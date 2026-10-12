@@ -242,22 +242,17 @@ GitHub Actions khởi động SQL riêng và chạy cả hai test. Workflow chư
 | Swagger không có login/register | Đúng: bộ khung chưa có nghiệp vụ auth |
 | `database update` báo thiếu cấu hình | Thêm `-- --environment Development` như mục 8 |
 
-## 11. Đưa lên GitHub và bắt đầu làm việc
+## 11. Git và quy trình làm việc nhóm
 
-Bộ khung đã chuẩn bị `.gitignore`, PR template và `.github/workflows/ci.yml`. Chưa có remote GitHub tự động. Tạo repository trống trong tài khoản/organization của nhóm, sau đó thực hiện trong thư mục starter:
+Repository chính thức: [FPT-SWP391-SE2040-GROUP02/Backend](https://github.com/FPT-SWP391-SE2040-GROUP02/Backend).
 
-```powershell
-git init -b main
-git add .
-git status
-git diff --cached --stat
-git commit -m "chore: bootstrap backend environment"
-# Thay URL dưới đây bằng repository thật của nhóm:
-git remote add origin https://github.com/YOUR-ORG/legacyvault-be.git
-git push -u origin main
-```
+Đọc [Hướng dẫn Git và quy trình code chức năng](docs/HUONG-DAN-GIT.md) để clone, chuyển nhánh, lưu code dở, commit tiếng Việt, push và tạo Pull Request.
 
-Kiểm tra `.env`, `bin`, `obj` không xuất hiện trong phần staged trước commit. Không copy thư mục `.git`, `.vs` hoặc database của project cũ sang đây. Sau khi có repo, mỗi chức năng dùng nhánh `feature/...` và PR theo `CONTRIBUTING.md`.
+- `main`: bản ổn định của nhóm.
+- `develop`: nhánh tích hợp chức năng.
+- `feature/...`: tạo từ `develop`, code rồi mở PR về `develop`.
+
+Không chạy lại `git init` hoặc thêm remote sau khi clone. Kiểm tra `.env`, `bin`, `obj` không nằm trong staged files trước commit. Quy ước review và code nằm trong [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 12. Trạng thái chức năng
 
