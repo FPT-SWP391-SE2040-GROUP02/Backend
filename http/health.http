@@ -1,0 +1,10 @@
+@baseUrl = http://localhost:5000
+
+### API đang chạy: 200 Healthy, kể cả khi SQL đang dừng
+GET {{baseUrl}}/health/live
+
+### Database sẵn sàng: 200 Healthy; không kết nối được: 503 Unhealthy
+GET {{baseUrl}}/health/ready
+
+### OpenAPI (chỉ Development; chưa có endpoint nghiệp vụ)
+GET {{baseUrl}}/openapi/v1.json

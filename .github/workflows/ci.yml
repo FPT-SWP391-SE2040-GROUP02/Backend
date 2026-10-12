@@ -1,0 +1,39 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Prepare isolated SQL configuration
+        shell: bash
+        run: |
+          cp .env.example .env
+          sed -i 's/SQL_PASSWORD=CHANGE_ME/SQL_PASSWORD=CiOnly12345!/' .env
+      - name: Validate and start database
+        run: |
+          docker compose config --quiet
+          docker compose up -d --wait --wait-timeout 180
+          printf "IF DB_ID(N'LegacyVault') IS NULL CREATE DATABASE [LegacyVault];\n" | docker compose exec -T sqlserver sh -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b'
+      - run: dotnet restore LegacyVault.sln
+      - run: dotnet tool restore
+      - run: dotnet build LegacyVault.sln --configuration Release --no-restore
+      - name: Test HTTP startup and real database readiness
+        env:
+          LEGACYVAULT_TEST_CONNECTION: Server=127.0.0.1,14331;Database=LegacyVault;User Id=sa;Password=CiOnly12345!;Encrypt=True;TrustServerCertificate=True;Connect Timeout=5
+        run: dotnet test LegacyVault.sln --configuration Release --no-build --logger trx
+      - name: Stop CI database
+        if: always()
+        run: docker compose down
