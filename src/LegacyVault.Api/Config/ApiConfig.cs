@@ -1,4 +1,5 @@
 using LegacyVault.Api.Exceptions;
+using LegacyVault.Api.Security;
 
 namespace LegacyVault.Api.Config;
 
@@ -12,6 +13,7 @@ public static class ApiConfig
                 context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddOpenApi();
+        services.AddSingleton<AuthCookieWriter>();
         return services;
     }
 }
