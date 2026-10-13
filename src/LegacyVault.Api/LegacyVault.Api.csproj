@@ -1,7 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-  <PropertyGroup>
-    <UserSecretsId>legacyvault-starter-api-dev</UserSecretsId>
-  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\LegacyVault.Application\LegacyVault.Application.csproj" />
     <ProjectReference Include="..\LegacyVault.Infrastructure\LegacyVault.Infrastructure.csproj" />

@@ -15,7 +15,7 @@ public static class InfrastructureConfig
         services.AddOptions<DatabaseSettings>()
             .Bind(configuration.GetSection("ConnectionStrings"))
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Default),
-                "Thiếu ConnectionStrings:Default. Chạy scripts/setup-local.ps1 trước khi chạy API.")
+                "Thiếu ConnectionStrings:Default. Khi chạy local, chọn profile http (Development).")
             .ValidateOnStart();
 
         services.AddDbContext<AppDbContext>((provider, options) =>

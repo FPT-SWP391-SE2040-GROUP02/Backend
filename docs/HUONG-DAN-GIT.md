@@ -60,10 +60,10 @@ Cấu hình này chỉ áp dụng cho repository hiện tại. Email liên kết
 Mở Docker Desktop và setup môi trường theo [README](../README.md):
 
 ```powershell
-.\scripts\setup-local.ps1
+docker compose up -d --wait
 ```
 
-Script setup không tạo nhánh, commit hoặc push. Mỗi thành viên có database local riêng.
+Docker tự khởi động SQL Server và tạo database trống nếu chưa có; không cần `.env`, tự đặt password hoặc chạy script setup. Mỗi thành viên có database local riêng, dùng thông tin kết nối mẫu trong README. API vẫn cần .NET SDK/Visual Studio để chạy.
 
 ## 3. Khi bắt đầu một chức năng mới
 
@@ -129,7 +129,7 @@ git diff --cached
 
 `git add .` chọn mọi thay đổi không bị ignore trong thư mục hiện tại. Chỉ dùng khi mọi thay đổi đều thuộc công việc cần commit; nếu có việc khác xen lẫn thì dùng `git add đường-dẫn-file` cho từng file cần chọn.
 
-Kiểm tra không có `.env`, `.vs`, `bin`, `obj`, token hoặc dữ liệu thật. `.env.example` cần được commit. Nếu chọn nhầm file, bỏ khỏi vùng chuẩn bị commit bằng:
+Kiểm tra không có `.env`, `.vs`, `bin`, `obj`, token hoặc dữ liệu thật. Cấu hình SQL development mẫu trong Compose/appsettings.Development.json được commit để mọi người chạy ngay. Nếu chọn nhầm file, bỏ khỏi vùng chuẩn bị commit bằng:
 
 ```powershell
 git restore --staged đường-dẫn-file

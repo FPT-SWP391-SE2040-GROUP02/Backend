@@ -1,3 +1,6 @@
+# Development only: a shared local password makes a fresh clone ready to run.
+name: legacyvault-starter
+
 services:
   sqlserver:
     # SQL Server 2022 image pinned to the version verified for this starter.
@@ -5,15 +8,32 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer
-      MSSQL_SA_PASSWORD: ${SQL_PASSWORD:?Run scripts/setup-local.ps1 first}
+      MSSQL_SA_PASSWORD: "LegacyVault12345!"
     ports:
-      - "127.0.0.1:${SQL_PORT:-14331}:1433"
+      - "127.0.0.1:14331:1433"
     volumes:
       - sql-data:/var/opt/mssql
+    # Compose runs this automatically; no host script or .env is needed.
+    # Retry because the SQL process may still be initializing after container start.
+    post_start:
+      - command:
+          - /bin/bash
+          - -c
+          - |
+            export SQLCMDPASSWORD="$$MSSQL_SA_PASSWORD"
+            for attempt in {1..60}; do
+              if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 2 -t 30 -Q "IF DB_ID(N'LegacyVault') IS NULL CREATE DATABASE [LegacyVault];"; then
+                echo 'LegacyVault database is ready.'
+                exit 0
+              fi
+              sleep 2
+            done
+            echo 'Could not initialize LegacyVault. Check SQL logs and the password of an existing volume.' >&2
+            exit 1
     healthcheck:
       test:
         - CMD-SHELL
-        - 'SQLCMDPASSWORD="$$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 5 -Q "SELECT 1" -o /dev/null'
+        - 'SQLCMDPASSWORD="$$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 5 -d LegacyVault -Q "SELECT 1" -o /dev/null'
       interval: 5s
       timeout: 10s
       retries: 30

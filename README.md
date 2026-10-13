@@ -1,199 +1,148 @@
 # LegacyVault Backend — bộ khung khởi tạo
 
-Repository dành cho nhóm bắt đầu phát triển BE theo SRS 3.14.0. Cấu trúc giữ bốn project giống BE hiện tại: **Api → Application → Domain**, Infrastructure triển khai database/repository. Luồng request khi có chức năng là **Controller → Service → Repository → Database**.
+Cấu trúc giữ bốn project của nhóm: **Api, Application, Domain, Infrastructure**. Khi có chức năng, luồng xử lý là **Controller → Service → Repository → Database**.
 
-**Docker chỉ chạy SQL Server. API chạy trên máy bằng Visual Studio hoặc `dotnet run`.** Bộ khung chưa có đăng nhập, tài khoản demo, bảng nghiệp vụ, Vault, thanh toán hoặc eKYC.
+**Docker chỉ chạy SQL Server. API chạy bằng Visual Studio hoặc .NET trên máy.** Chưa có auth, tài khoản demo hoặc bảng nghiệp vụ.
 
-## 1. Công cụ cần cài trên mỗi máy
+## 1. Chạy SQL bằng một lệnh
 
-- Windows và PowerShell 5.1 trở lên (khuyến nghị PowerShell 7).
-- [.NET SDK](https://dotnet.microsoft.com/download/dotnet/10.0) theo `global.json`: dòng **10.0.400**, cho phép patch mới hơn trong cùng feature band.
-- [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/), chạy **Linux containers**. Hoàn tất WSL 2 theo hướng dẫn của Docker nếu máy yêu cầu.
-- [Git](https://git-scm.com/downloads).
-- Visual Studio có hỗ trợ SDK .NET 10 của project và workload ASP.NET; hoặc VS Code + terminal. Nếu IDE cũ không hỗ trợ SDK thì dùng terminal hoặc cập nhật IDE.
-- SSMS là công cụ tùy chọn để xem database, **không cần cài SQL Server riêng trên Windows**.
-
-Kiểm tra:
+Cài [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/), mở Docker và chờ Linux Engine sẵn sàng. Lấy source về, mở terminal tại thư mục chứa `docker-compose.yml`, chạy:
 
 ```powershell
-dotnet --version
-docker version
-git --version
+docker compose up -d --wait
 ```
 
-`docker version` cần có cả Client và Server. Nếu báo không có Docker Engine, mở Docker Desktop và chờ sẵn sàng.
-
-## 2. Setup lần đầu sau khi clone
-
-Clone repo của nhóm bằng URL GitHub thực tế, sau đó mở PowerShell tại thư mục chứa `LegacyVault.sln`:
+Docker tự tải image nếu cần, khởi động SQL Server và tạo database `LegacyVault` trống nếu chưa có. Lệnh đợi tới khi kết nối được database. **Không cần tạo .env, đặt mật khẩu hoặc chạy script setup.** Lần đầu tải image/khởi động có thể mất vài phút.
 
 ```powershell
-.\scripts\setup-local.ps1
+docker compose ps
 ```
 
-Nếu PowerShell chặn chạy script, chỉ bỏ chặn trong tiến trình này, không đổi policy toàn máy:
+Service `sqlserver` báo `healthy` là database sẵn sàng. Mỗi thành viên có database local riêng dù dùng cùng thông tin kết nối mẫu.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-local.ps1
-```
+## 2. Kết nối bằng SSMS
 
-Script thực hiện:
+| Trường | Giá trị |
+|---|---|
+| Server name | `127.0.0.1,14331` |
+| Authentication | SQL Server Authentication |
+| Login | `sa` |
+| Password | `LegacyVault12345!` |
+| Database | `LegacyVault` |
+| Encrypt | Bật |
+| Trust server certificate | Bật cho môi trường local |
 
-1. Kiểm tra SDK và Docker Engine.
-2. Tạo `.env` từ `.env.example` nếu chưa có.
-3. Tạo mật khẩu dev ngẫu nhiên khi `SQL_PASSWORD` còn là `CHANGE_ME`.
-4. Restore NuGet và local tool `dotnet-ef`.
-5. Khởi động SQL Server, chờ health check thành công.
-6. Tạo database `LegacyVault` trống nếu chưa có; giữ nguyên database đã tồn tại.
-7. Lưu connection string vào user-secrets của API, không in mật khẩu ra terminal.
-8. Build solution.
+SSMS là công cụ tùy chọn; không cần cài SQL Server riêng trên Windows. Database chưa có bảng nghiệp vụ là đúng phạm vi bộ khung.
 
-Script **không cài tự động .NET/Docker/Git**, không xóa database và không chạy migration nghiệp vụ. Các công cụ ở mục 1 cần được cài trước. Mỗi thành viên có database và password local riêng; không dùng chung database qua mạng.
-
-### Muốn tự chọn password trước lần setup đầu
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Mở `.env`, sửa `SQL_PASSWORD`, sau đó chạy script. Ví dụ password development dễ nhớ đã thống nhất cho máy setup ban đầu là `LegacyVault12345!`; các máy mới có thể dùng mật khẩu được script sinh tự động. Không dùng mật khẩu ví dụ này cho server triển khai.
-
-SQL Server không chấp nhận `12345` lúc khởi tạo: cần 8–128 ký tự và ít nhất ba nhóm chữ hoa/chữ thường/số/ký hiệu. Script hỗ trợ các ký tự nêu trong `.env.example` để tránh lỗi escape khi nối cấu hình.
+Mật khẩu này là **mẫu development công khai**, chỉ dùng trên máy local. SQL chỉ mở cổng tại `127.0.0.1`. Server triển khai phải dùng cấu hình/bí mật riêng.
 
 ## 3. Chạy API
 
-### Bằng Visual Studio
+Chỉ chạy SQL thì cần Docker. Để chạy/code API cần thêm [.NET SDK](https://dotnet.microsoft.com/download/dotnet/10.0) theo `global.json` (dòng **10.0.400**, chấp nhận patch mới hơn trong cùng feature band), Visual Studio hỗ trợ SDK này với workload ASP.NET hoặc VS Code/terminal. Git dùng để clone/pull/push.
 
-1. Mở `LegacyVault.sln`.
-2. Chuột phải `LegacyVault.Api` → **Set as Startup Project**.
-3. Chọn profile **http**.
-4. Bấm F5 hoặc Ctrl+F5. Swagger mở ở `http://localhost:5000/swagger`.
+**Visual Studio:** mở `LegacyVault.sln` → chọn `LegacyVault.Api` làm Startup Project → chọn profile **http** → F5 hoặc Ctrl+F5.
 
-### Bằng terminal
+**Terminal:**
 
 ```powershell
 dotnet run --project src/LegacyVault.Api --launch-profile http
 ```
 
-Chỉ chọn một cách để tránh chạy hai API trùng cổng 5000. Swagger/OpenAPI chỉ mở ở Development. Swagger báo chưa có operation nghiệp vụ là bình thường: bộ khung chỉ có health endpoint hạ tầng.
+.NET tự restore/build khi cần; lần đầu cần mạng để tải NuGet. Connection string đã có trong `src/LegacyVault.Api/appsettings.Development.json`, không phải nhập lại. Chỉ chạy API bằng một cách để tránh trùng cổng 5000.
 
 | Địa chỉ | Kết quả |
 |---|---|
 | `http://localhost:5000/swagger` | Giao diện tài liệu API |
 | `http://localhost:5000/openapi/v1.json` | OpenAPI JSON |
-| `http://localhost:5000/health/live` | 200 `Healthy` khi API đang hoạt động |
-| `http://localhost:5000/health/ready` | 200 `Healthy` khi kết nối được SQL; 503 `Unhealthy` khi SQL không sẵn sàng |
+| `http://localhost:5000/health/live` | 200 Healthy khi API hoạt động |
+| `http://localhost:5000/health/ready` | 200 Healthy khi kết nối được database; 503 khi không kết nối được |
 
-Có thể mở `http/health.http` bằng Visual Studio hoặc REST Client để gửi request. Test nhanh bằng PowerShell:
+Swagger/OpenAPI chỉ mở ở Development. Chưa có login/register trong Swagger là bình thường. Có thể mở `http/health.http` để gửi request hạ tầng.
 
-```powershell
-Invoke-RestMethod http://localhost:5000/health/live
-Invoke-RestMethod http://localhost:5000/health/ready
-```
+## 4. Các lần chạy sau và cách dừng
 
-## 4. Mỗi ngày làm việc
+Mở Docker Desktop, chạy lại `docker compose up -d --wait`, rồi chạy API. Dữ liệu nằm trong named volume `legacyvault-starter_sql-data`; không phải tạo lại password/database.
 
-1. Mở Docker Desktop.
-2. Pull code mới.
-3. Tại thư mục repo, chạy:
-
-```powershell
-docker compose up -d --wait
-dotnet run --project src/LegacyVault.Api --launch-profile http
-```
-
-Không cần setup lại mỗi ngày. Khi pull package mới chạy `dotnet restore`; khi nhóm thay phiên bản tool chạy `dotnet tool restore`. Khi sửa `.env`, đọc mục 6 rồi chạy lại setup để cập nhật cấu hình API.
-
-Dừng API bằng nút Stop của IDE hoặc Ctrl+C. Dừng database:
+Dừng API bằng Stop của IDE hoặc Ctrl+C. Dừng SQL:
 
 ```powershell
 docker compose stop
 ```
 
-Volume `sql-data` giữ dữ liệu qua lần dừng/chạy. `docker compose down` cũng giữ named volume. **Không dùng `docker compose down -v` trừ khi chủ động muốn xóa toàn bộ database local.**
+`docker compose down` cũng giữ named volume. **Không thêm -v nếu cần giữ dữ liệu.**
 
-## 5. Kết nối bằng SSMS
+## 5. Cấu hình và chuyển từ bản setup cũ
 
-| Trường | Giá trị mặc định |
+| File | Vai trò |
 |---|---|
-| Server name | `127.0.0.1,14331` |
-| Authentication | SQL Server Authentication |
-| Login | `sa` |
-| Password | Giá trị `SQL_PASSWORD` trong `.env` trên máy bạn |
-| Database | `LegacyVault` |
-| Encrypt | Bật |
-| Trust server certificate | Bật cho môi trường development này |
+| `docker-compose.yml` | SQL, cổng 14331, password mẫu, volume, tự tạo database và health check |
+| `appsettings.Development.json` | Connection string khớp Docker, origin FE localhost:5173 |
+| `appsettings.json` | Logging/cấu hình chung; không chứa password server triển khai |
+| `launchSettings.json` | Profile http, môi trường Development, API cổng 5000 |
+| `global.json` | SDK nhóm dùng |
+| `Directory.Packages.props` | Phiên bản NuGet tập trung |
 
-Máy setup ban đầu dùng password `LegacyVault12345!`. Database ở bộ khung chưa có bảng nghiệp vụ là đúng thiết kế.
+Compose dùng tên project `legacyvault-starter` để không phụ thuộc tên thư mục clone. Cổng 14331 tránh SQL 14330 của project cũ. Không chạy hai checkout với cùng project/cổng cùng lúc.
 
-Cổng **14331** dành cho bộ khung mới, tránh cổng 14330 của project BE cũ. Compose chỉ bind SQL vào `127.0.0.1`; database này dành cho máy local. Container/volume nằm trong Compose project `legacyvault-starter`; không dùng volume của project cũ. Không đặt `container_name` cố định để giảm xung đột giữa checkout.
+Nếu từng chạy script setup bản trước:
 
-## 6. Hiểu `.env`, appsettings và user-secrets
+- Máy đang dùng `LegacyVault12345!` chỉ cần chạy lại Compose; giữ nguyên volume/dữ liệu.
+- Đã bỏ UserSecretsId nên API không tự nạp user-secrets cũ; không cần xóa kho secrets trên máy.
+- `.env` cũ không còn cung cấp port/password. Nếu có `COMPOSE_PROJECT_NAME` khác `legacyvault-starter`, kiểm tra project/volume đang dùng trước khi đổi.
+- Biến môi trường `ConnectionStrings__Default` có thể ghi đè appsettings; bỏ biến nếu đang trỏ nhầm database.
+- Volume đã có password tự sinh khác sẽ **không tự đổi password trong SQL**. Dùng kết nối/password cũ để đổi login sa, hoặc giữ password cũ đồng bộ trong Compose và appsettings.Development.json. Không xóa volume khi cần giữ dữ liệu.
 
-| Nơi cấu hình | Nội dung | Commit Git? |
-|---|---|---|
-| `.env.example` | Tên biến, giá trị mẫu và hướng dẫn | Có |
-| `.env` | Password, cổng và tên database local cho Docker | Không |
-| `appsettings.json` | Logging, cấu hình chung không bí mật | Có |
-| `appsettings.Development.json` | Origin FE dev, mặc định `http://localhost:5173` | Có |
-| User-secrets | `ConnectionStrings:Default` cho API chạy local | Không; lưu ngoài repo |
+Cần **Docker Compose 2.30 trở lên** để hỗ trợ `post_start` tự tạo database. Docker Desktop mới đã kèm Compose; nếu báo không hỗ trợ hãy cập nhật Docker Desktop. Hook có retry chờ SQL; không tạo bảng nghiệp vụ và không chạy migration.
 
-ASP.NET Core **không tự đọc `.env`** theo mặc định. Script đọc file này rồi ghi connection string vào user-secrets. `UserSecretsId` của starter khác bản auth cũ để không ghi đè cấu hình của project cũ. User-secrets giúp tách bí mật khỏi Git, không phải kho bí mật được mã hóa cho production.
-
-Mỗi dòng `.env` theo dạng đơn giản `KEY=value`, không có dấu nháy hoặc comment cuối dòng. Không đặt cùng tên biến `SQL_PORT`, `SQL_DATABASE`, `SQL_PASSWORD`, `COMPOSE_PROJECT_NAME` trong shell: script sẽ báo lỗi để tránh Docker và API dùng cấu hình khác nhau. `ConnectionStrings__Default` trong biến môi trường cũng có thể ghi đè user-secrets; bỏ biến này nếu đang trỏ nhầm database.
-
-Nếu đổi cổng trong `.env`, chạy lại setup. Nếu đổi password khi volume SQL **đã tồn tại**, chỉ sửa `.env` không đổi password bên trong SQL Server. Hãy đổi password của login trong SQL trước rồi đồng bộ `.env` và chạy lại setup; nếu chỉ nhập nhầm `.env`, khôi phục password đúng. Không xóa volume để sửa lỗi kết nối khi cần giữ dữ liệu.
-
-## 7. Cấu trúc code và cách thêm chức năng
+## 6. Cấu trúc code
 
 ```text
 src/
 ├── LegacyVault.Api/
-│   ├── Controllers/       # Nhận HTTP request, gọi service, trả status/response
-│   ├── Config/            # Cấu hình HTTP, CORS, OpenAPI
-│   ├── Exceptions/        # Xử lý lỗi HTTP tập trung
-│   └── Program.cs         # Lắp ráp ứng dụng và middleware
+│   ├── Controllers/          # Nhận request, gọi service, trả HTTP
+│   ├── Config/               # HTTP, CORS, OpenAPI
+│   ├── Exceptions/           # Xử lý lỗi HTTP tập trung
+│   └── Program.cs            # DI, middleware, endpoint
 ├── LegacyVault.Application/
-│   ├── Dtos/Requests/     # Dữ liệu đầu vào của use case
-│   ├── Dtos/Responses/    # Dữ liệu trả ra
-│   ├── Services/          # Interface và class xử lý nghiệp vụ
-│   ├── Repositories/      # Interface để service yêu cầu đọc/ghi dữ liệu
-│   ├── Exceptions/        # Lỗi nghiệp vụ khi bắt đầu triển khai
+│   ├── Dtos/Requests/        # Dữ liệu đầu vào
+│   ├── Dtos/Responses/       # Dữ liệu trả ra
+│   ├── Services/             # Interface/class nghiệp vụ
+│   ├── Repositories/         # Interface đọc/ghi dữ liệu
+│   ├── Exceptions/           # Lỗi nghiệp vụ
 │   └── ApplicationConfig.cs
 ├── LegacyVault.Domain/
-│   ├── Entities/          # Đối tượng nghiệp vụ
-│   └── Enums/             # Trạng thái/giá trị nghiệp vụ
+│   ├── Entities/             # Đối tượng nghiệp vụ
+│   └── Enums/                # Trạng thái, giá trị nghiệp vụ
 └── LegacyVault.Infrastructure/
     ├── Data/AppDbContext.cs
     ├── Data/Configurations/  # EF mapping theo entity
-    ├── Data/Migrations/      # Lịch sử thay đổi schema
-    ├── Repositories/         # Triển khai truy vấn EF Core
-    ├── Health/               # Kiểm tra kết nối database
+    ├── Data/Migrations/      # Lịch sử schema
+    ├── Repositories/         # Truy vấn EF Core
+    ├── Health/               # Kiểm tra SQL
     └── InfrastructureConfig.cs
 ```
 
-Thư mục trống dùng `.gitkeep` để Git lưu được. Khi có code thật có thể bỏ `.gitkeep`.
+Thư mục trống dùng `.gitkeep` để Git lưu được. Khi có code thật có thể bỏ file đó.
 
-Ví dụ khi nhóm bắt đầu feature Vault (các file sau **chưa được tạo**):
+Ví dụ thêm Vault (các file minh họa chưa có):
 
-| Việc | File / vị trí |
+| Phần việc | Nơi đặt |
 |---|---|
-| Entity | `Domain/Entities/Vault.cs` |
-| EF mapping | `Infrastructure/Data/Configurations/VaultConfiguration.cs` |
-| DbSet | Bổ sung vào `Infrastructure/Data/AppDbContext.cs` |
-| Hợp đồng truy vấn | `Application/Repositories/IVaultRepository.cs` |
-| Truy vấn EF | `Infrastructure/Repositories/VaultRepository.cs` |
-| Request / response | `Application/Dtos/Requests/CreateVaultRequest.cs`, `Dtos/Responses/VaultResponse.cs` |
-| Nghiệp vụ | `Application/Services/IVaultService.cs`, `VaultService.cs` |
-| HTTP | `Api/Controllers/VaultsController.cs` |
-| Đăng ký service | `ApplicationConfig.cs`: `AddScoped<IVaultService, VaultService>()` |
-| Đăng ký repository | `InfrastructureConfig.cs`: `AddScoped<IVaultRepository, VaultRepository>()` |
+| VaultsController.cs | Api/Controllers |
+| IVaultService.cs, VaultService.cs | Application/Services |
+| CreateVaultRequest.cs, VaultResponse.cs | Application/Dtos/Requests và Responses |
+| IVaultRepository.cs | Application/Repositories |
+| Vault.cs | Domain/Entities |
+| VaultRepository.cs | Infrastructure/Repositories |
+| VaultConfiguration.cs | Infrastructure/Data/Configurations |
+| DbSet<Vault> | AppDbContext |
+| Đăng ký service/repository | ApplicationConfig / InfrastructureConfig |
 
-Controller chỉ điều phối HTTP; service kiểm tra nghiệp vụ/quyền; repository thực hiện truy vấn. Không dùng DbContext trực tiếp trong controller. Application không tham chiếu EF Core; Domain không tham chiếu project/framework hạ tầng. Hướng dẫn thêm trong `docs/architecture.md`.
+Controller điều phối HTTP; service kiểm tra nghiệp vụ/quyền; repository truy vấn dữ liệu. Application không tham chiếu EF Core; Domain không phụ thuộc API/database. Có thể chia feature lớn cho nhiều người theo [CONTRIBUTING.md](CONTRIBUTING.md). Xem thêm [kiến trúc](docs/architecture.md).
 
-## 8. Migration khi bắt đầu có entity
+## 7. Migration khi bắt đầu có entity
 
-**Không chạy `InitialCreate` cho bộ khung trống.** Người thêm entity/mapping tạo migration cùng feature:
+Docker chỉ tạo database trống. **Không tạo InitialCreate khi chưa có entity.** Người thêm entity/mapping tạo migration:
 
 ```powershell
 dotnet tool restore
@@ -201,61 +150,51 @@ dotnet ef migrations add AddVaults --project src/LegacyVault.Infrastructure --st
 dotnet ef database update --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
 ```
 
-Commit migration và model snapshot cùng entity/mapping. Các thành viên khác pull code rồi chạy `database update`, **không tạo lại cùng migration**. Môi trường Development được truyền rõ để EF đọc user-secrets khi khởi tạo API. Script tạo database không thay thế EF migration. Khi triển khai server cần quy trình migration riêng; bộ khung không tự migrate mỗi lần API khởi động.
+Commit migration/model snapshot cùng code. Người khác pull rồi chạy `database update`, không tạo lại cùng migration. Tham số Development giúp EF đọc connection string có sẵn. API không tự migrate khi khởi động; server triển khai cần quy trình migration riêng.
 
-## 9. Kiểm thử
+## 8. Kiểm thử
 
 ```powershell
 dotnet test LegacyVault.sln
 ```
 
-Test HTTP kiểm tra liveness vẫn chạy khi SQL lỗi, readiness trả 503, OpenAPI truy cập được và route không tồn tại trả ProblemDetails. Test SQL thật chỉ chạy khi có `LEGACYVAULT_TEST_CONNECTION`; mặc định hiện **Skipped**, không giả vờ là đã pass.
+Test HTTP kiểm tra liveness khi SQL lỗi, readiness 503, OpenAPI và lỗi 404. Test SQL thật chỉ chạy khi có `LEGACYVAULT_TEST_CONNECTION`; chưa đặt thì hiển thị Skipped.
 
-Để chạy test SQL thật trên máy đã setup, lấy connection string từ user-secrets mà không in ra terminal:
+Chỉ khi muốn chạy thêm test SQL thật, sau khi Docker healthy:
 
 ```powershell
-$secretJson = (dotnet user-secrets list --project src/LegacyVault.Api --json | Where-Object { $_ -notmatch '^//' }) -join "`n"
-$localSecrets = $secretJson | ConvertFrom-Json
-$env:LEGACYVAULT_TEST_CONNECTION = $localSecrets.'ConnectionStrings:Default'
+$devSettings = Get-Content src/LegacyVault.Api/appsettings.Development.json -Raw | ConvertFrom-Json
+$env:LEGACYVAULT_TEST_CONNECTION = $devSettings.ConnectionStrings.Default
 try {
     dotnet test LegacyVault.sln
 } finally {
     Remove-Item Env:LEGACYVAULT_TEST_CONNECTION -ErrorAction SilentlyContinue
-    $localSecrets = $null
-    $secretJson = $null
 }
 ```
 
-GitHub Actions khởi động SQL riêng và chạy cả hai test. Workflow chưa thể được xác nhận trên GitHub cho đến khi repository được push; chạy local thành công không thay thế kết quả CI remote. Không build Docker image API vì API chưa được container hóa.
+Biến trên chỉ phục vụ kiểm thử tự động, không bắt buộc để chạy SQL/API. GitHub Actions chạy cùng Compose và cả hai test; workflow mới cần được push để xác nhận trên GitHub.
 
-## 10. Lỗi thường gặp
+## 9. Lỗi thường gặp
 
 | Lỗi | Cách xử lý |
 |---|---|
-| Không tìm thấy SDK phù hợp | Cài SDK theo `global.json`; IDE phải hỗ trợ SDK này |
-| Không kết nối Docker Engine | Mở Docker Desktop, đợi Linux Engine chạy |
-| SQL không healthy | Xem `docker compose logs --tail 50 sqlserver`; kiểm tra password, RAM và volume cũ |
-| Cổng SQL bị chiếm | Đổi `SQL_PORT` trong `.env`, chạy lại setup |
-| API báo thiếu connection string | Chạy setup, chọn profile `http`/Development |
-| `/health/ready` trả 503 | Kiểm tra SQL đang chạy, tên DB, password và user-secrets có cùng `.env` |
-| API báo cổng 5000 đang dùng | Dừng bản API khác hoặc đổi cổng profile và cập nhật URL test |
-| Swagger không có login/register | Đúng: bộ khung chưa có nghiệp vụ auth |
-| `database update` báo thiếu cấu hình | Thêm `-- --environment Development` như mục 8 |
+| Không kết nối Docker Engine | Mở Docker Desktop, đợi Linux Engine sẵn sàng |
+| Compose không hiểu post_start | Cập nhật Docker Desktop/Compose 2.30 trở lên |
+| SQL không healthy | Xem `docker compose logs --tail 50 sqlserver`; kiểm tra RAM và password volume cũ |
+| Cổng 14331 bị chiếm | Dừng SQL khác chiếm cổng hoặc đổi cổng Compose và connection string API cùng nhau |
+| SSMS lỗi chứng chỉ | Bật Trust server certificate cho kết nối dev |
+| API thiếu SDK | Cài SDK theo global.json, dùng IDE hỗ trợ SDK |
+| API thiếu connection string | Chọn profile http/Development |
+| Health ready trả 503 | Chờ Docker healthy, kiểm tra password/database/cấu hình ghi đè |
+| Cổng API 5000 bị chiếm | Dừng API cũ hoặc đổi profile và URL test |
+| Swagger chưa có login/register | Bộ khung chưa triển khai auth |
 
-## 11. Git và quy trình làm việc nhóm
+## 10. Git và trạng thái chức năng
 
-Repository chính thức: [FPT-SWP391-SE2040-GROUP02/Backend](https://github.com/FPT-SWP391-SE2040-GROUP02/Backend).
+Repo chính thức: [FPT-SWP391-SE2040-GROUP02/Backend](https://github.com/FPT-SWP391-SE2040-GROUP02/Backend).
 
-Đọc [Hướng dẫn Git và quy trình code chức năng](docs/HUONG-DAN-GIT.md) để clone, chuyển nhánh, lưu code dở, commit tiếng Việt, push và tạo Pull Request.
+Đọc [Hướng dẫn Git](docs/HUONG-DAN-GIT.md): tạo nhánh từ develop → code → kiểm tra → commit → push → PR về develop. Nhóm chốt bản ổn định mới mở PR về main. Không chạy lại git init sau khi clone.
 
-- `main`: bản ổn định của nhóm.
-- `develop`: nhánh tích hợp chức năng.
-- `feature/...`: tạo từ `develop`, code rồi mở PR về `develop`.
+Đã có: bốn project, DI, SQL Docker tự tạo database, EF Core, CORS, ProblemDetails, Swagger, health check và cấu hình CI.
 
-Không chạy lại `git init` hoặc thêm remote sau khi clone. Kiểm tra `.env`, `bin`, `obj` không nằm trong staged files trước commit. Quy ước review và code nằm trong [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## 12. Trạng thái chức năng
-
-Đã có: cấu trúc bốn project, DI, SQL Server/EF Core, CORS, ProblemDetails, Swagger, health check, script setup và cấu hình CI.
-
-Chưa có: Auth, tài khoản demo, bảng nghiệp vụ, Vault/Assets, mã hóa tài sản, Google, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem `docs/backlog.md` để bắt đầu các feature theo SRS 3.14.0. Health endpoint chạy được chỉ xác nhận môi trường, không có nghĩa đã hoàn thành SRS.
+Chưa có: Auth, tài khoản demo, bảng nghiệp vụ, Vault/Assets, mã hóa, Google, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.

@@ -10,7 +10,7 @@ Xem [Hướng dẫn Git và quy trình code chức năng](docs/HUONG-DAN-GIT.md)
 6. CancellationToken truyền từ controller đến thao tác async trong service/repository.
 7. Quyền đối tượng, trạng thái và quy tắc SRS phải kiểm tra ở server, không dựa vào FE ẩn nút.
 8. Thay đổi schema phải kèm migration/model snapshot; thống nhất thứ tự merge migration khi cùng sửa model. Không sửa migration đã được nhóm áp dụng; thêm migration mới.
-9. Không commit `.env`, connection string có password, token, giấy tờ hoặc dữ liệu thật. Không log password/payload tài sản.
+9. Không commit secrets thật, `.env`, connection string của server triển khai, token, giấy tờ hoặc dữ liệu thật. Mật khẩu SQL development công khai trong Compose và appsettings.Development.json là cấu hình mẫu dùng riêng trên máy local của nhóm. Không log password/payload tài sản.
 10. Trước PR chạy build và kiểm thử liên quan. Cập nhật OpenAPI/README khi thay contract hoặc cấu hình. Không viết test rỗng chỉ để làm CI xanh.
 11. Một người khác review PR trước merge. Cấu hình branch protection trên GitHub sau khi tạo repo để yêu cầu review/CI.
 

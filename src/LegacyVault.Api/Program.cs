@@ -37,7 +37,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = check => check.Tags.Contains("ready")
 });
 
-// Không tự migrate/seed lúc khởi động. Script setup tạo database dev trống.
+// Không tự migrate/seed lúc khởi động. Docker Compose tạo database dev trống.
 app.Run();
 
 public partial class Program;
