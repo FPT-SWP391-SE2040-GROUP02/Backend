@@ -29,6 +29,7 @@ public sealed class ContainerService : IContainerService
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
     private readonly IContainerRepository containerRepository;
+    private readonly IAssetRepository assetRepository;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -36,12 +37,14 @@ public sealed class ContainerService : IContainerService
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
         IContainerRepository containerRepository,
+        IAssetRepository assetRepository,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.containerRepository = containerRepository;
+        this.assetRepository = assetRepository;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -130,8 +133,7 @@ public sealed class ContainerService : IContainerService
 
         if (container.Status == ContainerStatus.Archived)
         {
-            throw new AppException(AppErrorType.Conflict, ErrorCode.ContainerArchived,
-                "Gói đã lưu trữ, không sửa được.");
+            throw Archived();
         }
         if (!Etag.Matches(request.Etag, container.UpdatedAt))
         {
@@ -219,16 +221,125 @@ public sealed class ContainerService : IContainerService
         return container.ToResponse(NoRecipients);
     }
 
-    public Task<ContainerResponse> AddAssetAsync(
+    public async Task<ContainerResponse> AddAssetAsync(
         Guid vaultId, Guid containerId, AddContainerAssetRequest request, CancellationToken ct)
     {
-        throw new NotImplementedException("Làm ở nhánh feature/container-assets");
+        Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
+        // OPLAN-01: thêm tài sản vào gói là thao tác "thêm".
+        VaultRules.EnsureEditable(vault);
+        Container container = await LoadContainerAsync(vault.Id, containerId, ct);
+
+        if (container.Status == ContainerStatus.Archived)
+        {
+            throw Archived();
+        }
+        // SETUP-17 / AC-04: hạng Free không được đưa tài sản vào gói; chặn ở API, không chỉ ẩn nút.
+        if (vault.Entitlement.Tier == ServiceTier.Free)
+        {
+            throw new AppException(AppErrorType.Forbidden, ErrorCode.PaidTierRequired,
+                "Hạng miễn phí chưa được đưa tài sản vào gói. Vui lòng nâng cấp dịch vụ.");
+        }
+
+        Guid assetId = request.AssetId;
+        Asset? asset = await assetRepository.FindByIdAsync(vault.Id, assetId, ct);
+        if (asset == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.AssetNotFound, "Không tìm thấy tài sản.");
+        }
+
+        // SETUP-03: một tài sản thuộc tối đa một gói chưa lưu trữ (gói lưu trữ không còn liên kết nào).
+        ContainerAsset? existing = await containerRepository.FindLinkByAssetIdAsync(assetId, ct);
+        if (existing != null)
+        {
+            if (existing.ContainerId == container.Id)
+            {
+                // Đã ở đúng gói này: trả nguyên trạng, không ghi DB, không tăng ConfigVersion.
+                return container.ToResponse(NoRecipients);
+            }
+            throw AlreadyInContainer(existing.ContainerId);
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        ContainerAsset link = new ContainerAsset();
+        link.ContainerId = container.Id;
+        link.AssetId = assetId;
+        link.AddedAt = now;
+        // Thêm vào danh sách trước để RecalculateStatus và assetIds trong response tính cả tài sản mới.
+        container.Assets.Add(link);
+        container.UpdatedAt = now;
+        ContainerRules.RecalculateStatus(container, NoRecipients);
+        BumpConfigVersion(vault, now);
+
+        // Lưu liên kết cùng các thay đổi đang chờ của Container và Plan trong một lần SaveChanges.
+        // Hai request cùng đưa tài sản vào CÙNG gói có thể vấp concurrency token Container.UpdatedAt
+        // → GlobalExceptionHandler trả 409 EDIT_CONFLICT; không bắt ở đây.
+        bool added = await containerRepository.TryAddAssetLinkAsync(link, ct);
+        if (added)
+        {
+            return container.ToResponse(NoRecipients);
+        }
+
+        // Unique AssetId chặn: request khác vừa đưa tài sản này vào một gói.
+        // Container/Plan đang theo dõi đã bị sửa trong bộ nhớ nhưng KHÔNG được lưu, nên bỏ hết rồi đọc lại từ DB.
+        containerRepository.DiscardPendingChanges();
+        ContainerAsset? winner = await containerRepository.FindLinkByAssetIdAsync(assetId, ct);
+        if (winner == null)
+        {
+            // Liên kết của request kia đã bị gỡ ngay sau đó: không đoán được trạng thái đúng,
+            // báo dữ liệu vừa thay đổi để FE tải lại.
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
+                "Dữ liệu vừa thay đổi. Vui lòng tải lại.");
+        }
+        if (winner.ContainerId != containerId)
+        {
+            throw AlreadyInContainer(winner.ContainerId);
+        }
+
+        // Request kia đưa đúng vào gói này: trả kết quả dựng từ dữ liệu mới đọc lại.
+        Container reloaded = await LoadContainerAsync(vault.Id, containerId, ct);
+        return reloaded.ToResponse(NoRecipients);
     }
 
-    public Task<ContainerResponse> RemoveAssetAsync(
+    public async Task<ContainerResponse> RemoveAssetAsync(
         Guid vaultId, Guid containerId, Guid assetId, ConfirmPlanImpactRequest? request, CancellationToken ct)
     {
-        throw new NotImplementedException("Làm ở nhánh feature/container-assets");
+        Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
+        // OPLAN-01: gỡ tài sản là thao tác "giảm", vẫn cho khi dịch vụ đang ân hạn.
+        VaultRules.EnsureCanReduce(vault);
+        Container container = await LoadContainerAsync(vault.Id, containerId, ct);
+
+        if (container.Status == ContainerStatus.Archived)
+        {
+            throw Archived();
+        }
+
+        ContainerAsset? link = FindLinkInContainer(container, assetId);
+        if (link == null)
+        {
+            // Tài sản không ở trong gói: trả nguyên trạng, không ghi DB.
+            return container.ToResponse(NoRecipients);
+        }
+
+        bool confirmed = false;
+        if (request != null)
+        {
+            confirmed = request.ConfirmPlanDeactivation;
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        // SETUP-16: gỡ tài sản cuối cùng của gói READY làm gói về DRAFT, có thể làm kế hoạch mất gói READY cuối cùng.
+        bool willLoseReady = container.Status == ContainerStatus.Ready && container.Assets.Count == 1;
+        await EnsurePlanImpactConfirmedAsync(vault, willLoseReady, confirmed, now, ct);
+
+        // QUOTA-02: chỉ gỡ liên kết; không xóa tài sản, không đổi dung lượng đã dùng.
+        // Gỡ cả khỏi danh sách để RecalculateStatus và assetIds trong response đúng ngay.
+        container.Assets.Remove(link);
+        containerRepository.RemoveAssetLink(link);
+        container.UpdatedAt = now;
+        ContainerRules.RecalculateStatus(container, NoRecipients);
+        BumpConfigVersion(vault, now);
+        await unitOfWork.SaveChangesAsync(ct);
+        return container.ToResponse(NoRecipients);
     }
 
     /// <summary>
@@ -284,6 +395,34 @@ public sealed class ContainerService : IContainerService
             throw new AppException(AppErrorType.NotFound, ErrorCode.ContainerNotFound, "Không tìm thấy gói.");
         }
         return container;
+    }
+
+    /// <summary>Liên kết của tài sản trong gói đã nạp Assets; không có → null.</summary>
+    private static ContainerAsset? FindLinkInContainer(Container container, Guid assetId)
+    {
+        foreach (ContainerAsset link in container.Assets)
+        {
+            if (link.AssetId == assetId)
+            {
+                return link;
+            }
+        }
+        return null;
+    }
+
+    private static AppException Archived()
+    {
+        return new AppException(AppErrorType.Conflict, ErrorCode.ContainerArchived,
+            "Gói đã lưu trữ, không sửa được.");
+    }
+
+    /// <summary>SETUP-03: tài sản đang ở gói khác; containerId để FE chỉ ra gói đó.</summary>
+    private static AppException AlreadyInContainer(Guid containerId)
+    {
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["containerId"] = containerId;
+        return new AppException(AppErrorType.Conflict, ErrorCode.AssetAlreadyInContainer,
+            "Tài sản này đang ở một gói khác.", extensions);
     }
 
     private static AppException LimitExceeded()

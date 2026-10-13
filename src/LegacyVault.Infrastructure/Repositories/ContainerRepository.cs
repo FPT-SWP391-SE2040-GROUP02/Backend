@@ -110,4 +110,13 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
     {
         context.ContainerAssets.Remove(link);
     }
+
+    /// <remarks>
+    /// Xóa MỌI thay đổi chưa lưu của cả request, không chỉ của Container. Chỉ gọi khi use case
+    /// sẽ trả kết quả mà không SaveChanges nữa (ví dụ sau khi TryAddAssetLinkAsync trả false).
+    /// </remarks>
+    public void DiscardPendingChanges()
+    {
+        context.ChangeTracker.Clear();
+    }
 }

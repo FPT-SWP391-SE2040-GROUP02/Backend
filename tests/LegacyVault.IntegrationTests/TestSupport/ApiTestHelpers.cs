@@ -5,6 +5,7 @@ using System.Text.Json;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -49,6 +50,33 @@ public static class ApiTestHelpers
             AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await action(db);
         }
+    }
+
+    /// <summary>Tạo tài sản dạng chữ qua API (POST .../assets/text), trả id tài sản.</summary>
+    public static async Task<Guid> CreateTextAssetAsync(HttpClient client, Guid vaultId, string name)
+    {
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"/api/v1/vaults/{vaultId}/assets/text", new { name, content = $"Nội dung của {name}" });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        JsonElement asset = await ReadJsonAsync(response);
+        return asset.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// Nâng kho lên hạng XS đang trả phí bằng cách sửa thẳng VaultEntitlements (chưa có module thanh toán):
+    /// 200 MiB, 2 suất người nhận.
+    /// </summary>
+    public static async Task UpgradeVaultToXsAsync(ApiFactory factory, Guid vaultId)
+    {
+        await WithDbAsync(factory, async db =>
+        {
+            await db.VaultEntitlements.Where(e => e.VaultId == vaultId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(e => e.Tier, ServiceTier.Xs)
+                    .SetProperty(e => e.Status, EntitlementStatus.PaidActive)
+                    .SetProperty(e => e.StorageQuotaBytes, 200 * 1_048_576L)
+                    .SetProperty(e => e.IncludedBeneficiarySlots, 2));
+        });
     }
 
     public static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)

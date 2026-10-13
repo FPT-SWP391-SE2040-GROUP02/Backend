@@ -70,4 +70,30 @@ public sealed class ContainersController(IContainerService containerService) : C
     {
         return containerService.ArchiveContainerAsync(vaultId, containerId, request, ct);
     }
+
+    /// <summary>Đưa một tài sản của kho vào gói (hạng Free bị chặn, SETUP-17).</summary>
+    [HttpPost("{containerId:guid}/assets")]
+    [Consumes("application/json")]
+    [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ContainerResponse> AddContainerAsset(
+        Guid vaultId, Guid containerId, AddContainerAssetRequest request, CancellationToken ct)
+    {
+        return containerService.AddAssetAsync(vaultId, containerId, request, ct);
+    }
+
+    /// <summary>Gỡ tài sản khỏi gói (không xóa tài sản, không giải phóng dung lượng — QUOTA-02).</summary>
+    [HttpDelete("{containerId:guid}/assets/{assetId:guid}")]
+    [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ContainerResponse> RemoveContainerAsset(
+        Guid vaultId, Guid containerId, Guid assetId, [FromQuery] ConfirmPlanImpactRequest request,
+        CancellationToken ct)
+    {
+        return containerService.RemoveAssetAsync(vaultId, containerId, assetId, request, ct);
+    }
 }

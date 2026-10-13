@@ -320,7 +320,6 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo s
 - Gặp `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED`: FE hiện cảnh báo "kế hoạch sẽ trở về bản nháp"; Owner đồng ý thì gọi lại với `?confirmPlanDeactivation=true`.
 - Hạng Free: được tạo/đổi tên/lưu trữ gói rỗng; đưa tài sản vào gói → `403 PAID_TIER_REQUIRED` (FE hiện gợi ý nâng cấp).
 - `status`: `DRAFT` (thiếu tài sản hoặc người nhận), `READY`, `ARCHIVED`. BE tự tính, FE không gửi trạng thái. `missingRequirements` cho biết còn thiếu gì: `NO_ASSET`, `NO_DESIGNATION`.
-- Thêm/gỡ tài sản cần module Tài sản; hai endpoint này cài sau.
 
 ### 6.7. Tài sản (Asset)
 

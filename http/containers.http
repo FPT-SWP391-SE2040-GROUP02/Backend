@@ -61,3 +61,35 @@ X-Dev-User-Id: {{userId}}
 ### Lưu trữ gói READY cuối cùng của kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT
 DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}?confirmPlanDeactivation=true
 X-Dev-User-Id: {{userId}}
+
+### ---------- Thêm / gỡ tài sản trong gói ----------
+# Hạng Free đưa tài sản vào gói → 403 PAID_TIER_REQUIRED (SETUP-17).
+# Muốn thử luồng trả phí: nâng kho lên XS trong SSMS (CHỈ DB local, không chạy trên môi trường thật):
+#    UPDATE VaultEntitlements
+#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200, IncludedBeneficiarySlots = 2
+#    WHERE VaultId = '<vaultId>';
+
+### Tạo tài sản dạng chữ để đưa vào gói — lấy id từ response
+POST {{baseUrl}}/vaults/{{vaultId}}/assets/text
+X-Dev-User-Id: {{userId}}
+Content-Type: application/json
+
+{ "name": "Sổ tiết kiệm", "content": "Ngân hàng A, số sổ ..." }
+
+### Điền assetId từ response trên
+@assetId = 00000000-0000-0000-0000-000000000000
+
+### Đưa tài sản vào gói (gửi lại lần 2 vẫn 200; tài sản đang ở gói khác → 409 ASSET_ALREADY_IN_CONTAINER)
+POST {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/assets
+X-Dev-User-Id: {{userId}}
+Content-Type: application/json
+
+{ "assetId": "{{assetId}}" }
+
+### Gỡ tài sản khỏi gói (không xóa tài sản, không giải phóng dung lượng — QUOTA-02)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/assets/{{assetId}}
+X-Dev-User-Id: {{userId}}
+
+### Gỡ tài sản cuối cùng của gói READY cuối cùng khi kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/assets/{{assetId}}?confirmPlanDeactivation=true
+X-Dev-User-Id: {{userId}}
