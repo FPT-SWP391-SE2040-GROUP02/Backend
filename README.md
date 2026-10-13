@@ -102,12 +102,14 @@ src/
 │   ├── Controllers/          # Nhận request, gọi service, trả HTTP
 │   ├── Config/               # HTTP, CORS, OpenAPI
 │   ├── Exceptions/           # Xử lý lỗi HTTP tập trung
+│   ├── Security/             # Cookie, HTTP context security
 │   └── Program.cs            # DI, middleware, endpoint
 ├── LegacyVault.Application/
 │   ├── Dtos/Requests/        # Dữ liệu đầu vào
 │   ├── Dtos/Responses/       # Dữ liệu trả ra
 │   ├── Services/             # Interface/class nghiệp vụ
 │   ├── Repositories/         # Interface đọc/ghi dữ liệu
+│   ├── Notifications/        # Interface thông báo, gửi email
 │   ├── Exceptions/           # Lỗi nghiệp vụ
 │   └── ApplicationConfig.cs
 ├── LegacyVault.Domain/
@@ -118,6 +120,8 @@ src/
     ├── Data/Configurations/  # EF mapping theo entity
     ├── Data/Migrations/      # Lịch sử schema
     ├── Repositories/         # Truy vấn EF Core
+    ├── Security/             # Hash mật khẩu Argon2, JWT token
+    ├── Notifications/        # Triển khai email dev, app URL provider
     ├── Health/               # Kiểm tra SQL
     └── InfrastructureConfig.cs
 ```
@@ -197,10 +201,17 @@ Repo chính thức: [FPT-SWP391-SE2040-GROUP02/Backend](https://github.com/FPT-S
 
 Đã có: bốn project, DI, SQL Docker tự tạo database, EF Core, CORS, ProblemDetails, Swagger, health check và cấu hình CI.
 
-Đã có thêm: tạo/xem/sửa kho; tạo/xem tài sản (tệp, chữ) — xem docs/api-contract.md mục 6.5 và 6.7.
+Đã có thêm: đăng ký/xác minh email, đăng nhập email/mật khẩu (JWT + refresh cookie), đăng nhập Google; tạo/xem/sửa kho; tạo/xem tài sản mã hóa (tệp, chữ); gói: tạo/xem/đổi tên/lưu trữ, thêm/gỡ tài sản trong gói — xem docs/api-contract.md mục 6.
 
 Nội dung tài sản được **mã hóa envelope** trước khi ghi đĩa: AES-256-GCM, mỗi phiên bản một DEK riêng, DEK được bọc bằng KEK trong mục `AssetEncryption` của cấu hình (không nằm trong DB). `appsettings.Development.json` có sẵn KEK mẫu `dev-local` — **chỉ dùng local**, giống mật khẩu SQL mẫu. Server thật đặt KEK qua biến môi trường `AssetEncryption__ActiveKeyId` và `AssetEncryption__Keys__<id>`; thiếu/sai KEK thì API không khởi động. Đổi KEK: thêm khóa mới, chuyển `ActiveKeyId`, **giữ khóa cũ** để mở các phiên bản đã lưu. Mất KEK = mất toàn bộ nội dung đã lưu.
 
-Sau khi kéo migration `AddAssetVersionEncryption`: tài sản tạo trước đó trong database dev là bản chưa mã hóa, xóa các dòng `Assets`/`AssetVersions` cùng thư mục `src/LegacyVault.Api/App_Data/asset-content` rồi tạo lại.
+Database dev đã chạy các migration cũ (`InitialSchema`, `AddAssetVersionEncryption`, đã bỏ khi gộp với develop) thì xóa database rồi tạo lại theo migration hiện tại:
 
-Chưa có: Auth (đang dùng header X-Dev-User-Id tạm ở Development), tài khoản demo, nghiệp vụ gói/chỉ định, tải/sửa/xóa nội dung tài sản, Google, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
+```powershell
+dotnet ef database drop --force --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
+dotnet ef database update --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
+```
+
+Nhớ xóa luôn thư mục `src/LegacyVault.Api/App_Data/asset-content` vì nội dung trong đó không còn bản ghi tương ứng.
+
+Chưa có: tài khoản demo, chỉ định người nhận (gói hiện luôn DRAFT), tải về/sửa/xóa nội dung tài sản, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.

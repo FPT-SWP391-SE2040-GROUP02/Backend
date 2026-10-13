@@ -7,11 +7,18 @@ public static class ApplicationConfig
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddSingleton(TimeProvider.System);
-
+        // TimeProvider đăng ký một lần ở InfrastructureConfig.
         services.AddScoped<IVaultService, VaultService>();
         services.AddScoped<IAssetService, AssetService>();
         services.AddScoped<IContainerService, ContainerService>();
+
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IRegistrationService, RegistrationService>();
+
+        // Đăng nhập Google
+        services.AddScoped<IGoogleAuthService, GoogleAuthService>();
+        services.AddScoped<LoginSessionIssuer>();
+        services.AddScoped<LoginThrottleGuard>();
         return services;
     }
 }

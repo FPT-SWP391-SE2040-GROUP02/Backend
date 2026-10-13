@@ -9,9 +9,22 @@ public sealed class EmailVerificationTokenConfiguration : IEntityTypeConfigurati
     public void Configure(EntityTypeBuilder<EmailVerificationToken> builder)
     {
         builder.ToTable("EmailVerificationTokens");
+
         builder.HasKey(t => t.Id);
-        builder.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
-        builder.HasIndex(t => t.TokenHash).IsUnique();
-        builder.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.Property(t => t.TokenHash)
+            .IsRequired()
+            .HasMaxLength(64)
+            .IsFixedLength();
+
+        builder.HasIndex(t => t.TokenHash)
+            .IsUnique();
+
+        builder.HasOne(t => t.User)
+            .WithMany()
+            .HasForeignKey(t => t.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(t => t.UserId);
     }
 }

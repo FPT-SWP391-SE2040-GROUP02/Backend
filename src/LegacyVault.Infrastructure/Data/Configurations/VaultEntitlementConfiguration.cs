@@ -9,9 +9,20 @@ public sealed class VaultEntitlementConfiguration : IEntityTypeConfiguration<Vau
     public void Configure(EntityTypeBuilder<VaultEntitlement> builder)
     {
         builder.ToTable("VaultEntitlements");
+
         builder.HasKey(e => e.Id);
-        builder.Property(e => e.Tier).HasConversion<string>().HasMaxLength(32);
-        builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(32);
-        builder.HasIndex(e => e.VaultId).IsUnique();
+
+        builder.Property(e => e.Tier)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        builder.Property(e => e.Status)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        builder.HasIndex(e => e.VaultId)
+            .IsUnique();
     }
 }

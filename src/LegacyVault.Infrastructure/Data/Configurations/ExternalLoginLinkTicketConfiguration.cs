@@ -9,12 +9,32 @@ public sealed class ExternalLoginLinkTicketConfiguration : IEntityTypeConfigurat
     public void Configure(EntityTypeBuilder<ExternalLoginLinkTicket> builder)
     {
         builder.ToTable("ExternalLoginLinkTickets");
+
         builder.HasKey(t => t.Id);
-        builder.Property(t => t.Provider).HasConversion<string>().HasMaxLength(32);
-        builder.Property(t => t.ProviderSubject).HasMaxLength(255).IsRequired();
-        builder.Property(t => t.ProviderEmail).HasMaxLength(320);
-        builder.Property(t => t.TicketHash).HasMaxLength(64).IsRequired();
-        builder.HasIndex(t => t.TicketHash).IsUnique();
-        builder.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.Property(t => t.Provider)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        builder.Property(t => t.ProviderSubject)
+            .IsRequired()
+            .HasMaxLength(256);
+
+        builder.Property(t => t.ProviderEmail)
+            .HasMaxLength(256);
+
+        builder.Property(t => t.TicketHash)
+            .IsRequired()
+            .HasMaxLength(64)
+            .IsFixedLength();
+
+        builder.HasIndex(t => t.TicketHash)
+            .IsUnique();
+
+        builder.HasOne(t => t.User)
+            .WithMany()
+            .HasForeignKey(t => t.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

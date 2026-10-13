@@ -359,8 +359,6 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 - Hạng Free được lưu tài sản trong 20 MiB; mọi phiên bản đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản không ở gói nào.
 - Chưa có (làm sau cùng phần bảo mật): tải nội dung về, thay nội dung (phiên bản mới), đổi tên/xóa tài sản.
 
-> **Tạm thời khi chưa có đăng nhập (chỉ Development):** gửi header `X-Dev-User-Id: <userId>` thay cho Bearer token. Thiếu header → `401 SESSION_EXPIRED`. Sẽ bỏ khi có JWT.
-
 ---
 
 ## 7. Tóm tắt thay đổi FE cần làm

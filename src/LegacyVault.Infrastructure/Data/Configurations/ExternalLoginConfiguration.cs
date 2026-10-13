@@ -9,12 +9,30 @@ public sealed class ExternalLoginConfiguration : IEntityTypeConfiguration<Extern
     public void Configure(EntityTypeBuilder<ExternalLogin> builder)
     {
         builder.ToTable("ExternalLogins");
-        builder.HasKey(l => l.Id);
-        builder.Property(l => l.Provider).HasConversion<string>().HasMaxLength(32);
-        builder.Property(l => l.ProviderSubject).HasMaxLength(255).IsRequired();
-        builder.Property(l => l.ProviderEmail).HasMaxLength(320);
-        builder.HasIndex(l => new { l.Provider, l.ProviderSubject }).IsUnique();
-        builder.HasIndex(l => new { l.UserId, l.Provider }).IsUnique();
-        builder.HasOne(l => l.User).WithMany().HasForeignKey(l => l.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasKey(e => e.Id);
+
+        builder.Property(e => e.Provider)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        builder.Property(e => e.ProviderSubject)
+            .IsRequired()
+            .HasMaxLength(256);
+
+        builder.Property(e => e.ProviderEmail)
+            .HasMaxLength(256);
+
+        builder.HasIndex(e => new { e.Provider, e.ProviderSubject })
+            .IsUnique();
+
+        builder.HasIndex(e => new { e.UserId, e.Provider })
+            .IsUnique();
+
+        builder.HasOne(e => e.User)
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
@@ -14,10 +15,7 @@ namespace LegacyVault.IntegrationTests.TestSupport;
 /// <summary>Hàm dùng chung cho test gọi API: tạo user thử, đọc JSON, kiểm ProblemDetails, sửa DB trực tiếp.</summary>
 public static class ApiTestHelpers
 {
-    /// <summary>Header đăng nhập giả của môi trường Development (DevHeaderAuthenticationHandler).</summary>
-    public const string DevUserHeader = "X-Dev-User-Id";
-
-    /// <summary>Thêm một user Active vào DB và trả HttpClient đã gắn header đăng nhập của user đó.</summary>
+    /// <summary>Thêm một user Active vào DB và trả HttpClient đã gắn Bearer token của user đó.</summary>
     public static async Task<HttpClient> CreateClientForNewUserAsync(ApiFactory factory, bool emailVerified)
     {
         User user = new User();
@@ -38,8 +36,19 @@ public static class ApiTestHelpers
         });
 
         HttpClient client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add(DevUserHeader, user.Id.ToString());
+        AuthorizeAs(client, factory.Services, user);
         return client;
+    }
+
+    /// <summary>
+    /// Tạo access token JWT cho user bằng ITokenService của chính API đang test (cùng khóa ký),
+    /// rồi gắn header Authorization: Bearer cho client. Không đi qua luồng đăng nhập.
+    /// </summary>
+    public static void AuthorizeAs(HttpClient client, IServiceProvider services, User user)
+    {
+        ITokenService tokenService = services.GetRequiredService<ITokenService>();
+        AccessToken token = tokenService.CreateAccessToken(user);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Value);
     }
 
     /// <summary>Chạy một đoạn code với AppDbContext riêng (scope riêng), dùng để chuẩn bị dữ liệu hoặc kiểm DB.</summary>

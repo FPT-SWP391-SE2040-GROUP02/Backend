@@ -9,13 +9,22 @@ public sealed class ContainerAssetConfiguration : IEntityTypeConfiguration<Conta
     public void Configure(EntityTypeBuilder<ContainerAsset> builder)
     {
         builder.ToTable("ContainerAssets");
-        builder.HasKey(l => l.Id);
 
-        // SETUP-03 / DATA-04: một tài sản thuộc tối đa một Container — chặn ở DB.
-        builder.HasIndex(l => l.AssetId).IsUnique();
+        builder.HasKey(a => a.Id);
+
+        // DATA-04: Mỗi tài sản chỉ thuộc tối đa một Container chưa lưu trữ
+        builder.HasIndex(a => a.AssetId)
+            .IsUnique();
+
+        builder.HasOne(a => a.Container)
+            .WithMany(c => c.Assets)
+            .HasForeignKey(a => a.ContainerId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Restrict: tránh hai đường cascade (Vault→Container→Link và Vault→Asset→Link) mà SQL Server không cho.
-        builder.HasOne(l => l.Asset).WithMany()
-            .HasForeignKey(l => l.AssetId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(a => a.Asset)
+            .WithMany()
+            .HasForeignKey(a => a.AssetId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -1,6 +1,8 @@
 using LegacyVault.Api.Exceptions;
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LegacyVault.Api.Config;
@@ -17,7 +19,44 @@ public static class ApiConfig
                 context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddOpenApi();
+        services.AddSingleton<AuthCookieWriter>();
+
+        // Cấu hình JWT của Auth (InfrastructureConfig.AddJwtBearer): bổ sung OnChallenge để 401 trả
+        // ProblemDetails có code SESSION_EXPIRED, khớp docs/api-contract.md mục 2 và 3.
+        // Đặt ở Api vì cần GlobalExceptionHandler.Problem(...) để cùng format với các lỗi khác.
+        services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+        {
+            if (options.Events == null)
+            {
+                options.Events = new JwtBearerEvents();
+            }
+            options.Events.OnChallenge = WriteSessionExpiredAsync;
+        });
         return services;
+    }
+
+    /// <summary>Không có token / token sai / hết hạn trên endpoint [Authorize] → 401 SESSION_EXPIRED.</summary>
+    private static async Task WriteSessionExpiredAsync(JwtBearerChallengeContext context)
+    {
+        // Chặn response 401 mặc định (body rỗng + header WWW-Authenticate) để tự ghi ProblemDetails.
+        context.HandleResponse();
+
+        HttpContext httpContext = context.HttpContext;
+        ProblemDetails problem = GlobalExceptionHandler.Problem(StatusCodes.Status401Unauthorized,
+            ErrorCode.SessionExpired, "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        problem.Extensions["traceId"] = httpContext.TraceIdentifier;
+        httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+
+        IProblemDetailsService problemDetails = httpContext.RequestServices.GetRequiredService<IProblemDetailsService>();
+        bool written = await problemDetails.TryWriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = httpContext,
+            ProblemDetails = problem,
+        });
+        if (!written)
+        {
+            await httpContext.Response.WriteAsJsonAsync(problem);
+        }
     }
 
     /// <summary>

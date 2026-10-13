@@ -18,7 +18,8 @@ namespace LegacyVault.IntegrationTests;
 ///   xem README mục 8); không có biến thì test hiện Skipped.
 /// - Mỗi lớp test (InitializeAsync) tạo một ApiFactory: chạy API trong bộ nhớ, trỏ tới một database TẠM tên ngẫu nhiên,
 ///   áp migration; DisposeAsync xóa database đó. Không đụng database dev.
-/// - Đăng nhập dùng header X-Dev-User-Id của môi trường Development; mỗi test tự tạo user riêng nên không ảnh hưởng nhau.
+/// - Đăng nhập: mỗi test tự tạo user riêng trong DB rồi gắn Bearer token JWT (ApiTestHelpers.AuthorizeAs),
+///   nên các test không ảnh hưởng nhau.
 /// - Dữ liệu khó tạo qua API (50 gói, kho đang ân hạn, gói READY) thì sửa thẳng DB ở phần "Chuẩn bị".
 /// </remarks>
 public sealed class ContainerFlowTests : IAsyncLifetime
