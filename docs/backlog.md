@@ -4,7 +4,7 @@ Căn cứ: LegacyVault-SRS-v3.14.0.md, bản chính thức ngày 08/10/2026. Nh�
 
 | Nhóm việc | Nội dung | Trạng thái |
 |---|---|---|
-| Môi trường | Bốn project, SQL Docker, DI, Swagger, health, setup script, cấu hình CI | Có trong starter; CI remote cần chạy sau push |
+| Môi trường | Bốn project, SQL Docker tự tạo database, DI, Swagger, health, cấu hình CI | Có trong starter; CI remote cần chạy sau push |
 | Auth | Đăng ký, xác minh email, login/logout, session, refresh, Google/link, giới hạn phiên | Chưa làm |
 | Quyền | Role staff, quan hệ Owner/Executor/Beneficiary, guard theo object và phân công | Chưa làm |
 | F1 | Vault, gói bàn giao, chỉ định, quota, mời Executor, kích hoạt kế hoạch | Chưa làm |

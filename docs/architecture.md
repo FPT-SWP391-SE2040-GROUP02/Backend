@@ -38,9 +38,11 @@ Application định nghĩa interface repository; Infrastructure triển khai. Ap
 
 ## Môi trường
 
-SQL Server Developer chạy Docker, chỉ bind localhost, dùng named volume và image digest đã chốt. API chạy trực tiếp bằng SDK. .env phục vụ Compose; API đọc user-secrets do script setup ghi. Không cài SQL Server service trên Windows.
+SQL Server Developer chạy Docker, chỉ bind localhost cổng 14331, dùng named volume và image digest đã chốt. Chạy `docker compose up -d --wait` để SQL khởi động và Compose tự tạo database LegacyVault nếu chưa có. Hook `post_start` có retry chờ SQL; health check xác nhận kết nối được đúng database LegacyVault. Không cài SQL Server service trên Windows.
 
-UserSecretsId dành riêng cho starter. Các clone khác của chính starter trên cùng tài khoản Windows dùng chung ID; nếu muốn chạy nhiều clone với database khác nhau, cần ID/config riêng để không ghi đè connection string nhau.
+API chạy trực tiếp bằng SDK, đọc connection string mẫu từ appsettings.Development.json. Cấu hình local dùng password công khai `LegacyVault12345!`; không cần `.env`, user-secrets hoặc script setup. UserSecretsId cũ được bỏ khỏi csproj để secret từ lần setup trước không ghi đè cấu hình mẫu. Không xóa kho user-secrets cũ trên máy.
+
+Compose cần phiên bản 2.30 trở lên để hỗ trợ post_start. Giữ nguyên tên Compose project `legacyvault-starter` và volume `sql-data` để lần cập nhật này không tạo nhầm database khác. Khi đổi password cho volume đã có dữ liệu phải cập nhật login SQL trước; sửa cấu hình không tự đổi password bên trong database. Môi trường triển khai phải cấp connection string/bí mật riêng; không dùng password development này.
 
 ## Các quyết định nghiệp vụ phải giữ theo SRS 3.14.0
 
