@@ -1,0 +1,63 @@
+# Thử CRUD gói (Container) — chỉ Development, chưa có đăng nhập.
+#
+# Chuẩn bị giống http/vault-assets.http: chạy migration, tạo user thử, chạy API (profile http),
+# tạo kho rồi điền vaultId bên dưới.
+
+@baseUrl = http://localhost:5000/api/v1
+@userId = 0199e7a4-0000-7000-8000-000000000001
+
+### Kho của tôi — lấy vaultId, xem planConfigVersion
+GET {{baseUrl}}/vaults/me
+X-Dev-User-Id: {{userId}}
+
+### Điền vaultId từ response trên
+@vaultId = 00000000-0000-0000-0000-000000000000
+
+### Tạo gói (201, DRAFT, missingRequirements = NO_ASSET, NO_DESIGNATION)
+POST {{baseUrl}}/vaults/{{vaultId}}/containers
+X-Dev-User-Id: {{userId}}
+Content-Type: application/json
+
+{ "name": "Tài liệu gia đình", "description": "Giấy tờ nhà, sổ tiết kiệm" }
+
+### Danh sách gói chưa lưu trữ, sắp theo tên
+GET {{baseUrl}}/vaults/{{vaultId}}/containers?sortBy=name&pageSize=10
+X-Dev-User-Id: {{userId}}
+
+### Danh sách gồm cả gói đã lưu trữ
+GET {{baseUrl}}/vaults/{{vaultId}}/containers?includeArchived=true
+X-Dev-User-Id: {{userId}}
+
+### sortBy sai → 400 VALIDATION_ERROR
+GET {{baseUrl}}/vaults/{{vaultId}}/containers?sortBy=status
+X-Dev-User-Id: {{userId}}
+
+### Điền containerId và etag từ response tạo gói
+@containerId = 00000000-0000-0000-0000-000000000000
+@etag = "0"
+
+### Xem một gói
+GET {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}
+X-Dev-User-Id: {{userId}}
+
+### Đổi tên gói (gửi lại etag; etag cũ → 409 EDIT_CONFLICT)
+PUT {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}
+X-Dev-User-Id: {{userId}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "name": "Tài liệu nhà đất" }
+
+### Xóa mô tả (description rỗng = xóa)
+PUT {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}
+X-Dev-User-Id: {{userId}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "description": "" }
+
+### Lưu trữ gói (gọi lại lần 2 vẫn 200, cùng kết quả)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}
+X-Dev-User-Id: {{userId}}
+
+### Lưu trữ gói READY cuối cùng của kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}?confirmPlanDeactivation=true
+X-Dev-User-Id: {{userId}}

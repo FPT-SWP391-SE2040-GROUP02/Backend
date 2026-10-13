@@ -21,6 +21,10 @@ public enum ErrorCode
     StorageQuotaExceeded,
     FileTooLarge,
     InternalError,
+    ContainerNotFound,
+    ContainerLimitExceeded,
+    ContainerArchived,
+    PlanDeactivationConfirmationRequired,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

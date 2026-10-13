@@ -11,6 +11,7 @@ public static class ApplicationConfig
 
         services.AddScoped<IVaultService, VaultService>();
         services.AddScoped<IAssetService, AssetService>();
+        services.AddScoped<IContainerService, ContainerService>();
         return services;
     }
 }
