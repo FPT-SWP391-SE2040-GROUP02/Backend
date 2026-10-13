@@ -35,13 +35,30 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
 
         var totalCount = await query.CountAsync(ct);
 
-        query = (sortBy, isAscending) switch
+        // ThenBy(Id): khi trùng tên/thời điểm tạo vẫn có thứ tự cố định, chuyển trang không lặp/sót.
+        if (sortBy == "name")
         {
-            ("name", true) => query.OrderBy(c => c.Name).ThenBy(c => c.Id),
-            ("name", false) => query.OrderByDescending(c => c.Name).ThenByDescending(c => c.Id),
-            (_, true) => query.OrderBy(c => c.CreatedAt).ThenBy(c => c.Id),
-            (_, false) => query.OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id),
-        };
+            if (isAscending)
+            {
+                query = query.OrderBy(c => c.Name).ThenBy(c => c.Id);
+            }
+            else
+            {
+                query = query.OrderByDescending(c => c.Name).ThenByDescending(c => c.Id);
+            }
+        }
+        else
+        {
+            // Mặc định: sắp theo thời điểm tạo (service đã chặn các giá trị sortBy khác).
+            if (isAscending)
+            {
+                query = query.OrderBy(c => c.CreatedAt).ThenBy(c => c.Id);
+            }
+            else
+            {
+                query = query.OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id);
+            }
+        }
 
         var items = await query
             .Skip((pageIndex - 1) * pageSize)
