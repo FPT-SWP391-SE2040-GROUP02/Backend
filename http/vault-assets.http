@@ -1,0 +1,52 @@
+# Thử luồng tạo kho → tạo tài sản (chỉ Development, chưa có đăng nhập).
+#
+# 1. Chạy migration:  dotnet ef database update --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
+# 2. Tạo user thử trong SSMS (chưa có API đăng ký):
+#    INSERT INTO Users (Id, Email, EmailVerifiedAt, FullName, Role, Status, CreatedAt)
+#    VALUES ('0199e7a4-0000-7000-8000-000000000001', 'an@test.local', SYSDATETIMEOFFSET(),
+#            N'Nguyễn Văn An', 'User', 'Active', SYSDATETIMEOFFSET());
+# 3. Chạy API (profile http) rồi gửi lần lượt các request dưới.
+
+@baseUrl = http://localhost:5000/api/v1
+@userId = 0199e7a4-0000-7000-8000-000000000001
+
+### Tạo kho của tôi (201 lần đầu, 200 các lần sau)
+POST {{baseUrl}}/vaults
+X-Dev-User-Id: {{userId}}
+Content-Type: application/json
+
+{ "name": "Kho gia đình" }
+
+### Kho của tôi — lấy id và etag
+GET {{baseUrl}}/vaults/me
+X-Dev-User-Id: {{userId}}
+
+### Điền vaultId từ response trên
+@vaultId = 00000000-0000-0000-0000-000000000000
+
+### Tạo tài sản dạng chữ
+POST {{baseUrl}}/vaults/{{vaultId}}/assets/text
+X-Dev-User-Id: {{userId}}
+Content-Type: application/json
+
+{ "name": "Tài khoản ngân hàng", "content": "user: an / pass: ..." }
+
+### Tải lên tài sản dạng tệp
+POST {{baseUrl}}/vaults/{{vaultId}}/assets
+X-Dev-User-Id: {{userId}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="name"
+
+Ghi chú gia đình
+--lv
+Content-Disposition: form-data; name="file"; filename="ghi-chu.txt"
+Content-Type: text/plain
+
+Nội dung tệp thử.
+--lv--
+
+### Danh sách tài sản
+GET {{baseUrl}}/vaults/{{vaultId}}/assets?sortBy=name&pageSize=10
+X-Dev-User-Id: {{userId}}

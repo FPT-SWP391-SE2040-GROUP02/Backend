@@ -14,3 +14,6 @@ artifacts/
 *.bak
 *.mdf
 *.ldf
+
+# Nội dung tài sản lưu local khi dev
+**/App_Data/

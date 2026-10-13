@@ -9,6 +9,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiConfig();
 builder.Services.AddCorsConfig(builder.Configuration);
+builder.Services.AddAuthConfig(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 
@@ -28,6 +29,8 @@ else
 }
 
 app.UseCors(CorsConfig.FrontendPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 // Liveness không phụ thuộc SQL; readiness chỉ đạt khi kết nối được database.

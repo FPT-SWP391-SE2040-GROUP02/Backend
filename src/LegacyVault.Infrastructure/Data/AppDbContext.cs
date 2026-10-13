@@ -1,3 +1,4 @@
+using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Container> Containers => Set<Container>();
     public DbSet<ContainerAsset> ContainerAssets => Set<ContainerAsset>();
 
+    // Tài sản
+    public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<AssetVersion> AssetVersions => Set<AssetVersion>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -37,8 +42,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     }
 
     // DbContext.SaveChangesAsync trả Task<int>, còn IUnitOfWork trả Task → cài đặt tường minh.
-    Task IUnitOfWork.SaveChangesAsync(CancellationToken ct)
+    // Concurrency token (UpdatedAt) lệch nghĩa là request khác vừa sửa cùng bản ghi → 409 EDIT_CONFLICT,
+    // để Application không phải biết exception của EF.
+    async Task IUnitOfWork.SaveChangesAsync(CancellationToken ct)
     {
-        return SaveChangesAsync(ct);
+        try
+        {
+            await SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
+                "Dữ liệu vừa được sửa ở nơi khác. Vui lòng tải lại rồi sửa tiếp.");
+        }
     }
 }

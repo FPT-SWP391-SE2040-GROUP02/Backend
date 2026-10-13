@@ -197,4 +197,10 @@ Repo chính thức: [FPT-SWP391-SE2040-GROUP02/Backend](https://github.com/FPT-S
 
 Đã có: bốn project, DI, SQL Docker tự tạo database, EF Core, CORS, ProblemDetails, Swagger, health check và cấu hình CI.
 
-Chưa có: Auth, tài khoản demo, bảng nghiệp vụ, Vault/Assets, mã hóa, Google, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
+Đã có thêm: tạo/xem/sửa kho; tạo/xem tài sản (tệp, chữ) — xem docs/api-contract.md mục 6.5 và 6.7.
+
+Nội dung tài sản được **mã hóa envelope** trước khi ghi đĩa: AES-256-GCM, mỗi phiên bản một DEK riêng, DEK được bọc bằng KEK trong mục `AssetEncryption` của cấu hình (không nằm trong DB). `appsettings.Development.json` có sẵn KEK mẫu `dev-local` — **chỉ dùng local**, giống mật khẩu SQL mẫu. Server thật đặt KEK qua biến môi trường `AssetEncryption__ActiveKeyId` và `AssetEncryption__Keys__<id>`; thiếu/sai KEK thì API không khởi động. Đổi KEK: thêm khóa mới, chuyển `ActiveKeyId`, **giữ khóa cũ** để mở các phiên bản đã lưu. Mất KEK = mất toàn bộ nội dung đã lưu.
+
+Sau khi kéo migration `AddAssetVersionEncryption`: tài sản tạo trước đó trong database dev là bản chưa mã hóa, xóa các dòng `Assets`/`AssetVersions` cùng thư mục `src/LegacyVault.Api/App_Data/asset-content` rồi tạo lại.
+
+Chưa có: Auth (đang dùng header X-Dev-User-Id tạm ở Development), tài khoản demo, nghiệp vụ gói/chỉ định, tải/sửa/xóa nội dung tài sản, Google, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
