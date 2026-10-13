@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 
-namespace LegacyVault.Infrastructure.Security;
+namespace LegacyVault.Api.Security;
 
 public sealed class AuthCookieWriter
 {

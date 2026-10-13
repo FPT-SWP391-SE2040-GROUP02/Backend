@@ -102,12 +102,14 @@ src/
 │   ├── Controllers/          # Nhận request, gọi service, trả HTTP
 │   ├── Config/               # HTTP, CORS, OpenAPI
 │   ├── Exceptions/           # Xử lý lỗi HTTP tập trung
+│   ├── Security/             # Cookie, HTTP context security
 │   └── Program.cs            # DI, middleware, endpoint
 ├── LegacyVault.Application/
 │   ├── Dtos/Requests/        # Dữ liệu đầu vào
 │   ├── Dtos/Responses/       # Dữ liệu trả ra
 │   ├── Services/             # Interface/class nghiệp vụ
 │   ├── Repositories/         # Interface đọc/ghi dữ liệu
+│   ├── Notifications/        # Interface thông báo, gửi email
 │   ├── Exceptions/           # Lỗi nghiệp vụ
 │   └── ApplicationConfig.cs
 ├── LegacyVault.Domain/
@@ -118,6 +120,8 @@ src/
     ├── Data/Configurations/  # EF mapping theo entity
     ├── Data/Migrations/      # Lịch sử schema
     ├── Repositories/         # Truy vấn EF Core
+    ├── Security/             # Hash mật khẩu Argon2, JWT token
+    ├── Notifications/        # Triển khai email dev, app URL provider
     ├── Health/               # Kiểm tra SQL
     └── InfrastructureConfig.cs
 ```
