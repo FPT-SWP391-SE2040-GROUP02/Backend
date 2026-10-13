@@ -66,7 +66,10 @@ public sealed class AuthService : IAuthService
         // 3. Nếu không có user hoặc tài khoản không có mật khẩu (chỉ dùng Google)
         if (user == null || string.IsNullOrEmpty(user.PasswordHash))
         {
-            _dummyHash ??= _passwordHasher.Hash(Guid.NewGuid().ToString());
+            if (_dummyHash == null)
+            {
+                _dummyHash = _passwordHasher.Hash(Guid.NewGuid().ToString());
+            }
             _passwordHasher.Verify(request.Password, _dummyHash);
 
             throw await RecordFailedLoginAsync(throttle, email, ipRange, now, ct);

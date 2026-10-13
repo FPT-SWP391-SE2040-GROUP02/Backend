@@ -4,10 +4,19 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace LegacyVault.Api.Exceptions;
 
-public sealed class GlobalExceptionHandler(
-    IProblemDetailsService problemDetails,
-    ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
+public sealed class GlobalExceptionHandler : IExceptionHandler
 {
+    private readonly IProblemDetailsService _problemDetails;
+    private readonly ILogger<GlobalExceptionHandler> _logger;
+
+    public GlobalExceptionHandler(
+        IProblemDetailsService problemDetails,
+        ILogger<GlobalExceptionHandler> logger)
+    {
+        _problemDetails = problemDetails;
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(
         HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
@@ -26,7 +35,7 @@ public sealed class GlobalExceptionHandler(
                 problem.Extensions[kvp.Key] = kvp.Value;
             }
 
-            if (!await problemDetails.TryWriteAsync(new ProblemDetailsContext
+            if (!await _problemDetails.TryWriteAsync(new ProblemDetailsContext
             {
                 HttpContext = context,
                 ProblemDetails = problem
@@ -38,7 +47,7 @@ public sealed class GlobalExceptionHandler(
         }
 
         // Không ghi nội dung request, connection string hoặc exception message có thể chứa secrets.
-        logger.LogError("Unhandled {ExceptionType}; trace {TraceId}",
+        _logger.LogError("Unhandled {ExceptionType}; trace {TraceId}",
             exception.GetType().Name, context.TraceIdentifier);
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         var defaultProblem = new ProblemDetails
@@ -48,7 +57,7 @@ public sealed class GlobalExceptionHandler(
         };
         defaultProblem.Extensions["code"] = "INTERNAL_ERROR";
         defaultProblem.Extensions["traceId"] = context.TraceIdentifier;
-        if (!await problemDetails.TryWriteAsync(new ProblemDetailsContext
+        if (!await _problemDetails.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = context,
             ProblemDetails = defaultProblem

@@ -118,7 +118,11 @@ public sealed class AuthController : ControllerBase
         CancellationToken ct)
     {
         var refreshToken = Request.Cookies[AuthCookieWriter.RefreshTokenCookieName];
-        var revokeAllDevices = request?.RevokeAllDevices ?? false;
+        var revokeAllDevices = false;
+        if (request != null && request.RevokeAllDevices)
+        {
+            revokeAllDevices = true;
+        }
 
         await _authService.LogoutAsync(refreshToken, revokeAllDevices, ct);
         _cookieWriter.Clear(Response);

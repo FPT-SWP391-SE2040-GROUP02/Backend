@@ -9,7 +9,15 @@ public sealed class AppUrlProvider : IAppUrlProvider
 
     public AppUrlProvider(IConfiguration configuration)
     {
-        _clientBaseUrl = configuration["App:ClientUrl"]?.TrimEnd('/') ?? "http://localhost:5173";
+        string? clientUrl = configuration["App:ClientUrl"];
+        if (!string.IsNullOrWhiteSpace(clientUrl))
+        {
+            _clientBaseUrl = clientUrl.TrimEnd('/');
+        }
+        else
+        {
+            _clientBaseUrl = "http://localhost:5173";
+        }
     }
 
     public string GetEmailVerificationUrl(string token)

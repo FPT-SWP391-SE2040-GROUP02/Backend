@@ -34,7 +34,7 @@ public sealed class Argon2PasswordHasher : IPasswordHasher
 
         try
         {
-            var p = parts[1].Split(',').Select(x => int.Parse(x[2..])).ToArray();
+            var p = parts[1].Split(',').Select(x => int.Parse(x.Substring(2))).ToArray();
             var salt = Convert.FromBase64String(parts[2]);
             var expected = Convert.FromBase64String(parts[3]);
             var actual = Compute(password, salt, p[0], p[1], p[2], expected.Length);
