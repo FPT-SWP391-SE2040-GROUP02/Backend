@@ -15,6 +15,9 @@ namespace LegacyVault.IntegrationTests.TestSupport;
 /// <summary>Hàm dùng chung cho test gọi API: tạo user thử, đọc JSON, kiểm ProblemDetails, sửa DB trực tiếp.</summary>
 public static class ApiTestHelpers
 {
+    /// <summary>Email của hồ sơ người nhận tạo bằng CreateBeneficiaryAsync.</summary>
+    public const string BeneficiaryEmail = "nguoinhan@example.com";
+
     /// <summary>Thêm một user Active vào DB và trả HttpClient đã gắn Bearer token của user đó.</summary>
     public static async Task<HttpClient> CreateClientForNewUserAsync(ApiFactory factory, bool emailVerified)
     {
@@ -86,6 +89,46 @@ public static class ApiTestHelpers
                     .SetProperty(e => e.StorageQuotaBytes, 200 * 1_048_576L)
                     .SetProperty(e => e.IncludedBeneficiarySlots, 2));
         });
+    }
+
+    /// <summary>Đổi trạng thái dịch vụ của kho bằng cách sửa thẳng VaultEntitlements (ví dụ GraceReadOnly).</summary>
+    public static async Task SetEntitlementStatusAsync(ApiFactory factory, Guid vaultId, EntitlementStatus status)
+    {
+        await WithDbAsync(factory, async db =>
+        {
+            await db.VaultEntitlements.Where(e => e.VaultId == vaultId)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, status));
+        });
+    }
+
+    /// <summary>
+    /// Tạo hồ sơ người nhận người lớn qua API (POST .../beneficiaries, phải là hồ sơ mới, 201), trả JSON hồ sơ.
+    /// Kho phải đang trả phí (UpgradeVaultToXsAsync).
+    /// </summary>
+    public static async Task<JsonElement> CreateBeneficiaryAsync(
+        HttpClient client, Guid vaultId, string citizenId, string fullName)
+    {
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"/api/v1/vaults/{vaultId}/beneficiaries",
+            new { citizenId, fullName, dateOfBirth = "1990-05-20", email = BeneficiaryEmail });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await ReadJsonAsync(response);
+    }
+
+    /// <summary>"Tạo kho của tôi" qua API (phải là lần tạo đầu, 201), trả id kho.</summary>
+    public static async Task<Guid> CreateVaultAsync(HttpClient client)
+    {
+        HttpResponseMessage response = await client.PostAsync("/api/v1/vaults", null);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        JsonElement vault = await ReadJsonAsync(response);
+        return vault.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>planConfigVersion của kho của user đang gắn token.</summary>
+    public static async Task<int> GetPlanConfigVersionAsync(HttpClient client)
+    {
+        JsonElement vault = await ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
+        return vault.GetProperty("planConfigVersion").GetInt32();
     }
 
     public static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
