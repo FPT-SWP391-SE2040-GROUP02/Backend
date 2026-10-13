@@ -83,6 +83,12 @@ public static class InfrastructureConfig
 
         services.AddAuthorization();
 
+        // Đăng nhập Google: Client ID đọc từ cấu hình GoogleAuth:ClientId, không viết cứng trong code.
+        services.AddOptions<GoogleAuthSettings>().Bind(configuration.GetSection(GoogleAuthSettings.SectionName));
+        services.AddSingleton<IGoogleTokenVerifier, GoogleTokenVerifier>();
+        services.AddScoped<IExternalLoginRepository, ExternalLoginRepository>();
+        services.AddScoped<IExternalLoginLinkTicketRepository, ExternalLoginLinkTicketRepository>();
+
         return services;
     }
 }

@@ -9,6 +9,11 @@ public static class ApplicationConfig
     {
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
+
+        // Đăng nhập Google
+        services.AddScoped<IGoogleAuthService, GoogleAuthService>();
+        services.AddScoped<LoginSessionIssuer>();
+        services.AddScoped<LoginThrottleGuard>();
         return services;
     }
 }
