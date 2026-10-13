@@ -1,3 +1,4 @@
+using LegacyVault.Application.Repositories;
 using LegacyVault.Infrastructure.Data;
 using LegacyVault.Infrastructure.Health;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,11 @@ public static class InfrastructureConfig
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
 
-        // Đăng ký repository và tích hợp bên ngoài tại đây khi có feature.
+        // IUnitOfWork chính là AppDbContext của request: repository và service dùng chung một instance.
+        services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<AppDbContext>());
+
+        // Đăng ký repository và tích hợp bên ngoài tại đây khi có feature, ví dụ:
+        // services.AddScoped<IUserRepository, UserRepository>();
         return services;
     }
 }
