@@ -139,6 +139,7 @@ public sealed class VaultService(
     {
         var usedBytes = await vaultRepository.SumUsedBytesAsync(vault.Id, ct);
         var activeContainers = await containerRepository.CountActiveByVaultIdAsync(vault.Id, ct);
-        return vault.ToResponse(usedBytes, activeContainers);
+        var usedBeneficiarySlots = await containerRepository.CountUsedBeneficiarySlotsAsync(vault.Id, ct);
+        return vault.ToResponse(usedBytes, activeContainers, usedBeneficiarySlots);
     }
 }

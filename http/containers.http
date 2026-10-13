@@ -103,3 +103,29 @@ Authorization: Bearer {{token}}
 ### Gỡ tài sản cuối cùng của gói READY cuối cùng khi kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT
 DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/assets/{{assetId}}?confirmPlanDeactivation=true
 Authorization: Bearer {{token}}
+
+### ---------- Gắn / gỡ người nhận trong gói ----------
+# Cần kho đã nâng lên XS (xem lệnh UPDATE ở trên; XS có 2 suất) và hồ sơ người nhận tạo bằng http/beneficiaries.http.
+# Gói có tài sản + người nhận thì tự chuyển READY.
+
+### Điền beneficiaryId từ http/beneficiaries.http
+@beneficiaryId = 00000000-0000-0000-0000-000000000000
+
+### Gắn người nhận vào gói (gửi lại lần 2 vẫn 200; người mới vượt suất → 409 BENEFICIARY_SLOTS_EXCEEDED)
+POST {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/beneficiaries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "beneficiaryId": "{{beneficiaryId}}" }
+
+### Xem suất đang dùng (usedBeneficiarySlots) và tổng suất
+GET {{baseUrl}}/vaults/me
+Authorization: Bearer {{token}}
+
+### Gỡ người nhận khỏi gói (không xóa hồ sơ; người còn ở gói khác vẫn chiếm suất)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/beneficiaries/{{beneficiaryId}}
+Authorization: Bearer {{token}}
+
+### Gỡ người nhận cuối cùng của gói READY cuối cùng khi kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/beneficiaries/{{beneficiaryId}}?confirmPlanDeactivation=true
+Authorization: Bearer {{token}}

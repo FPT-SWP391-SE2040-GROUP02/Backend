@@ -14,6 +14,9 @@ public class ContainerResponse
     /// <summary>Id các tài sản trong gói. FE lấy tên/kích thước từ danh sách tài sản của kho.</summary>
     public List<Guid> AssetIds { get; set; } = new List<Guid>();
 
+    /// <summary>Id các hồ sơ người nhận được chỉ định trong gói, theo thứ tự gắn. FE lấy thông tin từ danh sách người nhận của kho.</summary>
+    public List<Guid> BeneficiaryIds { get; set; } = new List<Guid>();
+
     /// <summary>Lý do còn DRAFT để FE hướng dẫn: "NO_ASSET", "NO_DESIGNATION". Rỗng khi READY/ARCHIVED.</summary>
     public List<string> MissingRequirements { get; set; } = new List<string>();
 

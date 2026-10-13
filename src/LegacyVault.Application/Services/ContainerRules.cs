@@ -5,8 +5,9 @@ namespace LegacyVault.Application.Services;
 
 /// <summary>Luật nghiệp vụ của gói (Container) dùng chung cho các service.</summary>
 /// <remarks>
-/// recipientCount là số chỉ định người nhận hợp lệ của gói. Chưa có module người nhận nên hiện luôn truyền 0;
-/// nhánh người nhận sẽ truyền số thật.
+/// Cần container đã nạp Assets và Designations.
+/// SETUP-08: hồ sơ người nhận đã lưu luôn đủ số CCCD, họ tên, ngày sinh nên mọi chỉ định đều hợp lệ;
+/// SETUP-19: người nhận chưa đủ 18 tuổi vẫn tính.
 /// </remarks>
 public static class ContainerRules
 {
@@ -17,17 +18,17 @@ public static class ContainerRules
     public const string NoDesignation = "NO_DESIGNATION";
 
     /// <summary>
-    /// SETUP-16: backend tự tính DRAFT/READY. READY cần ≥1 tài sản VÀ ≥1 chỉ định hợp lệ.
+    /// SETUP-16: backend tự tính DRAFT/READY. READY cần ≥1 tài sản VÀ ≥1 chỉ định người nhận hợp lệ.
     /// Gói ARCHIVED do Owner chọn nên giữ nguyên.
     /// </summary>
-    public static void RecalculateStatus(Container container, int recipientCount)
+    public static void RecalculateStatus(Container container)
     {
         if (container.Status == ContainerStatus.Archived)
         {
             return;
         }
 
-        if (container.Assets.Count > 0 && recipientCount > 0)
+        if (container.Assets.Count > 0 && container.Designations.Count > 0)
         {
             container.Status = ContainerStatus.Ready;
         }
@@ -38,7 +39,7 @@ public static class ContainerRules
     }
 
     /// <summary>Lý do gói còn DRAFT để FE hướng dẫn. Gói READY/ARCHIVED → danh sách rỗng.</summary>
-    public static List<string> GetMissingRequirements(Container container, int recipientCount)
+    public static List<string> GetMissingRequirements(Container container)
     {
         List<string> missing = new List<string>();
         if (container.Status == ContainerStatus.Ready || container.Status == ContainerStatus.Archived)
@@ -50,7 +51,7 @@ public static class ContainerRules
         {
             missing.Add(NoAsset);
         }
-        if (recipientCount == 0)
+        if (container.Designations.Count == 0)
         {
             missing.Add(NoDesignation);
         }

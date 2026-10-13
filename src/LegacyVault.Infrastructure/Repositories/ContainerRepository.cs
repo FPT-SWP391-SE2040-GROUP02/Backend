@@ -16,6 +16,7 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
     {
         return context.Containers
             .Include(c => c.Assets)
+            .Include(c => c.Designations.OrderBy(d => d.CreatedAt).ThenBy(d => d.Id))
             .FirstOrDefaultAsync(c => c.Id == containerId && c.VaultId == vaultId, ct);
     }
 
@@ -64,6 +65,7 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
             .Include(c => c.Assets)
+            .Include(c => c.Designations.OrderBy(d => d.CreatedAt).ThenBy(d => d.Id))
             .AsSplitQuery()
             .ToListAsync(ct);
         return (items, totalCount);
@@ -109,6 +111,71 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
     public void RemoveAssetLink(ContainerAsset link)
     {
         context.ContainerAssets.Remove(link);
+    }
+
+    public async Task<bool> TryAddDesignationAsync(Designation designation, CancellationToken ct)
+    {
+        context.Designations.Add(designation);
+        try
+        {
+            await context.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException ex) when (DbExceptions.IsUniqueViolation(ex))
+        {
+            DbExceptions.DetachAll(context, designation);
+            return false;
+        }
+    }
+
+    public void RemoveDesignation(Designation designation)
+    {
+        context.Designations.Remove(designation);
+    }
+
+    public Task<int> CountUsedBeneficiarySlotsAsync(Guid vaultId, CancellationToken ct)
+    {
+        return context.Designations
+            .Where(d => d.Container.VaultId == vaultId)
+            .Select(d => d.BeneficiaryId)
+            .Distinct()
+            .CountAsync(ct);
+    }
+
+    public Task<bool> IsBeneficiaryDesignatedAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
+    {
+        return context.Designations
+            .AnyAsync(d => d.BeneficiaryId == beneficiaryId && d.Container.VaultId == vaultId, ct);
+    }
+
+    public async Task<Dictionary<Guid, List<Guid>>> FindContainerIdsByBeneficiaryIdsAsync(
+        List<Guid> beneficiaryIds, CancellationToken ct)
+    {
+        Dictionary<Guid, List<Guid>> result = new Dictionary<Guid, List<Guid>>();
+        if (beneficiaryIds.Count == 0)
+        {
+            return result;
+        }
+
+        var rows = await context.Designations
+            .AsNoTracking()
+            .Where(d => beneficiaryIds.Contains(d.BeneficiaryId))
+            .OrderBy(d => d.CreatedAt)
+            .ThenBy(d => d.Id)
+            .Select(d => new { d.BeneficiaryId, d.ContainerId })
+            .ToListAsync(ct);
+
+        foreach (var row in rows)
+        {
+            List<Guid>? containerIds;
+            if (!result.TryGetValue(row.BeneficiaryId, out containerIds))
+            {
+                containerIds = new List<Guid>();
+                result[row.BeneficiaryId] = containerIds;
+            }
+            containerIds.Add(row.ContainerId);
+        }
+        return result;
     }
 
     /// <remarks>

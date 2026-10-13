@@ -9,16 +9,9 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <remarks>
-/// Chưa có module người nhận nên số chỉ định luôn là 0 (gói luôn DRAFT, SETUP-01);
-/// nhánh người nhận sẽ truyền số thật vào ContainerRules và ToResponse.
-/// </remarks>
 public sealed class ContainerService : IContainerService
 {
     private const string DefaultSortBy = "createdAt";
-
-    /// <summary>Chưa có module người nhận.</summary>
-    private const int NoRecipients = 0;
 
     private static readonly Dictionary<string, string> SortColumns = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -30,6 +23,7 @@ public sealed class ContainerService : IContainerService
     private readonly IVaultRepository vaultRepository;
     private readonly IContainerRepository containerRepository;
     private readonly IAssetRepository assetRepository;
+    private readonly IBeneficiaryRepository beneficiaryRepository;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -38,6 +32,7 @@ public sealed class ContainerService : IContainerService
         IVaultRepository vaultRepository,
         IContainerRepository containerRepository,
         IAssetRepository assetRepository,
+        IBeneficiaryRepository beneficiaryRepository,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -45,6 +40,7 @@ public sealed class ContainerService : IContainerService
         this.vaultRepository = vaultRepository;
         this.containerRepository = containerRepository;
         this.assetRepository = assetRepository;
+        this.beneficiaryRepository = beneficiaryRepository;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -79,12 +75,12 @@ public sealed class ContainerService : IContainerService
         container.Status = ContainerStatus.Draft;
         container.CreatedAt = now;
         // Gói mới chưa sửa lần nào: UpdatedAt = null → etag "0" (docs/api-contract.md mục 6.6).
-        ContainerRules.RecalculateStatus(container, NoRecipients);
+        ContainerRules.RecalculateStatus(container);
 
         containerRepository.Add(container);
         BumpConfigVersion(vault, now);
         await unitOfWork.SaveChangesAsync(ct);
-        return container.ToResponse(NoRecipients);
+        return container.ToResponse();
     }
 
     public async Task<PaginatedList<ContainerResponse>> GetContainersAsync(
@@ -111,7 +107,7 @@ public sealed class ContainerService : IContainerService
         List<ContainerResponse> responses = new List<ContainerResponse>();
         foreach (Container container in page.Items)
         {
-            responses.Add(container.ToResponse(NoRecipients));
+            responses.Add(container.ToResponse());
         }
         return responses.ToPaginatedList(page.TotalCount, pagination);
     }
@@ -120,7 +116,7 @@ public sealed class ContainerService : IContainerService
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
         Container container = await LoadContainerAsync(vault.Id, containerId, ct);
-        return container.ToResponse(NoRecipients);
+        return container.ToResponse();
     }
 
     public async Task<ContainerResponse> UpdateContainerAsync(
@@ -169,7 +165,7 @@ public sealed class ContainerService : IContainerService
         // Không có gì đổi: không lưu, không tăng ConfigVersion.
         if (!changed)
         {
-            return container.ToResponse(NoRecipients);
+            return container.ToResponse();
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -177,7 +173,7 @@ public sealed class ContainerService : IContainerService
         // SETUP-04: đổi tên/mô tả gói cũng tăng ConfigVersion.
         BumpConfigVersion(vault, now);
         await unitOfWork.SaveChangesAsync(ct);
-        return container.ToResponse(NoRecipients);
+        return container.ToResponse();
     }
 
     public async Task<ContainerResponse> ArchiveContainerAsync(
@@ -191,7 +187,7 @@ public sealed class ContainerService : IContainerService
         // Đã lưu trữ: trả nguyên trạng, không lưu, không tăng ConfigVersion.
         if (container.Status == ContainerStatus.Archived)
         {
-            return container.ToResponse(NoRecipients);
+            return container.ToResponse();
         }
 
         bool confirmed = false;
@@ -212,13 +208,20 @@ public sealed class ContainerService : IContainerService
         {
             containerRepository.RemoveAssetLink(link);
         }
+        // SETUP-16: gói lưu trữ cũng không còn người nhận (hồ sơ không bị xóa). Người không còn ở gói nào
+        // thì tự hết chiếm suất vì suất luôn đếm lại từ chỉ định (QUOTA-03).
+        List<Designation> designations = new List<Designation>(container.Designations);
+        foreach (Designation designation in designations)
+        {
+            containerRepository.RemoveDesignation(designation);
+        }
 
         container.Status = ContainerStatus.Archived;
         container.ArchivedAt = now;
         container.UpdatedAt = now;
         BumpConfigVersion(vault, now);
         await unitOfWork.SaveChangesAsync(ct);
-        return container.ToResponse(NoRecipients);
+        return container.ToResponse();
     }
 
     public async Task<ContainerResponse> AddAssetAsync(
@@ -254,7 +257,7 @@ public sealed class ContainerService : IContainerService
             if (existing.ContainerId == container.Id)
             {
                 // Đã ở đúng gói này: trả nguyên trạng, không ghi DB, không tăng ConfigVersion.
-                return container.ToResponse(NoRecipients);
+                return container.ToResponse();
             }
             throw AlreadyInContainer(existing.ContainerId);
         }
@@ -267,7 +270,7 @@ public sealed class ContainerService : IContainerService
         // Thêm vào danh sách trước để RecalculateStatus và assetIds trong response tính cả tài sản mới.
         container.Assets.Add(link);
         container.UpdatedAt = now;
-        ContainerRules.RecalculateStatus(container, NoRecipients);
+        ContainerRules.RecalculateStatus(container);
         BumpConfigVersion(vault, now);
 
         // Lưu liên kết cùng các thay đổi đang chờ của Container và Plan trong một lần SaveChanges.
@@ -276,7 +279,7 @@ public sealed class ContainerService : IContainerService
         bool added = await containerRepository.TryAddAssetLinkAsync(link, ct);
         if (added)
         {
-            return container.ToResponse(NoRecipients);
+            return container.ToResponse();
         }
 
         // Unique AssetId chặn: request khác vừa đưa tài sản này vào một gói.
@@ -297,7 +300,7 @@ public sealed class ContainerService : IContainerService
 
         // Request kia đưa đúng vào gói này: trả kết quả dựng từ dữ liệu mới đọc lại.
         Container reloaded = await LoadContainerAsync(vault.Id, containerId, ct);
-        return reloaded.ToResponse(NoRecipients);
+        return reloaded.ToResponse();
     }
 
     public async Task<ContainerResponse> RemoveAssetAsync(
@@ -317,7 +320,7 @@ public sealed class ContainerService : IContainerService
         if (link == null)
         {
             // Tài sản không ở trong gói: trả nguyên trạng, không ghi DB.
-            return container.ToResponse(NoRecipients);
+            return container.ToResponse();
         }
 
         bool confirmed = false;
@@ -336,10 +339,126 @@ public sealed class ContainerService : IContainerService
         container.Assets.Remove(link);
         containerRepository.RemoveAssetLink(link);
         container.UpdatedAt = now;
-        ContainerRules.RecalculateStatus(container, NoRecipients);
+        ContainerRules.RecalculateStatus(container);
         BumpConfigVersion(vault, now);
         await unitOfWork.SaveChangesAsync(ct);
-        return container.ToResponse(NoRecipients);
+        return container.ToResponse();
+    }
+
+    public async Task<ContainerResponse> AddBeneficiaryAsync(
+        Guid vaultId, Guid containerId, AddContainerBeneficiaryRequest request, CancellationToken ct)
+    {
+        Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
+        // OPLAN-01: chỉ định người nhận là thao tác "thêm".
+        VaultRules.EnsureEditable(vault);
+        Container container = await LoadContainerAsync(vault.Id, containerId, ct);
+
+        if (container.Status == ContainerStatus.Archived)
+        {
+            throw Archived();
+        }
+        // SETUP-17 / AC-04: hạng Free không được thêm người nhận; chặn ở API, không chỉ ẩn nút.
+        if (vault.Entitlement.Tier == ServiceTier.Free)
+        {
+            throw new AppException(AppErrorType.Forbidden, ErrorCode.PaidTierRequired,
+                "Hạng miễn phí chưa được thêm người nhận vào gói. Vui lòng nâng cấp dịch vụ.");
+        }
+
+        Guid beneficiaryId = request.BeneficiaryId;
+        Beneficiary? beneficiary = await beneficiaryRepository.FindByIdAsync(vault.Id, beneficiaryId, ct);
+        if (beneficiary == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.BeneficiaryNotFound, "Không tìm thấy người nhận.");
+        }
+
+        if (FindDesignationInContainer(container, beneficiaryId) != null)
+        {
+            // Đã ở đúng gói này: trả nguyên trạng, không ghi DB, không tăng ConfigVersion.
+            return container.ToResponse();
+        }
+
+        // QUOTA-03 / QUOTA-05: suất đếm theo NGƯỜI khác nhau có chỉ định trong kho.
+        // Người đã ở gói khác thì không tốn thêm suất; người mới thì phải còn suất.
+        // TODO: hai request gắn 2 người MỚI khác nhau cùng lúc có thể cùng qua bước đếm này và vượt suất
+        // (chờ chốt concurrency token cho HandoverPlan.ConfigVersion).
+        bool alreadyDesignated = await containerRepository.IsBeneficiaryDesignatedAsync(vault.Id, beneficiaryId, ct);
+        if (!alreadyDesignated)
+        {
+            int usedSlots = await containerRepository.CountUsedBeneficiarySlotsAsync(vault.Id, ct);
+            int maxSlots = vault.Entitlement.IncludedBeneficiarySlots + vault.Entitlement.ExtraBeneficiarySlots;
+            if (usedSlots + 1 > maxSlots)
+            {
+                throw SlotsExceeded(usedSlots, maxSlots);
+            }
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        Designation designation = new Designation();
+        designation.ContainerId = container.Id;
+        designation.BeneficiaryId = beneficiaryId;
+        designation.CreatedAt = now;
+        // Thêm vào danh sách trước để RecalculateStatus và beneficiaryIds trong response tính cả người mới.
+        // SETUP-08 / SETUP-19: mọi hồ sơ đã lưu đều hợp lệ, kể cả người chưa đủ 18 tuổi.
+        container.Designations.Add(designation);
+        container.UpdatedAt = now;
+        ContainerRules.RecalculateStatus(container);
+        BumpConfigVersion(vault, now);
+
+        // Lưu chỉ định cùng các thay đổi đang chờ của Container và Plan trong một lần SaveChanges.
+        // Concurrency token Container.UpdatedAt lệch → GlobalExceptionHandler trả 409 EDIT_CONFLICT; không bắt ở đây.
+        bool added = await containerRepository.TryAddDesignationAsync(designation, ct);
+        if (added)
+        {
+            return container.ToResponse();
+        }
+
+        // Unique (ContainerId, BeneficiaryId) chặn: request khác (bấm lặp) vừa gắn đúng người này vào đúng gói này.
+        // Container/Plan đang theo dõi đã bị sửa trong bộ nhớ nhưng KHÔNG được lưu, nên bỏ hết rồi đọc lại từ DB.
+        containerRepository.DiscardPendingChanges();
+        Container reloaded = await LoadContainerAsync(vault.Id, containerId, ct);
+        return reloaded.ToResponse();
+    }
+
+    public async Task<ContainerResponse> RemoveBeneficiaryAsync(
+        Guid vaultId, Guid containerId, Guid beneficiaryId, ConfirmPlanImpactRequest? request, CancellationToken ct)
+    {
+        Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
+        // OPLAN-01: gỡ người nhận là thao tác "giảm", vẫn cho khi dịch vụ đang ân hạn.
+        VaultRules.EnsureCanReduce(vault);
+        Container container = await LoadContainerAsync(vault.Id, containerId, ct);
+
+        if (container.Status == ContainerStatus.Archived)
+        {
+            throw Archived();
+        }
+
+        Designation? designation = FindDesignationInContainer(container, beneficiaryId);
+        if (designation == null)
+        {
+            // Người nhận không ở trong gói: trả nguyên trạng, không ghi DB.
+            return container.ToResponse();
+        }
+
+        bool confirmed = false;
+        if (request != null)
+        {
+            confirmed = request.ConfirmPlanDeactivation;
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        // SETUP-16: gỡ người nhận cuối cùng của gói READY làm gói về DRAFT, có thể làm kế hoạch mất gói READY cuối cùng.
+        bool willLoseReady = container.Status == ContainerStatus.Ready && container.Designations.Count == 1;
+        await EnsurePlanImpactConfirmedAsync(vault, willLoseReady, confirmed, now, ct);
+
+        // Không cần "trả suất": suất luôn đếm lại từ chỉ định; người còn ở gói khác vẫn chiếm suất (AC-103).
+        // Gỡ cả khỏi danh sách để RecalculateStatus và beneficiaryIds trong response đúng ngay.
+        container.Designations.Remove(designation);
+        containerRepository.RemoveDesignation(designation);
+        container.UpdatedAt = now;
+        ContainerRules.RecalculateStatus(container);
+        BumpConfigVersion(vault, now);
+        await unitOfWork.SaveChangesAsync(ct);
+        return container.ToResponse();
     }
 
     /// <summary>
@@ -410,6 +529,19 @@ public sealed class ContainerService : IContainerService
         return null;
     }
 
+    /// <summary>Chỉ định của hồ sơ trong gói đã nạp Designations; không có → null.</summary>
+    private static Designation? FindDesignationInContainer(Container container, Guid beneficiaryId)
+    {
+        foreach (Designation designation in container.Designations)
+        {
+            if (designation.BeneficiaryId == beneficiaryId)
+            {
+                return designation;
+            }
+        }
+        return null;
+    }
+
     private static AppException Archived()
     {
         return new AppException(AppErrorType.Conflict, ErrorCode.ContainerArchived,
@@ -423,6 +555,16 @@ public sealed class ContainerService : IContainerService
         extensions["containerId"] = containerId;
         return new AppException(AppErrorType.Conflict, ErrorCode.AssetAlreadyInContainer,
             "Tài sản này đang ở một gói khác.", extensions);
+    }
+
+    /// <summary>QUOTA-05: vượt suất thì từ chối, kèm số đang dùng và tối đa.</summary>
+    private static AppException SlotsExceeded(int usedSlots, int maxSlots)
+    {
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["usedSlots"] = usedSlots;
+        extensions["maxSlots"] = maxSlots;
+        return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiarySlotsExceeded,
+            "Kho đã dùng hết suất người nhận. Vui lòng mua thêm suất.", extensions);
     }
 
     private static AppException LimitExceeded()

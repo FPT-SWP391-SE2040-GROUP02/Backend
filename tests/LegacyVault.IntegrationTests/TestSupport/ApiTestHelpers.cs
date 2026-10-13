@@ -115,6 +115,58 @@ public static class ApiTestHelpers
         return await ReadJsonAsync(response);
     }
 
+    /// <summary>Tạo gói qua API (POST .../containers, 201), trả JSON gói.</summary>
+    public static async Task<JsonElement> CreateContainerAsync(HttpClient client, Guid vaultId, string name)
+    {
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers", new { name });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await ReadJsonAsync(response);
+    }
+
+    /// <summary>Đưa tài sản vào gói (POST .../containers/{containerId}/assets); trả response để test tự kiểm.</summary>
+    public static Task<HttpResponseMessage> AddAssetToContainerAsync(
+        HttpClient client, Guid vaultId, Guid containerId, Guid assetId)
+    {
+        return client.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers/{containerId}/assets", new { assetId });
+    }
+
+    /// <summary>Chỉ định người nhận cho gói (POST .../containers/{containerId}/beneficiaries); trả response để test tự kiểm.</summary>
+    public static Task<HttpResponseMessage> AddBeneficiaryToContainerAsync(
+        HttpClient client, Guid vaultId, Guid containerId, Guid beneficiaryId)
+    {
+        return client.PostAsJsonAsync(
+            $"/api/v1/vaults/{vaultId}/containers/{containerId}/beneficiaries", new { beneficiaryId });
+    }
+
+    /// <summary>Đổi trạng thái kế hoạch bằng cách sửa thẳng HandoverPlans (chưa có luồng kích hoạt kế hoạch).</summary>
+    public static async Task SetPlanStatusAsync(ApiFactory factory, Guid vaultId, PlanStatus status)
+    {
+        await WithDbAsync(factory, async db =>
+        {
+            await db.HandoverPlans.Where(p => p.VaultId == vaultId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, status));
+        });
+    }
+
+    /// <summary>Đặt số suất người nhận mua thêm bằng cách sửa thẳng VaultEntitlements (chưa có module thanh toán).</summary>
+    public static async Task SetExtraBeneficiarySlotsAsync(ApiFactory factory, Guid vaultId, int extraSlots)
+    {
+        await WithDbAsync(factory, async db =>
+        {
+            await db.VaultEntitlements.Where(e => e.VaultId == vaultId)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.ExtraBeneficiarySlots, extraSlots));
+        });
+    }
+
+    /// <summary>User mới (đã xác minh email) có kho đã nâng lên XS (2 suất người nhận).</summary>
+    public static async Task<(HttpClient Client, Guid VaultId)> CreateClientWithPaidVaultAsync(ApiFactory factory)
+    {
+        HttpClient client = await CreateClientForNewUserAsync(factory, emailVerified: true);
+        Guid vaultId = await CreateVaultAsync(client);
+        await UpgradeVaultToXsAsync(factory, vaultId);
+        return (client, vaultId);
+    }
+
     /// <summary>"Tạo kho của tôi" qua API (phải là lần tạo đầu, 201), trả id kho.</summary>
     public static async Task<Guid> CreateVaultAsync(HttpClient client)
     {

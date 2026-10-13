@@ -2,14 +2,17 @@ using LegacyVault.Domain.Entities;
 
 namespace LegacyVault.Application.Repositories;
 
-/// <summary>Truy cập bảng Containers (kèm ContainerAssets).</summary>
+/// <summary>Truy cập bảng Containers (kèm ContainerAssets và Designations).</summary>
 public interface IContainerRepository
 {
-    /// <summary>Một Container trong ĐÚNG kho, kèm Assets (có theo dõi thay đổi). Không thấy / kho khác → null (SEC-04).</summary>
+    /// <summary>
+    /// Một Container trong ĐÚNG kho, kèm Assets và Designations (sắp theo thời điểm gắn), có theo dõi thay đổi.
+    /// Không thấy / kho khác → null (SEC-04).
+    /// </summary>
     Task<Container?> FindByIdAsync(Guid vaultId, Guid containerId, CancellationToken ct);
 
     /// <summary>
-    /// Một trang Container của kho kèm Assets, kèm tổng số bản ghi khớp bộ lọc.
+    /// Một trang Container của kho kèm Assets và Designations (sắp theo thời điểm gắn), kèm tổng số bản ghi khớp bộ lọc.
     /// searchTerm lọc theo tên; sortBy chỉ nhận giá trị service đã kiểm tra ("name" / "createdAt").
     /// pageIndex bắt đầu từ 1.
     /// </summary>
@@ -37,6 +40,30 @@ public interface IContainerRepository
 
     /// <summary>Đánh dấu "sẽ DELETE" một liên kết tài sản.</summary>
     void RemoveAssetLink(ContainerAsset link);
+
+    /// <summary>
+    /// Thêm chỉ định người nhận rồi lưu ngay (cùng các thay đổi đang chờ, ví dụ Plan.ConfigVersion).
+    /// Trả false khi DB báo trùng (ContainerId, BeneficiaryId): request khác vừa gắn đúng người này vào đúng gói này.
+    /// </summary>
+    Task<bool> TryAddDesignationAsync(Designation designation, CancellationToken ct);
+
+    /// <summary>Đánh dấu "sẽ DELETE" một chỉ định người nhận.</summary>
+    void RemoveDesignation(Designation designation);
+
+    /// <summary>
+    /// QUOTA-03: số người nhận KHÁC NHAU (theo BeneficiaryId) có ít nhất một chỉ định trong các gói của kho.
+    /// Một người ở nhiều gói tính một suất. Gói lưu trữ không còn chỉ định nên không cần lọc theo trạng thái.
+    /// </summary>
+    Task<int> CountUsedBeneficiarySlotsAsync(Guid vaultId, CancellationToken ct);
+
+    /// <summary>Hồ sơ có đang được chỉ định ở gói nào của kho không.</summary>
+    Task<bool> IsBeneficiaryDesignatedAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct);
+
+    /// <summary>
+    /// beneficiaryId → các containerId đang chỉ định hồ sơ đó (sắp theo thời điểm gắn), một truy vấn cho cả danh sách.
+    /// Hồ sơ không có chỉ định nào thì KHÔNG có key trong kết quả.
+    /// </summary>
+    Task<Dictionary<Guid, List<Guid>>> FindContainerIdsByBeneficiaryIdsAsync(List<Guid> beneficiaryIds, CancellationToken ct);
 
     /// <summary>
     /// Bỏ MỌI thay đổi chưa lưu của cả request (ChangeTracker.Clear): mọi entity đang theo dõi

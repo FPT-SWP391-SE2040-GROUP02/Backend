@@ -245,6 +245,34 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("ContainerAssets", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.Designation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BeneficiaryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ContainerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BeneficiaryId");
+
+                    b.HasIndex("ContainerId", "BeneficiaryId")
+                        .IsUnique();
+
+                    b.ToTable("Designations", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.EmailVerificationToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -687,6 +715,25 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Container");
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.Designation", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Beneficiary", "Beneficiary")
+                        .WithMany()
+                        .HasForeignKey("BeneficiaryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LegacyVault.Domain.Entities.Container", "Container")
+                        .WithMany("Designations")
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Beneficiary");
+
+                    b.Navigation("Container");
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.EmailVerificationToken", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.User", "User")
@@ -772,6 +819,8 @@ namespace LegacyVault.Infrastructure.Data.Migrations
             modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>
                 {
                     b.Navigation("Assets");
+
+                    b.Navigation("Designations");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.Vault", b =>

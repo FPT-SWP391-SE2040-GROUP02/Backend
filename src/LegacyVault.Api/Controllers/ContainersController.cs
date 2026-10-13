@@ -96,4 +96,30 @@ public sealed class ContainersController(IContainerService containerService) : C
     {
         return containerService.RemoveAssetAsync(vaultId, containerId, assetId, request, ct);
     }
+
+    /// <summary>Chỉ định một hồ sơ người nhận của kho cho gói (hạng Free bị chặn, SETUP-17; kiểm suất, QUOTA-05).</summary>
+    [HttpPost("{containerId:guid}/beneficiaries")]
+    [Consumes("application/json")]
+    [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ContainerResponse> AddContainerBeneficiary(
+        Guid vaultId, Guid containerId, AddContainerBeneficiaryRequest request, CancellationToken ct)
+    {
+        return containerService.AddBeneficiaryAsync(vaultId, containerId, request, ct);
+    }
+
+    /// <summary>Gỡ người nhận khỏi gói (không xóa hồ sơ; người còn ở gói khác vẫn chiếm suất).</summary>
+    [HttpDelete("{containerId:guid}/beneficiaries/{beneficiaryId:guid}")]
+    [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ContainerResponse> RemoveContainerBeneficiary(
+        Guid vaultId, Guid containerId, Guid beneficiaryId, [FromQuery] ConfirmPlanImpactRequest request,
+        CancellationToken ct)
+    {
+        return containerService.RemoveBeneficiaryAsync(vaultId, containerId, beneficiaryId, request, ct);
+    }
 }

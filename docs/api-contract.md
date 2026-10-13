@@ -65,7 +65,7 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 | 401 | `REAUTHENTICATION_FAILED` | Xác thực lại thất bại khi đổi phương thức đăng nhập (**không** đá về trang login) | |
 | 403 | `ACCOUNT_NOT_ACTIVE` | Tài khoản bị khóa/vô hiệu | |
 | 403 | `EMAIL_NOT_VERIFIED` | Tạo kho khi email chưa xác minh | |
-| 403 | `PAID_TIER_REQUIRED` | Hạng Free đưa tài sản vào gói, hoặc thêm người nhận | |
+| 403 | `PAID_TIER_REQUIRED` | Hạng Free đưa tài sản vào gói, tạo hồ sơ người nhận hoặc gắn người nhận vào gói | |
 | 404 | `VAULT_NOT_FOUND` | Chưa có kho, hoặc kho của người khác | |
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
@@ -80,6 +80,8 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 | 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kế hoạch không còn gói sẵn sàng; cần Owner xác nhận | |
 | 409 | `BENEFICIARY_IDENTITY_CONFLICT` | Kho đã có hồ sơ cùng số CCCD nhưng khác họ tên hoặc ngày sinh | `beneficiaryId` |
 | 409 | `MINOR_CONFIRMATION_REQUIRED` | Người nhận chưa đủ 18 tuổi; cần Owner xác nhận cảnh báo | |
+| 409 | `BENEFICIARY_IN_USE` | Xóa hồ sơ người nhận đang ở gói; gỡ khỏi các gói trước | `containerIds` |
+| 409 | `BENEFICIARY_SLOTS_EXCEEDED` | Gắn thêm một người nhận mới vượt số suất của kho | `usedSlots`, `maxSlots` |
 | 409 | `GOOGLE_ACCOUNT_ALREADY_LINKED` | Google này đã gắn tài khoản khác / tài khoản đã có Google | |
 | 409 | `LAST_LOGIN_METHOD` | Gỡ phương thức đăng nhập cuối cùng | |
 | 409 | `LOGIN_METHOD_ALREADY_EXISTS` | Đã có phương thức này | `method` |
@@ -272,6 +274,9 @@ Cột **Quyền**: `Công khai` = không cần token; `Đăng nhập` = cần Be
   "storageUsedBytes": 0,
   "storageRemainingBytes": 20971520,
   "beneficiarySlots": 0,
+  "includedBeneficiarySlots": 0,
+  "extraBeneficiarySlots": 0,
+  "usedBeneficiarySlots": 0,
   "activeContainerCount": 0,
   "createdAt": "2026-10-13T08:30:00+00:00",
   "updatedAt": null,
@@ -288,6 +293,8 @@ Cột **Quyền**: `Công khai` = không cần token; `Đăng nhập` = cần Be
 
 Ba trạng thái **độc lập**: kho đã trả tiền vẫn có thể `planStatus = DRAFT`. Dung lượng tính bằng byte, `1 MiB = 1.048.576 byte`.
 
+Suất người nhận (QUOTA-06): `beneficiarySlots` = tổng = `includedBeneficiarySlots` (kèm hạng) + `extraBeneficiarySlots` (mua thêm). `usedBeneficiarySlots` = số **người** khác nhau đang ở ít nhất một gói; một người ở nhiều gói tính một suất, hồ sơ chưa ở gói nào không tính.
+
 ### 6.6. Gói (Container)
 
 Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo service bằng `createBaseService({ endpoint: \`/v1/vaults/${vaultId}/containers\` })`.
@@ -301,6 +308,8 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo s
 | DELETE | `.../containers/{containerId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` (đã `ARCHIVED`) | 404, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
 | POST | `.../containers/{containerId}/assets` | Đăng nhập | `{ assetId }` | 200 `ContainerResponse` | 403 `PAID_TIER_REQUIRED`, 404, 409 `ASSET_ALREADY_IN_CONTAINER` / `CONTAINER_ARCHIVED` |
 | DELETE | `.../containers/{containerId}/assets/{assetId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` | 404, 409 `CONTAINER_ARCHIVED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
+| POST | `.../containers/{containerId}/beneficiaries` | Đăng nhập | `{ beneficiaryId }` | 200 `ContainerResponse` | 400, 403 `PAID_TIER_REQUIRED`, 404 `CONTAINER_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `BENEFICIARY_SLOTS_EXCEEDED` / `CONTAINER_ARCHIVED` / `VAULT_NOT_EDITABLE` |
+| DELETE | `.../containers/{containerId}/beneficiaries/{beneficiaryId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` | 404, 409 `CONTAINER_ARCHIVED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
 
 ```json
 // ContainerResponse
@@ -311,6 +320,7 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo s
   "description": null,
   "status": "DRAFT",
   "assetIds": [],
+  "beneficiaryIds": [],
   "missingRequirements": ["NO_ASSET", "NO_DESIGNATION"],
   "createdAt": "2026-10-13T08:35:00+00:00",
   "updatedAt": null,
@@ -319,10 +329,14 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo s
 }
 ```
 
-- `DELETE` gói = **lưu trữ**, không xóa hẳn: gói chuyển `ARCHIVED`, tài sản được gỡ ra nhưng **không bị xóa**.
+- `DELETE` gói = **lưu trữ**, không xóa hẳn: gói chuyển `ARCHIVED`, tài sản và người nhận được gỡ ra nhưng **không bị xóa**. Người nhận không còn ở gói nào khác thì hết chiếm suất.
 - Gặp `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED`: FE hiện cảnh báo "kế hoạch sẽ trở về bản nháp"; Owner đồng ý thì gọi lại với `?confirmPlanDeactivation=true`.
-- Hạng Free: được tạo/đổi tên/lưu trữ gói rỗng; đưa tài sản vào gói → `403 PAID_TIER_REQUIRED` (FE hiện gợi ý nâng cấp).
-- `status`: `DRAFT` (thiếu tài sản hoặc người nhận), `READY`, `ARCHIVED`. BE tự tính, FE không gửi trạng thái. `missingRequirements` cho biết còn thiếu gì: `NO_ASSET`, `NO_DESIGNATION`.
+- Hạng Free: được tạo/đổi tên/lưu trữ gói rỗng; đưa tài sản hoặc người nhận vào gói → `403 PAID_TIER_REQUIRED` (FE hiện gợi ý nâng cấp).
+- `status`: `DRAFT` (thiếu tài sản hoặc người nhận), `READY` (có ≥1 tài sản **và** ≥1 người nhận), `ARCHIVED`. BE tự tính, FE không gửi trạng thái. `missingRequirements` cho biết còn thiếu gì: `NO_ASSET`, `NO_DESIGNATION`. Người nhận chưa đủ 18 tuổi (đã xác nhận) vẫn tính.
+- `beneficiaryIds`: id hồ sơ người nhận trong gói, theo thứ tự gắn; FE lấy họ tên từ danh sách người nhận của kho (mục 6.8).
+- **Gắn người nhận** (`POST .../beneficiaries`): hồ sơ phải thuộc kho này (tạo trước ở mục 6.8). Gắn lại người đã có trong gói → 200, không đổi gì. Người **chưa ở gói nào** chiếm thêm một suất; vượt suất → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots`, `maxSlots` (FE gợi ý mua thêm suất). Người đã ở gói khác thì không tốn thêm suất.
+- **Gỡ người nhận** không xóa hồ sơ. Người còn ở gói khác vẫn chiếm suất; gỡ khỏi mọi gói thì trả suất. Gỡ người cuối cùng của gói READY cuối cùng khi kế hoạch đang chạy → `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` như gỡ tài sản.
+- Mọi thay đổi gói (kể cả gắn/gỡ người nhận) tăng `planConfigVersion`. Dịch vụ đang ân hạn: gắn bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), gỡ vẫn được.
 
 ### 6.7. Tài sản (Asset)
 
@@ -364,7 +378,7 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 
 ### 6.8. Người nhận (Beneficiary)
 
-Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lại cho nhiều gói. Endpoint gốc: `/v1/vaults/{vaultId}/beneficiaries`. Hiện chỉ có CRUD hồ sơ; **chưa** gắn người nhận vào gói và **chưa** đếm suất (làm ở nhánh chỉ định).
+Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lại cho nhiều gói. Endpoint gốc: `/v1/vaults/{vaultId}/beneficiaries`. Gắn/gỡ hồ sơ vào gói ở mục 6.6 (`.../containers/{containerId}/beneficiaries`).
 
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
@@ -372,7 +386,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 | POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone?, confirmMinor? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `MINOR_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` |
 | GET | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | 200 `BeneficiaryResponse` | 404 `VAULT_NOT_FOUND` / `BENEFICIARY_NOT_FOUND` |
 | PUT | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | `{ etag, fullName?, dateOfBirth?, email?, phone?, confirmMinor? }` | 200 `BeneficiaryResponse` | 400, 404, 409 `EDIT_CONFLICT` / `MINOR_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` |
-| DELETE | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | **204** | 404, 409 `VAULT_NOT_EDITABLE` |
+| DELETE | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | **204** | 404, 409 `BENEFICIARY_IN_USE` / `VAULT_NOT_EDITABLE` |
 
 ```json
 // POST body
@@ -412,7 +426,11 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **Trùng CCCD trong kho:** cùng CCCD, cùng họ tên (không phân biệt hoa thường, bỏ khoảng trắng thừa) và cùng ngày sinh → **200** trả hồ sơ cũ, không đổi gì (kể cả liên hệ). Khác họ tên hoặc ngày sinh → `409 BENEFICIARY_IDENTITY_CONFLICT` kèm `beneficiaryId`; FE mở hồ sơ đó cho Owner sửa cho thống nhất.
 - **Dưới 18 tuổi** (tính theo giờ Việt Nam): lần đầu lưu cần `confirmMinor: true`, không thì `409 MINOR_CONFIRMATION_REQUIRED`; FE hiện cảnh báo "người này hiện chưa nhận được qua app" rồi gọi lại. Đã xác nhận rồi thì các lần sửa sau không cần gửi lại. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
-- Tạo/sửa hồ sơ chưa gắn gói **không** tăng `planConfigVersion` và không chiếm suất. BE không gửi thông báo, không tạo tài khoản cho người nhận.
+- `containerIds`: các gói đang có người này, theo thứ tự gắn; rỗng khi chưa ở gói nào.
+- Tạo hồ sơ **không** tăng `planConfigVersion` và không chiếm suất; suất chỉ tính khi hồ sơ được gắn vào gói (mục 6.6).
+- Sửa hồ sơ **đang ở gói** (có thay đổi thật) → `planConfigVersion` tăng 1; hồ sơ chưa ở gói nào thì không tăng.
+- Xóa hồ sơ đang ở gói → `409 BENEFICIARY_IN_USE` kèm `containerIds`; FE hướng dẫn gỡ khỏi các gói đó trước.
+- BE không gửi thông báo, không tạo tài khoản cho người nhận.
 
 ---
 
