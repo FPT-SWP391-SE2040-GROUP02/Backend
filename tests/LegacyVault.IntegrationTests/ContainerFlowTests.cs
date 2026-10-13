@@ -52,7 +52,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: kho mới luôn ở hạng Free.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
 
         // Hành động
         HttpResponseMessage response = await client.PostAsJsonAsync(ContainersUrl(vaultId),
@@ -77,7 +77,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: thêm thẳng 50 gói chưa lưu trữ vào DB.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             for (int i = 1; i <= 50; i++)
@@ -106,13 +106,13 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: chủ kho A có một gói; người lạ có kho B riêng.
         HttpClient owner = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid ownerVaultId = await CreateVaultAsync(owner);
+        Guid ownerVaultId = await ApiTestHelpers.CreateVaultAsync(owner);
         JsonElement container = await CreateContainerAsync(owner, ownerVaultId, "Gói của chủ kho");
         Guid containerId = container.GetProperty("id").GetGuid();
         string? etag = container.GetProperty("etag").GetString();
 
         HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid strangerVaultId = await CreateVaultAsync(stranger);
+        Guid strangerVaultId = await ApiTestHelpers.CreateVaultAsync(stranger);
         string viaOwnVault = $"{ContainersUrl(strangerVaultId)}/{containerId}";
         string viaOwnerVault = $"{ContainersUrl(ownerVaultId)}/{containerId}";
 
@@ -140,7 +140,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: một gói đã đổi tên một lần (etag ban đầu thành cũ).
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         JsonElement container = await CreateContainerAsync(client, vaultId, "Tên cũ");
         string url = $"{ContainersUrl(vaultId)}/{container.GetProperty("id").GetGuid()}";
         string? oldEtag = container.GetProperty("etag").GetString();
@@ -149,7 +149,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
         JsonElement current = await ApiTestHelpers.ReadJsonAsync(renamed);
         string? currentEtag = current.GetProperty("etag").GetString();
-        int versionBefore = await GetPlanConfigVersionAsync(client);
+        int versionBefore = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
 
         // Hành động
         HttpResponseMessage stale = await client.PutAsJsonAsync(url, new { etag = oldEtag, name = "Ghi đè" });
@@ -161,7 +161,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         JsonElement afterNoChange = await ApiTestHelpers.ReadJsonAsync(noChange);
         Assert.Equal("Tên mới", afterNoChange.GetProperty("name").GetString());
         Assert.Equal(currentEtag, afterNoChange.GetProperty("etag").GetString());
-        Assert.Equal(versionBefore, await GetPlanConfigVersionAsync(client));
+        Assert.Equal(versionBefore, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
     }
 
     [SqlFact]
@@ -169,14 +169,14 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         JsonElement container = await CreateContainerAsync(client, vaultId, "Gói sẽ lưu trữ");
         string url = $"{ContainersUrl(vaultId)}/{container.GetProperty("id").GetGuid()}";
 
         // Hành động: lưu trữ 2 lần rồi thử sửa.
         HttpResponseMessage first = await client.DeleteAsync(url);
         JsonElement firstBody = await ApiTestHelpers.ReadJsonAsync(first);
-        int versionAfterFirst = await GetPlanConfigVersionAsync(client);
+        int versionAfterFirst = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
         HttpResponseMessage second = await client.DeleteAsync(url);
         JsonElement secondBody = await ApiTestHelpers.ReadJsonAsync(second);
         HttpResponseMessage update = await client.PutAsJsonAsync(url,
@@ -189,7 +189,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         Assert.Equal(0, firstBody.GetProperty("missingRequirements").GetArrayLength());
         Assert.NotEqual(JsonValueKind.Null, firstBody.GetProperty("archivedAt").ValueKind);
         Assert.Equal(firstBody.GetRawText(), secondBody.GetRawText());
-        Assert.Equal(versionAfterFirst, await GetPlanConfigVersionAsync(client));
+        Assert.Equal(versionAfterFirst, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
         await ApiTestHelpers.AssertProblemAsync(update, HttpStatusCode.Conflict, "CONTAINER_ARCHIVED");
     }
 
@@ -198,7 +198,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: hai gói, lưu trữ một gói.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await CreateContainerAsync(client, vaultId, "B - còn dùng");
         JsonElement archived = await CreateContainerAsync(client, vaultId, "A - đã lưu trữ");
         Guid archivedId = archived.GetProperty("id").GetGuid();
@@ -226,22 +226,22 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
-        int start = await GetPlanConfigVersionAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
+        int start = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
 
         // Hành động + Kiểm tra: mỗi bước tăng đúng 1.
         JsonElement container = await CreateContainerAsync(client, vaultId, "Gói");
-        Assert.Equal(start + 1, await GetPlanConfigVersionAsync(client));
+        Assert.Equal(start + 1, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
 
         string url = $"{ContainersUrl(vaultId)}/{container.GetProperty("id").GetGuid()}";
         HttpResponseMessage renamed = await client.PutAsJsonAsync(url,
             new { etag = container.GetProperty("etag").GetString(), name = "Gói đổi tên" });
         Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
-        Assert.Equal(start + 2, await GetPlanConfigVersionAsync(client));
+        Assert.Equal(start + 2, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
 
         HttpResponseMessage archived = await client.DeleteAsync(url);
         Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
-        Assert.Equal(start + 3, await GetPlanConfigVersionAsync(client));
+        Assert.Equal(start + 3, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
     }
 
     [SqlFact]
@@ -249,7 +249,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: có sẵn một gói, rồi chuyển dịch vụ sang ân hạn chỉ đọc.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         JsonElement container = await CreateContainerAsync(client, vaultId, "Gói có sẵn");
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
@@ -276,7 +276,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         // Chuẩn bị: chưa có module người nhận nên gói READY và kế hoạch ACTIVE được dựng thẳng trong DB;
         // gói có một tài sản để kiểm tài sản được gỡ ra nhưng không bị xóa.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         JsonElement container = await CreateContainerAsync(client, vaultId, "Gói sẵn sàng");
         Guid containerId = container.GetProperty("id").GetGuid();
         HttpResponseMessage assetResponse = await client.PostAsJsonAsync(
@@ -323,7 +323,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: kho Free vẫn tạo được tài sản và gói.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         Guid containerId = (await CreateContainerAsync(client, vaultId, "Gói")).GetProperty("id").GetGuid();
 
@@ -340,11 +340,11 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Sổ tiết kiệm");
         Guid containerId = (await CreateContainerAsync(client, vaultId, "Gói")).GetProperty("id").GetGuid();
-        int versionBefore = await GetPlanConfigVersionAsync(client);
+        int versionBefore = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
 
         // Hành động
         HttpResponseMessage response = await AddAssetAsync(client, vaultId, containerId, assetId);
@@ -355,7 +355,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         Assert.Equal(new List<Guid> { assetId }, ReadGuids(container.GetProperty("assetIds")));
         Assert.Equal("DRAFT", container.GetProperty("status").GetString());
         Assert.Equal(new List<string> { "NO_DESIGNATION" }, ReadStrings(container.GetProperty("missingRequirements")));
-        Assert.Equal(versionBefore + 1, await GetPlanConfigVersionAsync(client));
+        Assert.Equal(versionBefore + 1, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
     }
 
     [SqlFact]
@@ -363,7 +363,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: tài sản đã ở gói thứ nhất.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         Guid firstId = (await CreateContainerAsync(client, vaultId, "Gói 1")).GetProperty("id").GetGuid();
@@ -384,11 +384,11 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         Guid containerId = (await CreateContainerAsync(client, vaultId, "Gói")).GetProperty("id").GetGuid();
-        int versionBefore = await GetPlanConfigVersionAsync(client);
+        int versionBefore = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
 
         // Hành động
         HttpResponseMessage first = await AddAssetAsync(client, vaultId, containerId, assetId);
@@ -401,7 +401,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         JsonElement secondBody = await ApiTestHelpers.ReadJsonAsync(second);
         Assert.Equal(firstBody.GetRawText(), secondBody.GetRawText());
         Assert.Equal(1, await CountLinksAsync(assetId));
-        Assert.Equal(versionBefore + 1, await GetPlanConfigVersionAsync(client));
+        Assert.Equal(versionBefore + 1, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
     }
 
     [SqlFact]
@@ -409,11 +409,11 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: người khác có một tài sản trong kho của họ.
         HttpClient other = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid otherVaultId = await CreateVaultAsync(other);
+        Guid otherVaultId = await ApiTestHelpers.CreateVaultAsync(other);
         Guid otherAssetId = await ApiTestHelpers.CreateTextAssetAsync(other, otherVaultId, "Của người khác");
 
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid containerId = (await CreateContainerAsync(client, vaultId, "Gói")).GetProperty("id").GetGuid();
 
@@ -430,7 +430,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: một gói đã lưu trữ.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         Guid containerId = (await CreateContainerAsync(client, vaultId, "Gói")).GetProperty("id").GetGuid();
@@ -450,14 +450,14 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: gói có tài sản A; tài sản B không ở trong gói.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetA = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản A");
         Guid assetB = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản B");
         Guid containerId = (await CreateContainerAsync(client, vaultId, "Gói")).GetProperty("id").GetGuid();
         JsonElement withAsset = await ApiTestHelpers.ReadJsonAsync(await AddAssetAsync(client, vaultId, containerId, assetA));
         long usedBefore = await GetStorageUsedBytesAsync(client);
-        int versionBefore = await GetPlanConfigVersionAsync(client);
+        int versionBefore = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
 
         // Hành động: gỡ tài sản không có trong gói, rồi gỡ tài sản có trong gói.
         HttpResponseMessage removeMissing = await client.DeleteAsync(ContainerAssetUrl(vaultId, containerId, assetB));
@@ -473,7 +473,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         JsonElement removed = await ApiTestHelpers.ReadJsonAsync(removeReal);
         Assert.Equal(0, removed.GetProperty("assetIds").GetArrayLength());
         Assert.Equal(new List<string> { "NO_ASSET", "NO_DESIGNATION" }, ReadStrings(removed.GetProperty("missingRequirements")));
-        Assert.Equal(versionBefore + 1, await GetPlanConfigVersionAsync(client));
+        Assert.Equal(versionBefore + 1, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
         Assert.Equal(usedBefore, await GetStorageUsedBytesAsync(client));
         HttpResponseMessage asset = await client.GetAsync($"/api/v1/vaults/{vaultId}/assets/{assetA}");
         Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
@@ -484,7 +484,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: tài sản ở gói 1, rồi lưu trữ gói 1.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         Guid firstId = (await CreateContainerAsync(client, vaultId, "Gói 1")).GetProperty("id").GetGuid();
@@ -507,7 +507,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: gói có tài sản A (thêm khi còn trả phí), rồi chuyển dịch vụ sang ân hạn.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetA = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản A");
         Guid assetB = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản B");
@@ -535,7 +535,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: gói có 1 tài sản; chưa có module người nhận nên gói READY và kế hoạch ACTIVE dựng thẳng trong DB.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         Guid containerId = (await CreateContainerAsync(client, vaultId, "Gói sẵn sàng")).GetProperty("id").GetGuid();
@@ -577,7 +577,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: hai gói, một tài sản.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await CreateVaultAsync(client);
+        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         Guid firstId = (await CreateContainerAsync(client, vaultId, "Gói 1")).GetProperty("id").GetGuid();
@@ -656,25 +656,11 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         return values;
     }
 
-    private static async Task<Guid> CreateVaultAsync(HttpClient client)
-    {
-        HttpResponseMessage response = await client.PostAsync("/api/v1/vaults", null);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        JsonElement vault = await ApiTestHelpers.ReadJsonAsync(response);
-        return vault.GetProperty("id").GetGuid();
-    }
-
     private static async Task<JsonElement> CreateContainerAsync(HttpClient client, Guid vaultId, string name)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(ContainersUrl(vaultId), new { name });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return await ApiTestHelpers.ReadJsonAsync(response);
-    }
-
-    private static async Task<int> GetPlanConfigVersionAsync(HttpClient client)
-    {
-        JsonElement vault = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
-        return vault.GetProperty("planConfigVersion").GetInt32();
     }
 
     private static List<string> ReadStrings(JsonElement array)

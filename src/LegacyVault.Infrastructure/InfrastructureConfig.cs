@@ -48,6 +48,7 @@ public static class InfrastructureConfig
         services.AddScoped<IVaultRepository, VaultRepository>();
         services.AddScoped<IContainerRepository, ContainerRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
+        services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
 
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()
@@ -65,6 +66,8 @@ public static class InfrastructureConfig
             .ValidateOnStart();
         services.AddSingleton<DataKeyProtector>();
         services.AddSingleton<IAssetContentStore, LocalAssetContentStore>();
+        // Mã hóa dữ liệu cá nhân của người nhận, dùng chung DataKeyProtector (DATA-02).
+        services.AddSingleton<IBeneficiaryDataProtector, BeneficiaryDataProtector>();
 
         // Security & Notifications
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
