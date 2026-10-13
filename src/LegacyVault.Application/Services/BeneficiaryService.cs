@@ -28,6 +28,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
     private readonly IBeneficiaryRepository beneficiaryRepository;
+    private readonly IContainerRepository containerRepository;
     private readonly IBeneficiaryDataProtector dataProtector;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -36,6 +37,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
         IBeneficiaryRepository beneficiaryRepository,
+        IContainerRepository containerRepository,
         IBeneficiaryDataProtector dataProtector,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
@@ -43,6 +45,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.beneficiaryRepository = beneficiaryRepository;
+        this.containerRepository = containerRepository;
         this.dataProtector = dataProtector;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
@@ -87,9 +90,10 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             if (IsSameIdentity(existing.Data, data))
             {
                 // Gửi lại đúng người: trả hồ sơ cũ nguyên trạng, không ghi DB (liên hệ mới không được cập nhật).
+                List<Guid> existingContainerIds = await LoadContainerIdsAsync(existing.Beneficiary.Id, ct);
                 CreateBeneficiaryResult same = new CreateBeneficiaryResult();
                 same.Created = false;
-                same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, today);
+                same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, existingContainerIds, today);
                 return same;
             }
             // QUOTA-04 / AC-92: cùng CCCD mà khác tên hoặc ngày sinh → Owner phải sửa cho thống nhất.
@@ -107,7 +111,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
         CreateBeneficiaryResult result = new CreateBeneficiaryResult();
         result.Created = true;
-        result.Beneficiary = beneficiary.ToResponse(data, today);
+        // Hồ sơ mới chưa ở gói nào.
+        result.Beneficiary = beneficiary.ToResponse(data, new List<Guid>(), today);
         return result;
     }
 
@@ -133,12 +138,22 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         (List<Beneficiary> Items, int TotalCount) page = await beneficiaryRepository.FindPageByVaultIdAsync(
             vaultId, searchTerm, pagination.PageIndex, pagination.PageSize, pagination.IsAscending, ct);
 
+        // Lấy containerIds của cả trang bằng một truy vấn (tránh N+1).
+        List<Guid> beneficiaryIds = new List<Guid>();
+        foreach (Beneficiary beneficiary in page.Items)
+        {
+            beneficiaryIds.Add(beneficiary.Id);
+        }
+        Dictionary<Guid, List<Guid>> containerIdsByBeneficiary =
+            await containerRepository.FindContainerIdsByBeneficiaryIdsAsync(beneficiaryIds, ct);
+
         DateOnly today = GetTodayInVietnam();
         List<BeneficiaryResponse> responses = new List<BeneficiaryResponse>();
         foreach (Beneficiary beneficiary in page.Items)
         {
             BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
-            responses.Add(beneficiary.ToResponse(data, today));
+            List<Guid> containerIds = GetContainerIds(containerIdsByBeneficiary, beneficiary.Id);
+            responses.Add(beneficiary.ToResponse(data, containerIds, today));
         }
         return responses.ToPaginatedList(page.TotalCount, pagination);
     }
@@ -148,7 +163,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
         Beneficiary beneficiary = await LoadBeneficiaryAsync(vault.Id, beneficiaryId, ct);
         BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
-        return beneficiary.ToResponse(data, GetTodayInVietnam());
+        List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
+        return beneficiary.ToResponse(data, containerIds, GetTodayInVietnam());
     }
 
     public async Task<BeneficiaryResponse> UpdateBeneficiaryAsync(
@@ -203,18 +219,25 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             || !string.Equals(updated.Phone, current.Phone, StringComparison.Ordinal)
             || beneficiary.MinorAcknowledgedAt != acknowledgedBefore;
 
+        List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
+
         // Không có gì đổi: không mã hóa lại, không lưu, etag giữ nguyên.
         if (!changed)
         {
-            return beneficiary.ToResponse(current, today);
+            return beneficiary.ToResponse(current, containerIds, today);
         }
 
         // Mỗi lần lưu dùng DEK mới.
         dataProtector.Protect(beneficiary, updated);
         beneficiary.UpdatedAt = now;
-        // TODO: nhánh designations sẽ tăng ConfigVersion khi hồ sơ đang ở gói (SETUP-04).
+        // SETUP-04: hồ sơ đang ở gói thì sửa người nhận là đổi cấu hình bàn giao → tăng ConfigVersion
+        // (lưu cùng một lần SaveChanges với hồ sơ).
+        if (containerIds.Count > 0)
+        {
+            PlanRules.BumpConfigVersion(vault.Plan, now);
+        }
         await unitOfWork.SaveChangesAsync(ct);
-        return beneficiary.ToResponse(updated, today);
+        return beneficiary.ToResponse(updated, containerIds, today);
     }
 
     public async Task DeleteBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
@@ -224,7 +247,15 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         VaultRules.EnsureCanReduce(vault);
         Beneficiary beneficiary = await LoadBeneficiaryAsync(vault.Id, beneficiaryId, ct);
 
-        // TODO: nhánh designations sẽ trả 409 BENEFICIARY_IN_USE khi hồ sơ đang ở gói.
+        // Hồ sơ đang ở gói thì phải gỡ khỏi gói trước; containerIds để FE chỉ ra các gói đó.
+        List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
+        if (containerIds.Count > 0)
+        {
+            throw InUse(containerIds);
+        }
+
+        // TODO: request khác gắn hồ sơ này vào gói đúng lúc này thì FK Restrict ở DB chặn việc xóa,
+        // nhưng lỗi đó hiện ra 500 thay vì 409 BENEFICIARY_IN_USE.
         beneficiaryRepository.Remove(beneficiary);
         await unitOfWork.SaveChangesAsync(ct);
     }
@@ -437,6 +468,35 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             throw new AppException(AppErrorType.NotFound, ErrorCode.BeneficiaryNotFound, "Không tìm thấy người nhận.");
         }
         return beneficiary;
+    }
+
+    /// <summary>Các gói đang chỉ định một hồ sơ (sắp theo thời điểm gắn); không có → danh sách rỗng.</summary>
+    private async Task<List<Guid>> LoadContainerIdsAsync(Guid beneficiaryId, CancellationToken ct)
+    {
+        List<Guid> beneficiaryIds = new List<Guid>();
+        beneficiaryIds.Add(beneficiaryId);
+        Dictionary<Guid, List<Guid>> containerIdsByBeneficiary =
+            await containerRepository.FindContainerIdsByBeneficiaryIdsAsync(beneficiaryIds, ct);
+        return GetContainerIds(containerIdsByBeneficiary, beneficiaryId);
+    }
+
+    /// <summary>Hồ sơ không có chỉ định nào thì không có key trong dictionary → danh sách rỗng.</summary>
+    private static List<Guid> GetContainerIds(Dictionary<Guid, List<Guid>> containerIdsByBeneficiary, Guid beneficiaryId)
+    {
+        List<Guid>? containerIds;
+        if (containerIdsByBeneficiary.TryGetValue(beneficiaryId, out containerIds))
+        {
+            return containerIds;
+        }
+        return new List<Guid>();
+    }
+
+    private static AppException InUse(List<Guid> containerIds)
+    {
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["containerIds"] = containerIds;
+        return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiaryInUse,
+            "Người nhận đang ở trong gói. Vui lòng gỡ khỏi các gói trước khi xóa.", extensions);
     }
 
     /// <summary>QUOTA-04 / AC-92: beneficiaryId để FE mở hồ sơ đang có cùng CCCD cho Owner sửa.</summary>

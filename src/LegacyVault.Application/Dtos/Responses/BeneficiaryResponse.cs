@@ -21,7 +21,7 @@ public class BeneficiaryResponse
 
     public DateTimeOffset? MinorAcknowledgedAt { get; set; }
 
-    /// <summary>Id các gói đang chỉ định người này. Chưa có module chỉ định nên luôn rỗng.</summary>
+    /// <summary>Id các gói đang chỉ định người này, theo thứ tự gắn. Rỗng khi chưa ở gói nào.</summary>
     public List<Guid> ContainerIds { get; set; } = new List<Guid>();
 
     public DateTimeOffset CreatedAt { get; set; }

@@ -37,6 +37,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     // Người nhận
     public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();
+    public DbSet<Designation> Designations => Set<Designation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

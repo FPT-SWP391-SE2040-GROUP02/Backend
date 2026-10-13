@@ -92,6 +92,6 @@ Content-Type: application/json
 
 { "etag": "{{etag}}", "email": "", "phone": "" }
 
-### Xóa hồ sơ (204; gọi lại → 404 BENEFICIARY_NOT_FOUND)
+### Xóa hồ sơ (204; đang ở gói → 409 BENEFICIARY_IN_USE kèm containerIds; gọi lại → 404 BENEFICIARY_NOT_FOUND)
 DELETE {{baseUrl}}/vaults/{{vaultId}}/beneficiaries/{{beneficiaryId}}
 Authorization: Bearer {{token}}

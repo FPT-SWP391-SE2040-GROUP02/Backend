@@ -10,7 +10,8 @@ namespace LegacyVault.Application.Services;
 /// Luật chung khi cài đặt:
 /// - Dữ liệu cá nhân được mã hóa; response chỉ có 4 số cuối CCCD, không bao giờ có số đầy đủ (DATA-02).
 /// - Không gửi thông báo, không tạo tài khoản cho người nhận (SETUP-02).
-/// - Hồ sơ chưa gắn vào gói nên chưa thuộc cấu hình bàn giao, không chiếm suất, không tăng ConfigVersion (QUOTA-03).
+/// - Tạo hồ sơ không chiếm suất, không tăng ConfigVersion: suất chỉ tính khi hồ sơ được chỉ định vào gói (QUOTA-03).
+/// - containerIds trong response là các gói đang chỉ định hồ sơ.
 /// - Thao tác "thêm" (tạo, sửa) chặn khi kho CLOSED / kế hoạch bị khóa / dịch vụ đang ân hạn;
 ///   thao tác "giảm" (xóa) vẫn cho khi ân hạn (OPLAN-01).
 /// Lỗi chung: 401 SESSION_EXPIRED, 404 VAULT_NOT_FOUND (không có kho / kho người khác),
@@ -38,11 +39,15 @@ public interface IBeneficiaryService
 
     /// <summary>
     /// Sửa họ tên/ngày sinh/liên hệ (request.Etag bắt buộc; không đổi được CCCD). Không có gì đổi → trả nguyên trạng.
+    /// Hồ sơ đang ở gói mà có thay đổi thì tăng ConfigVersion (SETUP-04).
     /// Lỗi: 404 BENEFICIARY_NOT_FOUND, 409 EDIT_CONFLICT, 400 VALIDATION_ERROR, 409 MINOR_CONFIRMATION_REQUIRED.
     /// </summary>
     Task<BeneficiaryResponse> UpdateBeneficiaryAsync(
         Guid vaultId, Guid beneficiaryId, UpdateBeneficiaryRequest request, CancellationToken ct);
 
-    /// <summary>Xóa hồ sơ (thao tác "giảm", vẫn cho khi ân hạn). Lỗi: 404 BENEFICIARY_NOT_FOUND.</summary>
+    /// <summary>
+    /// Xóa hồ sơ (thao tác "giảm", vẫn cho khi ân hạn).
+    /// Lỗi: 404 BENEFICIARY_NOT_FOUND, 409 BENEFICIARY_IN_USE (+containerIds, hồ sơ đang ở gói).
+    /// </summary>
     Task DeleteBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct);
 }

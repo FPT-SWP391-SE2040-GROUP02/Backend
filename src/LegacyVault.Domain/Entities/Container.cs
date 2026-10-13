@@ -10,7 +10,7 @@ namespace LegacyVault.Domain.Entities;
 /// - SETUP-04: Container không có phiên bản riêng; mọi thay đổi tăng HandoverPlan.ConfigVersion.
 /// - SETUP-17: hạng Free chỉ được tạo/đổi tên/lưu trữ Container rỗng.
 /// - NFR-14: tối đa 50 Container chưa lưu trữ mỗi kho.
-/// Chỉ định người nhận (Designation) thêm khi làm module người nhận; tới lúc đó Container luôn là Draft.
+/// - SETUP-16: READY khi có ≥1 tài sản VÀ ≥1 chỉ định người nhận (Designation); backend tự tính lại sau mỗi thay đổi.
 /// </remarks>
 public class Container
 {
@@ -35,4 +35,7 @@ public class Container
     public DateTimeOffset? ArchivedAt { get; set; }
 
     public List<ContainerAsset> Assets { get; set; } = new List<ContainerAsset>();
+
+    /// <summary>Các chỉ định người nhận của gói, sắp theo thời điểm gắn.</summary>
+    public List<Designation> Designations { get; set; } = new List<Designation>();
 }

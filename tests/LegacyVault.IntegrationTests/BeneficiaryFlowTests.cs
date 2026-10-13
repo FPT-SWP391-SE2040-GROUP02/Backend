@@ -66,7 +66,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Ekyc08_CitizenIdMustBeTwelveDigits()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
 
         // Hành động
         HttpResponseMessage elevenDigits = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody("01234567890", FullName));
@@ -83,7 +83,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Section52Step7_MissingBothEmailAndPhoneIsRejected()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
 
         // Hành động: email "" và phone chỉ khoảng trắng đều coi là không có.
         HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
@@ -97,7 +97,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Setup19_FutureDateOfBirthIsRejected()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         string tomorrow = TodayInVietnam().AddDays(1).ToString("yyyy-MM-dd");
 
         // Hành động
@@ -113,7 +113,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Ekyc08_Quota04_LeadingZeroKeptAndResubmitReturnsSameProfile()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
 
         // Hành động
         HttpResponseMessage first = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(LeadingZeroCitizenId, FullName));
@@ -142,7 +142,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Quota04_DifferentCitizenIdsWithSameLast4AreSeparateProfiles()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
 
         // Hành động
         HttpResponseMessage first = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(LeadingZeroCitizenId, FullName));
@@ -161,7 +161,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Match02_SameCitizenIdWithNameDifferingOnlyInCaseAndSpacingReturnsExisting()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
 
         // Hành động
@@ -180,7 +180,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Quota04_Ac92_SameCitizenIdWithDifferentNameOrBirthDateConflicts()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
         Guid createdId = created.GetProperty("id").GetGuid();
 
@@ -204,7 +204,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Setup19_Ac105_MinorNeedsConfirmation()
     {
         // Chuẩn bị: người nhận 10 tuổi.
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         string tenYearsAgo = TodayInVietnam().AddYears(-10).ToString("yyyy-MM-dd");
 
         // Hành động
@@ -227,7 +227,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Data02_FullCitizenIdIsNeverReturnedAndIsStoredEncrypted()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
 
         // Hành động
         HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(LeadingZeroCitizenId, FullName));
@@ -260,7 +260,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Quota03_CreatingBeneficiaryDoesNotBumpPlanConfigVersion()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         int versionBefore = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
 
         // Hành động
@@ -274,9 +274,9 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Sec04_BeneficiaryOfAnotherVaultIsNotFound()
     {
         // Chuẩn bị: hồ sơ thuộc kho của owner; stranger dùng id đó trên kho của chính mình.
-        (HttpClient owner, Guid ownerVaultId) = await CreatePaidVaultAsync();
+        (HttpClient owner, Guid ownerVaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(owner, ownerVaultId, LeadingZeroCitizenId, FullName);
-        (HttpClient stranger, Guid strangerVaultId) = await CreatePaidVaultAsync();
+        (HttpClient stranger, Guid strangerVaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         string strangerUrl =$"{BeneficiariesUrl(strangerVaultId)}/{created.GetProperty("id").GetGuid()}";
 
         // Hành động
@@ -295,7 +295,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Edit_StaleEtagIsRejected()
     {
         // Chuẩn bị: sửa một lần để etag "0" thành cũ.
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
         string url = $"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}";
         HttpResponseMessage firstEdit = await client.PutAsJsonAsync(url, new { etag = created.GetProperty("etag").GetString(), phone = "0901234567" });
@@ -312,7 +312,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Edit_RenameChangesEtagAndIsReadBack()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
         string url = $"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}";
 
@@ -337,7 +337,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Edit_NothingChangedKeepsEtag()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
         string url = $"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}";
 
@@ -356,7 +356,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Section52Step7_EditRemovingBothEmailAndPhoneIsRejected()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
         string url = $"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}";
 
@@ -372,7 +372,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Data02_SearchOnlyByLast4Digits()
     {
         // Chuẩn bị: hai hồ sơ khác 4 số cuối.
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement matching = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
         await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, "079123451234", "Trần Thị Bình");
 
@@ -394,7 +394,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Oplan01_GraceReadOnlyBlocksCreateButAllowsDelete()
     {
         // Chuẩn bị: có sẵn một hồ sơ, rồi chuyển dịch vụ sang ân hạn chỉ đọc.
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement existing = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
         await ApiTestHelpers.SetEntitlementStatusAsync(factory, vaultId, EntitlementStatus.GraceReadOnly);
 
@@ -413,7 +413,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task Delete_ThenGetReturnsNotFound()
     {
         // Chuẩn bị
-        (HttpClient client, Guid vaultId) = await CreatePaidVaultAsync();
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
         string url = $"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}";
 
@@ -434,15 +434,6 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     private static object AdultBody(string citizenId, string fullName)
     {
         return new { citizenId, fullName, dateOfBirth = "1990-05-20", email = Email };
-    }
-
-    /// <summary>User mới có kho đã nâng lên XS.</summary>
-    private async Task<(HttpClient Client, Guid VaultId)> CreatePaidVaultAsync()
-    {
-        HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
-        Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
-        await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
-        return (client, vaultId);
     }
 
     /// <summary>Số dòng Beneficiaries của kho (đọc thẳng DB).</summary>

@@ -30,6 +30,8 @@ public enum ErrorCode
     BeneficiaryNotFound,
     BeneficiaryIdentityConflict,
     MinorConfirmationRequired,
+    BeneficiaryInUse,
+    BeneficiarySlotsExceeded,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>
