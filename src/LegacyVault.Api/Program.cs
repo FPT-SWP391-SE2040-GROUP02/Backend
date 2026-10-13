@@ -28,6 +28,8 @@ else
 }
 
 app.UseCors(CorsConfig.FrontendPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 // Liveness không phụ thuộc SQL; readiness chỉ đạt khi kết nối được database.
