@@ -2,11 +2,13 @@ using System.Text;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Storage;
 using LegacyVault.Infrastructure.Data;
 using LegacyVault.Infrastructure.Health;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
 using LegacyVault.Infrastructure.Security;
+using LegacyVault.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -43,6 +45,26 @@ public static class InfrastructureConfig
         services.AddScoped<ILoginThrottleRepository, LoginThrottleRepository>();
         services.AddScoped<IEmailVerificationTokenRepository, EmailVerificationTokenRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IVaultRepository, VaultRepository>();
+        services.AddScoped<IContainerRepository, ContainerRepository>();
+        services.AddScoped<IAssetRepository, AssetRepository>();
+
+        // Lưu trữ và mã hóa nội dung tài sản
+        services.AddOptions<AssetStorageSettings>()
+            .Bind(configuration.GetSection("AssetStorage"))
+            .Validate(settings => !string.IsNullOrWhiteSpace(settings.RootPath),
+                "Thiếu AssetStorage:RootPath.")
+            .ValidateOnStart();
+
+        // KEK cho mã hóa nội dung tài sản. Sai/thiếu khóa thì API không khởi động, tránh lưu nội dung không mở lại được.
+        services.AddOptions<AssetEncryptionSettings>()
+            .Bind(configuration.GetSection("AssetEncryption"))
+            .Validate(settings => DataKeyProtector.FindConfigurationError(settings) == null,
+                "Cấu hình AssetEncryption không hợp lệ (cần ActiveKeyId và Keys là base64 32 byte). "
+                + "Khi chạy local, chọn profile http (Development).")
+            .ValidateOnStart();
+        services.AddSingleton<DataKeyProtector>();
+        services.AddSingleton<IAssetContentStore, LocalAssetContentStore>();
 
         // Security & Notifications
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();

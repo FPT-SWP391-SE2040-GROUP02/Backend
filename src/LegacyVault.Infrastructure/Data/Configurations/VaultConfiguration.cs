@@ -16,13 +16,18 @@ public sealed class VaultConfiguration : IEntityTypeConfiguration<Vault>
             .IsRequired()
             .HasMaxLength(200);
 
+        // Khớp UpdateVaultRequest/CreateVaultRequest (tối đa 1000 ký tự).
         builder.Property(v => v.Description)
-            .HasMaxLength(2000);
+            .HasMaxLength(1000);
 
         builder.Property(v => v.Status)
             .IsRequired()
             .HasConversion<string>()
             .HasMaxLength(32);
+
+        // ETag: UPDATE ... WHERE UpdatedAt = giá trị đã đọc; lệch → EDIT_CONFLICT.
+        builder.Property(v => v.UpdatedAt)
+            .IsConcurrencyToken();
 
         // SETUP-12 / DATA-04: Mỗi OwnerId chỉ có tối đa một kho trong toàn hệ thống
         builder.HasIndex(v => v.OwnerId)
@@ -43,9 +48,6 @@ public sealed class VaultConfiguration : IEntityTypeConfiguration<Vault>
             .HasForeignKey<VaultEntitlement>(e => e.VaultId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(v => v.Containers)
-            .WithOne(c => c.Vault)
-            .HasForeignKey(c => c.VaultId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Quan hệ Vault → Containers khai báo ở ContainerConfiguration (Restrict).
     }
 }

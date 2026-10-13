@@ -1,0 +1,59 @@
+# Thử luồng tạo kho → tạo tài sản (chỉ Development).
+#
+# 1. Chạy migration:  dotnet ef database update --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
+# 2. Chạy API (profile http), tạo tài khoản thử bằng http/auth.http (đăng ký → xác minh email).
+# 3. Gửi request đăng nhập bên dưới để lấy token, rồi gửi lần lượt các request còn lại.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập — lấy access token (hết hạn sau 15 phút thì gửi lại request này)
+# Tài khoản tạo bằng http/auth.http: đăng ký → xác minh email (token xác minh in ở console của API).
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Tạo kho của tôi (201 lần đầu, 200 các lần sau)
+POST {{baseUrl}}/vaults
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Kho gia đình" }
+
+### Kho của tôi — lấy id và etag
+GET {{baseUrl}}/vaults/me
+Authorization: Bearer {{token}}
+
+### Điền vaultId từ response trên
+@vaultId = 00000000-0000-0000-0000-000000000000
+
+### Tạo tài sản dạng chữ
+POST {{baseUrl}}/vaults/{{vaultId}}/assets/text
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Tài khoản ngân hàng", "content": "user: an / pass: ..." }
+
+### Tải lên tài sản dạng tệp
+POST {{baseUrl}}/vaults/{{vaultId}}/assets
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="name"
+
+Ghi chú gia đình
+--lv
+Content-Disposition: form-data; name="file"; filename="ghi-chu.txt"
+Content-Type: text/plain
+
+Nội dung tệp thử.
+--lv--
+
+### Danh sách tài sản
+GET {{baseUrl}}/vaults/{{vaultId}}/assets?sortBy=name&pageSize=10
+Authorization: Bearer {{token}}
