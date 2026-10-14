@@ -31,6 +31,7 @@ public sealed class AssetsController(IAssetService assetService) : ControllerBas
     public async Task<ActionResult<AssetResponse>> CreateFileAsset(
         Guid vaultId, [FromForm] CreateFileAssetForm form, CancellationToken ct)
     {
+        //Kiểm tra file có hợp lệ không
         var file = form.File!;
         await using var content = file.OpenReadStream();
         var asset = await assetService.CreateFileAssetAsync(vaultId, new CreateFileAssetRequest

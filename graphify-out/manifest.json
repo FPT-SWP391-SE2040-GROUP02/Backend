@@ -1,0 +1,1676 @@
+{
+  ".claude/settings.json": {
+    "mtime": 1791983364.9817772,
+    "seen": 1791983375.170925,
+    "ast_hash": "3ac995fbf93552a991ecab9b63f776aa",
+    "semantic_hash": ""
+  },
+  ".config/dotnet-tools.json": {
+    "mtime": 1791885423.9928482,
+    "seen": 1791983375.170925,
+    "ast_hash": "04553b285500a88d6862f1008979dcde",
+    "semantic_hash": ""
+  },
+  "LegacyVault.sln": {
+    "mtime": 1791885423.9948483,
+    "seen": 1791983375.170925,
+    "ast_hash": "b19e9ee907a4b7bd9d7ba48debb9f6b7",
+    "semantic_hash": ""
+  },
+  "global.json": {
+    "mtime": 1791885423.9958484,
+    "seen": 1791983375.170925,
+    "ast_hash": "d133a83ec1934a212f3513b3c6e225d1",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Config/ApiConfig.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "894271560cc887723916fb5b0cd31050",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Config/CorsConfig.cs": {
+    "mtime": 1791885423.9973526,
+    "seen": 1791983375.170925,
+    "ast_hash": "33c4e9226f9124cacd09b5dca8954424",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Controllers/AssetsController.cs": {
+    "mtime": 1791965336.6953726,
+    "seen": 1791983375.170925,
+    "ast_hash": "0d95148a94808ef4eaa5f5637231df75",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Controllers/AuthController.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "01a6cd6c267ba4442a23e596f1df7a39",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Controllers/BeneficiariesController.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "dfcdeaba7086c41c2d0c647d8b539441",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Controllers/CheckInsController.cs": {
+    "mtime": 1791959934.658291,
+    "seen": 1791983375.170925,
+    "ast_hash": "758f7d5a34ea3006024dcf3bcd5db6a7",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Controllers/ContainersController.cs": {
+    "mtime": 1791959933.8663712,
+    "seen": 1791983375.170925,
+    "ast_hash": "3a7c6260c3d6b8f328fd7ebe169092cb",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Controllers/GoogleAuthController.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "117517c091ced7211a737a464e676dfc",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Controllers/VaultsController.cs": {
+    "mtime": 1791901214.0749772,
+    "seen": 1791983375.170925,
+    "ast_hash": "1b8d1856ac1ea24f8bde716d78f97a8d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Exceptions/GlobalExceptionHandler.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "0948d1e335010f1542fc1fbc454173f8",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/LegacyVault.Api.csproj": {
+    "mtime": 1791959934.658291,
+    "seen": 1791983375.170925,
+    "ast_hash": "e937193addff1988df10eb25956f5ed3",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Models/CreateFileAssetForm.cs": {
+    "mtime": 1791901214.2793846,
+    "seen": 1791983375.170925,
+    "ast_hash": "9b7bf5cfa22f839ddf9a04b49ed39d83",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Program.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "a0ae4312552fc17ae541e0df9338dcc7",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Properties/launchSettings.json": {
+    "mtime": 1791885423.9987943,
+    "seen": 1791983375.170925,
+    "ast_hash": "f97e370efa1640bdcb9db1c7a35c0fc9",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Security/AuthCookieWriter.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "47a955d8c54b08c27112b6603cebb88a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/Security/ClientIpRange.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "da945f503719332aff427e2948b787d3",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/appsettings.Development.json": {
+    "mtime": 1791959934.6594408,
+    "seen": 1791983375.170925,
+    "ast_hash": "b548bdef7918153ff7ed625c6c14d2b1",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Api/appsettings.json": {
+    "mtime": 1791959934.660442,
+    "seen": 1791983375.170925,
+    "ast_hash": "e9f5a78e93e5b9ac82e52ca06c2354ba",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/ApplicationConfig.cs": {
+    "mtime": 1791959934.6614425,
+    "seen": 1791983375.170925,
+    "ast_hash": "c2f635f51097185f29dea45b31fdbfe6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/AddContainerAssetRequest.cs": {
+    "mtime": 1791886286.6460896,
+    "seen": 1791983375.170925,
+    "ast_hash": "fdcc36f9467437a27019ab4864bc09b6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/AddContainerBeneficiaryRequest.cs": {
+    "mtime": 1791959933.869402,
+    "seen": 1791983375.170925,
+    "ast_hash": "dc65a857497cf65b50261765de2b6e1c",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/ConfirmGoogleLinkRequest.cs": {
+    "mtime": 1791886285.7361207,
+    "seen": 1791983375.170925,
+    "ast_hash": "26238d29fb50496dc2ce5d4b2d6b346d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/ConfirmPlanImpactRequest.cs": {
+    "mtime": 1791886823.6732352,
+    "seen": 1791983375.170925,
+    "ast_hash": "f474eb2adbeb53dfe3714eb67a8169fb",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/CreateBeneficiaryRequest.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "076cc12a4b33673bad3c2b8911643ac6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/CreateContainerRequest.cs": {
+    "mtime": 1791886286.435802,
+    "seen": 1791983375.170925,
+    "ast_hash": "6b75b7b3e2fc439f5860fb02e2a3b45f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/CreateFileAssetRequest.cs": {
+    "mtime": 1791900854.3283658,
+    "seen": 1791983375.170925,
+    "ast_hash": "ee6cb8719ac4f6ac882912455c18c910",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/CreateTextAssetRequest.cs": {
+    "mtime": 1791900854.5283098,
+    "seen": 1791983375.170925,
+    "ast_hash": "fa11953f02bfc740274fefb7dfdf4d1a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/CreateVaultRequest.cs": {
+    "mtime": 1791886286.2312038,
+    "seen": 1791983375.170925,
+    "ast_hash": "beedf7e8f3f7ac4c1720601015da4186",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/GoogleLoginRequest.cs": {
+    "mtime": 1791886285.673043,
+    "seen": 1791983375.170925,
+    "ast_hash": "c3e334389a33f4077c9897af34acd0f2",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/LinkGoogleRequest.cs": {
+    "mtime": 1791886285.7856622,
+    "seen": 1791983375.170925,
+    "ast_hash": "9f480ea93d8617a265b8d08cf6775e8a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/LoginRequest.cs": {
+    "mtime": 1791886285.426368,
+    "seen": 1791983375.170925,
+    "ast_hash": "8688975397c7f18d6652540817b94f12",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/LogoutRequest.cs": {
+    "mtime": 1791886285.48288,
+    "seen": 1791983375.170925,
+    "ast_hash": "2aed68bcc427c0cb32e359b8b7a932d6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/PaginationRequest.cs": {
+    "mtime": 1791886823.7081301,
+    "seen": 1791983375.170925,
+    "ast_hash": "354929a9444579e2ce065b231ffb6ff6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/RegisterRequest.cs": {
+    "mtime": 1791886284.9531372,
+    "seen": 1791983375.170925,
+    "ast_hash": "e0c248296b751c3baf9f3abd693a2784",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/RemovePasswordRequest.cs": {
+    "mtime": 1791886891.5187826,
+    "seen": 1791983375.170925,
+    "ast_hash": "b667cc6919b2f0f00d100ae9edd360b1",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/ResendVerificationRequest.cs": {
+    "mtime": 1791886285.2153053,
+    "seen": 1791983375.170925,
+    "ast_hash": "c9d2a33d639f6370c8d8a2fbfff5fff6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/SetPasswordRequest.cs": {
+    "mtime": 1791886286.0211496,
+    "seen": 1791983375.170925,
+    "ast_hash": "2ff5455dcf672418dff8df51b032ee35",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/UnlinkGoogleRequest.cs": {
+    "mtime": 1791886891.4862483,
+    "seen": 1791983375.170925,
+    "ast_hash": "0d567cbd6d80239fbed41e2214e749db",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/UpdateBeneficiaryRequest.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "ffa9d6e16a90f634bd847c516981c6a0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/UpdateCheckInSettingsRequest.cs": {
+    "mtime": 1791959934.6624436,
+    "seen": 1791983375.170925,
+    "ast_hash": "a14c2d6b0ed8fe374a6d343e38a7df6a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/UpdateContainerRequest.cs": {
+    "mtime": 1791886823.6295376,
+    "seen": 1791983375.170925,
+    "ast_hash": "7b4aa265d4e2a5d7f7f1f568be736017",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/UpdateVaultRequest.cs": {
+    "mtime": 1791886823.5961587,
+    "seen": 1791983375.170925,
+    "ast_hash": "46bafb7c4c07b3609510d6abf473ad30",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Requests/VerifyEmailRequest.cs": {
+    "mtime": 1791886285.0012565,
+    "seen": 1791983375.170925,
+    "ast_hash": "11d2bcfde300c27c6036e8fea39d9871",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/AssetResponse.cs": {
+    "mtime": 1791900854.583264,
+    "seen": 1791983375.170925,
+    "ast_hash": "f52680e129018137afe9d3b52dfbe45a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/AuthResult.cs": {
+    "mtime": 1791886823.5515866,
+    "seen": 1791983375.170925,
+    "ast_hash": "b7a38e3e4020bbee69d0b983114e3518",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/AuthSessionResponse.cs": {
+    "mtime": 1791886823.5026486,
+    "seen": 1791983375.170925,
+    "ast_hash": "f1bd9e5eeb99e9a62ed5cde99ee8de6a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/BeneficiaryResponse.cs": {
+    "mtime": 1791959933.8704097,
+    "seen": 1791983375.170925,
+    "ast_hash": "64c92ef0cd1d896926cd226c4f2b688e",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/CheckInStatusResponse.cs": {
+    "mtime": 1791959934.6634412,
+    "seen": 1791983375.170925,
+    "ast_hash": "b0fe1dd11bfd99767f61ad211b113540",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/ContainerResponse.cs": {
+    "mtime": 1791959933.871414,
+    "seen": 1791983375.170925,
+    "ast_hash": "0cde99bb65f6a89965878a70ca080396",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/CreateBeneficiaryResult.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "eced8d928f307ef4856e7fac125ce041",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/GoogleLoginResponse.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "0662b242f4dbd4a05d16a3e2780d3bc1",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/GoogleLoginResult.cs": {
+    "mtime": 1791886316.9213302,
+    "seen": 1791983375.170925,
+    "ast_hash": "570df3274130916c12c49f4beff6eea6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/LoginMethodResponse.cs": {
+    "mtime": 1791887627.2228978,
+    "seen": 1791983375.170925,
+    "ast_hash": "69b3fcdd12c8939d23ca075cffe9a483",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/OpenVaultResult.cs": {
+    "mtime": 1791886317.4573147,
+    "seen": 1791983375.170925,
+    "ast_hash": "3be45bd0ecb3b97c379402f52a84ecfe",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/PaginatedList.cs": {
+    "mtime": 1791886823.7566333,
+    "seen": 1791983375.170925,
+    "ast_hash": "c49e5014e202d701819005ab8fae0ea0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/UserResponse.cs": {
+    "mtime": 1791886316.364504,
+    "seen": 1791983375.170925,
+    "ast_hash": "687d02838d07808b95c982ad0d429aa5",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Dtos/Responses/VaultResponse.cs": {
+    "mtime": 1791959933.873408,
+    "seen": 1791983375.170925,
+    "ast_hash": "6b4b9f7df2903dd26d5d520bf0f8c8d1",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/AccountLockedException.cs": {
+    "mtime": 1791940688.1194563,
+    "seen": 1791983375.170925,
+    "ast_hash": "a14776e12f7ab3fabfd62bb782e515d0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/AccountNotActiveException.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "0e2fa6b86653b8a722f2a7c090e0254f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/ApiException.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "9dc98d80fc9dcffa3acbdca432abe75d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/AppErrorType.cs": {
+    "mtime": 1791900804.169452,
+    "seen": 1791983375.170925,
+    "ast_hash": "ba3f22276f10cb206a60c8ba8a7a4dd8",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/AppException.cs": {
+    "mtime": 1791900874.807086,
+    "seen": 1791983375.170925,
+    "ast_hash": "7a6a7854f11f4b05392c458696df3a8d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/ErrorCode.cs": {
+    "mtime": 1791959942.2280085,
+    "seen": 1791983375.170925,
+    "ast_hash": "64b72b330847e9aa76365e59655ddfea",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/GoogleAccountAlreadyLinkedException.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "c3dbe07a006032ed89150d28749199ce",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/InvalidCredentialsException.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "279a86188271d516723042895a2fea3f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/InvalidGoogleTokenException.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "838ab504e53a3bb473740ad22a0be55a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/InvalidLinkTicketException.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "38c601ee498f36c158c57ef30e1b4ade",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/InvalidVerificationTokenException.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "7bf004bd21414f962ae0f7fc34ffdff1",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/SessionExpiredException.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "e35bf02234447beb03da76263eb2526c",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Exceptions/ValidationErrors.cs": {
+    "mtime": 1791900930.1886036,
+    "seen": 1791983375.170925,
+    "ast_hash": "dff709b7c8c1a7e0976f7b009b5a02b9",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/LegacyVault.Application.csproj": {
+    "mtime": 1791885424.0007994,
+    "seen": 1791983375.170925,
+    "ast_hash": "18856d3e50b4624fd4d012db816693ad",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Mappings/AssetMappings.cs": {
+    "mtime": 1791900901.2958295,
+    "seen": 1791983375.170925,
+    "ast_hash": "a6bf1641c97cf05625538670262a41a0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Mappings/BeneficiaryMappings.cs": {
+    "mtime": 1791959933.874407,
+    "seen": 1791983375.170925,
+    "ast_hash": "630aff50dbf71ff2d80bfb008c4c6365",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Mappings/ContainerMappings.cs": {
+    "mtime": 1791959933.8754072,
+    "seen": 1791983375.170925,
+    "ast_hash": "5519d9673acf774d6d4d8f70b5631e76",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Mappings/EnumText.cs": {
+    "mtime": 1791900874.8740275,
+    "seen": 1791983375.170925,
+    "ast_hash": "0bbb6bf6660f5682ddcf970b5b261780",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Mappings/PaginationMappings.cs": {
+    "mtime": 1791900975.8657656,
+    "seen": 1791983375.170925,
+    "ast_hash": "08e9b58c24058648c449ba9a3dd79cd3",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Mappings/VaultMappings.cs": {
+    "mtime": 1791959933.8764074,
+    "seen": 1791983375.170925,
+    "ast_hash": "2217703fa4b5c6aa54357b697a5fdf5b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Notifications/IAppUrlProvider.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "a782658fbe332b6393528a341a711885",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Notifications/ICheckInReminderSender.cs": {
+    "mtime": 1791959934.6654408,
+    "seen": 1791983375.170925,
+    "ast_hash": "83f420333c909412f75f6a26e1d29b90",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Notifications/IEmailSender.cs": {
+    "mtime": 1791886203.7715054,
+    "seen": 1791983375.170925,
+    "ast_hash": "b64769c5c7c41942fb19353667389503",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IAssetRepository.cs": {
+    "mtime": 1791900854.0136697,
+    "seen": 1791983375.170925,
+    "ast_hash": "44006b118cc752a6000fe9d92a2addbb",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IBeneficiaryRepository.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "b08ddf50bdbd40472463c53eb12cb136",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/ICheckInRepository.cs": {
+    "mtime": 1791959934.6664414,
+    "seen": 1791983375.170925,
+    "ast_hash": "20824ee265b160ebd2e38c5755f4e669",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IContainerRepository.cs": {
+    "mtime": 1791959933.8789134,
+    "seen": 1791983375.170925,
+    "ast_hash": "72d6a48a2a77d0e21dbf852dd0ce767a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IEmailVerificationTokenRepository.cs": {
+    "mtime": 1791886237.6761136,
+    "seen": 1791983375.170925,
+    "ast_hash": "4827b709b29c76e17434cf5d1f4245b7",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IExternalLoginLinkTicketRepository.cs": {
+    "mtime": 1791886238.0412257,
+    "seen": 1791983375.170925,
+    "ast_hash": "78f57c52719fe296e77c4eba8a39f48d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IExternalLoginRepository.cs": {
+    "mtime": 1791886237.8756366,
+    "seen": 1791983375.170925,
+    "ast_hash": "58a88195a03d75f71b13ba289f620d9c",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/ILoginThrottleRepository.cs": {
+    "mtime": 1791886237.8431218,
+    "seen": 1791983375.170925,
+    "ast_hash": "05c2ba0fff67e493936f478c745c38bd",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IRefreshTokenRepository.cs": {
+    "mtime": 1791886237.6453986,
+    "seen": 1791983375.170925,
+    "ast_hash": "05798f66c76b88bed0894f6c9db320c5",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IUnitOfWork.cs": {
+    "mtime": 1791886237.434374,
+    "seen": 1791983375.170925,
+    "ast_hash": "8030e383f05942288ec4a49d993c6f66",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IUserRepository.cs": {
+    "mtime": 1791886237.4776678,
+    "seen": 1791983375.170925,
+    "ast_hash": "0d250a77dd021fbc73ca0bccd5626d9f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Repositories/IVaultRepository.cs": {
+    "mtime": 1791886238.083114,
+    "seen": 1791983375.170925,
+    "ast_hash": "8169d14aa503c5e4264fc55adb15c73e",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/AccessToken.cs": {
+    "mtime": 1791886203.35193,
+    "seen": 1791983375.170925,
+    "ast_hash": "27f14c36aeb6518664ee5c4755f1a261",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/BeneficiaryPersonalData.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "c3a767cb311f9113ca3ef51249c87590",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/CurrentUserExtensions.cs": {
+    "mtime": 1791900875.0754824,
+    "seen": 1791983375.170925,
+    "ast_hash": "6957a35451108923b39fbeaf0d27cb07",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/GoogleIdentity.cs": {
+    "mtime": 1791886203.7314823,
+    "seen": 1791983375.170925,
+    "ast_hash": "b9041fb51a2589eaed0ff13fcfdc6e3e",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/IBeneficiaryDataProtector.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "805ae748564dda1ef15fd9e5f37db042",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/ICurrentUser.cs": {
+    "mtime": 1791886203.1152635,
+    "seen": 1791983375.170925,
+    "ast_hash": "4c8f44b65cd89cc8a5f960b130f82117",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/IGoogleTokenVerifier.cs": {
+    "mtime": 1791886203.562436,
+    "seen": 1791983375.170925,
+    "ast_hash": "bee138aca30f96834d5af22cd04b3baa",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/IPasswordHasher.cs": {
+    "mtime": 1791886203.1550114,
+    "seen": 1791983375.170925,
+    "ast_hash": "3699882cb8c02cb3ae95a32182bce96b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/ITokenService.cs": {
+    "mtime": 1791886203.3187978,
+    "seen": 1791983375.170925,
+    "ast_hash": "76c379847e03c7a4f7bdbb5ba8f1f55d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Security/OpaqueToken.cs": {
+    "mtime": 1791886203.5190341,
+    "seen": 1791983375.170925,
+    "ast_hash": "92e5d2a91e739acdb7160509a6c5957b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/AssetService.cs": {
+    "mtime": 1791959963.0184996,
+    "seen": 1791983375.170925,
+    "ast_hash": "8ac37c7386090465c3a83ff21d98675f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/AuthService.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "99e13acb79153ee373928e6c6eb93532",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/BeneficiaryRules.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "451bcec80ded0c1ba6e55b4c57a4272d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/BeneficiaryService.cs": {
+    "mtime": 1791959933.880935,
+    "seen": 1791983375.170925,
+    "ast_hash": "680bb6e73973974e3e76bbf81819a504",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/CheckInJob.cs": {
+    "mtime": 1791959934.6689544,
+    "seen": 1791983375.170925,
+    "ast_hash": "d007c95d5d2499926a5c61fb47caa2bf",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/CheckInRules.cs": {
+    "mtime": 1791959934.6699653,
+    "seen": 1791983375.170925,
+    "ast_hash": "a61411816b7ad3489a0c1de512202ab0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/CheckInScheduler.cs": {
+    "mtime": 1791959934.6709664,
+    "seen": 1791983375.170925,
+    "ast_hash": "ddc36ece3786147c84d27cda2d36b069",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/CheckInService.cs": {
+    "mtime": 1791959934.6719635,
+    "seen": 1791983375.170925,
+    "ast_hash": "ceb9b1ea438d74f24df736f6df95b7cd",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/CheckInTimeline.cs": {
+    "mtime": 1791959934.6729677,
+    "seen": 1791983375.170925,
+    "ast_hash": "fb5469a1245d6106002efbd91b823535",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/ContainerRules.cs": {
+    "mtime": 1791959933.88193,
+    "seen": 1791983375.170925,
+    "ast_hash": "4320b8fef8d0227ae10ddde90d51b7ed",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/ContainerService.cs": {
+    "mtime": 1791959953.9276564,
+    "seen": 1791983375.170925,
+    "ast_hash": "d84348618b28ceeab2ea5db19138ab04",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/EmailMasker.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "5d8eddc4d3bc23b307eb991cb37b3d71",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/Etag.cs": {
+    "mtime": 1791900900.8267944,
+    "seen": 1791983375.170925,
+    "ast_hash": "dc08a6238ecafadb719cf04f99e93fe7",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/GoogleAuthService.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "4ca09a59e9e4e8a6c4cb84b3ff279f66",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/IAssetService.cs": {
+    "mtime": 1791900975.8330083,
+    "seen": 1791983375.170925,
+    "ast_hash": "d91d363340d2cc24f33dd10f9a53eb73",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/IAuthService.cs": {
+    "mtime": 1791886372.4313207,
+    "seen": 1791983375.170925,
+    "ast_hash": "286f7d890d14ec9a8d05e2201210aaa0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/IBeneficiaryService.cs": {
+    "mtime": 1791959933.8839326,
+    "seen": 1791983375.170925,
+    "ast_hash": "3ebe5fe4a85d2ff630d367cf7148578b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/ICheckInJob.cs": {
+    "mtime": 1791959934.674965,
+    "seen": 1791983375.170925,
+    "ast_hash": "01812ba8ae1794e94d4b57ffbdeafb4a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/ICheckInScheduler.cs": {
+    "mtime": 1791959934.675965,
+    "seen": 1791983375.170925,
+    "ast_hash": "0b1aaf6c27be8e6e9b80a00879d5baaa",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/ICheckInService.cs": {
+    "mtime": 1791959934.6766958,
+    "seen": 1791983375.170925,
+    "ast_hash": "966edd918d0b71d80095354a3859f40e",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/IContainerService.cs": {
+    "mtime": 1791959933.8849285,
+    "seen": 1791983375.170925,
+    "ast_hash": "fd4595c4d37d5e0a50a48a7978ed7d24",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/IGoogleAuthService.cs": {
+    "mtime": 1791892096.1078804,
+    "seen": 1791983375.170925,
+    "ast_hash": "8454cab35449923e4a9efe7ca36ead66",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/ILoginMethodService.cs": {
+    "mtime": 1791886372.7171676,
+    "seen": 1791983375.170925,
+    "ast_hash": "169bbbd163541cf03f5bb52454f64cce",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/IRegistrationService.cs": {
+    "mtime": 1791886372.4810636,
+    "seen": 1791983375.170925,
+    "ast_hash": "f1070a677b80308ff955c3b1e9aa4aae",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/IVaultService.cs": {
+    "mtime": 1791886848.072933,
+    "seen": 1791983375.170925,
+    "ast_hash": "f50363187844ce4cf5501e12666935f6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/LoginSessionIssuer.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "d1480852b3bbae88068603ad22ce5664",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/LoginThrottleGuard.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "082ada49b5b57fc5b6449a777f2b83e9",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/PlanRules.cs": {
+    "mtime": 1791959934.6782162,
+    "seen": 1791983375.170925,
+    "ast_hash": "3485ac3a0055816187858786046ee27b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/RegistrationService.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "fd53c9b8809c1dc728b4ab39e8b17331",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/ReturnUrlValidator.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "513b5b8bfc66d3ccd1f9f74e04d41ceb",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/StorageLimits.cs": {
+    "mtime": 1791900901.0190022,
+    "seen": 1791983375.170925,
+    "ast_hash": "e0799763e4e6292ff724795fb7144fbc",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/TextInput.cs": {
+    "mtime": 1791901819.013389,
+    "seen": 1791983375.170925,
+    "ast_hash": "c019da4dcb106d2472aa37a747cfb00b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/VaultRules.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "de26de04e8f358cf1a12ef209025121e",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Services/VaultService.cs": {
+    "mtime": 1791959933.8869293,
+    "seen": 1791983375.170925,
+    "ast_hash": "7d1a1685ebb8d017b588b781d39f0d46",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Application/Storage/IAssetContentStore.cs": {
+    "mtime": 1791901756.6644123,
+    "seen": 1791983375.170925,
+    "ast_hash": "70b3a87ddef8920445a635fd5f4e53d2",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/Asset.cs": {
+    "mtime": 1791900822.726105,
+    "seen": 1791983375.170925,
+    "ast_hash": "ca1eb85611234ac9a63e191be5e3bae7",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/AssetVersion.cs": {
+    "mtime": 1791901770.465152,
+    "seen": 1791983375.170925,
+    "ast_hash": "f52fc7b00910ac4f5568bce24b467fef",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/Beneficiary.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "0a9949eaf64a2a79237d754599246701",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/CheckInPeriod.cs": {
+    "mtime": 1791959934.6792276,
+    "seen": 1791983375.170925,
+    "ast_hash": "34744ce3fdcfeba5082dbbc1f17888e1",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/CheckInReminder.cs": {
+    "mtime": 1791959934.6792276,
+    "seen": 1791983375.170925,
+    "ast_hash": "233a21d641925cb5312e4d17f4d47b41",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/CheckInSchedule.cs": {
+    "mtime": 1791959934.680229,
+    "seen": 1791983375.170925,
+    "ast_hash": "088f8a796314f02087a4bc117ee32e95",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/Container.cs": {
+    "mtime": 1791959933.8884356,
+    "seen": 1791983375.170925,
+    "ast_hash": "e671af25f8e03a943eb09ec7a95113ff",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/ContainerAsset.cs": {
+    "mtime": 1791900823.10094,
+    "seen": 1791983375.170925,
+    "ast_hash": "e4601b940a11ebbbb4b75f9cbb2a4969",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/Designation.cs": {
+    "mtime": 1791959933.8884356,
+    "seen": 1791983375.170925,
+    "ast_hash": "bdb2da926ce0fdb2a6569632e1be08a8",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/EmailVerificationToken.cs": {
+    "mtime": 1791886169.3413734,
+    "seen": 1791983375.170925,
+    "ast_hash": "d7f711ac3190f2fed644af8cfdb216b0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/ExternalLogin.cs": {
+    "mtime": 1791886169.732337,
+    "seen": 1791983375.170925,
+    "ast_hash": "d538ccf4840d3892b34cbdbca898975a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/ExternalLoginLinkTicket.cs": {
+    "mtime": 1791886169.782416,
+    "seen": 1791983375.170925,
+    "ast_hash": "09b3f1dc2745ae3d7d84cf1aa2cd23fe",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/HandoverPlan.cs": {
+    "mtime": 1791886170.0777204,
+    "seen": 1791983375.170925,
+    "ast_hash": "b7d72415d46c3197095093e6e160565b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/LoginThrottle.cs": {
+    "mtime": 1791886169.5160673,
+    "seen": 1791983375.170925,
+    "ast_hash": "b22fc7b373d4c2a5d235eb233c6dd7ff",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/RefreshToken.cs": {
+    "mtime": 1791886169.3073266,
+    "seen": 1791983375.170925,
+    "ast_hash": "a73b0e1270d9ee63dd8ee425467611e0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/User.cs": {
+    "mtime": 1791886169.1296127,
+    "seen": 1791983375.170925,
+    "ast_hash": "b4a3969d1d63bc2e00a593eaaa783901",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/Vault.cs": {
+    "mtime": 1791886864.5964732,
+    "seen": 1791983375.170925,
+    "ast_hash": "5401a18496b33866f913e7f7d388e172",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Entities/VaultEntitlement.cs": {
+    "mtime": 1791886170.2449596,
+    "seen": 1791983375.170925,
+    "ast_hash": "96ff35d19092548ee2113ec05de08251",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/AssetKind.cs": {
+    "mtime": 1791900822.4713788,
+    "seen": 1791983375.170925,
+    "ast_hash": "f9052620ef3412b037c520a047e7e075",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/CheckInReminderKind.cs": {
+    "mtime": 1791959934.681237,
+    "seen": 1791983375.170925,
+    "ast_hash": "e34a6b7d70f1a32a0ad27129fff6f101",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/CheckInReminderStatus.cs": {
+    "mtime": 1791959934.682239,
+    "seen": 1791983375.170925,
+    "ast_hash": "0342b564893bcbfcc8a1fb53b64913be",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/ContainerStatus.cs": {
+    "mtime": 1791886116.4205346,
+    "seen": 1791983375.170925,
+    "ast_hash": "bd74989e0c2a4db7484e30fadeec877d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/EntitlementStatus.cs": {
+    "mtime": 1791886116.3818638,
+    "seen": 1791983375.170925,
+    "ast_hash": "81601290d80c6601bba3b73e6e223a32",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/LoginProvider.cs": {
+    "mtime": 1791886115.946301,
+    "seen": 1791983375.170925,
+    "ast_hash": "62945539502a5554fd0195752b428a78",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/PlanStatus.cs": {
+    "mtime": 1791886116.1817193,
+    "seen": 1791983375.170925,
+    "ast_hash": "34d7c78c6e06a3f990cc9bf4d3b3bedf",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/ServiceTier.cs": {
+    "mtime": 1791886116.216684,
+    "seen": 1791983375.170925,
+    "ast_hash": "1d90d8e26acddcea22458ddfe4ec901e",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/UserRole.cs": {
+    "mtime": 1791886115.7252548,
+    "seen": 1791983375.170925,
+    "ast_hash": "61d9d3255d5f687033a386591f2d8222",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/UserStatus.cs": {
+    "mtime": 1791886115.7638097,
+    "seen": 1791983375.170925,
+    "ast_hash": "ae45493d02939c4d227b6bb192174101",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/Enums/VaultStatus.cs": {
+    "mtime": 1791886115.9836204,
+    "seen": 1791983375.170925,
+    "ast_hash": "74b9466a2598b3cf7c1cbc0e0eed1909",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Domain/LegacyVault.Domain.csproj": {
+    "mtime": 1791885424.0017996,
+    "seen": 1791983375.170925,
+    "ast_hash": "e2b260fa9012f472b127d9e2f724cd19",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/AppDbContext.cs": {
+    "mtime": 1791959934.6832378,
+    "seen": 1791983375.170925,
+    "ast_hash": "20022d396e33e0e298c2c58fab36c630",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/AssetConfiguration.cs": {
+    "mtime": 1791901069.5947728,
+    "seen": 1791983375.170925,
+    "ast_hash": "c2f0c1f008b704e62c4156496b26b568",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/AssetVersionConfiguration.cs": {
+    "mtime": 1791901770.5330167,
+    "seen": 1791983375.170925,
+    "ast_hash": "ceb7d89baca211626183d791503c7d3f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/BeneficiaryConfiguration.cs": {
+    "mtime": 1791940688.1331627,
+    "seen": 1791983375.170925,
+    "ast_hash": "ff66fa8815b4632572d565c81fd16f9b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/CheckInPeriodConfiguration.cs": {
+    "mtime": 1791959934.6832378,
+    "seen": 1791983375.170925,
+    "ast_hash": "c0fe6c8edd855fc6d670b8edf9c176d6",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/CheckInReminderConfiguration.cs": {
+    "mtime": 1791959934.6842382,
+    "seen": 1791983375.170925,
+    "ast_hash": "7fb6e10d0824f71a466f8981ab87dc93",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/CheckInScheduleConfiguration.cs": {
+    "mtime": 1791959934.685237,
+    "seen": 1791983375.170925,
+    "ast_hash": "0b3ee8050d919ae951cc98d522fc5881",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/ContainerAssetConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "7a8ffa95a66f8a6f7bba087fda64fcf3",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/ContainerConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "0d61b1670d569b4b2c88f73834787945",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/DesignationConfiguration.cs": {
+    "mtime": 1791959933.8894434,
+    "seen": 1791983375.170925,
+    "ast_hash": "2a819c93810f2e08300f316ba16a5e5d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/EmailVerificationTokenConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "36219ae398b0860ab40f2b559e51692a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/ExternalLoginConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "813ea562655b2c320773d30d42252486",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/ExternalLoginLinkTicketConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "785515a996195adc1da966fcb486b565",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/HandoverPlanConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "efd2cbdb3a40eec13221466e02fd0f7c",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/LoginThrottleConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "fcdb73fe74f4d11f5dabc2b4e831c403",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/RefreshTokenConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "5160519dd75c2a297808613688fd1916",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/UserConfiguration.cs": {
+    "mtime": 1791940688.1441605,
+    "seen": 1791983375.170925,
+    "ast_hash": "a5c60f0307690bbbddaa71f33bcfe280",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/VaultConfiguration.cs": {
+    "mtime": 1791940688.1478574,
+    "seen": 1791983375.170925,
+    "ast_hash": "7ece7fffe99d45a7d15e8ed1f4e4b3b1",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Configurations/VaultEntitlementConfiguration.cs": {
+    "mtime": 1791940688.1478574,
+    "seen": 1791983375.170925,
+    "ast_hash": "a295c6f6609f088c4ffe8aed52938211",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/DatabaseSettings.cs": {
+    "mtime": 1791885424.0028,
+    "seen": 1791983375.170925,
+    "ast_hash": "6301d7887fc8debd12ff24bb36bb0f0b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/DbExceptions.cs": {
+    "mtime": 1791959963.0195005,
+    "seen": 1791983375.170925,
+    "ast_hash": "9ad4da3bc2b25c9faaf744a24e660da3",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261013145252_InitialCreate.Designer.cs": {
+    "mtime": 1791940688.1488616,
+    "seen": 1791983375.170925,
+    "ast_hash": "1c27858f7e4bd1086bcf316ba0069669",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261013145252_InitialCreate.cs": {
+    "mtime": 1791940688.1488616,
+    "seen": 1791983375.170925,
+    "ast_hash": "8e9e1ac76a2990643033eef3bceec337",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261013172954_AddAssetsAndVaultRules.Designer.cs": {
+    "mtime": 1791940688.1488616,
+    "seen": 1791983375.170925,
+    "ast_hash": "00dc9d98bf28d26b503b55acac128491",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261013172954_AddAssetsAndVaultRules.cs": {
+    "mtime": 1791940688.1488616,
+    "seen": 1791983375.170925,
+    "ast_hash": "44a3f1a78d56f9377edbe289fbb45699",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261013184815_AddBeneficiaries.Designer.cs": {
+    "mtime": 1791940688.1488616,
+    "seen": 1791983375.170925,
+    "ast_hash": "c49c3d7c35cac9115599a818e8110770",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261013184815_AddBeneficiaries.cs": {
+    "mtime": 1791940688.1488616,
+    "seen": 1791983375.170925,
+    "ast_hash": "0091675bd948189d52821ce30183cc9a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261013191843_AddDesignations.Designer.cs": {
+    "mtime": 1791959933.891442,
+    "seen": 1791983375.170925,
+    "ast_hash": "9169d4cbb2652a0f0c611002d20f5554",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261013191843_AddDesignations.cs": {
+    "mtime": 1791959933.891442,
+    "seen": 1791983375.170925,
+    "ast_hash": "9569325e743bbac3f0dddd51a6a293dc",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261014064400_AddCheckIn.Designer.cs": {
+    "mtime": 1791960240.5405765,
+    "seen": 1791983375.170925,
+    "ast_hash": "ce4f6967028b11ef6f2be274c0d27df9",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/20261014064400_AddCheckIn.cs": {
+    "mtime": 1791960240.539576,
+    "seen": 1791983375.170925,
+    "ast_hash": "ac8ae86aefb4ddb28f7652a12383ac92",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Data/Migrations/AppDbContextModelSnapshot.cs": {
+    "mtime": 1791960240.5405765,
+    "seen": 1791983375.170925,
+    "ast_hash": "42e3f933eac8161e42219ab1b967e756",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Health/DatabaseHealthCheck.cs": {
+    "mtime": 1791885424.0037997,
+    "seen": 1791983375.170925,
+    "ast_hash": "5293f10cc1ce88fb351c6f580c4e4649",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/InfrastructureConfig.cs": {
+    "mtime": 1791959934.6903095,
+    "seen": 1791983375.170925,
+    "ast_hash": "521aa6a22ac9a9d8ad2305d1c55ee8c0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Jobs/CheckInJobSettings.cs": {
+    "mtime": 1791959934.691319,
+    "seen": 1791983375.170925,
+    "ast_hash": "4dfe1e601358be36bc5ee0c114e57b76",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Jobs/CheckInMonitor.cs": {
+    "mtime": 1791959934.692318,
+    "seen": 1791983375.170925,
+    "ast_hash": "fff2b07cafb3d8a9d81656613f302b79",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/LegacyVault.Infrastructure.csproj": {
+    "mtime": 1791959972.2686982,
+    "seen": 1791983375.170925,
+    "ast_hash": "ac11efc4d84dd741f39108fe08785bfb",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/AppUrlProvider.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "6d89d7ce07926289d201a9a9e3e89400",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/CheckInReminderEmail.cs": {
+    "mtime": 1791959934.6943188,
+    "seen": 1791983375.170925,
+    "ast_hash": "efcdf462571bcf1f36f0cd6a38b2fe28",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/DevEmailSender.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "fc14af0e38368fb01d35d49c8b9d462b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/EmailConfig.cs": {
+    "mtime": 1791959934.6953182,
+    "seen": 1791983375.170925,
+    "ast_hash": "8ff8ce392a144cf56e1e2e2773481e47",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/EmailContent.cs": {
+    "mtime": 1791959934.6963167,
+    "seen": 1791983375.170925,
+    "ast_hash": "9a87cdc5692928e4d2c43aa9d211aec0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/EmailStartupLogger.cs": {
+    "mtime": 1791959934.6963167,
+    "seen": 1791983375.170925,
+    "ast_hash": "181797a1855bc33bcb230a09b0616352",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/LogCheckInReminderSender.cs": {
+    "mtime": 1791959934.697319,
+    "seen": 1791983375.170925,
+    "ast_hash": "80cf53a8ecac4662779020402af6a24f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/SmtpCheckInReminderSender.cs": {
+    "mtime": 1791959934.6983178,
+    "seen": 1791983375.170925,
+    "ast_hash": "f69bfe1c3e8f381aff7317d393c55e7e",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/SmtpEmailSender.cs": {
+    "mtime": 1791959934.6996877,
+    "seen": 1791983375.170925,
+    "ast_hash": "f197f342a24a5173dd363ac32ebbda22",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/SmtpMailSender.cs": {
+    "mtime": 1791959934.7006874,
+    "seen": 1791983375.170925,
+    "ast_hash": "a1c22253cfc7466d8737214e38a4e18a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Notifications/SmtpSettings.cs": {
+    "mtime": 1791959934.7006874,
+    "seen": 1791983375.170925,
+    "ast_hash": "dfe14ff0b195532a5cda1cdb9dcb6739",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/AssetRepository.cs": {
+    "mtime": 1791901818.9487114,
+    "seen": 1791983375.170925,
+    "ast_hash": "3d6b38b88a4efff8afbb30ee1d8243c9",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/BeneficiaryRepository.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "6bfdb432b0114a8193abd8988184cd72",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/CheckInRepository.cs": {
+    "mtime": 1791959934.701687,
+    "seen": 1791983375.170925,
+    "ast_hash": "a07198dcd5c77add43dc5c1146c4177a",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/ContainerRepository.cs": {
+    "mtime": 1791959933.8954434,
+    "seen": 1791983375.170925,
+    "ast_hash": "dc907301fd13b59f9840cbcf13e935fe",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/EmailVerificationTokenRepository.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "ccee8f6f86a664de6327c202ea057c44",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/ExternalLoginLinkTicketRepository.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "d3fbe07d71a091f2bdba9f0d9f516ae9",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/ExternalLoginRepository.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "f3364c2dc69ca99d3694122d5fab5584",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/LoginThrottleRepository.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "03a0110855e29893edb1f20791793513",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/RefreshTokenRepository.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "adf026f0f77aff75e04f78cdc582f7d4",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/UserRepository.cs": {
+    "mtime": 1791940688.1517708,
+    "seen": 1791983375.170925,
+    "ast_hash": "c9c7ce3e7c374451626a0fa10cdb6c5b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Repositories/VaultRepository.cs": {
+    "mtime": 1791901110.1134596,
+    "seen": 1791983375.170925,
+    "ast_hash": "b72475d41b097c682b5592b197e7f577",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Security/Argon2PasswordHasher.cs": {
+    "mtime": 1791940688.1555457,
+    "seen": 1791983375.170925,
+    "ast_hash": "1fe33a287ed59675f7ecf73274f49cb0",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Security/BeneficiaryDataProtector.cs": {
+    "mtime": 1791940688.1555457,
+    "seen": 1791983375.170925,
+    "ast_hash": "8a22d5f878e2ce914bf5ce38ab68fae4",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Security/CurrentUser.cs": {
+    "mtime": 1791940688.1555457,
+    "seen": 1791983375.170925,
+    "ast_hash": "f8e9fca8a99a95bdee43ce975e0a5234",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Security/GoogleAuthSettings.cs": {
+    "mtime": 1791940688.1555457,
+    "seen": 1791983375.170925,
+    "ast_hash": "722f7d9b470438e8233b42c0076371b7",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Security/GoogleTokenVerifier.cs": {
+    "mtime": 1791940688.1555457,
+    "seen": 1791983375.170925,
+    "ast_hash": "ee0f41375a2ad1c78a547e55700e7b1f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Security/JwtSettings.cs": {
+    "mtime": 1791940688.1555457,
+    "seen": 1791983375.170925,
+    "ast_hash": "a306d405364d976fc46d4ff118cbdc89",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Security/JwtTokenService.cs": {
+    "mtime": 1791940688.1555457,
+    "seen": 1791983375.170925,
+    "ast_hash": "1a091f4ff2f07c87d5ee9f6b5ad45a0d",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Storage/AssetEncryptionSettings.cs": {
+    "mtime": 1791901837.480692,
+    "seen": 1791983375.170925,
+    "ast_hash": "60b5bbe3828fc7e48e4965593eda0382",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Storage/AssetStorageSettings.cs": {
+    "mtime": 1791901756.8176875,
+    "seen": 1791983375.170925,
+    "ast_hash": "fe7d3d6ca5ac522f23e083de67aa2a2f",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Storage/ChunkedAesGcm.cs": {
+    "mtime": 1791901730.449213,
+    "seen": 1791983375.170925,
+    "ast_hash": "4ead07d0062b43c621edace5aca7b78b",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Storage/DataKeyProtector.cs": {
+    "mtime": 1791901696.7188685,
+    "seen": 1791983375.170925,
+    "ast_hash": "98be2b3e15710ab12b549cb391a6d428",
+    "semantic_hash": ""
+  },
+  "src/LegacyVault.Infrastructure/Storage/LocalAssetContentStore.cs": {
+    "mtime": 1791901756.7510457,
+    "seen": 1791983375.170925,
+    "ast_hash": "0be642d798b8390caafad8408d5aff35",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/AssetEncryptionTests.cs": {
+    "mtime": 1791901901.1231382,
+    "seen": 1791983375.170925,
+    "ast_hash": "91c9c9c0f56a0a0f797b8cf1a360ec94",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/BeneficiaryFlowTests.cs": {
+    "mtime": 1791959933.896444,
+    "seen": 1791983375.170925,
+    "ast_hash": "e3daae3826c8c8bf27de420cd9722ee5",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/CheckIn/CheckInFakes.cs": {
+    "mtime": 1791959934.702687,
+    "seen": 1791983375.170925,
+    "ast_hash": "e1a8eee01a1fa6a2d2883e3c5e579071",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/CheckIn/CheckInFlowTests.cs": {
+    "mtime": 1791959934.7036877,
+    "seen": 1791983375.170925,
+    "ast_hash": "46a8391764ea594fdcefff83b770bc4f",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/CheckIn/CheckInJobTests.cs": {
+    "mtime": 1791959934.7051992,
+    "seen": 1791983375.170925,
+    "ast_hash": "a5fba78d02a0ec6fc35aaa7c06455430",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/CheckIn/CheckInMonitorTests.cs": {
+    "mtime": 1791959934.7051992,
+    "seen": 1791983375.170925,
+    "ast_hash": "865f6f4c42a141e809cd8d5ec88a4839",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/CheckIn/CheckInSchedulerTests.cs": {
+    "mtime": 1791959934.7062106,
+    "seen": 1791983375.170925,
+    "ast_hash": "ad81bfdf694379420fc3d26fdadcb6a0",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/CheckIn/CheckInServiceTests.cs": {
+    "mtime": 1791959934.7072084,
+    "seen": 1791983375.170925,
+    "ast_hash": "76cbe76e9501e44999012fc657ae4378",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/CheckIn/CheckInSettingsTests.cs": {
+    "mtime": 1791959934.7084403,
+    "seen": 1791983375.170925,
+    "ast_hash": "9264cec0a89ab5a6b995eebccf188537",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/CheckIn/CheckInTimelineTests.cs": {
+    "mtime": 1791959934.7084403,
+    "seen": 1791983375.170925,
+    "ast_hash": "d86cb1c9579a84974eb51f3fb1bea581",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/ContainerFlowTests.cs": {
+    "mtime": 1791959933.8974438,
+    "seen": 1791983375.170925,
+    "ast_hash": "cd9eec147554fb8c3b0000947e02897c",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/DesignationFlowTests.cs": {
+    "mtime": 1791959933.8974438,
+    "seen": 1791983375.170925,
+    "ast_hash": "fd744f4a544cd90b4c243c7099af71ad",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/Email/EmailStartupLoggerTests.cs": {
+    "mtime": 1791959934.7094479,
+    "seen": 1791983375.170925,
+    "ast_hash": "336e08b6346b6584b3f6d651d3c7f0b4",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/Email/FakeSmtpServer.cs": {
+    "mtime": 1791959934.710955,
+    "seen": 1791983375.170925,
+    "ast_hash": "61f796bbc84d0898cc43657fce8d95fe",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/Email/SmtpEmailTests.cs": {
+    "mtime": 1791959934.710955,
+    "seen": 1791983375.170925,
+    "ast_hash": "fb3206f99fdf01640470208c1abc5c08",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/GoogleAuth/GoogleAuthFakes.cs": {
+    "mtime": 1791940688.1555457,
+    "seen": 1791983375.170925,
+    "ast_hash": "89646f1d3663b981970b9e8926a02148",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/GoogleAuth/GoogleAuthServiceTests.cs": {
+    "mtime": 1791940688.158924,
+    "seen": 1791983375.170925,
+    "ast_hash": "f53e37cee4ce7c3d10212e581b6a22f9",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/GoogleAuth/GoogleTokenVerifierTests.cs": {
+    "mtime": 1791940688.158924,
+    "seen": 1791983375.170925,
+    "ast_hash": "e1142e71c5aa9c57370d7afeceefc469",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/HealthEndpointTests.cs": {
+    "mtime": 1791885424.0047996,
+    "seen": 1791983375.170925,
+    "ast_hash": "26feacf91797ec6500cc7b312996da23",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/LegacyVault.IntegrationTests.csproj": {
+    "mtime": 1791885424.0047996,
+    "seen": 1791983375.170925,
+    "ast_hash": "140801c44e12410b1585ab2bec3cb59e",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/TestSupport/ApiFactory.cs": {
+    "mtime": 1791959934.7119641,
+    "seen": 1791983375.170925,
+    "ast_hash": "2d641b982949407075f30a56ff572b9a",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/TestSupport/ApiTestHelpers.cs": {
+    "mtime": 1791959933.898443,
+    "seen": 1791983375.170925,
+    "ast_hash": "08251e1f84eb4c0b88aa6d4893d57a0d",
+    "semantic_hash": ""
+  },
+  "tests/LegacyVault.IntegrationTests/VaultAssetFlowTests.cs": {
+    "mtime": 1791940688.158924,
+    "seen": 1791983375.170925,
+    "ast_hash": "8b5fb6dd8f0412053f5750cbe4c482f4",
+    "semantic_hash": ""
+  },
+  ".claude/CLAUDE.md": {
+    "mtime": 1791983364.9797773,
+    "seen": 1791983375.170925,
+    "ast_hash": "9b31786b637be3c13978bec4c2330752",
+    "semantic_hash": ""
+  },
+  ".github/pull_request_template.md": {
+    "mtime": 1791885423.9938512,
+    "seen": 1791983375.170925,
+    "ast_hash": "b30ed5deeb73505935bdd8e20623a30b",
+    "semantic_hash": ""
+  },
+  ".github/workflows/ci.yml": {
+    "mtime": 1791885423.9938512,
+    "seen": 1791983375.170925,
+    "ast_hash": "2d0b2564473044ba4c8d5ed3d0e28eb7",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1791983364.9807773,
+    "seen": 1791983375.170925,
+    "ast_hash": "67d88e9d0760c3ba54c75dfd9551c1c5",
+    "semantic_hash": ""
+  },
+  "CONTRIBUTING.md": {
+    "mtime": 1791885423.9948483,
+    "seen": 1791983375.170925,
+    "ast_hash": "5c78fc3fb966bdd611d122992c5a14bd",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1791959934.649276,
+    "seen": 1791983375.170925,
+    "ast_hash": "fd297df2e5288ffe034a687b6897294f",
+    "semantic_hash": ""
+  },
+  "docker-compose.yml": {
+    "mtime": 1791885423.9958484,
+    "seen": 1791983375.170925,
+    "ast_hash": "7a8077421e42804b25a0c10655db7126",
+    "semantic_hash": ""
+  },
+  "docs/HIEU-DU-AN.md": {
+    "mtime": 1791959934.6502776,
+    "seen": 1791983375.170925,
+    "ast_hash": "e22af88d3e9b7e05f86f236cea9e5f9a",
+    "semantic_hash": ""
+  },
+  "docs/HUONG-DAN-GIT.md": {
+    "mtime": 1791885423.9958484,
+    "seen": 1791983375.170925,
+    "ast_hash": "a195ca4d648b2696b52a25cb0d2b6773",
+    "semantic_hash": ""
+  },
+  "docs/api-contract.md": {
+    "mtime": 1791959934.6512864,
+    "seen": 1791983375.170925,
+    "ast_hash": "8991009aabbc8d7a54b8b83bafcbe5ac",
+    "semantic_hash": ""
+  },
+  "docs/architecture.md": {
+    "mtime": 1791885423.9958484,
+    "seen": 1791983375.170925,
+    "ast_hash": "763e7b4907eb4f090d5e38948a65a701",
+    "semantic_hash": ""
+  },
+  "docs/backlog.md": {
+    "mtime": 1791885423.9958484,
+    "seen": 1791983375.170925,
+    "ast_hash": "0ebe286c3f61a55c44e0fd32d282c72b",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-10-14-deadman-switch.md": {
+    "mtime": 1791959934.6532874,
+    "seen": 1791983375.170925,
+    "ast_hash": "955ea26f6efdccc9fc75a90ad03b18bb",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-10-14-deadman-switch-design.md": {
+    "mtime": 1791959934.654289,
+    "seen": 1791983375.170925,
+    "ast_hash": "ad80a23ff2d70589a06d9803a555a2e1",
+    "semantic_hash": ""
+  }
+}
