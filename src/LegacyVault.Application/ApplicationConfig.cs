@@ -19,6 +19,9 @@ public static class ApplicationConfig
         services.AddScoped<ICheckInScheduler, CheckInScheduler>();
         services.AddScoped<ICheckInJob, CheckInJob>();
 
+        // Hồ sơ chứng tử (F2B)
+        services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
+
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
 

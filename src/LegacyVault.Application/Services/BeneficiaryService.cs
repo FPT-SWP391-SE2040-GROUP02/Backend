@@ -19,7 +19,6 @@ namespace LegacyVault.Application.Services;
 public sealed partial class BeneficiaryService : IBeneficiaryService
 {
     private const string DefaultSortBy = "createdAt";
-    private const int CitizenIdLength = 12;
     private const int MaxSearchDigits = 4;
 
     /// <summary>Ngày sinh và tuổi tính theo giờ Việt Nam (UTC+07:00).</summary>
@@ -66,7 +65,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
         // SETUP-08: đủ số CCCD, họ tên, ngày sinh.
         BeneficiaryPersonalData data = new BeneficiaryPersonalData();
-        data.CitizenId = NormalizeCitizenId(request.CitizenId);
+        data.CitizenId = CitizenIdRules.NormalizeCitizenId(request.CitizenId, "citizenId");
         data.FullName = NormalizeFullName(request.FullName);
         if (request.DateOfBirth == null)
         {
@@ -130,7 +129,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
         // Họ tên đã mã hóa nên chỉ tìm được theo 4 số cuối CCCD (DATA-02).
         string? searchTerm = TextInput.NullIfBlank(pagination.SearchTerm);
-        if (searchTerm != null && !IsDigits(searchTerm, 1, MaxSearchDigits))
+        if (searchTerm != null && !CitizenIdRules.IsDigits(searchTerm, 1, MaxSearchDigits))
         {
             throw ValidationErrors.For("searchTerm", "Chỉ tìm theo 1 đến 4 số cuối CCCD.");
         }
@@ -258,31 +257,6 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // nhưng lỗi đó hiện ra 500 thay vì 409 BENEFICIARY_IN_USE.
         beneficiaryRepository.Remove(beneficiary);
         await unitOfWork.SaveChangesAsync(ct);
-    }
-
-    /// <summary>
-    /// EKYC-08: bỏ khoảng trắng; phải đúng 12 chữ số 0-9; giữ dạng chuỗi để không mất số 0 đầu.
-    /// </summary>
-    private static string NormalizeCitizenId(string? citizenId)
-    {
-        StringBuilder builder = new StringBuilder();
-        if (citizenId != null)
-        {
-            foreach (char c in citizenId)
-            {
-                if (!char.IsWhiteSpace(c))
-                {
-                    builder.Append(c);
-                }
-            }
-        }
-
-        string normalized = builder.ToString();
-        if (!IsDigits(normalized, CitizenIdLength, CitizenIdLength))
-        {
-            throw ValidationErrors.For("citizenId", "Số CCCD phải gồm đúng 12 chữ số.");
-        }
-        return normalized;
     }
 
     /// <summary>MATCH-02: chuẩn hóa Unicode NFC, bỏ khoảng trắng đầu/cuối, gộp nhiều khoảng trắng thành một.</summary>
@@ -433,23 +407,6 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     {
         return string.Equals(left.FullName, right.FullName, StringComparison.OrdinalIgnoreCase)
             && left.DateOfBirth == right.DateOfBirth;
-    }
-
-    /// <summary>Chuỗi chỉ gồm chữ số 0-9, độ dài trong [minLength, maxLength].</summary>
-    private static bool IsDigits(string value, int minLength, int maxLength)
-    {
-        if (value.Length < minLength || value.Length > maxLength)
-        {
-            return false;
-        }
-        foreach (char c in value)
-        {
-            if (!char.IsAsciiDigit(c))
-            {
-                return false;
-            }
-        }
-        return true;
     }
 
     private async Task<Vault> LoadOwnedVaultAsync(Guid vaultId, CancellationToken ct)

@@ -84,6 +84,7 @@ public static class InfrastructureConfig
         // Dịch vụ email: Gmail qua MailKit khi có cấu hình Email:Smtp, không thì chỉ ghi log (xem EmailConfig).
         services.AddEmailServices(configuration);
         LegacyVault.Infrastructure.Handover.HandoverConfig.AddHandover(services, configuration);
+        LegacyVault.Infrastructure.DeathCases.DeathCaseConfig.AddDeathCases(services, configuration);
         services.AddHostedService<CheckInMonitor>();
 
         // JWT Bearer Authentication
