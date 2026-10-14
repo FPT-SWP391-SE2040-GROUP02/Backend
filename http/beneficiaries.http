@@ -1,0 +1,97 @@
+# Thử CRUD hồ sơ người nhận cấp kho — chỉ Development (docs/api-contract.md mục 6.8).
+#
+# Chuẩn bị giống http/containers.http: chạy migration, chạy API (profile http), tạo tài khoản bằng http/auth.http,
+# đăng nhập bên dưới để lấy token, tạo kho rồi điền vaultId.
+# Hạng Free thêm người nhận → 403 PAID_TIER_REQUIRED (SETUP-17). Nâng kho lên XS trong SSMS
+# (CHỈ DB local, không chạy trên môi trường thật):
+#    UPDATE VaultEntitlements
+#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200, IncludedBeneficiarySlots = 2
+#    WHERE VaultId = '<vaultId>';
+# Dữ liệu dưới đây là dữ liệu giả, không dùng CCCD thật.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập — lấy access token (hết hạn sau 15 phút thì gửi lại request này)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Kho của tôi — lấy vaultId, xem planConfigVersion (tạo người nhận không làm tăng)
+GET {{baseUrl}}/vaults/me
+Authorization: Bearer {{token}}
+
+### Điền vaultId từ response trên
+@vaultId = 00000000-0000-0000-0000-000000000000
+
+### Tạo hồ sơ (201; response chỉ có citizenIdLast4 = "8901")
+POST {{baseUrl}}/vaults/{{vaultId}}/beneficiaries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "citizenId": "012345678901",
+  "fullName": "Nguyễn Văn An",
+  "dateOfBirth": "1990-05-20",
+  "email": "an.nguyen@example.com",
+  "phone": "0901 234 567"
+}
+
+### Gửi lại cùng người (tên khác hoa thường/khoảng trắng) → 200, cùng id, không tạo thêm
+POST {{baseUrl}}/vaults/{{vaultId}}/beneficiaries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "citizenId": "0123 4567 8901", "fullName": "  nguyễn  văn AN ", "dateOfBirth": "1990-05-20", "email": "an.nguyen@example.com" }
+
+### Cùng CCCD nhưng khác ngày sinh → 409 BENEFICIARY_IDENTITY_CONFLICT (+beneficiaryId)
+POST {{baseUrl}}/vaults/{{vaultId}}/beneficiaries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "citizenId": "012345678901", "fullName": "Nguyễn Văn An", "dateOfBirth": "1991-01-01", "email": "an.nguyen@example.com" }
+
+### Người nhận dưới 18 tuổi chưa xác nhận → 409 MINOR_CONFIRMATION_REQUIRED; đổi confirmMinor = true → 201
+POST {{baseUrl}}/vaults/{{vaultId}}/beneficiaries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "citizenId": "079200001234", "fullName": "Nguyễn Thị Cúc", "dateOfBirth": "2016-03-01", "phone": "0912345678", "confirmMinor": false }
+
+### Danh sách hồ sơ (mới nhất trước)
+GET {{baseUrl}}/vaults/{{vaultId}}/beneficiaries?isAscending=false&pageSize=10
+Authorization: Bearer {{token}}
+
+### Tìm theo 4 số cuối CCCD (chữ → 400 VALIDATION_ERROR)
+GET {{baseUrl}}/vaults/{{vaultId}}/beneficiaries?searchTerm=8901
+Authorization: Bearer {{token}}
+
+### Điền beneficiaryId và etag từ response tạo hồ sơ
+@beneficiaryId = 00000000-0000-0000-0000-000000000000
+@etag = "0"
+
+### Xem một hồ sơ
+GET {{baseUrl}}/vaults/{{vaultId}}/beneficiaries/{{beneficiaryId}}
+Authorization: Bearer {{token}}
+
+### Sửa họ tên, xóa số điện thoại (gửi lại etag; etag cũ → 409 EDIT_CONFLICT; không gửi CCCD vì không đổi được)
+PUT {{baseUrl}}/vaults/{{vaultId}}/beneficiaries/{{beneficiaryId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "fullName": "Nguyễn Văn Bình", "phone": "" }
+
+### Xóa cả email lẫn số điện thoại → 400 VALIDATION_ERROR
+PUT {{baseUrl}}/vaults/{{vaultId}}/beneficiaries/{{beneficiaryId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "email": "", "phone": "" }
+
+### Xóa hồ sơ (204; gọi lại → 404 BENEFICIARY_NOT_FOUND)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/beneficiaries/{{beneficiaryId}}
+Authorization: Bearer {{token}}

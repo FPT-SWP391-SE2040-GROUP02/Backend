@@ -37,4 +37,11 @@ public interface IContainerRepository
 
     /// <summary>Đánh dấu "sẽ DELETE" một liên kết tài sản.</summary>
     void RemoveAssetLink(ContainerAsset link);
+
+    /// <summary>
+    /// Bỏ MỌI thay đổi chưa lưu của cả request (ChangeTracker.Clear): mọi entity đang theo dõi
+    /// (Container, Plan, Vault...) bị bỏ theo dõi, lần đọc sau lấy dữ liệu mới từ DB.
+    /// Chỉ được gọi khi use case sẽ trả kết quả (hoặc ném lỗi) mà KHÔNG SaveChanges nữa.
+    /// </summary>
+    void DiscardPendingChanges();
 }

@@ -7,6 +7,12 @@ public static class ApplicationConfig
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
+        // TimeProvider đăng ký một lần ở InfrastructureConfig.
+        services.AddScoped<IVaultService, VaultService>();
+        services.AddScoped<IAssetService, AssetService>();
+        services.AddScoped<IContainerService, ContainerService>();
+        services.AddScoped<IBeneficiaryService, BeneficiaryService>();
+
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
 

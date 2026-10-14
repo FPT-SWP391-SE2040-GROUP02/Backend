@@ -20,5 +20,11 @@ public sealed class ContainerAssetConfiguration : IEntityTypeConfiguration<Conta
             .WithMany(c => c.Assets)
             .HasForeignKey(a => a.ContainerId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Restrict: tránh hai đường cascade (Vault→Container→Link và Vault→Asset→Link) mà SQL Server không cho.
+        builder.HasOne(a => a.Asset)
+            .WithMany()
+            .HasForeignKey(a => a.AssetId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

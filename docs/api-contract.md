@@ -65,16 +65,21 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 | 401 | `REAUTHENTICATION_FAILED` | Xác thực lại thất bại khi đổi phương thức đăng nhập (**không** đá về trang login) | |
 | 403 | `ACCOUNT_NOT_ACTIVE` | Tài khoản bị khóa/vô hiệu | |
 | 403 | `EMAIL_NOT_VERIFIED` | Tạo kho khi email chưa xác minh | |
-| 403 | `PAID_TIER_REQUIRED` | Hạng Free đưa tài sản vào gói | |
+| 403 | `PAID_TIER_REQUIRED` | Hạng Free đưa tài sản vào gói, hoặc thêm người nhận | |
 | 404 | `VAULT_NOT_FOUND` | Chưa có kho, hoặc kho của người khác | |
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
+| 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
+| 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
+| 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
 | 409 | `EDIT_CONFLICT` | `etag` đã cũ: dữ liệu bị sửa ở tab/máy khác. FE tải lại rồi cho sửa tiếp | |
 | 409 | `VAULT_NOT_EDITABLE` | Kho không cho sửa lúc này | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `SERVICE_READ_ONLY` |
 | 409 | `CONTAINER_LIMIT_EXCEEDED` | Đủ 50 gói chưa lưu trữ | `maxContainers` |
 | 409 | `CONTAINER_ARCHIVED` | Sửa gói đã lưu trữ | |
 | 409 | `ASSET_ALREADY_IN_CONTAINER` | Tài sản đang ở gói khác | `containerId` |
 | 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kế hoạch không còn gói sẵn sàng; cần Owner xác nhận | |
+| 409 | `BENEFICIARY_IDENTITY_CONFLICT` | Kho đã có hồ sơ cùng số CCCD nhưng khác họ tên hoặc ngày sinh | `beneficiaryId` |
+| 409 | `MINOR_CONFIRMATION_REQUIRED` | Người nhận chưa đủ 18 tuổi; cần Owner xác nhận cảnh báo | |
 | 409 | `GOOGLE_ACCOUNT_ALREADY_LINKED` | Google này đã gắn tài khoản khác / tài khoản đã có Google | |
 | 409 | `LAST_LOGIN_METHOD` | Gỡ phương thức đăng nhập cuối cùng | |
 | 409 | `LOGIN_METHOD_ALREADY_EXISTS` | Đã có phương thức này | `method` |
@@ -318,7 +323,96 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo s
 - Gặp `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED`: FE hiện cảnh báo "kế hoạch sẽ trở về bản nháp"; Owner đồng ý thì gọi lại với `?confirmPlanDeactivation=true`.
 - Hạng Free: được tạo/đổi tên/lưu trữ gói rỗng; đưa tài sản vào gói → `403 PAID_TIER_REQUIRED` (FE hiện gợi ý nâng cấp).
 - `status`: `DRAFT` (thiếu tài sản hoặc người nhận), `READY`, `ARCHIVED`. BE tự tính, FE không gửi trạng thái. `missingRequirements` cho biết còn thiếu gì: `NO_ASSET`, `NO_DESIGNATION`.
-- Thêm/gỡ tài sản cần module Tài sản; hai endpoint này cài sau.
+
+### 6.7. Tài sản (Asset)
+
+Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồi mới đưa vào gói bằng `POST .../containers/{containerId}/assets`.
+
+| Method | URL | Quyền | Body / Query | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| POST | `/v1/vaults/{vaultId}/assets` | Đăng nhập | `multipart/form-data`: `file` (bắt buộc), `name?`, `description?` | **201** `AssetResponse` | 400, 404, 409 `STORAGE_QUOTA_EXCEEDED` / `VAULT_NOT_EDITABLE`, 413 `FILE_TOO_LARGE` |
+| POST | `/v1/vaults/{vaultId}/assets/text` | Đăng nhập | `{ name, description?, content }` | **201** `AssetResponse` | 400, 404, 409 như trên |
+| GET | `/v1/vaults/{vaultId}/assets` | Đăng nhập | Query phân trang; `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<AssetResponse>` | 400, 404 |
+| GET | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 200 `AssetResponse` | 404 `VAULT_NOT_FOUND` / `ASSET_NOT_FOUND` |
+
+```json
+// AssetResponse — chỉ metadata, KHÔNG có nội dung tài sản
+{
+  "id": "0199e7c1-...",
+  "vaultId": "0199e7a4-...",
+  "kind": "FILE",
+  "name": "Giấy tờ nhà",
+  "description": null,
+  "currentVersion": {
+    "versionNumber": 1,
+    "fileName": "giay-to.pdf",
+    "contentType": "application/pdf",
+    "sizeBytes": 1500,
+    "createdAt": "2026-10-13T08:40:00+00:00"
+  },
+  "createdAt": "2026-10-13T08:40:00+00:00",
+  "updatedAt": null,
+  "etag": "\"0\""
+}
+```
+
+- `kind`: `FILE` (tệp tải lên) | `TEXT` (nội dung chữ: thông tin tài khoản, ghi chú...). `fileName` là `null` với `TEXT`.
+- `name` của tệp không gửi thì lấy theo tên tệp. Tên/mô tả **không mã hóa**: không ghi mật khẩu vào đây; bí mật để trong `content`/tệp.
+- Nội dung tệp và `content` được BE mã hóa (AES-256-GCM, khóa riêng mỗi phiên bản) trước khi lưu. FE gửi nội dung gốc qua HTTPS, **không** tự mã hóa hay Base64 nội dung. `sizeBytes` là kích thước nội dung gốc, cũng là số tính vào quota.
+- Hạng Free được lưu tài sản trong 20 MiB; mọi phiên bản đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản không ở gói nào.
+- Chưa có (làm sau cùng phần bảo mật): tải nội dung về, thay nội dung (phiên bản mới), đổi tên/xóa tài sản.
+
+### 6.8. Người nhận (Beneficiary)
+
+Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lại cho nhiều gói. Endpoint gốc: `/v1/vaults/{vaultId}/beneficiaries`. Hiện chỉ có CRUD hồ sơ; **chưa** gắn người nhận vào gói và **chưa** đếm suất (làm ở nhánh chỉ định).
+
+| Method | URL | Quyền | Body / Query | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `.../beneficiaries` | Đăng nhập | Query phân trang; `sortBy`: chỉ `createdAt` (mặc định); `searchTerm`: 1–4 chữ số | 200 `PaginatedList<BeneficiaryResponse>` | 400, 404 |
+| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone?, confirmMinor? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `MINOR_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` |
+| GET | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | 200 `BeneficiaryResponse` | 404 `VAULT_NOT_FOUND` / `BENEFICIARY_NOT_FOUND` |
+| PUT | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | `{ etag, fullName?, dateOfBirth?, email?, phone?, confirmMinor? }` | 200 `BeneficiaryResponse` | 400, 404, 409 `EDIT_CONFLICT` / `MINOR_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` |
+| DELETE | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | **204** | 404, 409 `VAULT_NOT_EDITABLE` |
+
+```json
+// POST body
+{
+  "citizenId": "012345678901",
+  "fullName": "Nguyễn Văn An",
+  "dateOfBirth": "1990-05-20",
+  "email": "an.nguyen@example.com",
+  "phone": "0901 234 567",
+  "confirmMinor": false
+}
+
+// BeneficiaryResponse — KHÔNG có số CCCD đầy đủ
+{
+  "id": "0199e7d2-...",
+  "citizenIdLast4": "8901",
+  "fullName": "Nguyễn Văn An",
+  "dateOfBirth": "1990-05-20",
+  "email": "an.nguyen@example.com",
+  "phone": "0901234567",
+  "isMinor": false,
+  "minorAcknowledgedAt": null,
+  "containerIds": [],
+  "createdAt": "2026-10-14T08:00:00+00:00",
+  "updatedAt": null,
+  "etag": "\"0\""
+}
+
+// PUT body: chỉ gửi trường cần đổi
+{ "etag": "\"0\"", "fullName": "Nguyễn Văn Bình", "email": "" }
+```
+
+- **Bảo mật (DATA-02):** BE mã hóa số CCCD, họ tên, ngày sinh, email, số điện thoại. Response **chỉ** có `citizenIdLast4`, không bao giờ trả số CCCD đầy đủ. FE không lưu số CCCD đầy đủ sau khi gửi.
+- **Tìm kiếm:** họ tên đã mã hóa nên `searchTerm` **chỉ** tìm theo 4 số cuối CCCD: 1–4 chữ số, khớp phần cuối của `citizenIdLast4` (ví dụ `01` khớp `8901`). Có chữ hoặc quá 4 ký tự → 400.
+- **CCCD:** đúng 12 chữ số, được gõ khoảng trắng (BE bỏ đi), giữ số 0 đầu. **Không sửa được** sau khi tạo; muốn đổi thì xóa hồ sơ rồi tạo lại.
+- **Liên hệ:** cần ít nhất `email` hoặc `phone`. Khi tạo, `""` coi như không có. Khi sửa, `null`/không gửi = giữ nguyên, `""` = xóa. Email được đổi sang chữ thường; số điện thoại bỏ khoảng trắng, dấu chấm, dấu gạch, phải có 9–15 chữ số (cho phép `+` đầu).
+- **Trùng CCCD trong kho:** cùng CCCD, cùng họ tên (không phân biệt hoa thường, bỏ khoảng trắng thừa) và cùng ngày sinh → **200** trả hồ sơ cũ, không đổi gì (kể cả liên hệ). Khác họ tên hoặc ngày sinh → `409 BENEFICIARY_IDENTITY_CONFLICT` kèm `beneficiaryId`; FE mở hồ sơ đó cho Owner sửa cho thống nhất.
+- **Dưới 18 tuổi** (tính theo giờ Việt Nam): lần đầu lưu cần `confirmMinor: true`, không thì `409 MINOR_CONFIRMATION_REQUIRED`; FE hiện cảnh báo "người này hiện chưa nhận được qua app" rồi gọi lại. Đã xác nhận rồi thì các lần sửa sau không cần gửi lại. Ngày sinh ở tương lai → 400.
+- Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
+- Tạo/sửa hồ sơ chưa gắn gói **không** tăng `planConfigVersion` và không chiếm suất. BE không gửi thông báo, không tạo tài khoản cho người nhận.
 
 ---
 

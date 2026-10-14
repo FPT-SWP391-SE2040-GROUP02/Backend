@@ -201,4 +201,17 @@ Repo chính thức: [FPT-SWP391-SE2040-GROUP02/Backend](https://github.com/FPT-S
 
 Đã có: bốn project, DI, SQL Docker tự tạo database, EF Core, CORS, ProblemDetails, Swagger, health check và cấu hình CI.
 
-Chưa có: Auth, tài khoản demo, bảng nghiệp vụ, Vault/Assets, mã hóa, Google, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
+Đã có thêm: đăng ký/xác minh email, đăng nhập email/mật khẩu (JWT + refresh cookie), đăng nhập Google; tạo/xem/sửa kho; tạo/xem tài sản mã hóa (tệp, chữ); gói: tạo/xem/đổi tên/lưu trữ, thêm/gỡ tài sản trong gói — xem docs/api-contract.md mục 6.
+
+Nội dung tài sản được **mã hóa envelope** trước khi ghi đĩa: AES-256-GCM, mỗi phiên bản một DEK riêng, DEK được bọc bằng KEK trong mục `AssetEncryption` của cấu hình (không nằm trong DB). `appsettings.Development.json` có sẵn KEK mẫu `dev-local` — **chỉ dùng local**, giống mật khẩu SQL mẫu. Server thật đặt KEK qua biến môi trường `AssetEncryption__ActiveKeyId` và `AssetEncryption__Keys__<id>`; thiếu/sai KEK thì API không khởi động. Đổi KEK: thêm khóa mới, chuyển `ActiveKeyId`, **giữ khóa cũ** để mở các phiên bản đã lưu. Mất KEK = mất toàn bộ nội dung đã lưu.
+
+Database dev đã chạy các migration cũ (`InitialSchema`, `AddAssetVersionEncryption`, đã bỏ khi gộp với develop) thì xóa database rồi tạo lại theo migration hiện tại:
+
+```powershell
+dotnet ef database drop --force --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
+dotnet ef database update --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
+```
+
+Nhớ xóa luôn thư mục `src/LegacyVault.Api/App_Data/asset-content` vì nội dung trong đó không còn bản ghi tương ứng.
+
+Chưa có: tài khoản demo, chỉ định người nhận (gói hiện luôn DRAFT), tải về/sửa/xóa nội dung tài sản, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
