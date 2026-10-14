@@ -32,4 +32,10 @@ public class HandoverPlan
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Số phiên bản của dòng, database tự tăng mỗi lần lưu. Kích hoạt kế hoạch, nộp chứng tử và việc điểm danh
+    /// cùng sửa Status; nhờ số này, thao tác lưu sau không ghi đè lên thao tác vừa lưu trước.
+    /// </summary>
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 }

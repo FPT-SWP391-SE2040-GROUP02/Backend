@@ -4,8 +4,15 @@
 @baseUrl = http://localhost:5000
 @idToken = dan-google-id-token-vao-day
 
+### Lấy proof với cùng cookie jar trước các POST; lấy lại sau đổi principal
+# @name googleCsrf
+GET {{baseUrl}}/api/v1/auth/csrf
+
+@csrfToken = {{googleCsrf.response.body.requestToken}}
+
 ### 1. Đăng nhập bằng Google ID token
 POST {{baseUrl}}/api/v1/auth/google
+X-CSRF-Token: {{csrfToken}}
 Content-Type: application/json
 
 {
@@ -16,6 +23,7 @@ Content-Type: application/json
 
 ### 2. Email Google trùng tài khoản có mật khẩu: dán linkTicket từ bước 1 và nhập mật khẩu tài khoản app
 POST {{baseUrl}}/api/v1/auth/google/link-confirm
+X-CSRF-Token: {{csrfToken}}
 Content-Type: application/json
 
 {

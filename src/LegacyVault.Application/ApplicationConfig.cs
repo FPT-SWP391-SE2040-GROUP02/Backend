@@ -29,6 +29,9 @@ public static class ApplicationConfig
         services.AddScoped<IGoogleAuthService, GoogleAuthService>();
         services.AddScoped<LoginSessionIssuer>();
         services.AddScoped<LoginThrottleGuard>();
+
+        // Xác minh danh tính (eKYC)
+        services.AddScoped<IEkycService, EkycService>();
         return services;
     }
 }

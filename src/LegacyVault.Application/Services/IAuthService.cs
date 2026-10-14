@@ -30,7 +30,7 @@ public interface IAuthService
     /// </summary>
     Task<AuthResult> RefreshAsync(string? refreshToken, CancellationToken ct);
 
-    /// <summary>Đăng xuất: thu hồi family hiện tại, hoặc mọi phiên của user nếu revokeAllDevices. Luôn thành công.</summary>
+    /// <summary>Đăng xuất: thu hồi family hiện tại, hoặc mọi phiên của user nếu revokeAllDevices. Thiếu/expired/revoked proof khi logout-all trả SESSION_EXPIRED; single-device có thể no-op.</summary>
     Task LogoutAsync(string? refreshToken, bool revokeAllDevices, CancellationToken ct);
 
     /// <summary>Người đang đăng nhập. Lỗi: 401 SESSION_EXPIRED.</summary>

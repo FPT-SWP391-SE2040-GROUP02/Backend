@@ -48,7 +48,14 @@ public sealed class HealthEndpointTests
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
-                new Dictionary<string, string?> { ["ConnectionStrings:Default"] = connectionString }));
+                new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:Default"] = connectionString,
+                    // Health test có thể kết nối DB development: tuyệt đối không chạy job hoặc SMTP thật.
+                    ["CheckIn:Enabled"] = "false",
+                    ["Email:Smtp:UserName"] = "",
+                    ["Email:Smtp:Password"] = "",
+                }));
         }
     }
 }
