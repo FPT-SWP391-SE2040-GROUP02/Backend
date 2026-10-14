@@ -96,18 +96,18 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 | | Access token | Refresh token |
 |---|---|---|
 | Nằm ở | **JSON body** (`accessToken`) | **Cookie HttpOnly** `lv_refresh` |
-| FE lưu | `localStorage.access_token` (interceptor hiện có gửi `Authorization: Bearer`) | Không lưu, JS không đọc được |
+| FE lưu | Chỉ RAM; interceptor gửi `Authorization: Bearer`. Cấm Web Storage | Không lưu, JS không đọc được |
 | Sống | 15 phút | Hết khi không dùng 30 phút, tối đa 12 giờ từ lúc đăng nhập (NFR-06) |
 | Cookie | — | `HttpOnly; SameSite=Lax; Path=/api/v1/auth`; `Secure` ngoài môi trường dev |
 
 **Việc FE cần làm:**
 
-1. Các request tới `/v1/auth/*` gửi kèm `withCredentials: true` để trình duyệt gửi/nhận cookie `lv_refresh`. Các API khác không cần.
-2. Response interceptor: gặp `401` (trừ chính `/v1/auth/refresh` và `/v1/auth/login`) → gọi `POST /v1/auth/refresh` **một lần**, lưu `accessToken` mới, thử lại request. Refresh cũng `401` → xóa `access_token` và về trang đăng nhập. Nhiều request cùng 401 thì chỉ gọi refresh một lần (dùng chung một promise).
-3. Đăng xuất: gọi `POST /v1/auth/logout` rồi xóa `localStorage.access_token`.
+1. Các request tới `/api/v1/auth/*` gửi kèm `withCredentials: true` để trình duyệt gửi/nhận cookie `lv_refresh`. Các API khác không cần.
+2. Cấp proof mới bằng `GET /api/v1/auth/csrf` (raw `{ requestToken }`), gửi `X-CSRF-Token` cùng antiforgery cookie trước login/refresh/logout/Google/link-confirm. Proof gắn principal hiện tại: lấy lại sau đổi danh tính; không gửi POST khi acquisition lỗi. Thiếu/sai proof trả 400; vượt limiter trả 429 và Retry-After.
+3. Đăng xuất: gọi `POST /api/v1/auth/logout`; chỉ xóa RAM/cache và báo hoàn tất sau server success. Logout-all cần bearer principal active hoặc refresh token active, không chấp nhận cookie thuộc user khác. Thu hồi refresh không tự vô hiệu access JWT đang còn hạn.
 4. Không đưa token vào URL/query hoặc log (SEC-06).
 
-BE bật CORS cho origin FE (`http://localhost:5173`) **có credentials**.
+BE bật CORS credentials cho origins cấu hình rõ. Alias `/v1` còn tồn tại nhưng cookie Path dùng `/api/v1/auth`; dùng prefix `/api/v1` cho luồng có cookie. Refresh tự động chỉ bật sau checks phối hợp single-flight, nhiều tab và logout/login đang bay; không tự retry mutation.
 
 ---
 
@@ -169,11 +169,13 @@ Cột **Quyền**: `Công khai` = không cần token; `Đăng nhập` = cần Be
 
 ### 6.2. Đăng nhập, phiên, đăng xuất
 
+Bổ sung 14/10/2026: `GET /api/v1/auth/csrf` trả raw requestToken/no-store + cookie HttpOnly; login/refresh/logout/Google/link-confirm bắt buộc proof. Policy IP: login và Google/link-confirm chung 5/phút; refresh/logout mỗi policy 30/phút. Limiter chỉ tin Connection.RemoteIpAddress, không parse X-Forwarded-For tự gửi. Login/refresh/logout chạy Serializable; lỗi credentials/replay chỉ trả sau commit bộ đếm/thu hồi. Không retry deadlock mù. Các HTTP status 400/429 này bổ sung cho bảng phía dưới.
+
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | POST | `/v1/auth/login` | Công khai | `LoginRequest` | 200 `AuthSessionResponse` + Set-Cookie `lv_refresh` | 400, 401 `INVALID_CREDENTIALS`, 423 `ACCOUNT_LOCKED`, 403 `ACCOUNT_NOT_ACTIVE` |
 | POST | `/v1/auth/refresh` | Cookie `lv_refresh` | — | 200 `AuthSessionResponse` + cookie mới | 401 `SESSION_EXPIRED` (cookie bị xóa) |
-| POST | `/v1/auth/logout` | Công khai | `{ revokeAllDevices? }` (không bắt buộc) | **204** + xóa cookie | — (luôn 204) |
+| POST | `/v1/auth/logout` | Công khai | `{ revokeAllDevices? }` (không bắt buộc) | **204** + xóa cookie | 400 CSRF, 401 SESSION_EXPIRED khi logout-all thiếu quyền, 429 |
 | GET | `/v1/auth/session` | Đăng nhập | — | 200 `UserResponse` | 401 `SESSION_EXPIRED` |
 
 ```json

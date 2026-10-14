@@ -94,6 +94,8 @@ public static class InfrastructureConfig
                 "Cấu hình Jwt:Issuer không được để trống.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Audience),
                 "Cấu hình Jwt:Audience không được để trống.")
+            .Validate(settings => settings.AccessTokenMinutes > 0,
+                "Jwt:AccessTokenMinutes phải dương.")
             .ValidateOnStart();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
