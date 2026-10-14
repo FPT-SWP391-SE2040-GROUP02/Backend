@@ -83,6 +83,7 @@ public static class InfrastructureConfig
         services.Configure<CheckInJobSettings>(configuration.GetSection(CheckInJobSettings.SectionName));
         // Dịch vụ email: Gmail qua MailKit khi có cấu hình Email:Smtp, không thì chỉ ghi log (xem EmailConfig).
         services.AddEmailServices(configuration);
+        LegacyVault.Infrastructure.Handover.HandoverConfig.AddHandover(services, configuration);
         services.AddHostedService<CheckInMonitor>();
 
         // JWT Bearer Authentication

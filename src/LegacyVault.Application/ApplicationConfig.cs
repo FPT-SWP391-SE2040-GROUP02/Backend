@@ -12,6 +12,7 @@ public static class ApplicationConfig
         services.AddScoped<IAssetService, AssetService>();
         services.AddScoped<IContainerService, ContainerService>();
         services.AddScoped<IBeneficiaryService, BeneficiaryService>();
+        services.AddHandoverApplication();
 
         // Điểm danh (deadman switch)
         services.AddScoped<ICheckInService, CheckInService>();
