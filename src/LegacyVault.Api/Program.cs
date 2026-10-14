@@ -9,7 +9,6 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiConfig();
 builder.Services.AddCorsConfig(builder.Configuration);
-builder.Services.AddAuthConfig(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 

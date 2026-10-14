@@ -1,0 +1,25 @@
+### Đăng nhập Google (api-contract §6.3)
+# Cần cấu hình GoogleAuth:ClientId trước khi chạy API.
+# idToken thật lấy từ FE (Google Identity Services) — copy từ DevTools rồi dán vào đây.
+@baseUrl = http://localhost:5000
+@idToken = dan-google-id-token-vao-day
+
+### 1. Đăng nhập bằng Google ID token
+POST {{baseUrl}}/api/v1/auth/google
+Content-Type: application/json
+
+{
+  "idToken": "{{idToken}}",
+  "rememberMe": true,
+  "returnUrl": "/dashboard"
+}
+
+### 2. Email Google trùng tài khoản có mật khẩu: dán linkTicket từ bước 1 và nhập mật khẩu tài khoản app
+POST {{baseUrl}}/api/v1/auth/google/link-confirm
+Content-Type: application/json
+
+{
+  "linkTicket": "dan-link-ticket-vao-day",
+  "password": "MatKhauTaiKhoanApp",
+  "rememberMe": true
+}

@@ -39,6 +39,35 @@ public static class VaultRules
         }
     }
 
+    /// <summary>
+    /// Thao tác "giảm" (lưu trữ gói, gỡ tài sản khỏi gói...) chặn khi kho đóng hoặc kế hoạch bị khóa,
+    /// nhưng VẪN CHO khi dịch vụ đang ân hạn/chờ rà soát (OPLAN-01). Vi phạm → 409 VAULT_NOT_EDITABLE + reason.
+    /// Cần vault đã nạp Plan.
+    /// </summary>
+    public static void EnsureCanReduce(Vault vault)
+    {
+        // TODO: OPLAN-01 — thao tác giảm khi ân hạn cần đăng nhập lại trong 10 phút; làm khi có Auth.
+        VaultNotEditableReason? reason = null;
+        if (vault.Status == VaultStatus.Closed)
+        {
+            reason = VaultNotEditableReason.VaultClosed;
+        }
+        else if (vault.Plan.Status == PlanStatus.DeathCaseOpen
+            || vault.Plan.Status == PlanStatus.HandoverInProgress
+            || vault.Plan.Status == PlanStatus.Closed)
+        {
+            reason = VaultNotEditableReason.PlanLocked;
+        }
+
+        if (reason != null)
+        {
+            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+            extensions["reason"] = reason.Value.ToApiString();
+            throw new AppException(AppErrorType.Conflict, ErrorCode.VaultNotEditable,
+                "Kho hiện không cho phép chỉnh sửa.", extensions);
+        }
+    }
+
     public static VaultNotEditableReason? GetNotEditableReason(Vault vault)
     {
         if (vault.Status == VaultStatus.Closed)
