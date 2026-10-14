@@ -26,6 +26,11 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         return Task.FromResult(Cases.FirstOrDefault(c => c.VaultId == vaultId && c.Status != DeathCaseStatus.Rejected));
     }
 
+    public Task<List<ExecutorVaultRow>> FindExecutorVaultsAsync(Guid userId, CancellationToken ct)
+    {
+        return Task.FromResult(new List<ExecutorVaultRow>());
+    }
+
     public Task<DeathCase?> FindLatestRejectedByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
         return Task.FromResult(Cases
@@ -102,6 +107,11 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
     public Task<DeathCaseNotice?> FindNoticeForJobAsync(Guid noticeId, CancellationToken ct)
     {
         return Task.FromResult(Notices.FirstOrDefault(n => n.Id == noticeId));
+    }
+
+    public bool IsUniqueViolation(Exception exception)
+    {
+        return false;
     }
 
     public void DiscardPendingChanges()

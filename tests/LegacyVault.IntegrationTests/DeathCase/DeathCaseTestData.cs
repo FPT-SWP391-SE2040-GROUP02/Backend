@@ -125,6 +125,66 @@ public static class DeathCaseTestData
         });
     }
 
+    /// <summary>
+    /// Chèn thẳng một dòng Executors cho tài khoản userId (chưa dùng luồng mời của phần thiết lập bàn giao).
+    /// status Accepted = Executor đang hiệu lực.
+    /// </summary>
+    public static async Task<Executor> AddExecutorAsync(
+        ApiFactory factory, Guid vaultId, Guid userId, ExecutorStatus status, ExecutorRole role)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        Executor executor = new Executor();
+        executor.VaultId = vaultId;
+        executor.UserId = userId;
+        executor.InviteeEmail = $"{Guid.NewGuid():N}@test.local";
+        executor.Role = role;
+        executor.Status = status;
+        executor.InvitationTokenHash = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        executor.InvitedAt = now.AddDays(-1);
+        executor.ExpiresAt = now.AddDays(6);
+        if (status == ExecutorStatus.Accepted)
+        {
+            executor.AcceptedAt = now;
+        }
+
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            db.Set<Executor>().Add(executor);
+            await db.SaveChangesAsync();
+        });
+        return executor;
+    }
+
+    /// <summary>Executor đã chấp nhận (đang hiệu lực) của kho.</summary>
+    public static Task<Executor> AddAcceptedExecutorAsync(
+        ApiFactory factory, Guid vaultId, Guid userId, ExecutorRole role = ExecutorRole.Primary)
+    {
+        return AddExecutorAsync(factory, vaultId, userId, ExecutorStatus.Accepted, role);
+    }
+
+    /// <summary>Tài khoản mới là Executor đang hiệu lực của kho, kèm client đã gắn token của tài khoản đó.</summary>
+    public static async Task<ExecutorClient> CreateExecutorClientAsync(
+        ApiFactory factory, Guid vaultId, ExecutorRole role = ExecutorRole.Primary)
+    {
+        User user = await AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        await AddAcceptedExecutorAsync(factory, vaultId, user.Id, role);
+        HttpClient client = factory.CreateClient();
+        ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
+
+        ExecutorClient result = new ExecutorClient();
+        result.User = user;
+        result.Client = client;
+        return result;
+    }
+
+    /// <summary>Tài khoản thử và client đã gắn token của tài khoản đó.</summary>
+    public sealed class ExecutorClient
+    {
+        public User User { get; set; } = null!;
+
+        public HttpClient Client { get; set; } = null!;
+    }
+
     /// <summary>Owner và kho vừa tạo.</summary>
     public sealed class OwnerVault
     {

@@ -1,6 +1,23 @@
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Repositories;
+
+/// <summary>Một kho mà tài khoản đang là Executor (DMS-05): dữ liệu thô để service dựng ExecutorVaultResponse.</summary>
+public sealed class ExecutorVaultRow
+{
+    public Guid VaultId { get; set; }
+
+    /// <summary>Họ tên tài khoản Owner (dùng để Executor nhận ra kho; không phải dữ liệu trong hồ sơ chứng tử).</summary>
+    public string OwnerFullName { get; set; } = string.Empty;
+
+    public ExecutorRole Role { get; set; }
+
+    public PlanStatus PlanStatus { get; set; }
+
+    /// <summary>Hồ sơ đang mở của kho (kể cả Draft); null khi chưa có.</summary>
+    public Guid? OpenDeathCaseId { get; set; }
+}
 
 /// <summary>
 /// Truy cập các bảng hồ sơ chứng tử: DeathCases, DeathCaseVersions, DeathCaseFiles, DeathCaseFlags,
@@ -20,6 +37,12 @@ public interface IDeathCaseRepository
 
     /// <summary>DEATH-05: hồ sơ đang mở (chưa bị từ chối) của kho, cùng phần nạp kèm như FindByIdAsync. Không có → null.</summary>
     Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct);
+
+    /// <summary>
+    /// D12, DMS-05: các kho mà tài khoản là Executor đang hiệu lực (Status Accepted), chấp nhận sớm nhất trước.
+    /// Chỉ đọc bảng Executors, không đổi IExecutorReader.
+    /// </summary>
+    Task<List<ExecutorVaultRow>> FindExecutorVaultsAsync(Guid userId, CancellationToken ct);
 
     /// <summary>Hồ sơ bị từ chối gần nhất của kho (không nạp kèm), để nối PreviousCaseId. Không có → null.</summary>
     Task<DeathCase?> FindLatestRejectedByVaultIdAsync(Guid vaultId, CancellationToken ct);
@@ -60,6 +83,12 @@ public interface IDeathCaseRepository
 
     /// <summary>Thông báo theo Id (có theo dõi) để job xử lý. Không có → null.</summary>
     Task<DeathCaseNotice?> FindNoticeForJobAsync(Guid noticeId, CancellationToken ct);
+
+    /// <summary>
+    /// true nếu lỗi lưu là do vi phạm chỉ mục unique (ví dụ hai Executor gửi cùng lúc cùng tạo phân công hoặc cờ).
+    /// Giúp Application nhận ra tình huống này mà không phải biết exception của EF/SQL Server.
+    /// </summary>
+    bool IsUniqueViolation(Exception exception);
 
     /// <summary>
     /// Bỏ MỌI thay đổi chưa lưu của cả request (ChangeTracker.Clear). Chỉ gọi khi use case sẽ trả kết quả

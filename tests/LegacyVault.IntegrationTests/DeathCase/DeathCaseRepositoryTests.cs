@@ -180,6 +180,78 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
         Assert.True(atCutoff);
     }
 
+    [SqlFact]
+    public async Task Role03_VerifierCandidateExcludesActiveExecutors()
+    {
+        // Chuẩn bị: Verifier A là Executor đang hiệu lực của kho (chưa từng được giao), B chỉ mới được mời,
+        // C là Verifier thường đã được giao trước đó
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCase deathCase = DeathCaseTestData.NewDraftCase(vault, vault.Owner.Id);
+        await TryAddAsync(deathCase);
+        User verifierA = await DeathCaseTestData.AddVerifierAsync(factory);
+        User verifierB = await DeathCaseTestData.AddVerifierAsync(factory);
+        User verifierC = await DeathCaseTestData.AddVerifierAsync(factory);
+        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault.VaultId, verifierA.Id);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, verifierB.Id, ExecutorStatus.Invited, ExecutorRole.Backup);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await DeathCaseTestData.AddEndedAssignmentAsync(factory, deathCase.Id, verifierB.Id, now.AddDays(-3));
+        await DeathCaseTestData.AddEndedAssignmentAsync(factory, deathCase.Id, verifierC.Id, now.AddDays(-1));
+
+        // Hành động: loại Owner và các Executor đang hiệu lực như DeathCaseService sẽ làm
+        List<Guid> excluded = new List<Guid>();
+        excluded.Add(vault.Owner.Id);
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IExecutorReader executorReader = scope.ServiceProvider.GetRequiredService<IExecutorReader>();
+            List<Executor> active = await executorReader.GetActiveAsync(vault.VaultId, CancellationToken.None);
+            foreach (Executor executor in active)
+            {
+                if (executor.UserId != null)
+                {
+                    excluded.Add(executor.UserId.Value);
+                }
+            }
+        }
+        Guid? candidate = await FindCandidateAsync(excluded);
+
+        // Kiểm tra: A bị loại vì là Executor đang hiệu lực; B (mới được mời) vẫn đủ điều kiện và cũ hơn C
+        Assert.Contains(verifierA.Id, excluded);
+        Assert.DoesNotContain(verifierB.Id, excluded);
+        Assert.Equal(verifierB.Id, candidate);
+    }
+
+    [SqlFact]
+    public async Task Dms05_FindsVaultsWhereUserIsAcceptedExecutor()
+    {
+        // Chuẩn bị: user là Executor đang hiệu lực của kho 1 (có hồ sơ Draft), chỉ mới được mời ở kho 2,
+        // và đã bị thu hồi ở kho 3
+        DeathCaseTestData.OwnerVault vault1 = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.OwnerVault vault2 = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.OwnerVault vault3 = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        User executorUser = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault1.VaultId, executorUser.Id, ExecutorRole.Backup);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault2.VaultId, executorUser.Id, ExecutorStatus.Invited, ExecutorRole.Primary);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault3.VaultId, executorUser.Id, ExecutorStatus.Revoked, ExecutorRole.Primary);
+        DeathCase deathCase = DeathCaseTestData.NewDraftCase(vault1, executorUser.Id);
+        await TryAddAsync(deathCase);
+
+        // Hành động
+        List<ExecutorVaultRow> rows;
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IDeathCaseRepository repository = scope.ServiceProvider.GetRequiredService<IDeathCaseRepository>();
+            rows = await repository.FindExecutorVaultsAsync(executorUser.Id, CancellationToken.None);
+        }
+
+        // Kiểm tra
+        ExecutorVaultRow row = Assert.Single(rows);
+        Assert.Equal(vault1.VaultId, row.VaultId);
+        Assert.Equal(ExecutorRole.Backup, row.Role);
+        Assert.Equal(PlanStatus.Active, row.PlanStatus);
+        Assert.Equal(deathCase.Id, row.OpenDeathCaseId);
+        Assert.Equal(vault1.Owner.FullName, row.OwnerFullName);
+    }
+
     private async Task<bool> TryAddAsync(DeathCase deathCase)
     {
         using (IServiceScope scope = factory.Services.CreateScope())

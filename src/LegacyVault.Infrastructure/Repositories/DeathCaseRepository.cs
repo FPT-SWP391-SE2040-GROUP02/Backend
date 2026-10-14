@@ -29,6 +29,28 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
             .FirstOrDefaultAsync(c => c.VaultId == vaultId && c.Status != DeathCaseStatus.Rejected, ct);
     }
 
+    public async Task<List<ExecutorVaultRow>> FindExecutorVaultsAsync(Guid userId, CancellationToken ct)
+    {
+        List<ExecutorVaultRow> rows = await context.Set<Executor>()
+            .AsNoTracking()
+            .Where(e => e.UserId == userId && e.Status == ExecutorStatus.Accepted)
+            .OrderBy(e => e.AcceptedAt)
+            .ThenBy(e => e.Id)
+            .Select(e => new ExecutorVaultRow
+            {
+                VaultId = e.VaultId,
+                OwnerFullName = e.Vault.Owner.FullName,
+                Role = e.Role,
+                PlanStatus = e.Vault.Plan.Status,
+                OpenDeathCaseId = context.Set<DeathCase>()
+                    .Where(c => c.VaultId == e.VaultId && c.Status != DeathCaseStatus.Rejected)
+                    .Select(c => (Guid?)c.Id)
+                    .FirstOrDefault(),
+            })
+            .ToListAsync(ct);
+        return rows;
+    }
+
     public Task<DeathCase?> FindLatestRejectedByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
         return context.Set<DeathCase>()
@@ -135,6 +157,16 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
     public Task<DeathCaseNotice?> FindNoticeForJobAsync(Guid noticeId, CancellationToken ct)
     {
         return context.Set<DeathCaseNotice>().FirstOrDefaultAsync(n => n.Id == noticeId, ct);
+    }
+
+    public bool IsUniqueViolation(Exception exception)
+    {
+        DbUpdateException? dbException = exception as DbUpdateException;
+        if (dbException == null)
+        {
+            return false;
+        }
+        return DbExceptions.IsUniqueViolation(dbException);
     }
 
     public void DiscardPendingChanges()
