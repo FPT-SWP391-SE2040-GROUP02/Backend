@@ -13,6 +13,11 @@ public static class ApplicationConfig
         services.AddScoped<IContainerService, ContainerService>();
         services.AddScoped<IBeneficiaryService, BeneficiaryService>();
 
+        // Điểm danh (deadman switch)
+        services.AddScoped<ICheckInService, CheckInService>();
+        services.AddScoped<ICheckInScheduler, CheckInScheduler>();
+        services.AddScoped<ICheckInJob, CheckInJob>();
+
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
 

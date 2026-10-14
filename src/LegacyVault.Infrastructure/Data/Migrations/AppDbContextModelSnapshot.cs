@@ -180,6 +180,132 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("Beneficiaries", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInPeriod", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("AwaitingCheckAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("CheckedInAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("DueAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("GraceEndsAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("OverdueAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DueAt");
+
+                    b.HasIndex("PlanId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CheckInPeriods_OpenPerPlan")
+                        .HasFilter("[ClosedAt] IS NULL");
+
+                    b.HasIndex("PlanId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("CheckInPeriods", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInReminder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid>("PeriodId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("CheckInReminders", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("CycleDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GraceDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("LastCheckInAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("PendingCycleDays")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PendingGraceDays")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId")
+                        .IsUnique();
+
+                    b.ToTable("CheckInSchedules", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>
                 {
                     b.Property<Guid>("Id")
@@ -685,6 +811,39 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Vault");
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInPeriod", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.HandoverPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInReminder", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.CheckInPeriod", "Period")
+                        .WithMany("Reminders")
+                        .HasForeignKey("PeriodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Period");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInSchedule", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.HandoverPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.Vault", "Vault")
@@ -814,6 +973,11 @@ namespace LegacyVault.Infrastructure.Data.Migrations
             modelBuilder.Entity("LegacyVault.Domain.Entities.Asset", b =>
                 {
                     b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInPeriod", b =>
+                {
+                    b.Navigation("Reminders");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>

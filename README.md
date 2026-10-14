@@ -201,7 +201,7 @@ Repo chính thức: [FPT-SWP391-SE2040-GROUP02/Backend](https://github.com/FPT-S
 
 Đã có: bốn project, DI, SQL Docker tự tạo database, EF Core, CORS, ProblemDetails, Swagger, health check và cấu hình CI.
 
-Đã có thêm: đăng ký/xác minh email, đăng nhập email/mật khẩu (JWT + refresh cookie), đăng nhập Google; tạo/xem/sửa kho; tạo/xem tài sản mã hóa (tệp, chữ); gói: tạo/xem/đổi tên/lưu trữ, thêm/gỡ tài sản trong gói — xem docs/api-contract.md mục 6.
+Đã có thêm: đăng ký/xác minh email, đăng nhập email/mật khẩu (JWT + refresh cookie), đăng nhập Google; tạo/xem/sửa kho; tạo/xem tài sản mã hóa (tệp, chữ); gói: tạo/xem/đổi tên/lưu trữ, thêm/gỡ tài sản trong gói; điểm danh định kỳ (deadman switch) với job nền chuyển trạng thái và nhắc hạn — xem docs/api-contract.md mục 6. Email xác minh tài khoản và lời nhắc điểm danh gửi thật qua Gmail (MailKit) khi có cấu hình `Email:Smtp` — xem mục 11; chưa cấu hình thì chỉ ghi log. Lưu trữ gói READY cuối cùng (kế hoạch về nháp) cũng dừng lịch điểm danh.
 
 Nội dung tài sản được **mã hóa envelope** trước khi ghi đĩa: AES-256-GCM, mỗi phiên bản một DEK riêng, DEK được bọc bằng KEK trong mục `AssetEncryption` của cấu hình (không nằm trong DB). `appsettings.Development.json` có sẵn KEK mẫu `dev-local` — **chỉ dùng local**, giống mật khẩu SQL mẫu. Server thật đặt KEK qua biến môi trường `AssetEncryption__ActiveKeyId` và `AssetEncryption__Keys__<id>`; thiếu/sai KEK thì API không khởi động. Đổi KEK: thêm khóa mới, chuyển `ActiveKeyId`, **giữ khóa cũ** để mở các phiên bản đã lưu. Mất KEK = mất toàn bộ nội dung đã lưu.
 
@@ -214,4 +214,21 @@ dotnet ef database update --project src/LegacyVault.Infrastructure --startup-pro
 
 Nhớ xóa luôn thư mục `src/LegacyVault.Api/App_Data/asset-content` vì nội dung trong đó không còn bản ghi tương ứng.
 
-Chưa có: tài khoản demo, chỉ định người nhận (gói hiện luôn DRAFT), tải về/sửa/xóa nội dung tài sản, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
+Chưa có: tài khoản demo, chỉ định người nhận (gói hiện luôn DRAFT), tải về/sửa/xóa nội dung tài sản, eKYC, thanh toán, kích hoạt kế hoạch (nối điểm danh), Executor, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
+
+## 11. Gửi email thật bằng Gmail (MailKit SMTP)
+
+Dịch vụ email dùng chung cho email xác minh tài khoản và lời nhắc điểm danh. **Chưa cấu hình thì hệ thống chỉ ghi log, không gửi email** (dev và test vẫn chạy bình thường).
+
+1. Tài khoản Gmail dùng để gửi cần bật **Xác minh 2 bước**, rồi tạo **Mật khẩu ứng dụng** tại <https://myaccount.google.com/apppasswords> (16 ký tự). Gmail không cho dùng mật khẩu đăng nhập thường.
+2. Đặt bí mật **bằng user-secrets** (chỉ nằm trên máy bạn, không vào Git):
+
+```powershell
+dotnet user-secrets set "Email:Smtp:UserName" "ten-ban@gmail.com" --project src/LegacyVault.Api
+dotnet user-secrets set "Email:Smtp:Password" "mat-khau-ung-dung-16-ky-tu" --project src/LegacyVault.Api
+```
+
+3. Khởi động lại API. Thử bằng cách đăng ký một tài khoản bằng email thật: email xác minh sẽ tới hộp thư.
+
+Server thật đặt biến môi trường `Email__Smtp__UserName` và `Email__Smtp__Password` (không viết vào `appsettings.json`, không commit). Các giá trị không bí mật (`Host`, `Port`, `SecureSocket`, `FromName`, `FromAddress`) nằm ở mục `Email:Smtp` của `appsettings.json`. Gmail chỉ cho gửi từ chính tài khoản đã đăng nhập (hoặc bí danh đã xác minh), nên để trống `FromAddress`. Cấu hình sai (cổng, `SecureSocket`, địa chỉ gửi) thì API không khởi động. Gmail giới hạn khoảng 500 thư/ngày cho tài khoản thường.
+
