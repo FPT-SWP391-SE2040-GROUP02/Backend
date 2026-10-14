@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace LegacyVault.Infrastructure.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialSchema : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -16,7 +16,7 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Email = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
                     IpRange = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
                     FailedCount = table.Column<int>(type: "int", nullable: false),
                     WindowStartedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
@@ -32,11 +32,11 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Email = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
                     EmailVerifiedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
-                    PasswordHash = table.Column<string>(type: "nvarchar(512)", maxLength: 512, nullable: true),
+                    PasswordHash = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     FullName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Phone = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    Phone = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: true),
                     Role = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     Status = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
@@ -54,7 +54,7 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    TokenHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    TokenHash = table.Column<string>(type: "nchar(64)", fixedLength: true, maxLength: 64, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     ExpiresAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UsedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
@@ -77,9 +77,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Provider = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
-                    ProviderSubject = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
-                    ProviderEmail = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: true),
-                    TicketHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    ProviderSubject = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    ProviderEmail = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    TicketHash = table.Column<string>(type: "nchar(64)", fixedLength: true, maxLength: 64, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     ExpiresAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UsedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
@@ -102,8 +102,8 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Provider = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
-                    ProviderSubject = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
-                    ProviderEmail = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: true),
+                    ProviderSubject = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    ProviderEmail = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     LinkedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     LastUsedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
                 },
@@ -124,7 +124,7 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    TokenHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    TokenHash = table.Column<string>(type: "nchar(64)", fixedLength: true, maxLength: 64, nullable: false),
                     FamilyId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     SessionStartedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
@@ -151,7 +151,7 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     OwnerId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    Description = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
                     Status = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
@@ -169,37 +169,13 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Assets",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    VaultId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Kind = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
-                    CurrentVersionNumber = table.Column<int>(type: "int", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Assets", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Assets_Vaults_VaultId",
-                        column: x => x.VaultId,
-                        principalTable: "Vaults",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Containers",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     VaultId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    Description = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
                     Status = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
@@ -213,7 +189,7 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         column: x => x.VaultId,
                         principalTable: "Vaults",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -266,31 +242,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AssetVersions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    AssetId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    VersionNumber = table.Column<int>(type: "int", nullable: false),
-                    FileName = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: true),
-                    ContentType = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    SizeBytes = table.Column<long>(type: "bigint", nullable: false),
-                    Sha256 = table.Column<string>(type: "char(64)", unicode: false, fixedLength: true, maxLength: 64, nullable: false),
-                    StorageKey = table.Column<string>(type: "varchar(200)", unicode: false, maxLength: 200, nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AssetVersions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AssetVersions_Assets_AssetId",
-                        column: x => x.AssetId,
-                        principalTable: "Assets",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "ContainerAssets",
                 columns: table => new
                 {
@@ -303,35 +254,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 {
                     table.PrimaryKey("PK_ContainerAssets", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ContainerAssets_Assets_AssetId",
-                        column: x => x.AssetId,
-                        principalTable: "Assets",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
                         name: "FK_ContainerAssets_Containers_ContainerId",
                         column: x => x.ContainerId,
                         principalTable: "Containers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Assets_VaultId_CreatedAt",
-                table: "Assets",
-                columns: new[] { "VaultId", "CreatedAt" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetVersions_AssetId_VersionNumber",
-                table: "AssetVersions",
-                columns: new[] { "AssetId", "VersionNumber" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetVersions_StorageKey",
-                table: "AssetVersions",
-                column: "StorageKey",
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_ContainerAssets_AssetId",
@@ -396,6 +324,11 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_LoginThrottles_IpRange_WindowStartedAt",
+                table: "LoginThrottles",
+                columns: new[] { "IpRange", "WindowStartedAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RefreshTokens_FamilyId",
                 table: "RefreshTokens",
                 column: "FamilyId");
@@ -434,9 +367,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "AssetVersions");
-
-            migrationBuilder.DropTable(
                 name: "ContainerAssets");
 
             migrationBuilder.DropTable(
@@ -459,9 +389,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "VaultEntitlements");
-
-            migrationBuilder.DropTable(
-                name: "Assets");
 
             migrationBuilder.DropTable(
                 name: "Containers");

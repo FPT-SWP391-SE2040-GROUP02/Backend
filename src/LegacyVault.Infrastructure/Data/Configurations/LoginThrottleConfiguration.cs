@@ -9,9 +9,20 @@ public sealed class LoginThrottleConfiguration : IEntityTypeConfiguration<LoginT
     public void Configure(EntityTypeBuilder<LoginThrottle> builder)
     {
         builder.ToTable("LoginThrottles");
+
         builder.HasKey(t => t.Id);
-        builder.Property(t => t.Email).HasMaxLength(320).IsRequired();
-        builder.Property(t => t.IpRange).HasMaxLength(64).IsRequired();
-        builder.HasIndex(t => new { t.Email, t.IpRange }).IsUnique();
+
+        builder.Property(t => t.Email)
+            .IsRequired()
+            .HasMaxLength(256);
+
+        builder.Property(t => t.IpRange)
+            .IsRequired()
+            .HasMaxLength(64);
+
+        builder.HasIndex(t => new { t.Email, t.IpRange })
+            .IsUnique();
+
+        builder.HasIndex(t => new { t.IpRange, t.WindowStartedAt });
     }
 }

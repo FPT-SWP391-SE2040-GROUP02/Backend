@@ -1,0 +1,70 @@
+# Thu API xac thuc theo docs/api-contract.md va SRS 3.15
+# Trinh duyet/REST Client tu dong luu va gui cookie lv_refresh giua cac request
+
+@api = http://localhost:5000/v1/auth
+
+### 1. Dang ky tai khoan moi (ROLE-01, AUTH-04) -> 202 Accepted (khong body)
+POST {{api}}/register
+Content-Type: application/json
+
+{
+  "email": "an@gmail.com",
+  "password": "Password123!",
+  "confirmPassword": "Password123!",
+  "fullName": "Nguyen Van An"
+}
+
+### 2. Xac minh email bang token -> 200 OK UserResponse
+# Token nhan duoc trong console log cua backend khi chay voi DevEmailSender
+POST {{api}}/verify-email
+Content-Type: application/json
+
+{
+  "token": "thay-token-o-day"
+}
+
+### 3. Gui lai link xac minh email -> 202 Accepted (khong body)
+POST {{api}}/resend-verification
+Content-Type: application/json
+
+{
+  "email": "an@gmail.com"
+}
+
+### 4. Dang nhap -> 200 OK AuthSessionResponse + Set-Cookie lv_refresh
+# @name login
+POST {{api}}/login
+Content-Type: application/json
+
+{
+  "email": "an@gmail.com",
+  "password": "Password123!",
+  "rememberMe": true
+}
+
+### Luu access token tu ket qua dang nhap
+@accessToken = {{login.response.body.accessToken}}
+
+### 5. Xem phien hien tai (dung Bearer access token) -> 200 OK UserResponse
+GET {{api}}/session
+Authorization: Bearer {{accessToken}}
+
+### 6. Lam moi phien (dung cookie lv_refresh) -> 200 OK AuthSessionResponse + cookie moi
+POST {{api}}/refresh
+
+### 7. Dang xuat -> 204 No Content + xoa cookie lv_refresh
+POST {{api}}/logout
+Content-Type: application/json
+
+{
+  "revokeAllDevices": false
+}
+
+### 8. Thu dang nhap sai mat khau -> 401 INVALID_CREDENTIALS (attemptsRemaining giam dan)
+POST {{api}}/login
+Content-Type: application/json
+
+{
+  "email": "an@gmail.com",
+  "password": "SaiMatKhau123!"
+}

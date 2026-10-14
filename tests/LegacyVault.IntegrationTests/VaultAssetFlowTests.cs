@@ -22,7 +22,6 @@ namespace LegacyVault.IntegrationTests;
 /// </summary>
 public sealed class VaultAssetFlowTests : IAsyncLifetime
 {
-    private const string DevUserHeader = "X-Dev-User-Id";
     private ApiFactory factory = null!;
     private string storageRoot = null!;
 
@@ -268,7 +267,7 @@ public sealed class VaultAssetFlowTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add(DevUserHeader, user.Id.ToString());
+        TestSupport.ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
         return client;
     }
 
@@ -306,7 +305,7 @@ public sealed class VaultAssetFlowTests : IAsyncLifetime
 public sealed class VaultApiWithoutDatabaseTests
 {
     [Fact]
-    public async Task MissingDevUserHeaderReturnsSessionExpired()
+    public async Task MissingTokenReturnsSessionExpired()
     {
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {

@@ -1,6 +1,8 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Cho phép ghim phiên bản của gói gián tiếp (vá lỗ hổng mà chưa có bản mới của gói cha). -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
@@ -11,6 +13,12 @@
     <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageVersion Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
+    <PackageVersion Include="Google.Apis.Auth" Version="1.77.0" />
+    <PackageVersion Include="MailKit" Version="4.17.0" />
+    <!-- Ghim vì System.Security.Cryptography.Pkcs 10.0.0 có lỗ hổng DoS (CVE-2026-84008, CVE-2026-70162); được kéo vào bởi MailKit và EF SqlServer. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>

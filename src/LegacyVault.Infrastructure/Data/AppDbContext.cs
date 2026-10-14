@@ -35,6 +35,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<AssetVersion> AssetVersions => Set<AssetVersion>();
 
+    // Người nhận
+    public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();
+
+    // Điểm danh (deadman switch)
+    public DbSet<CheckInSchedule> CheckInSchedules => Set<CheckInSchedule>();
+    public DbSet<CheckInPeriod> CheckInPeriods => Set<CheckInPeriod>();
+    public DbSet<CheckInReminder> CheckInReminders => Set<CheckInReminder>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
