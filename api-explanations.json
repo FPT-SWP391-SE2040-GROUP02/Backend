@@ -1,0 +1,530 @@
+{
+  "AuthController.Register": {
+    "summary": "Đăng ký tài khoản mới bằng email + mật khẩu và gửi email xác minh. Luôn trả 202 dù email đã tồn tại, để không lộ email nào đã đăng ký.",
+    "access": "Công khai (AllowAnonymous)",
+    "steps": [
+      "`AuthController.Register` gọi `RegistrationService.RegisterAsync`.",
+      "Chuẩn hóa email (trim + chữ thường) và họ tên.",
+      "`IUserRepository.FindByEmailAsync`: nếu email đã có thì dừng, vẫn trả thành công.",
+      "Tạo `User` với Role=User, Status=Active, EmailVerifiedAt=null; mật khẩu băm bằng `IPasswordHasher.Hash`.",
+      "`IUserRepository.TryAddAsync` lưu user; nếu một request khác vừa tạo cùng email (race) thì dừng, vẫn trả thành công.",
+      "`ITokenService.CreateOpaqueToken` sinh token xác minh; chỉ lưu HASH vào `EmailVerificationToken` (hạn 24 giờ) qua `IEmailVerificationTokenRepository.Add` + `IUnitOfWork.SaveChangesAsync`.",
+      "`IAppUrlProvider.GetEmailVerificationUrl` dựng link, `IEmailSender.SendEmailVerificationAsync` gửi email.",
+      "Controller trả `202 Accepted`."
+    ],
+    "errors": [
+      "400 nếu dữ liệu không hợp lệ (validation). Email trùng KHÔNG báo lỗi."
+    ]
+  },
+  "AuthController.VerifyEmail": {
+    "summary": "Xác minh email bằng token gửi trong email; trả về thông tin user đã xác minh.",
+    "access": "Công khai",
+    "steps": [
+      "`RegistrationService.VerifyEmailAsync` băm token nhận được bằng `ITokenService.HashOpaqueToken`.",
+      "`IEmailVerificationTokenRepository.FindByHashAsync` tìm bản ghi token.",
+      "Token phải tồn tại, chưa dùng (UsedAt=null) và chưa hết hạn, nếu không ném `InvalidVerificationTokenException`.",
+      "Đặt `UsedAt` = now (token dùng một lần); nếu user chưa xác minh thì đặt `EmailVerifiedAt` và `UpdatedAt`.",
+      "`IUnitOfWork.SaveChangesAsync`, trả `UserResponse` (200)."
+    ],
+    "errors": [
+      "400 INVALID_VERIFICATION_TOKEN: token sai, đã dùng hoặc hết hạn."
+    ]
+  },
+  "AuthController.ResendVerification": {
+    "summary": "Gửi lại email xác minh. Luôn trả 202 để không lộ email nào đã đăng ký.",
+    "access": "Công khai",
+    "steps": [
+      "`RegistrationService.ResendVerificationAsync` chuẩn hóa email, `FindByEmailAsync`.",
+      "Nếu không có user, user đã xác minh hoặc không Active thì dừng (vẫn trả thành công).",
+      "`IEmailVerificationTokenRepository.FindUnusedByUserAsync`: vô hiệu hóa mọi token cũ chưa dùng (đặt UsedAt).",
+      "Sinh token mới (hạn 24 giờ), lưu hash, `SaveChangesAsync`.",
+      "Gửi lại email qua `IAppUrlProvider` + `IEmailSender`.",
+      "Controller trả `202 Accepted`."
+    ],
+    "errors": []
+  },
+  "AuthController.Login": {
+    "summary": "Đăng nhập bằng email + mật khẩu. Trả access token trong body và đặt refresh token vào cookie `lv_refresh`. Có khóa tạm khi sai nhiều lần.",
+    "access": "Công khai",
+    "steps": [
+      "Controller tính dải IP của client (`GetClientIpRange`: IPv4 → /24, IPv6 → /64, ưu tiên X-Forwarded-For) rồi gọi `AuthService.LoginAsync`.",
+      "Chống dò mật khẩu (SEC-10): `ILoginThrottleRepository.FindAsync(email, ipRange)`; nếu đang bị khóa → ném `AccountLockedException` kèm số giây còn lại.",
+      "`IUserRepository.FindByEmailAsync`. Nếu không có user hoặc tài khoản không có mật khẩu (chỉ dùng Google): vẫn băm/so với một hash giả để thời gian phản hồi giống nhau, rồi ghi một lần sai (`RecordFailedLoginAsync`).",
+      "`IPasswordHasher.Verify` mật khẩu; sai → ghi lần sai. Đủ 5 lần sai trong 15 phút thì khóa 15 phút (423), chưa đủ thì trả 401 kèm số lượt còn lại.",
+      "Chỉ SAU khi mật khẩu đúng mới kiểm tra `Status` (khác Active → `AccountNotActiveException`), để người lạ không dò được trạng thái tài khoản.",
+      "Xóa bộ đếm sai, cập nhật `LastLoginAt`.",
+      "Mở phiên: tạo `RefreshToken` (chỉ lưu hash, FamilyId mới = một thiết bị), idle 30 phút nhưng tối đa 12 giờ, cờ IsPersistent = RememberMe.",
+      "`ITokenService.CreateAccessToken` tạo access token, `IUnitOfWork.SaveChangesAsync` lưu tất cả.",
+      "Controller gọi `AuthCookieWriter.Append` ghi cookie refresh và trả `AuthSessionResponse` (accessToken, expiresIn, user)."
+    ],
+    "errors": [
+      "401 INVALID_CREDENTIALS (kèm số lượt còn lại)",
+      "423 ACCOUNT_LOCKED",
+      "403 tài khoản không Active"
+    ]
+  },
+  "AuthController.Refresh": {
+    "summary": "Đổi refresh token trong cookie lấy access token mới (xoay vòng token). Phát hiện dùng lại token cũ thì thu hồi cả phiên.",
+    "access": "Công khai (đọc cookie `lv_refresh`)",
+    "steps": [
+      "Controller đọc cookie refresh rồi gọi `AuthService.RefreshAsync`.",
+      "Không có token → `SessionExpiredException`. Băm token, `IRefreshTokenRepository.FindByHashAsync`.",
+      "Token đã bị thu hồi mà vẫn được dùng lại = dấu hiệu bị đánh cắp: `FindActiveByFamilyAsync` thu hồi toàn bộ token cùng family rồi báo hết phiên.",
+      "Kiểm tra thời hạn: quá 12 giờ kể từ lúc đăng nhập hoặc quá idle 30 phút thì thu hồi và báo hết phiên (NFR-06).",
+      "Tài khoản không còn Active thì thu hồi và báo hết phiên.",
+      "Xoay vòng: thu hồi token cũ, tạo token mới cùng FamilyId (giữ nguyên SessionStartedAt), `ReplacedByTokenId` trỏ sang token mới.",
+      "Tạo access token mới, `SaveChangesAsync`. Controller ghi lại cookie và trả `AuthSessionResponse`.",
+      "Nếu `SessionExpiredException`, controller xóa cookie (`AuthCookieWriter.Clear`) rồi ném lại."
+    ],
+    "errors": [
+      "401 SESSION_EXPIRED"
+    ]
+  },
+  "AuthController.Logout": {
+    "summary": "Đăng xuất: thu hồi refresh token và xóa cookie. Luôn trả 204 dù không có phiên.",
+    "access": "Công khai (đọc cookie)",
+    "steps": [
+      "Controller đọc cookie refresh và cờ `RevokeAllDevices` trong body (body có thể rỗng).",
+      "`AuthService.LogoutAsync`: không có token hoặc không tìm thấy thì thoát yên lặng.",
+      "`RevokeAllDevices=true` → `FindActiveByUserAsync` thu hồi mọi token của user (mọi thiết bị).",
+      "Ngược lại → `FindActiveByFamilyAsync` chỉ thu hồi phiên của thiết bị này.",
+      "`SaveChangesAsync`; controller xóa cookie và trả `204 No Content`."
+    ],
+    "errors": []
+  },
+  "AuthController.Session": {
+    "summary": "Trả thông tin người dùng đang đăng nhập (dùng để FE kiểm tra phiên).",
+    "access": "Cần đăng nhập (Authorize)",
+    "steps": [
+      "`AuthService.GetCurrentUserAsync` lấy userId từ `ICurrentUser` (lấy từ access token).",
+      "`IUserRepository.FindByIdAsync`; không có user hoặc không Active → `SessionExpiredException`.",
+      "Map sang `UserResponse` (không chứa mật khẩu) và trả 200."
+    ],
+    "errors": [
+      "401 SESSION_EXPIRED"
+    ]
+  },
+  "GoogleAuthController.Login": {
+    "summary": "Đăng nhập bằng Google (FE gửi ID token). Có 3 trường hợp: đã liên kết → đăng nhập; trùng email tài khoản thường → trả vé liên kết; chưa có gì → tạo tài khoản mới.",
+    "access": "Công khai",
+    "steps": [
+      "`GoogleAuthService.LoginWithGoogleAsync` gọi `IGoogleTokenVerifier.VerifyAsync` kiểm tra chữ ký, Client ID, hạn và nonce; thiếu subject/email → `InvalidGoogleTokenException`.",
+      "`ReturnUrlValidator.KeepIfLocal` chỉ giữ returnUrl nội bộ (chống open redirect).",
+      "`TryLoginAsync` trường hợp 1: `IExternalLoginRepository.FindBySubjectAsync` theo Google `sub` (không theo email, vì email có thể đổi). Có liên kết → kiểm tra Active → `LoginSessionIssuer.OpenSessionAsync` mở phiên.",
+      "Trường hợp 2: `FindByEmailAsync` thấy tài khoản thường trùng email → KHÔNG tự gộp. `CreateLinkTicketAsync` tạo vé liên kết 10 phút, dùng một lần (lưu hash), trả `signedIn=false`, `linkTicket` và email đã che bằng `EmailMasker`.",
+      "Trường hợp 3: người mới → tạo `User` không mật khẩu (chỉ coi email đã xác minh nếu Google xác nhận) và `ExternalLogin` trong cùng một lần lưu (`TryAddAsync`), rồi mở phiên, `accountCreated=true`.",
+      "Nếu lưu thất bại do request khác chen vào (bấm hai lần), thử lại đúng một lần.",
+      "Controller chỉ ghi cookie refresh khi `SignedIn=true`, rồi trả `GoogleLoginResponse`."
+    ],
+    "errors": [
+      "401 INVALID_GOOGLE_TOKEN",
+      "403 ACCOUNT_NOT_ACTIVE"
+    ]
+  },
+  "GoogleAuthController.ConfirmLink": {
+    "summary": "Xác nhận liên kết Google với tài khoản thường bằng cách nhập mật khẩu tài khoản đó, rồi đăng nhập.",
+    "access": "Công khai",
+    "steps": [
+      "Controller lấy dải IP bằng `ClientIpRange.From` rồi gọi `GoogleAuthService.ConfirmGoogleLinkAsync`.",
+      "Băm vé, `IExternalLoginLinkTicketRepository.FindByHashAsync`; vé phải tồn tại, chưa dùng, chưa hết hạn, nếu không → `InvalidLinkTicketException`.",
+      "`LoginThrottleGuard.ThrowIfLockedAsync`: dùng CHUNG bộ đếm với đăng nhập thường, nên không thể lách giới hạn bằng cách đổi endpoint.",
+      "`IPasswordHasher.Verify` mật khẩu; sai → `LoginThrottleGuard.RecordFailureAsync` (401 hoặc 423).",
+      "Mật khẩu đúng mới kiểm tra Status; rồi `ClearAsync` xóa bộ đếm sai.",
+      "Đánh dấu vé đã dùng, tạo `ExternalLogin` bằng `IExternalLoginRepository.TryAddAsync`; trùng (Google đã gắn user khác / user đã gắn Google khác) → `GoogleAccountAlreadyLinkedException`.",
+      "`LoginSessionIssuer.OpenSessionAsync` mở phiên, controller ghi cookie và trả `AuthSessionResponse`."
+    ],
+    "errors": [
+      "400 INVALID_LINK_TICKET (vé sai, đã dùng hoặc hết hạn)",
+      "401 INVALID_CREDENTIALS (sai mật khẩu)",
+      "423 ACCOUNT_LOCKED",
+      "403 ACCOUNT_NOT_ACTIVE",
+      "409 GOOGLE_ACCOUNT_ALREADY_LINKED"
+    ]
+  },
+  "VaultsController.OpenOrCreateMyVault": {
+    "summary": "Mở kho của chính mình, hoặc tạo kho mới nếu chưa có (mỗi người một kho). Trả 201 khi tạo mới, 200 khi mở kho có sẵn.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`VaultService.OpenOrCreateMyVaultAsync` lấy userId qua `ICurrentUser.RequireUserId`.",
+      "Đọc lại user từ DB (token có thể được cấp trước khi tài khoản bị khóa): không có → 401, không Active → 403.",
+      "`IVaultRepository.FindByOwnerIdAsync`: đã có kho (kể cả đã đóng) → trả kho đó, bỏ qua tên/mô tả gửi lên (`Created=false`).",
+      "Chưa có kho mà email chưa xác minh → 403 EMAIL_NOT_VERIFIED.",
+      "`BuildNewVault` dựng Vault (tên mặc định \"Kho của tôi\") cùng `HandoverPlan` nháp (ConfigVersion=1) và `VaultEntitlement` hạng Free với hạn mức dung lượng miễn phí.",
+      "`IVaultRepository.TryAddAsync`: nếu request khác vừa tạo kho trước thì đọc lại và trả kho đó.",
+      "`ToResponseAsync` tính dung lượng đã dùng (`SumUsedBytesAsync`), số gói đang hoạt động (`CountActiveByVaultIdAsync`), số suất người nhận đã dùng (`CountUsedBeneficiarySlotsAsync`) rồi map sang `VaultResponse`.",
+      "Controller trả `201 Created` hoặc `200 OK` tùy `Created`."
+    ],
+    "errors": [
+      "401 SESSION_EXPIRED",
+      "403 ACCOUNT_NOT_ACTIVE / EMAIL_NOT_VERIFIED"
+    ]
+  },
+  "VaultsController.GetMyVault": {
+    "summary": "Lấy kho của người đang đăng nhập.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`VaultService.GetMyVaultAsync`: `IVaultRepository.FindByOwnerIdAsync(userId)`.",
+      "`VaultRules.EnsureOwnedBy` kiểm tra tồn tại và đúng chủ.",
+      "`ToResponseAsync` tính dung lượng, số gói, số suất rồi trả `VaultResponse`."
+    ],
+    "errors": [
+      "404 VAULT_NOT_FOUND"
+    ]
+  },
+  "VaultsController.GetVault": {
+    "summary": "Lấy kho theo id (chỉ chủ kho mới xem được).",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`VaultService.GetVaultAsync`: `IVaultRepository.FindByIdAsync(vaultId)`.",
+      "`VaultRules.EnsureOwnedBy`: kho không tồn tại hoặc của người khác đều trả 404 để không lộ sự tồn tại (SEC-04).",
+      "`ToResponseAsync` rồi trả `VaultResponse`."
+    ],
+    "errors": [
+      "404 VAULT_NOT_FOUND"
+    ]
+  },
+  "VaultsController.UpdateVault": {
+    "summary": "Sửa tên/mô tả kho, có kiểm tra xung đột sửa đồng thời bằng etag.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`VaultService.UpdateVaultAsync`: nạp kho và `VaultRules.EnsureOwnedBy`.",
+      "`VaultRules.EnsureEditable`: kho đã đóng, kế hoạch bị khóa hoặc dịch vụ chỉ đọc → 409 VAULT_NOT_EDITABLE kèm lý do.",
+      "`Etag.Matches(request.Etag, vault.UpdatedAt)`: lệch → 409 EDIT_CONFLICT (kho vừa được sửa ở nơi khác).",
+      "Tên gửi lên (nếu có) được trim, không được rỗng; mô tả rỗng được coi là xóa.",
+      "Đặt `UpdatedAt`, `IUnitOfWork.SaveChangesAsync`. Không tăng ConfigVersion vì tên/mô tả kho không thuộc cấu hình bàn giao.",
+      "Trả `VaultResponse` mới."
+    ],
+    "errors": [
+      "400 tên rỗng",
+      "404 VAULT_NOT_FOUND",
+      "409 VAULT_NOT_EDITABLE / EDIT_CONFLICT"
+    ]
+  },
+  "AssetsController.CreateFileAsset": {
+    "summary": "Tải một tệp lên kho làm tài sản. Nội dung được mã hóa trước khi lưu.",
+    "access": "Cần đăng nhập (multipart/form-data)",
+    "steps": [
+      "Controller đọc form và gọi `AssetService.CreateFileAssetAsync`.",
+      "`SanitizeFileName` chỉ giữ tên tệp (bỏ đường dẫn, ký tự điều khiển, tối đa 255 ký tự); rỗng → 400. Tệp rỗng → 400. Không gửi tên thì lấy tên tệp.",
+      "`SanitizeContentType` chỉ nhận dạng `type/subtype` hợp lệ, còn lại là `application/octet-stream`.",
+      "`CreateAsync`: nạp kho + kiểm tra chủ (`LoadOwnedVaultAsync`), `VaultRules.EnsureEditable`.",
+      "Kiểm tra dung lượng: hạn mức (`Entitlement.StorageQuotaBytes`) trừ đã dùng (`IVaultRepository.SumUsedBytesAsync`); kích thước khai báo vượt phần còn lại → 409 STORAGE_QUOTA_EXCEEDED.",
+      "`IAssetContentStore.SaveAsync` mã hóa và ghi nội dung, tự đếm byte thật (kích thước khai báo có thể sai) và dừng nếu vượt phần còn lại.",
+      "Tạo `Asset` + `AssetVersion` số 1 (lưu SHA-256, StorageKey, khóa dữ liệu đã bọc), `IAssetRepository.Add`, `SaveChangesAsync`.",
+      "Nếu lưu DB lỗi thì `IAssetContentStore.DeleteAsync` xóa nội dung vừa ghi để không còn tệp mồ côi.",
+      "Trả `201 Created` kèm `AssetResponse`."
+    ],
+    "errors": [
+      "400 tệp thiếu/rỗng, tên quá dài",
+      "404 VAULT_NOT_FOUND",
+      "409 VAULT_NOT_EDITABLE / STORAGE_QUOTA_EXCEEDED",
+      "413 tệp quá lớn"
+    ]
+  },
+  "AssetsController.CreateTextAsset": {
+    "summary": "Tạo tài sản dạng văn bản (ghi chú, mật khẩu...) trong kho.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`AssetService.CreateTextAssetAsync`: tên và nội dung bắt buộc (rỗng → 400).",
+      "Chuyển nội dung sang byte UTF-8, content type `text/plain; charset=utf-8`.",
+      "Dùng chung `CreateAsync` với tệp: kiểm tra chủ kho, `EnsureEditable`, hạn mức dung lượng, mã hóa và lưu bằng `IAssetContentStore.SaveAsync`, lưu Asset + AssetVersion.",
+      "Trả `201 Created` kèm `AssetResponse`."
+    ],
+    "errors": [
+      "400 thiếu tên/nội dung",
+      "404 VAULT_NOT_FOUND",
+      "409 VAULT_NOT_EDITABLE / STORAGE_QUOTA_EXCEEDED"
+    ]
+  },
+  "AssetsController.GetAssets": {
+    "summary": "Liệt kê tài sản của kho, có phân trang, tìm kiếm và sắp xếp (theo name hoặc createdAt).",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`AssetService.GetAssetsAsync`: `LoadOwnedVaultAsync` kiểm tra chủ kho (không cần kho đang cho sửa).",
+      "`sortBy` chỉ nhận `name` hoặc `createdAt`, khác → 400.",
+      "`IAssetRepository.FindPageByVaultIdAsync` truy vấn trang với searchTerm, sắp xếp, chiều tăng/giảm.",
+      "Map từng Asset sang `AssetResponse` và đóng gói `PaginatedList`."
+    ],
+    "errors": [
+      "400 sortBy không hợp lệ",
+      "404 VAULT_NOT_FOUND"
+    ]
+  },
+  "AssetsController.GetAsset": {
+    "summary": "Lấy chi tiết một tài sản trong kho.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`AssetService.GetAssetAsync`: `LoadOwnedVaultAsync` kiểm tra chủ kho.",
+      "`IAssetRepository.FindByIdAsync(vaultId, assetId)`; không có hoặc thuộc kho khác → 404 ASSET_NOT_FOUND.",
+      "Map sang `AssetResponse`."
+    ],
+    "errors": [
+      "404 VAULT_NOT_FOUND / ASSET_NOT_FOUND"
+    ]
+  },
+  "BeneficiariesController.CreateBeneficiary": {
+    "summary": "Tạo hồ sơ người nhận trong kho. Dữ liệu cá nhân (CCCD, họ tên, ngày sinh, liên hệ) được mã hóa khi lưu.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`BeneficiaryService.CreateBeneficiaryAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureEditable`.",
+      "Hạng Free không được thêm người nhận → 403 PAID_TIER_REQUIRED (chặn ở API, không chỉ ẩn nút).",
+      "Chuẩn hóa dữ liệu: CCCD phải đúng 12 chữ số (`NormalizeCitizenId`), họ tên NFC + gộp khoảng trắng (`NormalizeFullName`), ngày sinh bắt buộc, `NormalizeContact` cần ít nhất email hoặc số điện thoại hợp lệ.",
+      "`ApplyMinorRule`: ngày sinh không ở tương lai; dưới 18 tuổi thì phải gửi `confirmMinor`, nếu không → 409 MINOR_CONFIRMATION_REQUIRED.",
+      "`FindSameCitizenIdAsync` tìm hồ sơ trùng CCCD: lọc theo 4 số cuối rồi giải mã từng hồ sơ để so số đầy đủ.",
+      "Trùng CCCD và cùng họ tên + ngày sinh → trả hồ sơ cũ, không ghi DB (`Created=false`); cùng CCCD nhưng khác tên/ngày sinh → 409 BENEFICIARY_IDENTITY_CONFLICT.",
+      "`IBeneficiaryDataProtector.Protect` mã hóa dữ liệu cá nhân, `IBeneficiaryRepository.Add`, `SaveChangesAsync`. Chưa gắn vào gói nên không tăng ConfigVersion.",
+      "Controller trả 201 (tạo mới) hoặc 200 (hồ sơ đã có)."
+    ],
+    "errors": [
+      "400 dữ liệu không hợp lệ",
+      "403 PAID_TIER_REQUIRED",
+      "404 VAULT_NOT_FOUND",
+      "409 VAULT_NOT_EDITABLE / MINOR_CONFIRMATION_REQUIRED / BENEFICIARY_IDENTITY_CONFLICT"
+    ]
+  },
+  "BeneficiariesController.GetBeneficiaries": {
+    "summary": "Liệt kê người nhận của kho, phân trang; chỉ tìm được theo 1 đến 4 số cuối CCCD.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`BeneficiaryService.GetBeneficiariesAsync`: `LoadOwnedVaultAsync`.",
+      "`sortBy` chỉ nhận `createdAt`; `searchTerm` (nếu có) phải là 1-4 chữ số vì họ tên đã mã hóa nên không tìm theo tên được.",
+      "`IBeneficiaryRepository.FindPageByVaultIdAsync` lấy một trang.",
+      "`IContainerRepository.FindContainerIdsByBeneficiaryIdsAsync` lấy các gói của cả trang bằng một truy vấn (tránh N+1).",
+      "`IBeneficiaryDataProtector.Unprotect` giải mã từng hồ sơ, map sang `BeneficiaryResponse` (kèm tuổi tính theo giờ Việt Nam)."
+    ],
+    "errors": [
+      "400 sortBy/searchTerm không hợp lệ",
+      "404 VAULT_NOT_FOUND"
+    ]
+  },
+  "BeneficiariesController.GetBeneficiary": {
+    "summary": "Lấy chi tiết một người nhận.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`BeneficiaryService.GetBeneficiaryAsync`: `LoadOwnedVaultAsync`, `LoadBeneficiaryAsync` (không có hoặc thuộc kho khác → 404).",
+      "`IBeneficiaryDataProtector.Unprotect` giải mã dữ liệu cá nhân.",
+      "`LoadContainerIdsAsync` lấy các gói đang chỉ định người này, map sang `BeneficiaryResponse`."
+    ],
+    "errors": [
+      "404 VAULT_NOT_FOUND / BENEFICIARY_NOT_FOUND"
+    ]
+  },
+  "BeneficiariesController.UpdateBeneficiary": {
+    "summary": "Sửa hồ sơ người nhận (không đổi được CCCD), kiểm tra xung đột bằng etag.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`BeneficiaryService.UpdateBeneficiaryAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureEditable`, `LoadBeneficiaryAsync`.",
+      "`Etag.Matches` so với `UpdatedAt`; lệch → 409 EDIT_CONFLICT.",
+      "Giải mã dữ liệu hiện tại; trường gửi `null` thì giữ nguyên (riêng email/phone gửi \"\" nghĩa là xóa).",
+      "Chuẩn hóa lại liên hệ (`NormalizeContact`) và áp dụng `ApplyMinorRule` (dưới 18 tuổi cần xác nhận).",
+      "Không có gì thay đổi thì trả nguyên trạng, không mã hóa lại, không lưu.",
+      "Có thay đổi: `Protect` mã hóa lại với khóa dữ liệu (DEK) mới, đặt `UpdatedAt`; nếu hồ sơ đang nằm trong gói thì `PlanRules.BumpConfigVersion` (SETUP-04).",
+      "`SaveChangesAsync` và trả `BeneficiaryResponse`."
+    ],
+    "errors": [
+      "400 dữ liệu không hợp lệ",
+      "404 không tìm thấy",
+      "409 VAULT_NOT_EDITABLE / EDIT_CONFLICT / MINOR_CONFIRMATION_REQUIRED"
+    ]
+  },
+  "BeneficiariesController.DeleteBeneficiary": {
+    "summary": "Xóa hồ sơ người nhận. Chỉ xóa được khi người đó không còn ở gói nào.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`BeneficiaryService.DeleteBeneficiaryAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureCanReduce` (thao tác \"giảm\", vẫn cho khi dịch vụ đang ân hạn).",
+      "`LoadBeneficiaryAsync` rồi `LoadContainerIdsAsync`: nếu còn ở gói nào → 409 BENEFICIARY_IN_USE kèm danh sách containerIds để FE chỉ ra.",
+      "`IBeneficiaryRepository.Remove`, `SaveChangesAsync`."
+    ],
+    "errors": [
+      "404 không tìm thấy",
+      "409 VAULT_NOT_EDITABLE / BENEFICIARY_IN_USE"
+    ]
+  },
+  "ContainersController.CreateContainer": {
+    "summary": "Tạo một gói bàn giao (container) rỗng trong kho.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.CreateContainerAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureEditable` (hạng Free vẫn được tạo gói rỗng).",
+      "Tên bắt buộc (`TextInput.NullIfBlank`).",
+      "`IContainerRepository.CountActiveByVaultIdAsync`: tối đa 50 gói chưa lưu trữ → 409 CONTAINER_LIMIT_EXCEEDED.",
+      "Tạo `Container` trạng thái Draft, `ContainerRules.RecalculateStatus`, `IContainerRepository.Add`.",
+      "`PlanRules.BumpConfigVersion` tăng phiên bản cấu hình kế hoạch (SETUP-04), `SaveChangesAsync`.",
+      "Trả `ContainerResponse`."
+    ],
+    "errors": [
+      "400 tên rỗng",
+      "404 VAULT_NOT_FOUND",
+      "409 VAULT_NOT_EDITABLE / CONTAINER_LIMIT_EXCEEDED"
+    ]
+  },
+  "ContainersController.GetContainers": {
+    "summary": "Liệt kê gói của kho, phân trang; có thể gồm cả gói đã lưu trữ.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.GetContainersAsync`: `LoadOwnedVaultAsync`.",
+      "`sortBy` chỉ nhận `name` hoặc `createdAt`, khác → 400.",
+      "`IContainerRepository.FindPageByVaultIdAsync(includeArchived, trang, searchTerm, sắp xếp)`.",
+      "Map sang `ContainerResponse` và đóng gói `PaginatedList`."
+    ],
+    "errors": [
+      "400 sortBy không hợp lệ",
+      "404 VAULT_NOT_FOUND"
+    ]
+  },
+  "ContainersController.GetContainer": {
+    "summary": "Lấy chi tiết một gói (kèm id tài sản và người nhận).",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.GetContainerAsync`: `LoadOwnedVaultAsync`.",
+      "`LoadContainerAsync` → `IContainerRepository.FindByIdAsync(vaultId, containerId)`; không có hoặc thuộc kho khác → 404 CONTAINER_NOT_FOUND.",
+      "Map sang `ContainerResponse`."
+    ],
+    "errors": [
+      "404 VAULT_NOT_FOUND / CONTAINER_NOT_FOUND"
+    ]
+  },
+  "ContainersController.UpdateContainer": {
+    "summary": "Đổi tên/mô tả gói, có kiểm tra etag.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.UpdateContainerAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureEditable`, `LoadContainerAsync`.",
+      "Gói đã lưu trữ → 409 CONTAINER_ARCHIVED. `Etag.Matches` lệch → 409 EDIT_CONFLICT.",
+      "Tên null = giữ nguyên (rỗng → 400); mô tả \"\" = xóa mô tả.",
+      "Không có gì đổi thì trả nguyên trạng, không lưu, không tăng ConfigVersion.",
+      "Có đổi: đặt `UpdatedAt`, `PlanRules.BumpConfigVersion`, `SaveChangesAsync`, trả `ContainerResponse`."
+    ],
+    "errors": [
+      "400 tên rỗng",
+      "404 không tìm thấy",
+      "409 VAULT_NOT_EDITABLE / CONTAINER_ARCHIVED / EDIT_CONFLICT"
+    ]
+  },
+  "ContainersController.ArchiveContainer": {
+    "summary": "Lưu trữ (xóa mềm) một gói. Gỡ hết tài sản và người nhận khỏi gói nhưng không xóa dữ liệu gốc. Idempotent.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.ArchiveContainerAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureCanReduce` (thao tác \"giảm\"), `LoadContainerAsync`.",
+      "Gói đã lưu trữ → trả nguyên trạng, không ghi DB.",
+      "`EnsurePlanImpactConfirmedAsync`: nếu gói đang READY và là gói READY cuối cùng của kế hoạch đang chạy thì phải có `confirmPlanDeactivation`, nếu không → 409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED. Khi đã xác nhận: `PlanRules.Deactivate` đưa kế hoạch về Draft và `ICheckInScheduler.StopAsync` dừng lịch điểm danh.",
+      "`RemoveAssetLink` gỡ mọi liên kết tài sản (tài sản không bị xóa) và `RemoveDesignation` gỡ mọi chỉ định người nhận (hồ sơ không bị xóa).",
+      "Đặt Status=Archived, ArchivedAt, UpdatedAt, `BumpConfigVersion`, `SaveChangesAsync`, trả `ContainerResponse`."
+    ],
+    "errors": [
+      "404 không tìm thấy",
+      "409 VAULT_NOT_EDITABLE / PLAN_DEACTIVATION_CONFIRMATION_REQUIRED"
+    ]
+  },
+  "ContainersController.AddContainerAsset": {
+    "summary": "Thêm một tài sản vào gói. Mỗi tài sản chỉ thuộc tối đa một gói chưa lưu trữ.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.AddAssetAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureEditable`, `LoadContainerAsync`; gói đã lưu trữ → 409.",
+      "Hạng Free không được đưa tài sản vào gói → 403 PAID_TIER_REQUIRED.",
+      "`IAssetRepository.FindByIdAsync` xác nhận tài sản thuộc kho (404 nếu không).",
+      "`IContainerRepository.FindLinkByAssetIdAsync`: đã ở đúng gói này → trả nguyên trạng; đang ở gói khác → 409 ASSET_ALREADY_IN_CONTAINER (kèm containerId).",
+      "Tạo `ContainerAsset`, `ContainerRules.RecalculateStatus` (có tài sản + người nhận thì gói thành Ready), `BumpConfigVersion`.",
+      "`TryAddAssetLinkAsync` lưu: nếu ràng buộc unique chặn (request khác vừa thêm), `DiscardPendingChanges` rồi đọc lại và trả kết quả đúng hoặc 409.",
+      "Trả `ContainerResponse`."
+    ],
+    "errors": [
+      "403 PAID_TIER_REQUIRED",
+      "404 không tìm thấy",
+      "409 VAULT_NOT_EDITABLE / CONTAINER_ARCHIVED / ASSET_ALREADY_IN_CONTAINER / EDIT_CONFLICT"
+    ]
+  },
+  "ContainersController.RemoveContainerAsset": {
+    "summary": "Gỡ một tài sản khỏi gói (tài sản vẫn còn trong kho, dung lượng không đổi).",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.RemoveAssetAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureCanReduce`, `LoadContainerAsync`; gói đã lưu trữ → 409.",
+      "Tài sản không ở trong gói → trả nguyên trạng, không ghi DB.",
+      "Gỡ tài sản cuối của gói READY có thể làm kế hoạch mất gói READY cuối cùng: `EnsurePlanImpactConfirmedAsync` yêu cầu xác nhận (409 nếu thiếu), khi xác nhận thì kế hoạch về Draft và dừng lịch điểm danh.",
+      "`RemoveAssetLink`, `RecalculateStatus` (gói rỗng về Draft), `BumpConfigVersion`, `SaveChangesAsync`, trả `ContainerResponse`."
+    ],
+    "errors": [
+      "404 không tìm thấy",
+      "409 VAULT_NOT_EDITABLE / CONTAINER_ARCHIVED / PLAN_DEACTIVATION_CONFIRMATION_REQUIRED"
+    ]
+  },
+  "ContainersController.AddContainerBeneficiary": {
+    "summary": "Chỉ định một người nhận vào gói, có kiểm tra suất người nhận của kho.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.AddBeneficiaryAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureEditable`, `LoadContainerAsync`; gói đã lưu trữ → 409.",
+      "Hạng Free → 403 PAID_TIER_REQUIRED.",
+      "`IBeneficiaryRepository.FindByIdAsync` xác nhận người nhận thuộc kho (404 nếu không); đã được chỉ định trong gói này → trả nguyên trạng.",
+      "Suất tính theo số người KHÁC NHAU được chỉ định trong kho: người đã ở gói khác (`IsBeneficiaryDesignatedAsync`) không tốn thêm suất; người mới thì `CountUsedBeneficiarySlotsAsync` + 1 không được vượt (suất gồm sẵn + mua thêm) → 409 BENEFICIARY_SLOTS_EXCEEDED.",
+      "Tạo `Designation`, `RecalculateStatus`, `BumpConfigVersion`.",
+      "`TryAddDesignationAsync` lưu; nếu trùng do bấm lặp thì `DiscardPendingChanges`, đọc lại và trả kết quả.",
+      "Trả `ContainerResponse`."
+    ],
+    "errors": [
+      "403 PAID_TIER_REQUIRED",
+      "404 không tìm thấy",
+      "409 VAULT_NOT_EDITABLE / CONTAINER_ARCHIVED / BENEFICIARY_SLOTS_EXCEEDED / EDIT_CONFLICT"
+    ]
+  },
+  "ContainersController.RemoveContainerBeneficiary": {
+    "summary": "Gỡ người nhận khỏi gói (hồ sơ người nhận vẫn còn).",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`ContainerService.RemoveBeneficiaryAsync`: `LoadOwnedVaultAsync`, `VaultRules.EnsureCanReduce`, `LoadContainerAsync`; gói đã lưu trữ → 409.",
+      "Người nhận không ở trong gói → trả nguyên trạng.",
+      "Nếu đây là người nhận cuối của gói READY cuối cùng của kế hoạch đang chạy: `EnsurePlanImpactConfirmedAsync` yêu cầu xác nhận (409 nếu thiếu), khi xác nhận thì kế hoạch về Draft và dừng lịch điểm danh.",
+      "`RemoveDesignation`, `RecalculateStatus`, `BumpConfigVersion`, `SaveChangesAsync`. Suất không cần \"trả lại\" vì luôn được đếm lại từ các chỉ định.",
+      "Trả `ContainerResponse`."
+    ],
+    "errors": [
+      "404 không tìm thấy",
+      "409 VAULT_NOT_EDITABLE / CONTAINER_ARCHIVED / PLAN_DEACTIVATION_CONFIRMATION_REQUIRED"
+    ]
+  },
+  "CheckInsController.GetMyCheckIn": {
+    "summary": "Xem trạng thái điểm danh (check-in) của kho mình: cấu hình chu kỳ, hạn kế tiếp và lịch sử các kỳ.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`CheckInService.GetMyCheckInAsync`: `LoadMyVaultAsync` (`IVaultRepository.FindByOwnerIdAsync`), không có kho → 404.",
+      "`BuildResponseAsync`: đọc lịch (`FindScheduleByPlanIdAsync`), kỳ đang mở (`FindOpenPeriodByPlanIdAsync`) và một trang lịch sử (`FindPeriodPageByPlanIdAsync`).",
+      "Trạng thái: kế hoạch bị tạm dừng (có ca tử vong/đang bàn giao/đã đóng/bị chặn) → PAUSED; không chạy hoặc chưa có kỳ mở → NOT_STARTED; còn lại dùng `CheckInTimeline.EffectiveStatus` so giờ server với hạn và hết thời gian chờ → ACTIVE / CHECKIN_OVERDUE / AWAITING_CHECK.",
+      "Kèm cấu hình hiện tại (mặc định chu kỳ 30 ngày, chờ 7 ngày) và etag để sửa cấu hình."
+    ],
+    "errors": [
+      "401",
+      "404 VAULT_NOT_FOUND"
+    ]
+  },
+  "CheckInsController.CheckIn": {
+    "summary": "Chủ kho bấm điểm danh \"tôi vẫn ổn\": đóng kỳ hiện tại và mở kỳ mới.",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`CheckInService.CheckInAsync`: `LoadMyVaultAsync`; kế hoạch phải đang chạy (`CheckInRules.IsRunning`) nếu không → 409 CHECKIN_NOT_ALLOWED. Không gọi `EnsureEditable` vì được phép điểm danh cả khi dịch vụ ân hạn.",
+      "Điểm danh lặp trong 60 giây kể từ lần trước → không mở kỳ mới, chỉ trả trạng thái hiện tại.",
+      "Chưa có lịch thì tạo `CheckInSchedule`. Kỳ đang mở (nếu có) được đặt CheckedInAt và ClosedAt.",
+      "`ApplyPendingSettings` áp dụng chu kỳ/thời gian chờ đã chọn trước đó (DMS-01), cập nhật `LastCheckInAt`.",
+      "Mở kỳ mới: Sequence = max + 1, `CheckInTimeline.ComputeDueAt` (bắt đầu + chu kỳ) và `ComputeGraceEndsAt` (hạn + thời gian chờ); kế hoạch về Active.",
+      "Một lần `SaveChangesAsync` cho kỳ cũ, kỳ mới, lịch và kế hoạch; hai yêu cầu song song thì bên thua nhận 409 EDIT_CONFLICT.",
+      "Trả `CheckInStatusResponse` mới."
+    ],
+    "errors": [
+      "401",
+      "404 VAULT_NOT_FOUND",
+      "409 CHECKIN_NOT_ALLOWED / EDIT_CONFLICT"
+    ]
+  },
+  "CheckInsController.UpdateSettings": {
+    "summary": "Đổi chu kỳ điểm danh (30/60/90 ngày) hoặc thời gian chờ (7/14/30 ngày).",
+    "access": "Cần đăng nhập",
+    "steps": [
+      "`CheckInService.UpdateSettingsAsync`: `LoadMyVaultAsync`, `ValidateSettings` (phải gửi ít nhất một giá trị; `CheckInRules.IsAllowedCycleDays/IsAllowedGraceDays`).",
+      "`GetSettingsBlockedReason`: kho đã đóng hoặc kế hoạch đã khóa → 409 VAULT_NOT_EDITABLE (khác `VaultRules`, không chặn khi dịch vụ chỉ đọc).",
+      "`Etag.Matches` so với `schedule.UpdatedAt`; lệch → 409 EDIT_CONFLICT.",
+      "Kỳ đang chạy giữ nguyên hạn: lựa chọn mới lưu vào `PendingCycleDays/PendingGraceDays`, chỉ áp dụng từ kỳ sau. Chưa có kỳ mở thì áp dụng ngay.",
+      "Đặt `UpdatedAt`, `SaveChangesAsync`, trả `CheckInStatusResponse`."
+    ],
+    "errors": [
+      "400 giá trị không hợp lệ",
+      "404 VAULT_NOT_FOUND",
+      "409 VAULT_NOT_EDITABLE / EDIT_CONFLICT"
+    ]
+  }
+}
