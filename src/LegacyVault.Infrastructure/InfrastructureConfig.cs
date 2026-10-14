@@ -52,6 +52,9 @@ public static class InfrastructureConfig
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
         services.AddScoped<ICheckInRepository, CheckInRepository>();
 
+        // Bàn giao: Executor
+        services.AddScoped<IExecutorReader, ExecutorReader>();
+
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()
             .Bind(configuration.GetSection("AssetStorage"))
