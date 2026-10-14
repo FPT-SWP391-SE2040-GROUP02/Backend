@@ -44,6 +44,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<CheckInPeriod> CheckInPeriods => Set<CheckInPeriod>();
     public DbSet<CheckInReminder> CheckInReminders => Set<CheckInReminder>();
 
+    /// <summary>Transaction Auth giữ khóa từ lúc đọc refresh token tới commit; dispose rollback khi operation lỗi.</summary>
+    public async Task<T> ExecuteSerializableAsync<T>(Func<Task<T>> operation, CancellationToken ct)
+    {
+        await using var transaction = await Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var result = await operation();
+        await transaction.CommitAsync(ct);
+        return result;
+    }
+    // Xác minh danh tính (eKYC)
+    public DbSet<EkycVerification> EkycVerifications => Set<EkycVerification>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

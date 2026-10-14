@@ -12,11 +12,16 @@ public static class ApplicationConfig
         services.AddScoped<IAssetService, AssetService>();
         services.AddScoped<IContainerService, ContainerService>();
         services.AddScoped<IBeneficiaryService, BeneficiaryService>();
+        services.AddHandoverApplication();
 
         // Điểm danh (deadman switch)
         services.AddScoped<ICheckInService, CheckInService>();
         services.AddScoped<ICheckInScheduler, CheckInScheduler>();
         services.AddScoped<ICheckInJob, CheckInJob>();
+
+        // Hồ sơ chứng tử (F2B)
+        services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
+        services.AddScoped<IDeathCaseService, DeathCaseService>();
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
@@ -25,6 +30,9 @@ public static class ApplicationConfig
         services.AddScoped<IGoogleAuthService, GoogleAuthService>();
         services.AddScoped<LoginSessionIssuer>();
         services.AddScoped<LoginThrottleGuard>();
+
+        // Xác minh danh tính (eKYC)
+        services.AddScoped<IEkycService, EkycService>();
         return services;
     }
 }

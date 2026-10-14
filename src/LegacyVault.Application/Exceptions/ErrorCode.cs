@@ -18,6 +18,13 @@ public enum ErrorCode
     VaultNotEditable,
     EditConflict,
     AssetNotFound,
+    HandoverInvitationInvalid,
+    HandoverNotFound,
+    HandoverNotAllowed,
+    HandoverAlreadyClaimed,
+    HandoverDecisionExpired,
+    GrantNotActive,
+    ContentIntegrityFailed,
     StorageQuotaExceeded,
     FileTooLarge,
     InternalError,
@@ -33,6 +40,13 @@ public enum ErrorCode
     BeneficiaryInUse,
     BeneficiarySlotsExceeded,
     CheckinNotAllowed,
+    EkycImageRejected,
+    EkycDocumentExpired,
+    EkycServiceUnavailable,
+    DeathCaseNotFound,
+    DeathCaseNotAllowed,
+    DeathCaseIncomplete,
+    DeathCaseFileLimitExceeded,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

@@ -17,4 +17,6 @@ public enum AppErrorType
     Conflict,
     /// <summary>413.</summary>
     PayloadTooLarge,
+    /// <summary>503: dịch vụ ngoài (ví dụ eKYC) không gọi được.</summary>
+    ServiceUnavailable,
 }

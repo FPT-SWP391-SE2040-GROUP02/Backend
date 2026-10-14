@@ -19,5 +19,9 @@ public sealed class HandoverPlanConfiguration : IEntityTypeConfiguration<Handove
 
         builder.HasIndex(p => p.VaultId)
             .IsUnique();
+
+        // Nhiều phần cùng sửa Status; RowVersion khác đi nghĩa là phần kia vừa lưu trước, báo lỗi xung đột.
+        builder.Property(p => p.RowVersion)
+            .IsRowVersion();
     }
 }

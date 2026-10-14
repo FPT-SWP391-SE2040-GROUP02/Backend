@@ -10,4 +10,8 @@ namespace LegacyVault.Application.Repositories;
 public interface IUnitOfWork
 {
     Task SaveChangesAsync(CancellationToken ct);
+
+    /// <summary>Thực thi Auth read-modify-write trong transaction Serializable; lỗi rollback, không retry mutation.</summary>
+    Task<T> ExecuteSerializableAsync<T>(Func<Task<T>> operation, CancellationToken ct);
+
 }

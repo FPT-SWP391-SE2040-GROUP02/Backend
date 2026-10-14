@@ -1,0 +1,103 @@
+# Thử Executor nộp hồ sơ chứng tử (F2B nhánh A) — chỉ Development.
+#
+# Chuẩn bị:
+#   1. Chạy migration và API (profile http). Tạo 3 tài khoản (Owner, Executor, Verifier) bằng http/auth.http, Owner tạo kho (POST /vaults).
+#   2. Chạy http/death-case-dev.sql (thay 3 email): kế hoạch sang ACTIVE, Executor được chấp nhận, một tài khoản thành Verifier.
+#   3. Đăng nhập bằng tài khoản EXECUTOR bên dưới.
+#
+# Luồng: mở hồ sơ → khai 6 trường → tải trang giấy (PDF/JPEG/PNG/WEBP ≤ 20 MiB, tối đa 10 tệp) → gửi.
+# Gửi lần đầu khóa kế hoạch của kho (Owner không sửa kho/điểm danh được nữa). Thông báo Owner do job nền gửi mỗi 60 giây.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập tài khoản Executor
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "executor@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### 1) Các kho tôi là Executor (checkInOverdue = Owner đã quá hạn điểm danh)
+GET {{baseUrl}}/executor/vaults
+Authorization: Bearer {{token}}
+
+### Điền vaultId từ response trên
+@vaultId = 00000000-0000-0000-0000-000000000000
+
+### 2) Mở hồ sơ (201 lần đầu; mở lại trả 200 hồ sơ cũ; kế hoạch chưa chạy → 409 DEATH_CASE_NOT_ALLOWED / PLAN_NOT_RUNNING)
+# @name open
+POST {{baseUrl}}/executor/vaults/{{vaultId}}/death-case
+Authorization: Bearer {{token}}
+
+###
+@caseId = {{open.response.body.$.id}}
+@etag = {{open.response.body.$.etag}}
+
+### 3) Xem hồ sơ (missingRequirements cho biết còn thiếu gì)
+GET {{baseUrl}}/executor/death-cases/{{caseId}}
+Authorization: Bearer {{token}}
+
+### 4) Khai bản nháp — etag lấy từ response gần nhất. Chuỗi "" = xóa, không gửi = giữ nguyên. CCCD gõ có khoảng trắng cũng được.
+# Response chỉ có 4 số cuối CCCD. Ngày mất không được ở tương lai; ngày cấp ≥ ngày mất.
+# @name draft
+PUT {{baseUrl}}/executor/death-cases/{{caseId}}/draft
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "etag": "{{etag}}",
+  "ownerFullName": "Nguyễn Văn An",
+  "ownerCitizenId": "012345678901",
+  "dateOfDeath": "2026-10-10",
+  "certificateNumber": "123/2026/TT",
+  "issuedOn": "2026-10-11",
+  "issuedBy": "UBND phường Bến Nghé"
+}
+
+### 5) Tải một trang giấy chứng tử (multipart, field "file"). Loại tệp xác định theo NỘI DUNG, đổi đuôi .exe thành .pdf vẫn bị từ chối (400).
+# Điền đường dẫn tệp PDF/ảnh thật bên dưới.
+# @name upload
+POST {{baseUrl}}/executor/death-cases/{{caseId}}/files
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----dc
+
+------dc
+Content-Disposition: form-data; name="file"; filename="giay-chung-tu.pdf"
+Content-Type: application/pdf
+
+< ./giay-chung-tu.pdf
+------dc--
+
+###
+@etagAfterUpload = {{upload.response.body.$.etag}}
+@fileId = {{upload.response.body.$.currentVersion.files[0].id}}
+
+### 6) Gỡ trang vừa tải (chỉ bản nháp; bản đã gửi → 409 VERSION_LOCKED)
+DELETE {{baseUrl}}/executor/death-cases/{{caseId}}/files/{{fileId}}
+Authorization: Bearer {{token}}
+
+### 7) Gửi hồ sơ — cần confirm = true và đủ trường + ít nhất 1 trang (thiếu → 409 DEATH_CASE_INCOMPLETE kèm missingRequirements).
+# Gửi lặp trả trạng thái hiện tại. Sau lần gửi đầu kế hoạch sang DEATH_CASE_OPEN.
+# @name submit
+POST {{baseUrl}}/executor/death-cases/{{caseId}}/submit
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etagAfterUpload}}", "confirm": true }
+
+###
+@etagAfterSubmit = {{submit.response.body.$.etag}}
+
+### 8) Tạo phiên bản bổ sung từ bản đã gửi (hồ sơ đang xét hoặc cần bổ sung). Bản mới là bản nháp: sửa xong phải gửi lại với confirm.
+# Đổi họ tên/CCCD/ngày mất ở bản mới → Owner được báo lại và 72 giờ chạy lại.
+# @name newVersion
+POST {{baseUrl}}/executor/death-cases/{{caseId}}/versions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etagAfterSubmit}}" }
+
+### 9) Owner không dùng được API này (đăng nhập tài khoản Owner rồi gọi → 404 VAULT_NOT_FOUND / DEATH_CASE_NOT_FOUND)

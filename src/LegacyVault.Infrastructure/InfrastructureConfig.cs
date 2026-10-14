@@ -1,9 +1,11 @@
 using System.Text;
+using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Application.Storage;
 using LegacyVault.Infrastructure.Data;
+using LegacyVault.Infrastructure.Ekyc;
 using LegacyVault.Infrastructure.Health;
 using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
@@ -52,6 +54,9 @@ public static class InfrastructureConfig
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
         services.AddScoped<ICheckInRepository, CheckInRepository>();
 
+        // Bàn giao: Executor
+        services.AddScoped<IExecutorReader, ExecutorReader>();
+
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()
             .Bind(configuration.GetSection("AssetStorage"))
@@ -83,6 +88,8 @@ public static class InfrastructureConfig
         services.Configure<CheckInJobSettings>(configuration.GetSection(CheckInJobSettings.SectionName));
         // Dịch vụ email: Gmail qua MailKit khi có cấu hình Email:Smtp, không thì chỉ ghi log (xem EmailConfig).
         services.AddEmailServices(configuration);
+        LegacyVault.Infrastructure.Handover.HandoverConfig.AddHandover(services, configuration);
+        LegacyVault.Infrastructure.DeathCases.DeathCaseConfig.AddDeathCases(services, configuration);
         services.AddHostedService<CheckInMonitor>();
 
         // JWT Bearer Authentication
@@ -94,6 +101,8 @@ public static class InfrastructureConfig
                 "Cấu hình Jwt:Issuer không được để trống.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Audience),
                 "Cấu hình Jwt:Audience không được để trống.")
+            .Validate(settings => settings.AccessTokenMinutes > 0,
+                "Jwt:AccessTokenMinutes phải dương.")
             .ValidateOnStart();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -141,6 +150,24 @@ public static class InfrastructureConfig
         services.AddSingleton<IGoogleTokenVerifier, GoogleTokenVerifier>();
         services.AddScoped<IExternalLoginRepository, ExternalLoginRepository>();
         services.AddScoped<IExternalLoginLinkTicketRepository, ExternalLoginLinkTicketRepository>();
+
+        // eKYC: gọi dịch vụ Python riêng qua HTTP. Chưa cấu hình Ekyc:BaseUrl thì mọi lệnh eKYC trả 503.
+        services.Configure<EkycSettings>(configuration.GetSection(EkycSettings.SectionName));
+        services.AddScoped<IEkycVerificationRepository, EkycVerificationRepository>();
+        services.AddHttpClient<IEkycClient, EkycHttpClient>((provider, client) =>
+        {
+            EkycSettings settings = provider.GetRequiredService<IOptions<EkycSettings>>().Value;
+            if (!string.IsNullOrWhiteSpace(settings.BaseUrl))
+            {
+                // Dấu "/" cuối để địa chỉ tương đối "api/ocr" nối đúng vào BaseUrl có đường dẫn.
+                client.BaseAddress = new Uri(settings.BaseUrl.TrimEnd('/') + "/");
+            }
+            if (!string.IsNullOrWhiteSpace(settings.ApiKey))
+            {
+                client.DefaultRequestHeaders.Add("X-Ekyc-Key", settings.ApiKey);
+            }
+            client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+        });
 
         return services;
     }
