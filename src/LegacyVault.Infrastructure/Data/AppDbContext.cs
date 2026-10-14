@@ -52,6 +52,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         await transaction.CommitAsync(ct);
         return result;
     }
+    // Xác minh danh tính (eKYC)
+    public DbSet<EkycVerification> EkycVerifications => Set<EkycVerification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

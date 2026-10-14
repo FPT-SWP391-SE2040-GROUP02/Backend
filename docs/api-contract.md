@@ -74,6 +74,9 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 | 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
 | 409 | `EDIT_CONFLICT` | `etag` đã cũ: dữ liệu bị sửa ở tab/máy khác. FE tải lại rồi cho sửa tiếp | |
 | 409 | `CHECKIN_NOT_ALLOWED` | Điểm danh khi kế hoạch chưa kích hoạt (`DRAFT`) hoặc đã sang chứng tử/bàn giao/đóng | `planStatus` |
+| 400 | `EKYC_IMAGE_REJECTED` | Ảnh không phải JPEG/PNG, rỗng, hoặc dịch vụ eKYC từ chối (không thấy mặt, nhầm mặt thẻ...); `title` là câu hướng dẫn cho người dùng | |
+| 409 | `EKYC_DOCUMENT_EXPIRED` | Gửi selfie khi chưa đọc mặt trước, đã so khớp rồi, hoặc quá 30 phút | |
+| 503 | `EKYC_SERVICE_UNAVAILABLE` | Không gọi được dịch vụ eKYC (chưa cấu hình, tắt, quá thời gian chờ) | |
 | 409 | `VAULT_NOT_EDITABLE` | Kho không cho sửa lúc này | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `SERVICE_READ_ONLY` |
 | 409 | `CONTAINER_LIMIT_EXCEEDED` | Đủ 50 gói chưa lưu trữ | `maxContainers` |
 | 409 | `CONTAINER_ARCHIVED` | Sửa gói đã lưu trữ | |
@@ -470,6 +473,33 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **PATCH check-in-settings**: `cycleDays` ∈ {30, 60, 90}, `graceDays` ∈ {7, 14, 30}; phải gửi ít nhất một trong hai; `etag` lấy từ `settings.etag`. Đang có kỳ chạy thì lựa chọn mới nằm ở `pendingCycleDays`/`pendingGraceDays` và **chỉ áp dụng từ kỳ sau** (DMS-01). Kế hoạch đã sang chứng tử/bàn giao/đóng → `409 VAULT_NOT_EDITABLE` (`reason: PLAN_LOCKED`).
 - Nhắc điểm danh gửi 4 mốc, mỗi mốc một lần: trước hạn 7 ngày, trước hạn 1 ngày, khi bắt đầu thời gian chờ, khi còn 2 ngày chờ (DMS-06).
 - Chưa có API kích hoạt kế hoạch nên kỳ đầu tiên được mở khi Owner bấm "Điểm danh" lần đầu trên kế hoạch đang chạy; khi có chức năng kích hoạt sẽ gọi `ICheckInScheduler.StartFirstPeriodAsync`.
+
+### 6.10. Xác minh danh tính (eKYC)
+
+Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khuôn mặt. Server gọi dịch vụ eKYC riêng (chương trình Python) và **chỉ lưu kết quả**: không lưu ảnh, không lưu họ tên/ngày sinh/địa chỉ, chỉ giữ 4 số cuối CCCD. Cần đăng nhập (Bearer); người dùng lấy từ token. Ảnh JPEG/PNG, tối đa 8 MiB, gửi `multipart/form-data` với field `file`.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/v1/ekyc/me` | Đăng nhập | — | 200 `EkycStatusResponse` | 401 |
+| POST | `/v1/ekyc/document` | Đăng nhập | multipart `file` (ảnh mặt trước) | 200 `EkycDocumentResponse` | 400 `EKYC_IMAGE_REJECTED`, 401, 413 `FILE_TOO_LARGE`, 503 `EKYC_SERVICE_UNAVAILABLE` |
+| POST | `/v1/ekyc/face-match` | Đăng nhập | multipart `file` (selfie) | 200 `EkycStatusResponse` | 400, 401, 409 `EKYC_DOCUMENT_EXPIRED`, 413, 503 |
+
+```jsonc
+// POST /v1/ekyc/document → 200 (thông tin chỉ trả lần này, server không lưu)
+{ "verificationId": "0199...", "idNumber": "079200012345", "fullName": "NGUYỄN VĂN AN", "dateOfBirth": "01/02/2000",
+  "residenceAddress": "", "canMatchFace": true, "expiresAt": "2026-10-14T08:30:00+00:00", "warnings": [] }
+
+// POST /v1/ekyc/face-match và GET /v1/ekyc/me → 200
+{ "status": "PASSED", "verificationId": "0199...", "citizenIdLast4": "2345", "faceMatchScore": 0.52,
+  "matchThreshold": 0.363, "spoofCheckPassed": true, "createdAt": "...", "completedAt": "..." }
+```
+
+- `status`: `NOT_STARTED` (chưa làm; các trường còn lại null) | `PENDING` (đã đọc thẻ, chờ selfie) | `PASSED` | `FAILED`.
+- `canMatchFace = false` khi dịch vụ chưa tìm được đúng một khuôn mặt trên thẻ: vẫn trả chữ đọc được nhưng chưa có `verificationId`; FE yêu cầu chụp lại thẻ.
+- Mỗi lần gọi `/document` là một lượt mới và hủy lượt `PENDING` trước. Mỗi lượt chỉ so khớp **một lần**: sau khi có `PASSED`/`FAILED` muốn thử lại phải đọc lại mặt trước. Selfie bị nghi giả mạo (ảnh in, màn hình) → `FAILED`, `spoofCheckPassed = false`.
+- Ngưỡng `matchThreshold` do server cố định, FE không gửi. `faceMatchScore` là điểm cosine, **không** phải phần trăm.
+- eKYC chỉ là bằng chứng hỗ trợ; chưa nối vào luồng bàn giao (giai đoạn C do Executor đối chiếu giấy tờ do Owner cung cấp).
+- Chưa có kiểm tra liveness theo động tác (chớp mắt, quay đầu); chỉ có kiểm tra giả mạo trên một ảnh selfie.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 
