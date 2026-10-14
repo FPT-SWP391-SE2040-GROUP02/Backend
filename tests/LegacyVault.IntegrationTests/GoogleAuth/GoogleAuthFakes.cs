@@ -37,6 +37,9 @@ public sealed class FakeUnitOfWork : IUnitOfWork
 {
     public int SaveCount { get; private set; }
 
+    // Fake không chứng minh locking/rollback SQL; checks SQL riêng kiểm tra invariant này.
+    public Task<T> ExecuteSerializableAsync<T>(Func<Task<T>> operation, CancellationToken ct) => operation();
+
     public Task SaveChangesAsync(CancellationToken ct)
     {
         SaveCount++;

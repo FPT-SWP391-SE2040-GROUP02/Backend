@@ -27,8 +27,10 @@ else
     app.UseHttpsRedirection();
 }
 
+app.UseRouting();
 app.UseCors(CorsConfig.FrontendPolicy);
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 

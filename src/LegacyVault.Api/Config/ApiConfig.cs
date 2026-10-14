@@ -11,7 +11,7 @@ public static class ApiConfig
 {
     public static IServiceCollection AddApiConfig(this IServiceCollection services)
     {
-        services.AddControllers()
+        services.AddControllersWithViews()
             .ConfigureApiBehaviorOptions(options =>
                 options.InvalidModelStateResponseFactory = CreateValidationProblem);
         services.AddProblemDetails(options =>
@@ -20,6 +20,7 @@ public static class ApiConfig
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddOpenApi();
         services.AddSingleton<AuthCookieWriter>();
+        services.AddAuthSecurity();
 
         // Cấu hình JWT của Auth (InfrastructureConfig.AddJwtBearer): bổ sung OnChallenge để 401 trả
         // ProblemDetails có code SESSION_EXPIRED, khớp docs/api-contract.md mục 2 và 3.

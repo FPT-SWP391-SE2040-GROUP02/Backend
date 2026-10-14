@@ -296,6 +296,9 @@ public sealed class VaultAssetFlowTests : IAsyncLifetime
                 {
                     ["ConnectionStrings:Default"] = connectionString,
                     ["AssetStorage:RootPath"] = storageRoot,
+                    ["CheckIn:Enabled"] = "false",
+                    ["Email:Smtp:UserName"] = "",
+                    ["Email:Smtp:Password"] = "",
                 }));
         }
     }
@@ -315,6 +318,9 @@ public sealed class VaultApiWithoutDatabaseTests
                 {
                     ["ConnectionStrings:Default"] =
                         "Server=127.0.0.1,1;Database=Unavailable;User Id=sa;Password=TestOnly123!;Encrypt=True;TrustServerCertificate=True;Connect Timeout=1",
+                    ["CheckIn:Enabled"] = "false",
+                    ["Email:Smtp:UserName"] = "",
+                    ["Email:Smtp:Password"] = "",
                 }));
         });
         using var client = factory.CreateClient();

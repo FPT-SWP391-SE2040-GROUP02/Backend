@@ -1,7 +1,7 @@
 # Thu API xac thuc theo docs/api-contract.md va SRS 3.15
 # Trinh duyet/REST Client tu dong luu va gui cookie lv_refresh giua cac request
 
-@api = http://localhost:5000/v1/auth
+@api = http://localhost:5000/api/v1/auth
 
 ### 1. Dang ky tai khoan moi (ROLE-01, AUTH-04) -> 202 Accepted (khong body)
 POST {{api}}/register
@@ -31,9 +31,16 @@ Content-Type: application/json
   "email": "an@gmail.com"
 }
 
+### Lấy proof trước login; lấy lại theo principal mới trước refresh/logout
+# @name csrf
+GET {{api}}/csrf
+
+@csrfToken = {{csrf.response.body.requestToken}}
+
 ### 4. Dang nhap -> 200 OK AuthSessionResponse + Set-Cookie lv_refresh
 # @name login
 POST {{api}}/login
+X-CSRF-Token: {{csrfToken}}
 Content-Type: application/json
 
 {
@@ -51,9 +58,11 @@ Authorization: Bearer {{accessToken}}
 
 ### 6. Lam moi phien (dung cookie lv_refresh) -> 200 OK AuthSessionResponse + cookie moi
 POST {{api}}/refresh
+X-CSRF-Token: {{csrfToken}}
 
 ### 7. Dang xuat -> 204 No Content + xoa cookie lv_refresh
 POST {{api}}/logout
+X-CSRF-Token: {{csrfToken}}
 Content-Type: application/json
 
 {
@@ -62,6 +71,7 @@ Content-Type: application/json
 
 ### 8. Thu dang nhap sai mat khau -> 401 INVALID_CREDENTIALS (attemptsRemaining giam dan)
 POST {{api}}/login
+X-CSRF-Token: {{csrfToken}}
 Content-Type: application/json
 
 {

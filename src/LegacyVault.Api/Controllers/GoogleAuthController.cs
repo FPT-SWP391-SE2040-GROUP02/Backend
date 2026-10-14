@@ -3,6 +3,7 @@ using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
 using LegacyVault.Infrastructure.Security;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -31,6 +32,8 @@ public sealed class GoogleAuthController : ControllerBase
     /// Trả 200 GoogleLoginResponse: signedIn = true (kèm cookie lv_refresh) hoặc signedIn = false (cần liên kết).
     /// </summary>
     [HttpPost("")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthRateLimitPolicies.Login)]
     [AllowAnonymous]
     public async Task<IActionResult> Login(GoogleLoginRequest request, CancellationToken ct)
     {
@@ -50,6 +53,8 @@ public sealed class GoogleAuthController : ControllerBase
     /// Trả 200 AuthSessionResponse kèm cookie lv_refresh.
     /// </summary>
     [HttpPost("link-confirm")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthRateLimitPolicies.Login)]
     [AllowAnonymous]
     public async Task<IActionResult> ConfirmLink(ConfirmGoogleLinkRequest request, CancellationToken ct)
     {

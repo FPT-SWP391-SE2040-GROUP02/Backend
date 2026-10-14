@@ -16,16 +16,8 @@ public static class ClientIpRange
     {
         var ip = context.Connection.RemoteIpAddress;
 
-        // Chạy sau reverse proxy thì IP thật nằm ở phần tử đầu của X-Forwarded-For.
-        var forwardedFor = context.Request.Headers["X-Forwarded-For"].ToString();
-        if (!string.IsNullOrWhiteSpace(forwardedFor))
-        {
-            var firstIp = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
-            if (IPAddress.TryParse(firstIp, out var parsedIp))
-            {
-                ip = parsedIp;
-            }
-        }
+        // Chỉ dùng IP do server xác định. Forwarded headers chỉ được áp dụng bởi middleware
+        // khi có trusted proxy đã cấu hình; không tin header do caller tự gửi.
 
         if (ip == null)
         {

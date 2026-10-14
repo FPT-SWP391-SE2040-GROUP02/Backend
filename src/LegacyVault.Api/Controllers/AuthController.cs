@@ -1,10 +1,10 @@
-using System.Net;
-using System.Net.Sockets;
 using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -29,6 +29,20 @@ public sealed class AuthController : ControllerBase
         _authService = authService;
         _registrationService = registrationService;
         _cookieWriter = cookieWriter;
+    }
+
+    /// <summary>Cấp proof antiforgery theo principal hiện tại; không trả auth secrets.</summary>
+    [HttpGet(AuthCsrfContract.TokenRoute)]
+    [AllowAnonymous]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult Csrf([FromServices] IAntiforgery antiforgery)
+    {
+        var tokens = antiforgery.GetAndStoreTokens(HttpContext);
+        if (tokens.RequestToken == null)
+        {
+            throw new InvalidOperationException("Không cấp được antiforgery proof.");
+        }
+        return Ok(new AuthCsrfTokenDto(tokens.RequestToken));
     }
 
     /// <summary>
@@ -72,10 +86,12 @@ public sealed class AuthController : ControllerBase
     /// Trả 200 AuthSessionResponse kèm Set-Cookie lv_refresh (api-contract §6.2).
     /// </summary>
     [HttpPost("login")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthRateLimitPolicies.Login)]
     [AllowAnonymous]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken ct)
     {
-        var ipRange = GetClientIpRange();
+        var ipRange = ClientIpRange.From(HttpContext);
         var result = await _authService.LoginAsync(request, ipRange, ct);
 
         _cookieWriter.Append(Response, result);
@@ -87,6 +103,8 @@ public sealed class AuthController : ControllerBase
     /// Trả 200 AuthSessionResponse kèm cookie mới (api-contract §6.2).
     /// </summary>
     [HttpPost("refresh")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthRateLimitPolicies.Refresh)]
     [AllowAnonymous]
     public async Task<IActionResult> Refresh(CancellationToken ct)
     {
@@ -109,9 +127,11 @@ public sealed class AuthController : ControllerBase
 
     /// <summary>
     /// POST /v1/auth/logout — Đăng xuất và xóa cookie lv_refresh.
-    /// Luôn trả 204 No Content (api-contract §6.2).
+    /// Trả 204 sau thu hồi; logout-all thiếu bằng chứng phiên trả 401.
     /// </summary>
     [HttpPost("logout")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthRateLimitPolicies.Logout)]
     [AllowAnonymous]
     public async Task<IActionResult> Logout(
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] LogoutRequest? request,
@@ -137,55 +157,4 @@ public sealed class AuthController : ControllerBase
         return Ok(user);
     }
 
-    private string GetClientIpRange()
-    {
-        var ip = HttpContext.Connection.RemoteIpAddress;
-
-        if (Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedValues))
-        {
-            var headerValue = forwardedValues.ToString();
-            if (!string.IsNullOrWhiteSpace(headerValue))
-            {
-                var firstIpStr = headerValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
-                if (IPAddress.TryParse(firstIpStr, out var parsedIp))
-                {
-                    ip = parsedIp;
-                }
-            }
-        }
-
-        if (ip == null)
-        {
-            return "unknown";
-        }
-
-        try
-        {
-            if (ip.IsIPv4MappedToIPv6)
-            {
-                ip = ip.MapToIPv4();
-            }
-
-            if (ip.AddressFamily == AddressFamily.InterNetwork)
-            {
-                var bytes = ip.GetAddressBytes();
-                return $"{bytes[0]}.{bytes[1]}.{bytes[2]}.0/24";
-            }
-
-            if (ip.AddressFamily == AddressFamily.InterNetworkV6)
-            {
-                var bytes = ip.GetAddressBytes();
-                var prefixBytes = new byte[16];
-                Array.Copy(bytes, prefixBytes, 8);
-                var subnet = new IPAddress(prefixBytes);
-                return $"{subnet}/64";
-            }
-        }
-        catch
-        {
-            // Tránh ngắt request khi parse IP
-        }
-
-        return "unknown";
-    }
 }
