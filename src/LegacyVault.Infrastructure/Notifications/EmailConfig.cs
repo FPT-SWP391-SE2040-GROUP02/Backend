@@ -1,0 +1,52 @@
+using LegacyVault.Application.Notifications;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+
+namespace LegacyVault.Infrastructure.Notifications;
+
+/// <summary>
+/// Đăng ký dịch vụ email. Có đủ Email:Smtp:UserName và Password thì gửi email thật qua Gmail;
+/// chưa cấu hình thì dùng bản chỉ ghi log để dev/test vẫn chạy được. Chọn lúc cần dùng, nên đăng ký này ghi đè
+/// các đăng ký IEmailSender/ICheckInReminderSender khác đặt trước nó.
+/// </summary>
+public static class EmailConfig
+{
+    public static IServiceCollection AddEmailServices(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<SmtpSettings>()
+            .Bind(configuration.GetSection(SmtpSettings.SectionName))
+            .Validate(settings => settings.FindError() == null,
+                "Cấu hình Email:Smtp không hợp lệ (Port 1–65535, SecureSocket đúng tên, FromAddress là email).")
+            .ValidateOnStart();
+        services.AddSingleton<SmtpMailSender>();
+        services.AddHostedService<EmailStartupLogger>();
+        services.AddSingleton<ICheckInReminderSender>(provider => ChooseReminderSender(provider));
+        services.AddSingleton<IEmailSender>(provider => ChooseVerificationSender(provider));
+        return services;
+    }
+
+    private static ICheckInReminderSender ChooseReminderSender(IServiceProvider provider)
+    {
+        if (IsConfigured(provider))
+        {
+            return ActivatorUtilities.CreateInstance<SmtpCheckInReminderSender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LogCheckInReminderSender>(provider);
+    }
+
+    private static IEmailSender ChooseVerificationSender(IServiceProvider provider)
+    {
+        if (IsConfigured(provider))
+        {
+            return ActivatorUtilities.CreateInstance<SmtpEmailSender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<DevEmailSender>(provider);
+    }
+
+    private static bool IsConfigured(IServiceProvider provider)
+    {
+        return provider.GetRequiredService<IOptions<SmtpSettings>>().Value.IsConfigured;
+    }
+}

@@ -1,0 +1,47 @@
+# Thử điểm danh (deadman switch) — chỉ Development.
+#
+# Chuẩn bị giống http/containers.http: chạy migration, chạy API (profile http), tạo tài khoản bằng http/auth.http
+# rồi tạo kho bằng POST /vaults.
+#
+# Chưa có API "kích hoạt kế hoạch", nên để thử cần đặt kế hoạch sang ACTIVE bằng SQL (SSMS), thay <vaultId>:
+#   UPDATE HandoverPlans SET Status = 'Active' WHERE VaultId = '<vaultId>';
+# Sau đó POST /check-ins lần đầu sẽ mở kỳ điểm danh đầu tiên.
+#
+# Muốn xem job nền chuyển trạng thái mà không chờ 30 ngày, kéo lùi hạn của kỳ bằng SQL (thay <planId>):
+#   UPDATE CheckInPeriods SET DueAt = DATEADD(HOUR, -1, SYSDATETIMEOFFSET()) WHERE PlanId = '<planId>' AND ClosedAt IS NULL;
+# Job quét mỗi 60 giây (CheckIn:PollSeconds) và ghi log "[NHẮC ĐIỂM DANH]" ở console của API.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập — lấy access token
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Trạng thái điểm danh (NOT_STARTED khi kế hoạch còn DRAFT)
+GET {{baseUrl}}/check-ins/me?pageIndex=1&pageSize=10
+Authorization: Bearer {{token}}
+
+### Điểm danh (409 CHECKIN_NOT_ALLOWED nếu kế hoạch còn DRAFT; bấm lặp trong 60 giây không mở kỳ mới)
+POST {{baseUrl}}/check-ins
+Authorization: Bearer {{token}}
+
+### Đổi chu kỳ 60 ngày, chờ 14 ngày — điền etag lấy từ settings.etag của response GET
+# Đang có kỳ chạy thì chỉ áp dụng từ kỳ sau (xem pendingCycleDays).
+PATCH {{baseUrl}}/vaults/me/check-in-settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "\"0\"", "cycleDays": 60, "graceDays": 14 }
+
+### Giá trị sai → 400 VALIDATION_ERROR (chu kỳ chỉ nhận 30/60/90, chờ chỉ nhận 7/14/30)
+PATCH {{baseUrl}}/vaults/me/check-in-settings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "\"0\"", "cycleDays": 45 }

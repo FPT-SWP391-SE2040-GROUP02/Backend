@@ -30,6 +30,7 @@ public static class PlanRules
     {
         plan.Status = PlanStatus.Draft;
         plan.UpdatedAt = now;
-        // TODO: dừng lịch điểm danh và chuyển Executor sang SUSPENDED khi có module điểm danh/Executor (§11.2).
+        // Lịch điểm danh được dừng bởi người gọi qua ICheckInScheduler.StopAsync (ContainerService).
+        // TODO: chuyển Executor sang SUSPENDED khi có module Executor (§11.2).
     }
 }

@@ -85,6 +85,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Jwt:Audience"] = "LegacyVault.Tests";
             settings["Jwt:SigningKey"] = "LegacyVault_TestOnly_SigningKey_AtLeast32Bytes!";
             settings["Jwt:AccessTokenMinutes"] = "15";
+            // Tắt job nền điểm danh: test tự gọi ICheckInJob khi cần, tránh job chạy xen vào dữ liệu test.
+            settings["CheckIn:Enabled"] = "false";
+            // Môi trường Development nạp user-secrets của người chạy test: ép trống thông tin Gmail để test
+            // KHÔNG BAO GIỜ gửi thư thật (mặc định dùng bản chỉ ghi log).
+            settings["Email:Smtp:UserName"] = "";
+            settings["Email:Smtp:Password"] = "";
             configuration.AddInMemoryCollection(settings);
         });
     }

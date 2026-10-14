@@ -24,6 +24,7 @@ public sealed class ContainerService : IContainerService
     private readonly IContainerRepository containerRepository;
     private readonly IAssetRepository assetRepository;
     private readonly IBeneficiaryRepository beneficiaryRepository;
+    private readonly ICheckInScheduler checkInScheduler;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -33,6 +34,7 @@ public sealed class ContainerService : IContainerService
         IContainerRepository containerRepository,
         IAssetRepository assetRepository,
         IBeneficiaryRepository beneficiaryRepository,
+        ICheckInScheduler checkInScheduler,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -41,6 +43,7 @@ public sealed class ContainerService : IContainerService
         this.containerRepository = containerRepository;
         this.assetRepository = assetRepository;
         this.beneficiaryRepository = beneficiaryRepository;
+        this.checkInScheduler = checkInScheduler;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -486,6 +489,8 @@ public sealed class ContainerService : IContainerService
                 "Thao tác này làm kế hoạch không còn gói sẵn sàng và kế hoạch sẽ trở về bản nháp. Vui lòng xác nhận.");
         }
         PlanRules.Deactivate(vault.Plan, now);
+        // SETUP-16: kế hoạch về DRAFT thì lịch điểm danh dừng; người gọi lưu cùng giao dịch.
+        await checkInScheduler.StopAsync(vault.Plan, ct);
     }
 
     /// <summary>

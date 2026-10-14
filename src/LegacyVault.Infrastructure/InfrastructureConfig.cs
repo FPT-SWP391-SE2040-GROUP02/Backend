@@ -5,6 +5,7 @@ using LegacyVault.Application.Security;
 using LegacyVault.Application.Storage;
 using LegacyVault.Infrastructure.Data;
 using LegacyVault.Infrastructure.Health;
+using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
 using LegacyVault.Infrastructure.Security;
@@ -49,6 +50,7 @@ public static class InfrastructureConfig
         services.AddScoped<IContainerRepository, ContainerRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
+        services.AddScoped<ICheckInRepository, CheckInRepository>();
 
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()
@@ -76,6 +78,12 @@ public static class InfrastructureConfig
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddSingleton<IEmailSender, DevEmailSender>();
         services.AddSingleton<IAppUrlProvider, AppUrlProvider>();
+
+        // Job nền điểm danh: quét DB theo chu kỳ, gửi nhắc qua ICheckInReminderSender (bản dev chỉ ghi log).
+        services.Configure<CheckInJobSettings>(configuration.GetSection(CheckInJobSettings.SectionName));
+        // Dịch vụ email: Gmail qua MailKit khi có cấu hình Email:Smtp, không thì chỉ ghi log (xem EmailConfig).
+        services.AddEmailServices(configuration);
+        services.AddHostedService<CheckInMonitor>();
 
         // JWT Bearer Authentication
         services.AddOptions<JwtSettings>()

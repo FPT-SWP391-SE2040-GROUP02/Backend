@@ -73,6 +73,7 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
 | 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
 | 409 | `EDIT_CONFLICT` | `etag` đã cũ: dữ liệu bị sửa ở tab/máy khác. FE tải lại rồi cho sửa tiếp | |
+| 409 | `CHECKIN_NOT_ALLOWED` | Điểm danh khi kế hoạch chưa kích hoạt (`DRAFT`) hoặc đã sang chứng tử/bàn giao/đóng | `planStatus` |
 | 409 | `VAULT_NOT_EDITABLE` | Kho không cho sửa lúc này | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `SERVICE_READ_ONLY` |
 | 409 | `CONTAINER_LIMIT_EXCEEDED` | Đủ 50 gói chưa lưu trữ | `maxContainers` |
 | 409 | `CONTAINER_ARCHIVED` | Sửa gói đã lưu trữ | |
@@ -433,6 +434,40 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - BE không gửi thông báo, không tạo tài khoản cho người nhận.
 
 ---
+
+### 6.9. Điểm danh (deadman switch)
+
+Điểm danh chỉ để phát hiện việc cần kiểm tra, **không** chứng minh Owner đã mất (DMS-03). Đăng nhập hay thanh toán không phải điểm danh (DMS-02). Cần đăng nhập (Bearer); kho lấy theo người trong token.
+
+| Method | URL | Quyền | Body / Query | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/v1/check-ins/me` | Đăng nhập | Query phân trang (`pageIndex`, `pageSize`) cho `history` | 200 `CheckInStatusResponse` | 401, 404 `VAULT_NOT_FOUND` |
+| POST | `/v1/check-ins` | Đăng nhập | Không có body | 200 `CheckInStatusResponse` | 401, 404, 409 `CHECKIN_NOT_ALLOWED` / `EDIT_CONFLICT` |
+| PATCH | `/v1/vaults/me/check-in-settings` | Đăng nhập | `{ etag, cycleDays?, graceDays? }` | 200 `CheckInStatusResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
+
+```json
+// CheckInStatusResponse
+{
+  "status": "ACTIVE",
+  "planStatus": "ACTIVE",
+  "serverTime": "2026-10-14T08:00:00+00:00",
+  "lastCheckInAt": "2026-10-01T08:00:00+00:00",
+  "nextCheckInDueAt": "2026-10-31T08:00:00+00:00",
+  "graceEndsAt": "2026-11-07T08:00:00+00:00",
+  "settings": { "cycleDays": 30, "graceDays": 7, "pendingCycleDays": null, "pendingGraceDays": null, "etag": "\"0\"" },
+  "history": {
+    "items": [ { "sequence": 2, "startedAt": "...", "dueAt": "...", "graceEndsAt": "...", "checkedInAt": null, "overdueAt": null, "awaitingCheckAt": null } ],
+    "totalCount": 2, "pageIndex": 1, "pageSize": 10, "totalPages": 1, "hasPreviousPage": false, "hasNextPage": false
+  }
+}
+```
+
+- `status` tính theo giờ server nên luôn đúng dù job nền chạy chậm: `NOT_STARTED` (kế hoạch chưa kích hoạt) | `ACTIVE` | `CHECKIN_OVERDUE` (quá hạn, đang trong thời gian chờ) | `AWAITING_CHECK` (hết thời gian chờ, cần Executor kiểm tra) | `PAUSED` (kế hoạch đã sang giai đoạn chứng tử/bàn giao hoặc bị chặn). `planStatus` là trạng thái kế hoạch đang lưu trong DB (có thể chậm vài chục giây so với `status`).
+- FE đếm ngược theo `serverTime`, **không** dùng giờ trình duyệt (TIME-01). `history` xếp kỳ mới nhất trước.
+- **POST /check-ins** đóng kỳ hiện tại, mở kỳ mới và đưa kế hoạch về `ACTIVE`; cho phép khi kế hoạch `ACTIVE`/`CHECKIN_OVERDUE`/`AWAITING_CHECK`, kể cả khi dịch vụ đang ân hạn. Bấm lặp trong **60 giây** thì trả trạng thái hiện tại, không mở kỳ mới. Hai yêu cầu chạy song song: bên thua nhận `409 EDIT_CONFLICT` (gọi lại `GET`). Kế hoạch `DRAFT` hoặc đã sang chứng tử/bàn giao → `409 CHECKIN_NOT_ALLOWED` kèm trường phụ `planStatus`.
+- **PATCH check-in-settings**: `cycleDays` ∈ {30, 60, 90}, `graceDays` ∈ {7, 14, 30}; phải gửi ít nhất một trong hai; `etag` lấy từ `settings.etag`. Đang có kỳ chạy thì lựa chọn mới nằm ở `pendingCycleDays`/`pendingGraceDays` và **chỉ áp dụng từ kỳ sau** (DMS-01). Kế hoạch đã sang chứng tử/bàn giao/đóng → `409 VAULT_NOT_EDITABLE` (`reason: PLAN_LOCKED`).
+- Nhắc điểm danh gửi 4 mốc, mỗi mốc một lần: trước hạn 7 ngày, trước hạn 1 ngày, khi bắt đầu thời gian chờ, khi còn 2 ngày chờ (DMS-06).
+- Chưa có API kích hoạt kế hoạch nên kỳ đầu tiên được mở khi Owner bấm "Điểm danh" lần đầu trên kế hoạch đang chạy; khi có chức năng kích hoạt sẽ gọi `ICheckInScheduler.StartFirstPeriodAsync`.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 
