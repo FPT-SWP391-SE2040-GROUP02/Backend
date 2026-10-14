@@ -399,6 +399,53 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("Designations", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.EkycVerification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CitizenIdLast4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(4)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DocumentToken")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTimeOffset?>("DocumentTokenExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<double?>("FaceMatchScore")
+                        .HasColumnType("float");
+
+                    b.Property<bool?>("SpoofCheckPassed")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("EkycVerifications", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.EmailVerificationToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -891,6 +938,17 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Beneficiary");
 
                     b.Navigation("Container");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.EkycVerification", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.EmailVerificationToken", b =>

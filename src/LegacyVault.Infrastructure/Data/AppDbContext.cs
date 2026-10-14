@@ -44,6 +44,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<CheckInPeriod> CheckInPeriods => Set<CheckInPeriod>();
     public DbSet<CheckInReminder> CheckInReminders => Set<CheckInReminder>();
 
+    // Xác minh danh tính (eKYC)
+    public DbSet<EkycVerification> EkycVerifications => Set<EkycVerification>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

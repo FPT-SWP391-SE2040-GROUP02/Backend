@@ -106,6 +106,10 @@ public sealed class GlobalExceptionHandler(
         {
             status = StatusCodes.Status413PayloadTooLarge;
         }
+        else if (exception.Type == AppErrorType.ServiceUnavailable)
+        {
+            status = StatusCodes.Status503ServiceUnavailable;
+        }
         else
         {
             status = StatusCodes.Status500InternalServerError;

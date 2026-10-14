@@ -1,0 +1,47 @@
+# Thử eKYC — chỉ Development.
+#
+# Chuẩn bị:
+#  1. Chạy dịch vụ eKYC (ekyc-prototype-v2\START.cmd) ở http://127.0.0.1:8879. Dịch vụ hiện chỉ nhận Host
+#     localhost nên chạy cùng máy với API. Địa chỉ cấu hình ở Ekyc:BaseUrl (appsettings.Development.json).
+#  2. Chạy migration, chạy API (profile http), đăng nhập bằng http/auth.http.
+# Ảnh thử: thay đường dẫn sau dấu "<" bằng ảnh trên máy. Không commit ảnh CCCD thật.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập — lấy access token
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Kết quả eKYC hiện tại (chưa làm → NOT_STARTED)
+GET {{baseUrl}}/ekyc/me
+Authorization: Bearer {{token}}
+
+### Gửi mặt trước CCCD
+POST {{baseUrl}}/ekyc/document
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="file"; filename="front.jpg"
+Content-Type: image/jpeg
+
+< C:\duong-dan\mat-truoc.jpg
+--lv--
+
+### Gửi selfie để so khớp (gọi sau khi canMatchFace = true, trong 30 phút)
+POST {{baseUrl}}/ekyc/face-match
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="file"; filename="selfie.jpg"
+Content-Type: image/jpeg
+
+< C:\duong-dan\selfie.jpg
+--lv--
