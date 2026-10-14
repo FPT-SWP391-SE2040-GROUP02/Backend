@@ -23,7 +23,7 @@ public sealed partial class AssetService : IAssetService
     private const int MaxNameLength = 200;
     private const int MaxFileNameLength = 255;
     private const int MaxContentTypeLength = 100;
-    private const string DefaultContentType = "application/octet-stream";
+    private const string DefaultContentType = "application/octet-stream";       
     private const string TextContentType = "text/plain; charset=utf-8";
     private const string DefaultSortBy = "createdAt";
 

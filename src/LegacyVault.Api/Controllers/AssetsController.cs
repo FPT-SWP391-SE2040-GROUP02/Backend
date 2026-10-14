@@ -15,7 +15,7 @@ namespace LegacyVault.Api.Controllers;
 public sealed class AssetsController(IAssetService assetService) : ControllerBase
 {
     /// <summary>Phần dư cho các field khác và boundary của multipart, ngoài nội dung tệp.</summary>
-    private const long MultipartOverheadBytes = 1_048_576;
+    private const long MultipartOverheadBytes = 1_048_576;      
     private const long MaxRequestBytes = StorageLimits.MaxUploadBytes + MultipartOverheadBytes;
 
     /// <summary>Tải lên một tệp thành tài sản mới (multipart/form-data).</summary>
