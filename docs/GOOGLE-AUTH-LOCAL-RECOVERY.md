@@ -52,3 +52,11 @@ dotnet run --project src/LegacyVault.Api --launch-profile google-dev
 ```
 
 Only one API process may listen on port 5000. This profile requires the local Windows SQL Server instance on port 1433 and the provisioned database. The unchanged `http` profile targets the Docker setup; it does not automatically select this new database. The usual Docker database must separately have the official schema before using Google/Auth there.
+
+### Debugger pauses that look like FE network failures
+
+For browser E2E, select `google-dev` and use **Ctrl+F5 / Start Without Debugging**, or the terminal command above. Stop the existing host before starting another on port 5000.
+
+Visual Studio can pause on a thrown `LegacyVault.Application.Exceptions.AppException` before the global exception handler runs. While paused, even `/health/live` can time out. An account without a vault legitimately produces `404 VAULT_NOT_FOUND`; adding an asset to a Free container produces `403 PAID_TIER_REQUIRED`. These responses must reach the FE rather than being replaced with successful empty results.
+
+If debugging, continue with F5 and adjust the debugger's **Break when this exception type is thrown** setting for this application exception as needed. This changes debugger behavior only; keep application authorization, exception middleware and HTTP status codes intact. A FE request that already timed out needs a manual retry after the host resumes; do not automatically retry mutations.

@@ -56,7 +56,8 @@ public static class ApiConfig
         });
         if (!written)
         {
-            await httpContext.Response.WriteAsJsonAsync(problem);
+            await httpContext.Response.WriteAsJsonAsync(problem, options: null,
+                contentType: "application/problem+json");
         }
     }
 

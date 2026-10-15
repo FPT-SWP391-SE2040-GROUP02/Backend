@@ -53,6 +53,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 ```
 
 - `500 INTERNAL_ERROR` có `status`, `title` chung, `code`, `traceId`; không trả exception/stack trace. Gửi `traceId` cho BE khi báo lỗi.
+- Global exception handler giữ `application/problem+json` cả ở nhánh ghi JSON dự phòng khi Accept không được writer hỗ trợ. `BadHttpRequestException` với status 400 trả `VALIDATION_ERROR`, status 413 trả `FILE_TOO_LARGE`; không đưa thông báo exception request vào response.
 - Auth CSRF: **400** khi proof thiếu/sai/khác principal. Rate limit: **429**, `Retry-After` tính bằng giây khi server cấp được thời gian chờ; không giả định response có JSON/code và không tự retry POST.
 
 ### Bảng mã lỗi

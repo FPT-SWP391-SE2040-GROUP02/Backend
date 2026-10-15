@@ -36,6 +36,12 @@ public sealed class GlobalExceptionHandler(
             problem = Problem(StatusCodes.Status413PayloadTooLarge, ErrorCode.FileTooLarge,
                 "Tệp vượt quá dung lượng cho phép.");
         }
+        else if (exception is BadHttpRequestException invalidRequest
+            && invalidRequest.StatusCode == StatusCodes.Status400BadRequest)
+        {
+            problem = Problem(StatusCodes.Status400BadRequest, ErrorCode.ValidationError,
+                "Dữ liệu gửi lên không hợp lệ.");
+        }
         else if (exception is DbUpdateConcurrencyException)
         {
             // Request khác vừa sửa cùng bản ghi (UPDATE ... WHERE UpdatedAt = giá trị cũ không khớp dòng nào).
@@ -59,7 +65,8 @@ public sealed class GlobalExceptionHandler(
             ProblemDetails = problem,
         }))
         {
-            await context.Response.WriteAsJsonAsync(problem, cancellationToken);
+            await context.Response.WriteAsJsonAsync(problem, options: null,
+                contentType: "application/problem+json", cancellationToken: cancellationToken);
         }
         return true;
     }
