@@ -37,6 +37,7 @@ public sealed partial class AssetService : IAssetService
     private readonly IVaultRepository vaultRepository;
     private readonly IAssetRepository assetRepository;
     private readonly IAssetContentStore contentStore;
+    private readonly IAuditLogRepository auditLogRepository;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -45,6 +46,7 @@ public sealed partial class AssetService : IAssetService
         IVaultRepository vaultRepository,
         IAssetRepository assetRepository,
         IAssetContentStore contentStore,
+        IAuditLogRepository auditLogRepository,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -52,6 +54,7 @@ public sealed partial class AssetService : IAssetService
         this.vaultRepository = vaultRepository;
         this.assetRepository = assetRepository;
         this.contentStore = contentStore;
+        this.auditLogRepository = auditLogRepository;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -195,6 +198,10 @@ public sealed partial class AssetService : IAssetService
         asset.Versions.Add(version);
 
         assetRepository.Add(asset);
+        // SEC-13: lưu cùng tài sản; INSERT lỗi thì nhật ký cũng không ghi. Không ghi tên tài sản hay tên tệp (SEC-07).
+        auditLogRepository.Add(AuditRules.OwnerAction(
+            vault.Id, vault.OwnerId, AuditAction.AssetCreated, AuditTargetType.Asset, asset.Id,
+            asset.CurrentVersionNumber, now));
         try
         {
             await unitOfWork.SaveChangesAsync(ct);

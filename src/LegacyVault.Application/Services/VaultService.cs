@@ -14,6 +14,7 @@ public sealed class VaultService(
     IUserRepository userRepository,
     IVaultRepository vaultRepository,
     IContainerRepository containerRepository,
+    IAuditLogRepository auditLogRepository,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider) : IVaultService
 {
@@ -47,6 +48,10 @@ public sealed class VaultService(
         }
 
         var vault = BuildNewVault(userId, request);
+        // SEC-13: ghi nhật ký trong cùng lần lưu với kho. Bên thua (unique OwnerId) không lưu lại lần nào nữa
+        // trong request này, nên dòng nhật ký của bên thua không bao giờ được ghi.
+        auditLogRepository.Add(AuditRules.OwnerAction(
+            vault.Id, userId, AuditAction.VaultCreated, AuditTargetType.Vault, vault.Id, null, vault.CreatedAt));
         if (!await vaultRepository.TryAddAsync(vault, ct))
         {
             // Request khác (tab khác, bấm lặp, retry) vừa tạo kho trước: trả lại kho đó (AC-89).
@@ -100,6 +105,8 @@ public sealed class VaultService(
 
         // Không tăng Plan.ConfigVersion: tên/mô tả kho không thuộc cấu hình bàn giao.
         vault.UpdatedAt = timeProvider.GetUtcNow();
+        auditLogRepository.Add(AuditRules.OwnerAction(
+            vault.Id, userId, AuditAction.VaultUpdated, AuditTargetType.Vault, vault.Id, null, vault.UpdatedAt.Value));
         await unitOfWork.SaveChangesAsync(ct);
         return await ToResponseAsync(vault, ct);
     }
