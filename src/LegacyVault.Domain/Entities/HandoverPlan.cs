@@ -29,6 +29,10 @@ public class HandoverPlan
     /// <summary>Lần kích hoạt gần nhất; null khi chưa từng kích hoạt.</summary>
     public DateTimeOffset? ActivatedAt { get; set; }
 
+    /// <summary>Version of the activation warning acknowledged by the Owner, never inferred from login.</summary>
+    public string? ActivationPolicyVersion { get; set; }
+    public DateTimeOffset? ActivationPolicyAcknowledgedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }

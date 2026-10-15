@@ -826,6 +826,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("AcceptedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("AcceptedScopeVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<Guid?>("BeneficiaryId")
                         .HasColumnType("uniqueidentifier");
 
@@ -833,6 +837,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("InvitationSentAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("InvitationTokenHash")
@@ -1059,6 +1066,13 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<DateTimeOffset?>("ActivatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ActivationPolicyAcknowledgedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ActivationPolicyVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("ConfigVersion")
                         .HasColumnType("int");
@@ -1701,7 +1715,7 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("LegacyVault.Domain.Entities.Vault", "Vault")
-                        .WithMany()
+                        .WithMany("Executors")
                         .HasForeignKey("VaultId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1847,6 +1861,8 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Navigation("Entitlement")
                         .IsRequired();
+
+                    b.Navigation("Executors");
 
                     b.Navigation("Plan")
                         .IsRequired();

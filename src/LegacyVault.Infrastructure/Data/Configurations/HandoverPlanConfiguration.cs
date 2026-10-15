@@ -11,6 +11,7 @@ public sealed class HandoverPlanConfiguration : IEntityTypeConfiguration<Handove
         builder.ToTable("HandoverPlans");
 
         builder.HasKey(p => p.Id);
+        builder.Property(p => p.ActivationPolicyVersion).HasMaxLength(64);
 
         builder.Property(p => p.Status)
             .IsRequired()

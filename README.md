@@ -216,7 +216,7 @@ dotnet ef database update --project src/LegacyVault.Infrastructure --startup-pro
 
 Nhớ xóa luôn thư mục `src/LegacyVault.Api/App_Data/asset-content` vì nội dung trong đó không còn bản ghi tương ứng.
 
-Chưa có: tài khoản demo, chỉ định người nhận (gói hiện luôn DRAFT), tải về/sửa/xóa nội dung tài sản, eKYC, thanh toán, kích hoạt kế hoạch (nối điểm danh), Executor, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
+Đoạn mô tả môi trường tối thiểu ở trên là checkpoint cũ, không phản ánh toàn bộ API hiện tại. Executor invite/resend/respond và kích hoạt kế hoạch nối điểm danh đã triển khai ngày 15/10/2026; xem [contract và giới hạn nghiệm thu](docs/PLAN-SETUP-API.md) cùng [API contract](docs/api-contract.md). Chạy được môi trường không đồng nghĩa hoàn thành SRS.
 
 ## 11. Gửi email thật bằng Gmail (MailKit SMTP)
 

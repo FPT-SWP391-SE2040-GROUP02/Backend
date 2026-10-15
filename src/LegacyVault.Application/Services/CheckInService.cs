@@ -76,7 +76,7 @@ public sealed class CheckInService : ICheckInService
             openPeriod.ClosedAt = now;
         }
 
-        ApplyPendingSettings(schedule, now);
+        CheckInRules.ApplyPendingSettings(schedule, now);
         schedule.LastCheckInAt = now;
 
         int lastSequence = await checkInRepository.GetMaxSequenceAsync(plan.Id, ct);
@@ -194,28 +194,6 @@ public sealed class CheckInService : ICheckInService
             return VaultNotEditableReason.PlanLocked;
         }
         return null;
-    }
-
-    /// <summary>DMS-01: lựa chọn chờ áp dụng được dùng khi mở kỳ mới, rồi xóa.</summary>
-    private static void ApplyPendingSettings(CheckInSchedule schedule, DateTimeOffset now)
-    {
-        bool changed = false;
-        if (schedule.PendingCycleDays != null)
-        {
-            schedule.CycleDays = schedule.PendingCycleDays.Value;
-            schedule.PendingCycleDays = null;
-            changed = true;
-        }
-        if (schedule.PendingGraceDays != null)
-        {
-            schedule.GraceDays = schedule.PendingGraceDays.Value;
-            schedule.PendingGraceDays = null;
-            changed = true;
-        }
-        if (changed)
-        {
-            schedule.UpdatedAt = now;
-        }
     }
 
     private async Task<Vault> LoadMyVaultAsync(CancellationToken ct)

@@ -488,7 +488,7 @@ public sealed class ContainerService : IContainerService
             throw new AppException(AppErrorType.Conflict, ErrorCode.PlanDeactivationConfirmationRequired,
                 "Thao tác này làm kế hoạch không còn gói sẵn sàng và kế hoạch sẽ trở về bản nháp. Vui lòng xác nhận.");
         }
-        PlanRules.Deactivate(vault.Plan, now);
+        PlanRules.Deactivate(vault, now);
         // SETUP-16: kế hoạch về DRAFT thì lịch điểm danh dừng; người gọi lưu cùng giao dịch.
         await checkInScheduler.StopAsync(vault.Plan, ct);
     }
