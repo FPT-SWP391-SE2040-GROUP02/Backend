@@ -9,4 +9,6 @@ public enum DeathCaseNoticeStatus
     Delivered = 1,
     /// <summary>Thử đủ 5 lần vẫn lỗi; đồng hồ 72 giờ chưa chạy. TODO: tạo sự cố F4.</summary>
     Failed = 2,
+    /// <summary>DEATH-12: hồ sơ bị từ chối trước khi gửi được thư; job bỏ qua.</summary>
+    Cancelled = 3,
 }

@@ -421,6 +421,17 @@ public sealed class DeathCaseService : IDeathCaseService
         {
             await AssignVerifierAsync(deathCase, vault, context.UserId, now, ct);
         }
+        else if (!isFirstSubmit)
+        {
+            // ASSIGN-04: Executor gửi bản mới thì hạn xét của phân công đang hiệu lực tính lại từ lúc gửi (giữ AssignedAt).
+            foreach (DeathCaseAssignment assignment in deathCase.Assignments)
+            {
+                if (assignment.EndedAt == null)
+                {
+                    assignment.DueAt = now.AddHours(DeathCaseRules.ReviewDueHours);
+                }
+            }
+        }
 
         deathCase.UpdatedAt = now;
         try
