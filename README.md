@@ -232,3 +232,22 @@ dotnet user-secrets set "Email:Smtp:Password" "mat-khau-ung-dung-16-ky-tu" --pro
 
 Server thật đặt biến môi trường `Email__Smtp__UserName` và `Email__Smtp__Password` (không viết vào `appsettings.json`, không commit). Các giá trị không bí mật (`Host`, `Port`, `SecureSocket`, `FromName`, `FromAddress`) nằm ở mục `Email:Smtp` của `appsettings.json`. Gmail chỉ cho gửi từ chính tài khoản đã đăng nhập (hoặc bí danh đã xác minh), nên để trống `FromAddress`. Cấu hình sai (cổng, `SecureSocket`, địa chỉ gửi) thì API không khởi động. Gmail giới hạn khoảng 500 thư/ngày cho tài khoản thường.
 
+
+## 12. Lưu nội dung tài sản trên Cloudflare R2
+
+Mặc định (`AssetStorage:Provider` = `Local`) nội dung đã mã hóa nằm trên đĩa server, ở thư mục `AssetStorage:RootPath`. Muốn lưu lên bucket R2 thì đổi `Provider` thành `R2`. R2 chỉ giữ dữ liệu đã mã hóa; KEK vẫn nằm ở server, nên không có KEK thì không đọc được nội dung (SEC-02, SEC-11).
+
+1. Tạo bucket **private** (không bật truy cập công khai) và một API token R2 có quyền đọc/ghi object trên bucket đó.
+2. Đặt cấu hình **bằng user-secrets**, không viết vào `appsettings*.json`:
+
+```powershell
+dotnet user-secrets set "AssetStorage:Provider" "R2" --project src/LegacyVault.Api
+dotnet user-secrets set "AssetStorage:R2:AccountId" "<account-id>" --project src/LegacyVault.Api
+dotnet user-secrets set "AssetStorage:R2:BucketName" "<ten-bucket>" --project src/LegacyVault.Api
+dotnet user-secrets set "AssetStorage:R2:AccessKeyId" "<access-key-id>" --project src/LegacyVault.Api
+dotnet user-secrets set "AssetStorage:R2:SecretAccessKey" "<secret-access-key>" --project src/LegacyVault.Api
+```
+
+3. Khởi động lại API. Thiếu một trong bốn giá trị `R2` thì API không khởi động.
+
+Server thật đặt biến môi trường `AssetStorage__Provider`, `AssetStorage__R2__AccountId`... Đổi `Provider` không chuyển dữ liệu cũ: tài sản đã lưu trên đĩa sẽ không đọc được khi chạy với R2, và ngược lại. Test tự động luôn ép `Provider` = `Local`, nên `dotnet test` không ghi vào bucket thật dù máy có user-secrets R2.

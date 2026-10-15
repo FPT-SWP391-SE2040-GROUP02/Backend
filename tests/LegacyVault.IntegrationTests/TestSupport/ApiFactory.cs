@@ -80,6 +80,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             Dictionary<string, string?> settings = new Dictionary<string, string?>();
             settings["ConnectionStrings:Default"] = connectionString;
             settings["AssetStorage:RootPath"] = StorageRoot;
+            // user-secrets của người chạy test có thể đặt Provider = R2: ép lưu trên đĩa để test KHÔNG BAO GIỜ ghi vào bucket thật.
+            settings["AssetStorage:Provider"] = "Local";
             // Jwt riêng cho test (không phụ thuộc appsettings.Development.json); token tạo bằng ITokenService của chính factory.
             settings["Jwt:Issuer"] = "LegacyVault.Tests";
             settings["Jwt:Audience"] = "LegacyVault.Tests";
