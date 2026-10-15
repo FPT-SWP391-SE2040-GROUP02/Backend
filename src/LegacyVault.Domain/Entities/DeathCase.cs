@@ -54,7 +54,7 @@ public class DeathCase
     /// <summary>Lúc gửi lần đầu (khóa kế hoạch, DEATH-12 phần mở); null khi còn Draft.</summary>
     public DateTimeOffset? FirstSubmittedAt { get; set; }
 
-    /// <summary>Lúc hồ sơ kết thúc (duyệt/từ chối). Đặt ở nhánh B.</summary>
+    /// <summary>Lúc hồ sơ kết thúc: đặt khi Verifier duyệt/từ chối; phân công vẫn giữ.</summary>
     public DateTimeOffset? ClosedAt { get; set; }
 
     /// <summary>Đổi sau mỗi lần sửa; concurrency token và etag. Null khi mới tạo → etag "0".</summary>
@@ -67,4 +67,6 @@ public class DeathCase
     public List<DeathCaseNotice> Notices { get; set; } = new List<DeathCaseNotice>();
 
     public List<DeathCaseAssignment> Assignments { get; set; } = new List<DeathCaseAssignment>();
+
+    public List<DeathCaseDecision> Decisions { get; set; } = new List<DeathCaseDecision>();
 }

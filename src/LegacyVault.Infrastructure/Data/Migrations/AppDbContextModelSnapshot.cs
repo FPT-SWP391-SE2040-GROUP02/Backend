@@ -480,6 +480,56 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("DeathCaseAssignments", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.DeathCaseDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("RequestedParts")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("VerifierUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VersionNo")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.HasIndex("VerifierUserId");
+
+                    b.HasIndex(new[] { "CaseId" }, "IX_DeathCaseDecisions_CaseId");
+
+                    b.HasIndex(new[] { "CaseId" }, "UX_DeathCaseDecisions_FinalPerCase")
+                        .IsUnique()
+                        .HasFilter("[Kind] IN ('Rejected','Approved')");
+
+                    b.ToTable("DeathCaseDecisions", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.DeathCaseFile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1613,6 +1663,27 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.DeathCaseDecision", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.DeathCaseAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LegacyVault.Domain.Entities.DeathCase", null)
+                        .WithMany("Decisions")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LegacyVault.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("VerifierUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.DeathCaseFile", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.DeathCaseVersion", null)
@@ -1835,6 +1906,8 @@ namespace LegacyVault.Infrastructure.Data.Migrations
             modelBuilder.Entity("LegacyVault.Domain.Entities.DeathCase", b =>
                 {
                     b.Navigation("Assignments");
+
+                    b.Navigation("Decisions");
 
                     b.Navigation("Flags");
 

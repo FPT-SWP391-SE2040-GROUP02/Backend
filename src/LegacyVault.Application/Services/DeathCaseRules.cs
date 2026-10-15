@@ -31,6 +31,16 @@ public static class DeathCaseRules
     public const string MissingIssuedBy = "ISSUED_BY";
     public const string MissingFiles = "FILES";
 
+    /// <summary>
+    /// DEATH-01: mọi mã phần hồ sơ có thể thiếu, đúng thứ tự GetMissingRequirements trả về.
+    /// Verifier chỉ được yêu cầu bổ sung các mã này.
+    /// </summary>
+    public static readonly string[] AllRequirementCodes =
+    {
+        MissingOwnerFullName, MissingOwnerCitizenId, MissingDateOfDeath,
+        MissingCertificateNumber, MissingIssuedOn, MissingIssuedBy, MissingFiles,
+    };
+
     /// <summary>Ngày trên giấy tờ tính theo giờ Việt Nam (UTC+07:00).</summary>
     public static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
