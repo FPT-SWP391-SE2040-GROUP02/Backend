@@ -1,0 +1,40 @@
+# Thử nhật ký hoạt động của kho (docs/api-contract.md mục 6.13) — chỉ Development.
+#
+# Chuẩn bị giống http/containers.http: chạy migration (có AddAuditLogs), chạy API (profile http),
+# tạo tài khoản bằng http/auth.http rồi tạo kho bằng POST /vaults. Mỗi thao tác trên kho, tài sản, gói,
+# người nhận, điểm danh sẽ thêm một dòng nhật ký; thao tác bị từ chối không ghi gì.
+#
+# Thay <vaultId> bằng id kho của tài khoản đang đăng nhập (GET /vaults/me).
+
+@baseUrl = http://localhost:5000/api/v1
+@vaultId = <vaultId>
+
+### Đăng nhập — lấy access token
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Nhật ký mới nhất trước, 20 dòng mỗi trang
+GET {{baseUrl}}/vaults/{{vaultId}}/audit-logs?pageIndex=1&pageSize=20&isAscending=false
+Authorization: Bearer {{token}}
+
+### Chỉ các lần thêm người nhận vào gói
+GET {{baseUrl}}/vaults/{{vaultId}}/audit-logs?action=CONTAINER_BENEFICIARY_ADDED
+Authorization: Bearer {{token}}
+
+### Trong một khoảng thời gian [from, to)
+GET {{baseUrl}}/vaults/{{vaultId}}/audit-logs?from=2026-10-15T00:00:00%2B07:00&to=2026-10-16T00:00:00%2B07:00
+Authorization: Bearer {{token}}
+
+### 400 VALIDATION_ERROR: action không có trong danh sách
+GET {{baseUrl}}/vaults/{{vaultId}}/audit-logs?action=DELETE_EVERYTHING
+Authorization: Bearer {{token}}
+
+### 404 VAULT_NOT_FOUND: kho của người khác hoặc không tồn tại
+GET {{baseUrl}}/vaults/00000000-0000-0000-0000-000000000000/audit-logs
+Authorization: Bearer {{token}}
