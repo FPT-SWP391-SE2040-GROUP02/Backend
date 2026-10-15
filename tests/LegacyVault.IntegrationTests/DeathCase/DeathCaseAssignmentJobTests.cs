@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
@@ -423,6 +424,188 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
         Assert.Equal(PlanStatus.DeathCaseOpen, plan.Status);
     }
 
+    [SqlFact]
+    public async Task Assign04_ReminderSentTwelveHoursBeforeDue()
+    {
+        // Chuẩn bị: hạn còn 48 giờ nên chưa cần nhắc
+        FakeDeathCaseVerifierReminderSender sender = new FakeDeathCaseVerifierReminderSender();
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        DeathCaseAssignmentOutcome tooEarly = await RunJobWithSenderAsync(submitted.CaseId, sender);
+        DateTimeOffset dueAt = await SetDueNotRemindedAsync(submitted.CaseId, 6);
+        DeathCase before = await LoadCaseAsync(submitted.CaseId);
+
+        // Hành động: hạn còn 6 giờ
+        DeathCaseAssignmentOutcome outcome = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Kiểm tra: thư chỉ có mã hồ sơ và hạn; ghi RemindedDueAt; không đổi UpdatedAt (D4) và không đổi phân công
+        DeathCase after = await LoadCaseAsync(submitted.CaseId);
+        List<DeathCaseAssignment> rows = await LoadAssignmentsAsync(submitted.CaseId);
+        Assert.Equal(DeathCaseAssignmentOutcome.None, tooEarly);
+        Assert.Equal(DeathCaseAssignmentOutcome.Reminded, outcome);
+        DeathCaseVerifierReminder sent = Assert.Single(sender.Sent);
+        Assert.Equal(submitted.AssignmentId, sent.AssignmentId);
+        Assert.Equal(submitted.Verifier.User.Email, sent.ToEmail);
+        Assert.Equal(DeathCaseRules.CaseCode(submitted.CaseId), sent.CaseCode);
+        Assert.Equal(dueAt, sent.DueAt);
+        Assert.Single(rows);
+        Assert.Equal(dueAt, rows[0].RemindedDueAt);
+        Assert.Equal(before.UpdatedAt, after.UpdatedAt);
+    }
+
+    [SqlFact]
+    public async Task Time02_ReminderSentOncePerDueAt()
+    {
+        // Chuẩn bị
+        FakeDeathCaseVerifierReminderSender sender = new FakeDeathCaseVerifierReminderSender();
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        await SetDueNotRemindedAsync(submitted.CaseId, 6);
+
+        // Hành động
+        DeathCaseAssignmentOutcome first = await RunJobWithSenderAsync(submitted.CaseId, sender);
+        DeathCaseAssignmentOutcome second = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Kiểm tra: chạy lại không gửi trùng
+        Assert.Equal(DeathCaseAssignmentOutcome.Reminded, first);
+        Assert.Equal(DeathCaseAssignmentOutcome.None, second);
+        Assert.Single(sender.Sent);
+    }
+
+    [SqlFact]
+    public async Task Assign04_ReminderSentAgainAfterResubmitMovesDueAt()
+    {
+        // Chuẩn bị: đã nhắc cho hạn còn 6 giờ; Verifier yêu cầu bổ sung; Executor gửi lại nên hạn dời tới +48 giờ
+        FakeDeathCaseVerifierReminderSender sender = new FakeDeathCaseVerifierReminderSender();
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        await SetDueNotRemindedAsync(submitted.CaseId, 6);
+        DeathCaseAssignmentOutcome firstReminder = await RunJobWithSenderAsync(submitted.CaseId, sender);
+        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+        HttpResponseMessage supplement = await DeathCaseReviewTestData.RequestSupplementAsync(
+            submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(),
+            "Thiếu nơi cấp", new[] { "ISSUED_BY" });
+        Assert.Equal(HttpStatusCode.OK, supplement.StatusCode);
+        await DeathCaseReviewTestData.ResubmitAsync(submitted);
+        DeathCaseAssignmentOutcome afterResubmit = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Hành động: hạn mới (khác hạn đã nhắc) lại còn 5 giờ; không đụng RemindedDueAt
+        DateTimeOffset newDueAt = DateTimeOffset.UtcNow.AddHours(5);
+        await DeathCaseReviewTestData.SetActiveDueAtAsync(factory, submitted.CaseId, newDueAt);
+        DeathCaseAssignmentOutcome secondReminder = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Kiểm tra: nhắc lại cho hạn mới
+        DeathCaseAssignment? active = await DeathCaseReviewTestData.LoadActiveAssignmentAsync(factory, submitted.CaseId);
+        Assert.Equal(DeathCaseAssignmentOutcome.Reminded, firstReminder);
+        Assert.Equal(DeathCaseAssignmentOutcome.None, afterResubmit);
+        Assert.Equal(DeathCaseAssignmentOutcome.Reminded, secondReminder);
+        Assert.Equal(2, sender.Sent.Count);
+        Assert.NotNull(active);
+        Assert.Equal(newDueAt, active.RemindedDueAt);
+    }
+
+    [SqlFact]
+    public async Task Ops02_ReminderFailureIsRetriedNextRound()
+    {
+        // Chuẩn bị: lần gửi đầu bị SMTP từ chối
+        FakeDeathCaseVerifierReminderSender sender = new FakeDeathCaseVerifierReminderSender();
+        sender.FailNext = true;
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        await SetDueNotRemindedAsync(submitted.CaseId, 6);
+
+        // Hành động
+        DeathCaseAssignmentOutcome failed = await RunJobWithSenderAsync(submitted.CaseId, sender);
+        DeathCaseAssignment? afterFailure = await DeathCaseReviewTestData.LoadActiveAssignmentAsync(factory, submitted.CaseId);
+        DeathCaseAssignmentOutcome retried = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Kiểm tra: lỗi thì không lưu, vòng sau thử lại và thành công
+        Assert.Equal(DeathCaseAssignmentOutcome.ReminderFailed, failed);
+        Assert.NotNull(afterFailure);
+        Assert.Null(afterFailure.RemindedDueAt);
+        Assert.Equal(DeathCaseAssignmentOutcome.Reminded, retried);
+        Assert.Equal(2, sender.CallCount);
+        Assert.Single(sender.Sent);
+    }
+
+    [SqlFact]
+    public async Task Assign04_OverdueWithoutCandidateStillWarnsCurrentVerifier()
+    {
+        // Chuẩn bị: chỉ một Verifier, hạn đã qua 1 giờ và chưa nhắc lần nào (không dùng MakeOverdueAsync)
+        FakeDeathCaseVerifierReminderSender sender = new FakeDeathCaseVerifierReminderSender();
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        await DeathCaseReviewTestData.SetActiveDueAtAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow.AddHours(-1));
+        await DeathCaseReviewTestData.SetActiveRemindedDueAtAsync(factory, submitted.CaseId, null);
+
+        // Hành động
+        DeathCaseAssignmentOutcome warned = await RunJobWithSenderAsync(submitted.CaseId, sender);
+        DeathCaseAssignmentOutcome again = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Kiểm tra: người đang giữ nhận cảnh báo quá hạn một lần, phân công không đổi
+        List<DeathCaseAssignment> rows = await LoadAssignmentsAsync(submitted.CaseId);
+        Assert.Equal(DeathCaseAssignmentOutcome.Reminded, warned);
+        Assert.Equal(DeathCaseAssignmentOutcome.NoCandidate, again);
+        Assert.Single(sender.Sent);
+        Assert.Single(rows);
+        Assert.Equal(submitted.AssignmentId, rows[0].Id);
+        Assert.Null(rows[0].EndedAt);
+    }
+
+    [SqlFact]
+    public async Task D2_SupplementRequiredGetsNoReminder()
+    {
+        // Chuẩn bị: hồ sơ chờ Executor bổ sung, hạn còn 6 giờ
+        FakeDeathCaseVerifierReminderSender sender = new FakeDeathCaseVerifierReminderSender();
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        await DeathCaseReviewTestData.SetCaseStatusAsync(factory, submitted.CaseId, DeathCaseStatus.SupplementRequired);
+        await SetDueNotRemindedAsync(submitted.CaseId, 6);
+
+        // Hành động
+        DeathCaseAssignmentOutcome outcome = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Kiểm tra
+        Assert.Equal(DeathCaseAssignmentOutcome.None, outcome);
+        Assert.Equal(0, sender.CallCount);
+    }
+
+    [SqlFact]
+    public async Task Assign02_UnavailableVerifierGetsNoReminder()
+    {
+        // Chuẩn bị: Verifier đang giữ bị khóa, không có người thay, hạn còn 6 giờ
+        FakeDeathCaseVerifierReminderSender sender = new FakeDeathCaseVerifierReminderSender();
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        await DeathCaseReviewTestData.SetUserStatusAsync(factory, submitted.Verifier.User.Id, UserStatus.Locked);
+        await SetDueNotRemindedAsync(submitted.CaseId, 6);
+
+        // Hành động
+        DeathCaseAssignmentOutcome outcome = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Kiểm tra: không gửi thư cho người đã bị khóa
+        Assert.Equal(DeathCaseAssignmentOutcome.NoCandidate, outcome);
+        Assert.Equal(0, sender.CallCount);
+    }
+
+    [SqlFact]
+    public async Task Assign04_VerifierWithoutEmailGetsNoReminder()
+    {
+        // Chuẩn bị: Verifier đang giữ có email rỗng, hạn còn 6 giờ
+        FakeDeathCaseVerifierReminderSender sender = new FakeDeathCaseVerifierReminderSender();
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        Guid holderId = submitted.Verifier.User.Id;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Users.Where(u => u.Id == holderId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Email, string.Empty));
+        });
+        await SetDueNotRemindedAsync(submitted.CaseId, 6);
+
+        // Hành động
+        DeathCaseAssignmentOutcome outcome = await RunJobWithSenderAsync(submitted.CaseId, sender);
+
+        // Kiểm tra: không gửi, không lưu RemindedDueAt
+        DeathCaseAssignment? active = await DeathCaseReviewTestData.LoadActiveAssignmentAsync(factory, submitted.CaseId);
+        Assert.Equal(DeathCaseAssignmentOutcome.None, outcome);
+        Assert.Equal(0, sender.CallCount);
+        Assert.NotNull(active);
+        Assert.Null(active.RemindedDueAt);
+    }
+
     private async Task<DeathCaseAssignmentOutcome> RunJobAsync(Guid caseId)
     {
         using (IServiceScope scope = factory.Services.CreateScope())
@@ -432,10 +615,43 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
         }
     }
 
-    /// <summary>Lùi hạn của phân công đang hiệu lực về 1 giờ trước (không giả lập giờ).</summary>
-    private Task MakeOverdueAsync(Guid caseId)
+    /// <summary>
+    /// Lùi hạn về 1 giờ trước và coi như đã nhắc cho hạn này (để test giao lại không bị bước nhắc xen vào).
+    /// </summary>
+    private async Task MakeOverdueAsync(Guid caseId)
     {
-        return DeathCaseReviewTestData.SetActiveDueAtAsync(factory, caseId, DateTimeOffset.UtcNow.AddHours(-1));
+        DateTimeOffset dueAt = DateTimeOffset.UtcNow.AddHours(-1);
+        await DeathCaseReviewTestData.SetActiveDueAtAsync(factory, caseId, dueAt);
+        await DeathCaseReviewTestData.SetActiveRemindedDueAtAsync(factory, caseId, dueAt);
+    }
+
+    /// <summary>Đặt hạn cách bây giờ hoursFromNow giờ và chưa nhắc lần nào (RemindedDueAt null). Trả hạn đã đặt.</summary>
+    private async Task<DateTimeOffset> SetDueNotRemindedAsync(Guid caseId, double hoursFromNow)
+    {
+        DateTimeOffset dueAt = DateTimeOffset.UtcNow.AddHours(hoursFromNow);
+        await DeathCaseReviewTestData.SetActiveDueAtAsync(factory, caseId, dueAt);
+        await DeathCaseReviewTestData.SetActiveRemindedDueAtAsync(factory, caseId, null);
+        return dueAt;
+    }
+
+    /// <summary>Dựng job bằng tay từ các service trong scope, thay bộ gửi thư nhắc bằng bản giả.</summary>
+    private async Task<DeathCaseAssignmentOutcome> RunJobWithSenderAsync(
+        Guid caseId, IDeathCaseVerifierReminderSender sender)
+    {
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IServiceProvider provider = scope.ServiceProvider;
+            DeathCaseAssignmentJob job = new DeathCaseAssignmentJob(
+                provider.GetRequiredService<IDeathCaseRepository>(),
+                provider.GetRequiredService<IDeathCaseAssignmentRepository>(),
+                provider.GetRequiredService<IVaultRepository>(),
+                provider.GetRequiredService<IUserRepository>(),
+                provider.GetRequiredService<IDeathCaseVerifierPicker>(),
+                sender,
+                provider.GetRequiredService<IUnitOfWork>(),
+                provider.GetRequiredService<TimeProvider>());
+            return await job.ProcessCaseAsync(caseId, CancellationToken.None);
+        }
     }
 
     private async Task<DeathCase> LoadCaseAsync(Guid caseId)

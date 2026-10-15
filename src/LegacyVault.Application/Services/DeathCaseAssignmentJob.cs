@@ -1,4 +1,5 @@
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
@@ -13,8 +14,10 @@ namespace LegacyVault.Application.Services;
 /// - Job KHÔNG BAO GIỜ đổi trạng thái hồ sơ, thêm quyết định hay mở bàn giao: quá hạn không tự cho đạt (ASSIGN-04).
 /// - ASSIGN-03: không sửa hay xóa quyết định cũ; quyết định cũ vẫn gắn AssignmentId của phân công đã kết thúc.
 /// - Mỗi hồ sơ SaveChanges tối đa một lần; đóng phân công cũ và thêm phân công mới nằm trong cùng lần lưu.
+/// - D3, TIME-02: nhắc Verifier đang giữ hồ sơ UnderReview khi còn không quá 12 giờ tới hạn, mỗi hạn một lần thành công.
+///   Hồ sơ SupplementRequired đang chờ Executor thì không nhắc (D2).
 /// - SEC-07: không đưa CCCD, tên Owner hay địa chỉ email vào bất kỳ đâu.
-/// TODO: nhắc Verifier trước hạn 12 giờ (D3) ở Bước 4; thư "bạn được giao" và báo Admin khi không có người thay (F4).
+/// TODO: thư "bạn được giao" cho Verifier mới và báo Admin khi không có người thay (F4).
 /// </remarks>
 public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
 {
@@ -26,6 +29,7 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
     private readonly IVaultRepository vaultRepository;
     private readonly IUserRepository userRepository;
     private readonly IDeathCaseVerifierPicker verifierPicker;
+    private readonly IDeathCaseVerifierReminderSender reminderSender;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -35,6 +39,7 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         IVaultRepository vaultRepository,
         IUserRepository userRepository,
         IDeathCaseVerifierPicker verifierPicker,
+        IDeathCaseVerifierReminderSender reminderSender,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -43,6 +48,7 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         this.vaultRepository = vaultRepository;
         this.userRepository = userRepository;
         this.verifierPicker = verifierPicker;
+        this.reminderSender = reminderSender;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -114,32 +120,96 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         {
             reason = DeathCaseAssignmentRules.EndReasonOverdue;
         }
-        if (reason == null)
+        if (reason != null)
         {
-            // TODO: Bước 4 — nhắc Verifier trước hạn 12 giờ (D3, TIME-02).
-            return DeathCaseAssignmentOutcome.None;
-        }
-
-        // Bước 5 (D5): chỉ kết thúc phân công cũ khi tìm được người thay (loại cả Verifier đang giữ).
-        Guid? replacement = await verifierPicker.PickAsync(vault, submitterUserId, active.VerifierUserId, ct);
-        if (replacement != null)
-        {
-            active.EndedAt = now;
-            active.EndReason = reason;
-            AddAssignment(deathCase, replacement.Value, now);
-            // D4: đổi etag để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT, tải lại thì 404.
-            deathCase.UpdatedAt = now;
-            bool reassignedSaved = await TrySaveAsync(ct);
-            if (!reassignedSaved)
+            // Bước 5 (D5): chỉ kết thúc phân công cũ khi tìm được người thay (loại cả Verifier đang giữ).
+            Guid? replacement = await verifierPicker.PickAsync(vault, submitterUserId, active.VerifierUserId, ct);
+            if (replacement != null)
             {
-                return DeathCaseAssignmentOutcome.Conflict;
+                active.EndedAt = now;
+                active.EndReason = reason;
+                AddAssignment(deathCase, replacement.Value, now);
+                // D4: đổi etag để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT, tải lại thì 404.
+                deathCase.UpdatedAt = now;
+                bool reassignedSaved = await TrySaveAsync(ct);
+                if (!reassignedSaved)
+                {
+                    return DeathCaseAssignmentOutcome.Conflict;
+                }
+                return DeathCaseAssignmentOutcome.Reassigned;
             }
-            return DeathCaseAssignmentOutcome.Reassigned;
+
+            // Bước 6 (D5): không có người thay. Verifier đã mất quyền thì không gửi thư cho họ.
+            if (reason == DeathCaseAssignmentRules.EndReasonVerifierUnavailable)
+            {
+                return DeathCaseAssignmentOutcome.NoCandidate;
+            }
         }
 
-        // Bước 6 và 8: không có người thay. Chưa có thư nhắc ở bước này nên mọi trường hợp đều là NoCandidate.
-        // TODO: Bước 4 — OVERDUE không có người thay vẫn nhắc người đang giữ (cảnh báo quá hạn, ASSIGN-04).
-        return DeathCaseAssignmentOutcome.NoCandidate;
+        // Bước 7 (D3, TIME-02, ASSIGN-04): nhắc Verifier đang giữ hồ sơ, gồm cả cảnh báo quá hạn khi OVERDUE
+        // mà không có người thay. Mỗi hạn chỉ nhắc thành công một lần (RemindedDueAt).
+        DeathCaseAssignmentOutcome? reminderOutcome = await TryRemindAsync(deathCase, active, holder, now, ct);
+        if (reminderOutcome != null)
+        {
+            return reminderOutcome.Value;
+        }
+
+        // Bước 8: OVERDUE không có người thay và đã nhắc cho hạn này thì vẫn báo NoCandidate; còn lại không có việc.
+        if (reason != null)
+        {
+            return DeathCaseAssignmentOutcome.NoCandidate;
+        }
+        return DeathCaseAssignmentOutcome.None;
+    }
+
+    /// <summary>
+    /// D3, D2: chỉ nhắc khi hồ sơ UnderReview, đến lúc nhắc cho hạn này và Verifier có email. Trả null khi không có
+    /// gì để nhắc. Gửi lỗi → ReminderFailed (không lưu, vòng sau thử lại, không đếm số lần). Gửi được → ghi
+    /// RemindedDueAt rồi lưu một lần; không đổi UpdatedAt (D4). Gửi được nhưng lưu lỗi thì có thể gửi trùng một lần.
+    /// </summary>
+    private async Task<DeathCaseAssignmentOutcome?> TryRemindAsync(
+        DeathCase deathCase, DeathCaseAssignment active, User? holder, DateTimeOffset now, CancellationToken ct)
+    {
+        if (deathCase.Status != DeathCaseStatus.UnderReview)
+        {
+            return null;
+        }
+        if (!DeathCaseAssignmentRules.NeedsReminder(active, now))
+        {
+            return null;
+        }
+        if (holder == null || string.IsNullOrWhiteSpace(holder.Email))
+        {
+            return null;
+        }
+
+        DeathCaseVerifierReminder reminder = new DeathCaseVerifierReminder();
+        reminder.AssignmentId = active.Id;
+        reminder.ToEmail = holder.Email;
+        reminder.FullName = holder.FullName;
+        reminder.CaseCode = DeathCaseRules.CaseCode(deathCase.Id);
+        reminder.DueAt = active.DueAt;
+        try
+        {
+            await reminderSender.SendAsync(reminder, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Không ghi chi tiết lỗi (có thể chứa địa chỉ email); RemindedDueAt vẫn cũ nên vòng sau thử lại.
+            return DeathCaseAssignmentOutcome.ReminderFailed;
+        }
+
+        active.RemindedDueAt = active.DueAt;
+        bool saved = await TrySaveAsync(ct);
+        if (!saved)
+        {
+            return DeathCaseAssignmentOutcome.Conflict;
+        }
+        return DeathCaseAssignmentOutcome.Reminded;
     }
 
     /// <summary>ASSIGN-04, D1: thêm phân công mới, hạn = ComputeDueAt(lúc giao, ObjectionEndsAt).</summary>

@@ -88,6 +88,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             // Tắt job nền điểm danh: test tự gọi ICheckInJob khi cần, tránh job chạy xen vào dữ liệu test.
             settings["CheckIn:Enabled"] = "false";
             settings["DeathCase:NoticeJobEnabled"] = "false";
+            settings["DeathCase:AssignmentJobEnabled"] = "false";
             // Môi trường Development nạp user-secrets của người chạy test: ép trống thông tin Gmail để test
             // KHÔNG BAO GIỜ gửi thư thật (mặc định dùng bản chỉ ghi log).
             settings["Email:Smtp:UserName"] = "";
