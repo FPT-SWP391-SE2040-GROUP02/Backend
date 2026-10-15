@@ -104,6 +104,17 @@ public sealed class DeathCaseNoticeJob : IDeathCaseNoticeJob
             {
                 deathCase.ObjectionStartsAt = now;
                 deathCase.ObjectionEndsAt = DeathCaseRules.ObjectionEndsAt(now);
+
+                // ASSIGN-04, D1, TIME-07: hạn Verifier không sớm hơn 48 giờ sau khi hết phản đối.
+                // Không đổi RemindedDueAt: hạn mới khác hạn đã nhắc nên sẽ được nhắc lại.
+                foreach (DeathCaseAssignment assignment in deathCase.Assignments)
+                {
+                    if (assignment.EndedAt == null)
+                    {
+                        assignment.DueAt = DeathCaseAssignmentRules.ExtendForObjection(
+                            assignment.DueAt, deathCase.ObjectionEndsAt.Value);
+                    }
+                }
             }
         }
         else if (notice.AttemptCount >= DeathCaseRules.MaxNoticeAttempts)
