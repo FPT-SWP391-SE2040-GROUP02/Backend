@@ -42,6 +42,8 @@ Chỉ chạy SQL thì cần Docker. Để chạy/code API cần thêm [.NET SDK]
 
 **Visual Studio:** mở `LegacyVault.sln` → chọn `LegacyVault.Api` làm Startup Project → chọn profile **http** → F5 hoặc Ctrl+F5.
 
+**Local đã đối soát Google ngày 15/10/2026:** chọn profile **google-dev** để dùng `LegacyVault_OfficialDev` trên SQL Windows local `localhost,1433` với Windows authentication. DB này đã áp đủ migrations; profile này không dùng database Docker của `http`. Xem [Google Auth local recovery](docs/GOOGLE-AUTH-LOCAL-RECOVERY.md) để biết cấu hình, bằng chứng và rollback. Chỉ chạy một host trên cổng 5000.
+
 **Terminal:**
 
 ```powershell

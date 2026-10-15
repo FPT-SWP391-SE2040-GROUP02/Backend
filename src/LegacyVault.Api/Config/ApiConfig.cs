@@ -18,7 +18,7 @@ public static class ApiConfig
             options.CustomizeProblemDetails = context =>
                 context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
         services.AddExceptionHandler<GlobalExceptionHandler>();
-        services.AddOpenApi();
+        services.AddOpenApi(AuthOpenApiConfig.Configure);
         services.AddSingleton<AuthCookieWriter>();
         services.AddAuthSecurity();
 
