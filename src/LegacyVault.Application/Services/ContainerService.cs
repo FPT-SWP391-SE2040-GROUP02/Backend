@@ -25,6 +25,7 @@ public sealed class ContainerService : IContainerService
     private readonly IAssetRepository assetRepository;
     private readonly IBeneficiaryRepository beneficiaryRepository;
     private readonly ICheckInScheduler checkInScheduler;
+    private readonly IAuditLogRepository auditLogRepository;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -35,6 +36,7 @@ public sealed class ContainerService : IContainerService
         IAssetRepository assetRepository,
         IBeneficiaryRepository beneficiaryRepository,
         ICheckInScheduler checkInScheduler,
+        IAuditLogRepository auditLogRepository,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -44,6 +46,7 @@ public sealed class ContainerService : IContainerService
         this.assetRepository = assetRepository;
         this.beneficiaryRepository = beneficiaryRepository;
         this.checkInScheduler = checkInScheduler;
+        this.auditLogRepository = auditLogRepository;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -82,6 +85,7 @@ public sealed class ContainerService : IContainerService
 
         containerRepository.Add(container);
         BumpConfigVersion(vault, now);
+        AddAudit(vault, AuditAction.ContainerCreated, container.Id, null, now);
         await unitOfWork.SaveChangesAsync(ct);
         return container.ToResponse();
     }
@@ -175,6 +179,7 @@ public sealed class ContainerService : IContainerService
         container.UpdatedAt = now;
         // SETUP-04: đổi tên/mô tả gói cũng tăng ConfigVersion.
         BumpConfigVersion(vault, now);
+        AddAudit(vault, AuditAction.ContainerUpdated, container.Id, null, now);
         await unitOfWork.SaveChangesAsync(ct);
         return container.ToResponse();
     }
@@ -223,6 +228,7 @@ public sealed class ContainerService : IContainerService
         container.ArchivedAt = now;
         container.UpdatedAt = now;
         BumpConfigVersion(vault, now);
+        AddAudit(vault, AuditAction.ContainerArchived, container.Id, null, now);
         await unitOfWork.SaveChangesAsync(ct);
         return container.ToResponse();
     }
@@ -275,6 +281,8 @@ public sealed class ContainerService : IContainerService
         container.UpdatedAt = now;
         ContainerRules.RecalculateStatus(container);
         BumpConfigVersion(vault, now);
+        // Bên thua (unique AssetId) gọi DiscardPendingChanges nên dòng nhật ký này cũng bị bỏ, không ghi sai.
+        AddAudit(vault, AuditAction.ContainerAssetAdded, container.Id, AssetNote(assetId), now);
 
         // Lưu liên kết cùng các thay đổi đang chờ của Container và Plan trong một lần SaveChanges.
         // Hai request cùng đưa tài sản vào CÙNG gói có thể vấp concurrency token Container.UpdatedAt
@@ -344,6 +352,7 @@ public sealed class ContainerService : IContainerService
         container.UpdatedAt = now;
         ContainerRules.RecalculateStatus(container);
         BumpConfigVersion(vault, now);
+        AddAudit(vault, AuditAction.ContainerAssetRemoved, container.Id, AssetNote(assetId), now);
         await unitOfWork.SaveChangesAsync(ct);
         return container.ToResponse();
     }
@@ -406,6 +415,8 @@ public sealed class ContainerService : IContainerService
         container.UpdatedAt = now;
         ContainerRules.RecalculateStatus(container);
         BumpConfigVersion(vault, now);
+        // Bên thua (unique ContainerId, BeneficiaryId) gọi DiscardPendingChanges nên dòng nhật ký này cũng bị bỏ.
+        AddAudit(vault, AuditAction.ContainerBeneficiaryAdded, container.Id, BeneficiaryNote(beneficiaryId), now);
 
         // Lưu chỉ định cùng các thay đổi đang chờ của Container và Plan trong một lần SaveChanges.
         // Concurrency token Container.UpdatedAt lệch → GlobalExceptionHandler trả 409 EDIT_CONFLICT; không bắt ở đây.
@@ -460,6 +471,7 @@ public sealed class ContainerService : IContainerService
         container.UpdatedAt = now;
         ContainerRules.RecalculateStatus(container);
         BumpConfigVersion(vault, now);
+        AddAudit(vault, AuditAction.ContainerBeneficiaryRemoved, container.Id, BeneficiaryNote(beneficiaryId), now);
         await unitOfWork.SaveChangesAsync(ct);
         return container.ToResponse();
     }
@@ -491,6 +503,33 @@ public sealed class ContainerService : IContainerService
         PlanRules.Deactivate(vault, now);
         // SETUP-16: kế hoạch về DRAFT thì lịch điểm danh dừng; người gọi lưu cùng giao dịch.
         await checkInScheduler.StopAsync(vault.Plan, ct);
+        // SEC-13: Owner đã xác nhận cảnh báo; lưu cùng thao tác gây ra việc này.
+        auditLogRepository.Add(AuditRules.OwnerAction(
+            vault.Id, vault.OwnerId, AuditAction.PlanDeactivated, AuditTargetType.Plan, vault.Plan.Id,
+            vault.Plan.ConfigVersion, now));
+    }
+
+    /// <summary>
+    /// SEC-13: một dòng nhật ký cho thao tác trên gói, lưu cùng lần SaveChanges của thao tác (STATE-02).
+    /// TargetVersion là config_version của kế hoạch sau khi tăng (SETUP-04, STATE-03).
+    /// </summary>
+    private void AddAudit(Vault vault, AuditAction action, Guid containerId, string? reason, DateTimeOffset now)
+    {
+        auditLogRepository.Add(AuditRules.Create(
+            vault.Id, vault.OwnerId, AuditActorRole.Owner, action, AuditTargetType.Container, containerId,
+            vault.Plan.ConfigVersion, AuditOutcome.Succeeded, reason, now));
+    }
+
+    /// <summary>Chỉ ghi id tài sản, không ghi tên tài sản (SEC-07).</summary>
+    private static string AssetNote(Guid assetId)
+    {
+        return "Tài sản " + assetId;
+    }
+
+    /// <summary>Chỉ ghi id hồ sơ người nhận, không ghi tên hay số CCCD (SEC-07).</summary>
+    private static string BeneficiaryNote(Guid beneficiaryId)
+    {
+        return "Người nhận " + beneficiaryId;
     }
 
     /// <summary>
