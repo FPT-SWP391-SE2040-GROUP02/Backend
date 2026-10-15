@@ -1,5 +1,6 @@
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.IntegrationTests.Audit;
 
@@ -11,5 +12,13 @@ public sealed class FakeAuditLogRepository : IAuditLogRepository
     public void Add(AuditLog log)
     {
         Logs.Add(log);
+    }
+
+    /// <summary>Test dùng fake này chỉ kiểm việc ghi; đọc trang được kiểm trên SQL Server thật.</summary>
+    public Task<(List<AuditLog> Items, int TotalCount)> FindPageByVaultIdAsync(
+        Guid vaultId, AuditAction? action, DateTimeOffset? from, DateTimeOffset? to,
+        int pageIndex, int pageSize, bool isAscending, CancellationToken ct)
+    {
+        throw new NotSupportedException();
     }
 }
