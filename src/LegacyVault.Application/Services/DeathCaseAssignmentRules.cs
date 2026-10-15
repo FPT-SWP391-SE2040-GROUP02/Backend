@@ -58,6 +58,29 @@ public static class DeathCaseAssignmentRules
     }
 
     /// <summary>
+    /// D3, TIME-02: cần nhắc khi chỉ còn không quá 12 giờ tới hạn và chưa nhắc thành công cho đúng hạn này.
+    /// Hạn bị dời (D1, Executor gửi lại) thì khác RemindedDueAt nên được nhắc lại cho hạn mới.
+    /// Nơi gọi tự kiểm trạng thái hồ sơ (D2: chỉ nhắc khi UnderReview).
+    /// </summary>
+    public static bool NeedsReminder(DeathCaseAssignment assignment, DateTimeOffset now)
+    {
+        DateTimeOffset remindFrom = assignment.DueAt.AddHours(-ReminderBeforeHours);
+        if (now < remindFrom)
+        {
+            return false;
+        }
+        if (assignment.RemindedDueAt == null)
+        {
+            return true;
+        }
+        if (assignment.RemindedDueAt.Value != assignment.DueAt)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// D5, ASSIGN-02, ADMIN-05: Verifier còn dùng được khi tài khoản tồn tại, đang Active
     /// và vẫn giữ vai trò Verifier.
     /// </summary>

@@ -465,6 +465,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("EndedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("RemindedDueAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid>("VerifierUserId")
                         .HasColumnType("uniqueidentifier");
 

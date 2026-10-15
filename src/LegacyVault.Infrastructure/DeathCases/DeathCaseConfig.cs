@@ -21,6 +21,7 @@ public static class DeathCaseConfig
     {
         services.AddScoped<IDeathCaseRepository, DeathCaseRepository>();
         services.AddScoped<IDeathCaseReviewRepository, DeathCaseReviewRepository>();
+        services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
 
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.
         services.AddSingleton<IDeathCaseDataProtector, DeathCaseDataProtector>();

@@ -99,6 +99,64 @@ public sealed class DeathCaseAssignmentRulesTests
         Assert.False(DeathCaseAssignmentRules.IsVerifierAvailable(null));
     }
 
+    [Fact]
+    public void Time02_ReminderNeededOncePerDueAt()
+    {
+        // Chuẩn bị: còn 10 giờ tới hạn
+        DateTimeOffset dueAt = Start.AddHours(10);
+        DeathCaseAssignment assignment = NewAssignment(dueAt, null);
+
+        // Hành động
+        bool beforeReminder = DeathCaseAssignmentRules.NeedsReminder(assignment, Start);
+        assignment.RemindedDueAt = dueAt;
+        bool afterReminder = DeathCaseAssignmentRules.NeedsReminder(assignment, Start);
+        bool afterReminderAndOverdue = DeathCaseAssignmentRules.NeedsReminder(assignment, dueAt.AddHours(1));
+
+        // Kiểm tra: nhắc đúng một lần cho mỗi hạn
+        Assert.True(beforeReminder);
+        Assert.False(afterReminder);
+        Assert.False(afterReminderAndOverdue);
+    }
+
+    [Fact]
+    public void Time02_MovedDueAtNeedsNewReminder()
+    {
+        // Chuẩn bị: đã nhắc cho hạn cũ, sau đó hạn bị dời tới còn 8 giờ
+        DateTimeOffset oldDueAt = Start.AddHours(10);
+        DeathCaseAssignment assignment = NewAssignment(oldDueAt, oldDueAt);
+        assignment.DueAt = Start.AddHours(8);
+
+        // Hành động
+        bool needs = DeathCaseAssignmentRules.NeedsReminder(assignment, Start);
+
+        // Kiểm tra: hạn mới khác hạn đã nhắc nên nhắc lại
+        Assert.True(needs);
+    }
+
+    [Fact]
+    public void Assign04_NoReminderBeforeTwelveHoursLeft()
+    {
+        // Chuẩn bị: hạn còn 12 giờ + 1 giây, rồi đúng 12 giờ
+        DeathCaseAssignment assignment = NewAssignment(Start.AddHours(12).AddSeconds(1), null);
+
+        // Hành động
+        bool tooEarly = DeathCaseAssignmentRules.NeedsReminder(assignment, Start);
+        assignment.DueAt = Start.AddHours(12);
+        bool exactly = DeathCaseAssignmentRules.NeedsReminder(assignment, Start);
+
+        // Kiểm tra
+        Assert.False(tooEarly);
+        Assert.True(exactly);
+    }
+
+    private static DeathCaseAssignment NewAssignment(DateTimeOffset dueAt, DateTimeOffset? remindedDueAt)
+    {
+        DeathCaseAssignment assignment = new DeathCaseAssignment();
+        assignment.DueAt = dueAt;
+        assignment.RemindedDueAt = remindedDueAt;
+        return assignment;
+    }
+
     private static User NewUser(UserRole role, UserStatus status)
     {
         User user = new User();
