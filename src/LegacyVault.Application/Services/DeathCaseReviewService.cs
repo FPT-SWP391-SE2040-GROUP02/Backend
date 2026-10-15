@@ -257,8 +257,16 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
 
         // 7) DEATH-12: kế hoạch phải đang khóa DeathCaseOpen và hồ sơ phải nhớ trạng thái trước đó.
         Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
+        // AC-71: hồ sơ và kế hoạch không được đọc cùng một lúc. Verifier khác có thể vừa từ chối/duyệt xong ngay sau lúc
+        // ta đọc hồ sơ (kế hoạch khi đó không còn DEATH_CASE_OPEN), nên kiểm sai thì ĐỌC LẠI hồ sơ trước khi báo lỗi:
+        // đã bị từ chối → 200, đã được duyệt → 409 CASE_CLOSED, còn lại → PLAN_STATE_INVALID như cũ.
         if (vault == null || vault.Plan.Status != PlanStatus.DeathCaseOpen || deathCase.StatusBeforeCase == null)
         {
+            VerifierDeathCaseResponse? current = await TryResolveDecisionConflictAsync(caseId, DeathCaseStatus.Rejected, ct);
+            if (current != null)
+            {
+                return current;
+            }
             throw NotAllowed(DeathCaseNotAllowedReason.PlanStateInvalid);
         }
         HandoverPlan plan = vault.Plan;
@@ -339,10 +347,13 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         await EnsureNoConflictOfInterestAsync(context, ct);
 
         // 5) Kế hoạch phải đang khóa DEATH_CASE_OPEN (lúc Executor gửi lần đầu).
+        //    AC-71: hồ sơ và kế hoạch không được đọc cùng một lúc. Verifier khác có thể vừa duyệt/từ chối xong ngay sau
+        //    lúc ta đọc hồ sơ (kế hoạch khi đó không còn DEATH_CASE_OPEN), nên kế hoạch sai thì phải ĐỌC LẠI hồ sơ
+        //    chứ chưa kết luận PLAN_STATE_INVALID: đã duyệt → 200, đã bị từ chối → 409 CASE_CLOSED, còn lại → PLAN_STATE_INVALID.
         Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
         if (vault == null || vault.Plan.Status != PlanStatus.DeathCaseOpen)
         {
-            throw NotAllowed(DeathCaseNotAllowedReason.PlanStateInvalid);
+            return await ResolveApproveConflictAsync(caseId, ct);
         }
 
         // 6) Đánh dấu duyệt NHƯNG CHƯA LƯU: quyết định, đóng hồ sơ. Phân công giữ nguyên.
@@ -483,19 +494,22 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     }
 
     /// <summary>
-    /// Sau lỗi lưu do tranh chấp: bỏ thay đổi chưa lưu, đọc lại hồ sơ; nếu hồ sơ đã ở trạng thái expected
-    /// (bên kia thắng với cùng quyết định) thì trả trạng thái hiện tại, ngược lại trả null để người gọi ném lại lỗi gốc.
+    /// Luật bên thua (AC-71), dùng khi lưu lỗi do tranh chấp HOẶC khi kiểm kế hoạch thấy sai: bỏ thay đổi chưa lưu,
+    /// đọc lại hồ sơ. Hồ sơ đã ở trạng thái expected (bên kia thắng với cùng quyết định) → trả trạng thái hiện tại.
+    /// Hồ sơ đã đóng bằng quyết định KHÁC → 409 CASE_CLOSED. Còn lại → null để người gọi tự xử lý (ném lỗi gốc).
     /// </summary>
     private async Task<VerifierDeathCaseResponse?> TryResolveDecisionConflictAsync(
         Guid caseId, DeathCaseStatus expected, CancellationToken ct)
     {
         deathCaseRepository.DiscardPendingChanges();
         ReviewContext latest = await LoadCaseForVerifierAsync(caseId, ct);
-        if (latest.DeathCase.Status != expected)
+        if (latest.DeathCase.Status == expected)
         {
-            return null;
+            return await BuildResponseAsync(latest, null, ct);
         }
-        return await BuildResponseAsync(latest, null, ct);
+        // Verifier khác vừa duyệt/từ chối bằng quyết định khác: không phải lỗi kế hoạch mà là hồ sơ đã đóng.
+        EnsureNotClosed(latest.DeathCase);
+        return null;
     }
 
     /// <summary>
