@@ -259,13 +259,20 @@ public sealed class DeathCaseReviewRulesTests
     [Fact]
     public void State03_ClosedAndDecidableStatuses()
     {
-        // Chuẩn bị / Hành động / Kiểm tra: duyệt, từ chối là trạng thái đóng; chỉ đang xét/chờ bổ sung mới quyết được
-        foreach (DeathCaseStatus status in Enum.GetValues<DeathCaseStatus>())
+        // Chuẩn bị: duyệt, từ chối là trạng thái đóng; chỉ đang xét/chờ bổ sung mới quyết được
+        DeathCaseStatus[] statuses = Enum.GetValues<DeathCaseStatus>();
+
+        foreach (DeathCaseStatus status in statuses)
         {
+            // Hành động
+            bool closed = DeathCaseReviewRules.IsClosed(status);
+            bool canDecide = DeathCaseReviewRules.CanDecide(status);
+
+            // Kiểm tra
             bool expectedClosed = status == DeathCaseStatus.ApprovedForHandover || status == DeathCaseStatus.Rejected;
             bool expectedDecide = status == DeathCaseStatus.UnderReview || status == DeathCaseStatus.SupplementRequired;
-            Assert.Equal(expectedClosed, DeathCaseReviewRules.IsClosed(status));
-            Assert.Equal(expectedDecide, DeathCaseReviewRules.CanDecide(status));
+            Assert.Equal(expectedClosed, closed);
+            Assert.Equal(expectedDecide, canDecide);
         }
     }
 
