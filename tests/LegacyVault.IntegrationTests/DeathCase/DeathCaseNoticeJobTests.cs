@@ -158,6 +158,39 @@ public sealed class DeathCaseNoticeJobTests
         Assert.Equal(8, message.CaseCode.Length);
     }
 
+    [Fact]
+    public async Task Assign04_DeliveredNoticeExtendsActiveAssignmentDueAt()
+    {
+        // Chuẩn bị: một phân công đang hiệu lực hạn Now + 40 giờ, một phân công cũ đã kết thúc
+        DeathCase deathCase = AddCase(notifiedVersionNo: 1);
+        DeathCaseNotice notice = AddNotice(deathCase, versionNo: 1, attemptCount: 0);
+        DeathCaseAssignment active = AddAssignment(deathCase, Now.AddHours(40), null);
+        DeathCaseAssignment ended = AddAssignment(deathCase, Now.AddHours(-5), Now.AddHours(-1));
+
+        // Hành động
+        await CreateJob().ProcessNoticeAsync(notice.Id, CancellationToken.None);
+
+        // Kiểm tra: hạn dời tới hết phản đối (Now + 72 giờ) + 48 giờ; dòng đã kết thúc giữ nguyên
+        Assert.Equal(Now.AddHours(72 + 48), active.DueAt);
+        Assert.Equal(Now.AddHours(-5), ended.DueAt);
+        Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Assign04_NoticeOfOlderVersionDoesNotTouchDueAt()
+    {
+        // Chuẩn bị: bản 2 đã đổi trọng yếu (NotifiedVersionNo = 2), thông báo cũ của bản 1 mới được giao
+        DeathCase deathCase = AddCase(notifiedVersionNo: 2);
+        DeathCaseNotice oldNotice = AddNotice(deathCase, versionNo: 1, attemptCount: 0);
+        DeathCaseAssignment active = AddAssignment(deathCase, Now.AddHours(40), null);
+
+        // Hành động
+        await CreateJob().ProcessNoticeAsync(oldNotice.Id, CancellationToken.None);
+
+        // Kiểm tra: đồng hồ 72 giờ không chạy nên hạn Verifier không đổi
+        Assert.Equal(Now.AddHours(40), active.DueAt);
+    }
+
     private DeathCaseNoticeJob CreateJob()
     {
         return new DeathCaseNoticeJob(repository, users, sender, unitOfWork, new FixedTimeProvider(Now));
@@ -187,6 +220,19 @@ public sealed class DeathCaseNoticeJobTests
 
         repository.Cases.Add(deathCase);
         return deathCase;
+    }
+
+    private DeathCaseAssignment AddAssignment(DeathCase deathCase, DateTimeOffset dueAt, DateTimeOffset? endedAt)
+    {
+        DeathCaseAssignment assignment = new DeathCaseAssignment();
+        assignment.CaseId = deathCase.Id;
+        assignment.VerifierUserId = Guid.NewGuid();
+        assignment.AssignedAt = Now.AddHours(-8);
+        assignment.DueAt = dueAt;
+        assignment.EndedAt = endedAt;
+        repository.Assignments.Add(assignment);
+        deathCase.Assignments.Add(assignment);
+        return assignment;
     }
 
     private DeathCaseNotice AddNotice(DeathCase deathCase, int versionNo, int attemptCount)

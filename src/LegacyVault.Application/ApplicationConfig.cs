@@ -23,6 +23,8 @@ public static class ApplicationConfig
         services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
         services.AddScoped<IDeathCaseService, DeathCaseService>();
         services.AddScoped<IDeathCaseReviewService, DeathCaseReviewService>();
+        services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();
+        services.AddScoped<IDeathCaseAssignmentJob, DeathCaseAssignmentJob>();
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();

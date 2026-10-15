@@ -19,12 +19,24 @@ public class DeathCaseAssignment
 
     public DateTimeOffset AssignedAt { get; set; }
 
-    /// <summary>Hạn xét bản đang chờ: lúc giao hoặc lúc Executor gửi bản mới gần nhất + ReviewDueHours (ASSIGN-04).</summary>
+    /// <summary>
+    /// D1, ASSIGN-04: hạn Verifier phải ra quyết định = mốc muộn hơn giữa (lúc giao hoặc lúc Executor gửi bản mới
+    /// gần nhất + ReviewDueHours) và (ObjectionEndsAt + ReviewDueHours). Tính bằng DeathCaseAssignmentRules.
+    /// </summary>
     public DateTimeOffset DueAt { get; set; }
 
-    /// <summary>Lúc phân công kết thúc; chỉ đặt khi giao lại người khác (nhánh C). Duyệt/từ chối không đặt. Null khi còn hiệu lực.</summary>
+    /// <summary>
+    /// Lúc phân công kết thúc; đặt khi job giao lại người khác (OVERDUE, VERIFIER_UNAVAILABLE).
+    /// Duyệt/từ chối không đặt. Null khi còn hiệu lực.
+    /// </summary>
     public DateTimeOffset? EndedAt { get; set; }
 
-    /// <summary>Lý do kết thúc dạng mã chữ ngắn (≤ 32 ký tự); chỉ đặt khi giao lại người khác (nhánh C).</summary>
+    /// <summary>Lý do kết thúc dạng mã chữ ngắn (≤ 32 ký tự); đặt khi job giao lại người khác (OVERDUE, VERIFIER_UNAVAILABLE).</summary>
     public string? EndReason { get; set; }
+
+    /// <summary>
+    /// D3, TIME-02: giá trị DueAt đã gửi nhắc thành công; khác DueAt hiện tại nghĩa là chưa nhắc cho hạn này.
+    /// Null khi chưa nhắc lần nào.
+    /// </summary>
+    public DateTimeOffset? RemindedDueAt { get; set; }
 }

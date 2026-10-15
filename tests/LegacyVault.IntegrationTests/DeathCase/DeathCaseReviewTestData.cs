@@ -282,7 +282,47 @@ public static class DeathCaseReviewTestData
         });
     }
 
-    public const string VerifierListUrl = "/api/v1/verifier/death-cases";
+    /// <summary>Đặt RemindedDueAt của phân công đang hiệu lực (null = chưa nhắc lần nào).</summary>
+    public static async Task SetActiveRemindedDueAtAsync(ApiFactory factory, Guid caseId, DateTimeOffset? value)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<DeathCaseAssignment>().Where(a => a.CaseId == caseId && a.EndedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.RemindedDueAt, value));
+        });
+    }
+
+    /// <summary>Đổi trạng thái tài khoản (giả lập Admin khóa Verifier).</summary>
+    public static async Task SetUserStatusAsync(ApiFactory factory, Guid userId, UserStatus status)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Users.Where(u => u.Id == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, status));
+        });
+    }
+
+    /// <summary>Đổi vai trò tài khoản (giả lập Admin thu hồi vai trò Verifier).</summary>
+    public static async Task SetUserRoleAsync(ApiFactory factory, Guid userId, UserRole role)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Users.Where(u => u.Id == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Role, role));
+        });
+    }
+
+    /// <summary>Đặt trạng thái hồ sơ trực tiếp trong DB; không đổi UpdatedAt nên etag không đổi.</summary>
+    public static async Task SetCaseStatusAsync(ApiFactory factory, Guid caseId, DeathCaseStatus status)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<DeathCase>().Where(c => c.Id == caseId)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, status));
+        });
+    }
+
+    public const string VerifierListUrl ="/api/v1/verifier/death-cases";
 
     public static string VerifierCaseUrl(Guid caseId)
     {

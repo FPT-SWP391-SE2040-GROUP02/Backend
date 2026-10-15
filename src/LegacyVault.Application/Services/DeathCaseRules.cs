@@ -23,6 +23,9 @@ public static class DeathCaseRules
     /// <summary>D3: thử gửi thông báo tối đa 5 lần rồi đánh dấu Failed.</summary>
     public const int MaxNoticeAttempts = 5;
 
+    /// <summary>Số ký tự của Id hồ sơ dùng làm mã rút gọn trong thư.</summary>
+    public const int CaseCodeLength = 8;
+
     public const string MissingOwnerFullName = "OWNER_FULL_NAME";
     public const string MissingOwnerCitizenId = "OWNER_CITIZEN_ID";
     public const string MissingDateOfDeath = "DATE_OF_DEATH";
@@ -204,6 +207,16 @@ public static class DeathCaseRules
     public static DateTimeOffset ObjectionEndsAt(DateTimeOffset deliveredAt)
     {
         return deliveredAt.AddHours(ObjectionHours);
+    }
+
+    /// <summary>
+    /// Mã hồ sơ rút gọn trong thư: 8 ký tự hex CUỐI của Id, chữ hoa. Không lấy phần đầu vì Guid v7 bắt đầu bằng
+    /// mốc thời gian, các hồ sơ tạo gần nhau sẽ trùng mã. Dùng chung cho thư báo Owner và thư nhắc Verifier.
+    /// </summary>
+    public static string CaseCode(Guid caseId)
+    {
+        string hex = caseId.ToString("N");
+        return hex.Substring(hex.Length - CaseCodeLength).ToUpperInvariant();
     }
 
     /// <summary>Ngày hiện tại theo giờ Việt Nam.</summary>
