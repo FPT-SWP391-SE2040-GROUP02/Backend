@@ -17,6 +17,20 @@ namespace LegacyVault.IntegrationTests.Auth;
 /// <summary>HTTP checks chuyển từ test: proof thiếu/sai bị chặn trước service, CORS và rate limit thực.</summary>
 public sealed class AuthHttpSecurityTests
 {
+    [Fact]
+    public async Task JwtChallengeUsesProblemJsonEvenForUnsupportedAccept()
+    {
+        await using var factory = new AuthFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Accept.ParseAdd("text/html");
+        var response = await client.GetAsync("/api/v1/auth/session");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("SESSION_EXPIRED", body.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("traceId").GetString()));
+    }
+
     [Theory]
     [InlineData("login")]
     [InlineData("refresh")]

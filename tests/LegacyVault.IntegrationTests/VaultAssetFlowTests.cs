@@ -296,6 +296,8 @@ public sealed class VaultAssetFlowTests : IAsyncLifetime
                 {
                     ["ConnectionStrings:Default"] = connectionString,
                     ["AssetStorage:RootPath"] = storageRoot,
+                    // Ép lưu trên đĩa dù user-secrets đặt Provider = R2, để test không ghi vào bucket thật.
+                    ["AssetStorage:Provider"] = "Local",
                     ["CheckIn:Enabled"] = "false",
                     ["Email:Smtp:UserName"] = "",
                     ["Email:Smtp:Password"] = "",

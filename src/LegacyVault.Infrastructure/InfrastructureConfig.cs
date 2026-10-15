@@ -56,12 +56,16 @@ public static class InfrastructureConfig
 
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();
+        services.AddScoped<IExecutorInvitationRepository, ExecutorInvitationRepository>();
+        services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
 
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()
             .Bind(configuration.GetSection("AssetStorage"))
-            .Validate(settings => !string.IsNullOrWhiteSpace(settings.RootPath),
+            .Validate(settings => settings.IsR2() || !string.IsNullOrWhiteSpace(settings.RootPath),
                 "Thiếu AssetStorage:RootPath.")
+            .Validate(settings => !settings.IsR2() || settings.R2.FindError() == null,
+                "Thiếu AssetStorage:R2 (cần AccountId, BucketName, AccessKeyId, SecretAccessKey).")
             .ValidateOnStart();
 
         // KEK cho mã hóa nội dung tài sản. Sai/thiếu khóa thì API không khởi động, tránh lưu nội dung không mở lại được.
@@ -72,7 +76,8 @@ public static class InfrastructureConfig
                 + "Khi chạy local, chọn profile http (Development).")
             .ValidateOnStart();
         services.AddSingleton<DataKeyProtector>();
-        services.AddSingleton<IAssetContentStore, LocalAssetContentStore>();
+        services.AddSingleton<IR2ObjectClient, S3R2ObjectClient>();
+        services.AddSingleton<IAssetContentStore>(provider => ChooseAssetContentStore(provider));
         // Mã hóa dữ liệu cá nhân của người nhận, dùng chung DataKeyProtector (DATA-02).
         services.AddSingleton<IBeneficiaryDataProtector, BeneficiaryDataProtector>();
 
@@ -170,5 +175,16 @@ public static class InfrastructureConfig
         });
 
         return services;
+    }
+
+    /// <summary>Chọn nơi lưu nội dung tài sản theo AssetStorage:Provider: "R2" dùng Cloudflare R2, còn lại dùng đĩa server.</summary>
+    private static IAssetContentStore ChooseAssetContentStore(IServiceProvider provider)
+    {
+        AssetStorageSettings settings = provider.GetRequiredService<IOptions<AssetStorageSettings>>().Value;
+        if (settings.IsR2())
+        {
+            return ActivatorUtilities.CreateInstance<R2AssetContentStore>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LocalAssetContentStore>(provider);
     }
 }

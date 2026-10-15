@@ -11,6 +11,7 @@ public sealed class ExecutorConfiguration : IEntityTypeConfiguration<Executor>
         builder.ToTable("Executors");
 
         builder.HasKey(e => e.Id);
+        builder.Property(e => e.AcceptedScopeVersion).HasMaxLength(64);
 
         builder.Property(e => e.InviteeEmail)
             .IsRequired()
@@ -48,7 +49,7 @@ public sealed class ExecutorConfiguration : IEntityTypeConfiguration<Executor>
 
         // Không xóa dây chuyền: lời mời là lịch sử, giữ lại dù kho, tài khoản hay hồ sơ người nhận thay đổi.
         builder.HasOne(e => e.Vault)
-            .WithMany()
+            .WithMany(v => v.Executors)
             .HasForeignKey(e => e.VaultId)
             .OnDelete(DeleteBehavior.Restrict);
 

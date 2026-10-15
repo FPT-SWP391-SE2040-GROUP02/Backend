@@ -9,6 +9,7 @@ public static class ApplicationConfig
     {
         // TimeProvider đăng ký một lần ở InfrastructureConfig.
         services.AddScoped<IVaultService, VaultService>();
+        services.AddScoped<IPlanSetupService, PlanSetupService>();
         services.AddScoped<IAssetService, AssetService>();
         services.AddScoped<IContainerService, ContainerService>();
         services.AddScoped<IBeneficiaryService, BeneficiaryService>();

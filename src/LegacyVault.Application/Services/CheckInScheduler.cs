@@ -35,6 +35,7 @@ public sealed class CheckInScheduler : ICheckInScheduler
             repository.AddSchedule(schedule);
         }
 
+        CheckInRules.ApplyPendingSettings(schedule, now);
         int lastSequence = await repository.GetMaxSequenceAsync(plan.Id, ct);
         CheckInPeriod period = new CheckInPeriod();
         period.PlanId = plan.Id;

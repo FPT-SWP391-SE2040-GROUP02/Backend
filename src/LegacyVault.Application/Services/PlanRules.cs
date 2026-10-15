@@ -26,11 +26,17 @@ public static class PlanRules
     }
 
     /// <summary>SETUP-16: kế hoạch mất gói READY cuối cùng (Owner đã xác nhận) → về DRAFT.</summary>
-    public static void Deactivate(HandoverPlan plan, DateTimeOffset now)
+    public static void Deactivate(Vault vault, DateTimeOffset now)
     {
+        var plan = vault.Plan;
         plan.Status = PlanStatus.Draft;
         plan.UpdatedAt = now;
+        foreach (var executor in vault.Executors.Where(e => e.Status == ExecutorStatus.Accepted))
+        {
+            executor.Status = ExecutorStatus.Suspended;
+            executor.EndedAt = now;
+            executor.UpdatedAt = now;
+        }
         // Lịch điểm danh được dừng bởi người gọi qua ICheckInScheduler.StopAsync (ContainerService).
-        // TODO: chuyển Executor sang SUSPENDED khi có module Executor (§11.2).
     }
 }

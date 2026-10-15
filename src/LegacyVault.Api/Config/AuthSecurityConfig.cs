@@ -42,6 +42,8 @@ public static class AuthSecurityConfig
                 (AuthRateLimitPolicies.Login, AuthRateLimitPolicies.LoginPermitLimit),
                 (AuthRateLimitPolicies.Refresh, AuthRateLimitPolicies.SessionPermitLimit),
                 (AuthRateLimitPolicies.Logout, AuthRateLimitPolicies.SessionPermitLimit),
+                ("plan-setup", 10),
+                ("executor-invitations", 30),
             };
             foreach (var (name, limit) in policies)
             {

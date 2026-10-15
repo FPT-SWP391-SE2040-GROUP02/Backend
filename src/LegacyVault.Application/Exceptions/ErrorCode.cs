@@ -48,6 +48,13 @@ public enum ErrorCode
     DeathCaseIncomplete,
     DeathCaseFileLimitExceeded,
     RoleNotAllowed,
+    StorageUnavailable,
+    ExecutorInvitationInvalid,
+    ExecutorInvitationConflict,
+    ExecutorNotAllowed,
+    PlanActivationNotAllowed,
+    PlanActivationRequirementsNotMet,
+    PolicyAcknowledgementRequired,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

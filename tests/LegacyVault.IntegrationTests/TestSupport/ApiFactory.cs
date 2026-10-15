@@ -29,6 +29,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     }
 
     public string StorageRoot { get; }
+    public Action<IServiceCollection>? ConfigureAdditionalServices { get; set; }
 
     /// <summary>
     /// Tạo factory trỏ tới database tên ngẫu nhiên trên server của LEGACYVAULT_TEST_CONNECTION.
@@ -61,6 +62,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Xóa database tạm và thư mục nội dung tạm.</summary>
     public async Task DropAsync()
     {
+        var databaseName = new SqlConnectionStringBuilder(connectionString).InitialCatalog;
+        var storagePath = Path.GetFullPath(StorageRoot);
+        var expectedParent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
+        if (!databaseName.StartsWith("LegacyVault_Test_", StringComparison.Ordinal)
+            || !Guid.TryParseExact(databaseName["LegacyVault_Test_".Length..], "N", out _)
+            || !string.Equals(Path.GetDirectoryName(storagePath), expectedParent, StringComparison.OrdinalIgnoreCase)
+            || !Path.GetFileName(storagePath).StartsWith("legacyvault-test-", StringComparison.Ordinal)
+            || !Guid.TryParseExact(Path.GetFileName(storagePath)["legacyvault-test-".Length..], "N", out _))
+            throw new InvalidOperationException("Refusing cleanup outside the generated test database/directory.");
         using (IServiceScope scope = Services.CreateScope())
         {
             AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -80,6 +90,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             Dictionary<string, string?> settings = new Dictionary<string, string?>();
             settings["ConnectionStrings:Default"] = connectionString;
             settings["AssetStorage:RootPath"] = StorageRoot;
+            // user-secrets của người chạy test có thể đặt Provider = R2: ép lưu trên đĩa để test KHÔNG BAO GIỜ ghi vào bucket thật.
+            settings["AssetStorage:Provider"] = "Local";
             // Jwt riêng cho test (không phụ thuộc appsettings.Development.json); token tạo bằng ITokenService của chính factory.
             settings["Jwt:Issuer"] = "LegacyVault.Tests";
             settings["Jwt:Audience"] = "LegacyVault.Tests";
@@ -87,6 +99,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Jwt:AccessTokenMinutes"] = "15";
             // Tắt job nền điểm danh: test tự gọi ICheckInJob khi cần, tránh job chạy xen vào dữ liệu test.
             settings["CheckIn:Enabled"] = "false";
+            settings["Handover:Job:Enabled"] = "false";
+            settings["ExecutorInvitations:DeliveryEnabled"] = "false";
             settings["DeathCase:NoticeJobEnabled"] = "false";
             settings["DeathCase:AssignmentJobEnabled"] = "false";
             // Môi trường Development nạp user-secrets của người chạy test: ép trống thông tin Gmail để test
@@ -95,5 +109,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Email:Smtp:Password"] = "";
             configuration.AddInMemoryCollection(settings);
         });
+        builder.ConfigureServices(services => ConfigureAdditionalServices?.Invoke(services));
     }
 }
