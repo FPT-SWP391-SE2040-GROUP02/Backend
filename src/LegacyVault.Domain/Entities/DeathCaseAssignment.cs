@@ -19,12 +19,12 @@ public class DeathCaseAssignment
 
     public DateTimeOffset AssignedAt { get; set; }
 
-    /// <summary>Hạn xét: AssignedAt + 48 giờ.</summary>
+    /// <summary>Hạn xét bản đang chờ: lúc giao hoặc lúc Executor gửi bản mới gần nhất + ReviewDueHours (ASSIGN-04).</summary>
     public DateTimeOffset DueAt { get; set; }
 
-    /// <summary>Lúc phân công kết thúc (xét xong, giao lại...); null khi còn hiệu lực.</summary>
+    /// <summary>Lúc phân công kết thúc; chỉ đặt khi giao lại người khác (nhánh C). Duyệt/từ chối không đặt. Null khi còn hiệu lực.</summary>
     public DateTimeOffset? EndedAt { get; set; }
 
-    /// <summary>Lý do kết thúc dạng mã chữ ngắn (≤ 32 ký tự). Đặt ở nhánh B.</summary>
+    /// <summary>Lý do kết thúc dạng mã chữ ngắn (≤ 32 ký tự); chỉ đặt khi giao lại người khác (nhánh C).</summary>
     public string? EndReason { get; set; }
 }
