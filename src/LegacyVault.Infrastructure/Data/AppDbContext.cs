@@ -2,6 +2,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace LegacyVault.Infrastructure.Data;
 
@@ -48,9 +49,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public async Task<T> ExecuteSerializableAsync<T>(Func<Task<T>> operation, CancellationToken ct)
     {
         await using var transaction = await Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
-        var result = await operation();
-        await transaction.CommitAsync(ct);
-        return result;
+        try
+        {
+            var result = await operation();
+            await transaction.CommitAsync(ct);
+            return result;
+        }
+        catch (Exception exception) when (exception.GetBaseException() is SqlException { Number: 1205 })
+        {
+            // Serializable read-modify-write may select a deadlock victim. Dispose rolls back; never retry a mutation.
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
+                "Dữ liệu đang được cập nhật đồng thời. Tải lại trước khi thử lại.");
+        }
     }
     // Xác minh danh tính (eKYC)
     public DbSet<EkycVerification> EkycVerifications => Set<EkycVerification>();

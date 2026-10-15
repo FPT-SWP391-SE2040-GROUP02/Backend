@@ -18,7 +18,7 @@ public static class ApiConfig
             options.CustomizeProblemDetails = context =>
                 context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
         services.AddExceptionHandler<GlobalExceptionHandler>();
-        services.AddOpenApi();
+        services.AddOpenApi(AuthOpenApiConfig.Configure);
         services.AddSingleton<AuthCookieWriter>();
         services.AddAuthSecurity();
 
@@ -56,7 +56,8 @@ public static class ApiConfig
         });
         if (!written)
         {
-            await httpContext.Response.WriteAsJsonAsync(problem);
+            await httpContext.Response.WriteAsJsonAsync(problem, options: null,
+                contentType: "application/problem+json");
         }
     }
 

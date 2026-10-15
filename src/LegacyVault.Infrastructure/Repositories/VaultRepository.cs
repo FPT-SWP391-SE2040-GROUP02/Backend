@@ -43,6 +43,6 @@ public sealed class VaultRepository(AppDbContext context) : IVaultRepository
 
     private IQueryable<Vault> WithPlanAndEntitlement()
     {
-        return context.Vaults.Include(v => v.Plan).Include(v => v.Entitlement);
+        return context.Vaults.Include(v => v.Plan).Include(v => v.Entitlement).Include(v => v.Executors);
     }
 }

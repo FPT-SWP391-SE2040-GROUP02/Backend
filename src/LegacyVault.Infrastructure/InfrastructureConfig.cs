@@ -56,6 +56,8 @@ public static class InfrastructureConfig
 
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();
+        services.AddScoped<IExecutorInvitationRepository, ExecutorInvitationRepository>();
+        services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
 
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()

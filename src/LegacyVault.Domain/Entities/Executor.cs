@@ -54,6 +54,10 @@ public class Executor
 
     public DateTimeOffset? AcceptedAt { get; set; }
 
+    /// <summary>SMTP acknowledgement only; null means delivery is unconfirmed.</summary>
+    public DateTimeOffset? InvitationSentAt { get; set; }
+    public string? AcceptedScopeVersion { get; set; }
+
     /// <summary>Lúc từ chối, hết hạn, bị thu hồi hoặc bị tạm dừng gần nhất.</summary>
     public DateTimeOffset? EndedAt { get; set; }
 

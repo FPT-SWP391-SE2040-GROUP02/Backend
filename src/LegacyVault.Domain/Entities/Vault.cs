@@ -39,4 +39,5 @@ public class Vault
     public VaultEntitlement Entitlement { get; set; } = null!;
 
     public List<Container> Containers { get; set; } = new List<Container>();
+    public List<Executor> Executors { get; set; } = new();
 }

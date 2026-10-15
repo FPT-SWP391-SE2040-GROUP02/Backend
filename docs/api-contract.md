@@ -1,8 +1,10 @@
 # Hợp đồng API — Đăng nhập và Tạo kho
 
-> Phiên bản: 0.1 (13/10/2026) — bản thống nhất giữa BE và FE, **chưa cài đặt**.
-> Căn cứ: SRS v3.14.x, interface trong `src/LegacyVault.Application/Services`, và FE `src/shared/api` (axiosClient, baseService).
+> Cập nhật Auth: 15/10/2026 — mục 3 và 6.1–6.3 đã đối chiếu controller, DTO và service hiện có. Mục 6.4 là contract dự kiến, chưa có controller/implementation. Các module khác giữ trạng thái đối soát riêng; không suy ra toàn bộ tài liệu đã triển khai.
+> Căn cứ: SRS v3.14.0; `AuthController`, `GoogleAuthController`, DTO và services trong Backend; FE `features/auth/api/authService.ts`.
 > Đổi hợp đồng thì sửa file này trong cùng PR và báo FE.
+
+Swagger Auth được cập nhật trực tiếp từ metadata của `AuthController`, `GoogleAuthController` và `AuthOpenApiConfig`: nhóm Auth, summary/description tiếng Việt, request DTO, typed response, CSRF header, Bearer và hai ví dụ response Google. Chỉ thay metadata, không đổi route/logic auth/DB. Swagger chỉ hiển thị 10 endpoint `/api/v1/auth/...`, ẩn alias `/v1/auth/...` bị lặp; alias runtime vẫn giữ để tương thích. Dùng prefix canonical cho cookie như mục 3. Automated check `AuthOpenApiTests` đọc `/openapi/v1.json` thật, kiểm tra 10 endpoint canonical, schema, response không body, CSRF và security optional/required; chạy cùng `AuthHttpSecurityTests` đã pass 10 tests. Khi host đang chạy bản cũ, restart Backend rồi tải lại `/swagger`.
 
 ---
 
@@ -10,7 +12,7 @@
 
 | Mục | Quy ước |
 |---|---|
-| Base URL | FE: `VITE_API_BASE_URL=http://localhost:5000/api`. Mọi route nghiệp vụ bắt đầu bằng `/v1`, nên FE gọi ví dụ `apiClient.post("/v1/auth/login", ...)` |
+| Base URL | FE: `VITE_API_BASE_URL=http://localhost:5000/api/v1`. Gọi relative path `/auth/login` để tạo URL `/api/v1/auth/login`; không ghép lặp `/api/v1`. Các ví dụ `/v1/...` cũ là alias, không dùng cho auth có cookie |
 | Định dạng | JSON, tên trường `camelCase` |
 | Response thành công | Trả **thẳng object/mảng**, **không bọc** `{ success, data }` (axiosClient của FE đã trả `response.data`; baseService coi đó là entity). Type `ApiResponse<T>` ở FE không dùng cho API này |
 | Id | Guid dạng chuỗi, ví dụ `"0199e7a4-5c1b-7c3e-9a51-3f0f5d2b8a10"` |
@@ -25,7 +27,7 @@
 
 ## 2. Lỗi
 
-Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để FE so sánh:
+Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `code` để FE so sánh. Lỗi antiforgery và rate limiter do framework xử lý có thể không có `code`; FE phải xử lý HTTP status riêng:
 
 ```json
 {
@@ -50,7 +52,9 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 }
 ```
 
-- `500 INTERNAL_ERROR` chỉ có `traceId`; gửi `traceId` cho BE khi báo lỗi.
+- `500 INTERNAL_ERROR` có `status`, `title` chung, `code`, `traceId`; không trả exception/stack trace. Gửi `traceId` cho BE khi báo lỗi.
+- Global exception handler giữ `application/problem+json` cả ở nhánh ghi JSON dự phòng khi Accept không được writer hỗ trợ. `BadHttpRequestException` với status 400 trả `VALIDATION_ERROR`, status 413 trả `FILE_TOO_LARGE`; không đưa thông báo exception request vào response.
+- Auth CSRF: **400** khi proof thiếu/sai/khác principal. Rate limit: **429**, `Retry-After` tính bằng giây khi server cấp được thời gian chờ; không giả định response có JSON/code và không tự retry POST.
 
 ### Bảng mã lỗi
 
@@ -107,17 +111,19 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 |---|---|---|
 | Nằm ở | **JSON body** (`accessToken`) | **Cookie HttpOnly** `lv_refresh` |
 | FE lưu | Chỉ RAM; interceptor gửi `Authorization: Bearer`. Cấm Web Storage | Không lưu, JS không đọc được |
-| Sống | 15 phút | Hết khi không dùng 30 phút, tối đa 12 giờ từ lúc đăng nhập (NFR-06) |
+| Sống | Theo `expiresIn` (giây); `Jwt:AccessTokenMinutes` mặc định 15 phút | Idle 30 phút từ lần cấp/refresh thành công, tối đa 12 giờ từ lúc đăng nhập (NFR-06); không suy ra hạn từ hoạt động UI/API thông thường |
 | Cookie | — | `HttpOnly; SameSite=Lax; Path=/api/v1/auth`; `Secure` ngoài môi trường dev |
 
 **Việc FE cần làm:**
 
 1. Các request tới `/api/v1/auth/*` gửi kèm `withCredentials: true` để trình duyệt gửi/nhận cookie `lv_refresh`. Các API khác không cần.
-2. Cấp proof mới bằng `GET /api/v1/auth/csrf` (raw `{ requestToken }`), gửi `X-CSRF-Token` cùng antiforgery cookie trước login/refresh/logout/Google/link-confirm. Proof gắn principal hiện tại: lấy lại sau đổi danh tính; không gửi POST khi acquisition lỗi. Thiếu/sai proof trả 400; vượt limiter trả 429 và Retry-After.
+2. Cấp proof mới bằng `GET /api/v1/auth/csrf` (raw `{ "requestToken": "<opaque-proof>" }`, `Cache-Control: no-store`), gửi `X-CSRF-Token` cùng cookie HttpOnly `lv_antiforgery` (`Path=/api/v1`, `SameSite=Lax`, Secure ngoài Development) trước login/refresh/logout/Google/link-confirm. Proof không phải access JWT. Dùng cùng Bearer principal ở GET và POST; lấy lại sau đổi danh tính, không gửi POST khi acquisition lỗi. Register/verify-email/resend-verification hiện không gắn filter antiforgery hay policy rate limit riêng này.
 3. Đăng xuất: gọi `POST /api/v1/auth/logout`; chỉ xóa RAM/cache và báo hoàn tất sau server success. Logout-all cần bearer principal active hoặc refresh token active, không chấp nhận cookie thuộc user khác. Thu hồi refresh không tự vô hiệu access JWT đang còn hạn.
 4. Không đưa token vào URL/query hoặc log (SEC-06).
 
 BE bật CORS credentials cho origins cấu hình rõ. Alias `/v1` còn tồn tại nhưng cookie Path dùng `/api/v1/auth`; dùng prefix `/api/v1` cho luồng có cookie. Refresh tự động chỉ bật sau checks phối hợp single-flight, nhiều tab và logout/login đang bay; không tự retry mutation.
+
+Refresh xoay token: token cũ bị thu hồi; gửi lại token cũ làm thu hồi cả family và trả `401 SESSION_EXPIRED`. Client phải phối hợp refresh giữa các request/tab, không gọi song song hoặc retry mù. Khi reload, access token RAM đã mất: lấy CSRF → refresh bằng cookie → lưu `accessToken` RAM và dùng `user` trong response. `GET /session` cần Bearer, không khôi phục phiên chỉ bằng refresh cookie. Logo/chuyển trang dùng điều hướng nội bộ, không gọi logout hoặc xóa phiên/cache.
 
 ---
 
@@ -165,12 +171,14 @@ Cột **Quyền**: `Công khai` = không cần token; `Đăng nhập` = cần Be
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| POST | `/v1/auth/register` | Công khai | `RegisterRequest` | **202**, không body | 400 |
-| POST | `/v1/auth/verify-email` | Công khai | `{ token }` | 200 `UserResponse` | 400 `INVALID_VERIFICATION_TOKEN` |
-| POST | `/v1/auth/resend-verification` | Công khai | `{ email }` | **202**, không body | 400 |
+| POST | `/api/v1/auth/register` | Công khai | `RegisterRequest` | **202**, không body | 400 `VALIDATION_ERROR` |
+| POST | `/api/v1/auth/verify-email` | Công khai | `{ token }` | 200 `UserResponse` | 400 `VALIDATION_ERROR` / `INVALID_VERIFICATION_TOKEN` |
+| POST | `/api/v1/auth/resend-verification` | Công khai | `{ email }` | **202**, không body | 400 `VALIDATION_ERROR` |
 
-- `register` và `resend-verification` **luôn trả 202** kể cả khi email đã có tài khoản, để không lộ email nào đã đăng ký. FE hiện: "Nếu email hợp lệ, bạn sẽ nhận được link xác minh".
+- Với DTO hợp lệ và xử lý thành công, `register` trả 202 kể cả email đã tồn tại; `resend-verification` trả 202 cả khi email không tồn tại/đã xác minh. Đây là response chống dò tài khoản, không bảo đảm email đã được giao; lỗi validation/hạ tầng vẫn có thể thất bại. FE hiện: "Nếu email hợp lệ, bạn sẽ nhận được link xác minh".
 - Link trong email có dạng `<FE>/verify-email?token=...`; trang FE đọc `token` rồi gọi `verify-email`.
+- Token xác minh tối đa 256 ký tự, sống 24 giờ, dùng một lần. `UserResponse` sau xác minh **không** có access token hoặc refresh cookie mới, không tự cấp phiên.
+- Register: email hợp lệ ≤256 ký tự; password 8–128; confirmPassword phải khớp; fullName bắt buộc ≤200. Resend nhận email hợp lệ ≤256. Không gửi role/userId hoặc tự coi Google name là định danh đã xác minh.
 
 ```json
 // RegisterRequest
@@ -179,14 +187,15 @@ Cột **Quyền**: `Công khai` = không cần token; `Đăng nhập` = cần Be
 
 ### 6.2. Đăng nhập, phiên, đăng xuất
 
-Bổ sung 14/10/2026: `GET /api/v1/auth/csrf` trả raw requestToken/no-store + cookie HttpOnly; login/refresh/logout/Google/link-confirm bắt buộc proof. Policy IP: login và Google/link-confirm chung 5/phút; refresh/logout mỗi policy 30/phút. Limiter chỉ tin Connection.RemoteIpAddress, không parse X-Forwarded-For tự gửi. Login/refresh/logout chạy Serializable; lỗi credentials/replay chỉ trả sau commit bộ đếm/thu hồi. Không retry deadlock mù. Các HTTP status 400/429 này bổ sung cho bảng phía dưới.
+Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và logout có policy riêng, mỗi policy 30/phút/IP (fixed window, không xếp hàng). Limiter dùng `Connection.RemoteIpAddress`, không parse `X-Forwarded-For` tự gửi. Khóa mật khẩu là cơ chế riêng theo email + dải IP: 5 lần sai trong 15 phút → khóa 15 phút. Login/refresh/logout có xử lý Serializable; không suy rộng bảo đảm transaction này sang Google/link-confirm.
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| POST | `/v1/auth/login` | Công khai | `LoginRequest` | 200 `AuthSessionResponse` + Set-Cookie `lv_refresh` | 400, 401 `INVALID_CREDENTIALS`, 423 `ACCOUNT_LOCKED`, 403 `ACCOUNT_NOT_ACTIVE` |
-| POST | `/v1/auth/refresh` | Cookie `lv_refresh` | — | 200 `AuthSessionResponse` + cookie mới | 401 `SESSION_EXPIRED` (cookie bị xóa) |
-| POST | `/v1/auth/logout` | Công khai | `{ revokeAllDevices? }` (không bắt buộc) | **204** + xóa cookie | 400 CSRF, 401 SESSION_EXPIRED khi logout-all thiếu quyền, 429 |
-| GET | `/v1/auth/session` | Đăng nhập | — | 200 `UserResponse` | 401 `SESSION_EXPIRED` |
+| GET | `/api/v1/auth/csrf` | Công khai; Bearer nếu đang có principal | — | 200 `{ requestToken }` + cookie antiforgery | Lỗi hạ tầng |
+| POST | `/api/v1/auth/login` | Công khai + CSRF | `LoginRequest` | 200 `AuthSessionResponse` + Set-Cookie `lv_refresh` | 400, 401 `INVALID_CREDENTIALS`, 423 `ACCOUNT_LOCKED`, 403 `ACCOUNT_NOT_ACTIVE`, 429 |
+| POST | `/api/v1/auth/refresh` | Cookie `lv_refresh` + CSRF | Không body | 200 `AuthSessionResponse` + cookie mới | 400, 401 `SESSION_EXPIRED` (cookie bị xóa), 429 |
+| POST | `/api/v1/auth/logout` | CSRF; logout-all cần bằng chứng phiên | `{ revokeAllDevices? }` hoặc không body | **204**, không body + xóa cookie | 400, 401 `SESSION_EXPIRED` khi logout-all thiếu quyền, 429 |
+| GET | `/api/v1/auth/session` | Bearer | — | 200 `UserResponse` | 401 `SESSION_EXPIRED` (gồm user không còn active) |
 
 ```json
 // LoginRequest
@@ -214,32 +223,50 @@ Bổ sung 14/10/2026: `GET /api/v1/auth/csrf` trả raw requestToken/no-store + 
 - `status`: `ACTIVE` | `LOCKED` | `DISABLED`.
 - `emailVerified = false` → FE hiện nhắc xác minh và nút gửi lại link; vẫn đăng nhập được nhưng chưa tạo được kho.
 - `rememberMe = true` thì cookie sống qua khi tắt trình duyệt, nhưng phiên vẫn tối đa 12 giờ.
+- Login chỉ nhận email hợp lệ ≤256 ký tự, password bắt buộc ≤128, rememberMe boolean mặc định false. `AuthSessionResponse` là raw body; `user` bên trong chính là `UserResponse`. Không có `refreshToken` trong JSON. `expiresIn: 900` ở ví dụ là cấu hình mặc định, không phải giá trị client được hardcode.
 
 ### 6.3. Đăng nhập Google
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| POST | `/v1/auth/google` | Công khai | `GoogleLoginRequest` | 200 (2 dạng, xem dưới) | 401 `INVALID_GOOGLE_TOKEN`, 403 `ACCOUNT_NOT_ACTIVE` |
-| POST | `/v1/auth/google/link-confirm` | Công khai | `ConfirmGoogleLinkRequest` | 200 `AuthSessionResponse` + cookie | 400 `INVALID_LINK_TICKET`, 401 `INVALID_CREDENTIALS`, 423, 403, 409 `GOOGLE_ACCOUNT_ALREADY_LINKED` |
+| POST | `/api/v1/auth/google` | Công khai + CSRF | `GoogleLoginRequest` | 200 `GoogleLoginResponse` (2 nhánh, xem dưới) | 400 validation/CSRF, 401 `INVALID_GOOGLE_TOKEN`, 403 `ACCOUNT_NOT_ACTIVE`, 429 |
+| POST | `/api/v1/auth/google/link-confirm` | Công khai + CSRF | `ConfirmGoogleLinkRequest` | 200 `AuthSessionResponse` + cookie | 400 validation/CSRF/`INVALID_LINK_TICKET`, 401 `INVALID_CREDENTIALS`, 423 `ACCOUNT_LOCKED`, 403 `ACCOUNT_NOT_ACTIVE`, 409 `GOOGLE_ACCOUNT_ALREADY_LINKED`, 429 |
 
 ```json
 // GoogleLoginRequest — idToken lấy từ Google Identity Services
 { "idToken": "eyJhbGciOi...", "nonce": "random-from-fe", "rememberMe": true, "returnUrl": "/invitations/abc" }
 
-// Dạng 1: đăng nhập được (kèm Set-Cookie lv_refresh)
-{ "signedIn": true, "accountCreated": false, "returnUrl": "/invitations/abc", "session": { /* AuthSessionResponse */ } }
-
-// Dạng 2: email Google trùng tài khoản app chưa liên kết (AUTH-02) — KHÔNG có cookie
-{ "signedIn": false, "linkTicket": "k3Jd...", "maskedEmail": "an***@gmail.com" }
-
 // ConfirmGoogleLinkRequest — người dùng nhập mật khẩu tài khoản app
 { "linkTicket": "k3Jd...", "password": "Matkhau123!", "rememberMe": true }
 ```
 
-- `returnUrl` chỉ nhận đường dẫn nội bộ bắt đầu bằng `/`; giá trị khác bị bỏ (trả `null`).
-- Vé liên kết sống khoảng 10 phút, dùng một lần.
+`GoogleLoginResponse` có đầy đủ sáu trường dưới đây (các trường không dùng có thể là `null`):
+
+| Trường | `signedIn: true` | `signedIn: false` |
+|---|---|---|
+| `signedIn` | `true` | `false` |
+| `accountCreated` | `true` khi vừa tạo user; `false` khi đã liên kết | `false` |
+| `returnUrl` | Đường dẫn đã lọc hoặc `null` | Đường dẫn đã lọc hoặc `null` |
+| `session` | `AuthSessionResponse` như mục 6.2 | `null` |
+| `linkTicket` | `null` | Vé opaque |
+| `maskedEmail` | `null` | Email đã che của tài khoản app |
+
+- Subject Google (`sub`) đã liên kết → đăng nhập user đó. Chưa có liên kết nhưng email trùng user app → chỉ cấp vé, **không tự gộp và không cấp refresh cookie mới**. Chưa có user → tạo user `USER/ACTIVE` không mật khẩu và liên kết Google; `emailVerified` theo claim Google. Không tự tạo kho. Google display name không phải bằng chứng eKYC.
+- Gửi GIS `credential` dưới tên `idToken` (bắt buộc ≤4096 ký tự), không gửi access token OAuth hoặc email/name để Backend tin trực tiếp. Backend kiểm tra chữ ký, issuer, audience và expiry. `nonce` optional ≤256 theo DTO: nếu có giá trị thì phải khớp claim token; FE hiện tạo nonce cho lần lấy credential. Nonce không thay CSRF và Backend chưa có kho nonce dùng một lần.
+- `returnUrl` optional ≤2048; chỉ giữ đường dẫn bắt đầu `/`, loại `//`, `/\` và ký tự điều khiển; không hợp lệ trả `null`. Backend chỉ trả dữ liệu, không tự redirect. FE kiểm tra lại trước điều hướng; link-confirm không nhận/trả returnUrl, nên FE giữ đường dẫn đã kiểm tra trong RAM khi chờ xác nhận.
+- Vé liên kết sống 10 phút, dùng một lần. Giữ vé trong RAM; không lưu URL/storage/log. Ticket ≤256 ký tự; password bắt buộc ≤128; rememberMe boolean mặc định false. Sai mật khẩu giữ màn xác nhận, không coi `401 INVALID_CREDENTIALS` là phiên hết hạn. Vé sai/hết hạn/đã dùng → lấy Google credential mới và bắt đầu lại, không tự retry mutation.
+
+#### Cấu hình và kiểm thử Google local
+
+- Dùng OAuth Client **Web application**, không phải service account. `VITE_GOOGLE_CLIENT_ID` ở FE phải bằng `GoogleAuth:ClientId` ở BE (biến môi trường BE: `GoogleAuth__ClientId`). Đây là public Client ID; luồng GIS ID token này không cần client secret hoặc callback đổi authorization code.
+- Google Cloud → Google Auth Platform → Clients → chọn Web client → Authorized JavaScript origins: thêm chính xác `http://localhost:5173`, Save. Origin không có path; scheme/host/port phải khớp FE thực tế. `Cors:AllowedOrigins` của Backend cũng phải cho origin FE và credentials; hai cấu hình này độc lập.
+- Thiếu Client ID BE hiện phát sinh lỗi cấu hình và trả 500; audience/nonce/token không hợp lệ trả 401. Lỗi `origin_mismatch` thuộc cấu hình GIS trước khi gọi API. Không đưa client secret vào biến `VITE_*`.
+- Chạy local theo [Google Auth local recovery](GOOGLE-AUTH-LOCAL-RECOVERY.md); ví dụ request ở [google-auth.http](../http/google-auth.http). Swagger/OpenAPI Development: `/swagger`, `/openapi/v1.json`; route xuất hiện trong tài liệu này chưa bảo đảm xuất hiện trong OpenAPI.
+- Đã có xác nhận người dùng đăng nhập Google thật vào dashboard ngày 15/10/2026. Nhánh email trùng → link-confirm đã có implementation và automated checks; xác nhận trên không chứng minh đã E2E nhánh này bằng tài khoản Google thật.
 
 ### 6.4. Phương thức đăng nhập của tôi
+
+> **Dự kiến, chưa triển khai endpoint.** Hiện chỉ có `ILoginMethodService` và DTO, chưa có service implementation/controller/DI. Không gọi các route dưới đây từ UI chính thức; không xem các mã lỗi dưới đây là response đã kiểm chứng. Đây là quản lý phương thức của user đang đăng nhập, khác luồng công khai `/auth/google/link-confirm` đã triển khai ở mục 6.3. Chưa chốt CSRF/rate limit cho các route dự kiến này.
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
@@ -255,6 +282,7 @@ Bổ sung 14/10/2026: `GET /api/v1/auth/csrf` trả raw requestToken/no-store + 
 ```
 
 - `REAUTHENTICATION_FAILED` là 401 nhưng phiên vẫn còn: interceptor **không** được coi là hết phiên.
+- Quên/đặt lại mật khẩu, OTP, passkey và 2FA cũng chưa có endpoint trong Backend hiện tại; UI/scaffold hoặc type FE không chứng minh đã có API.
 
 ### 6.5. Kho
 
@@ -644,3 +672,6 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 | 4 | Không dùng `ApiResponse<T>` cho API này (BE không bọc envelope) | `shared/types` |
 | 5 | Bổ sung hằng trạng thái: `LOCKED`, `DISABLED`, `OPEN`, `CLOSED`, `READY`, `ARCHIVED`, `PAID_ACTIVE`... (hiện `STATUS` chưa có) | `shared/constants` |
 | 6 | Gọi route có tiền tố `/v1` (base URL đã có `/api`) | các `features/*/api` |
+# Executor setup and activation (15/10/2026)
+
+See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.

@@ -1,8 +1,11 @@
 ### Đăng nhập Google (api-contract §6.3)
 # Cần cấu hình GoogleAuth:ClientId trước khi chạy API.
-# idToken thật lấy từ FE (Google Identity Services) — copy từ DevTools rồi dán vào đây.
+# Dùng GIS credential của tài khoản dev làm idToken, không dùng OAuth access token.
+# Không commit credential/linkTicket/password thật. Ưu tiên kiểm thử qua FE;
+# nếu dùng file này, chỉ thay placeholder local và hoàn nguyên trước commit.
 @baseUrl = http://localhost:5000
 @idToken = dan-google-id-token-vao-day
+@nonce = nonce-da-truyen-cho-gis-khi-lay-credential
 
 ### Lấy proof với cùng cookie jar trước các POST; lấy lại sau đổi principal
 # @name googleCsrf
@@ -17,13 +20,18 @@ Content-Type: application/json
 
 {
   "idToken": "{{idToken}}",
+  "nonce": "{{nonce}}",
   "rememberMe": true,
   "returnUrl": "/dashboard"
 }
 
+### Chỉ chạy khi bước 1 trả signedIn=false; không gọi nếu đã signedIn=true
+# @name linkCsrf
+GET {{baseUrl}}/api/v1/auth/csrf
+
 ### 2. Email Google trùng tài khoản có mật khẩu: dán linkTicket từ bước 1 và nhập mật khẩu tài khoản app
 POST {{baseUrl}}/api/v1/auth/google/link-confirm
-X-CSRF-Token: {{csrfToken}}
+X-CSRF-Token: {{linkCsrf.response.body.requestToken}}
 Content-Type: application/json
 
 {

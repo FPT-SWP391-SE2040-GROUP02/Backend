@@ -66,6 +66,19 @@ public sealed class CheckInSchedulerTests
     }
 
     [Fact]
+    public async Task RestartAfterDeactivationAppliesPendingSettingsToTheNewPeriod()
+    {
+        var schedule = new CheckInSchedule { PlanId = plan.Id, CycleDays = 30, GraceDays = 7, PendingCycleDays = 60, PendingGraceDays = 14 };
+        repository.Schedules.Add(schedule);
+        await scheduler.StartFirstPeriodAsync(plan, CancellationToken.None);
+        var period = Assert.Single(repository.Periods);
+        Assert.Equal(Now.AddDays(60), period.DueAt);
+        Assert.Equal(Now.AddDays(74), period.GraceEndsAt);
+        Assert.Null(schedule.PendingCycleDays);
+        Assert.Null(schedule.PendingGraceDays);
+    }
+
+    [Fact]
     public async Task Stop_ClosesOpenPeriodWithoutMarkingCheckIn()
     {
         await scheduler.StartFirstPeriodAsync(plan, CancellationToken.None);

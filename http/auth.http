@@ -1,5 +1,6 @@
-# Thu API xac thuc theo docs/api-contract.md va SRS 3.15
+# Thử API xác thực hiện có theo docs/api-contract.md mục 3, 6.1–6.3.
 # Trinh duyet/REST Client tu dong luu va gui cookie lv_refresh giua cac request
+# Chỉ dùng tài khoản dev. Các giá trị bên dưới là placeholder; không commit token/mật khẩu thật.
 
 @api = http://localhost:5000/api/v1/auth
 
@@ -15,7 +16,7 @@ Content-Type: application/json
 }
 
 ### 2. Xac minh email bang token -> 200 OK UserResponse
-# Token nhan duoc trong console log cua backend khi chay voi DevEmailSender
+# Token lấy từ email xác minh gửi tới tài khoản dev; không yêu cầu ghi token vào log.
 POST {{api}}/verify-email
 Content-Type: application/json
 
@@ -56,22 +57,37 @@ Content-Type: application/json
 GET {{api}}/session
 Authorization: Bearer {{accessToken}}
 
+### Lấy proof anonymous mới trước refresh (GET và POST đều không gửi Bearer)
+# @name refreshCsrf
+GET {{api}}/csrf
+
 ### 6. Lam moi phien (dung cookie lv_refresh) -> 200 OK AuthSessionResponse + cookie moi
+# @name refresh
 POST {{api}}/refresh
-X-CSRF-Token: {{csrfToken}}
+X-CSRF-Token: {{refreshCsrf.response.body.requestToken}}
+
+### Lấy proof theo Bearer mới trước logout; giữ cùng principal cho POST tiếp theo
+# @name logoutCsrf
+GET {{api}}/csrf
+Authorization: Bearer {{refresh.response.body.accessToken}}
 
 ### 7. Dang xuat -> 204 No Content + xoa cookie lv_refresh
 POST {{api}}/logout
-X-CSRF-Token: {{csrfToken}}
+Authorization: Bearer {{refresh.response.body.accessToken}}
+X-CSRF-Token: {{logoutCsrf.response.body.requestToken}}
 Content-Type: application/json
 
 {
   "revokeAllDevices": false
 }
 
+### Lấy proof anonymous mới cho ví dụ lỗi login độc lập
+# @name failedLoginCsrf
+GET {{api}}/csrf
+
 ### 8. Thu dang nhap sai mat khau -> 401 INVALID_CREDENTIALS (attemptsRemaining giam dan)
 POST {{api}}/login
-X-CSRF-Token: {{csrfToken}}
+X-CSRF-Token: {{failedLoginCsrf.response.body.requestToken}}
 Content-Type: application/json
 
 {
