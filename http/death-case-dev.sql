@@ -17,6 +17,7 @@
 --      Vai trò Verifier được service đọc từ DB nên đổi Role xong không cần đăng nhập lại để gọi API; FE vẫn đọc claim trong
 --      token nên cần đăng nhập lại nếu FE phân trang theo vai trò.
 --   4. Dùng lệnh "Cho phép duyệt" ở cuối file để coi như Owner đã nhận thư và hết 72 giờ phản đối.
+--   5. Muốn thử NHẮC hoặc GIAO LẠI Verifier (job phân công, ASSIGN-04): xem mục "Cho phép nhắc / giao lại" ở cuối file.
 --
 -- Lưu ý: nếu chạy bằng sqlcmd phải thêm cờ -I (QUOTED_IDENTIFIER ON), vì bảng có index lọc; SSMS đã bật sẵn.
 -- Cách dùng: thay 3 email bên dưới bằng tài khoản ĐÃ ĐĂNG KÝ và xác minh email (xem http/auth.http), rồi chạy cả file.
@@ -100,5 +101,22 @@ SELECT @vaultId AS VaultId, @ownerEmail AS Owner, @executorEmail AS Executor, @v
 -- Sau khi DUYỆT, kế hoạch sang HANDOVER_IN_PROGRESS và có lượt bàn giao; muốn thử lại từ đầu thì chạy lại cả file này (dọn lượt cũ).
 --   SELECT p.Status FROM HandoverPlans p WHERE p.VaultId = @vaultId;
 --   SELECT t.Status, t.ContainerName, t.InvitedAt FROM HandoverTurns t WHERE t.VaultId = @vaultId;
+-- Cho phép nhắc / giao lại Verifier (job phân công, ASSIGN-04, TIME-02; chạy SAU khi Executor gửi hồ sơ).
+-- Job DeathCaseAssignmentMonitor quét mỗi 60 giây (DeathCase:AssignmentPollSeconds): bật API rồi chờ tối đa khoảng 60 giây.
+-- LƯU Ý: lệnh "Cho phép duyệt" ở trên chỉ lùi ObjectionEndsAt, KHÔNG dời DueAt của phân công (D1: DueAt chỉ được dời khi
+-- job báo Owner giao thư thành công), nên muốn thử nhắc hoặc giao lại hãy dùng các lệnh lùi DueAt RIÊNG dưới đây.
+-- Muốn thấy giao lại cần ít nhất 2 tài khoản Verifier Active (không phải Owner/Executor của kho); chỉ có 1 người thì hồ sơ giữ
+-- nguyên người cũ và (khi quá hạn) chỉ nhắc người đó. Chưa cấu hình email thì thư nhắc chỉ ghi log "[NHẮC VERIFIER HỒ SƠ CHỨNG TỬ]".
+-- Giao lại làm đổi etag của hồ sơ: Verifier cũ gọi lại sẽ nhận 404 (đang thao tác giữa chừng thì có thể nhận 409 EDIT_CONFLICT).
+-- Thử NHẮC (còn 6 giờ tới hạn, chưa nhắc lần nào; sau khi nhắc, RemindedDueAt = DueAt và không nhắc lại cho hạn này):
+--   UPDATE a SET DueAt = DATEADD(HOUR, 6, SYSDATETIMEOFFSET()), RemindedDueAt = NULL FROM DeathCaseAssignments a JOIN DeathCases c ON c.Id = a.CaseId WHERE c.VaultId = @vaultId AND a.EndedAt IS NULL;
+-- Thử GIAO LẠI vì quá hạn (hồ sơ phải UNDER_REVIEW; SUPPLEMENT_REQUIRED đang chờ Executor thì không bị giao lại vì quá hạn, D2):
+--   UPDATE a SET DueAt = DATEADD(HOUR, -1, SYSDATETIMEOFFSET()), RemindedDueAt = NULL FROM DeathCaseAssignments a JOIN DeathCases c ON c.Id = a.CaseId WHERE c.VaultId = @vaultId AND a.EndedAt IS NULL;
+-- Thử GIAO LẠI vì Verifier mất quyền (giao ngay, cả khi UNDER_REVIEW lẫn SUPPLEMENT_REQUIRED; Users.Status lưu dạng chữ: Active | Locked | Disabled):
+--   UPDATE u SET Status = 'Locked' FROM Users u JOIN DeathCaseAssignments a ON a.VerifierUserId = u.Id JOIN DeathCases c ON c.Id = a.CaseId WHERE c.VaultId = @vaultId AND a.EndedAt IS NULL;
+-- Mở khóa lại các Verifier đã bị phân công kết thúc vì mất quyền ở kho này (để thử lại):
+--   UPDATE u SET Status = 'Active' FROM Users u WHERE u.Id IN (SELECT a.VerifierUserId FROM DeathCaseAssignments a JOIN DeathCases c ON c.Id = a.CaseId WHERE c.VaultId = @vaultId AND a.EndReason = 'VERIFIER_UNAVAILABLE');
+-- Xem ai đang giữ (EndedAt = NULL), hạn xét, lần nhắc gần nhất và lý do kết thúc (OVERDUE | VERIFIER_UNAVAILABLE):
+--   SELECT u.Email, a.AssignedAt, a.DueAt, a.RemindedDueAt, a.EndedAt, a.EndReason FROM DeathCaseAssignments a JOIN DeathCases c ON c.Id = a.CaseId JOIN Users u ON u.Id = a.VerifierUserId WHERE c.VaultId = @vaultId ORDER BY a.AssignedAt;
 -- Giả lập Owner có điểm danh sau ngày mất để thử cờ DEATH-10 (làm TRƯỚC khi Executor gửi hồ sơ; kho cần có ít nhất một kỳ điểm danh):
 --   UPDATE CheckInPeriods SET CheckedInAt = SYSDATETIMEOFFSET(), ClosedAt = SYSDATETIMEOFFSET() WHERE ClosedAt IS NULL AND PlanId IN (SELECT Id FROM HandoverPlans WHERE VaultId = @vaultId);
