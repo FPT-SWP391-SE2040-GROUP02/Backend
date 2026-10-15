@@ -148,4 +148,22 @@ public sealed class VerifierDeathCasesController : ControllerBase
         Response.Headers["Cache-Control"] = "no-store";
         return await reviewService.RejectAsync(caseId, request, ct);
     }
+
+    /// <summary>
+    /// Duyệt hồ sơ và mở bàn giao F3 (tạo lượt, ghim snapshot, gửi lời mời cho người nhận). Chưa duyệt được thì 409
+    /// DEATH_CASE_NOT_ALLOWED kèm reason và approveBlockers. Gọi lặp trên hồ sơ đã duyệt trả 200 (handover = null).
+    /// </summary>
+    [HttpPost("death-cases/{caseId:guid}/approve")]
+    [Consumes("application/json")]
+    [ProducesResponseType<VerifierDeathCaseResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<VerifierDeathCaseResponse> Approve(
+        Guid caseId, ApproveDeathCaseRequest request, CancellationToken ct)
+    {
+        Response.Headers["Cache-Control"] = "no-store";
+        return await reviewService.ApproveAsync(caseId, request, ct);
+    }
 }

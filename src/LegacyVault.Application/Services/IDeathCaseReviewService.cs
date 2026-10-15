@@ -51,4 +51,12 @@ public interface IDeathCaseReviewService
     /// Kế hoạch không ở DEATH_CASE_OPEN hoặc hồ sơ thiếu trạng thái trước → 409 PLAN_STATE_INVALID.
     /// </summary>
     Task<VerifierDeathCaseResponse> RejectAsync(Guid caseId, RejectDeathCaseRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// DEATH-06: duyệt hồ sơ và mở bàn giao F3 (IHandoverStarter) trong MỘT lần lưu. Chưa duyệt được thì 409
+    /// DEATH_CASE_NOT_ALLOWED (reason = lý do đầu, approveBlockers = đủ danh sách) hoặc PLAN_STATE_INVALID;
+    /// không có gói nào để bàn giao thì 409 HANDOVER_NOT_ALLOWED và hồ sơ vẫn đang xét.
+    /// Gọi lặp trên hồ sơ đã duyệt trả 200 (handover = null); hồ sơ đã bị từ chối thì 409 CASE_CLOSED.
+    /// </summary>
+    Task<VerifierDeathCaseResponse> ApproveAsync(Guid caseId, ApproveDeathCaseRequest request, CancellationToken ct);
 }

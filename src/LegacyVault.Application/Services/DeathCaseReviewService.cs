@@ -28,6 +28,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     private readonly IDeathCaseRepository deathCaseRepository;
     private readonly IDeathCaseReviewRepository reviewRepository;
     private readonly IExecutorReader executorReader;
+    private readonly IHandoverStarter handoverStarter;
     private readonly IDeathCaseDataProtector dataProtector;
     private readonly IAssetContentStore contentStore;
     private readonly IUnitOfWork unitOfWork;
@@ -40,6 +41,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         IDeathCaseRepository deathCaseRepository,
         IDeathCaseReviewRepository reviewRepository,
         IExecutorReader executorReader,
+        IHandoverStarter handoverStarter,
         IDeathCaseDataProtector dataProtector,
         IAssetContentStore contentStore,
         IUnitOfWork unitOfWork,
@@ -51,6 +53,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         this.deathCaseRepository = deathCaseRepository;
         this.reviewRepository = reviewRepository;
         this.executorReader = executorReader;
+        this.handoverStarter = handoverStarter;
         this.dataProtector = dataProtector;
         this.contentStore = contentStore;
         this.unitOfWork = unitOfWork;
@@ -303,6 +306,87 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         return await BuildResponseAsync(context, null, ct);
     }
 
+    public async Task<VerifierDeathCaseResponse> ApproveAsync(
+        Guid caseId, ApproveDeathCaseRequest request, CancellationToken ct)
+    {
+        // 1) Chuẩn hóa input trước, rồi Verifier + phân công đang hiệu lực (V3).
+        string reason = DeathCaseReviewRules.NormalizeReason(request.Reason, "reason");
+        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
+        DeathCase deathCase = context.DeathCase;
+
+        // 2) AC-71: hồ sơ đã đóng (kiểm TRƯỚC etag). Đã duyệt rồi thì gọi lặp trả trạng thái hiện tại
+        //    (không thêm dòng, không gọi lại StartAsync); đã bị từ chối thì 409 CASE_CLOSED.
+        if (deathCase.Status == DeathCaseStatus.ApprovedForHandover)
+        {
+            return await BuildResponseAsync(context, null, ct);
+        }
+        EnsureNotClosed(deathCase);
+
+        // 3) STATE-03: etag.
+        EnsureEtag(request.Etag, deathCase);
+
+        // 4) DEATH-04, 08, 09, 10: còn lý do chưa duyệt được thì 409, reason = lý do đầu, approveBlockers = cả danh sách.
+        //    Sau đó ROLE-03 (VERIFIER_CONFLICT).
+        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase, timeProvider.GetUtcNow());
+        if (blockers.Count > 0)
+        {
+            Dictionary<string, object?> blockerExtensions = new Dictionary<string, object?>();
+            blockerExtensions["reason"] = blockers[0];
+            blockerExtensions["approveBlockers"] = blockers;
+            throw new AppException(AppErrorType.Conflict, ErrorCode.DeathCaseNotAllowed,
+                "Hồ sơ chứng tử chưa duyệt được.", blockerExtensions);
+        }
+        await EnsureNoConflictOfInterestAsync(context, ct);
+
+        // 5) Kế hoạch phải đang khóa DEATH_CASE_OPEN (lúc Executor gửi lần đầu).
+        Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
+        if (vault == null || vault.Plan.Status != PlanStatus.DeathCaseOpen)
+        {
+            throw NotAllowed(DeathCaseNotAllowedReason.PlanStateInvalid);
+        }
+
+        // 6) Đánh dấu duyệt NHƯNG CHƯA LƯU: quyết định, đóng hồ sơ. Phân công giữ nguyên.
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        DeathCaseDecision decision = NewDecision(context, DeathCaseDecisionKind.Approved, reason, now);
+        deathCase.Decisions.Add(decision);
+        reviewRepository.AddDecision(decision);
+        deathCase.Status = DeathCaseStatus.ApprovedForHandover;
+        deathCase.ClosedAt = now;
+        deathCase.UpdatedAt = now;
+
+        // 7) DEATH-06, V6: ApproveAsync KHÔNG tự SaveChanges. Lần lưu duy nhất là lần đầu bên trong StartAsync
+        //    (cùng một lần lưu: quyết định + hồ sơ + lượt bàn giao + snapshot + kế hoạch). Không cấp grant, không giải mã
+        //    tài sản: StartAsync chỉ tạo lượt Invited.
+        HandoverStartResult result;
+        try
+        {
+            result = await handoverStarter.StartAsync(deathCase.VaultId, ct);
+        }
+        catch (AppException ex) when (ex.Code == ErrorCode.HandoverNotAllowed)
+        {
+            // Ví dụ NOTHING_TO_HAND_OVER: StartAsync ném TRƯỚC khi lưu → bỏ thay đổi chưa lưu, hồ sơ vẫn đang xét.
+            deathCaseRepository.DiscardPendingChanges();
+            throw;
+        }
+        catch (Exception ex) when (IsSaveRace(ex))
+        {
+            // AC-71: Verifier khác vừa duyệt, hoặc Owner/job vừa đổi kế hoạch (EDIT_CONFLICT, trùng lượt/quyết định).
+            return await ResolveApproveConflictAsync(caseId, ct);
+        }
+
+        // Kế hoạch đã có lượt bàn giao từ trước: StartAsync không lưu gì, các thay đổi ở bước 6 vẫn chưa được lưu.
+        if (result.AlreadyStarted)
+        {
+            return await ResolveApproveConflictAsync(caseId, ct);
+        }
+
+        VerifierHandoverResponse handover = new VerifierHandoverResponse();
+        handover.TurnCount = result.TurnCount;
+        handover.InvitationsSent = result.InvitationsSent;
+        handover.InvitationsFailed = result.InvitationsFailed;
+        return await BuildResponseAsync(context, handover, ct);
+    }
+
     /// <summary>
     /// ROLE-04: đọc tài khoản từ DB, không tin claim role trong token.
     /// Không có tài khoản → 401 SESSION_EXPIRED; không Active → 403 ACCOUNT_NOT_ACTIVE; không phải Verifier → 403 ROLE_NOT_ALLOWED.
@@ -377,6 +461,13 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         }
 
         List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase, timeProvider.GetUtcNow());
+        // ROLE-03: GetApproveBlockers giữ thuần; xung đột lợi ích cần đọc kho nên thêm ở đây, cuối danh sách,
+        // để FE không hiện nút duyệt với Verifier sẽ bị chặn lúc ghi.
+        bool conflict = await HasConflictOfInterestAsync(deathCase, context.UserId, ct);
+        if (conflict)
+        {
+            blockers.Add(DeathCaseNotAllowedReason.VerifierConflict.ToApiString());
+        }
         return deathCase.ToVerifierResponse(context.Assignment, identity, previous, blockers, handover);
     }
 
@@ -405,6 +496,21 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
             return null;
         }
         return await BuildResponseAsync(latest, null, ct);
+    }
+
+    /// <summary>
+    /// Luật bên thua khi duyệt (AC-71): bỏ thay đổi chưa lưu, đọc lại hồ sơ. Đã ApprovedForHandover (bên kia duyệt xong)
+    /// → 200 trạng thái hiện tại, handover = null. Còn lại (kế hoạch đã có lượt mà hồ sơ chưa duyệt, hoặc kế hoạch
+    /// bị đổi) → 409 PLAN_STATE_INVALID, hồ sơ vẫn đang xét. Không SaveChanges.
+    /// </summary>
+    private async Task<VerifierDeathCaseResponse> ResolveApproveConflictAsync(Guid caseId, CancellationToken ct)
+    {
+        VerifierDeathCaseResponse? current = await TryResolveDecisionConflictAsync(caseId, DeathCaseStatus.ApprovedForHandover, ct);
+        if (current != null)
+        {
+            return current;
+        }
+        throw NotAllowed(DeathCaseNotAllowedReason.PlanStateInvalid);
     }
 
     /// <summary>
@@ -445,7 +551,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     {
         DeathCaseDecision decision = new DeathCaseDecision();
         decision.CaseId = context.DeathCase.Id;
-        decision.VersionNo = context.DeathCase.ReviewVersionNo!.Value;
+        decision.VersionNo = DeathCaseReviewRules.FindReviewVersion(context.DeathCase).VersionNo;
         decision.Kind = kind;
         decision.Reason = reason;
         decision.VerifierUserId = context.Assignment.VerifierUserId;

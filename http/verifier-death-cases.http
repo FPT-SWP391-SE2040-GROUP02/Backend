@@ -70,3 +70,13 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "etag": "{{etag}}", "reason": "Giấy chứng tử không khớp thông tin Owner." }
+
+### 7) Duyệt hồ sơ và mở bàn giao F3 (DEATH-06). Cần: Owner đã nhận thư và hết 72 giờ (xem death-case-dev.sql), hết cờ chưa
+# xem xét, Executor không có bản nháp mới hơn, có gói READY. Chưa duyệt được → 409 DEATH_CASE_NOT_ALLOWED kèm reason và
+# approveBlockers; không có gói READY → 409 HANDOVER_NOT_ALLOWED (NOTHING_TO_HAND_OVER). Dùng etag MỚI NHẤT.
+# Gọi lặp trên hồ sơ đã duyệt: 200, handover = null. Response lần đầu có handover { turnCount, invitationsSent, invitationsFailed }.
+POST {{baseUrl}}/verifier/death-cases/{{caseId}}/approve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "reason": "Giấy chứng tử hợp lệ, thông tin khớp." }

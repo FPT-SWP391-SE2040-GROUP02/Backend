@@ -328,6 +328,26 @@ public static class DeathCaseReviewTestData
         return await RejectAsync(submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(), reason);
     }
 
+    public static Task<HttpResponseMessage> ApproveAsync(HttpClient verifier, Guid caseId, string? etag, string? reason)
+    {
+        return verifier.PostAsJsonAsync(VerifierCaseUrl(caseId) + "/approve", new { etag, reason });
+    }
+
+    /// <summary>Verifier đọc lấy etag hiện tại rồi duyệt với lý do cho trước; trả response của lệnh duyệt.</summary>
+    public static async Task<HttpResponseMessage> ApproveNowAsync(SubmittedCase submitted, string reason)
+    {
+        JsonElement detail = await GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+        return await ApproveAsync(submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(), reason);
+    }
+
+    /// <summary>Hồ sơ đã gửi và Owner đã nhận thư cách đây 80 giờ (hết 72 giờ phản đối): sẵn sàng để duyệt.</summary>
+    public static async Task<SubmittedCase> CreateReadyToApproveCaseAsync(ApiFactory factory)
+    {
+        SubmittedCase submitted = await CreateSubmittedCaseAsync(factory);
+        await MarkOwnerNotifiedAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow.AddHours(-80));
+        return submitted;
+    }
+
     /// <summary>Đặt StatusBeforeCase của hồ sơ (giả lập hồ sơ gửi khi kế hoạch đang ở trạng thái khác ACTIVE).</summary>
     public static async Task SetStatusBeforeCaseAsync(ApiFactory factory, Guid caseId, PlanStatus? status)
     {
