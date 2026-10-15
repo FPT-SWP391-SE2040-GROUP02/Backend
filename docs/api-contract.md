@@ -65,6 +65,7 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 | 401 | `REAUTHENTICATION_FAILED` | Xác thực lại thất bại khi đổi phương thức đăng nhập (**không** đá về trang login) | |
 | 403 | `ACCOUNT_NOT_ACTIVE` | Tài khoản bị khóa/vô hiệu | |
 | 403 | `EMAIL_NOT_VERIFIED` | Tạo kho khi email chưa xác minh | |
+| 403 | `ROLE_NOT_ALLOWED` | Gọi API Verifier khi tài khoản (đọc từ DB, không tin claim trong token) không phải Verifier | |
 | 403 | `PAID_TIER_REQUIRED` | Hạng Free đưa tài sản vào gói, tạo hồ sơ người nhận hoặc gắn người nhận vào gói | |
 | 404 | `VAULT_NOT_FOUND` | Chưa có kho, hoặc kho của người khác | |
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
@@ -78,7 +79,7 @@ Mọi lỗi trả theo chuẩn **ProblemDetails** (RFC 9457) kèm `code` để F
 | 409 | `EKYC_DOCUMENT_EXPIRED` | Gửi selfie khi chưa đọc mặt trước, đã so khớp rồi, hoặc quá 30 phút | |
 | 503 | `EKYC_SERVICE_UNAVAILABLE` | Không gọi được dịch vụ eKYC (chưa cấu hình, tắt, quá thời gian chờ) | |
 | 404 | `DEATH_CASE_NOT_FOUND` | Không có hồ sơ chứng tử, hoặc người gọi không phải Executor đang hiệu lực của kho, hoặc là Owner của kho | |
-| 409 | `DEATH_CASE_NOT_ALLOWED` | Thao tác hồ sơ chứng tử không được lúc này | `reason`: `PLAN_NOT_RUNNING` (kèm `planStatus`) / `VERSION_LOCKED` / `CASE_CLOSED` / `CASE_NOT_REVISABLE` |
+| 409 | `DEATH_CASE_NOT_ALLOWED` | Thao tác hồ sơ chứng tử không được lúc này | `reason`: `PLAN_NOT_RUNNING` (kèm `planStatus`) / `VERSION_LOCKED` / `CASE_CLOSED` / `CASE_NOT_REVISABLE`; phía Verifier (mục 6.12): `NOT_UNDER_REVIEW` / `NEWER_VERSION_PENDING` / `OWNER_NOT_NOTIFIED` / `OBJECTION_PERIOD_NOT_OVER` / `FLAGS_NOT_REVIEWED` / `VERIFIER_CONFLICT` / `PLAN_STATE_INVALID` | `approveBlockers` (khi duyệt bị chặn) |
 | 409 | `DEATH_CASE_INCOMPLETE` | Gửi hồ sơ khi còn thiếu trường hoặc chưa có trang giấy nào | `missingRequirements` |
 | 409 | `DEATH_CASE_FILE_LIMIT_EXCEEDED` | Bản hồ sơ đã đủ 10 trang giấy | `maxFiles` |
 | 409 | `VAULT_NOT_EDITABLE` | Kho không cho sửa lúc này | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `SERVICE_READ_ONLY` |
@@ -507,7 +508,7 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
 
 ### 6.11. Executor nộp hồ sơ chứng tử
 
-Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, khai thông tin trên giấy, tải các trang giấy rồi xác nhận gửi (SRS §6.2 F2B). Cần đăng nhập (Bearer); người dùng lấy từ token. **Người gọi phải là Executor đang hiệu lực (`Accepted`) của kho và không phải Owner của kho đó**; không đủ điều kiện thì `404` (`VAULT_NOT_FOUND` / `DEATH_CASE_NOT_FOUND`) để không lộ kho hay hồ sơ có tồn tại hay không. Phần Verifier xét duyệt, yêu cầu bổ sung và Owner phản đối chưa có trong mục này.
+Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, khai thông tin trên giấy, tải các trang giấy rồi xác nhận gửi (SRS §6.2 F2B). Cần đăng nhập (Bearer); người dùng lấy từ token. **Người gọi phải là Executor đang hiệu lực (`Accepted`) của kho và không phải Owner của kho đó**; không đủ điều kiện thì `404` (`VAULT_NOT_FOUND` / `DEATH_CASE_NOT_FOUND`) để không lộ kho hay hồ sơ có tồn tại hay không. Phần Verifier xét hồ sơ nằm ở mục 6.12; Owner phản đối chưa có.
 
 | Method | URL | Body | Thành công | Lỗi |
 |---|---|---|---|---|
@@ -538,6 +539,8 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
   },
   "reviewVersionNo": 1,
   "missingRequirements": [],
+  "supplementRequest": null,   // khi SUPPLEMENT_REQUIRED: { "versionNo": 1, "reason": "...", "requestedParts": ["FILES"], "requestedAt": "..." }
+  "rejectReason": null,        // khi REJECTED: lý do Verifier từ chối
   "ownerNotice": { "status": "DELIVERED", "deliveredAt": "2026-10-15T03:06:00+00:00" },
   "objectionEndsAt": "2026-10-18T03:06:00+00:00",
   "createdAt": "2026-10-15T03:00:00+00:00", "updatedAt": "2026-10-15T03:05:00+00:00", "etag": "\"639...\""
@@ -550,6 +553,7 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
 - **Trang giấy**: PDF, JPEG, PNG hoặc WEBP, tối đa 20 MiB mỗi tệp, tối đa 10 tệp mỗi bản. Loại tệp xác định theo **nội dung thật**, không theo đuôi hay Content-Type: tệp đổi đuôi (ví dụ `.exe` thành `.pdf`) bị `400`. Nội dung được mã hóa khi lưu và **không tính vào dung lượng kho**. Response chỉ có metadata, chưa có API tải trang về.
 - **Gửi hồ sơ** (`submit`): cần `confirm = true` (Executor xác nhận thông tin đúng), đủ 6 trường và ít nhất một trang, nếu không `409 DEATH_CASE_INCOMPLETE` kèm `missingRequirements` (`OWNER_FULL_NAME`, `OWNER_CITIZEN_ID`, `DATE_OF_DEATH`, `CERTIFICATE_NUMBER`, `ISSUED_ON`, `ISSUED_BY`, `FILES`). Trong **một lần lưu**: khóa bản vừa gửi (không bao giờ sửa lại), chuyển kế hoạch sang `DEATH_CASE_OPEN` (lần gửi đầu; từ đó Owner không sửa kho được: `VAULT_NOT_EDITABLE` / `PLAN_LOCKED`, không điểm danh được: `CHECKIN_NOT_ALLOWED`), đặt cờ nếu Owner có điểm danh sau ngày mất, xếp thông báo cho Owner và phân công Verifier. Kế hoạch bị đổi ở nơi khác đúng lúc đó (Owner điểm danh, job quá hạn) → `409 EDIT_CONFLICT`, không ghi đè. Gửi lặp bản đã gửi trả trạng thái hiện tại.
 - **Phiên bản bổ sung** (`versions`): khi hồ sơ `UNDER_REVIEW` hoặc `SUPPLEMENT_REQUIRED`, tạo bản `versionNo + 1` chép dữ liệu và các trang của bản đã gửi (dùng chung nội dung đã lưu). Mỗi hồ sơ chỉ có một bản nháp (`CASE_NOT_REVISABLE` nếu đã có hoặc chưa có bản nào được gửi). Verifier vẫn xét bản gửi gần nhất (`reviewVersionNo`) cho tới khi bản mới được gửi và xác nhận lại. Bản đã gửi không đổi.
+- **Phía Verifier tác động đến Executor (mục 6.12)**: `supplementRequest` chỉ có khi hồ sơ `SUPPLEMENT_REQUIRED` (yêu cầu bổ sung gần nhất; mã `requestedParts` viết hoa như `missingRequirements`; **không** có thông tin Verifier) và về `null` khi Executor gửi lại. `rejectReason` chỉ có khi hồ sơ `REJECTED` (lý do Verifier nhập, để Executor mở hồ sơ mới); trạng thái khác thì `null`. `ownerNotice.status` có thể là `CANCELLED` (hồ sơ bị từ chối trước khi gửi được thư cho Owner). **Thao tác của Verifier làm đổi `etag` hồ sơ**: Executor đang sửa bản nháp có thể nhận `409 EDIT_CONFLICT` và phải tải lại hồ sơ rồi sửa tiếp. Executor gửi bản mới (không phải lần đầu) thì hạn xét của Verifier được tính lại.
 - **Thông báo Owner**: gửi hồ sơ chỉ ghi nhận thông báo (`ownerNotice.status = PENDING`); job nền gửi email, được SMTP nhận thì `DELIVERED` và `objectionEndsAt` = lúc giao + 72 giờ. Thử tối đa 5 lần rồi `FAILED` (đồng hồ chưa chạy). Gửi bản bổ sung đổi **họ tên Owner, CCCD Owner hoặc ngày mất** thì báo lại và chạy lại 72 giờ; đổi số giấy, nơi cấp, ngày cấp thì giữ nguyên đồng hồ.
 
 **Các điểm khác SRS (đã chốt với nhóm):**
@@ -558,7 +562,66 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
 - Thông báo Owner theo hàng đợi (outbox) và SMTP nhận thư được coi là "đã giao" (DEATH-08); sự cố khi mọi kênh đều lỗi (F4) chưa làm, hiện chỉ ghi log.
 - Phân công Verifier xoay vòng theo lần được giao gần nhất; loại Owner, Executor đang hiệu lực của kho và người gửi. Chưa loại được người nhận vì người nhận chưa gắn tài khoản trước F3 (ROLE-03 một phần). Không có Verifier phù hợp thì để trống (ASSIGN-04 làm ở nhánh Verifier).
 - Snapshot bàn giao ghim lúc **duyệt** (`IHandoverStarter`), không ghim lúc Executor gửi.
-- Chưa làm: Verifier duyệt/từ chối/yêu cầu bổ sung (nhánh B), Owner phản đối "Tôi còn sống" (DEATH-07), tạm dừng (DEATH-13), sự cố F4, nhật ký kiểm toán.
+- Chưa làm: Verifier duyệt (nhánh B, bước sau; xem mục 6.12), Owner phản đối "Tôi còn sống" (DEATH-07), tạm dừng (DEATH-13), sự cố F4, nhật ký kiểm toán.
+
+### 6.12. Verifier xét hồ sơ chứng tử
+
+Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy chứng tử (SRS §6.2 F2B, §6.4 ASSIGN). Cần đăng nhập (Bearer). Mọi API kiểm tài khoản từ **DB** (không tin claim `role` trong token, ROLE-04) theo thứ tự: không có tài khoản `401 SESSION_EXPIRED`; không `Active` `403 ACCOUNT_NOT_ACTIVE`; không phải Verifier `403 ROLE_NOT_ALLOWED`. Sau đó hồ sơ không tồn tại, hoặc **tôi không có phân công đang hiệu lực** (`EndedAt` rỗng) trên hồ sơ đó, đều là `404 DEATH_CASE_NOT_FOUND` giống nhau (SEC-04, SEC-05). Phân công đã kết thúc (giao lại người khác) thì không còn thấy hồ sơ.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/v1/verifier/death-cases` | query mục 5: `pageIndex`, `pageSize`, `sortBy` = `dueAt` (mặc định) \| `assignedAt` (không phân biệt hoa thường), `isAscending`; `searchTerm` **bị bỏ qua** | 200 `PaginatedList<VerifierDeathCaseSummaryResponse>` | 400 (`sortBy` lạ), 401, 403 |
+| GET | `/v1/verifier/death-cases/{caseId}` | — | 200 `VerifierDeathCaseResponse`, `Cache-Control: no-store` | 401, 403, 404 |
+| GET | `/v1/verifier/death-cases/{caseId}/files/{fileId}/content` | — | 200 nội dung trang (byte gốc) | 401, 403, 404, 500 `CONTENT_INTEGRITY_FAILED` |
+| POST | `/v1/verifier/death-cases/{caseId}/flags/{flagId}/review` | `{ etag, note }` | 200 `VerifierDeathCaseResponse` (etag mới) | 400, 403, 404, 409 `EDIT_CONFLICT` / `DEATH_CASE_NOT_ALLOWED` |
+| POST | `/v1/verifier/death-cases/{caseId}/request-supplement` | `{ etag, reason, requestedParts: [...] }` | 200 `VerifierDeathCaseResponse` | 400, 403, 404, 409 `EDIT_CONFLICT` / `DEATH_CASE_NOT_ALLOWED` |
+| POST | `/v1/verifier/death-cases/{caseId}/reject` | `{ etag, reason }` | 200 `VerifierDeathCaseResponse` | 400, 403, 404, 409 `EDIT_CONFLICT` / `DEATH_CASE_NOT_ALLOWED` (`CASE_CLOSED`, `NOT_UNDER_REVIEW`, `VERIFIER_CONFLICT`, `PLAN_STATE_INVALID`) |
+
+```jsonc
+// VerifierDeathCaseSummaryResponse (mỗi phần tử của items) — chỉ 4 số cuối CCCD
+{ "id": "0199...", "status": "UNDER_REVIEW", "reviewVersionNo": 1, "ownerCitizenIdLast4": "8901",
+  "dateOfDeath": "2026-10-10", "submittedAt": "2026-10-15T03:05:00+00:00",
+  "assignedAt": "2026-10-15T03:05:00+00:00", "dueAt": "2026-10-17T03:05:00+00:00",
+  "objectionEndsAt": null, "unreviewedFlagCount": 0, "closedAt": null }
+
+// VerifierDeathCaseResponse
+{
+  "id": "0199...", "vaultId": "0199...", "status": "UNDER_REVIEW", "etag": "\"639...\"",
+  "createdAt": "...", "firstSubmittedAt": "...", "closedAt": null,
+  "reviewVersion": { "versionNo": 2, "ownerFullName": "Nguyễn Văn An", "ownerCitizenId": "012345678901",
+    "ownerCitizenIdLast4": "8901", "dateOfDeath": "2026-10-10", "certificateNumber": "123/2026/TT",
+    "issuedOn": "2026-10-11", "issuedBy": "UBND phường Bến Nghé", "submittedAt": "...",
+    "files": [ { "id": "0199...", "position": 1, "fileName": "trang.pdf", "contentType": "application/pdf", "sizeBytes": 531, "uploadedAt": "..." } ] },
+  "versions": [ { "versionNo": 1, "ownerCitizenIdLast4": "8901", "dateOfDeath": "2026-10-10", "submittedAt": "...", "files": [] } ],
+  "flags": [ { "id": "0199...", "kind": "CHECKIN_AFTER_DEATH", "detail": "...", "createdAt": "...", "reviewedAt": null, "reviewNote": null } ],
+  "decisions": [],
+  "ownerNotice": { "status": "DELIVERED", "deliveredAt": "..." },
+  "objectionEndsAt": "...",
+  "assignment": { "assignedAt": "...", "dueAt": "..." },
+  "canApprove": false, "approveBlockers": ["OBJECTION_PERIOD_NOT_OVER"],
+  "previousCase": null, "handover": null
+}
+```
+
+- **Dữ liệu trả (DATA-02, cách hiểu):** `reviewVersion` (bản Executor gửi gần nhất, `reviewVersionNo`) có đủ họ tên, **CCCD 12 số**, số giấy, nơi cấp, vì Verifier được giao là "người cần" (SEC-05) và ảnh giấy chứng tử vốn có số đầy đủ. Câu "không trả CCCD đầy đủ trước khi xác minh xong" áp cho **người nhận ở F3**, không áp cho CCCD của Owner trong hồ sơ chứng tử. `versions[]` (các bản đã gửi khác) chỉ có cột không mã hóa (4 số cuối, ngày mất, `submittedAt`, metadata trang). Danh sách chỉ có 4 số cuối. Verifier **không bao giờ** thấy bản nháp. Không trả thông tin Executor, email Owner, khóa lưu trữ, SHA-256, Id người quyết định.
+- **`approveBlockers`** (cộng dồn, theo thứ tự): `NOT_UNDER_REVIEW` (hồ sơ không ở `UNDER_REVIEW`), `NEWER_VERSION_PENDING` (Executor đang có bản nháp mới hơn bản đang xét), `OWNER_NOT_NOTIFIED` (đồng hồ 72 giờ chưa chạy), `OBJECTION_PERIOD_NOT_OVER` (DEATH-09), `FLAGS_NOT_REVIEWED` (DEATH-10, chỉ cờ của bản đang xét). `canApprove` = danh sách rỗng. Không gồm `VERIFIER_CONFLICT` (kiểm lúc ghi). Chưa có hold/phản đối F2C.
+- **`ownerNotice.status`**: `PENDING` | `DELIVERED` | `FAILED` | `CANCELLED`.
+- **`previousCase`** (DEATH-12): hồ sơ bị từ chối trước đó của cùng kho (`id`, `closedAt`, `rejectReason`), hoặc `null`.
+- **Xem trang (DATA-06):** gọi bằng Bearer access token ngắn hạn, gắn đúng người dùng, **không** phải đường link ký sẵn dùng chung. Chỉ xem được trang của bản **đã gửi** của đúng hồ sơ (kể cả bản cũ); trang của bản nháp hoặc của hồ sơ khác là `404`. Nội dung được giải mã hai lượt: lượt 1 kiểm toàn vẹn (kích thước, SHA-256), chỉ khi qua mới gửi byte đầu tiên; hỏng hoặc mất tệp thì `500 CONTENT_INTEGRITY_FAILED` và không có byte nội dung nào. Response: `Content-Type` giữ nguyên nếu là PDF/JPEG/PNG/WEBP (còn lại `application/octet-stream`), `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`. Máy chủ ghi log "đã xem trang" (chỉ Id hồ sơ, Id tệp, Id người xem); TODO chuyển sang nhật ký kiểm toán (SEC-07, DATA-07).
+
+- **Thao tác ghi của Verifier** (xem xét cờ, yêu cầu bổ sung, từ chối, duyệt) đều bắt buộc `etag`, kiểm theo thứ tự: chuẩn hóa input (400) → tài khoản Verifier và phân công đang hiệu lực (401/403/404) → [xem xét cờ: tìm cờ của bản đang xét, không thấy 404] → gọi lặp → hồ sơ đã đóng (`CASE_CLOSED`) → `etag` (`EDIT_CONFLICT`) → trạng thái (`NOT_UNDER_REVIEW`) → `VERIFIER_CONFLICT` → ghi một lần. Mọi thao tác ghi làm đổi `etag` hồ sơ; FE dùng `etag` trong response cho thao tác kế tiếp (ví dụ xem xét cờ xong thì lấy `etag` mới để bấm duyệt).
+- **Xem xét cờ** (`flags/{flagId}/review`): chỉ cờ của bản đang xét (cờ của bản cũ hoặc hồ sơ khác: `404`). `note` bắt buộc, ≤ 1000 ký tự. Gọi lặp trên cờ đã xem xét trả `200` và **giữ ghi chú đầu**, không kiểm `etag`. Hết cờ chưa xem xét thì `FLAGS_NOT_REVIEWED` biến mất khỏi `approveBlockers`.
+- **Yêu cầu bổ sung** (`request-supplement`): `reason` bắt buộc ≤ 1000 ký tự; `requestedParts` bắt buộc có ít nhất một phần, **mỗi phần phải là mã viết hoa đúng như `missingRequirements`** (`OWNER_FULL_NAME`, `OWNER_CITIZEN_ID`, `DATE_OF_DEATH`, `CERTIFICATE_NUMBER`, `ISSUED_ON`, `ISSUED_BY`, `FILES`; chữ thường hoặc mã lạ là `400`). Server bỏ trùng, sắp xếp rồi lưu. Hồ sơ → `SUPPLEMENT_REQUIRED`; **phân công, kế hoạch và đồng hồ 72 giờ giữ nguyên**. Làm được cả khi Executor đang soạn bản nháp. Gọi lặp cùng nội dung khi hồ sơ đang `SUPPLEMENT_REQUIRED` trả `200`, không thêm dòng (kiểm trước `etag`). Chưa gửi email cho Executor (TODO). Mỗi lần Executor gửi bản mới **không phải lần đầu**, hạn xét (`assignment.dueAt`) của phân công đang hiệu lực được tính lại = lúc gửi + 48 giờ (`assignedAt` giữ nguyên).
+- **Từ chối** (`reject`): `reason` bắt buộc ≤ 1000 ký tự; Executor sẽ thấy (`rejectReason` ở mục 6.11). Làm được từ `UNDER_REVIEW` hoặc `SUPPLEMENT_REQUIRED`, kể cả khi Executor đang có bản nháp. Trong **một lần lưu**: thêm quyết định `REJECTED` (gắn `reviewVersionNo` và phân công đang hiệu lực), hồ sơ → `REJECTED` + `closedAt`, **kế hoạch trở về trạng thái trước khi gửi hồ sơ** (`ACTIVE` / `CHECKIN_OVERDUE` / `AWAITING_CHECK`; Owner điểm danh lại được), thông báo Owner còn `PENDING` → `CANCELLED` (job không gửi nữa; `DELIVERED`/`FAILED` giữ nguyên; không gửi email khi từ chối). Phân công **không** kết thúc (chỉ giao lại mới kết thúc). Kế hoạch không ở `DEATH_CASE_OPEN` hoặc hồ sơ thiếu trạng thái trước → `409 DEATH_CASE_NOT_ALLOWED` `PLAN_STATE_INVALID`, không ghi gì. Gọi lặp trên hồ sơ đã bị từ chối → `200` trạng thái hiện tại (không thêm dòng, kiểm trước `etag`); hồ sơ đã được duyệt → `409 CASE_CLOSED`. Mỗi hồ sơ chỉ có tối đa một quyết định cuối (`REJECTED` hoặc `APPROVED`, DB chặn bằng chỉ mục unique); hai Verifier từ chối cùng lúc thì bên thua nhận `200` hoặc `409 EDIT_CONFLICT`.
+- **Trễ tối đa 60 giây sau khi từ chối (NFR-03)**: kế hoạch chỉ được trả về trạng thái trước đó; kỳ điểm danh không bị sửa. Job điểm danh tính lại theo kỳ (ví dụ `ACTIVE` → `CHECKIN_OVERDUE` nếu kỳ đã quá hạn trong lúc xét) trong vòng 60 giây, nên trạng thái kế hoạch có thể trễ tối đa 60 giây so với lịch. API điểm danh trả trạng thái hiệu lực theo giờ server nên FE không sai.
+- **"Nhả snapshot" (SRS §11.2)**: snapshot bàn giao chỉ được ghim lúc **duyệt**, nên khi từ chối chưa có snapshot nào để nhả.
+- **ROLE-03 (`VERIFIER_CONFLICT`)**: Verifier là Owner của kho, Executor đang hiệu lực của kho, hoặc người gửi bản đang xét thì không được ghi (xem thì vẫn được). **Vế "người nhận của kho" chưa kiểm**: người nhận là bản ghi mã hóa theo email, chưa gắn tài khoản trước F3 (lúc giao ở nhánh A cũng không loại).
+
+**Các điểm khác SRS / chưa làm của mục 6.12 (cập nhật dần theo từng API):**
+- ASSIGN-04 (giao người cho hồ sơ chưa có người, nhắc và giao lại khi quá 48 giờ) làm ở nhánh sau; nhánh này chỉ đọc phân công đang hiệu lực.
+- ROLE-03 vế "người nhận của kho" chưa kiểm: người nhận là bản ghi mã hóa theo email, chưa gắn tài khoản trước F3 (lúc giao ở nhánh A cũng không loại).
+- Chưa có nhật ký kiểm toán (SEC-07, DATA-07) cho việc xem trang; hiện chỉ ghi log.
+- API duyệt (`approve`, mở bàn giao F3) chưa có trong phiên bản này của mục 6.12; chưa có hold/phản đối của Owner (F2C, DEATH-07).
 
 ## 7. Tóm tắt thay đổi FE cần làm
 

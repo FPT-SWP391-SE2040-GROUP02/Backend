@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
@@ -200,5 +201,195 @@ public static class DeathCaseReviewTestData
             await db.SaveChangesAsync();
         });
         return decision.Id;
+    }
+
+    /// <summary>
+    /// DEATH-10: chèn thẳng một cờ CHECKIN_AFTER_DEATH chưa xem xét vào bản đang xét (ReviewVersionNo) của hồ sơ.
+    /// Không đổi UpdatedAt của hồ sơ nên etag không đổi. Trả Id cờ.
+    /// </summary>
+    public static async Task<Guid> AddFlagAsync(ApiFactory factory, Guid caseId)
+    {
+        return await AddFlagToVersionAsync(factory, caseId, null);
+    }
+
+    /// <summary>Như AddFlagAsync nhưng gắn vào bản có số versionNo (null = bản đang xét).</summary>
+    public static async Task<Guid> AddFlagToVersionAsync(ApiFactory factory, Guid caseId, int? versionNo)
+    {
+        DeathCaseFlag flag = new DeathCaseFlag();
+        flag.CaseId = caseId;
+        flag.Kind = DeathCaseFlagKind.CheckinAfterDeath;
+        flag.Detail = "Owner có điểm danh sau ngày mất ghi trên giấy chứng tử.";
+        flag.CreatedAt = DateTimeOffset.UtcNow;
+
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            DeathCase deathCase = await db.Set<DeathCase>().AsNoTracking().SingleAsync(c => c.Id == caseId);
+            int target = 1;
+            if (versionNo != null)
+            {
+                target = versionNo.Value;
+            }
+            else if (deathCase.ReviewVersionNo != null)
+            {
+                target = deathCase.ReviewVersionNo.Value;
+            }
+            flag.VersionId = await db.Set<DeathCaseVersion>()
+                .Where(v => v.CaseId == caseId && v.VersionNo == target)
+                .Select(v => v.Id)
+                .SingleAsync();
+            db.Set<DeathCaseFlag>().Add(flag);
+            await db.SaveChangesAsync();
+        });
+        return flag.Id;
+    }
+
+    /// <summary>Phân công đang hiệu lực (EndedAt null) của hồ sơ; không có → null.</summary>
+    public static async Task<DeathCaseAssignment?> LoadActiveAssignmentAsync(ApiFactory factory, Guid caseId)
+    {
+        DeathCaseAssignment? assignment = null;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            assignment = await db.Set<DeathCaseAssignment>().AsNoTracking()
+                .FirstOrDefaultAsync(a => a.CaseId == caseId && a.EndedAt == null);
+        });
+        return assignment;
+    }
+
+    /// <summary>Chèn thẳng một phân công mới (giả lập nhánh C giao lại). Phân công cũ phải đã kết thúc.</summary>
+    public static async Task<DeathCaseAssignment> AddAssignmentAsync(
+        ApiFactory factory, Guid caseId, Guid verifierUserId, DateTimeOffset assignedAt, DateTimeOffset dueAt)
+    {
+        DeathCaseAssignment assignment = new DeathCaseAssignment();
+        assignment.CaseId = caseId;
+        assignment.VerifierUserId = verifierUserId;
+        assignment.AssignedAt = assignedAt;
+        assignment.DueAt = dueAt;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            db.Set<DeathCaseAssignment>().Add(assignment);
+            await db.SaveChangesAsync();
+        });
+        return assignment;
+    }
+
+    /// <summary>Đặt hạn xét của phân công đang hiệu lực (để thử đặt lại DueAt).</summary>
+    public static async Task SetActiveDueAtAsync(ApiFactory factory, Guid caseId, DateTimeOffset dueAt)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<DeathCaseAssignment>().Where(a => a.CaseId == caseId && a.EndedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.DueAt, dueAt));
+        });
+    }
+
+    public const string VerifierListUrl = "/api/v1/verifier/death-cases";
+
+    public static string VerifierCaseUrl(Guid caseId)
+    {
+        return VerifierListUrl + "/" + caseId;
+    }
+
+    public static string VerifierFileUrl(Guid caseId, Guid fileId)
+    {
+        return VerifierCaseUrl(caseId) + "/files/" + fileId + "/content";
+    }
+
+    /// <summary>Verifier đọc chi tiết hồ sơ (phải 200), trả JSON.</summary>
+    public static async Task<JsonElement> GetDetailAsync(HttpClient verifier, Guid caseId)
+    {
+        HttpResponseMessage response = await verifier.GetAsync(VerifierCaseUrl(caseId));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
+    public static Task<HttpResponseMessage> ReviewFlagAsync(
+        HttpClient verifier, Guid caseId, Guid flagId, string? etag, string? note)
+    {
+        return verifier.PostAsJsonAsync(
+            VerifierCaseUrl(caseId) + "/flags/" + flagId + "/review", new { etag, note });
+    }
+
+    public static Task<HttpResponseMessage> RequestSupplementAsync(
+        HttpClient verifier, Guid caseId, string? etag, string? reason, string[]? requestedParts)
+    {
+        return verifier.PostAsJsonAsync(
+            VerifierCaseUrl(caseId) + "/request-supplement", new { etag, reason, requestedParts });
+    }
+
+    public static Task<HttpResponseMessage> RejectAsync(HttpClient verifier, Guid caseId, string? etag, string? reason)
+    {
+        return verifier.PostAsJsonAsync(VerifierCaseUrl(caseId) + "/reject", new { etag, reason });
+    }
+
+    /// <summary>Verifier đọc lấy etag hiện tại rồi từ chối với lý do cho trước; trả response của lệnh từ chối.</summary>
+    public static async Task<HttpResponseMessage> RejectNowAsync(SubmittedCase submitted, string reason)
+    {
+        JsonElement detail = await GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+        return await RejectAsync(submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(), reason);
+    }
+
+    /// <summary>Đặt StatusBeforeCase của hồ sơ (giả lập hồ sơ gửi khi kế hoạch đang ở trạng thái khác ACTIVE).</summary>
+    public static async Task SetStatusBeforeCaseAsync(ApiFactory factory, Guid caseId, PlanStatus? status)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<DeathCase>().Where(c => c.Id == caseId)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.StatusBeforeCase, status));
+        });
+    }
+
+    /// <summary>Thêm một kỳ điểm danh đang mở bắt đầu daysAgo ngày trước; trả Id kỳ.</summary>
+    public static async Task<Guid> AddOpenPeriodAsync(ApiFactory factory, Guid planId, int daysAgo)
+    {
+        await DeathCaseTestData.AddCheckInPeriodAsync(factory, planId, 1, DateTimeOffset.UtcNow.AddDays(-daysAgo), null);
+        Guid periodId = Guid.Empty;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            periodId = await db.CheckInPeriods.Where(p => p.PlanId == planId).Select(p => p.Id).SingleAsync();
+        });
+        return periodId;
+    }
+
+    public static async Task<HandoverPlan> LoadPlanAsync(ApiFactory factory, Guid vaultId)
+    {
+        HandoverPlan? plan = null;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            plan = await db.HandoverPlans.AsNoTracking().SingleAsync(p => p.VaultId == vaultId);
+        });
+        return plan!;
+    }
+
+    /// <summary>Executor đọc lại hồ sơ (để lấy etag mới nhất, vì thao tác của Verifier làm đổi etag).</summary>
+    public static async Task<JsonElement> GetExecutorCaseAsync(SubmittedCase submitted)
+    {
+        HttpResponseMessage response = await submitted.Executor.Client.GetAsync(DeathCaseApi.CaseUrl(submitted.CaseId));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
+    /// <summary>Executor tạo phiên bản bổ sung từ bản đã gửi (201), trả JSON hồ sơ có bản nháp mới.</summary>
+    public static async Task<JsonElement> CreateDraftVersionAsync(SubmittedCase submitted)
+    {
+        JsonElement current = await GetExecutorCaseAsync(submitted);
+        HttpResponseMessage response = await submitted.Executor.Client.PostAsJsonAsync(
+            DeathCaseApi.CaseUrl(submitted.CaseId) + "/versions",
+            new { etag = current.GetProperty("etag").GetString() });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
+    /// <summary>
+    /// Executor gửi lại: tạo bản nháp mới, đổi nơi cấp (không trọng yếu nên không báo lại Owner) rồi gửi. Trả JSON sau khi gửi.
+    /// </summary>
+    public static async Task<JsonElement> ResubmitAsync(SubmittedCase submitted)
+    {
+        JsonElement draft = await CreateDraftVersionAsync(submitted);
+        HttpResponseMessage edit = await submitted.Executor.Client.PutAsJsonAsync(
+            DeathCaseApi.CaseUrl(submitted.CaseId) + "/draft",
+            new { etag = draft.GetProperty("etag").GetString(), issuedBy = "UBND phường Bến Thành" });
+        Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        JsonElement edited = await ApiTestHelpers.ReadJsonAsync(edit);
+        return await DeathCaseApi.SubmitOkAsync(submitted.Executor.Client, edited);
     }
 }

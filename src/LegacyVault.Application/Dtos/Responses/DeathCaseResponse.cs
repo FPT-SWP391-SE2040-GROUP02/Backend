@@ -26,6 +26,18 @@ public class DeathCaseResponse
     /// </summary>
     public List<string> MissingRequirements { get; set; } = new List<string>();
 
+    /// <summary>
+    /// DEATH-01: yêu cầu bổ sung gần nhất của Verifier khi hồ sơ đang SUPPLEMENT_REQUIRED; trạng thái khác thì null.
+    /// Không có thông tin Verifier.
+    /// </summary>
+    public DeathCaseSupplementRequestResponse? SupplementRequest { get; set; }
+
+    /// <summary>
+    /// DEATH-12: lý do Verifier từ chối khi hồ sơ REJECTED (Executor là người phải mở hồ sơ mới); trạng thái khác thì null.
+    /// Không có thông tin Verifier.
+    /// </summary>
+    public string? RejectReason { get; set; }
+
     /// <summary>Thông báo gần nhất cho Owner (DEATH-08); null khi chưa gửi hồ sơ lần nào.</summary>
     public DeathCaseNoticeResponse? OwnerNotice { get; set; }
 
@@ -84,8 +96,22 @@ public class DeathCaseFileResponse
 /// <summary>Trạng thái thông báo cho Owner.</summary>
 public class DeathCaseNoticeResponse
 {
-    /// <summary>PENDING | DELIVERED | FAILED.</summary>
+    /// <summary>PENDING | DELIVERED | FAILED | CANCELLED (hồ sơ bị từ chối trước khi gửi được thư).</summary>
     public string Status { get; set; } = string.Empty;
 
     public DateTimeOffset? DeliveredAt { get; set; }
+}
+
+/// <summary>DEATH-01: Verifier yêu cầu Executor bổ sung những gì.</summary>
+public class DeathCaseSupplementRequestResponse
+{
+    /// <summary>Bản hồ sơ mà Verifier đã xét khi yêu cầu.</summary>
+    public int VersionNo { get; set; }
+
+    public string Reason { get; set; } = string.Empty;
+
+    /// <summary>Mã viết hoa như missingRequirements: OWNER_FULL_NAME, ..., FILES.</summary>
+    public List<string> RequestedParts { get; set; } = new List<string>();
+
+    public DateTimeOffset RequestedAt { get; set; }
 }

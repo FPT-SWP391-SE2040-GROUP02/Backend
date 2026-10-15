@@ -62,6 +62,8 @@ public static class DeathCaseMappings
         response.ReviewVersionNo = deathCase.ReviewVersionNo;
         response.MissingRequirements = DeathCaseRules.GetMissingRequirements(
             ownerFullName, ownerCitizenId, current.DateOfDeath, certificateNumber, current.IssuedOn, issuedBy, current.Files.Count);
+        response.SupplementRequest = ToSupplementRequestResponse(deathCase);
+        response.RejectReason = ToRejectReason(deathCase);
         response.OwnerNotice = ToNoticeResponse(deathCase);
         response.ObjectionEndsAt = deathCase.ObjectionEndsAt;
         response.CreatedAt = deathCase.CreatedAt;
@@ -94,6 +96,58 @@ public static class DeathCaseMappings
             }
         }
         throw new InvalidOperationException("Hồ sơ chứng tử thiếu phiên bản hiện tại.");
+    }
+
+    /// <summary>
+    /// DEATH-01: yêu cầu bổ sung mới nhất (theo DecidedAt rồi Id) khi hồ sơ đang SupplementRequired.
+    /// Trạng thái khác, hoặc không có dòng quyết định, → null (không ném lỗi). Không lộ thông tin Verifier.
+    /// </summary>
+    private static DeathCaseSupplementRequestResponse? ToSupplementRequestResponse(DeathCase deathCase)
+    {
+        if (deathCase.Status != DeathCaseStatus.SupplementRequired)
+        {
+            return null;
+        }
+        DeathCaseDecision? latest = null;
+        foreach (DeathCaseDecision decision in deathCase.Decisions)
+        {
+            if (decision.Kind != DeathCaseDecisionKind.SupplementRequested)
+            {
+                continue;
+            }
+            if (latest == null || VerifierDeathCaseMappings.CompareDecisions(decision, latest) > 0)
+            {
+                latest = decision;
+            }
+        }
+        if (latest == null)
+        {
+            return null;
+        }
+
+        DeathCaseSupplementRequestResponse response = new DeathCaseSupplementRequestResponse();
+        response.VersionNo = latest.VersionNo;
+        response.Reason = latest.Reason;
+        response.RequestedParts = DeathCaseReviewRules.SplitRequestedParts(latest.RequestedParts);
+        response.RequestedAt = latest.DecidedAt;
+        return response;
+    }
+
+    /// <summary>DEATH-12: lý do của dòng quyết định Rejected khi hồ sơ REJECTED; trạng thái khác hoặc không có dòng → null.</summary>
+    private static string? ToRejectReason(DeathCase deathCase)
+    {
+        if (deathCase.Status != DeathCaseStatus.Rejected)
+        {
+            return null;
+        }
+        foreach (DeathCaseDecision decision in deathCase.Decisions)
+        {
+            if (decision.Kind == DeathCaseDecisionKind.Rejected)
+            {
+                return decision.Reason;
+            }
+        }
+        return null;
     }
 
     /// <summary>Thông báo của bản mới nhất; cùng bản thì lấy thông báo tạo sau. Chưa có → null.</summary>

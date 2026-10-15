@@ -1,0 +1,72 @@
+# Thử Verifier xét hồ sơ chứng tử (F2B nhánh B) — chỉ Development.
+#
+# Chuẩn bị:
+#   1. Làm xong luồng Executor gửi hồ sơ (http/death-cases.http). Hồ sơ được phân công cho một Verifier xoay vòng:
+#      xem bảng DeathCaseAssignments (dòng EndedAt = NULL) để biết ĐÚNG tài khoản Verifier được giao.
+#   2. Đăng nhập bằng tài khoản VERIFIER được giao (vai trò đọc từ DB, không cần đăng nhập lại sau khi đổi Role).
+#
+# Luồng: danh sách → chi tiết → xem trang → xem xét cờ → yêu cầu bổ sung → (Executor gửi lại) → từ chối / duyệt.
+# Hồ sơ không giao cho bạn (hoặc phân công đã kết thúc) luôn là 404 DEATH_CASE_NOT_FOUND.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập tài khoản Verifier được giao
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "verifier@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### 1) Hồ sơ đang giao cho tôi — sortBy: dueAt (mặc định) | assignedAt; hồ sơ còn mở đứng trước. searchTerm bị bỏ qua.
+# Chỉ có 4 số cuối CCCD.
+GET {{baseUrl}}/verifier/death-cases?pageIndex=1&pageSize=10&sortBy=dueAt&isAscending=true
+Authorization: Bearer {{token}}
+
+### Điền caseId từ danh sách
+@caseId = 00000000-0000-0000-0000-000000000000
+
+### 2) Chi tiết (no-store). reviewVersion có CCCD 12 số; versions[] (bản cũ) chỉ có 4 số cuối.
+# approveBlockers cho biết vì sao chưa duyệt được (OBJECTION_PERIOD_NOT_OVER, FLAGS_NOT_REVIEWED...).
+# @name detail
+GET {{baseUrl}}/verifier/death-cases/{{caseId}}
+Authorization: Bearer {{token}}
+
+###
+@fileId = {{detail.response.body.$.reviewVersion.files[0].id}}
+
+### 3) Xem một trang giấy (byte gốc; tải về, không lưu đệm). Trang hỏng/mất → 500 CONTENT_INTEGRITY_FAILED.
+GET {{baseUrl}}/verifier/death-cases/{{caseId}}/files/{{fileId}}/content
+Authorization: Bearer {{token}}
+
+### 4) Xem xét một cờ của bản đang xét (DEATH-10). etag lấy từ chi tiết; gọi lặp giữ ghi chú đầu.
+# Thao tác ghi làm đổi etag — dùng etag trong response cho thao tác kế tiếp.
+@etag = {{detail.response.body.$.etag}}
+@flagId = {{detail.response.body.$.flags[0].id}}
+
+# @name reviewFlag
+POST {{baseUrl}}/verifier/death-cases/{{caseId}}/flags/{{flagId}}/review
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "note": "Đã đối chiếu với Owner, điểm danh trước ngày mất." }
+
+### 5) Yêu cầu Executor bổ sung. requestedParts là mã VIẾT HOA như missingRequirements:
+# OWNER_FULL_NAME, OWNER_CITIZEN_ID, DATE_OF_DEATH, CERTIFICATE_NUMBER, ISSUED_ON, ISSUED_BY, FILES.
+# Hồ sơ chuyển SUPPLEMENT_REQUIRED; Executor thấy supplementRequest, tạo bản mới (POST .../versions) rồi gửi lại.
+POST {{baseUrl}}/verifier/death-cases/{{caseId}}/request-supplement
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "reason": "Ảnh giấy chứng tử bị mờ, không đọc được nơi cấp.", "requestedParts": ["FILES", "ISSUED_BY"] }
+
+### 6) Từ chối hồ sơ (lý do bắt buộc, Executor thấy rejectReason). Hồ sơ đóng, kế hoạch về trạng thái trước khi gửi
+# (job điểm danh có thể tính lại trong vòng 60 giây), thông báo Owner đang chờ bị hủy (CANCELLED). Gọi lặp: 200.
+# Sau đó Executor mở hồ sơ mới (POST /executor/vaults/{vaultId}/death-case) và Verifier thấy previousCase.
+POST {{baseUrl}}/verifier/death-cases/{{caseId}}/reject
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "reason": "Giấy chứng tử không khớp thông tin Owner." }
