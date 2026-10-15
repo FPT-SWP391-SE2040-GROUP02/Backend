@@ -4,6 +4,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using LegacyVault.IntegrationTests.Audit;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -25,7 +26,7 @@ public sealed class CheckInSettingsTests
     public CheckInSettingsTests()
     {
         currentUser.UserId = ownerId;
-        service = new CheckInService(currentUser, vaults, repository, unitOfWork, new FixedTimeProvider(Now));
+        service = new CheckInService(currentUser, vaults, repository, new FakeAuditLogRepository(), unitOfWork, new FixedTimeProvider(Now));
     }
 
     private Vault SeedVault(PlanStatus planStatus, bool withOpenPeriod)

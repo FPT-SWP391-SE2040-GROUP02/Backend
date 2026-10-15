@@ -21,6 +21,7 @@ public sealed class CheckInService : ICheckInService
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
     private readonly ICheckInRepository checkInRepository;
+    private readonly IAuditLogRepository auditLogRepository;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -28,12 +29,14 @@ public sealed class CheckInService : ICheckInService
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
         ICheckInRepository checkInRepository,
+        IAuditLogRepository auditLogRepository,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.checkInRepository = checkInRepository;
+        this.auditLogRepository = auditLogRepository;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -90,6 +93,10 @@ public sealed class CheckInService : ICheckInService
 
         plan.Status = PlanStatus.Active;
         plan.UpdatedAt = now;
+
+        // SEC-13: TargetId là kỳ mới vừa mở, TargetVersion là số thứ tự kỳ. Bấm lặp đã trả ở trên nên không ghi trùng.
+        auditLogRepository.Add(AuditRules.OwnerAction(
+            vault.Id, vault.OwnerId, AuditAction.CheckedIn, AuditTargetType.CheckIn, next.Id, next.Sequence, now));
 
         // Một lần lưu cho cả kỳ cũ, kỳ mới, lịch và kế hoạch (STATE-02). Hai yêu cầu song song:
         // RowVersion của kỳ cũ lệch nên bên thua nhận 409 EDIT_CONFLICT.
@@ -162,8 +169,34 @@ public sealed class CheckInService : ICheckInService
         }
         schedule.UpdatedAt = now;
 
+        // SEC-13: lý do chỉ ghi lựa chọn mới và thời điểm áp dụng (DMS-01), không có dữ liệu nhạy cảm.
+        auditLogRepository.Add(AuditRules.Create(
+            vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.CheckInSettingsUpdated,
+            AuditTargetType.CheckIn, schedule.Id, null, AuditOutcome.Succeeded,
+            DescribeSettings(request, openPeriod != null), now));
+
         await unitOfWork.SaveChangesAsync(ct);
         return await BuildResponseAsync(plan, new PaginationRequest(), ct);
+    }
+
+    /// <summary>Mô tả ngắn lựa chọn mới cho nhật ký, ví dụ "Chu kỳ 60 ngày, chờ 14 ngày; áp dụng từ kỳ sau".</summary>
+    private static string DescribeSettings(UpdateCheckInSettingsRequest request, bool appliesNextPeriod)
+    {
+        List<string> parts = new List<string>();
+        if (request.CycleDays != null)
+        {
+            parts.Add("Chu kỳ " + request.CycleDays.Value + " ngày");
+        }
+        if (request.GraceDays != null)
+        {
+            parts.Add("chờ " + request.GraceDays.Value + " ngày");
+        }
+        string text = string.Join(", ", parts);
+        if (appliesNextPeriod)
+        {
+            return text + "; áp dụng từ kỳ sau";
+        }
+        return text + "; áp dụng ngay";
     }
 
     private static void ValidateSettings(UpdateCheckInSettingsRequest request)
