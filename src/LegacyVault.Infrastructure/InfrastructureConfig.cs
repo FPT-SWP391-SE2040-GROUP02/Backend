@@ -77,6 +77,7 @@ public static class InfrastructureConfig
         services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
         services.AddScoped<IExecutorReminderSender, ExecutorReminderSender>();
         services.AddHostedService<ExecutorInvitationMonitor>();
+        services.AddScoped<IHandoverProgressReader, HandoverProgressReader>();
 
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()
