@@ -752,6 +752,97 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("DeathCaseNotices", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.DeathCaseObjection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ConcludedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ConcludedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Conclusion")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ConclusionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("FirstReportedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("InsufficientEvidenceCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("LastReportedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PreviousCaseStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("PreviousPlanStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<int>("ReportCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("SelfieDeadlineAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("SelfieFailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("SelfieFailureWindowStartedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("SelfiePassedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("VerifierDueAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("VerifierUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Open'");
+
+                    b.HasIndex("VaultId");
+
+                    b.HasIndex("VerifierUserId", "Status");
+
+                    b.ToTable("DeathCaseObjections", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.DeathCaseVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1789,6 +1880,15 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasOne("LegacyVault.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.DeathCaseObjection", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.DeathCase", null)
+                        .WithMany()
+                        .HasForeignKey("CaseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -25,4 +25,19 @@ public enum DeathCaseNotAllowedReason
     VerifierConflict,
     /// <summary>Kế hoạch không ở DeathCaseOpen, thiếu StatusBeforeCase, hoặc đã có lượt bàn giao.</summary>
     PlanStateInvalid,
+
+    /// <summary>F2C: báo còn sống trước đó đã bị bác, muốn mở lại phải có bằng chứng mới (ALIVE-09).</summary>
+    ObjectionAlreadyRejected,
+
+    /// <summary>F2C: đã quá 7 ngày kể từ lần báo đầu, không chụp selfie nữa (ALIVE-03).</summary>
+    ObjectionWindowClosed,
+
+    /// <summary>F2C: đã thất bại 3 lần trong 24 giờ (EKYC-20).</summary>
+    SelfieAttemptsExceeded,
+
+    /// <summary>F2C: báo không còn mở để kết luận.</summary>
+    ObjectionNotOpen,
+
+    /// <summary>F2C: kết luận còn sống nhưng chưa có selfie đạt và chưa hết hạn 7 ngày (ALIVE-02, ALIVE-04).</summary>
+    AliveEvidenceRequired,
 }

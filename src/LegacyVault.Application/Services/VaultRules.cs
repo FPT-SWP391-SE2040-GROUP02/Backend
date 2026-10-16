@@ -54,6 +54,7 @@ public static class VaultRules
         }
         else if (vault.Plan.Status == PlanStatus.DeathCaseOpen
             || vault.Plan.Status == PlanStatus.HandoverInProgress
+            || vault.Plan.Status == PlanStatus.Blocked
             || vault.Plan.Status == PlanStatus.Closed)
         {
             reason = VaultNotEditableReason.PlanLocked;
@@ -74,7 +75,7 @@ public static class VaultRules
         {
             return VaultNotEditableReason.VaultClosed;
         }
-        if (vault.Plan.Status is PlanStatus.DeathCaseOpen or PlanStatus.HandoverInProgress or PlanStatus.Closed)
+        if (vault.Plan.Status is PlanStatus.DeathCaseOpen or PlanStatus.HandoverInProgress or PlanStatus.Blocked or PlanStatus.Closed)
         {
             return VaultNotEditableReason.PlanLocked;
         }

@@ -100,6 +100,8 @@ public sealed class HandoverService : IHandoverService
         turn.ClaimantUserId = userId;
         turn.ClaimedAt = now;
         turn.UpdatedAt = now;
+        // Chạm kế hoạch để RowVersion của nó chặn nhận lượt chạy cùng lúc với báo còn sống (ALIVE-01).
+        vault.Plan.UpdatedAt = now;
 
         if (policy.RequireIdentityVerification)
         {
@@ -149,6 +151,7 @@ public sealed class HandoverService : IHandoverService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverPlan plan = await EnsureDecidableAsync(turn, now, ct);
+        plan.UpdatedAt = now;
 
         HandoverGrant grant = new HandoverGrant();
         grant.TurnId = turn.Id;
@@ -193,6 +196,7 @@ public sealed class HandoverService : IHandoverService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverPlan plan = await EnsureDecidableAsync(turn, now, ct);
+        plan.UpdatedAt = now;
 
         turn.Status = HandoverTurnStatus.Declined;
         turn.DecidedAt = now;
