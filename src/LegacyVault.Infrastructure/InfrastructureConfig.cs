@@ -3,6 +3,7 @@ using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Services;
 using LegacyVault.Application.Storage;
 using LegacyVault.Infrastructure.Data;
 using LegacyVault.Infrastructure.Ekyc;
@@ -61,6 +62,8 @@ public static class InfrastructureConfig
         services.AddScoped<IExecutorReader, ExecutorReader>();
         services.AddScoped<IExecutorInvitationRepository, ExecutorInvitationRepository>();
         services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
+        services.AddScoped<IExecutorReminderSender, ExecutorReminderSender>();
+        services.AddHostedService<ExecutorInvitationMonitor>();
 
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()

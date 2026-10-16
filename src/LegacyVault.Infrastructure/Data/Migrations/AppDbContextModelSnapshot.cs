@@ -1081,6 +1081,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("ReminderSentAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<Guid?>("ReplacesExecutorId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(32)

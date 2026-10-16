@@ -50,6 +50,7 @@ public enum ErrorCode
     RoleNotAllowed,
     StorageUnavailable,
     ExecutorInvitationInvalid,
+    ExecutorNotFound,
     ExecutorInvitationConflict,
     ExecutorNotAllowed,
     PlanActivationNotAllowed,

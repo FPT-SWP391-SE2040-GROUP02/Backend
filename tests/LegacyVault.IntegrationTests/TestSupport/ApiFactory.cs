@@ -104,6 +104,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["DeathCase:NoticeJobEnabled"] = "false";
             settings["DeathCase:AssignmentJobEnabled"] = "false";
             settings["DeathCase:SupplementJobEnabled"] = "false";
+            settings["Executor:InvitationJobEnabled"] = "false";
+            settings["Retention:Enabled"] = "false";
             // Môi trường Development nạp user-secrets của người chạy test: ép trống thông tin Gmail để test
             // KHÔNG BAO GIỜ gửi thư thật (mặc định dùng bản chỉ ghi log).
             settings["Email:Smtp:UserName"] = "";

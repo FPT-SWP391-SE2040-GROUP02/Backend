@@ -30,3 +30,14 @@ Rollback application binaries while retaining the additive nullable columns. Do 
 ## Verification
 
 PlanSetupFlowTests exercise real HTTP/SQL against isolated GUID test databases, with synthetic paid/eKYC fixtures and an in-memory capturing email sender. They cover full invite/accept/activate/check-in, duplicates, concurrent activation, forced failure after a DB flush with full transaction rollback, missing requirements, expired service/token, stale policy/config, wrong Owner/claimant and backup independence. They do not verify a real eKYC provider or SMTP delivery. No real documents or external mail are used.
+
+## Thu hồi, đổi Executor chính, hết hạn và nhắc (bổ sung 16/10/2026)
+
+| Method / path | Caller / body | Result |
+|---|---|---|
+| POST `/vaults/{vaultId}/executors/{executorId}/revoke` | Owner: `{ etag }` | 200 trạng thái mới (`REVOKED`); gọi lặp trên dòng đã kết thúc trả trạng thái hiện tại |
+
+- **Quyền quản lý** (SETUP-21): thu hồi bị chặn `VAULT_NOT_EDITABLE` khi hồ sơ chứng tử đang mở, đang bàn giao, bị chặn hoặc kho đóng.
+- **Kế hoạch đang chạy** không được bỏ trống Executor chính (ASSIGN-05): thu hồi Executor chính đã chấp nhận → `409 EXECUTOR_NOT_ALLOWED` `REPLACEMENT_REQUIRED`. Muốn đổi, Owner `POST .../executors` với `role = PRIMARY` mời người thay: người cũ **giữ vai trò** tới khi người mới chấp nhận, lúc đó người cũ thành `REVOKED` trong cùng giao dịch (cột `ReplacesExecutorId`). Executor chính cũng là người nhận thì không được thu hồi Executor dự phòng độc lập cuối cùng (`BACKUP_EXECUTOR_REQUIRED`).
+- Mời và chấp nhận lời mời giờ làm được cả khi kế hoạch đang chạy (không chỉ `DRAFT`); các trạng thái khóa vẫn bị chặn.
+- **Job nền** (`Executor:InvitationJobEnabled`, `Executor:InvitationPollSeconds`, mặc định 60): lời mời quá 7 ngày → `EXPIRED` (`EndedAt` = `ExpiresAt`); nhắc **một lần** ở giờ thứ 48 qua `IExecutorReminderSender` (cùng công tắc `ExecutorInvitations:DeliveryEnabled`; chưa bật hoặc gửi lỗi thì không đánh dấu, vòng sau thử lại). Thư nhắc không có link vì DB chỉ lưu mã băm token; không đổi `etag`.

@@ -42,6 +42,9 @@ public class Executor
     /// <summary>Hồ sơ người nhận tương ứng khi IsBeneficiary là true; null khi không phải người nhận.</summary>
     public Guid? BeneficiaryId { get; set; }
 
+    /// <summary>SETUP-06: lời mời này thay cho Executor đã chấp nhận (id dòng cũ); khi người mới chấp nhận thì dòng cũ thành Revoked trong cùng giao dịch.</summary>
+    public Guid? ReplacesExecutorId { get; set; }
+
     public Beneficiary? Beneficiary { get; set; }
 
     public DateTimeOffset InvitedAt { get; set; }
