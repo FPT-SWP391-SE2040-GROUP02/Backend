@@ -70,6 +70,14 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
             await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.IntegrityFailed, now, ct);
             throw new ContentIntegrityException("Không tìm thấy phiên bản nội dung của tài sản.", null);
         }
+        if (version.ContentDeletedAt != null)
+        {
+            // RETENTION-06: nội dung đã dọn (khóa đã hủy) thì không giải mã nữa.
+            Dictionary<string, object?> deleted = new Dictionary<string, object?>();
+            deleted["reason"] = "CONTENT_DELETED";
+            throw new AppException(AppErrorType.Forbidden, ErrorCode.GrantNotActive,
+                "Nội dung đã được xóa theo chính sách lưu dữ liệu.", deleted);
+        }
 
         StoredContent stored = new StoredContent();
         stored.StorageKey = version.StorageKey;

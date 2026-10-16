@@ -71,6 +71,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<Guid>("AssetId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("ContentDeletedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -98,6 +101,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("StorageDeletedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("StorageKey")
                         .IsRequired()
@@ -1397,6 +1403,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("DecisionDeadline")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid>("DesignationId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1428,6 +1437,23 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("ResponseDeadline")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("RetentionDeadline")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("RetentionNoticeStage")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("RetentionRemainingSeconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("RetentionStartedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("RetentionStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -1458,6 +1484,8 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasIndex("PlanId");
 
                     b.HasIndex("ClaimantUserId", "Status");
+
+                    b.HasIndex("PlanId", "RetentionStatus");
 
                     b.HasIndex("Status", "DecisionDeadline");
 

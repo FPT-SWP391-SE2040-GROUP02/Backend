@@ -39,7 +39,7 @@ public sealed class StorageReservationRepository : IStorageReservationRepository
                 .Where(r => r.VaultId == vaultId && r.Status == StorageReservationStatus.Active && r.ExpiresAt > now)
                 .SumAsync(r => (long?)r.Bytes, ct) ?? 0;
             long used = await context.AssetVersions
-                .Where(v => v.Asset.VaultId == vaultId)
+                .Where(v => v.Asset.VaultId == vaultId && v.ContentDeletedAt == null)
                 .SumAsync(v => (long?)v.SizeBytes, ct) ?? 0;
 
             long remaining = Math.Max(0, quotaBytes - used - held);
