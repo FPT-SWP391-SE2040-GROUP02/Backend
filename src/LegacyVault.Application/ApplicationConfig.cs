@@ -37,6 +37,9 @@ public static class ApplicationConfig
 
         // Xác minh danh tính (eKYC)
         services.AddScoped<IEkycService, EkycService>();
+
+        // Nhật ký hoạt động (SEC-13)
+        services.AddScoped<IAuditLogService, AuditLogService>();
         return services;
     }
 }

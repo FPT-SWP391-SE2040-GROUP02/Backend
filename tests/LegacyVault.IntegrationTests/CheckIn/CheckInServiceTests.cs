@@ -4,6 +4,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using LegacyVault.IntegrationTests.Audit;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -28,7 +29,7 @@ public sealed class CheckInServiceTests
     public CheckInServiceTests()
     {
         currentUser.UserId = ownerId;
-        service = new CheckInService(currentUser, vaults, repository, unitOfWork, clock);
+        service = new CheckInService(currentUser, vaults, repository, new FakeAuditLogRepository(), unitOfWork, clock);
     }
 
     /// <summary>Tạo kho với kế hoạch ở trạng thái cho trước; withOpenPeriod=true thì thêm kỳ 1 (chu kỳ 30, chờ 7).</summary>

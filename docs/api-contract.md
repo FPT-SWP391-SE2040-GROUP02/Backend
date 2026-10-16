@@ -672,6 +672,51 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 - **Một quyết định cuối** cho mỗi hồ sơ; yêu cầu bổ sung được nhiều lần. Quyết định cuối chỉ đóng hồ sơ (`closedAt`), không kết thúc phân công.
 - **Chưa làm:** email "bạn được giao" cho Verifier mới và báo Admin khi hồ sơ quá hạn không có người thay (F4); ROLE-03 vế người nhận; ASSIGN-05 (Executor bị kẹt); hold/phản đối "Tôi còn sống" của Owner (F2C, DEATH-07); nhật ký kiểm toán cho việc xem trang và quyết định của Verifier (SEC-07, DATA-07, hiện chỉ ghi log xem trang); email báo Executor khi có yêu cầu bổ sung; cho Executor xem lại trang giấy đã gửi.
 
+### 6.13. Nhật ký hoạt động của kho
+
+Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). Nhật ký **chỉ đọc**: không có API sửa hay xóa (ADMIN-06, DATA-07). Cần đăng nhập (Bearer). Kho không tồn tại hoặc của người khác đều trả `404 VAULT_NOT_FOUND` giống nhau (SEC-04).
+
+| Method | URL | Quyền | Body / Query | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/vaults/{vaultId}/audit-logs` | Owner của kho | Query phân trang (`pageIndex`, `pageSize`, `sortBy`, `isAscending`) và bộ lọc `action?`, `from?`, `to?` | 200 `PaginatedList<AuditLogResponse>` | 400 `VALIDATION_ERROR`, 401, 404 `VAULT_NOT_FOUND` |
+
+```json
+// AuditLogResponse
+{
+  "id": "0199e7a4-5c1b-7c3e-9a51-3f0f5d2b8a10",
+  "at": "2026-10-15T08:30:00+00:00",
+  "actorRole": "OWNER",
+  "actorUserId": "0199e7a4-0000-7c3e-9a51-3f0f5d2b8a10",
+  "action": "CONTAINER_BENEFICIARY_ADDED",
+  "targetType": "CONTAINER",
+  "targetId": "0199e7a4-1111-7c3e-9a51-3f0f5d2b8a10",
+  "targetVersion": 7,
+  "outcome": "SUCCEEDED",
+  "reason": "Người nhận 0199e7a4-2222-7c3e-9a51-3f0f5d2b8a10"
+}
+```
+
+- **Sắp xếp:** `sortBy` chỉ nhận `at` (mặc định). `isAscending` mặc định `true` như mọi danh sách khác; FE gửi `isAscending=false` để xem mới nhất trước. `searchTerm` không dùng.
+- **Lọc:** `action` là một giá trị trong bảng dưới (đúng dạng `UPPER_SNAKE_CASE`, giá trị khác → 400). `from` tính cả mốc, `to` không tính mốc, cả hai là ISO 8601; `from` phải trước `to`.
+- **`targetVersion`:** phiên bản đối tượng **sau** thao tác. Với thao tác đổi cấu hình bàn giao (gói, người nhận đang ở gói, kế hoạch về nháp) là `config_version` của kế hoạch (SETUP-04, STATE-03); với tài sản là số phiên bản tài sản; với điểm danh là số thứ tự kỳ mới; còn lại `null`.
+- **Không có dữ liệu nhạy cảm (SEC-07):** không ghi tên tài sản, tên tệp, họ tên, số CCCD, liên hệ hay nội dung. Thao tác có đối tượng thứ hai chỉ ghi id của nó trong `reason` (`"Tài sản <id>"`, `"Người nhận <id>"`); FE tự tra tên qua API tài sản hoặc người nhận nếu cần.
+- **Chỉ ghi thao tác đã lưu:** nhật ký lưu cùng giao dịch với thao tác (STATE-02), nên thao tác bị từ chối, lỗi hoặc bấm lặp không đổi gì thì không có dòng nào. Hiện mọi dòng đều có `outcome = SUCCEEDED`.
+
+| `action` | `targetType` | Khi nào |
+|---|---|---|
+| `VAULT_CREATED` | `VAULT` | Tạo kho lần đầu (mở lại kho cũ không ghi) |
+| `VAULT_UPDATED` | `VAULT` | Sửa tên hoặc mô tả kho |
+| `ASSET_CREATED` | `ASSET` | Tải tài sản lên |
+| `CONTAINER_CREATED` / `CONTAINER_UPDATED` / `CONTAINER_ARCHIVED` | `CONTAINER` | Tạo, đổi tên/mô tả, lưu trữ gói |
+| `CONTAINER_ASSET_ADDED` / `CONTAINER_ASSET_REMOVED` | `CONTAINER` | Thêm, gỡ tài sản khỏi gói (`reason` có id tài sản) |
+| `CONTAINER_BENEFICIARY_ADDED` / `CONTAINER_BENEFICIARY_REMOVED` | `CONTAINER` | Thêm, gỡ người nhận khỏi gói (`reason` có id hồ sơ) |
+| `PLAN_DEACTIVATED` | `PLAN` | Owner xác nhận cảnh báo, kế hoạch về `DRAFT` vì mất gói `READY` cuối cùng (SETUP-16) |
+| `BENEFICIARY_CREATED` / `BENEFICIARY_UPDATED` / `BENEFICIARY_DELETED` | `BENEFICIARY` | Thêm, sửa, xóa hồ sơ người nhận |
+| `CHECKED_IN` | `CHECK_IN` | Điểm danh, `targetId` là kỳ mới |
+| `CHECK_IN_SETTINGS_UPDATED` | `CHECK_IN` | Đổi chu kỳ hoặc thời gian chờ; `reason` ghi lựa chọn mới và áp dụng ngay hay từ kỳ sau |
+
+- **Chưa làm:** ghi nhật ký cho thiết lập/kích hoạt kế hoạch, mời Executor, hồ sơ chứng tử và bàn giao (thuộc các module khác, cần chủ module đồng ý); lịch sử người nhận xem/tải nội dung (`HandoverAccessLogs`) chưa có API đọc cho Owner; Admin tra cứu nhật ký toàn hệ thống (ADMIN-06).
+
 ## 7. Tóm tắt thay đổi FE cần làm
 
 | # | Việc | File FE |

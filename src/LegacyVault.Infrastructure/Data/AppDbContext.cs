@@ -65,6 +65,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     // Xác minh danh tính (eKYC)
     public DbSet<EkycVerification> EkycVerifications => Set<EkycVerification>();
 
+    // Nhật ký hoạt động (SEC-07, SEC-13)
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

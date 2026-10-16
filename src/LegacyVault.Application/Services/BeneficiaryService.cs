@@ -29,6 +29,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly IBeneficiaryRepository beneficiaryRepository;
     private readonly IContainerRepository containerRepository;
     private readonly IBeneficiaryDataProtector dataProtector;
+    private readonly IAuditLogRepository auditLogRepository;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -38,6 +39,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         IBeneficiaryRepository beneficiaryRepository,
         IContainerRepository containerRepository,
         IBeneficiaryDataProtector dataProtector,
+        IAuditLogRepository auditLogRepository,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -46,6 +48,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         this.beneficiaryRepository = beneficiaryRepository;
         this.containerRepository = containerRepository;
         this.dataProtector = dataProtector;
+        this.auditLogRepository = auditLogRepository;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -106,6 +109,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         beneficiary.CreatedAt = now;
         beneficiaryRepository.Add(beneficiary);
         // QUOTA-03: chưa gắn vào gói thì chưa thuộc cấu hình bàn giao, chưa chiếm suất → KHÔNG tăng ConfigVersion.
+        // SEC-13: chỉ ghi id hồ sơ; họ tên, số CCCD, liên hệ không vào nhật ký (SEC-07).
+        AddAudit(vault, AuditAction.BeneficiaryCreated, beneficiary.Id, null, now);
         await unitOfWork.SaveChangesAsync(ct);
 
         CreateBeneficiaryResult result = new CreateBeneficiaryResult();
@@ -231,10 +236,13 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         beneficiary.UpdatedAt = now;
         // SETUP-04: hồ sơ đang ở gói thì sửa người nhận là đổi cấu hình bàn giao → tăng ConfigVersion
         // (lưu cùng một lần SaveChanges với hồ sơ).
+        int? configVersion = null;
         if (containerIds.Count > 0)
         {
             PlanRules.BumpConfigVersion(vault.Plan, now);
+            configVersion = vault.Plan.ConfigVersion;
         }
+        AddAudit(vault, AuditAction.BeneficiaryUpdated, beneficiary.Id, configVersion, now);
         await unitOfWork.SaveChangesAsync(ct);
         return beneficiary.ToResponse(updated, containerIds, today);
     }
@@ -256,7 +264,19 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // TODO: request khác gắn hồ sơ này vào gói đúng lúc này thì FK Restrict ở DB chặn việc xóa,
         // nhưng lỗi đó hiện ra 500 thay vì 409 BENEFICIARY_IN_USE.
         beneficiaryRepository.Remove(beneficiary);
+        // AuditLogs.TargetId không có khóa ngoại nên dòng nhật ký vẫn giữ sau khi hồ sơ bị xóa (DATA-07).
+        AddAudit(vault, AuditAction.BeneficiaryDeleted, beneficiary.Id, null, timeProvider.GetUtcNow());
         await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// SEC-13: một dòng nhật ký cho thao tác trên hồ sơ người nhận, lưu cùng lần SaveChanges (STATE-02).
+    /// configVersion chỉ có khi thao tác đổi cấu hình bàn giao (hồ sơ đang ở gói, SETUP-04).
+    /// </summary>
+    private void AddAudit(Vault vault, AuditAction action, Guid beneficiaryId, int? configVersion, DateTimeOffset now)
+    {
+        auditLogRepository.Add(AuditRules.OwnerAction(
+            vault.Id, vault.OwnerId, action, AuditTargetType.Beneficiary, beneficiaryId, configVersion, now));
     }
 
     /// <summary>MATCH-02: chuẩn hóa Unicode NFC, bỏ khoảng trắng đầu/cuối, gộp nhiều khoảng trắng thành một.</summary>
