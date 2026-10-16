@@ -1,0 +1,29 @@
+# Thử Executor theo dõi tiến độ bàn giao (docs/api-contract.md mục 6.14) — chỉ Development.
+#
+# Chuẩn bị giống http/death-cases.http và http/verifier-death-cases.http: Executor nộp hồ sơ, Verifier duyệt
+# (hồ sơ sang APPROVED_FOR_HANDOVER, hệ thống tạo lượt bàn giao). Người nhận nhận lượt, đồng ý và tải tài sản
+# bằng http/handover-receive.http để thấy tiến độ thay đổi.
+#
+# Thay <caseId> bằng id hồ sơ chứng tử (GET /executor/vaults → openDeathCaseId).
+
+@baseUrl = http://localhost:5000/api/v1
+@caseId = <caseId>
+
+### Đăng nhập tài khoản Executor — lấy access token
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "executor@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Tiến độ bàn giao: trạng thái từng lượt, hạn, quyền tải và tài sản đã tải hay chưa
+# Hồ sơ chưa duyệt: 200 với handoverStarted = false và turns rỗng.
+GET {{baseUrl}}/executor/death-cases/{{caseId}}/handover-progress
+Authorization: Bearer {{token}}
+
+### 404 DEATH_CASE_NOT_FOUND: hồ sơ không tồn tại, hoặc người gọi không phải Executor đang hiệu lực của kho
+GET {{baseUrl}}/executor/death-cases/00000000-0000-0000-0000-000000000000/handover-progress
+Authorization: Bearer {{token}}
