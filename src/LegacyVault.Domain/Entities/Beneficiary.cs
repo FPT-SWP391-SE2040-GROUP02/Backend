@@ -25,6 +25,12 @@ public class Beneficiary
     /// <summary>4 số cuối CCCD, dạng rõ (không đủ để định danh). Trả cho FE thay cho số đầy đủ (DATA-02).</summary>
     public string CitizenIdLast4 { get; set; } = string.Empty;
 
+    /// <summary>
+    /// HMAC-SHA256 của số CCCD (chỉ mục chống trùng, QUOTA-04); không đảo ngược được. Null với hồ sơ tạo trước khi có cột này.
+    /// Unique theo (VaultId, CitizenIdHash) để hai request cùng CCCD không tạo hai hồ sơ.
+    /// </summary>
+    public byte[]? CitizenIdHash { get; set; }
+
     /// <summary>Id của KEK đã bọc WrappedDataKey (cho phép đổi KEK mà vẫn mở được hồ sơ cũ).</summary>
     public string EncryptionKeyId { get; set; } = string.Empty;
 

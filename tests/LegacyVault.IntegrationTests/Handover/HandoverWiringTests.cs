@@ -126,8 +126,10 @@ public sealed class HandoverWiringTests
         Assert.Contains("secret-token-xyz", string.Join("\n", devLogger.Lines.Select(l => l.Text)));
 
         CapturingLogger<LogHandoverInvitationSender> prodLogger = new CapturingLogger<LogHandoverInvitationSender>();
-        await new LogHandoverInvitationSender(prodLogger, new HandoverSettingsTests.TestHostEnvironment("Production"))
-            .SendAsync(invitation, CancellationToken.None);
+        // Ngoài Development không giả vờ đã gửi: ném lỗi để lượt giữ InvitationSentAt = null, và vẫn không lộ token.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new LogHandoverInvitationSender(prodLogger, new HandoverSettingsTests.TestHostEnvironment("Production"))
+                .SendAsync(invitation, CancellationToken.None));
         string prodText = string.Join("\n", prodLogger.Lines.Select(l => l.Text));
         Assert.DoesNotContain("secret-token-xyz", prodText);
         Assert.DoesNotContain("an@test.local", prodText);

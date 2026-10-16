@@ -730,3 +730,10 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 # Executor setup and activation (15/10/2026)
 
 See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.
+
+## 9. Tính đúng đắn dữ liệu khi chạy đồng thời (LV-01)
+
+- **Giữ chỗ dung lượng** (QUOTA-02): mỗi lần tải tài sản kiểm `đã dùng + chỗ đang giữ còn hạn + lần này ≤ hạn mức` và ghi chỗ giữ (bảng `StorageReservations`, 15 phút) trong một bước dưới khóa riêng của kho (`sp_getapplock`). Sáu lần tải 5 MiB cùng lúc vào kho 20 MiB chỉ nhận bốn lần. Tải lỗi thì trả chỗ; chỗ giữ quá hạn không còn tính; tải xong thì chỗ giữ chuyển `COMMITTED` trong cùng lần lưu với tài sản. Kích thước khai báo là trần: nội dung thật vượt khai báo thì `409 STORAGE_QUOTA_EXCEEDED`.
+- **Chống trùng CCCD** (QUOTA-04): cột `Beneficiaries.CitizenIdHash` = HMAC-SHA256 của số CCCD (không đảo ngược, không lưu CCCD rõ), unique theo `(VaultId, CitizenIdHash)`. Hai request cùng CCCD đến cùng lúc: một bên `201`, bên kia `200` trả hồ sơ đó (cùng họ tên, ngày sinh) hoặc `409 BENEFICIARY_IDENTITY_CONFLICT`. Khóa HMAC lấy từ `AssetEncryption:BlindIndexKey` (base64 32 byte, **không đổi khi xoay KEK**); bỏ trống thì suy ra từ KEK đang dùng, chỉ nên cho máy dev. Hồ sơ tạo trước migration có `CitizenIdHash = NULL` nên chưa được ràng buộc (vẫn dò trùng theo 4 số cuối như cũ).
+- **Chưa cấu hình email** ngoài Development: bộ gửi chỉ-ghi-log **ném lỗi** thay vì báo đã giao. Thông báo chứng tử giữ `PENDING` (không bắt đầu 72 giờ), hết số lần thử thì `FAILED`; lời mời nhận tài sản để `InvitationSentAt = null`; lời mời Executor trả `invitationSent = false`.
+- **Chưa làm:** dọn nội dung mồ côi khi process chết giữa lúc ghi nội dung và lưu DB; xác thực lại trong 10 phút cho thao tác giảm dữ liệu lúc ân hạn (OPLAN-01); khóa theo kho cho thanh toán/cleanup (chưa có module).

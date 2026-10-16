@@ -54,6 +54,7 @@ public static class InfrastructureConfig
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
         services.AddScoped<ICheckInRepository, CheckInRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<IStorageReservationRepository, StorageReservationRepository>();
 
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();

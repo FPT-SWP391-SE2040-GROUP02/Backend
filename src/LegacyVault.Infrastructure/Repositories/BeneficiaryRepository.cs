@@ -67,4 +67,19 @@ public sealed class BeneficiaryRepository : IBeneficiaryRepository
     {
         context.Beneficiaries.Remove(beneficiary);
     }
+
+    public bool IsUniqueViolation(Exception exception)
+    {
+        DbUpdateException? update = exception as DbUpdateException;
+        if (update == null)
+        {
+            return false;
+        }
+        return DbExceptions.IsUniqueViolation(update);
+    }
+
+    public void DiscardPendingChanges()
+    {
+        context.ChangeTracker.Clear();
+    }
 }

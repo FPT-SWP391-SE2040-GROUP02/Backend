@@ -24,6 +24,7 @@ public sealed partial class DataKeyProtector
 
     private readonly string activeKeyId;
     private readonly Dictionary<string, byte[]> keys;
+    private readonly byte[] blindIndexKey;
 
     public DataKeyProtector(IOptions<AssetEncryptionSettings> options)
     {
@@ -40,6 +41,17 @@ public sealed partial class DataKeyProtector
         {
             keys[entry.Key] = Convert.FromBase64String(entry.Value);
         }
+
+        if (string.IsNullOrWhiteSpace(settings.BlindIndexKey))
+        {
+            blindIndexKey = System.Security.Cryptography.HKDF.DeriveKey(
+                System.Security.Cryptography.HashAlgorithmName.SHA256, keys[activeKeyId], KeySize,
+                salt: null, info: System.Text.Encoding.UTF8.GetBytes("legacyvault:citizen-id-blind-index"));
+        }
+        else
+        {
+            blindIndexKey = Convert.FromBase64String(settings.BlindIndexKey);
+        }
     }
 
     /// <summary>
@@ -55,6 +67,10 @@ public sealed partial class DataKeyProtector
         {
             return "AssetEncryption:Keys không có khóa trùng với ActiveKeyId.";
         }
+        if (!string.IsNullOrWhiteSpace(settings.BlindIndexKey) && !IsBase64KeyOfCorrectSize(settings.BlindIndexKey))
+        {
+            return $"AssetEncryption:BlindIndexKey phải là base64 của đúng {KeySize} byte.";
+        }
         foreach (KeyValuePair<string, string> entry in settings.Keys)
         {
             if (!KeyIdPattern().IsMatch(entry.Key))
@@ -67,6 +83,13 @@ public sealed partial class DataKeyProtector
             }
         }
         return null;
+    }
+
+    /// <summary>HMAC-SHA256 của giá trị chuẩn hóa bằng khóa chỉ mục chống trùng; luôn 32 byte, không đảo ngược được.</summary>
+    public byte[] ComputeBlindIndex(string purpose, string value)
+    {
+        byte[] message = System.Text.Encoding.UTF8.GetBytes(purpose + ":" + value);
+        return System.Security.Cryptography.HMACSHA256.HashData(blindIndexKey, message);
     }
 
     /// <summary>Tạo một DEK ngẫu nhiên mới. Người gọi phải xóa mảng (CryptographicOperations.ZeroMemory) sau khi dùng.</summary>

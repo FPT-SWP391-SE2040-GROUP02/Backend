@@ -185,6 +185,11 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<byte[]>("CitizenIdHash")
+                        .HasMaxLength(32)
+                        .HasColumnType("binary(32)")
+                        .IsFixedLength();
+
                     b.Property<string>("CitizenIdLast4")
                         .IsRequired()
                         .HasMaxLength(4)
@@ -226,6 +231,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsFixedLength();
 
                     b.HasKey("Id");
+
+                    b.HasIndex("VaultId", "CitizenIdHash")
+                        .IsUnique()
+                        .HasFilter("[CitizenIdHash] IS NOT NULL");
 
                     b.HasIndex("VaultId", "CitizenIdLast4");
 
@@ -1532,6 +1541,39 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("RefreshTokens", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.StorageReservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VaultId", "Status", "ExpiresAt");
+
+                    b.ToTable("StorageReservations", (string)null);
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.User", b =>
