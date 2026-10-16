@@ -23,7 +23,6 @@ Chi tiết những gì đã làm: `docs/TIEN-DO-BACKEND.md`. Các mục 1–10 b
 - Mỗi việc là một nhánh từ `develop`, một PR, có test SQL thật và mục hợp đồng trong `docs/api-contract.md`.
 - Thêm mã lỗi vào **cuối** `ErrorCode.cs` và bảng lỗi → hay conflict; khi gặp thì giữ cả hai bên.
 - Migration: mỗi PR một migration; trước khi mở PR thì `git pull origin develop` và tạo lại migration nếu snapshot đã đổi.
-- Không push file Claude/graphify (hook đã chặn).
 
 ## 1. Đợt 1 — XONG: đưa code đã viết sẵn lên `develop`
 
