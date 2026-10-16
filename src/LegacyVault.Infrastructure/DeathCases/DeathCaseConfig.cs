@@ -36,6 +36,8 @@ public static class DeathCaseConfig
 
         // D6: job giao Verifier cho hồ sơ trống, nhắc trước hạn và giao lại khi quá hạn.
         services.AddHostedService<DeathCaseAssignmentMonitor>();
+        services.AddScoped<ISupplementOverdueRepository, SupplementOverdueRepository>();
+        services.AddHostedService<DeathCaseSupplementMonitor>();
 
         // Chọn bộ gửi lúc cần dùng: có Email:Smtp đầy đủ thì gửi thật, không thì chỉ ghi log (như HandoverConfig).
         services.AddSingleton<IDeathCaseNoticeSender>(provider => ChooseSender(provider));

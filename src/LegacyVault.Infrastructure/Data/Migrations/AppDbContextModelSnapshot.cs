@@ -482,6 +482,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<DateTimeOffset?>("SupplementOverdueAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .IsConcurrencyToken()
                         .HasColumnType("datetimeoffset");
@@ -559,6 +562,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("DueAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("Kind")

@@ -57,6 +57,12 @@ public class DeathCase
     /// <summary>Lúc hồ sơ kết thúc: đặt khi Verifier duyệt/từ chối; phân công vẫn giữ.</summary>
     public DateTimeOffset? ClosedAt { get; set; }
 
+    /// <summary>
+    /// Lúc job ghi nhận Executor quá hạn bổ sung. Không tự quyết định: Verifier vẫn là người từ chối hoặc yêu cầu lại.
+    /// Null khi chưa quá hạn hoặc khi Executor đã nộp bản mới.
+    /// </summary>
+    public DateTimeOffset? SupplementOverdueAt { get; set; }
+
     /// <summary>Đổi sau mỗi lần sửa; concurrency token và etag. Null khi mới tạo → etag "0".</summary>
     public DateTimeOffset? UpdatedAt { get; set; }
 

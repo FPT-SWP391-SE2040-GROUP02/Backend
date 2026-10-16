@@ -33,12 +33,14 @@ public sealed class StorageReservationRepository : IStorageReservationRepository
                 throw new TimeoutException("Không lấy được khóa dung lượng của kho.");
             }
 
-            long used = await context.AssetVersions
-                .Where(v => v.Asset.VaultId == vaultId)
-                .SumAsync(v => (long?)v.SizeBytes, ct) ?? 0;
+            // Đọc chỗ đang giữ TRƯỚC, phần đã dùng SAU: một lần tải chốt giữa hai phép đọc (chỗ giữ chuyển sang Committed
+            // cùng lúc tài sản được ghi) chỉ có thể bị đếm hai lần, không bao giờ bị bỏ sót.
             long held = await context.Set<StorageReservation>()
                 .Where(r => r.VaultId == vaultId && r.Status == StorageReservationStatus.Active && r.ExpiresAt > now)
                 .SumAsync(r => (long?)r.Bytes, ct) ?? 0;
+            long used = await context.AssetVersions
+                .Where(v => v.Asset.VaultId == vaultId)
+                .SumAsync(v => (long?)v.SizeBytes, ct) ?? 0;
 
             long remaining = Math.Max(0, quotaBytes - used - held);
             outcome.RemainingBytes = remaining;

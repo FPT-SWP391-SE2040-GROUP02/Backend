@@ -25,6 +25,7 @@ public static class ApplicationConfig
         services.AddScoped<IDeathCaseService, DeathCaseService>();
         services.AddScoped<IDeathCaseReviewService, DeathCaseReviewService>();
         services.AddScoped<IOwnerObjectionService, OwnerObjectionService>();
+        services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
         services.AddScoped<IVerifierObjectionService, VerifierObjectionService>();
         services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();
         services.AddScoped<IDeathCaseAssignmentJob, DeathCaseAssignmentJob>();

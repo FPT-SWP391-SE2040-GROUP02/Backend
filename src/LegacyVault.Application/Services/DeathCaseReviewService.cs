@@ -223,6 +223,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         DateTimeOffset now = timeProvider.GetUtcNow();
         DeathCaseDecision decision = NewDecision(context, DeathCaseDecisionKind.SupplementRequested, reason, now);
         decision.RequestedParts = requestedParts;
+        decision.DueAt = now.AddDays(DeathCaseReviewRules.SupplementDueDays);
         deathCase.Decisions.Add(decision);
         reviewRepository.AddDecision(decision);
         deathCase.Status = DeathCaseStatus.SupplementRequired;
