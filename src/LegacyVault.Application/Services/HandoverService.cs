@@ -16,6 +16,7 @@ public sealed class HandoverService : IHandoverService
     private readonly IHandoverRepository handover;
     private readonly ITokenService tokens;
     private readonly IHandoverPolicy policy;
+    private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -28,6 +29,20 @@ public sealed class HandoverService : IHandoverService
         IHandoverPolicy policy,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
+        : this(currentUser, users, vaults, handover, tokens, policy, new NoHoldReader(), unitOfWork, timeProvider)
+    {
+    }
+
+    public HandoverService(
+        ICurrentUser currentUser,
+        IUserRepository users,
+        IVaultRepository vaults,
+        IHandoverRepository handover,
+        ITokenService tokens,
+        IHandoverPolicy policy,
+        IHoldReader holdReader,
+        IUnitOfWork unitOfWork,
+        TimeProvider timeProvider)
     {
         this.currentUser = currentUser;
         this.users = users;
@@ -35,6 +50,7 @@ public sealed class HandoverService : IHandoverService
         this.handover = handover;
         this.tokens = tokens;
         this.policy = policy;
+        this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -95,6 +111,11 @@ public sealed class HandoverService : IHandoverService
         if (!HandoverRules.CanClaim(turn.Status))
         {
             throw NotAllowed("WRONG_STATE", "Lượt này không còn nhận được.");
+        }
+
+        if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
+        {
+            throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa nhận được lượt này.");
         }
 
         turn.ClaimantUserId = userId;
@@ -227,6 +248,10 @@ public sealed class HandoverService : IHandoverService
         }
 
         string? deniedReason = HandoverRules.GrantDeniedReason(grant, vault.Plan.Status, timeProvider.GetUtcNow());
+        if (deniedReason == null && await holdReader.HasActiveHoldAsync(vault.Id, ct))
+        {
+            deniedReason = "HOLD_ACTIVE";
+        }
         if (deniedReason != null)
         {
             Dictionary<string, object?> extensions = new Dictionary<string, object?>();
@@ -260,6 +285,11 @@ public sealed class HandoverService : IHandoverService
         if (turn.Status != HandoverTurnStatus.ReadyToAccept)
         {
             throw NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để quyết định.");
+        }
+
+        if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
+        {
+            throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa quyết định được.");
         }
 
         // Đúng giây hạn là hết hạn, kể cả khi job chưa kịp chạy (TIME-02).

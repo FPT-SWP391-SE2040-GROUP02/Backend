@@ -40,4 +40,7 @@ public enum DeathCaseNotAllowedReason
 
     /// <summary>F2C: kết luận còn sống nhưng chưa có selfie đạt và chưa hết hạn 7 ngày (ALIVE-02, ALIVE-04).</summary>
     AliveEvidenceRequired,
+
+    /// <summary>Kho đang có hold (Admin hoặc báo còn sống) nên chưa duyệt được.</summary>
+    HoldActive,
 }

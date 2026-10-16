@@ -31,6 +31,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     private readonly IHandoverStarter handoverStarter;
     private readonly IDeathCaseDataProtector dataProtector;
     private readonly IAssetContentStore contentStore;
+    private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -44,6 +45,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         IHandoverStarter handoverStarter,
         IDeathCaseDataProtector dataProtector,
         IAssetContentStore contentStore,
+        IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -56,6 +58,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         this.handoverStarter = handoverStarter;
         this.dataProtector = dataProtector;
         this.contentStore = contentStore;
+        this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -355,6 +358,11 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         if (vault == null || vault.Plan.Status != PlanStatus.DeathCaseOpen)
         {
             return await ResolveApproveConflictAsync(caseId, ct);
+        }
+        if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
+        {
+            // SRS §6.4: hold đang hiệu lực chặn duyệt (kể cả hold do Admin đặt).
+            throw NotAllowed(DeathCaseNotAllowedReason.HoldActive);
         }
 
         // 6) Đánh dấu duyệt NHƯNG CHƯA LƯU: quyết định, đóng hồ sơ. Phân công giữ nguyên.

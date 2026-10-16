@@ -88,7 +88,9 @@ public sealed class DeathCaseAssignmentMonitor : BackgroundService
                     {
                         logger.LogWarning("Gửi thư nhắc Verifier hồ sơ chứng tử {CaseId} lỗi, vòng sau thử lại.", id);
                     }
-                    // TODO: F4 — báo Admin khi hồ sơ quá hạn mà không có Verifier thay (NoCandidate), thay cho việc im lặng.
+                    // Không có Verifier phù hợp → sự cố NO_VERIFIER có người phụ trách và hạn (ASSIGN-04); giao được thì đóng sự cố.
+                    IOperationsRecorder recorder = scope.ServiceProvider.GetRequiredService<IOperationsRecorder>();
+                    await recorder.RecordAssignmentOutcomeAsync(id, outcome, ct);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

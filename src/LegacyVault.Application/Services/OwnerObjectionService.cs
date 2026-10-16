@@ -24,6 +24,9 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
     private readonly IDeathCaseRepository deathCases;
     private readonly IObjectionRepository objections;
     private readonly IOwnerFaceVerifier faceVerifier;
+    private readonly IHoldService holdService;
+    private readonly IIncidentService incidentService;
+    private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -33,6 +36,9 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         IDeathCaseRepository deathCases,
         IObjectionRepository objections,
         IOwnerFaceVerifier faceVerifier,
+        IHoldService holdService,
+        IIncidentService incidentService,
+        IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -41,6 +47,9 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         this.deathCases = deathCases;
         this.objections = objections;
         this.faceVerifier = faceVerifier;
+        this.holdService = holdService;
+        this.incidentService = incidentService;
+        this.audit = audit;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -109,6 +118,12 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
                 turn.Grant.Status = HandoverGrantStatus.Blocked;
             }
         }
+        // Hold chung + sự cố theo dõi có người phụ trách và hạn (ALIVE-01, SRS §6.4); lưu cùng giao dịch với việc chặn.
+        await holdService.PlaceOwnerAliveAsync(vault, objection.VerifierUserId, objection.SelfieDeadlineAt, ct);
+        await incidentService.RaiseAsync(IncidentType.OwnerAlive, vault.Id, IncidentRules.TargetDeathCase, deathCase.Id,
+            "Owner báo còn sống, chờ Verifier kết luận.", objection.VerifierUserId, ct);
+        audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.ObjectionReported,
+            AuditTargetType.DeathCase, deathCase.Id, null, AuditOutcome.Succeeded, null, now));
         objections.Add(objection);
 
         try

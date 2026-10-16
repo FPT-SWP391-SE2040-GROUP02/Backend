@@ -740,6 +740,37 @@ Owner xem hồ sơ chứng tử của kho và báo "Tôi còn sống" (SRS §6.3
 - **Chưa làm:** sự cố theo dõi và thông báo Verifier/Executor/người nhận (LV-07/LV-14); thử thách camera (EKYC-10); đăng nhập lại trước khi báo.
 
 
+### 6.15. Hold, sự cố và Admin
+
+Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cần Bearer; quyền kiểm từ DB: không phải Admin đang hoạt động → `404` như khu vực không tồn tại (SEC-04). **Không có endpoint nào đọc nội dung tài sản, trang giấy chứng tử hay danh tính**; Admin không duyệt thay và không tự thay Executor bằng người Owner chưa cho phép.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/v1/admin/dashboard` | — | 200 `AdminDashboardResponse` (sự cố mở/quá hạn/chưa có người, hold, hồ sơ chưa có Verifier) | 404 |
+| GET | `/v1/admin/users?search=&role=&status=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminUserResponse>` (không có mật khẩu) | 400, 404 |
+| PUT | `/v1/admin/users/{userId}/role` | `{ role: USER/VERIFIER/ADMIN, reason }` | 200 | 400, 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CANNOT_CHANGE_SELF`, `LAST_ADMIN`) |
+| PUT | `/v1/admin/users/{userId}/status` | `{ status: ACTIVE/LOCKED/DISABLED, reason }` | 200 | như trên |
+| POST | `/v1/admin/death-cases/{caseId}/reassign-verifier` | `{ verifierUserId, reason }` | 204 (gọi lặp cùng người: 204) | 400 (không phải Verifier hợp lệ / là chủ kho, Executor, người gửi), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CASE_NOT_PENDING`) / `EDIT_CONFLICT` |
+| GET | `/v1/admin/incidents?status=&type=&assigneeUserId=&overdueOnly=` | — | 200 `PaginatedList<IncidentSummaryResponse>` | 400 |
+| GET | `/v1/admin/incidents/{id}` | — | 200 `IncidentDetailResponse` (kèm lịch sử `events`) | 404 `INCIDENT_NOT_FOUND` |
+| POST | `/v1/admin/incidents/{id}/assign` | `{ assigneeUserId, reason, etag }` | 200 | 400 (không phải Admin/Verifier hoạt động, hoặc là chủ kho/Executor của kho), 409 `EDIT_CONFLICT` / `INCIDENT_NOT_OPEN` |
+| POST | `/v1/admin/incidents/{id}/notes` | `{ note }` | 200 | 404 |
+| POST | `/v1/admin/incidents/{id}/review` | `{ nextReviewAt, note, etag }` | 200 | 400 (quá 7 ngày), 409 |
+| POST | `/v1/admin/incidents/{id}/resolve` | `{ note, etag }` | 200 (gọi lặp: trạng thái hiện tại) | 409 `EDIT_CONFLICT` |
+| GET | `/v1/admin/holds?status=&vaultId=` | — | 200 `PaginatedList<HoldResponse>` | 400 |
+| GET | `/v1/admin/holds/{id}` | — | 200 | 404 `HOLD_NOT_FOUND` |
+| POST | `/v1/admin/holds` | `{ vaultId, scope?: VAULT/CONTAINER, targetId?, reason, reviewAt? }` | **201** `HoldResponse` | 400 (`reviewAt` quá 7 ngày), 404 `VAULT_NOT_FOUND` / `CONTAINER_NOT_FOUND` |
+| POST | `/v1/admin/holds/{id}/review` | `{ nextReviewAt, etag }` | 200 | 400, 409 |
+| POST | `/v1/admin/holds/{id}/release` | `{ reason, etag }` | 200 (gọi lặp: trạng thái hiện tại) | 409 `ADMIN_ACTION_NOT_ALLOWED` (`HOLD_OWNER_ALIVE`) / `EDIT_CONFLICT` |
+
+- **Hold** (`Holds`): phạm vi, loại (`OWNER_ALIVE` đặt tự động khi Owner báo còn sống và chỉ gỡ khi Verifier kết luận; `ADMIN`; `DISPUTE`), lý do, người phụ trách, `reviewAt` (tối đa 7 ngày một lần), thời điểm gỡ. Hold đang hiệu lực chặn: duyệt chứng tử (`DEATH_CASE_NOT_ALLOWED` / `HOLD_ACTIVE`), nhận lượt và đồng ý (`HANDOVER_NOT_ALLOWED` / `HOLD_ACTIVE`), liệt kê và tải tài sản (`GRANT_NOT_ACTIVE` / `HOLD_ACTIVE`), kích hoạt kế hoạch (`missingRequirements` có `HOLD_ACTIVE`) và dọn dữ liệu (đồng hồ lưu tạm dừng). Đặt/gỡ hold ghi `plan.UpdatedAt` nên thao tác nhận chạy cùng lúc thua `RowVersion`.
+- **Sự cố** (`Incidents`, `IncidentEvents`): loại `NO_VERIFIER`, `NO_EXECUTOR`, `CHECK_IN_OVERDUE`, `NOTIFICATION_FAILED`, `OWNER_ALIVE`, `INTEGRATION`, `MANUAL`. Mỗi (loại, đối tượng) chỉ một sự cố đang mở (chỉ mục unique có lọc). **Luôn có người phụ trách (hoặc Admin ít việc nhất), hạn và ngày xem lại**; chưa ai nhận được thì `assigneeUserId = null` kèm `nextReviewAt` sau 1 ngày và job giao cho Admin khi có.
+- **Tự động tạo:** job phân công Verifier không có người (`NO_VERIFIER`, tự đóng khi giao được); kỳ điểm danh sang `AWAITING_CHECK` (`CHECK_IN_OVERDUE` giao Executor chính, không có Executor thì `NO_EXECUTOR` giao Admin; tự đóng khi Owner điểm danh, DMS-05); Owner báo còn sống (`OWNER_ALIVE` giao Verifier phụ trách, đóng khi kết luận).
+- **Job sự cố** (`Incident:JobEnabled`, `Incident:PollSeconds` mặc định 300): nhắc người phụ trách sau 48 giờ (một lần), báo mọi Admin sau 72 giờ (một lần), giao sự cố mồ côi. Quá hạn không tự đóng. Thư chỉ có loại sự cố, mã rút gọn và hạn.
+- **Nhật ký:** mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier, giao/đóng sự cố, đặt/gỡ hold) và F2C ghi `AuditLogs` trong cùng giao dịch.
+- **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); sự cố từ lỗi eKYC/thanh toán (chờ LV-02/LV-04); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; thu hồi phiên đăng nhập khi khóa tài khoản.
+
+
 ## 7. Tóm tắt thay đổi FE cần làm
 
 | # | Việc | File FE |

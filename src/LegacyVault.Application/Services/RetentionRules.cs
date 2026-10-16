@@ -13,6 +13,7 @@ public static class RetentionRules
     public const string HoldClaimInProgress = "CLAIM_IN_PROGRESS";
     public const string HoldGrantActive = "GRANT_ACTIVE";
     public const string HoldObjection = "OBJECTION";
+    public const string HoldAdmin = "HOLD";
 
     public const int NoticeNone = 0;
     public const int NoticeStarted = 1;

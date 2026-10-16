@@ -23,7 +23,7 @@ public interface IPlanSetupService
 public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository vaults,
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
-    IExecutorInvitationSender sender, ICheckInScheduler scheduler, IUnitOfWork unitOfWork,
+    IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
     TimeProvider time) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-15";
@@ -217,6 +217,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         if (user?.Status != UserStatus.Active) missing.Add("ACCOUNT_NOT_ACTIVE");
         if (user?.EmailVerifiedAt is null) missing.Add("EMAIL_VERIFICATION_REQUIRED");
         if (vault.Status != VaultStatus.Open) missing.Add("VAULT_NOT_OPEN");
+        if (await holdReader.HasActiveHoldAsync(vault.Id, ct)) missing.Add("HOLD_ACTIVE");
         if (!Paid(vault)) missing.Add("PAID_SERVICE_REQUIRED");
         if ((await ekyc.FindLatestByUserIdAsync(vault.OwnerId, ct))?.Status != EkycStatus.Passed) missing.Add("OWNER_EKYC_REQUIRED");
         if (await containers.CountReadyByVaultIdAsync(vault.Id, ct) == 0) missing.Add("READY_CONTAINER_REQUIRED");

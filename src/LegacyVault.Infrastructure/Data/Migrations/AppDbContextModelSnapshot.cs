@@ -1497,6 +1497,185 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("HandoverTurns", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.Hold", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ReleaseReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset?>("ReleasedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReleasedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ResponsibleUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ReviewAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "ReviewAt");
+
+                    b.HasIndex("VaultId", "Status");
+
+                    b.HasIndex("VaultId", "Type", "Scope", "TargetId")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Active' AND [Type] = 'OwnerAlive'");
+
+                    b.ToTable("Holds", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.Incident", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AssigneeUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("DueAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("EscalatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("NextReviewAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("RemindedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssigneeUserId", "Status");
+
+                    b.HasIndex("Status", "DueAt");
+
+                    b.HasIndex("Type", "TargetType", "TargetId")
+                        .IsUnique()
+                        .HasFilter("[Status] <> 'Resolved'");
+
+                    b.ToTable("Incidents", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.IncidentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("IncidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentId", "At");
+
+                    b.ToTable("IncidentEvents", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.LoginThrottle", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2102,6 +2281,24 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Turn");
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.Hold", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Vault", null)
+                        .WithMany()
+                        .HasForeignKey("VaultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.IncidentEvent", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Incident", null)
+                        .WithMany("Events")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.User", "User")
@@ -2175,6 +2372,11 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Grant");
 
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.Incident", b =>
+                {
+                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.Vault", b =>

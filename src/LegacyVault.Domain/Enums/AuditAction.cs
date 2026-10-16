@@ -37,4 +37,22 @@ public enum AuditAction
     CheckedIn = 14,
     /// <summary>Owner đổi chu kỳ hoặc thời gian chờ điểm danh (DMS-01).</summary>
     CheckInSettingsUpdated = 15,
+    /// <summary>Admin hoặc job đặt hold.</summary>
+    HoldPlaced = 16,
+    /// <summary>Hold được gỡ.</summary>
+    HoldReleased = 17,
+    /// <summary>Sự cố được giao lại người phụ trách.</summary>
+    IncidentAssigned = 18,
+    /// <summary>Sự cố được đóng.</summary>
+    IncidentResolved = 19,
+    /// <summary>Admin đổi vai trò hệ thống của tài khoản.</summary>
+    UserRoleChanged = 20,
+    /// <summary>Admin khóa, mở khóa hoặc vô hiệu hóa tài khoản.</summary>
+    UserStatusChanged = 21,
+    /// <summary>Admin giao lại Verifier cho hồ sơ chứng tử.</summary>
+    VerifierReassigned = 22,
+    /// <summary>Owner báo còn sống (F2C).</summary>
+    ObjectionReported = 23,
+    /// <summary>Verifier kết luận báo còn sống.</summary>
+    ObjectionConcluded = 24,
 }

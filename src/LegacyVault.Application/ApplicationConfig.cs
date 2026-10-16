@@ -27,6 +27,12 @@ public static class ApplicationConfig
         services.AddScoped<IRetentionJob, RetentionJob>();
         services.AddScoped<IExecutorManagementService, ExecutorManagementService>();
         services.AddScoped<IExecutorInvitationJob, ExecutorInvitationJob>();
+        services.AddScoped<IIncidentService, IncidentService>();
+        services.AddScoped<IHoldService, HoldService>();
+        services.AddScoped<IHoldReader, HoldReader>();
+        services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<IOperationsRecorder, OperationsRecorder>();
+        services.AddScoped<IIncidentJob, IncidentJob>();
         services.AddScoped<IOwnerObjectionService, OwnerObjectionService>();
         services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
         services.AddScoped<IVerifierObjectionService, VerifierObjectionService>();

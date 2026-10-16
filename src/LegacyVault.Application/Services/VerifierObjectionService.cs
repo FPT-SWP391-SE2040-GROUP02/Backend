@@ -22,6 +22,9 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
     private readonly IExecutorReader executorReader;
     private readonly IObjectionRepository objections;
     private readonly ICheckInRepository checkIns;
+    private readonly IHoldService holdService;
+    private readonly IIncidentService incidentService;
+    private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -33,6 +36,9 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         IExecutorReader executorReader,
         IObjectionRepository objections,
         ICheckInRepository checkIns,
+        IHoldService holdService,
+        IIncidentService incidentService,
+        IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -43,6 +49,9 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         this.executorReader = executorReader;
         this.objections = objections;
         this.checkIns = checkIns;
+        this.holdService = holdService;
+        this.incidentService = incidentService;
+        this.audit = audit;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -115,6 +124,14 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         objection.ConcludedByUserId = context.UserId;
         objection.ConcludedAt = now;
         objection.UpdatedAt = now;
+
+        // Kết luận xong: gỡ hold chung, đóng sự cố theo dõi và ghi nhật ký trong cùng giao dịch (ALIVE-05, ALIVE-06).
+        await holdService.ReleaseOwnerAliveAsync(context.Vault.Id, context.UserId, reason, ct);
+        await incidentService.ResolveByTargetAsync(
+            IncidentType.OwnerAlive, IncidentRules.TargetDeathCase, context.DeathCase.Id, "Verifier đã kết luận.", ct);
+        audit.Add(AuditRules.Create(context.Vault.Id, context.UserId, AuditActorRole.Verifier,
+            AuditAction.ObjectionConcluded, AuditTargetType.DeathCase, context.DeathCase.Id, null,
+            AuditOutcome.Succeeded, conclusion.ToString().ToUpperInvariant(), now));
         await unitOfWork.SaveChangesAsync(ct);
         return ObjectionMapper.ToResponse(objection, now);
     }

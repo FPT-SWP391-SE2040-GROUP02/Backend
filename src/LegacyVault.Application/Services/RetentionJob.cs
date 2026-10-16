@@ -52,6 +52,7 @@ public sealed class RetentionJob : IRetentionJob
     private readonly IBeneficiaryDataProtector protector;
     private readonly IAssetContentStore contentStore;
     private readonly IRetentionNoticeSender sender;
+    private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -62,6 +63,7 @@ public sealed class RetentionJob : IRetentionJob
         IBeneficiaryDataProtector protector,
         IAssetContentStore contentStore,
         IRetentionNoticeSender sender,
+        IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -71,6 +73,7 @@ public sealed class RetentionJob : IRetentionJob
         this.protector = protector;
         this.contentStore = contentStore;
         this.sender = sender;
+        this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -101,6 +104,7 @@ public sealed class RetentionJob : IRetentionJob
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         List<HandoverTurn> due = new List<HandoverTurn>();
+        bool vaultHeld = await holdReader.HasActiveHoldAsync(vault.Id, ct);
         foreach (HandoverTurn turn in turns)
         {
             if (!RetentionRules.AppliesToTurn(turn))
@@ -108,6 +112,11 @@ public sealed class RetentionJob : IRetentionJob
                 continue;
             }
             string? reason = RetentionRules.HoldReason(turn, plan.Status, now);
+            if (reason == null && vaultHeld)
+            {
+                // SRS §6.4: hold đang hiệu lực giữ dữ liệu; tạm dừng đồng hồ lưu, không xóa.
+                reason = RetentionRules.HoldAdmin;
+            }
             if (RetentionRules.Advance(turn, reason, now))
             {
                 due.Add(turn);
