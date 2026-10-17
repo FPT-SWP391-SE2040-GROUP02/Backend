@@ -1,5 +1,6 @@
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +21,16 @@ public sealed class EkycVerificationRepository : IEkycVerificationRepository
         // ThenByDescending(Id): hai lượt cùng thời điểm vẫn có thứ tự cố định.
         return context.EkycVerifications
             .Where(v => v.UserId == userId)
+            .OrderByDescending(v => v.CreatedAt)
+            .ThenByDescending(v => v.Id)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public Task<EkycVerification?> FindLatestByUserAndPurposeAsync(Guid userId, EkycPurpose purpose, CancellationToken ct)
+    {
+        return context.EkycVerifications
+            .AsNoTracking()
+            .Where(v => v.UserId == userId && v.Purpose == purpose)
             .OrderByDescending(v => v.CreatedAt)
             .ThenByDescending(v => v.Id)
             .FirstOrDefaultAsync(ct);
