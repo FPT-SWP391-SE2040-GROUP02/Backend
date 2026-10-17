@@ -9,7 +9,8 @@ namespace LegacyVault.Application.Services;
 /// <remarks>
 /// - Lượt của người khác hoặc id lạ đều trả cùng một 404 HANDOVER_NOT_FOUND (SEC-04).
 /// - eKYC chỉ cung cấp bằng chứng; việc đổi trạng thái lượt do service này làm, không phải module eKYC.
-/// - Chưa có bước gọi video với Executor (IDENTITY-01): khi có thì bước đó phải nằm giữa eKYC và "sẵn sàng nhận".
+/// - Nhóm đã bỏ bước gọi video (IDENTITY-01) và thay bằng xác minh eKYC ở bước nhận: eKYC đạt và khớp người được chỉ định
+/// là đủ để sang "sẵn sàng nhận", không còn bước Executor kết luận "đúng người".
 /// </remarks>
 public interface IHandoverIdentityService
 {

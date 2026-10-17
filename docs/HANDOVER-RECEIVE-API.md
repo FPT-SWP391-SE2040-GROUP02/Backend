@@ -26,7 +26,7 @@ Cấu hình `Handover:RequireIdentityVerification`:
 
 | Giá trị | Hiệu lực |
 |---|---|
-| `true` (mặc định trong code) | `claim` dừng ở `IDENTITY_IN_PROGRESS`; người nhận làm eKYC (mục đích `BENEFICIARY_CLAIM`, kèm `handoverTurnId`, xem `api-contract.md` mục 6.10) rồi gọi `POST turns/{turnId}/identity/complete` để sang `READY_TO_ACCEPT`. Chưa có bước gọi video với Executor (IDENTITY-01). |
+| `true` (mặc định trong code) | `claim` dừng ở `IDENTITY_IN_PROGRESS`; người nhận làm eKYC (mục đích `BENEFICIARY_CLAIM`, kèm `handoverTurnId`, xem `api-contract.md` mục 6.10) rồi gọi `POST turns/{turnId}/identity/complete` để sang `READY_TO_ACCEPT`. Nhóm đã bỏ bước gọi video: xác minh eKYC ở bước này thay cho việc gọi video và Executor kết luận "đúng người". |
 | `false` | `claim` đi thẳng tới `READY_TO_ACCEPT` và lượt có `identityBypassed: true`. **Chỉ hợp lệ ở môi trường Development**: ở môi trường khác API không khởi động (`OptionsValidationException`). |
 
 `appsettings.Development.json` đặt `false` để bạn thử được. Lúc khởi động API ghi một dòng log cho biết đang bật hay bỏ qua.
