@@ -43,6 +43,15 @@ public sealed class BeneficiaryConfiguration : IEntityTypeConfiguration<Benefici
         builder.HasIndex(b => new { b.VaultId, b.CitizenIdLast4 });
         builder.HasIndex(b => new { b.VaultId, b.CreatedAt });
 
+        builder.Property(b => b.CitizenIdHash)
+            .HasMaxLength(32)
+            .IsFixedLength();
+
+        // QUOTA-04: một CCCD chỉ một hồ sơ trong kho, kể cả khi hai request đến cùng lúc. Hồ sơ cũ chưa có hash (NULL) không bị ràng buộc.
+        builder.HasIndex(b => new { b.VaultId, b.CitizenIdHash })
+            .IsUnique()
+            .HasFilter("[CitizenIdHash] IS NOT NULL");
+
         // Không cascade từ kho: dữ liệu kho không bị xóa dây chuyền.
         builder.HasOne(b => b.Vault)
             .WithMany()

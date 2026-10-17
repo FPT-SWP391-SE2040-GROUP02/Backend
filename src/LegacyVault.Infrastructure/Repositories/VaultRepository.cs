@@ -37,7 +37,7 @@ public sealed class VaultRepository(AppDbContext context) : IVaultRepository
     {
         // QUOTA-01/02: mọi phiên bản đang lưu đều chiếm dung lượng, kể cả khi tài sản không ở gói nào.
         return await context.AssetVersions
-            .Where(v => v.Asset.VaultId == vaultId)
+            .Where(v => v.Asset.VaultId == vaultId && v.ContentDeletedAt == null)
             .SumAsync(v => (long?)v.SizeBytes, ct) ?? 0;
     }
 

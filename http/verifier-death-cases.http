@@ -8,6 +8,10 @@
 #   3. Hồ sơ được giao cho MỘT Verifier xoay vòng: xem bảng DeathCaseAssignments (dòng EndedAt = NULL; lệnh có sẵn ở cuối
 #      http/death-case-dev.sql) để biết ĐÚNG tài khoản được giao. Đăng nhập tài khoản đó ở bước dưới.
 #   4. Muốn thử DUYỆT: chạy lệnh "Cho phép duyệt" ở cuối http/death-case-dev.sql (coi như Owner đã nhận thư cách đây 80 giờ).
+#   5. Phân công do job nền (F2B nhánh C) quản lý, không có API riêng. dueAt = hạn ra quyết định, không sớm hơn 48 giờ sau
+#      khi hết phản đối nên hồ sơ còn trong 72 giờ phản đối có dueAt xa hơn (D1). Hồ sơ SUPPLEMENT_REQUIRED có thể hiện dueAt
+#      đã qua vì đang chờ Executor (D2). Job nhắc email trước hạn 12 giờ; quá hạn hoặc Verifier mất quyền thì giao người khác,
+#      lúc đó hồ sơ biến mất khỏi danh sách của bạn (404). Thử nhắc/giao lại: mục "Cho phép nhắc / giao lại" ở http/death-case-dev.sql.
 #
 # Luồng: danh sách → chi tiết → xem trang → xem xét cờ → yêu cầu bổ sung → (Executor gửi lại, xem 5b) → từ chối hoặc duyệt.
 # Hồ sơ không giao cho bạn (hoặc phân công đã kết thúc) luôn là 404 DEATH_CASE_NOT_FOUND. Tài khoản không phải Verifier: 403 ROLE_NOT_ALLOWED.

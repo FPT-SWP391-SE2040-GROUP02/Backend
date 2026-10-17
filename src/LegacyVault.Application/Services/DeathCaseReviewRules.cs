@@ -13,6 +13,9 @@ public static class DeathCaseReviewRules
     /// <summary>Độ dài tối đa của lý do / ghi chú Verifier (khớp cột DeathCaseDecisions.Reason, DeathCaseFlags.ReviewNote).</summary>
     public const int MaxReasonLength = 1000;
 
+    /// <summary>DEATH-01: Executor có 7 ngày để bổ sung sau yêu cầu của Verifier.</summary>
+    public const int SupplementDueDays = 7;
+
     /// <summary>AC-71: hồ sơ đã có quyết định cuối (duyệt hoặc từ chối).</summary>
     public static bool IsClosed(DeathCaseStatus status)
     {

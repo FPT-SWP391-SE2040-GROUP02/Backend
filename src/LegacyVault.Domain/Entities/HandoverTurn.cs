@@ -68,6 +68,24 @@ public class HandoverTurn
 
     public DateTimeOffset? UpdatedAt { get; set; }
 
+    /// <summary>RETENTION-01..09: trạng thái lưu dữ liệu của lượt.</summary>
+    public RetentionStatus RetentionStatus { get; set; }
+
+    /// <summary>Lúc đồng hồ lưu bắt đầu lần đầu (retention_started_at); không đổi khi tạm dừng rồi chạy lại.</summary>
+    public DateTimeOffset? RetentionStartedAt { get; set; }
+
+    /// <summary>Hạn lưu hiện tại (retention_deadline) khi đang chạy; null khi chưa chạy hoặc đang tạm dừng.</summary>
+    public DateTimeOffset? RetentionDeadline { get; set; }
+
+    /// <summary>Số giây còn lại khi tạm dừng (RETENTION-04): chạy lại thì cộng phần này, không đặt lại 30 ngày.</summary>
+    public long? RetentionRemainingSeconds { get; set; }
+
+    /// <summary>Mốc nhắc đã gửi: 0 chưa, 1 lúc bắt đầu, 2 còn 7 ngày, 3 còn 24 giờ (RETENTION-05, §7.7 bước 5).</summary>
+    public int RetentionNoticeStage { get; set; }
+
+    /// <summary>Lúc dọn dữ liệu xong (tombstone); null khi chưa dọn.</summary>
+    public DateTimeOffset? DeletedAt { get; set; }
+
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 
     public List<HandoverSnapshotItem> Items { get; set; } = new List<HandoverSnapshotItem>();

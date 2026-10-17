@@ -22,9 +22,6 @@ public sealed class DeathCaseNoticeJob : IDeathCaseNoticeJob
     /// <summary>Số thông báo tối đa xử lý mỗi vòng quét.</summary>
     private const int BatchSize = 50;
 
-    /// <summary>Số ký tự của Id hồ sơ dùng làm mã rút gọn trong thư.</summary>
-    private const int CaseCodeLength = 8;
-
     private readonly IDeathCaseRepository deathCaseRepository;
     private readonly IUserRepository userRepository;
     private readonly IDeathCaseNoticeSender noticeSender;
@@ -74,7 +71,7 @@ public sealed class DeathCaseNoticeJob : IDeathCaseNoticeJob
             message.NoticeId = notice.Id;
             message.ToEmail = owner.Email;
             message.FullName = owner.FullName;
-            message.CaseCode = BuildCaseCode(deathCase.Id);
+            message.CaseCode = DeathCaseRules.CaseCode(deathCase.Id);
             message.ExpectedObjectionEndsAt = DeathCaseRules.ObjectionEndsAt(now);
             try
             {
@@ -104,6 +101,17 @@ public sealed class DeathCaseNoticeJob : IDeathCaseNoticeJob
             {
                 deathCase.ObjectionStartsAt = now;
                 deathCase.ObjectionEndsAt = DeathCaseRules.ObjectionEndsAt(now);
+
+                // ASSIGN-04, D1, TIME-07: hạn Verifier không sớm hơn 48 giờ sau khi hết phản đối.
+                // Không đổi RemindedDueAt: hạn mới khác hạn đã nhắc nên sẽ được nhắc lại.
+                foreach (DeathCaseAssignment assignment in deathCase.Assignments)
+                {
+                    if (assignment.EndedAt == null)
+                    {
+                        assignment.DueAt = DeathCaseAssignmentRules.ExtendForObjection(
+                            assignment.DueAt, deathCase.ObjectionEndsAt.Value);
+                    }
+                }
             }
         }
         else if (notice.AttemptCount >= DeathCaseRules.MaxNoticeAttempts)
@@ -114,15 +122,5 @@ public sealed class DeathCaseNoticeJob : IDeathCaseNoticeJob
 
         await unitOfWork.SaveChangesAsync(ct);
         return notice.Status;
-    }
-
-    /// <summary>
-    /// Mã hồ sơ rút gọn: 8 ký tự hex CUỐI của Id, chữ hoa. Không lấy phần đầu vì Guid v7 bắt đầu bằng mốc thời gian,
-    /// các hồ sơ tạo gần nhau sẽ trùng mã.
-    /// </summary>
-    private static string BuildCaseCode(Guid caseId)
-    {
-        string hex = caseId.ToString("N");
-        return hex.Substring(hex.Length - CaseCodeLength).ToUpperInvariant();
     }
 }

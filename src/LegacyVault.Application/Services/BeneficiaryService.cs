@@ -89,21 +89,9 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         MatchedBeneficiary? existing = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
         if (existing != null)
         {
-            if (IsSameIdentity(existing.Data, data))
-            {
-                // Gửi lại đúng người: trả hồ sơ cũ nguyên trạng, không ghi DB (liên hệ mới không được cập nhật).
-                List<Guid> existingContainerIds = await LoadContainerIdsAsync(existing.Beneficiary.Id, ct);
-                CreateBeneficiaryResult same = new CreateBeneficiaryResult();
-                same.Created = false;
-                same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, existingContainerIds, today);
-                return same;
-            }
-            // QUOTA-04 / AC-92: cùng CCCD mà khác tên hoặc ngày sinh → Owner phải sửa cho thống nhất.
-            throw IdentityConflict(existing.Beneficiary.Id);
+            return await ResultForExistingAsync(existing, data, today, ct);
         }
 
-        // TODO: DB không có ràng buộc unique theo CCCD (CCCD đã mã hóa), nên 2 request cùng CCCD gửi đúng cùng lúc
-        // có thể tạo 2 hồ sơ; FE khóa nút Lưu khi đang gửi.
         dataProtector.Protect(beneficiary, data);
         // Hồ sơ mới chưa sửa lần nào: UpdatedAt = null → etag "0".
         beneficiary.CreatedAt = now;
@@ -111,13 +99,46 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // QUOTA-03: chưa gắn vào gói thì chưa thuộc cấu hình bàn giao, chưa chiếm suất → KHÔNG tăng ConfigVersion.
         // SEC-13: chỉ ghi id hồ sơ; họ tên, số CCCD, liên hệ không vào nhật ký (SEC-07).
         AddAudit(vault, AuditAction.BeneficiaryCreated, beneficiary.Id, null, now);
-        await unitOfWork.SaveChangesAsync(ct);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (beneficiaryRepository.IsUniqueViolation(ex))
+        {
+            // Hai request cùng CCCD đến cùng lúc: chỉ mục unique (VaultId, CitizenIdHash) cho một bên thắng.
+            // Bên thua bỏ hồ sơ của mình rồi xử lý như gặp hồ sơ có sẵn.
+            beneficiaryRepository.DiscardPendingChanges();
+            MatchedBeneficiary? winner = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
+            if (winner == null)
+            {
+                throw;
+            }
+            return await ResultForExistingAsync(winner, data, today, ct);
+        }
 
         CreateBeneficiaryResult result = new CreateBeneficiaryResult();
         result.Created = true;
         // Hồ sơ mới chưa ở gói nào.
         result.Beneficiary = beneficiary.ToResponse(data, new List<Guid>(), today);
         return result;
+    }
+
+    /// <summary>
+    /// Đã có hồ sơ cùng CCCD: cùng họ tên và ngày sinh thì trả hồ sơ cũ nguyên trạng (không ghi DB, liên hệ mới không được
+    /// cập nhật); khác thì 409 BENEFICIARY_IDENTITY_CONFLICT để Owner sửa cho thống nhất (QUOTA-04, AC-92).
+    /// </summary>
+    private async Task<CreateBeneficiaryResult> ResultForExistingAsync(
+        MatchedBeneficiary existing, BeneficiaryPersonalData data, DateOnly today, CancellationToken ct)
+    {
+        if (!IsSameIdentity(existing.Data, data))
+        {
+            throw IdentityConflict(existing.Beneficiary.Id);
+        }
+        List<Guid> existingContainerIds = await LoadContainerIdsAsync(existing.Beneficiary.Id, ct);
+        CreateBeneficiaryResult same = new CreateBeneficiaryResult();
+        same.Created = false;
+        same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, existingContainerIds, today);
+        return same;
     }
 
     public async Task<PaginatedList<BeneficiaryResponse>> GetBeneficiariesAsync(

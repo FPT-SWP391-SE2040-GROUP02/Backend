@@ -41,5 +41,14 @@ public class AssetVersion
     /// <summary>DEK của phiên bản này, đã bọc bằng KEK (60 byte). Không trả cho FE, không log.</summary>
     public byte[] WrappedDataKey { get; set; } = Array.Empty<byte>();
 
+    /// <summary>
+    /// Tombstone (RETENTION-06): lúc khóa nội dung bị hủy. Khi đặt, WrappedDataKey đã bị ghi đè bằng 0 nên nội dung không
+    /// giải mã được nữa kể cả khi xóa tệp lỗi. Null = nội dung còn.
+    /// </summary>
+    public DateTimeOffset? ContentDeletedAt { get; set; }
+
+    /// <summary>Lúc tệp mã hóa đã xóa khỏi kho lưu trữ; null khi chưa xóa được (job thử lại).</summary>
+    public DateTimeOffset? StorageDeletedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 }

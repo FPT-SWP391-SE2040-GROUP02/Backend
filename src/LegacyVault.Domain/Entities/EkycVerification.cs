@@ -23,6 +23,24 @@ public class EkycVerification
 
     public EkycStatus Status { get; set; }
 
+    /// <summary>Mục đích của lượt eKYC, lấy từ lần đồng ý gần nhất trước khi chụp (EKYC-01, EKYC-03).</summary>
+    public EkycPurpose Purpose { get; set; }
+
+    /// <summary>
+    /// Lượt bàn giao đang đối chiếu khi Purpose là BeneficiaryClaim (EKYC-02); null ở mục đích khác.
+    /// Không đặt khóa ngoại để module eKYC không phụ thuộc bảng của luồng bàn giao.
+    /// </summary>
+    public Guid? HandoverTurnId { get; set; }
+
+    /// <summary>Kết quả đối chiếu với người được chỉ định; NotChecked khi không có gì để đối chiếu (MATCH-01..05).</summary>
+    public EkycIdentityMatch IdentityMatch { get; set; }
+
+    /// <summary>
+    /// true khi đã đọc mặt sau và mã định danh trong MRZ trùng 4 số cuối mặt trước, tức hai mặt cùng một thẻ (EKYC-04).
+    /// Thẻ cũ không có MRZ chứa số căn cước thì luôn false.
+    /// </summary>
+    public bool BackSideChecked { get; set; }
+
     /// <summary>4 số cuối CCCD đọc được từ mặt trước, dạng rõ. Rỗng khi OCR không đọc được số.</summary>
     public string CitizenIdLast4 { get; set; } = string.Empty;
 

@@ -19,4 +19,10 @@ public sealed class AssetEncryptionSettings
 
     /// <summary>Id KEK → giá trị KEK dạng base64 (đúng 32 byte sau khi giải mã).</summary>
     public Dictionary<string, string> Keys { get; set; } = new Dictionary<string, string>();
+
+    /// <summary>
+    /// Khóa HMAC (base64 32 byte) để tính chỉ mục chống trùng CCCD (QUOTA-04). KHÔNG đổi khi xoay KEK, vì đổi khóa này
+    /// làm các hồ sơ cũ không còn khớp chỉ mục. Bỏ trống thì suy ra từ KEK đang dùng (chỉ nên cho môi trường thử).
+    /// </summary>
+    public string BlindIndexKey { get; set; } = string.Empty;
 }

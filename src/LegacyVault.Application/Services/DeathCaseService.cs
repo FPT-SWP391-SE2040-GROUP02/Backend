@@ -21,8 +21,10 @@ public sealed class DeathCaseService : IDeathCaseService
     private readonly IVaultRepository vaultRepository;
     private readonly IDeathCaseRepository deathCaseRepository;
     private readonly IExecutorReader executorReader;
+    private readonly IDeathCaseVerifierPicker verifierPicker;
     private readonly IDeathCaseDataProtector dataProtector;
     private readonly IAssetContentStore contentStore;
+    private readonly IOwnerIdentityReader identityReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -31,8 +33,10 @@ public sealed class DeathCaseService : IDeathCaseService
         IVaultRepository vaultRepository,
         IDeathCaseRepository deathCaseRepository,
         IExecutorReader executorReader,
+        IDeathCaseVerifierPicker verifierPicker,
         IDeathCaseDataProtector dataProtector,
         IAssetContentStore contentStore,
+        IOwnerIdentityReader identityReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -40,8 +44,10 @@ public sealed class DeathCaseService : IDeathCaseService
         this.vaultRepository = vaultRepository;
         this.deathCaseRepository = deathCaseRepository;
         this.executorReader = executorReader;
+        this.verifierPicker = verifierPicker;
         this.dataProtector = dataProtector;
         this.contentStore = contentStore;
+        this.identityReader = identityReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -397,6 +403,24 @@ public sealed class DeathCaseService : IDeathCaseService
             deathCaseRepository.AddFlag(flag);
         }
 
+        // DEATH-13: số CCCD trên hồ sơ khác CCCD đã xác minh của Owner → đặt cờ, chặn duyệt tới khi Verifier xem xét.
+        // TODO(LV-02): so đủ 12 số với danh tính đã gắn; hiện chỉ có 4 số cuối của lượt eKYC đạt.
+        string? verifiedLast4 = await identityReader.FindVerifiedCitizenIdLast4Async(vault.OwnerId, ct);
+        if (DeathCaseRules.IsIdentityMismatch(verifiedLast4, data.OwnerCitizenId))
+        {
+            DeathCaseFlag mismatch = new DeathCaseFlag();
+            mismatch.CaseId = deathCase.Id;
+            mismatch.VersionId = version.Id;
+            mismatch.Kind = DeathCaseFlagKind.IdentityMismatch;
+            mismatch.Detail = "Số CCCD trên hồ sơ không khớp với CCCD Owner đã xác minh.";
+            mismatch.CreatedAt = now;
+            deathCase.Flags.Add(mismatch);
+            deathCaseRepository.AddFlag(mismatch);
+        }
+
+        // Bản bổ sung mới: hết trạng thái quá hạn bổ sung.
+        deathCase.SupplementOverdueAt = null;
+
         // DEATH-08, DEATH-11: lần đầu, hoặc đổi trọng yếu so với bản đã báo → xếp thông báo Pending (outbox, D3)
         // và dừng đồng hồ 72 giờ cho tới khi job gửi được thư. Đổi không trọng yếu thì giữ nguyên đồng hồ.
         if (NeedsOwnerNotice(deathCase, data, version))
@@ -423,12 +447,14 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         else if (!isFirstSubmit)
         {
-            // ASSIGN-04: Executor gửi bản mới thì hạn xét của phân công đang hiệu lực tính lại từ lúc gửi (giữ AssignedAt).
+            // ASSIGN-04, D1, TIME-07: Executor gửi bản mới thì hạn xét của phân công đang hiệu lực tính lại từ lúc gửi
+            // (giữ AssignedAt), nhưng không sớm hơn 48 giờ sau khi hết phản đối. Chạy sau đoạn xếp thông báo ở trên:
+            // đổi trọng yếu đã đặt ObjectionEndsAt = null nên hạn = lúc gửi + 48 giờ.
             foreach (DeathCaseAssignment assignment in deathCase.Assignments)
             {
                 if (assignment.EndedAt == null)
                 {
-                    assignment.DueAt = now.AddHours(DeathCaseRules.ReviewDueHours);
+                    assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now, deathCase.ObjectionEndsAt);
                 }
             }
         }
@@ -566,19 +592,8 @@ public sealed class DeathCaseService : IDeathCaseService
     private async Task AssignVerifierAsync(
         DeathCase deathCase, Vault vault, Guid submitterUserId, DateTimeOffset now, CancellationToken ct)
     {
-        List<Guid> excluded = new List<Guid>();
-        excluded.Add(vault.OwnerId);
-        excluded.Add(submitterUserId);
-        List<Executor> executors = await executorReader.GetActiveAsync(vault.Id, ct);
-        foreach (Executor executor in executors)
-        {
-            if (executor.UserId != null)
-            {
-                excluded.Add(executor.UserId.Value);
-            }
-        }
-
-        Guid? verifierId = await deathCaseRepository.FindVerifierCandidateAsync(excluded, ct);
+        // D5: danh sách loại trừ nằm ở IDeathCaseVerifierPicker, dùng chung với job phân công.
+        Guid? verifierId = await verifierPicker.PickAsync(vault, submitterUserId, null, ct);
         if (verifierId == null)
         {
             // ASSIGN-04 (nhánh B): chưa có Verifier phù hợp thì hồ sơ chờ được giao sau.
@@ -589,7 +604,7 @@ public sealed class DeathCaseService : IDeathCaseService
         assignment.CaseId = deathCase.Id;
         assignment.VerifierUserId = verifierId.Value;
         assignment.AssignedAt = now;
-        assignment.DueAt = now.AddHours(DeathCaseRules.ReviewDueHours);
+        assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now, deathCase.ObjectionEndsAt);
         deathCase.Assignments.Add(assignment);
         deathCaseRepository.AddAssignment(assignment);
     }

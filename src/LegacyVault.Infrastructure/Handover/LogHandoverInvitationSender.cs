@@ -29,8 +29,9 @@ public sealed class LogHandoverInvitationSender : IHandoverInvitationSender
         }
         else
         {
-            logger.LogInformation("[LỜI MỜI NHẬN TÀI SẢN] Lượt {TurnId}; chưa cấu hình email nên không gửi thư.",
-                invitation.TurnId);
+            logger.LogWarning("[LỜI MỜI NHẬN TÀI SẢN] Lượt {TurnId}; chưa cấu hình email nên không gửi thư.", invitation.TurnId);
+            // Không giả vờ đã gửi: HandoverStarter giữ InvitationSentAt = null.
+            throw new InvalidOperationException("Chưa cấu hình Email:Smtp nên không gửi được lời mời.");
         }
         return Task.CompletedTask;
     }

@@ -1,6 +1,8 @@
+using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Infrastructure.Ekyc;
 using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
@@ -21,6 +23,9 @@ public static class DeathCaseConfig
     {
         services.AddScoped<IDeathCaseRepository, DeathCaseRepository>();
         services.AddScoped<IDeathCaseReviewRepository, DeathCaseReviewRepository>();
+        services.AddScoped<IObjectionRepository, ObjectionRepository>();
+        services.AddSingleton<IOwnerFaceVerifier, UnavailableOwnerFaceVerifier>();
+        services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
 
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.
         services.AddSingleton<IDeathCaseDataProtector, DeathCaseDataProtector>();
@@ -29,8 +34,14 @@ public static class DeathCaseConfig
         services.Configure<DeathCaseJobSettings>(configuration.GetSection(DeathCaseJobSettings.SectionName));
         services.AddHostedService<DeathCaseNoticeMonitor>();
 
+        // D6: job giao Verifier cho hồ sơ trống, nhắc trước hạn và giao lại khi quá hạn.
+        services.AddHostedService<DeathCaseAssignmentMonitor>();
+        services.AddScoped<ISupplementOverdueRepository, SupplementOverdueRepository>();
+        services.AddHostedService<DeathCaseSupplementMonitor>();
+
         // Chọn bộ gửi lúc cần dùng: có Email:Smtp đầy đủ thì gửi thật, không thì chỉ ghi log (như HandoverConfig).
         services.AddSingleton<IDeathCaseNoticeSender>(provider => ChooseSender(provider));
+        services.AddSingleton<IDeathCaseVerifierReminderSender>(provider => ChooseReminderSender(provider));
         return services;
     }
 
@@ -42,5 +53,15 @@ public static class DeathCaseConfig
             return ActivatorUtilities.CreateInstance<SmtpDeathCaseNoticeSender>(provider);
         }
         return ActivatorUtilities.CreateInstance<LogDeathCaseNoticeSender>(provider);
+    }
+
+    private static IDeathCaseVerifierReminderSender ChooseReminderSender(IServiceProvider provider)
+    {
+        SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
+        if (smtp.IsConfigured)
+        {
+            return ActivatorUtilities.CreateInstance<SmtpDeathCaseVerifierReminderSender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LogDeathCaseVerifierReminderSender>(provider);
     }
 }

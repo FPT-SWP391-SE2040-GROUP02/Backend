@@ -130,6 +130,8 @@ public static class DeathCaseMappings
         response.Reason = latest.Reason;
         response.RequestedParts = DeathCaseReviewRules.SplitRequestedParts(latest.RequestedParts);
         response.RequestedAt = latest.DecidedAt;
+        response.DueAt = latest.DueAt;
+        response.Overdue = deathCase.SupplementOverdueAt != null;
         return response;
     }
 

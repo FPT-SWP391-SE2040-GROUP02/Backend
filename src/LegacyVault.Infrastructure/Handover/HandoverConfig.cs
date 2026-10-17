@@ -30,9 +30,25 @@ public static class HandoverConfig
         services.Configure<HandoverJobSettings>(configuration.GetSection(HandoverJobSettings.SectionName));
         services.AddHostedService<HandoverMonitor>();
 
+        // Lưu và xóa dữ liệu sau bàn giao (§7.7).
+        services.AddScoped<IRetentionRepository, RetentionRepository>();
+        services.Configure<RetentionJobSettings>(configuration.GetSection(RetentionJobSettings.SectionName));
+        services.AddHostedService<RetentionMonitor>();
+        services.AddSingleton<IRetentionNoticeSender>(provider => ChooseRetentionSender(provider));
+
         // Chọn bộ gửi lúc cần dùng: có Email:Smtp đầy đủ thì gửi thật, không thì chỉ ghi log (như EmailConfig).
         services.AddSingleton<IHandoverInvitationSender>(provider => ChooseSender(provider));
         return services;
+    }
+
+    private static IRetentionNoticeSender ChooseRetentionSender(IServiceProvider provider)
+    {
+        SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
+        if (smtp.IsConfigured)
+        {
+            return ActivatorUtilities.CreateInstance<SmtpRetentionNoticeSender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LogRetentionNoticeSender>(provider);
     }
 
     private static IHandoverInvitationSender ChooseSender(IServiceProvider provider)

@@ -21,6 +21,14 @@ public sealed class HandoverTurnConfiguration : IEntityTypeConfiguration<Handove
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(t => t.RetentionStatus)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        // Job lưu dữ liệu tìm các lượt chưa dọn theo kế hoạch.
+        builder.HasIndex(t => new { t.PlanId, t.RetentionStatus });
+
         // SHA-256 dạng hex chữ thường: chỉ ký tự ASCII, đúng 64 ký tự.
         builder.Property(t => t.InvitationTokenHash)
             .IsRequired()

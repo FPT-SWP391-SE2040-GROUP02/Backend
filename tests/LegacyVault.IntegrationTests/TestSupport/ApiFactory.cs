@@ -102,6 +102,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Handover:Job:Enabled"] = "false";
             settings["ExecutorInvitations:DeliveryEnabled"] = "false";
             settings["DeathCase:NoticeJobEnabled"] = "false";
+            settings["DeathCase:AssignmentJobEnabled"] = "false";
+            settings["DeathCase:SupplementJobEnabled"] = "false";
+            settings["Executor:InvitationJobEnabled"] = "false";
+            settings["Retention:Enabled"] = "false";
+            settings["Incident:JobEnabled"] = "false";
             // Môi trường Development nạp user-secrets của người chạy test: ép trống thông tin Gmail để test
             // KHÔNG BAO GIỜ gửi thư thật (mặc định dùng bản chỉ ghi log).
             settings["Email:Smtp:UserName"] = "";

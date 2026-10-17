@@ -23,7 +23,7 @@ public interface IPlanSetupService
 public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository vaults,
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
-    IExecutorInvitationSender sender, ICheckInScheduler scheduler, IUnitOfWork unitOfWork,
+    IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
     TimeProvider time) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-15";
@@ -54,8 +54,18 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 previous.EndedAt = now;
                 previous.UpdatedAt = now;
             }
-            if (vault.Executors.Any(e => e.Role == role && e.Status is ExecutorStatus.Invited or ExecutorStatus.Accepted or ExecutorStatus.Suspended))
-                throw Conflict();
+            Guid? replaces = null;
+            var occupying = vault.Executors.Where(e => e.Role == role
+                && e.Status is ExecutorStatus.Invited or ExecutorStatus.Accepted or ExecutorStatus.Suspended).ToList();
+            if (occupying.Count > 0)
+            {
+                // SETUP-06: kế hoạch đang chạy mà đã có Executor chính đã chấp nhận → mời người thay; người cũ giữ vai trò
+                // cho tới khi người mới chấp nhận. Mọi trường hợp khác vẫn là trùng lời mời.
+                bool replacement = PlanRules.IsRunning(vault.Plan.Status) && role == ExecutorRole.Primary
+                    && occupying.Count == 1 && occupying[0].Status == ExecutorStatus.Accepted;
+                if (!replacement) throw Conflict();
+                replaces = occupying[0].Id;
+            }
             if (request.BeneficiaryId is Guid beneficiaryId && await beneficiaries.FindByIdAsync(vault.Id, beneficiaryId, ct) is null)
                 throw new AppException(AppErrorType.NotFound, ErrorCode.BeneficiaryNotFound, "Không tìm thấy hồ sơ người nhận.");
             var item = new Executor
@@ -64,6 +74,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 InviteeEmail = email, InvitationTokenHash = token.Hash,
                 IsBeneficiary = request.BeneficiaryId.HasValue, BeneficiaryId = request.BeneficiaryId,
                 InvitedAt = now, ExpiresAt = now.AddDays(7),
+                ReplacesExecutorId = replaces,
             };
             invitations.Add(item);
             PlanRules.BumpConfigVersion(vault.Plan, now);
@@ -123,7 +134,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 return Map(item);
             if (item.Status != ExecutorStatus.Invited || item.ExpiresAt <= time.GetUtcNow()) throw InvalidInvitation();
             VaultRules.EnsureEditable(vault);
-            if (vault.Plan.Status != PlanStatus.Draft) throw NotAllowed("PLAN_NOT_DRAFT");
+            if (vault.Plan.Status != PlanStatus.Draft && !PlanRules.IsRunning(vault.Plan.Status)) throw NotAllowed("PLAN_NOT_DRAFT");
             if (request.Accept && vault.Executors.Any(e => e.Id != item.Id && e.UserId == userId && e.Status == ExecutorStatus.Accepted)) throw NotAllowed("INDEPENDENT_EXECUTOR_REQUIRED");
             var now = time.GetUtcNow();
             item.UserId = userId;
@@ -132,6 +143,17 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             item.AcceptedScopeVersion = request.Accept ? ScopeVersion : null;
             item.EndedAt = request.Accept ? null : now;
             item.UpdatedAt = now;
+            if (request.Accept && item.ReplacesExecutorId is Guid replacedId)
+            {
+                // SETUP-06: người thay chấp nhận thì người cũ thôi vai trò trong cùng giao dịch.
+                var replaced = vault.Executors.SingleOrDefault(e => e.Id == replacedId && e.Status == ExecutorStatus.Accepted);
+                if (replaced is not null)
+                {
+                    replaced.Status = ExecutorStatus.Revoked;
+                    replaced.EndedAt = now;
+                    replaced.UpdatedAt = now;
+                }
+            }
             PlanRules.BumpConfigVersion(vault.Plan, now);
             await unitOfWork.SaveChangesAsync(ct);
             return Map(item);
@@ -180,7 +202,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     {
         await UsableUserAsync(vault.OwnerId, ct);
         VaultRules.EnsureEditable(vault);
-        if (vault.Plan.Status != PlanStatus.Draft) throw NotAllowed("PLAN_NOT_DRAFT");
+        if (vault.Plan.Status != PlanStatus.Draft && !PlanRules.IsRunning(vault.Plan.Status)) throw NotAllowed("PLAN_NOT_DRAFT");
         if (!Paid(vault)) throw new AppException(AppErrorType.Forbidden, ErrorCode.PaidTierRequired, "Cần gói trả phí còn hiệu lực.");
     }
 
@@ -195,6 +217,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         if (user?.Status != UserStatus.Active) missing.Add("ACCOUNT_NOT_ACTIVE");
         if (user?.EmailVerifiedAt is null) missing.Add("EMAIL_VERIFICATION_REQUIRED");
         if (vault.Status != VaultStatus.Open) missing.Add("VAULT_NOT_OPEN");
+        if (await holdReader.HasActiveHoldAsync(vault.Id, ct)) missing.Add("HOLD_ACTIVE");
         if (!Paid(vault)) missing.Add("PAID_SERVICE_REQUIRED");
         if ((await ekyc.FindLatestByUserIdAsync(vault.OwnerId, ct))?.Status != EkycStatus.Passed) missing.Add("OWNER_EKYC_REQUIRED");
         if (await containers.CountReadyByVaultIdAsync(vault.Id, ct) == 0) missing.Add("READY_CONTAINER_REQUIRED");

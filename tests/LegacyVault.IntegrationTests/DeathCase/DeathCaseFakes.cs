@@ -119,6 +119,28 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
     }
 }
 
+/// <summary>Bộ gửi thư nhắc Verifier giả: ghi lại thư đã gửi; FailNext = true thì lần gọi kế tiếp ném lỗi như SMTP không nhận thư.</summary>
+public sealed class FakeDeathCaseVerifierReminderSender : IDeathCaseVerifierReminderSender
+{
+    public List<DeathCaseVerifierReminder> Sent { get; } = new List<DeathCaseVerifierReminder>();
+
+    public bool FailNext { get; set; }
+
+    public int CallCount { get; private set; }
+
+    public Task SendAsync(DeathCaseVerifierReminder reminder, CancellationToken ct)
+    {
+        CallCount++;
+        if (FailNext)
+        {
+            FailNext = false;
+            throw new InvalidOperationException("SMTP giả không nhận thư.");
+        }
+        Sent.Add(reminder);
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Bộ gửi giả: ghi lại thông báo đã gửi; Fail = true thì ném lỗi như SMTP không nhận thư.</summary>
 public sealed class FakeDeathCaseNoticeSender : IDeathCaseNoticeSender
 {

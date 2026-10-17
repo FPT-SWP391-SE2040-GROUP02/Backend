@@ -23,6 +23,9 @@ public static class DeathCaseRules
     /// <summary>D3: thử gửi thông báo tối đa 5 lần rồi đánh dấu Failed.</summary>
     public const int MaxNoticeAttempts = 5;
 
+    /// <summary>Số ký tự của Id hồ sơ dùng làm mã rút gọn trong thư.</summary>
+    public const int CaseCodeLength = 8;
+
     public const string MissingOwnerFullName = "OWNER_FULL_NAME";
     public const string MissingOwnerCitizenId = "OWNER_CITIZEN_ID";
     public const string MissingDateOfDeath = "DATE_OF_DEATH";
@@ -193,6 +196,20 @@ public static class DeathCaseRules
     /// DEATH-10, D7: điểm danh "sau ngày mất" là điểm danh từ 00:00 giờ Việt Nam của ngày kế tiếp ngày mất.
     /// Trả mốc đó theo UTC.
     /// </summary>
+    /// <summary>
+    /// DEATH-13: CCCD khai trên hồ sơ khác CCCD đã xác minh của Owner. Owner chưa xác minh (verifiedLast4 null)
+    /// hoặc hồ sơ chưa có số thì không kết luận được, trả false.
+    /// </summary>
+    public static bool IsIdentityMismatch(string? verifiedLast4, string? caseCitizenId)
+    {
+        if (string.IsNullOrEmpty(verifiedLast4) || string.IsNullOrEmpty(caseCitizenId) || caseCitizenId.Length < 4)
+        {
+            return false;
+        }
+        string caseLast4 = caseCitizenId.Substring(caseCitizenId.Length - 4);
+        return !string.Equals(caseLast4, verifiedLast4, StringComparison.Ordinal);
+    }
+
     public static DateTimeOffset CheckInCutoffUtc(DateOnly dateOfDeath)
     {
         DateTime nextDayStart = dateOfDeath.AddDays(1).ToDateTime(TimeOnly.MinValue);
@@ -204,6 +221,16 @@ public static class DeathCaseRules
     public static DateTimeOffset ObjectionEndsAt(DateTimeOffset deliveredAt)
     {
         return deliveredAt.AddHours(ObjectionHours);
+    }
+
+    /// <summary>
+    /// Mã hồ sơ rút gọn trong thư: 8 ký tự hex CUỐI của Id, chữ hoa. Không lấy phần đầu vì Guid v7 bắt đầu bằng
+    /// mốc thời gian, các hồ sơ tạo gần nhau sẽ trùng mã. Dùng chung cho thư báo Owner và thư nhắc Verifier.
+    /// </summary>
+    public static string CaseCode(Guid caseId)
+    {
+        string hex = caseId.ToString("N");
+        return hex.Substring(hex.Length - CaseCodeLength).ToUpperInvariant();
     }
 
     /// <summary>Ngày hiện tại theo giờ Việt Nam.</summary>

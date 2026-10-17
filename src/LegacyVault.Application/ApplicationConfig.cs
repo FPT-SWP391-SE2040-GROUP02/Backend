@@ -24,6 +24,20 @@ public static class ApplicationConfig
         services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
         services.AddScoped<IDeathCaseService, DeathCaseService>();
         services.AddScoped<IDeathCaseReviewService, DeathCaseReviewService>();
+        services.AddScoped<IRetentionJob, RetentionJob>();
+        services.AddScoped<IExecutorManagementService, ExecutorManagementService>();
+        services.AddScoped<IExecutorInvitationJob, ExecutorInvitationJob>();
+        services.AddScoped<IIncidentService, IncidentService>();
+        services.AddScoped<IHoldService, HoldService>();
+        services.AddScoped<IHoldReader, HoldReader>();
+        services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<IOperationsRecorder, OperationsRecorder>();
+        services.AddScoped<IIncidentJob, IncidentJob>();
+        services.AddScoped<IOwnerObjectionService, OwnerObjectionService>();
+        services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
+        services.AddScoped<IVerifierObjectionService, VerifierObjectionService>();
+        services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();
+        services.AddScoped<IDeathCaseAssignmentJob, DeathCaseAssignmentJob>();
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
@@ -38,6 +52,9 @@ public static class ApplicationConfig
 
         // Nhật ký hoạt động (SEC-13)
         services.AddScoped<IAuditLogService, AuditLogService>();
+
+        // Executor theo dõi tiến độ bàn giao
+        services.AddScoped<IHandoverProgressService, HandoverProgressService>();
         return services;
     }
 }
