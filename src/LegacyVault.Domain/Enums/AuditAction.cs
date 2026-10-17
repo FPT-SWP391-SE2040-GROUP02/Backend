@@ -55,4 +55,18 @@ public enum AuditAction
     ObjectionReported = 23,
     /// <summary>Verifier kết luận báo còn sống.</summary>
     ObjectionConcluded = 24,
+    /// <summary>Executor mở hồ sơ chứng tử (DEATH-05).</summary>
+    DeathCaseOpened = 25,
+    /// <summary>Executor gửi một bản hồ sơ chứng tử, kể cả bản bổ sung.</summary>
+    DeathCaseSubmitted = 26,
+    /// <summary>Executor tạo bản bổ sung của hồ sơ chứng tử.</summary>
+    DeathCaseVersionCreated = 27,
+    /// <summary>Verifier xem xét cờ cảnh báo của hồ sơ (DEATH-10).</summary>
+    DeathCaseFlagReviewed = 28,
+    /// <summary>Verifier yêu cầu Executor bổ sung hồ sơ.</summary>
+    DeathCaseSupplementRequested = 29,
+    /// <summary>Verifier từ chối hồ sơ chứng tử (DEATH-12).</summary>
+    DeathCaseRejected = 30,
+    /// <summary>Verifier duyệt hồ sơ chứng tử và mở bàn giao (DEATH-06).</summary>
+    DeathCaseApproved = 31,
 }

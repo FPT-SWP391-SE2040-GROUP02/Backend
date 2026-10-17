@@ -33,6 +33,29 @@ public sealed class AuditRulesTests
     }
 
     [Fact]
+    public void SEC07_DeathCaseAction_FillsTargetDeathCaseAndVersion()
+    {
+        Guid vaultId = Guid.NewGuid();
+        Guid verifierId = Guid.NewGuid();
+        Guid caseId = Guid.NewGuid();
+
+        AuditLog log = AuditRules.DeathCaseAction(
+            vaultId, verifierId, AuditActorRole.Verifier, AuditAction.DeathCaseSupplementRequested, caseId,
+            2, "FILES", Now);
+
+        Assert.Equal(vaultId, log.VaultId);
+        Assert.Equal(verifierId, log.ActorUserId);
+        Assert.Equal(AuditActorRole.Verifier, log.ActorRole);
+        Assert.Equal(AuditAction.DeathCaseSupplementRequested, log.Action);
+        Assert.Equal(AuditTargetType.DeathCase, log.TargetType);
+        Assert.Equal(caseId, log.TargetId);
+        Assert.Equal(2, log.TargetVersion);
+        Assert.Equal(AuditOutcome.Succeeded, log.Outcome);
+        Assert.Equal("FILES", log.Reason);
+        Assert.Equal(Now, log.At);
+    }
+
+    [Fact]
     public void Sec07_Create_SystemActionHasNoActor()
     {
         AuditLog log = AuditRules.Create(

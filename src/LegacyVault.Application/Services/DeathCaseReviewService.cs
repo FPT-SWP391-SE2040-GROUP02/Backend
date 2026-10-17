@@ -34,6 +34,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IDeathCaseVerifierPicker verifierPicker;
+    private readonly IAuditLogRepository auditLogRepository;
 
     public DeathCaseReviewService(
         ICurrentUser currentUser,
@@ -47,7 +49,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         IAssetContentStore contentStore,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDeathCaseVerifierPicker verifierPicker,
+        IAuditLogRepository auditLogRepository)
     {
         this.currentUser = currentUser;
         this.userRepository = userRepository;
@@ -61,6 +65,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.verifierPicker = verifierPicker;
+        this.auditLogRepository = auditLogRepository;
     }
 
     public async Task<PaginatedList<VerifierDeathCaseSummaryResponse>> ListAsync(PaginationRequest pagination, CancellationToken ct)
@@ -195,6 +201,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         flag.ReviewedAt = now;
         flag.ReviewNote = note;
         deathCase.UpdatedAt = now;
+        // SEC-07: nhật ký lưu cùng lần lưu; không ghi ghi chú tự do.
+        AddAudit(context, AuditAction.DeathCaseFlagReviewed, null, now);
         await unitOfWork.SaveChangesAsync(ct);
         return await BuildResponseAsync(context, null, ct);
     }
@@ -231,6 +239,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         reviewRepository.AddDecision(decision);
         deathCase.Status = DeathCaseStatus.SupplementRequired;
         deathCase.UpdatedAt = now;
+        // SEC-07: Reason chỉ chứa mã phần cần bổ sung đã chuẩn hóa, không chép lý do tự do (Owner xem được nhật ký).
+        AddAudit(context, AuditAction.DeathCaseSupplementRequested, requestedParts, now);
         // TODO: gửi email cho Executor khi có yêu cầu bổ sung.
         await unitOfWork.SaveChangesAsync(ct);
         return await BuildResponseAsync(context, null, ct);
@@ -301,6 +311,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
             }
         }
 
+        // SEC-07: nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
+        AddAudit(context, AuditAction.DeathCaseRejected, null, now);
         try
         {
             await unitOfWork.SaveChangesAsync(ct);
@@ -373,6 +385,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         deathCase.Status = DeathCaseStatus.ApprovedForHandover;
         deathCase.ClosedAt = now;
         deathCase.UpdatedAt = now;
+        // SEC-07: đặt TRƯỚC StartAsync để lần lưu duy nhất trong StartAsync lưu luôn dòng này. Nhánh HandoverNotAllowed
+        // và các nhánh tranh chấp đều bỏ thay đổi chưa lưu nên dòng không được ghi.
+        AddAudit(context, AuditAction.DeathCaseApproved, null, now);
 
         // 7) DEATH-06, V6: ApproveAsync KHÔNG tự SaveChanges. Lần lưu duy nhất là lần đầu bên trong StartAsync
         //    (cùng một lần lưu: quyết định + hồ sơ + lượt bàn giao + snapshot + kế hoạch). Không cấp grant, không giải mã
@@ -621,9 +636,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     }
 
     /// <summary>
-    /// ROLE-03, AC-67: Verifier là Owner của kho, Executor đang hiệu lực của kho, hoặc người gửi bản đang xét.
-    /// ROLE-03 vế người nhận của kho chưa kiểm: người nhận là bản ghi mã hóa theo email, chưa gắn tài khoản trước F3
-    /// (nhánh A lúc giao cũng không loại).
+    /// ROLE-03, AC-67: Verifier là Owner của kho, Executor đang hiệu lực của kho, người gửi bản đang xét,
+    /// hoặc người nhận của kho (so email với người nhận trong gói READY, cùng hàm với lúc chọn Verifier, D1).
+    /// Giới hạn: người nhận không khai email hoặc dùng email khác cho tài khoản thì chưa bắt được trước F3.
     /// </summary>
     private async Task<bool> HasConflictOfInterestAsync(DeathCase deathCase, Guid userId, CancellationToken ct)
     {
@@ -650,7 +665,31 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         {
             return true;
         }
+
+        // ROLE-03: Verifier là người nhận của kho (so email, D1). Dùng chung hàm với lúc chọn Verifier.
+        User? user = await userRepository.FindByIdAsync(userId, ct);
+        if (user != null)
+        {
+            string userEmail = DeathCaseAssignmentRules.NormalizeEmail(user.Email);
+            List<string> beneficiaryEmails = await verifierPicker.GetBeneficiaryEmailsAsync(vault.Id, ct);
+            foreach (string email in beneficiaryEmails)
+            {
+                if (string.Equals(email, userEmail, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
         return false;
+    }
+
+    /// <summary>SEC-07: dòng nhật ký của Verifier trên bản hồ sơ đang xét. reason chỉ nhận mã, không nhận lý do tự do.</summary>
+    private void AddAudit(ReviewContext context, AuditAction action, string? reason, DateTimeOffset now)
+    {
+        DeathCaseVersion reviewVersion = DeathCaseReviewRules.FindReviewVersion(context.DeathCase);
+        auditLogRepository.Add(AuditRules.DeathCaseAction(
+            context.DeathCase.VaultId, context.UserId, AuditActorRole.Verifier, action, context.DeathCase.Id,
+            reviewVersion.VersionNo, reason, now));
     }
 
     private static AppException CaseNotFound()

@@ -74,9 +74,10 @@ public interface IDeathCaseRepository
 
     /// <summary>
     /// ASSIGN-01, ROLE-03 (D4): Id Verifier Active có lần được giao gần nhất cũ nhất (chưa từng giao đứng trước),
-    /// hòa thì theo Id; bỏ qua các tài khoản trong excludedUserIds. Không ai phù hợp → null.
+    /// hòa thì theo Id; bỏ qua các tài khoản trong excludedUserIds và tài khoản có email nằm trong excludedEmails
+    /// (ROLE-03: người nhận của kho, email đã chuẩn hóa chữ thường). Không ai phù hợp → null.
     /// </summary>
-    Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, CancellationToken ct);
+    Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, List<string> excludedEmails, CancellationToken ct);
 
     /// <summary>D3: Id các thông báo Pending, tạo sớm nhất trước, tối đa maxCount dòng.</summary>
     Task<List<Guid>> FindPendingNoticeIdsAsync(int maxCount, CancellationToken ct);
