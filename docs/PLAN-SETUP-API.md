@@ -13,7 +13,7 @@ Implemented 15/10/2026. Canonical prefix is `/api/v1` only. Swagger UI: `/swagge
 
 Paths in the table follow `/api/v1`. Request/response schemas are generated from DTOs in OpenAPI. FE validates wire responses with Zod.
 
-Activation requires an active email-verified Owner, open vault, unexpired paid service, latest Passed Owner eKYC, a Ready container, and an active verified distinct primary Executor who accepted the current scope. If primary is also a beneficiary, an independent accepted non-beneficiary backup is required. Policy acknowledgement is explicit and stores version/time. A stale configVersion returns EDIT_CONFLICT. Duplicate activation does not reset deadlines. Deactivation suspends accepted Executors; reactivation requires fresh acceptance. Existing pending check-in settings apply when a new period starts.
+Activation requires an active email-verified Owner, open vault, unexpired paid service, latest Passed Owner eKYC with purpose OWNER_ENROLLMENT, a Ready container, and an active verified distinct primary Executor who accepted the current scope. If primary is also a beneficiary, an independent accepted non-beneficiary backup is required. Policy acknowledgement is explicit and stores version/time. A stale configVersion returns EDIT_CONFLICT. Duplicate activation does not reset deadlines. Deactivation suspends accepted Executors; reactivation requires fresh acceptance. Existing pending check-in settings apply when a new period starts.
 
 Invitations expire after seven days. Only the token hash is persisted. The email link uses `/executor-invitation#token=...`; inspect/respond send the token in the JSON body. No token appears in API responses or cache keys. The token is a capability: a verified separate account explicitly claims it; invitation email alone does not bind an account. Do not forward links.
 
@@ -41,3 +41,58 @@ PlanSetupFlowTests exercise real HTTP/SQL against isolated GUID test databases, 
 - **Kế hoạch đang chạy** không được bỏ trống Executor chính (ASSIGN-05): thu hồi Executor chính đã chấp nhận → `409 EXECUTOR_NOT_ALLOWED` `REPLACEMENT_REQUIRED`. Muốn đổi, Owner `POST .../executors` với `role = PRIMARY` mời người thay: người cũ **giữ vai trò** tới khi người mới chấp nhận, lúc đó người cũ thành `REVOKED` trong cùng giao dịch (cột `ReplacesExecutorId`). Executor chính cũng là người nhận thì không được thu hồi Executor dự phòng độc lập cuối cùng (`BACKUP_EXECUTOR_REQUIRED`).
 - Mời và chấp nhận lời mời giờ làm được cả khi kế hoạch đang chạy (không chỉ `DRAFT`); các trạng thái khóa vẫn bị chặn.
 - **Job nền** (`Executor:InvitationJobEnabled`, `Executor:InvitationPollSeconds`, mặc định 60): lời mời quá 7 ngày → `EXPIRED` (`EndedAt` = `ExpiresAt`); nhắc **một lần** ở giờ thứ 48 qua `IExecutorReminderSender` (cùng công tắc `ExecutorInvitations:DeliveryEnabled`; chưa bật hoặc gửi lỗi thì không đánh dấu, vòng sau thử lại). Thư nhắc không có link vì DB chỉ lưu mã băm token; không đổi `etag`.
+
+## Màn kích hoạt: gói, tài sản ngoài gói, cảnh báo (bổ sung 17/10/2026)
+
+`GET /api/v1/vaults/{vaultId}/plan-setup` và phản hồi `200` của `POST /api/v1/vaults/{vaultId}/activate` có thêm ba field ở cuối phản hồi:
+
+| Field | Kiểu | Nội dung |
+|---|---|---|
+| `containers` | Mảng object | Gói `READY` và `DRAFT`, không có `ARCHIVED`. Mỗi phần tử gồm `id`, `name`, `status`, `assetCount`, `designationCount`, `missingRequirements`. |
+| `assetsOutsideContainer` | Mảng object | Tài sản chưa có liên kết trong `ContainerAssets`. Mỗi phần tử gồm `id`, `name`, `kind` (`FILE` hoặc `TEXT`). Chỉ trả metadata, không chứa nội dung tài sản. |
+| `warnings` | Mảng chuỗi | Cảnh báo cấu hình; hiện có `NO_BACKUP_EXECUTOR`. Không có cảnh báo thì trả `[]`. |
+
+- **SETUP-01:** `containers` sắp theo `CreatedAt`, rồi `Id`, tăng dần. `missingRequirements` của từng gói dùng `ContainerRules.GetMissingRequirements`: `NO_ASSET`, `NO_DESIGNATION`; gói `READY` có danh sách rỗng. FE có thể tách nhóm "Sẽ bàn giao" (`READY`) và "Gói chưa đủ" (`DRAFT`).
+- **ASSET-03 / AC-68:** `assetsOutsideContainer` sắp theo `CreatedAt`, rồi `Id`, tăng dần. Tài sản trong gói `DRAFT` đã được tính ở `containers[].assetCount`, không lặp lại trong danh sách này. Gói lưu trữ đã gỡ các liên kết tài sản. Hai danh sách không phân trang.
+- **SETUP-10:** chỉ bỏ `NO_BACKUP_EXECUTOR` khi có Executor vai trò Backup trong danh sách đã chấp nhận, đúng scope version hiện hành, có tài khoản hoạt động, email đã xác minh và khác Owner. Backup mới được mời (`INVITED`) vẫn có cảnh báo.
+- **Cảnh báo không chặn kích hoạt:** `warnings` không được thêm vào `missingRequirements`, không đổi cách tính `canActivate` hay điều kiện của `POST /activate`. Nếu Executor chính cũng là người nhận và thiếu Backup độc lập đủ điều kiện, mã chặn `BACKUP_EXECUTOR_REQUIRED` vẫn có thể xuất hiện cùng cảnh báo `NO_BACKUP_EXECUTOR`.
+- **EKYC-01 / AC-46:** `OWNER_EKYC_REQUIRED` xét lượt mới nhất theo `CreatedAt`, rồi `Id`, giảm dần, có mục đích `OWNER_ENROLLMENT` và yêu cầu lượt đó `PASSED`. Lượt `BENEFICIARY_CLAIM` hoặc `OWNER_ALIVE` mới hơn không thay thế kết quả này. Dữ liệu dev cũ có mục đích mặc định OwnerEnrollment vẫn được tính, kể cả chưa có cờ liveness.
+
+Ví dụ GET rút gọn, giả định các điều kiện kích hoạt khác đã đủ:
+
+```json
+{
+  "planStatus": "DRAFT",
+  "configVersion": 7,
+  "canActivate": true,
+  "missingRequirements": [],
+  "containers": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "name": "Gói tài liệu thử nghiệm",
+      "status": "READY",
+      "assetCount": 1,
+      "designationCount": 1,
+      "missingRequirements": []
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "name": "Gói chưa có người nhận",
+      "status": "DRAFT",
+      "assetCount": 1,
+      "designationCount": 0,
+      "missingRequirements": ["NO_DESIGNATION"]
+    }
+  ],
+  "assetsOutsideContainer": [
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "name": "Ghi chú thử nghiệm ngoài gói",
+      "kind": "TEXT"
+    }
+  ],
+  "warnings": ["NO_BACKUP_EXECUTOR"]
+}
+```
+
+Lỗi `409 PLAN_ACTIVATION_REQUIREMENTS_NOT_MET` giữ nguyên ProblemDetails với `missingRequirements`; ba field mới thuộc phản hồi thành công. Thử tay bằng `http/plan-setup.http`; dữ liệu giả lập cho DB local nằm trong `http/plan-dev.sql`.

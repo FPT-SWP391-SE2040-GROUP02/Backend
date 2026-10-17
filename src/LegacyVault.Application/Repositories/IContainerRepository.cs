@@ -11,6 +11,9 @@ public interface IContainerRepository
     /// </summary>
     Task<Container?> FindByIdAsync(Guid vaultId, Guid containerId, CancellationToken ct);
 
+    /// <summary>SETUP-01: gói chưa lưu trữ kèm Assets và Designations, sắp theo CreatedAt rồi Id, chỉ đọc.</summary>
+    Task<List<Container>> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct);
+
     /// <summary>
     /// Một trang Container của kho kèm Assets và Designations (sắp theo thời điểm gắn), kèm tổng số bản ghi khớp bộ lọc.
     /// searchTerm lọc theo tên; sortBy chỉ nhận giá trị service đã kiểm tra ("name" / "createdAt").

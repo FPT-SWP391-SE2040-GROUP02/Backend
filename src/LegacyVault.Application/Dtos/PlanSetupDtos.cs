@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using LegacyVault.Application.Dtos.Responses;
 
 namespace LegacyVault.Application.Dtos;
 
@@ -8,7 +9,8 @@ public sealed record ExecutorInvitationResponse(Guid Id, string Role, string Sta
     DateTimeOffset? InvitationSentAt, string? AcceptedScopeVersion, string Etag);
 public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, bool CanActivate,
     string[] MissingRequirements, string PolicyVersion, string PolicyText, string ExecutorScopeVersion,
-    string ExecutorScopeText, List<ExecutorInvitationResponse> Executors);
+    string ExecutorScopeText, List<ExecutorInvitationResponse> Executors,
+    List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings);
 public sealed record ExecutorInvitationInfo(string Role, DateTimeOffset ExpiresAt, string Status,
     string ScopeVersion, string ScopeText);
 

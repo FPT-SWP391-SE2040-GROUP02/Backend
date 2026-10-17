@@ -2,6 +2,7 @@ using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
 
@@ -16,6 +17,16 @@ public sealed class FakeEkycVerificationRepository : IEkycVerificationRepository
         EkycVerification? latest = Verifications
             .Where(v => v.UserId == userId)
             .OrderByDescending(v => v.CreatedAt)
+            .FirstOrDefault();
+        return Task.FromResult(latest);
+    }
+
+    public Task<EkycVerification?> FindLatestByUserAndPurposeAsync(Guid userId, EkycPurpose purpose, CancellationToken ct)
+    {
+        EkycVerification? latest = Verifications
+            .Where(v => v.UserId == userId && v.Purpose == purpose)
+            .OrderByDescending(v => v.CreatedAt)
+            .ThenByDescending(v => v.Id)
             .FirstOrDefault();
         return Task.FromResult(latest);
     }

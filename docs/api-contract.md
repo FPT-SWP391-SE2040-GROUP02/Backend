@@ -837,6 +837,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 # Executor setup and activation (15/10/2026)
 
 See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.
+Màn kích hoạt (SETUP-01, SETUP-10, ASSET-03/AC-68): xem [PLAN-SETUP-API.md](PLAN-SETUP-API.md) để biết các field `containers`, `assetsOutsideContainer`, `warnings` và cách thử tay.
 
 ## 9a. Tính đúng đắn dữ liệu khi chạy đồng thời (LV-01)
 

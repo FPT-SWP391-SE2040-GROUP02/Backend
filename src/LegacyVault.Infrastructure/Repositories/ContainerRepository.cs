@@ -20,6 +20,20 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
             .FirstOrDefaultAsync(c => c.Id == containerId && c.VaultId == vaultId, ct);
     }
 
+    // SETUP-01: chỉ các gói chưa lưu trữ xuất hiện trên màn kích hoạt.
+    public Task<List<Container>> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct)
+    {
+        return context.Containers
+            .AsNoTracking()
+            .Where(c => c.VaultId == vaultId && c.Status != ContainerStatus.Archived)
+            .Include(c => c.Assets)
+            .Include(c => c.Designations)
+            .AsSplitQuery()
+            .OrderBy(c => c.CreatedAt)
+            .ThenBy(c => c.Id)
+            .ToListAsync(ct);
+    }
+
     public async Task<(List<Container> Items, int TotalCount)> FindPageByVaultIdAsync(
         Guid vaultId, bool includeArchived, int pageIndex, int pageSize, string? searchTerm,
         string sortBy, bool isAscending, CancellationToken ct)

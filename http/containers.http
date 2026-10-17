@@ -76,8 +76,10 @@ Authorization: Bearer {{token}}
 # Hạng Free đưa tài sản vào gói → 403 PAID_TIER_REQUIRED (SETUP-17).
 # Muốn thử luồng trả phí: nâng kho lên XS trong SSMS (CHỈ DB local, không chạy trên môi trường thật):
 #    UPDATE VaultEntitlements
-#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200, IncludedBeneficiarySlots = 2
+#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200, IncludedBeneficiarySlots = 2,
+#        ServiceExpiresAt = DATEADD(DAY, 365, SYSDATETIMEOFFSET())
 #    WHERE VaultId = '<vaultId>';
+# Hoặc dùng http/plan-dev.sql.
 
 ### Tạo tài sản dạng chữ để đưa vào gói — lấy id từ response
 POST {{baseUrl}}/vaults/{{vaultId}}/assets/text

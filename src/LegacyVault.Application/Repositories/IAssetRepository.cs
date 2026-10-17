@@ -11,6 +11,9 @@ public interface IAssetRepository
     /// </summary>
     Task<Asset?> FindByIdAsync(Guid vaultId, Guid assetId, CancellationToken ct);
 
+    /// <summary>ASSET-03, AC-68: tài sản chưa thuộc gói nào, sắp theo CreatedAt rồi Id, không nạp Versions.</summary>
+    Task<List<Asset>> FindOutsideContainerByVaultIdAsync(Guid vaultId, CancellationToken ct);
+
     /// <summary>
     /// Một trang tài sản của kho kèm Versions, kèm tổng số bản ghi khớp bộ lọc.
     /// searchTerm lọc theo tên; sortBy chỉ nhận giá trị service đã kiểm tra ("name" / "createdAt").

@@ -14,6 +14,17 @@ public sealed class AssetRepository(AppDbContext context) : IAssetRepository
             .FirstOrDefaultAsync(a => a.Id == assetId && a.VaultId == vaultId, ct);
     }
 
+    // ASSET-03, AC-68: tài sản trong gói DRAFT cũng đã có liên kết nên không liệt kê lại ở đây.
+    public Task<List<Asset>> FindOutsideContainerByVaultIdAsync(Guid vaultId, CancellationToken ct)
+    {
+        return context.Assets
+            .AsNoTracking()
+            .Where(a => a.VaultId == vaultId && !context.ContainerAssets.Any(l => l.AssetId == a.Id))
+            .OrderBy(a => a.CreatedAt)
+            .ThenBy(a => a.Id)
+            .ToListAsync(ct);
+    }
+
     public async Task<(List<Asset> Items, int TotalCount)> FindPageByVaultIdAsync(
         Guid vaultId, int pageIndex, int pageSize, string? searchTerm,
         string sortBy, bool isAscending, CancellationToken ct)
