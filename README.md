@@ -194,6 +194,7 @@ Biến trên chỉ phục vụ kiểm thử tự động, không bắt buộc đ
 | Health ready trả 503 | Chờ Docker healthy, kiểm tra password/database/cấu hình ghi đè |
 | Cổng API 5000 bị chiếm | Dừng API cũ hoặc đổi profile và URL test |
 | Swagger chưa có login/register | Bộ khung chưa triển khai auth |
+| Lệnh eKYC trả `503 EKYC_SERVICE_UNAVAILABLE` | Dịch vụ eKYC chưa chạy, sai cổng hoặc `Ekyc:BaseUrl` để trống; xem mục 13 |
 
 ## 10. Git và trạng thái chức năng
 
@@ -253,3 +254,23 @@ dotnet user-secrets set "AssetStorage:R2:SecretAccessKey" "<secret-access-key>" 
 3. Khởi động lại API. Thiếu một trong bốn giá trị `R2` thì API không khởi động.
 
 Server thật đặt biến môi trường `AssetStorage__Provider`, `AssetStorage__R2__AccountId`... Đổi `Provider` không chuyển dữ liệu cũ: tài sản đã lưu trên đĩa sẽ không đọc được khi chạy với R2, và ngược lại. Test tự động luôn ép `Provider` = `Local`, nên `dotnet test` không ghi vào bucket thật dù máy có user-secrets R2.
+
+## 13. Chạy dịch vụ eKYC để thử các luồng xác minh
+
+eKYC (đọc căn cước, so khuôn mặt, thử thách camera) là **chương trình Python riêng**, nằm ở repo `FPT-SWP391-SE2040-GROUP02/ekyc-model` chứ không nằm trong repo này. Backend gọi nó qua HTTP. Không cần dịch vụ này để build hay chạy `dotnet test` (test dùng bản giả lập); chỉ cần khi muốn thử eKYC thật qua Swagger, `http/ekyc.http` hoặc Frontend.
+
+Chạy trên **Windows 64-bit**, dịch vụ eKYC và Backend **cùng một máy**:
+
+1. Cài **Python 3.12 (64-bit)**, ví dụ `winget install Python.Python.3.12`. Các bản khác (3.13, 3.14, 32-bit) không được chấp nhận.
+2. Clone repo `ekyc-model` ra một thư mục riêng (không clone vào trong repo Backend), rồi chạy **một lần** `setup.cmd`. Lệnh này tự tạo `.venv`, cài thư viện, cài PyTorch bản CPU và tải model; cần Internet, chiếm khoảng 2 GB đĩa và mất vài phút đến hơn chục phút.
+3. Chạy `START.cmd` (giữ cửa sổ mở, dừng bằng Ctrl+C). Mở `http://127.0.0.1:8879/api/health`: phải thấy `ocr`, `face`, `landmarks`, `anti_spoof` đều là `true`.
+4. Chạy Backend như bình thường. `appsettings.Development.json` đã đặt sẵn `Ekyc:BaseUrl = http://127.0.0.1:8879` và `Ekyc:TimeoutSeconds = 120`, nên không cần cấu hình thêm. Lần gọi eKYC đầu chậm vì dịch vụ phải nạp model.
+
+Thử bằng `http/ekyc.http`. Luồng đầy đủ gọi theo thứ tự: `consent` → `document` (mặt trước) → `document-back` (tùy chọn) → thử thách camera (`liveness/start`, `liveness/frame` nhiều lần, `liveness/complete`). Thử thách camera cần khung hình thật từ camera nên thực tế phải làm qua Frontend; chi tiết hợp đồng ở `docs/api-contract.md` mục 6.10. Muốn thử cho người nhận thì xem thêm `docs/HANDOVER-RECEIVE-API.md`.
+
+Lưu ý:
+
+- Ảnh căn cước và khuôn mặt thật **không commit** vào repo. Dùng ảnh của chính bạn để thử.
+- Mặc định dịch vụ chỉ nhận kết nối từ chính máy đó. Muốn chạy ở máy khác (ví dụ một máy chung cho cả nhóm) thì làm theo mục "Bảo mật mạng" trong README của `ekyc-model`: đặt `EKYC_HOST`, `EKYC_ALLOWED_HOSTS` và **bắt buộc `EKYC_API_KEY`** ở dịch vụ, đồng thời đặt khóa tương ứng cho Backend bằng `dotnet user-secrets set "Ekyc:ApiKey" "<khóa>" --project src/LegacyVault.Api` (không ghi vào `appsettings*.json`).
+- Đổi cổng dịch vụ (`EKYC_PORT`) thì phải đổi `Ekyc:BaseUrl` cho khớp.
+- Sự cố thường gặp (sai phiên bản Python, `setup.cmd` lỗi mạng, cổng bận, model báo `false`) nằm trong README của `ekyc-model`.
