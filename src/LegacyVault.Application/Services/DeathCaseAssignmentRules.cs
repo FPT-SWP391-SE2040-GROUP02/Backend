@@ -100,4 +100,10 @@ public static class DeathCaseAssignmentRules
         }
         return true;
     }
+
+    /// <summary>ROLE-03: chuẩn hóa email để so người nhận với tài khoản Verifier (giống AuthService).</summary>
+    public static string NormalizeEmail(string email)
+    {
+        return email.Trim().ToLowerInvariant();
+    }
 }

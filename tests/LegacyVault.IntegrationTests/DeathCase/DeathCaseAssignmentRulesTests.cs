@@ -149,6 +149,19 @@ public sealed class DeathCaseAssignmentRulesTests
         Assert.True(exactly);
     }
 
+    [Fact]
+    public void ROLE03_NormalizeEmail_TrimsAndLowercases()
+    {
+        // Chuẩn bị
+        string raw = "  Nguoi.Nhan@Example.COM ";
+
+        // Hành động
+        string normalized = DeathCaseAssignmentRules.NormalizeEmail(raw);
+
+        // Kiểm tra
+        Assert.Equal("nguoi.nhan@example.com", normalized);
+    }
+
     private static DeathCaseAssignment NewAssignment(DateTimeOffset dueAt, DateTimeOffset? remindedDueAt)
     {
         DeathCaseAssignment assignment = new DeathCaseAssignment();

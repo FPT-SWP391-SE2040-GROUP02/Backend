@@ -34,6 +34,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IDeathCaseVerifierPicker verifierPicker;
 
     public DeathCaseReviewService(
         ICurrentUser currentUser,
@@ -47,7 +48,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         IAssetContentStore contentStore,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDeathCaseVerifierPicker verifierPicker)
     {
         this.currentUser = currentUser;
         this.userRepository = userRepository;
@@ -61,6 +63,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.verifierPicker = verifierPicker;
     }
 
     public async Task<PaginatedList<VerifierDeathCaseSummaryResponse>> ListAsync(PaginationRequest pagination, CancellationToken ct)
@@ -621,9 +624,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     }
 
     /// <summary>
-    /// ROLE-03, AC-67: Verifier là Owner của kho, Executor đang hiệu lực của kho, hoặc người gửi bản đang xét.
-    /// ROLE-03 vế người nhận của kho chưa kiểm: người nhận là bản ghi mã hóa theo email, chưa gắn tài khoản trước F3
-    /// (nhánh A lúc giao cũng không loại).
+    /// ROLE-03, AC-67: Verifier là Owner của kho, Executor đang hiệu lực của kho, người gửi bản đang xét,
+    /// hoặc người nhận của kho (so email với người nhận trong gói READY, cùng hàm với lúc chọn Verifier, D1).
+    /// Giới hạn: người nhận không khai email hoặc dùng email khác cho tài khoản thì chưa bắt được trước F3.
     /// </summary>
     private async Task<bool> HasConflictOfInterestAsync(DeathCase deathCase, Guid userId, CancellationToken ct)
     {
@@ -649,6 +652,21 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         if (reviewVersion.SubmittedByUserId == userId)
         {
             return true;
+        }
+
+        // ROLE-03: Verifier là người nhận của kho (so email, D1). Dùng chung hàm với lúc chọn Verifier.
+        User? user = await userRepository.FindByIdAsync(userId, ct);
+        if (user != null)
+        {
+            string userEmail = DeathCaseAssignmentRules.NormalizeEmail(user.Email);
+            List<string> beneficiaryEmails = await verifierPicker.GetBeneficiaryEmailsAsync(vault.Id, ct);
+            foreach (string email in beneficiaryEmails)
+            {
+                if (string.Equals(email, userEmail, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
         }
         return false;
     }
