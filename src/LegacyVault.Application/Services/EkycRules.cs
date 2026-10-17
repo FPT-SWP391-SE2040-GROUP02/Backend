@@ -25,6 +25,9 @@ public static class EkycRules
     /// <summary>Sau khi đồng ý, người dùng phải bắt đầu chụp trong thời gian này.</summary>
     public static readonly TimeSpan ConsentLifetime = TimeSpan.FromMinutes(30);
 
+    /// <summary>Các dạng ngày sinh chấp nhận khi đọc từ dịch vụ eKYC: ISO (dạng thật của dịch vụ) và ngày/tháng/năm.</summary>
+    private static readonly string[] BirthDateFormats = new string[] { "yyyy-MM-dd", "dd/MM/yyyy" };
+
     /// <summary>Chỉ nhận ảnh JPEG hoặc PNG.</summary>
     public static bool IsAllowedContentType(string contentType)
     {
@@ -139,8 +142,9 @@ public static class EkycRules
         {
             return EkycIdentityMatch.NeedsReview;
         }
+        // Dịch vụ eKYC trả ngày sinh dạng ISO yyyy-MM-dd (logic.py: birthday.isoformat()); giữ dd/MM/yyyy để chịu được bản khác.
         DateOnly readBirth;
-        if (!DateOnly.TryParseExact(reading.DateOfBirth, "dd/MM/yyyy", CultureInfo.InvariantCulture,
+        if (!DateOnly.TryParseExact(reading.DateOfBirth, BirthDateFormats, CultureInfo.InvariantCulture,
                 DateTimeStyles.None, out readBirth))
         {
             return EkycIdentityMatch.NeedsReview;

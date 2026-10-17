@@ -196,7 +196,7 @@ public sealed class EkycConsentAndMatchTests
     {
         Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
         HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, userId);
-        client.Reading = Reading("079200012345", "NGUYỄN  VĂN AN", "01/02/2000");
+        client.Reading = Reading("079200012345", "NGUYỄN  VĂN AN", "2000-02-01");
 
         EkycDocumentResponse response = await service.SubmitDocumentAsync(
             Image(), "front.jpg", "image/jpeg", turn.Id, CancellationToken.None);
@@ -213,7 +213,7 @@ public sealed class EkycConsentAndMatchTests
     {
         Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
         HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, userId);
-        client.Reading = Reading("079200099999", "NGUYỄN VĂN AN", "01/02/2000");
+        client.Reading = Reading("079200099999", "NGUYỄN VĂN AN", "2000-02-01");
 
         EkycDocumentResponse response = await service.SubmitDocumentAsync(
             Image(), "front.jpg", "image/jpeg", turn.Id, CancellationToken.None);
@@ -249,8 +249,10 @@ public sealed class EkycConsentAndMatchTests
     }
 
     [Theory]
+    [InlineData("079200012345", "Nguyễn Văn An", "2000-02-01", EkycIdentityMatch.Matched)]
     [InlineData("079200012345", "Nguyễn Văn An", "01/02/2000", EkycIdentityMatch.Matched)]
-    [InlineData("079200012345", "  nguyễn   văn an ", "01/02/2000", EkycIdentityMatch.Matched)]
+    [InlineData("079200012345", "Nguyễn Văn An", "2000-02-02", EkycIdentityMatch.NeedsReview)]
+    [InlineData("079200012345", "  nguyễn   văn an ", "2000-02-01", EkycIdentityMatch.Matched)]
     [InlineData("079200012345", "Nguyen Van An", "01/02/2000", EkycIdentityMatch.NeedsReview)]
     [InlineData("079200012345", "Nguyễn Văn An", "02/02/2000", EkycIdentityMatch.NeedsReview)]
     [InlineData("079200012345", "Nguyễn Văn An", "khong ro", EkycIdentityMatch.NeedsReview)]
