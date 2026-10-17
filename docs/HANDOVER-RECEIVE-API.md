@@ -26,7 +26,7 @@ Cấu hình `Handover:RequireIdentityVerification`:
 
 | Giá trị | Hiệu lực |
 |---|---|
-| `true` (mặc định trong code) | `claim` dừng ở `IDENTITY_IN_PROGRESS`; người nhận chưa xem được gì cho tới khi có eKYC. |
+| `true` (mặc định trong code) | `claim` dừng ở `IDENTITY_IN_PROGRESS`; người nhận làm eKYC (mục đích `BENEFICIARY_CLAIM`, kèm `handoverTurnId`, xem `api-contract.md` mục 6.10) rồi gọi `POST turns/{turnId}/identity/complete` để sang `READY_TO_ACCEPT`. Chưa có bước gọi video với Executor (IDENTITY-01). |
 | `false` | `claim` đi thẳng tới `READY_TO_ACCEPT` và lượt có `identityBypassed: true`. **Chỉ hợp lệ ở môi trường Development**: ở môi trường khác API không khởi động (`OptionsValidationException`). |
 
 `appsettings.Development.json` đặt `false` để bạn thử được. Lúc khởi động API ghi một dòng log cho biết đang bật hay bỏ qua.
@@ -55,6 +55,7 @@ Tiền tố `/api/v1/handover`. Tất cả cần `Authorization: Bearer` trừ e
 | 2 | `POST invitations/{token}/claim` | Gắn tài khoản đang đăng nhập vào lượt. Cùng người gọi lại: trả trạng thái hiện tại. Trả `HandoverTurn`. |
 | 3 | `GET turns/me` | Các lượt tôi đã nhận, mới nhất trước. |
 | 4 | `GET turns/{turnId}` | Một lượt của tôi. |
+| 4a | `POST turns/{turnId}/identity/complete` | Chốt xác minh danh tính: lượt `IDENTITY_IN_PROGRESS` sang `READY_TO_ACCEPT` (đặt hạn quyết định 7 ngày) khi lượt eKYC mới nhất của tôi cho đúng lượt này đã `PASSED` và `identityMatch = MATCHED`. Gọi lặp khi đã `READY_TO_ACCEPT` trả lại lượt, không đổi hạn. Trả `HandoverTurn`. Không tự đóng lượt khi sai người. |
 | 5 | `POST turns/{turnId}/accept` | Đồng ý: tạo grant 30 ngày. Gọi lặp trả lại cùng grant. |
 | 6 | `POST turns/{turnId}/decline` | Từ chối. |
 | 7 | `GET grants/{grantId}/assets` | Danh sách tài sản trong snapshot. |
@@ -100,7 +101,7 @@ Lỗi trả `application/problem+json` có trường `code` (UPPER_SNAKE) và đ
 | `HANDOVER_INVITATION_INVALID` | 404 | Token trong link không tồn tại. |
 | `HANDOVER_NOT_FOUND` | 404 | Lượt/grant/tài sản không tồn tại **hoặc không phải của bạn** (cùng một lỗi, không lộ sự tồn tại, SEC-04). |
 | `HANDOVER_ALREADY_CLAIMED` | 409 | Lượt đã được tài khoản khác nhận. |
-| `HANDOVER_NOT_ALLOWED` | 409 | `reason`: `OWNER_CANNOT_CLAIM`, `PLAN_NOT_IN_HANDOVER`, `WRONG_STATE`, `PLAN_NOT_READY`, `NOTHING_TO_HAND_OVER`. |
+| `HANDOVER_NOT_ALLOWED` | 409 | `reason`: `OWNER_CANNOT_CLAIM`, `PLAN_NOT_IN_HANDOVER`, `WRONG_STATE`, `PLAN_NOT_READY`, `NOTHING_TO_HAND_OVER`; ở `identity/complete` thêm `IDENTITY_NOT_VERIFIED` (chưa eKYC cho lượt này), `IDENTITY_NOT_FINISHED` (chưa so khớp mặt), `IDENTITY_FAILED`, `IDENTITY_NEEDS_REVIEW`, `IDENTITY_WRONG_PERSON`. |
 | `HANDOVER_DECISION_EXPIRED` | 409 | Quá hạn 7 ngày quyết định. |
 | `GRANT_NOT_ACTIVE` | 403 | `reason`: `EXPIRED`, `BLOCKED`, `REVOKED`, `PLAN_NOT_ACTIVE`. |
 | `CONTENT_INTEGRITY_FAILED` | 500 | Nội dung không qua kiểm toàn vẹn. |

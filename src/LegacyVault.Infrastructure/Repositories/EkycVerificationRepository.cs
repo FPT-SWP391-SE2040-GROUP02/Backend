@@ -25,6 +25,16 @@ public sealed class EkycVerificationRepository : IEkycVerificationRepository
             .FirstOrDefaultAsync(ct);
     }
 
+    public Task<EkycVerification?> FindLatestByHandoverTurnAsync(Guid userId, Guid handoverTurnId, CancellationToken ct)
+    {
+        return context.EkycVerifications
+            .AsNoTracking()
+            .Where(v => v.UserId == userId && v.HandoverTurnId == handoverTurnId)
+            .OrderByDescending(v => v.CreatedAt)
+            .ThenByDescending(v => v.Id)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public void Add(EkycVerification verification)
     {
         context.EkycVerifications.Add(verification);

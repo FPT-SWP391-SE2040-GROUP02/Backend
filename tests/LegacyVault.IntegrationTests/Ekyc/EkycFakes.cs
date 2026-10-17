@@ -19,6 +19,15 @@ public sealed class FakeEkycVerificationRepository : IEkycVerificationRepository
         return Task.FromResult(latest);
     }
 
+    public Task<EkycVerification?> FindLatestByHandoverTurnAsync(Guid userId, Guid handoverTurnId, CancellationToken ct)
+    {
+        EkycVerification? latest = Verifications
+            .Where(v => v.UserId == userId && v.HandoverTurnId == handoverTurnId)
+            .OrderByDescending(v => v.CreatedAt)
+            .FirstOrDefault();
+        return Task.FromResult(latest);
+    }
+
     public void Add(EkycVerification verification)
     {
         Verifications.Add(verification);

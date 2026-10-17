@@ -540,7 +540,7 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
 - `canMatchFace = false` khi dịch vụ chưa tìm được đúng một khuôn mặt trên thẻ: vẫn trả chữ đọc được nhưng chưa có `verificationId`; FE yêu cầu chụp lại thẻ.
 - Mỗi lần gọi `/document` là một lượt mới và hủy lượt `PENDING` trước. Mỗi lượt chỉ so khớp **một lần**: sau khi có `PASSED`/`FAILED` muốn thử lại phải đọc lại mặt trước. Selfie bị nghi giả mạo (ảnh in, màn hình) → `FAILED`, `spoofCheckPassed = false`.
 - Ngưỡng `matchThreshold` do server cố định, FE không gửi. `faceMatchScore` là điểm cosine, **không** phải phần trăm.
-- eKYC chỉ là bằng chứng hỗ trợ; chưa nối vào luồng bàn giao (giai đoạn C do Executor đối chiếu giấy tờ do Owner cung cấp).
+- eKYC chỉ là bằng chứng hỗ trợ. Luồng nhận tài sản dùng kết quả này qua `POST /handover/turns/{turnId}/identity/complete` (xem `docs/HANDOVER-RECEIVE-API.md`): chỉ khi lượt eKYC `BENEFICIARY_CLAIM` ghim đúng lượt, `PASSED` và `identityMatch = MATCHED` thì lượt mới sang `READY_TO_ACCEPT`. Chưa có bước gọi video với Executor (IDENTITY-01).
 - Chưa có kiểm tra liveness theo động tác (chớp mắt, quay đầu); chỉ có kiểm tra giả mạo trên một ảnh selfie.
 
 ### 6.11. Executor nộp hồ sơ chứng tử
