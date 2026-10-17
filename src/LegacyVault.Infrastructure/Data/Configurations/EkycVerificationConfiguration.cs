@@ -17,6 +17,16 @@ public sealed class EkycVerificationConfiguration : IEntityTypeConfiguration<Eky
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(v => v.Purpose)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        builder.Property(v => v.IdentityMatch)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
         // Rỗng khi OCR không đọc được số; còn lại đúng 4 chữ số.
         builder.Property(v => v.CitizenIdLast4)
             .IsRequired()

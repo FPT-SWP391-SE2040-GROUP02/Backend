@@ -6,6 +6,7 @@ using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.GoogleAuth;
+using LegacyVault.IntegrationTests.Handover;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
@@ -17,6 +18,10 @@ public sealed class EkycServiceTests
 
     private readonly FakeCurrentUser currentUser = new FakeCurrentUser();
     private readonly FakeEkycVerificationRepository repository = new FakeEkycVerificationRepository();
+    private readonly FakeEkycConsentRepository consentRepository = new FakeEkycConsentRepository();
+    private readonly FakeHandoverRepository handoverRepository = new FakeHandoverRepository();
+    private readonly FakeEkycBeneficiaryRepository beneficiaryRepository = new FakeEkycBeneficiaryRepository();
+    private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly FakeEkycClient client = new FakeEkycClient();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider clock = new FixedTimeProvider(Now);
@@ -26,7 +31,22 @@ public sealed class EkycServiceTests
     public EkycServiceTests()
     {
         currentUser.UserId = userId;
-        service = new EkycService(currentUser, repository, client, unitOfWork, clock);
+        service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
+            beneficiaryRepository, protector, client, unitOfWork, clock);
+
+        // Mặc định đã đồng ý cho mục đích OWNER_ENROLLMENT để các test cũ vẫn đi đúng luồng.
+        AddConsent(EkycPurpose.OwnerEnrollment, Now);
+    }
+
+    private void AddConsent(EkycPurpose purpose, DateTimeOffset at)
+    {
+        consentRepository.Consents.Add(new EkycConsent
+        {
+            UserId = userId,
+            Purpose = purpose,
+            NoticeVersion = EkycRules.NoticeVersion,
+            ConsentedAt = at,
+        });
     }
 
     private static MemoryStream Image()
@@ -47,8 +67,7 @@ public sealed class EkycServiceTests
     [Fact]
     public async Task Document_SavesOnlyResultAndLast4()
     {
-        EkycDocumentResponse response = await service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        EkycDocumentResponse response = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
 
         Assert.True(response.CanMatchFace);
         Assert.Equal("NGUYEN VAN AN", response.FullName);
@@ -65,8 +84,7 @@ public sealed class EkycServiceTests
     {
         client.Reading = new EkycDocumentReading { IdNumber = "079200012345", DocumentToken = null };
 
-        EkycDocumentResponse response = await service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        EkycDocumentResponse response = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
 
         Assert.False(response.CanMatchFace);
         Assert.Null(response.VerificationId);
@@ -76,11 +94,11 @@ public sealed class EkycServiceTests
     [Fact]
     public async Task Document_Again_CancelsPreviousToken()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
         clock.Now = Now.AddMinutes(1);
         client.Reading = new EkycDocumentReading { IdNumber = "079200012345", DocumentToken = "token-2" };
 
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
 
         Assert.Equal(new List<string> { "token-1" }, client.DeletedTokens);
         Assert.Equal(2, repository.Verifications.Count);
@@ -92,7 +110,7 @@ public sealed class EkycServiceTests
     public async Task Document_WrongContentType_Rejected()
     {
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.gif", "image/gif", CancellationToken.None));
+            Image(), "front.gif", "image/gif", null, CancellationToken.None));
 
         Assert.Equal(ErrorCode.EkycImageRejected, error.Code);
     }
@@ -103,7 +121,7 @@ public sealed class EkycServiceTests
         MemoryStream big = new MemoryStream(new byte[EkycRules.MaxImageBytes + 1]);
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            big, "front.jpg", "image/jpeg", CancellationToken.None));
+            big, "front.jpg", "image/jpeg", null, CancellationToken.None));
 
         Assert.Equal(ErrorCode.FileTooLarge, error.Code);
     }
@@ -120,7 +138,7 @@ public sealed class EkycServiceTests
     [Fact]
     public async Task Selfie_Match_PassesWithServerThresholdAndClearsToken()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
 
         EkycStatusResponse response = await service.SubmitSelfieAsync(
             Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
@@ -136,7 +154,7 @@ public sealed class EkycServiceTests
     [Fact]
     public async Task Selfie_ScoreBelowThreshold_FailsEvenIfServiceSaysMatched()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
         client.Comparison = new EkycFaceComparison { Score = 0.2, Matched = true };
 
         EkycStatusResponse response = await service.SubmitSelfieAsync(
@@ -148,7 +166,7 @@ public sealed class EkycServiceTests
     [Fact]
     public async Task Selfie_Spoof_FailsWithoutMatching()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
         client.Spoof = new EkycSpoofCheck { Passed = false, LiveScore = 0.1 };
 
         EkycStatusResponse response = await service.SubmitSelfieAsync(
@@ -163,7 +181,7 @@ public sealed class EkycServiceTests
     [Fact]
     public async Task Selfie_SecondAttemptOnSameDocument_Conflict()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
         await service.SubmitSelfieAsync(Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitSelfieAsync(
@@ -175,7 +193,7 @@ public sealed class EkycServiceTests
     [Fact]
     public async Task Selfie_AfterTokenExpired_Conflict()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
         clock.Now = Now + EkycRules.DocumentTokenLifetime;
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitSelfieAsync(

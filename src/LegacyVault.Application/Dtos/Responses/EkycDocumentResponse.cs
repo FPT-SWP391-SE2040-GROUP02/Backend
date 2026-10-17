@@ -17,6 +17,12 @@ public class EkycDocumentResponse
 
     public string ResidenceAddress { get; set; } = string.Empty;
 
+    /// <summary>
+    /// NOT_CHECKED, MATCHED, NEEDS_REVIEW hoặc WRONG_PERSON. Chỉ khác NOT_CHECKED khi mục đích là BENEFICIARY_CLAIM.
+    /// Cố ý không trả số CCCD, họ tên hay ngày sinh mong đợi (CLAIM-05).
+    /// </summary>
+    public string IdentityMatch { get; set; } = "NOT_CHECKED";
+
     /// <summary>true khi đã giữ được khuôn mặt trên thẻ, FE có thể gửi selfie để so khớp.</summary>
     public bool CanMatchFace { get; set; }
 

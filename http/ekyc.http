@@ -22,7 +22,14 @@ Content-Type: application/json
 GET {{baseUrl}}/ekyc/me
 Authorization: Bearer {{token}}
 
-### Gửi mặt trước CCCD
+### Đồng ý trước khi chụp (bắt buộc, hiệu lực 30 phút). purpose: OWNER_ENROLLMENT | BENEFICIARY_CLAIM | OWNER_ALIVE
+POST {{baseUrl}}/ekyc/consent
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "purpose": "OWNER_ENROLLMENT", "noticeVersion": "2026-10-v1" }
+
+### Gửi mặt trước CCCD (mục đích BENEFICIARY_CLAIM thì thêm field handoverTurnId = id lượt đang IDENTITY_IN_PROGRESS)
 POST {{baseUrl}}/ekyc/document
 Authorization: Bearer {{token}}
 Content-Type: multipart/form-data; boundary=lv
@@ -32,6 +39,18 @@ Content-Disposition: form-data; name="file"; filename="front.jpg"
 Content-Type: image/jpeg
 
 < C:\duong-dan\mat-truoc.jpg
+--lv--
+
+### Gửi mặt sau CCCD để kiểm tra cùng một thẻ (gọi sau khi canMatchFace = true)
+POST {{baseUrl}}/ekyc/document-back
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="file"; filename="back.jpg"
+Content-Type: image/jpeg
+
+< C:\duong-dan\mat-sau.jpg
 --lv--
 
 ### Gửi selfie để so khớp (gọi sau khi canMatchFace = true, trong 30 phút)

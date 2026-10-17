@@ -25,6 +25,57 @@ public sealed class FakeEkycVerificationRepository : IEkycVerificationRepository
     }
 }
 
+public sealed class FakeEkycConsentRepository : IEkycConsentRepository
+{
+    public List<EkycConsent> Consents { get; } = new List<EkycConsent>();
+
+    public Task<EkycConsent?> FindLatestByUserIdAsync(Guid userId, CancellationToken ct)
+    {
+        EkycConsent? latest = Consents
+            .Where(c => c.UserId == userId)
+            .OrderByDescending(c => c.ConsentedAt)
+            .FirstOrDefault();
+        return Task.FromResult(latest);
+    }
+
+    public void Add(EkycConsent consent)
+    {
+        Consents.Add(consent);
+    }
+}
+
+public sealed class FakeEkycBeneficiaryRepository : IBeneficiaryRepository
+{
+    public List<Beneficiary> Beneficiaries { get; } = new List<Beneficiary>();
+
+    public Task<Beneficiary?> FindByIdAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
+    {
+        Beneficiary? found = Beneficiaries.FirstOrDefault(b => b.VaultId == vaultId && b.Id == beneficiaryId);
+        return Task.FromResult(found);
+    }
+
+    public Task<List<Beneficiary>> ListByCitizenIdLast4Async(Guid vaultId, string last4, CancellationToken ct)
+    {
+        return Task.FromResult(new List<Beneficiary>());
+    }
+
+    public Task<(List<Beneficiary> Items, int TotalCount)> FindPageByVaultIdAsync(
+        Guid vaultId, string? last4Filter, int pageIndex, int pageSize, bool isAscending, CancellationToken ct)
+    {
+        return Task.FromResult((new List<Beneficiary>(), 0));
+    }
+
+    public void Add(Beneficiary beneficiary)
+    {
+        Beneficiaries.Add(beneficiary);
+    }
+
+    public void Remove(Beneficiary beneficiary)
+    {
+        Beneficiaries.Remove(beneficiary);
+    }
+}
+
 public sealed class FakeEkycClient : IEkycClient
 {
     public EkycDocumentReading Reading { get; set; } = new EkycDocumentReading
@@ -34,6 +85,8 @@ public sealed class FakeEkycClient : IEkycClient
         DateOfBirth = "01/02/2000",
         DocumentToken = "token-1",
     };
+
+    public EkycBackReading BackReading { get; set; } = new EkycBackReading { IdNumber = "079200012345" };
 
     public EkycSpoofCheck Spoof { get; set; } = new EkycSpoofCheck { Passed = true, LiveScore = 0.99 };
 
@@ -46,6 +99,11 @@ public sealed class FakeEkycClient : IEkycClient
     public Task<EkycDocumentReading> ReadFrontAsync(byte[] image, string fileName, string contentType, CancellationToken ct)
     {
         return Task.FromResult(Reading);
+    }
+
+    public Task<EkycBackReading> ReadBackAsync(byte[] image, string fileName, string contentType, CancellationToken ct)
+    {
+        return Task.FromResult(BackReading);
     }
 
     public Task<EkycSpoofCheck> CheckSpoofAsync(byte[] image, string fileName, string contentType, CancellationToken ct)

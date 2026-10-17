@@ -13,6 +13,9 @@ public interface IEkycClient
     /// <summary>Đọc mặt trước giấy tờ; dịch vụ giữ khuôn mặt trên thẻ và trả mã tham chiếu.</summary>
     Task<EkycDocumentReading> ReadFrontAsync(byte[] image, string fileName, string contentType, CancellationToken ct);
 
+    /// <summary>Đọc mặt sau giấy tờ để lấy mã định danh trong MRZ; không giữ khuôn mặt, không trả mã tham chiếu.</summary>
+    Task<EkycBackReading> ReadBackAsync(byte[] image, string fileName, string contentType, CancellationToken ct);
+
     /// <summary>Kiểm tra dấu hiệu giả mạo (ảnh in, màn hình) trên một ảnh selfie.</summary>
     Task<EkycSpoofCheck> CheckSpoofAsync(byte[] image, string fileName, string contentType, CancellationToken ct);
 

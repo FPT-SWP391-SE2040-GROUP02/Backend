@@ -179,6 +179,7 @@ public static class InfrastructureConfig
         // eKYC: gọi dịch vụ Python riêng qua HTTP. Chưa cấu hình Ekyc:BaseUrl thì mọi lệnh eKYC trả 503.
         services.Configure<EkycSettings>(configuration.GetSection(EkycSettings.SectionName));
         services.AddScoped<IEkycVerificationRepository, EkycVerificationRepository>();
+        services.AddScoped<IEkycConsentRepository, EkycConsentRepository>();
         services.AddHttpClient<IEkycClient, EkycHttpClient>((provider, client) =>
         {
             EkycSettings settings = provider.GetRequiredService<IOptions<EkycSettings>>().Value;
