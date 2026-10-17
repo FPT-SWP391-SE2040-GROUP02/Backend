@@ -770,6 +770,45 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 - **Nhật ký:** mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier, giao/đóng sự cố, đặt/gỡ hold) và F2C ghi `AuditLogs` trong cùng giao dịch.
 - **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); sự cố từ lỗi eKYC/thanh toán (chờ LV-02/LV-04); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; thu hồi phiên đăng nhập khi khóa tài khoản.
 
+### 6.16. Executor theo dõi tiến độ bàn giao
+
+Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng tử: từng lượt (một gói cho một người nhận), hạn, quyền tải và từng tài sản đã được tải hay chưa. Chỉ đọc. Cần đăng nhập (Bearer). Người gọi không phải Executor đã chấp nhận của kho, hoặc là Owner, nhận `404 DEATH_CASE_NOT_FOUND` như hồ sơ không tồn tại.
+
+| Method | URL | Quyền | Body / Query | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/executor/death-cases/{caseId}/handover-progress` | Executor đang hiệu lực của kho | — | 200 `HandoverProgressResponse` | 401, 404 `DEATH_CASE_NOT_FOUND` |
+
+```json
+// HandoverProgressResponse
+{
+  "caseId": "0199...",
+  "handoverStarted": true,
+  "serverTime": "2026-10-20T08:00:00+00:00",
+  "summary": { "totalTurns": 2, "waitingResponse": 1, "inVerification": 0, "accepted": 1, "declined": 0, "ended": 0 },
+  "turns": [
+    {
+      "turnId": "0199...",
+      "containerName": "Tài liệu gia đình",
+      "beneficiaryCitizenIdLast4": "8901",
+      "status": "HANDOVER_COMMITTED",
+      "invitedAt": "...", "responseDeadline": "...", "claimedAt": "...", "decisionDeadline": "...", "decidedAt": "...",
+      "grantStatus": "ACTIVE", "grantExpiresAt": "2026-11-19T08:00:00+00:00",
+      "totalItems": 2, "downloadedItems": 1,
+      "items": [
+        { "itemId": "0199...", "name": "Giấy tờ nhà", "kind": "FILE", "downloaded": true, "firstDownloadedAt": "..." },
+        { "itemId": "0199...", "name": "Tài khoản ngân hàng", "kind": "TEXT", "downloaded": false, "firstDownloadedAt": null }
+      ]
+    }
+  ]
+}
+```
+
+- **Chưa duyệt:** hồ sơ chưa ở `APPROVED_FOR_HANDOVER` thì `handoverStarted = false`, `turns` rỗng, `summary` toàn 0.
+- **Nhóm trạng thái trong `summary`:** `waitingResponse` = `INVITED`, `INITIAL_RESPONSE_EXPIRED`; `inVerification` = `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`; `accepted` = `HANDOVER_COMMITTED`; `declined` = `DECLINED`; `ended` = `DECISION_EXPIRED`, `CANCELLED`, `LAPSED`.
+- **Đã tải:** tài sản có ít nhất một lần tải thành công. Lần tải bị từ chối hoặc lỗi toàn vẹn không tính. `firstDownloadedAt` là lần tải thành công đầu tiên.
+- **Không có dữ liệu nhạy cảm:** chỉ có tên và loại tài sản; không có nội dung tài sản, họ tên, số CCCD đầy đủ hay liên hệ của người nhận. Người nhận được phân biệt bằng 4 số cuối CCCD.
+- **Thứ tự:** lượt xếp theo tên gói rồi theo lúc mời; tài sản xếp theo thứ tự đã ghim.
+- FE đếm thời gian còn lại theo `serverTime`.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 

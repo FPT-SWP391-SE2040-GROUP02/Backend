@@ -1,4 +1,4 @@
-# Thử Executor theo dõi tiến độ bàn giao (docs/api-contract.md mục 6.14) — chỉ Development.
+# Thử Executor theo dõi tiến độ bàn giao (docs/api-contract.md mục 6.16) — chỉ Development.
 #
 # Chuẩn bị giống http/death-cases.http và http/verifier-death-cases.http: Executor nộp hồ sơ, Verifier duyệt
 # (hồ sơ sang APPROVED_FOR_HANDOVER, hệ thống tạo lượt bàn giao). Người nhận nhận lượt, đồng ý và tải tài sản
