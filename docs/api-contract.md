@@ -82,6 +82,8 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 400 | `EKYC_IMAGE_REJECTED` | Ảnh không phải JPEG/PNG, rỗng, hoặc dịch vụ eKYC từ chối (không thấy mặt, nhầm mặt thẻ...); `title` là câu hướng dẫn cho người dùng | |
 | 409 | `EKYC_DOCUMENT_EXPIRED` | Gửi selfie khi chưa đọc mặt trước, đã so khớp rồi, hoặc quá 30 phút | |
 | 503 | `EKYC_SERVICE_UNAVAILABLE` | Không gọi được dịch vụ eKYC (chưa cấu hình, tắt, quá thời gian chờ) | |
+| 409 | `EKYC_CONSENT_REQUIRED` | Gửi mặt trước khi chưa đồng ý (`POST /ekyc/consent`), đồng ý đã quá 30 phút hoặc theo phiên bản thông báo cũ (EKYC-03) | |
+| 400 | `EKYC_DOCUMENT_MISMATCH` | Mặt sau không cùng thẻ với mặt trước vừa đọc (EKYC-04); chụp lại mặt sau | |
 | 404 | `DEATH_CASE_NOT_FOUND` | Không có hồ sơ chứng tử, hoặc người gọi không phải Executor đang hiệu lực của kho, hoặc là Owner của kho | |
 | 409 | `DEATH_CASE_NOT_ALLOWED` | Thao tác hồ sơ chứng tử không được lúc này | `reason`: `PLAN_NOT_RUNNING` (kèm `planStatus`) / `VERSION_LOCKED` / `CASE_CLOSED` / `CASE_NOT_REVISABLE`; phía Verifier (mục 6.12): `NOT_UNDER_REVIEW` / `NEWER_VERSION_PENDING` / `OWNER_NOT_NOTIFIED` / `OBJECTION_PERIOD_NOT_OVER` / `FLAGS_NOT_REVIEWED` / `VERIFIER_CONFLICT` / `PLAN_STATE_INVALID` | `approveBlockers` (khi duyệt bị chặn) |
 | 409 | `HANDOVER_NOT_ALLOWED` | Duyệt hồ sơ chứng tử nhưng không mở được bàn giao (không có gói `READY`, hoặc kế hoạch chưa sẵn sàng); hồ sơ vẫn đang xét | `reason`: `NOTHING_TO_HAND_OVER` / `PLAN_NOT_READY` |
@@ -516,7 +518,9 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `/v1/ekyc/me` | Đăng nhập | — | 200 `EkycStatusResponse` | 401 |
-| POST | `/v1/ekyc/document` | Đăng nhập | multipart `file` (ảnh mặt trước) | 200 `EkycDocumentResponse` | 400 `EKYC_IMAGE_REJECTED`, 401, 413 `FILE_TOO_LARGE`, 503 `EKYC_SERVICE_UNAVAILABLE` |
+| POST | `/v1/ekyc/consent` | Đăng nhập | JSON `{ "purpose", "noticeVersion" }` | 200 `EkycConsentResponse` | 400 `VALIDATION_ERROR`, 401 |
+| POST | `/v1/ekyc/document` | Đăng nhập | multipart `file` (ảnh mặt trước), `handoverTurnId` (chỉ khi mục đích `BENEFICIARY_CLAIM`) | 200 `EkycDocumentResponse` | 400 `EKYC_IMAGE_REJECTED` / `VALIDATION_ERROR`, 401, 404 `HANDOVER_NOT_FOUND`, 409 `EKYC_CONSENT_REQUIRED` / `HANDOVER_NOT_ALLOWED`, 413 `FILE_TOO_LARGE`, 503 `EKYC_SERVICE_UNAVAILABLE` |
+| POST | `/v1/ekyc/document-back` | Đăng nhập | multipart `file` (ảnh mặt sau) | 200 `EkycStatusResponse` | 400 `EKYC_DOCUMENT_MISMATCH` / `EKYC_IMAGE_REJECTED`, 401, 409 `EKYC_DOCUMENT_EXPIRED`, 413, 503 |
 | POST | `/v1/ekyc/face-match` | Đăng nhập | multipart `file` (selfie) | 200 `EkycStatusResponse` | 400, 401, 409 `EKYC_DOCUMENT_EXPIRED`, 413, 503 |
 
 ```jsonc
@@ -529,11 +533,14 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
   "matchThreshold": 0.363, "spoofCheckPassed": true, "createdAt": "...", "completedAt": "..." }
 ```
 
+- **Đồng ý trước khi chụp (EKYC-03):** gọi `POST /ekyc/consent` với `purpose` (`OWNER_ENROLLMENT` | `BENEFICIARY_CLAIM` | `OWNER_ALIVE`) và `noticeVersion` (hiện `2026-10-v1`; sai phiên bản → `400 VALIDATION_ERROR`). Đồng ý có hiệu lực 30 phút (`expiresAt`) và quyết định `purpose` của lượt eKYC kế tiếp. **Thay đổi hợp đồng:** `POST /ekyc/document` không còn chạy được nếu chưa đồng ý (`409 EKYC_CONSENT_REQUIRED`), FE phải gọi `consent` trước.
+- **Đối chiếu với người được chỉ định (EKYC-02, MATCH-01..07):** mục đích `BENEFICIARY_CLAIM` bắt buộc gửi `handoverTurnId` (lượt đang ở `IDENTITY_IN_PROGRESS` và thuộc về người gọi, kho người khác → `404`); mục đích khác gửi `handoverTurnId` → `400`. Server tự lấy hồ sơ người nhận của lượt đó, **không** nhận danh tính từ FE. `EkycDocumentResponse.identityMatch` và `EkycStatusResponse.identityMatch`: `NOT_CHECKED` | `MATCHED` (CCCD, họ tên NFC không phân biệt hoa thường, ngày sinh `dd/MM/yyyy` đều trùng) | `NEEDS_REVIEW` (OCR không chắc, hoặc CCCD trùng mà tên/ngày sinh lệch) | `WRONG_PERSON` (CCCD khác rõ ràng, OCR không cảnh báo). Response **không** trả CCCD/họ tên/ngày sinh mong đợi (CLAIM-05). eKYC chỉ ghi kết quả; việc đóng lượt khi `WRONG_PERSON` (MATCH-05) thuộc luồng bàn giao.
+- **Mặt sau (EKYC-04):** gọi `POST /ekyc/document-back` sau khi `canMatchFace = true`. Dịch vụ đọc số căn cước trong dòng MRZ mặt sau; 4 số cuối phải trùng mặt trước, khác thì `400 EKYC_DOCUMENT_MISMATCH`. Thẻ không có MRZ chứa số căn cước thì không kết luận được: `backSideChecked = false`, không phải lỗi. Hiện **chưa** chặn `face-match` khi chưa kiểm mặt sau. Chưa đọc mã QR (EKYC-06, EKYC-07): dịch vụ eKYC (Python) chưa có chức năng này.
 - `status`: `NOT_STARTED` (chưa làm; các trường còn lại null) | `PENDING` (đã đọc thẻ, chờ selfie) | `PASSED` | `FAILED`.
 - `canMatchFace = false` khi dịch vụ chưa tìm được đúng một khuôn mặt trên thẻ: vẫn trả chữ đọc được nhưng chưa có `verificationId`; FE yêu cầu chụp lại thẻ.
 - Mỗi lần gọi `/document` là một lượt mới và hủy lượt `PENDING` trước. Mỗi lượt chỉ so khớp **một lần**: sau khi có `PASSED`/`FAILED` muốn thử lại phải đọc lại mặt trước. Selfie bị nghi giả mạo (ảnh in, màn hình) → `FAILED`, `spoofCheckPassed = false`.
 - Ngưỡng `matchThreshold` do server cố định, FE không gửi. `faceMatchScore` là điểm cosine, **không** phải phần trăm.
-- eKYC chỉ là bằng chứng hỗ trợ; chưa nối vào luồng bàn giao (giai đoạn C do Executor đối chiếu giấy tờ do Owner cung cấp).
+- eKYC chỉ là bằng chứng hỗ trợ. Luồng nhận tài sản dùng kết quả này qua `POST /handover/turns/{turnId}/identity/complete` (xem `docs/HANDOVER-RECEIVE-API.md`): chỉ khi lượt eKYC `BENEFICIARY_CLAIM` ghim đúng lượt, `PASSED` và `identityMatch = MATCHED` thì lượt mới sang `READY_TO_ACCEPT`. Nhóm đã bỏ bước gọi video: xác minh eKYC ở bước nhận thay cho việc gọi video và Executor kết luận "đúng người".
 - Chưa có kiểm tra liveness theo động tác (chớp mắt, quay đầu); chỉ có kiểm tra giả mạo trên một ảnh selfie.
 
 ### 6.11. Executor nộp hồ sơ chứng tử

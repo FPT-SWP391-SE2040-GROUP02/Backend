@@ -38,6 +38,10 @@ Authorization: Bearer {{token}}
 GET {{baseUrl}}/handover/turns/{{turnId}}
 Authorization: Bearer {{token}}
 
+### 4a) Chốt xác minh danh tính (chỉ khi Handover:RequireIdentityVerification = true; cần eKYC BENEFICIARY_CLAIM đạt và khớp, xem ekyc.http)
+POST {{baseUrl}}/handover/turns/{{turnId}}/identity/complete
+Authorization: Bearer {{token}}
+
 ### 5) Đồng ý nhận (mở quyền xem và tải 30 ngày)
 # @name accept
 POST {{baseUrl}}/handover/turns/{{turnId}}/accept

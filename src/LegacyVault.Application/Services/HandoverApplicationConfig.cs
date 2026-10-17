@@ -11,6 +11,7 @@ public static class HandoverApplicationConfig
         services.AddScoped<IHandoverService, HandoverService>();
         services.AddScoped<IHandoverDownloadService, HandoverDownloadService>();
         services.AddScoped<IHandoverJob, HandoverJob>();
+        services.AddScoped<IHandoverIdentityService, HandoverIdentityService>();
         return services;
     }
 }

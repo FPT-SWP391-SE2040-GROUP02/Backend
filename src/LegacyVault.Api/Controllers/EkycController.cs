@@ -1,4 +1,5 @@
 using LegacyVault.Api.Models;
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -32,6 +33,16 @@ public sealed class EkycController : ControllerBase
         return ekycService.GetMyStatusAsync(ct);
     }
 
+    /// <summary>Người dùng đồng ý cho chụp giấy tờ và khuôn mặt (EKYC-03). Gọi trước khi gửi mặt trước.</summary>
+    [HttpPost("consent")]
+    [ProducesResponseType<EkycConsentResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public Task<EkycConsentResponse> RecordConsent([FromBody] EkycConsentRequest request, CancellationToken ct)
+    {
+        return ekycService.RecordConsentAsync(request, ct);
+    }
+
     /// <summary>Gửi ảnh mặt trước CCCD: trả thông tin đọc được (không lưu) và mở bước so khớp khuôn mặt.</summary>
     [HttpPost("document")]
     [Consumes("multipart/form-data")]
@@ -39,14 +50,36 @@ public sealed class EkycController : ControllerBase
     [ProducesResponseType<EkycDocumentResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
-    public async Task<EkycDocumentResponse> SubmitDocument([FromForm] EkycImageForm form, CancellationToken ct)
+    public async Task<EkycDocumentResponse> SubmitDocument([FromForm] EkycDocumentForm form, CancellationToken ct)
     {
         IFormFile file = form.File!;
         await using (Stream content = file.OpenReadStream())
         {
-            return await ekycService.SubmitDocumentAsync(content, file.FileName, file.ContentType, ct);
+            return await ekycService.SubmitDocumentAsync(
+                content, file.FileName, file.ContentType, form.HandoverTurnId, ct);
+        }
+    }
+
+    /// <summary>Gửi ảnh mặt sau của tấm thẻ vừa đọc mặt trước để kiểm tra hai mặt cùng một thẻ (EKYC-04).</summary>
+    [HttpPost("document-back")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(MaxRequestBytes)]
+    [ProducesResponseType<EkycStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<EkycStatusResponse> SubmitBack([FromForm] EkycImageForm form, CancellationToken ct)
+    {
+        IFormFile file = form.File!;
+        await using (Stream content = file.OpenReadStream())
+        {
+            return await ekycService.SubmitBackAsync(content, file.FileName, file.ContentType, ct);
         }
     }
 

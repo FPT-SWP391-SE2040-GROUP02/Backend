@@ -11,6 +11,9 @@ public static class EkycMappings
         return new EkycStatusResponse
         {
             Status = verification.Status.ToApiString(),
+            Purpose = verification.Purpose.ToApiString(),
+            IdentityMatch = verification.IdentityMatch.ToApiString(),
+            BackSideChecked = verification.BackSideChecked,
             VerificationId = verification.Id,
             CitizenIdLast4 = verification.CitizenIdLast4,
             FaceMatchScore = verification.FaceMatchScore,

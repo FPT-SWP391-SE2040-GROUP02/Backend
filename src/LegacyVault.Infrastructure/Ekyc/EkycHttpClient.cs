@@ -69,6 +69,40 @@ public sealed class EkycHttpClient : IEkycClient
         }
     }
 
+    public async Task<EkycBackReading> ReadBackAsync(
+        byte[] image, string fileName, string contentType, CancellationToken ct)
+    {
+        using (MultipartFormDataContent form = new MultipartFormDataContent())
+        {
+            form.Add(CreateImageContent(image, contentType), "file", fileName);
+            form.Add(new StringContent("back"), "side");
+
+            JsonElement root = await PostAsync("api/ocr", form, ct);
+
+            JsonElement fields = root;
+            if (root.TryGetProperty("fields", out JsonElement nested) && nested.ValueKind == JsonValueKind.Object)
+            {
+                fields = nested;
+            }
+
+            // Chỉ lấy số căn cước từ MRZ; nơi cư trú mặt sau không dùng và không được giữ lại.
+            EkycBackReading reading = new EkycBackReading();
+            reading.IdNumber = ReadString(fields, "id_number");
+            if (root.TryGetProperty("warnings", out JsonElement warnings)
+                && warnings.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement warning in warnings.EnumerateArray())
+                {
+                    if (warning.ValueKind == JsonValueKind.String)
+                    {
+                        reading.Warnings.Add(warning.GetString() ?? string.Empty);
+                    }
+                }
+            }
+            return reading;
+        }
+    }
+
     public async Task<EkycSpoofCheck> CheckSpoofAsync(
         byte[] image, string fileName, string contentType, CancellationToken ct)
     {

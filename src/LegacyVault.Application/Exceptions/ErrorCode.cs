@@ -61,6 +61,8 @@ public enum ErrorCode
     PlanActivationNotAllowed,
     PlanActivationRequirementsNotMet,
     PolicyAcknowledgementRequired,
+    EkycConsentRequired,
+    EkycDocumentMismatch,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

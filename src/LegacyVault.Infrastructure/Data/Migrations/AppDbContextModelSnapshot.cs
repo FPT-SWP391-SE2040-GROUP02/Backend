@@ -955,11 +955,44 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("Designations", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.EkycConsent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ConsentedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("NoticeVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Purpose", "ConsentedAt");
+
+                    b.ToTable("EkycConsents", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.EkycVerification", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("BackSideChecked")
+                        .HasColumnType("bit");
 
                     b.Property<string>("CitizenIdLast4")
                         .IsRequired()
@@ -983,6 +1016,19 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<double?>("FaceMatchScore")
                         .HasColumnType("float");
+
+                    b.Property<Guid?>("HandoverTurnId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("IdentityMatch")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<bool?>("SpoofCheckPassed")
                         .HasColumnType("bit");
@@ -2177,6 +2223,17 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Beneficiary");
 
                     b.Navigation("Container");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.EkycConsent", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.EkycVerification", b =>

@@ -6,6 +6,15 @@ public class EkycStatusResponse
     /// <summary>NOT_STARTED, PENDING, PASSED hoặc FAILED.</summary>
     public string Status { get; set; } = string.Empty;
 
+    /// <summary>OWNER_ENROLLMENT, BENEFICIARY_CLAIM hoặc OWNER_ALIVE; null khi chưa làm.</summary>
+    public string? Purpose { get; set; }
+
+    /// <summary>NOT_CHECKED, MATCHED, NEEDS_REVIEW hoặc WRONG_PERSON.</summary>
+    public string IdentityMatch { get; set; } = "NOT_CHECKED";
+
+    /// <summary>true khi mặt sau cùng thẻ với mặt trước (EKYC-04).</summary>
+    public bool BackSideChecked { get; set; }
+
     public Guid? VerificationId { get; set; }
 
     /// <summary>4 số cuối CCCD; chuỗi rỗng khi chưa đọc được.</summary>

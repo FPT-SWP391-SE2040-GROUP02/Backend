@@ -1,3 +1,4 @@
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
@@ -13,6 +14,10 @@ public sealed class EkycService : IEkycService
 {
     private readonly ICurrentUser currentUser;
     private readonly IEkycVerificationRepository verificationRepository;
+    private readonly IEkycConsentRepository consentRepository;
+    private readonly IHandoverRepository handoverRepository;
+    private readonly IBeneficiaryRepository beneficiaryRepository;
+    private readonly IBeneficiaryDataProtector beneficiaryProtector;
     private readonly IEkycClient ekycClient;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -20,27 +25,80 @@ public sealed class EkycService : IEkycService
     public EkycService(
         ICurrentUser currentUser,
         IEkycVerificationRepository verificationRepository,
+        IEkycConsentRepository consentRepository,
+        IHandoverRepository handoverRepository,
+        IBeneficiaryRepository beneficiaryRepository,
+        IBeneficiaryDataProtector beneficiaryProtector,
         IEkycClient ekycClient,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
         this.currentUser = currentUser;
         this.verificationRepository = verificationRepository;
+        this.consentRepository = consentRepository;
+        this.handoverRepository = handoverRepository;
+        this.beneficiaryRepository = beneficiaryRepository;
+        this.beneficiaryProtector = beneficiaryProtector;
         this.ekycClient = ekycClient;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
 
-    public async Task<EkycDocumentResponse> SubmitDocumentAsync(
-        Stream content, string fileName, string contentType, CancellationToken ct)
+    public async Task<EkycConsentResponse> RecordConsentAsync(EkycConsentRequest request, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
+        EkycPurpose purpose = ParsePurpose(request.Purpose);
+        if (request.NoticeVersion != EkycRules.NoticeVersion)
+        {
+            throw ValidationErrors.For("noticeVersion", "Thông báo đã thay đổi, vui lòng đọc lại rồi đồng ý.");
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        EkycConsent consent = new EkycConsent();
+        consent.UserId = userId;
+        consent.Purpose = purpose;
+        consent.NoticeVersion = EkycRules.NoticeVersion;
+        consent.ConsentedAt = now;
+        consentRepository.Add(consent);
+        await unitOfWork.SaveChangesAsync(ct);
+
+        EkycConsentResponse response = new EkycConsentResponse();
+        response.Purpose = purpose.ToApiString();
+        response.NoticeVersion = consent.NoticeVersion;
+        response.ConsentedAt = now;
+        response.ExpiresAt = now + EkycRules.ConsentLifetime;
+        return response;
+    }
+
+    public async Task<EkycDocumentResponse> SubmitDocumentAsync(
+        Stream content, string fileName, string contentType, Guid? handoverTurnId, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        DateTimeOffset now = timeProvider.GetUtcNow();
+
+        // EKYC-03: phải có đồng ý còn hiệu lực trước khi nhận bất kỳ ảnh nào.
+        EkycConsent? consent = await consentRepository.FindLatestByUserIdAsync(userId, ct);
+        if (consent == null || !EkycRules.IsConsentValid(consent, now))
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycConsentRequired,
+                "Vui lòng đọc thông báo và đồng ý trước khi chụp giấy tờ.");
+        }
+        EkycPurpose purpose = consent.Purpose;
+
+        // EKYC-02: người được chỉ định lấy từ backend (lượt bàn giao đã ghim), không nhận từ FE.
+        BeneficiaryPersonalData? expected = await LoadExpectedPersonAsync(purpose, handoverTurnId, userId, ct);
+
         byte[] image = await ReadImageAsync(content, contentType, ct);
 
         // Đọc trước, hủy lượt cũ sau: ảnh lỗi thì lượt Pending đang có vẫn giữ nguyên.
         EkycDocumentReading reading = await ekycClient.ReadFrontAsync(image, fileName, contentType, ct);
 
-        DateTimeOffset now = timeProvider.GetUtcNow();
+        EkycIdentityMatch identityMatch = EkycIdentityMatch.NotChecked;
+        if (expected != null)
+        {
+            identityMatch = EkycRules.CompareIdentity(reading, expected);
+        }
+
         EkycVerification? previous = await verificationRepository.FindLatestByUserIdAsync(userId, ct);
         if (previous != null && previous.DocumentToken != null)
         {
@@ -55,6 +113,7 @@ public sealed class EkycService : IEkycService
             FullName = reading.FullName,
             DateOfBirth = reading.DateOfBirth,
             ResidenceAddress = reading.ResidenceAddress,
+            IdentityMatch = identityMatch.ToApiString(),
             Warnings = reading.Warnings,
         };
 
@@ -69,6 +128,9 @@ public sealed class EkycService : IEkycService
         EkycVerification verification = new EkycVerification();
         verification.UserId = userId;
         verification.Status = EkycStatus.Pending;
+        verification.Purpose = purpose;
+        verification.HandoverTurnId = handoverTurnId;
+        verification.IdentityMatch = identityMatch;
         verification.CitizenIdLast4 = EkycRules.GetCitizenIdLast4(reading.IdNumber);
         verification.DocumentToken = reading.DocumentToken;
         verification.DocumentTokenExpiresAt = now + EkycRules.DocumentTokenLifetime;
@@ -80,6 +142,35 @@ public sealed class EkycService : IEkycService
         response.CanMatchFace = true;
         response.ExpiresAt = verification.DocumentTokenExpiresAt;
         return response;
+    }
+
+    public async Task<EkycStatusResponse> SubmitBackAsync(
+        Stream content, string fileName, string contentType, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        DateTimeOffset now = timeProvider.GetUtcNow();
+
+        // EKYC-04: mặt sau thuộc cùng lần chụp với mặt trước, nên phải có lượt đang chờ selfie.
+        EkycVerification? verification = await verificationRepository.FindLatestByUserIdAsync(userId, ct);
+        if (verification == null || !EkycRules.CanMatchFace(verification, now))
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycDocumentExpired,
+                "Vui lòng đọc mặt trước giấy tờ trước khi gửi mặt sau.");
+        }
+
+        byte[] image = await ReadImageAsync(content, contentType, ct);
+        EkycBackReading reading = await ekycClient.ReadBackAsync(image, fileName, contentType, ct);
+
+        if (reading.IdNumber.Length > 0 && !EkycRules.IsSameCard(reading.IdNumber, verification.CitizenIdLast4))
+        {
+            throw new AppException(AppErrorType.Validation, ErrorCode.EkycDocumentMismatch,
+                "Hai mặt giấy tờ không cùng một thẻ. Vui lòng chụp lại.");
+        }
+
+        // Thẻ không có MRZ chứa số căn cước thì không kết luận được: giữ false, không coi là lỗi.
+        verification.BackSideChecked = reading.IdNumber.Length > 0;
+        await unitOfWork.SaveChangesAsync(ct);
+        return verification.ToResponse();
     }
 
     public async Task<EkycStatusResponse> SubmitSelfieAsync(
@@ -131,6 +222,66 @@ public sealed class EkycService : IEkycService
             return EkycMappings.NotStarted();
         }
         return verification.ToResponse();
+    }
+
+    /// <summary>
+    /// Lấy dữ liệu người được chỉ định của lượt bàn giao để đối chiếu (BeneficiaryClaim). Mục đích khác thì không có lượt.
+    /// Lượt của người khác hoặc không tồn tại đều trả 404 (SEC-04).
+    /// </summary>
+    private async Task<BeneficiaryPersonalData?> LoadExpectedPersonAsync(
+        EkycPurpose purpose, Guid? handoverTurnId, Guid userId, CancellationToken ct)
+    {
+        if (purpose != EkycPurpose.BeneficiaryClaim)
+        {
+            if (handoverTurnId != null)
+            {
+                throw ValidationErrors.For("handoverTurnId", "Chỉ xác minh người nhận mới gửi kèm lượt bàn giao.");
+            }
+            return null;
+        }
+        if (handoverTurnId == null)
+        {
+            throw ValidationErrors.For("handoverTurnId", "Thiếu lượt bàn giao cần xác minh.");
+        }
+
+        HandoverTurn? turn = await handoverRepository.FindTurnByIdAsync(handoverTurnId.Value, ct);
+        if (turn == null || turn.ClaimantUserId != userId)
+        {
+            throw HandoverNotFound();
+        }
+        if (turn.Status != HandoverTurnStatus.IdentityInProgress)
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed,
+                "Lượt này không ở bước xác minh danh tính.");
+        }
+
+        Beneficiary? beneficiary = await beneficiaryRepository.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
+        if (beneficiary == null)
+        {
+            throw HandoverNotFound();
+        }
+        return beneficiaryProtector.Unprotect(beneficiary);
+    }
+
+    /// <summary>
+    /// Đổi chuỗi UPPER_SNAKE_CASE FE gửi sang enum. Không dùng Enum.Parse thẳng để FE không gửi được số hay tên C#.
+    /// </summary>
+    private static EkycPurpose ParsePurpose(string purpose)
+    {
+        foreach (EkycPurpose value in Enum.GetValues<EkycPurpose>())
+        {
+            if (string.Equals(value.ToApiString(), purpose, StringComparison.Ordinal))
+            {
+                return value;
+            }
+        }
+        throw ValidationErrors.For("purpose", "Mục đích xác minh không hợp lệ.");
+    }
+
+    private static AppException HandoverNotFound()
+    {
+        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound,
+            "Không tìm thấy nội dung bàn giao.");
     }
 
     /// <summary>Chốt kết quả, xóa mã tham chiếu ở cả DB và dịch vụ eKYC để mỗi lượt chỉ so khớp một lần.</summary>

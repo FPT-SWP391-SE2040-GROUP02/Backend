@@ -1,3 +1,4 @@
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 
 namespace LegacyVault.Application.Services;
@@ -15,11 +16,32 @@ namespace LegacyVault.Application.Services;
 public interface IEkycService
 {
     /// <summary>
+    /// Ghi nhận người dùng đồng ý cho chụp giấy tờ và khuôn mặt (EKYC-03). Phải gọi trước khi gửi mặt trước;
+    /// đồng ý có hiệu lực 30 phút và gắn mục đích cho lượt eKYC kế tiếp (EKYC-01).
+    /// Lỗi: 400 VALIDATION_ERROR (mục đích lạ hoặc phiên bản thông báo đã cũ).
+    /// </summary>
+    Task<EkycConsentResponse> RecordConsentAsync(EkycConsentRequest request, CancellationToken ct);
+
+    /// <summary>
     /// Đọc mặt trước giấy tờ và giữ khuôn mặt trên thẻ để so khớp. Mỗi lần gọi là một lượt eKYC mới,
     /// lượt Pending trước đó bị hủy.
-    /// Lỗi: 400 EKYC_IMAGE_REJECTED (ảnh sai định dạng, rỗng, nhầm mặt thẻ).
+    /// Mục đích BENEFICIARY_CLAIM bắt buộc kèm handoverTurnId và được đối chiếu với người được chỉ định của lượt đó
+    /// (EKYC-02, MATCH-01..05); mục đích khác không được gửi kèm lượt. Kết quả đối chiếu chỉ ghi lại, không tự đóng lượt.
+    /// Lỗi: 409 EKYC_CONSENT_REQUIRED (chưa đồng ý hoặc đã quá hạn), 400 EKYC_IMAGE_REJECTED (ảnh sai định dạng,
+    /// rỗng, nhầm mặt thẻ), 400 VALIDATION_ERROR (thiếu hoặc thừa handoverTurnId),
+    /// 404 HANDOVER_NOT_FOUND (lượt không tồn tại hoặc không phải của người gọi),
+    /// 409 HANDOVER_NOT_ALLOWED (lượt không ở bước xác minh danh tính).
     /// </summary>
     Task<EkycDocumentResponse> SubmitDocumentAsync(
+        Stream content, string fileName, string contentType, Guid? handoverTurnId, CancellationToken ct);
+
+    /// <summary>
+    /// Gửi mặt sau của chính tấm thẻ vừa đọc mặt trước (EKYC-04). Mã trong MRZ mặt sau phải trùng 4 số cuối mặt
+    /// trước. Thẻ không có MRZ chứa số căn cước thì không kết luận được và BackSideChecked giữ false.
+    /// Lỗi: 409 EKYC_DOCUMENT_EXPIRED (chưa đọc mặt trước hoặc quá 30 phút), 400 EKYC_DOCUMENT_MISMATCH
+    /// (hai mặt không cùng thẻ), 400 EKYC_IMAGE_REJECTED.
+    /// </summary>
+    Task<EkycStatusResponse> SubmitBackAsync(
         Stream content, string fileName, string contentType, CancellationToken ct);
 
     /// <summary>
