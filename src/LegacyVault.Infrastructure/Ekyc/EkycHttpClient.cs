@@ -8,7 +8,7 @@ using LegacyVault.Application.Exceptions;
 namespace LegacyVault.Infrastructure.Ekyc;
 
 /// <summary>
-/// Gọi dịch vụ eKYC bằng HTTP (ekyc-prototype: /api/ocr, /api/anti-spoof, /api/face-match, /api/documents).
+/// Gọi dịch vụ eKYC bằng HTTP (ekyc-prototype: /api/ocr, /api/anti-spoof, /api/face-match, /api/documents, /api/liveness).
 /// </summary>
 /// <remarks>
 /// - Đọc JSON bằng JsonDocument theo tên trường của dịch vụ, không dựng DTO để tránh lệ thuộc cấu trúc nội bộ.
@@ -161,6 +161,144 @@ public sealed class EkycHttpClient : IEkycClient
         }
     }
 
+    public async Task<EkycLivenessState> StartLivenessAsync(CancellationToken ct)
+    {
+        using (ByteArrayContent empty = new ByteArrayContent(Array.Empty<byte>()))
+        {
+            JsonElement root = await PostAsync("api/liveness/start", empty, ct, true);
+            return ReadLivenessState(root);
+        }
+    }
+
+    public async Task<EkycLivenessState> SendLivenessFrameAsync(
+        string sessionId, byte[] frame, string fileName, string contentType, CancellationToken ct)
+    {
+        using (MultipartFormDataContent form = new MultipartFormDataContent())
+        {
+            form.Add(new StringContent(sessionId), "session_id");
+            form.Add(CreateImageContent(frame, contentType), "frame", fileName);
+
+            JsonElement root = await PostAsync("api/liveness/frame", form, ct, true);
+            EkycLivenessState state = ReadLivenessState(root);
+            state.SessionId = sessionId;
+            return state;
+        }
+    }
+
+    public async Task<byte[]> GetLivenessSelfieAsync(string sessionId, CancellationToken ct)
+    {
+        EnsureConfigured();
+        try
+        {
+            using (HttpResponseMessage response = await httpClient.GetAsync(
+                "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie", ct))
+            {
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadAsByteArrayAsync(ct);
+                }
+                if (response.StatusCode == HttpStatusCode.Conflict)
+                {
+                    throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessNotPassed,
+                        "Bạn chưa hoàn thành thử thách camera.");
+                }
+                if (response.StatusCode == HttpStatusCode.Gone)
+                {
+                    throw LivenessExpired();
+                }
+                throw Unavailable();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            throw Unavailable();
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw Unavailable();
+        }
+    }
+
+    public async Task DeleteLivenessAsync(string sessionId, CancellationToken ct)
+    {
+        EnsureConfigured();
+        try
+        {
+            using (HttpResponseMessage response = await httpClient.DeleteAsync(
+                "api/liveness/" + Uri.EscapeDataString(sessionId), ct))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw Unavailable();
+                }
+            }
+        }
+        catch (HttpRequestException)
+        {
+            throw Unavailable();
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw Unavailable();
+        }
+    }
+
+    /// <summary>
+    /// Đọc JSON phiên thử thách của dịch vụ. Cố ý bỏ điểm chống giả mạo (pad_score, pad_samples): không chuyển cho FE.
+    /// </summary>
+    private static EkycLivenessState ReadLivenessState(JsonElement root)
+    {
+        EkycLivenessState state = new EkycLivenessState();
+        state.SessionId = ReadString(root, "session_id");
+        state.ExpiresInSeconds = ReadInt(root, "expires_in");
+        state.CurrentIndex = ReadInt(root, "current_index");
+        state.Prompt = ReadString(root, "prompt");
+        state.Calibrated = ReadBoolean(root, "calibrated");
+        state.ChallengeCompleted = ReadBoolean(root, "challenge_completed");
+        state.PadPassed = ReadBoolean(root, "pad_passed");
+        state.Passed = ReadBoolean(root, "prototype_passed");
+        state.FailedReason = ReadString(root, "failed_reason");
+        state.FrameHint = ReadString(root, "frame_hint");
+
+        if (root.TryGetProperty("actions", out JsonElement actions) && actions.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement item in actions.EnumerateArray())
+            {
+                EkycLivenessAction action = new EkycLivenessAction();
+                action.Key = ReadString(item, "key");
+                action.Label = ReadString(item, "label");
+                state.Actions.Add(action);
+            }
+        }
+        if (root.TryGetProperty("completed", out JsonElement completed) && completed.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement item in completed.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String)
+                {
+                    state.Completed.Add(item.GetString() ?? string.Empty);
+                }
+            }
+        }
+        return state;
+    }
+
+    private static int ReadInt(JsonElement root, string name)
+    {
+        if (root.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out int number))
+        {
+            return number;
+        }
+        return 0;
+    }
+
+    private static AppException LivenessExpired()
+    {
+        return new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessRequired,
+            "Phiên thử thách camera đã hết hạn hoặc chưa bắt đầu. Vui lòng bắt đầu lại.");
+    }
+
     private static ByteArrayContent CreateImageContent(byte[] image, string contentType)
     {
         ByteArrayContent content = new ByteArrayContent(image);
@@ -169,7 +307,8 @@ public sealed class EkycHttpClient : IEkycClient
     }
 
     /// <summary>POST multipart, đổi mã lỗi của dịch vụ thành AppException, trả JSON thành công.</summary>
-    private async Task<JsonElement> PostAsync(string path, HttpContent form, CancellationToken ct)
+    private async Task<JsonElement> PostAsync(
+        string path, HttpContent form, CancellationToken ct, bool livenessSession = false)
     {
         EnsureConfigured();
         try
@@ -189,6 +328,10 @@ public sealed class EkycHttpClient : IEkycClient
                 {
                     throw new AppException(AppErrorType.Validation, ErrorCode.EkycImageRejected,
                         ReadDetail(body, "Ảnh không dùng được. Vui lòng chụp lại rõ hơn."));
+                }
+                if (response.StatusCode == HttpStatusCode.Gone && livenessSession)
+                {
+                    throw LivenessExpired();
                 }
                 if (response.StatusCode == HttpStatusCode.Gone)
                 {

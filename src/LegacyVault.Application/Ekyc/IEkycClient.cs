@@ -23,6 +23,24 @@ public interface IEkycClient
     Task<EkycFaceComparison> CompareFaceAsync(
         string documentToken, byte[] selfie, string fileName, string contentType, double threshold, CancellationToken ct);
 
+    /// <summary>Tạo phiên thử thách camera: dịch vụ chọn ngẫu nhiên động tác và trả mã phiên (EKYC-10).</summary>
+    Task<EkycLivenessState> StartLivenessAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Gửi một khung hình của phiên thử thách. Phiên hết hạn (410) thì báo EKYC_LIVENESS_REQUIRED để bắt đầu lại.
+    /// </summary>
+    Task<EkycLivenessState> SendLivenessFrameAsync(
+        string sessionId, byte[] frame, string fileName, string contentType, CancellationToken ct);
+
+    /// <summary>
+    /// Lấy ảnh selfie tốt nhất của phiên đã đạt (EKYC-13). Phiên chưa đạt cả động tác và chống giả mạo thì
+    /// 409 EKYC_LIVENESS_NOT_PASSED; phiên hết hạn thì 409 EKYC_LIVENESS_REQUIRED.
+    /// </summary>
+    Task<byte[]> GetLivenessSelfieAsync(string sessionId, CancellationToken ct);
+
+    /// <summary>Hủy phiên thử thách. Không báo lỗi nếu phiên không còn.</summary>
+    Task DeleteLivenessAsync(string sessionId, CancellationToken ct);
+
     /// <summary>Xóa khuôn mặt đã giữ theo documentToken. Không báo lỗi nếu mã không còn.</summary>
     Task DeleteDocumentAsync(string documentToken, CancellationToken ct);
 }

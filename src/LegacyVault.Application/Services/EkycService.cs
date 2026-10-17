@@ -187,6 +187,18 @@ public sealed class EkycService : IEkycService
         }
         string documentToken = verification.DocumentToken!;
 
+        // Đường ảnh selfie tĩnh cũng phải qua thử thách camera trước (EKYC-14): chưa qua thì chưa so khớp.
+        if (!verification.LivenessPassed)
+        {
+            if (verification.LivenessSessionId == null)
+            {
+                throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessRequired,
+                    "Vui lòng hoàn thành thử thách camera trước khi gửi ảnh chân dung.");
+            }
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessNotPassed,
+                "Bạn chưa hoàn thành thử thách camera.");
+        }
+
         byte[] selfie = await ReadImageAsync(content, contentType, ct);
 
         EkycSpoofCheck spoofCheck = await ekycClient.CheckSpoofAsync(selfie, fileName, contentType, ct);
@@ -211,6 +223,112 @@ public sealed class EkycService : IEkycService
             await FinishAsync(verification, EkycStatus.Failed, now, ct);
         }
         return verification.ToResponse();
+    }
+
+    public async Task<EkycLivenessResponse> StartLivenessAsync(CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        EkycVerification verification = await RequirePendingVerificationAsync(userId, ct);
+
+        // Gọi lại thì hủy phiên cũ, lỗi hủy bỏ qua vì dịch vụ tự dọn phiên hết hạn.
+        string? previousSession = verification.LivenessSessionId;
+        EkycLivenessState state = await ekycClient.StartLivenessAsync(ct);
+        verification.LivenessSessionId = state.SessionId;
+        await unitOfWork.SaveChangesAsync(ct);
+
+        if (previousSession != null)
+        {
+            await TryDeleteLivenessAsync(previousSession, ct);
+        }
+        return state.ToResponse(true);
+    }
+
+    public async Task<EkycLivenessResponse> SubmitLivenessFrameAsync(
+        Stream content, string fileName, string contentType, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        EkycVerification verification = await RequirePendingVerificationAsync(userId, ct);
+        string sessionId = RequireLivenessSession(verification);
+
+        byte[] frame = await ReadImageAsync(content, contentType, ct);
+        EkycLivenessState state = await ekycClient.SendLivenessFrameAsync(sessionId, frame, fileName, contentType, ct);
+
+        // Ghi nhớ lúc phiên đạt cả động tác và chống giả mạo để đường ảnh selfie tĩnh cũng dùng được (EKYC-14).
+        if (state.Passed && !verification.LivenessPassed)
+        {
+            verification.LivenessPassed = true;
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        return state.ToResponse(false);
+    }
+
+    public async Task<EkycStatusResponse> CompleteLivenessAsync(CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        EkycVerification verification = await RequirePendingVerificationAsync(userId, ct);
+        string sessionId = RequireLivenessSession(verification);
+        string documentToken = verification.DocumentToken!;
+
+        // EKYC-13: selfie lấy từ chính phiên đã đạt. Phiên chưa đạt thì dịch vụ từ chối (EKYC_LIVENESS_NOT_PASSED).
+        byte[] selfie = await ekycClient.GetLivenessSelfieAsync(sessionId, ct);
+
+        // Dịch vụ chỉ trả selfie khi cả động tác và chống giả mạo trong phiên đều đạt (EKYC-14).
+        verification.SpoofCheckPassed = true;
+        verification.LivenessPassed = true;
+
+        EkycFaceComparison comparison = await ekycClient.CompareFaceAsync(
+            documentToken, selfie, "liveness.jpg", "image/jpeg", EkycRules.MatchThreshold, ct);
+        verification.FaceMatchScore = comparison.Score;
+        verification.LivenessSessionId = null;
+
+        // Tự so lại với ngưỡng của server, không tin cờ matched do dịch vụ ngoài trả về.
+        if (comparison.Score >= EkycRules.MatchThreshold)
+        {
+            await FinishAsync(verification, EkycStatus.Passed, now, ct);
+        }
+        else
+        {
+            await FinishAsync(verification, EkycStatus.Failed, now, ct);
+        }
+        await TryDeleteLivenessAsync(sessionId, ct);
+        return verification.ToResponse();
+    }
+
+    /// <summary>Lượt eKYC mới nhất phải còn chờ selfie (đã đọc mặt trước, còn trong 30 phút).</summary>
+    private async Task<EkycVerification> RequirePendingVerificationAsync(Guid userId, CancellationToken ct)
+    {
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        EkycVerification? verification = await verificationRepository.FindLatestByUserIdAsync(userId, ct);
+        if (verification == null || !EkycRules.CanMatchFace(verification, now))
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycDocumentExpired,
+                "Vui lòng đọc lại mặt trước giấy tờ trước khi làm thử thách camera.");
+        }
+        return verification;
+    }
+
+    private static string RequireLivenessSession(EkycVerification verification)
+    {
+        if (verification.LivenessSessionId == null)
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessRequired,
+                "Vui lòng bắt đầu thử thách camera trước.");
+        }
+        return verification.LivenessSessionId;
+    }
+
+    /// <summary>Hủy phiên thử thách ở dịch vụ eKYC. Lỗi thì bỏ qua vì dịch vụ tự dọn phiên sau 90 giây.</summary>
+    private async Task TryDeleteLivenessAsync(string sessionId, CancellationToken ct)
+    {
+        try
+        {
+            await ekycClient.DeleteLivenessAsync(sessionId, ct);
+        }
+        catch (AppException)
+        {
+            // Cố ý bỏ qua: hủy thất bại không ảnh hưởng kết quả, phiên tự hết hạn.
+        }
     }
 
     public async Task<EkycStatusResponse> GetMyStatusAsync(CancellationToken ct)
