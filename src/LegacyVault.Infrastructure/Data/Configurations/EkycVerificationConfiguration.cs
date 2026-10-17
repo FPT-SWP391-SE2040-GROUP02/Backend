@@ -38,6 +38,11 @@ public sealed class EkycVerificationConfiguration : IEntityTypeConfiguration<Eky
             .HasMaxLength(64)
             .IsUnicode(false);
 
+        // Mã phiên của dịch vụ eKYC, cùng kiểu với DocumentToken.
+        builder.Property(v => v.LivenessSessionId)
+            .HasMaxLength(64)
+            .IsUnicode(false);
+
         // Tìm lượt mới nhất của một người dùng.
         builder.HasIndex(v => new { v.UserId, v.CreatedAt });
 

@@ -48,10 +48,35 @@ public interface IEkycService
     /// Gửi selfie để so khớp với khuôn mặt trên thẻ vừa đọc. Mỗi lượt chỉ được so khớp MỘT lần
     /// (kết quả Passed hoặc Failed); muốn thử lại phải đọc lại mặt trước.
     /// Lỗi: 409 EKYC_DOCUMENT_EXPIRED (chưa đọc giấy tờ, đã so khớp rồi, hoặc quá 30 phút),
+    /// 409 EKYC_LIVENESS_REQUIRED (chưa bắt đầu thử thách camera), 409 EKYC_LIVENESS_NOT_PASSED (đã bắt đầu nhưng chưa đạt),
     /// 400 EKYC_IMAGE_REJECTED (selfie không có đúng một khuôn mặt).
     /// </summary>
     Task<EkycStatusResponse> SubmitSelfieAsync(
         Stream content, string fileName, string contentType, CancellationToken ct);
+
+    /// <summary>
+    /// Bắt đầu thử thách camera cho lượt eKYC đang chờ selfie (EKYC-10): dịch vụ eKYC chọn ngẫu nhiên các động tác
+    /// (chớp mắt, quay đầu trái hoặc phải). Mã phiên do backend giữ; gọi lại thì phiên cũ bị hủy.
+    /// Lỗi: 409 EKYC_DOCUMENT_EXPIRED (chưa đọc mặt trước hoặc quá 30 phút), 503 EKYC_SERVICE_UNAVAILABLE.
+    /// </summary>
+    Task<EkycLivenessResponse> StartLivenessAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Gửi một khung hình camera của phiên thử thách và trả tiến độ. Phiên là phiên của chính người gọi, không nhận
+    /// mã phiên từ FE. Phiên thất bại (đổi người, quá nhiều khung hình) thì phải bắt đầu lại.
+    /// Lỗi: 409 EKYC_DOCUMENT_EXPIRED, 409 EKYC_LIVENESS_REQUIRED (chưa bắt đầu hoặc phiên hết hạn),
+    /// 400 EKYC_IMAGE_REJECTED, 413 FILE_TOO_LARGE, 503 EKYC_SERVICE_UNAVAILABLE.
+    /// </summary>
+    Task<EkycLivenessResponse> SubmitLivenessFrameAsync(
+        Stream content, string fileName, string contentType, CancellationToken ct);
+
+    /// <summary>
+    /// Chốt thử thách: lấy selfie của chính phiên đã đạt (EKYC-13) rồi so khớp với khuôn mặt trên thẻ. Chống giả mạo
+    /// và động tác phải đạt riêng từng cái trong phiên (EKYC-14). Mỗi lượt chỉ so khớp một lần.
+    /// Lỗi: 409 EKYC_DOCUMENT_EXPIRED, 409 EKYC_LIVENESS_REQUIRED, 409 EKYC_LIVENESS_NOT_PASSED (chưa làm xong
+    /// động tác hoặc chống giả mạo chưa đạt), 503 EKYC_SERVICE_UNAVAILABLE.
+    /// </summary>
+    Task<EkycStatusResponse> CompleteLivenessAsync(CancellationToken ct);
 
     /// <summary>Kết quả eKYC mới nhất; chưa từng làm thì Status NOT_STARTED.</summary>
     Task<EkycStatusResponse> GetMyStatusAsync(CancellationToken ct);

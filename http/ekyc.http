@@ -53,7 +53,27 @@ Content-Type: image/jpeg
 < C:\duong-dan\mat-sau.jpg
 --lv--
 
-### Gửi selfie để so khớp (gọi sau khi canMatchFace = true, trong 30 phút)
+### Thử thách camera: bắt đầu (gọi sau khi canMatchFace = true; phiên 90 giây)
+POST {{baseUrl}}/ekyc/liveness/start
+Authorization: Bearer {{token}}
+
+### Thử thách camera: gửi một khung hình (lặp nhiều lần theo hướng dẫn prompt)
+POST {{baseUrl}}/ekyc/liveness/frame
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="file"; filename="frame.jpg"
+Content-Type: image/jpeg
+
+< C:\duong-dan\khung-hinh.jpg
+--lv--
+
+### Thử thách camera: chốt khi passed = true (so khớp selfie của chính phiên với thẻ)
+POST {{baseUrl}}/ekyc/liveness/complete
+Authorization: Bearer {{token}}
+
+### Gửi ảnh selfie để so khớp (chỉ sau khi thử thách camera đã passed = true, trong 30 phút)
 POST {{baseUrl}}/ekyc/face-match
 Authorization: Bearer {{token}}
 Content-Type: multipart/form-data; boundary=lv

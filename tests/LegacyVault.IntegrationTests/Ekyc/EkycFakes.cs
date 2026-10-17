@@ -1,4 +1,5 @@
 using LegacyVault.Application.Ekyc;
+using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
 
@@ -96,6 +97,73 @@ public sealed class FakeEkycBeneficiaryRepository : IBeneficiaryRepository
 
 public sealed class FakeEkycClient : IEkycClient
 {
+    public EkycLivenessState LivenessStart { get; set; } = new EkycLivenessState
+    {
+        SessionId = "live-1",
+        ExpiresInSeconds = 90,
+        Prompt = "Nhìn thẳng, mở mắt và giữ yên khoảng 2 giây để bắt đầu",
+        Actions = new List<EkycLivenessAction>
+        {
+            new EkycLivenessAction { Key = "blink", Label = "Nhắm mắt khoảng 1 giây, rồi mở mắt" },
+            new EkycLivenessAction { Key = "left", Label = "Quay đầu nhẹ sang trái, giữ 1 giây, rồi nhìn thẳng" },
+        },
+    };
+
+    public EkycLivenessState LivenessFrame { get; set; } = new EkycLivenessState { Prompt = "Nhắm mắt khoảng 1 giây, rồi mở mắt" };
+
+    public byte[] LivenessSelfie { get; set; } = new byte[] { 9, 9, 9 };
+
+    /// <summary>Đặt để mô phỏng dịch vụ từ chối lấy selfie (phiên chưa đạt, hết hạn...).</summary>
+    public AppException? LivenessSelfieError { get; set; }
+
+    public List<string> DeletedLivenessSessions { get; } = new List<string>();
+
+    public List<string> FrameSessions { get; } = new List<string>();
+
+    public int LivenessStartCount { get; private set; }
+
+    public string? LastSelfieSession { get; private set; }
+
+    public Task<EkycLivenessState> StartLivenessAsync(CancellationToken ct)
+    {
+        LivenessStartCount++;
+        EkycLivenessState state = LivenessStart;
+        if (LivenessStartCount > 1)
+        {
+            state = new EkycLivenessState
+            {
+                SessionId = "live-" + LivenessStartCount,
+                ExpiresInSeconds = LivenessStart.ExpiresInSeconds,
+                Actions = LivenessStart.Actions,
+                Prompt = LivenessStart.Prompt,
+            };
+        }
+        return Task.FromResult(state);
+    }
+
+    public Task<EkycLivenessState> SendLivenessFrameAsync(
+        string sessionId, byte[] frame, string fileName, string contentType, CancellationToken ct)
+    {
+        FrameSessions.Add(sessionId);
+        return Task.FromResult(LivenessFrame);
+    }
+
+    public Task<byte[]> GetLivenessSelfieAsync(string sessionId, CancellationToken ct)
+    {
+        LastSelfieSession = sessionId;
+        if (LivenessSelfieError != null)
+        {
+            throw LivenessSelfieError;
+        }
+        return Task.FromResult(LivenessSelfie);
+    }
+
+    public Task DeleteLivenessAsync(string sessionId, CancellationToken ct)
+    {
+        DeletedLivenessSessions.Add(sessionId);
+        return Task.CompletedTask;
+    }
+
     public EkycDocumentReading Reading { get; set; } = new EkycDocumentReading
     {
         IdNumber = "079200012345",

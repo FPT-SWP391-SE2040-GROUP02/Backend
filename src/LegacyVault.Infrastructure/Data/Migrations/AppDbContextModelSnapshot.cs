@@ -1025,6 +1025,14 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<bool>("LivenessPassed")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LivenessSessionId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
                     b.Property<string>("Purpose")
                         .IsRequired()
                         .HasMaxLength(32)

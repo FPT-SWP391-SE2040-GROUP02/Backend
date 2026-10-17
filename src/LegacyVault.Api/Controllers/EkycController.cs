@@ -83,6 +83,47 @@ public sealed class EkycController : ControllerBase
         }
     }
 
+    /// <summary>Bắt đầu thử thách camera (chớp mắt, quay đầu) cho lượt eKYC đang chờ selfie (EKYC-10).</summary>
+    [HttpPost("liveness/start")]
+    [ProducesResponseType<EkycLivenessResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public Task<EkycLivenessResponse> StartLiveness(CancellationToken ct)
+    {
+        return ekycService.StartLivenessAsync(ct);
+    }
+
+    /// <summary>Gửi một khung hình camera của thử thách và nhận tiến độ.</summary>
+    [HttpPost("liveness/frame")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(MaxRequestBytes)]
+    [ProducesResponseType<EkycLivenessResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<EkycLivenessResponse> SubmitLivenessFrame([FromForm] EkycImageForm form, CancellationToken ct)
+    {
+        IFormFile file = form.File!;
+        await using (Stream content = file.OpenReadStream())
+        {
+            return await ekycService.SubmitLivenessFrameAsync(content, file.FileName, file.ContentType, ct);
+        }
+    }
+
+    /// <summary>Chốt thử thách: so khớp selfie của phiên đã đạt với khuôn mặt trên thẻ (EKYC-13, EKYC-14).</summary>
+    [HttpPost("liveness/complete")]
+    [ProducesResponseType<EkycStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public Task<EkycStatusResponse> CompleteLiveness(CancellationToken ct)
+    {
+        return ekycService.CompleteLivenessAsync(ct);
+    }
+
     /// <summary>Gửi selfie để so khớp với khuôn mặt trên thẻ vừa đọc. Mỗi lần đọc thẻ chỉ so khớp một lần.</summary>
     [HttpPost("face-match")]
     [Consumes("multipart/form-data")]

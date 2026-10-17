@@ -56,6 +56,18 @@ public class EkycVerification
     /// <summary>Selfie có qua kiểm tra chống giả mạo ảnh đơn hay không; null khi chưa kiểm tra.</summary>
     public bool? SpoofCheckPassed { get; set; }
 
+    /// <summary>
+    /// Mã phiên thử thách camera của dịch vụ eKYC (EKYC-10); null khi chưa bắt đầu hoặc đã kết thúc.
+    /// Chỉ server biết, không trả cho FE.
+    /// </summary>
+    public string? LivenessSessionId { get; set; }
+
+    /// <summary>
+    /// true khi lượt này đã qua thử thách camera: đủ động tác và chống giả mạo đều đạt (EKYC-14).
+    /// Cả hai đường so khớp (selfie của phiên, hoặc ảnh selfie tĩnh) đều đòi cờ này trước khi so khớp mặt.
+    /// </summary>
+    public bool LivenessPassed { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>Lúc có kết quả cuối (Passed/Failed); null khi còn Pending.</summary>
