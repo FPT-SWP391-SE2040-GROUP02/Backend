@@ -125,6 +125,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 2. Cấp proof mới bằng `GET /api/v1/auth/csrf` (raw `{ "requestToken": "<opaque-proof>" }`, `Cache-Control: no-store`), gửi `X-CSRF-Token` cùng cookie HttpOnly `lv_antiforgery` (`Path=/api/v1`, `SameSite=Lax`, Secure ngoài Development) trước login/refresh/logout/Google/link-confirm. Proof không phải access JWT. Dùng cùng Bearer principal ở GET và POST; lấy lại sau đổi danh tính, không gửi POST khi acquisition lỗi. Register/verify-email/resend-verification hiện không gắn filter antiforgery hay policy rate limit riêng này.
 3. Đăng xuất: gọi `POST /api/v1/auth/logout`; chỉ xóa RAM/cache và báo hoàn tất sau server success. Logout-all cần bearer principal active hoặc refresh token active, không chấp nhận cookie thuộc user khác. Thu hồi refresh không tự vô hiệu access JWT đang còn hạn.
 4. Không đưa token vào URL/query hoặc log (SEC-06).
+5. Mỗi request có Bearer, server đọc lại trạng thái tài khoản: tài khoản bị khóa/vô hiệu hóa → `403 ACCOUNT_NOT_ACTIVE` ngay cả khi access token còn hạn; tài khoản không còn → `401 SESSION_EXPIRED`. Gặp `ACCOUNT_NOT_ACTIVE` thì báo "tài khoản bị khóa", xóa phiên trong RAM, **không** gọi refresh. Endpoint công khai không bị ảnh hưởng.
 
 BE bật CORS credentials cho origins cấu hình rõ. Alias `/v1` còn tồn tại nhưng cookie Path dùng `/api/v1/auth`; dùng prefix `/api/v1` cho luồng có cookie. Refresh tự động chỉ bật sau checks phối hợp single-flight, nhiều tab và logout/login đang bay; không tự retry mutation.
 
@@ -783,6 +784,7 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 - **Tự động tạo:** job phân công Verifier không có người (`NO_VERIFIER`, tự đóng khi giao được); kỳ điểm danh sang `AWAITING_CHECK` (`CHECK_IN_OVERDUE` giao Executor chính, không có Executor thì `NO_EXECUTOR` giao Admin; tự đóng khi Owner điểm danh, DMS-05); Owner báo còn sống (`OWNER_ALIVE` giao Verifier phụ trách, đóng khi kết luận).
 - **Job sự cố** (`Incident:JobEnabled`, `Incident:PollSeconds` mặc định 300): nhắc người phụ trách sau 48 giờ (một lần), báo mọi Admin sau 72 giờ (một lần), giao sự cố mồ côi. Quá hạn không tự đóng. Thư chỉ có loại sự cố, mã rút gọn và hạn.
 - **Nhật ký:** mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier, giao/đóng sự cố, đặt/gỡ hold) và F2C ghi `AuditLogs` trong cùng giao dịch.
+- **Khóa tài khoản** (`PUT /v1/admin/users/{userId}/status` với `LOCKED`/`DISABLED`): thu hồi mọi refresh token của tài khoản trong cùng lần lưu; access token còn hạn bị chặn ngay ở request kế tiếp (`403 ACCOUNT_NOT_ACTIVE`, xem mục 3). Mở khóa (`ACTIVE`) không khôi phục phiên đã thu hồi: người dùng đăng nhập lại khi access token hết hạn. Admin bị khóa gọi API Admin nhận `403 ACCOUNT_NOT_ACTIVE` (không còn là `404`).
 - **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); sự cố từ lỗi eKYC/thanh toán (chờ LV-02/LV-04); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; thu hồi phiên đăng nhập khi khóa tài khoản.
 
 ### 6.16. Executor theo dõi tiến độ bàn giao
