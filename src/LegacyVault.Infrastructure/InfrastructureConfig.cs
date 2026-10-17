@@ -46,6 +46,7 @@ public static class InfrastructureConfig
 
         // Repositories
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IUserStatusReader, UserStatusReader>();
         services.AddScoped<ILoginThrottleRepository, LoginThrottleRepository>();
         services.AddScoped<IEmailVerificationTokenRepository, EmailVerificationTokenRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();

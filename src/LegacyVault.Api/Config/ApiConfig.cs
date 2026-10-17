@@ -32,11 +32,16 @@ public static class ApiConfig
                 options.Events = new JwtBearerEvents();
             }
             options.Events.OnChallenge = WriteSessionExpiredAsync;
+            // Tài khoản bị khóa/vô hiệu hóa: chặn ngay ở request kế tiếp, không chờ access token hết hạn.
+            options.Events.OnTokenValidated = ActiveUserTokenValidator.ValidateAsync;
         });
         return services;
     }
 
-    /// <summary>Không có token / token sai / hết hạn trên endpoint [Authorize] → 401 SESSION_EXPIRED.</summary>
+    /// <summary>
+    /// Không có token / token sai / hết hạn trên endpoint [Authorize] → 401 SESSION_EXPIRED.
+    /// Token hợp lệ nhưng tài khoản bị khóa/vô hiệu hóa → 403 ACCOUNT_NOT_ACTIVE.
+    /// </summary>
     private static async Task WriteSessionExpiredAsync(JwtBearerChallengeContext context)
     {
         // Chặn response 401 mặc định (body rỗng + header WWW-Authenticate) để tự ghi ProblemDetails.
@@ -45,8 +50,14 @@ public static class ApiConfig
         HttpContext httpContext = context.HttpContext;
         ProblemDetails problem = GlobalExceptionHandler.Problem(StatusCodes.Status401Unauthorized,
             ErrorCode.SessionExpired, "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        if (httpContext.Items.ContainsKey(ActiveUserTokenValidator.InactiveAccountItem))
+        {
+            // Token hợp lệ nhưng tài khoản đã bị khóa/vô hiệu hóa: báo rõ để FE không coi là phiên hết hạn.
+            problem = GlobalExceptionHandler.Problem(StatusCodes.Status403Forbidden,
+                ErrorCode.AccountNotActive, "Tài khoản đang bị khóa hoặc vô hiệu hóa.");
+        }
         problem.Extensions["traceId"] = httpContext.TraceIdentifier;
-        httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        httpContext.Response.StatusCode = problem.Status!.Value;
 
         IProblemDetailsService problemDetails = httpContext.RequestServices.GetRequiredService<IProblemDetailsService>();
         bool written = await problemDetails.TryWriteAsync(new ProblemDetailsContext
