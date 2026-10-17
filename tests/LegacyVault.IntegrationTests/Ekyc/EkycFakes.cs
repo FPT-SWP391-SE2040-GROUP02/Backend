@@ -74,6 +74,15 @@ public sealed class FakeEkycBeneficiaryRepository : IBeneficiaryRepository
     {
         Beneficiaries.Remove(beneficiary);
     }
+
+    public bool IsUniqueViolation(Exception exception)
+    {
+        return false;
+    }
+
+    public void DiscardPendingChanges()
+    {
+    }
 }
 
 public sealed class FakeEkycClient : IEkycClient
