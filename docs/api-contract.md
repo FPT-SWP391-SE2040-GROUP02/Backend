@@ -684,7 +684,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 - **"Nhả snapshot" (§11.2):** snapshot ghim lúc duyệt nên khi từ chối chưa có gì để nhả.
 - **Trễ tối đa 60 giây (NFR-03)** sau khi từ chối, xem bullet trên; API điểm danh trả trạng thái hiệu lực theo giờ server.
 - **Một quyết định cuối** cho mỗi hồ sơ; yêu cầu bổ sung được nhiều lần. Quyết định cuối chỉ đóng hồ sơ (`closedAt`), không kết thúc phân công.
-- **Chưa làm:** email "bạn được giao" cho Verifier mới và báo Admin khi hồ sơ quá hạn không có người thay (F4); ASSIGN-05 (Executor bị kẹt); hold/phản đối "Tôi còn sống" của Owner (F2C, DEATH-07); nhật ký kiểm toán cho việc xem trang và quyết định của Verifier (SEC-07, DATA-07, hiện chỉ ghi log xem trang); email báo Executor khi có yêu cầu bổ sung; cho Executor xem lại trang giấy đã gửi.
+- **Chưa làm:** email "bạn được giao" cho Verifier mới và báo Admin khi hồ sơ quá hạn không có người thay (F4); ASSIGN-05 (Executor bị kẹt); hold/phản đối "Tôi còn sống" của Owner (F2C, DEATH-07); nhật ký kiểm toán cho việc Verifier xem trang giấy (DATA-07, hiện chỉ ghi log; quyết định của Verifier đã ghi AuditLogs, xem mục nhật ký); email báo Executor khi có yêu cầu bổ sung; cho Executor xem lại trang giấy đã gửi.
 
 ### 6.13. Nhật ký hoạt động của kho
 
