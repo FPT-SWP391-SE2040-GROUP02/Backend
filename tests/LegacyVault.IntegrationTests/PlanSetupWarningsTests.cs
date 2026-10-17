@@ -183,12 +183,12 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         HttpResponseMessage activation = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request);
 
         // Kiểm tra
-        AssertNoBackupWarning(setup);
+        AssertOnlyNoBackupExecutorWarning(setup);
         Assert.True(setup.GetProperty("canActivate").GetBoolean());
         Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
         JsonElement activated = await ApiTestHelpers.ReadJsonAsync(activation);
         Assert.Equal("ACTIVE", activated.GetProperty("planStatus").GetString());
-        AssertNoBackupWarning(activated);
+        AssertOnlyNoBackupExecutorWarning(activated);
         Assert.Equal(1, activated.GetProperty("containers").GetArrayLength());
         Assert.Equal(0, activated.GetProperty("assetsOutsideContainer").GetArrayLength());
     }
@@ -213,7 +213,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
 
         // Kiểm tra
         Assert.Equal("INVITED", invitation.Status);
-        AssertNoBackupWarning(beforeAcceptance);
+        AssertOnlyNoBackupExecutorWarning(beforeAcceptance);
         Assert.True(beforeAcceptance.GetProperty("canActivate").GetBoolean());
         Assert.Equal(0, afterAcceptance.GetProperty("warnings").GetArrayLength());
         Assert.True(afterAcceptance.GetProperty("canActivate").GetBoolean());
@@ -306,7 +306,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
-    private static void AssertNoBackupWarning(JsonElement setup)
+    private static void AssertOnlyNoBackupExecutorWarning(JsonElement setup)
     {
         JsonElement warnings = setup.GetProperty("warnings");
         Assert.Equal(1, warnings.GetArrayLength());
