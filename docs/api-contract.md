@@ -106,6 +106,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `LOGIN_METHOD_ALREADY_EXISTS` | Đã có phương thức này | `method` |
 | 423 | `ACCOUNT_LOCKED` | Sai mật khẩu 5 lần trong 15 phút | `attemptsRemaining: 0`, `remainingSeconds` |
 | 500 | `INTERNAL_ERROR` | Lỗi bất ngờ | `traceId` |
+| 400 | `INVALID_RESET_TOKEN` | Link đặt lại mật khẩu sai, hết hạn, đã dùng hoặc tài khoản không còn hoạt động | |
 
 ---
 
@@ -823,6 +824,19 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 - **Không có dữ liệu nhạy cảm:** chỉ có tên và loại tài sản; không có nội dung tài sản, họ tên, số CCCD đầy đủ hay liên hệ của người nhận. Người nhận được phân biệt bằng 4 số cuối CCCD.
 - **Thứ tự:** lượt xếp theo tên gói rồi theo lúc mời; tài sản xếp theo thứ tự đã ghim.
 - FE đếm thời gian còn lại theo `serverTime`.
+
+### 6.17. Quên và đặt lại mật khẩu
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| POST | `/api/v1/auth/forgot-password` | Công khai | `{ email }` | **202**, không body | 400 `VALIDATION_ERROR`, 429 |
+| POST | `/api/v1/auth/reset-password` | Công khai | `{ token, newPassword, confirmPassword }` | **204**, không body | 400 `VALIDATION_ERROR` / `INVALID_RESET_TOKEN`, 429 |
+
+- Link gửi qua email dạng `{App:ClientUrl}/reset-password?token=...`, hạn 30 phút, dùng một lần; yêu cầu mới vô hiệu link cũ; trong 60 giây kể từ link gần nhất thì không gửi thêm.
+- `forgot-password` luôn 202, kể cả email không tồn tại, tài khoản bị khóa hoặc chỉ dùng Google (không lộ tài khoản).
+- `reset-password` thành công: đổi mật khẩu, thu hồi mọi refresh token (mọi thiết bị phải đăng nhập lại), email chưa xác minh được coi là đã xác minh. Không tự đăng nhập; FE chuyển về trang đăng nhập.
+- Không cần CSRF (không dùng cookie). Rate limit 5 request/phút/IP cho mỗi API.
+- Lỗi kiểm dữ liệu ở nhóm `/auth` trả Content-Type `application/json` (do `[Produces]` của AuthController), body vẫn là ProblemDetails có `code`.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 
