@@ -14,6 +14,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
     private readonly IVaultRepository vaults;
     private readonly IHandoverRepository handover;
     private readonly IAssetContentStore contentStore;
+    private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -24,11 +25,24 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         IAssetContentStore contentStore,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
+        : this(currentUser, vaults, handover, contentStore, new NoHoldReader(), unitOfWork, timeProvider)
+    {
+    }
+
+    public HandoverDownloadService(
+        ICurrentUser currentUser,
+        IVaultRepository vaults,
+        IHandoverRepository handover,
+        IAssetContentStore contentStore,
+        IHoldReader holdReader,
+        IUnitOfWork unitOfWork,
+        TimeProvider timeProvider)
     {
         this.currentUser = currentUser;
         this.vaults = vaults;
         this.handover = handover;
         this.contentStore = contentStore;
+        this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -54,6 +68,11 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         string? deniedReason = HandoverRules.GrantDeniedReason(grant, vault.Plan.Status, now);
+        if (deniedReason == null && await holdReader.HasActiveHoldAsync(vault.Id, ct))
+        {
+            // Hold đang hiệu lực chặn tải (SRS §6.4), kể cả hold Admin đặt không đổi trạng thái grant.
+            deniedReason = "HOLD_ACTIVE";
+        }
         if (deniedReason != null)
         {
             await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.Denied, now, ct);
@@ -69,6 +88,14 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         {
             await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.IntegrityFailed, now, ct);
             throw new ContentIntegrityException("Không tìm thấy phiên bản nội dung của tài sản.", null);
+        }
+        if (version.ContentDeletedAt != null)
+        {
+            // RETENTION-06: nội dung đã dọn (khóa đã hủy) thì không giải mã nữa.
+            Dictionary<string, object?> deleted = new Dictionary<string, object?>();
+            deleted["reason"] = "CONTENT_DELETED";
+            throw new AppException(AppErrorType.Forbidden, ErrorCode.GrantNotActive,
+                "Nội dung đã được xóa theo chính sách lưu dữ liệu.", deleted);
         }
 
         StoredContent stored = new StoredContent();

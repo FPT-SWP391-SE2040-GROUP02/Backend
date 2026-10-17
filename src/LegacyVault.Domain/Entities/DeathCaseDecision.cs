@@ -37,4 +37,7 @@ public class DeathCaseDecision
     public Guid AssignmentId { get; set; }
 
     public DateTimeOffset DecidedAt { get; set; }
+
+    /// <summary>Hạn Executor bổ sung (yêu cầu bổ sung: DecidedAt + 7 ngày); null với từ chối và duyệt.</summary>
+    public DateTimeOffset? DueAt { get; set; }
 }

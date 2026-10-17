@@ -3,6 +3,7 @@ using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Services;
 using LegacyVault.Application.Storage;
 using LegacyVault.Infrastructure.Data;
 using LegacyVault.Infrastructure.Ekyc;
@@ -54,11 +55,28 @@ public static class InfrastructureConfig
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
         services.AddScoped<ICheckInRepository, CheckInRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<IHoldRepository, HoldRepository>();
+        services.AddScoped<IIncidentRepository, IncidentRepository>();
+        services.AddScoped<IAdminUserRepository, AdminUserRepository>();
+        services.AddHostedService<IncidentMonitor>();
+        services.AddSingleton<IIncidentNoticeSender>(provider =>
+        {
+            SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
+            if (smtp.IsConfigured)
+            {
+                return ActivatorUtilities.CreateInstance<SmtpIncidentNoticeSender>(provider);
+            }
+            return ActivatorUtilities.CreateInstance<LogIncidentNoticeSender>(provider);
+        });
+        services.AddScoped<IOwnerIdentityReader, OwnerIdentityReader>();
+        services.AddScoped<IStorageReservationRepository, StorageReservationRepository>();
 
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();
         services.AddScoped<IExecutorInvitationRepository, ExecutorInvitationRepository>();
         services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
+        services.AddScoped<IExecutorReminderSender, ExecutorReminderSender>();
+        services.AddHostedService<ExecutorInvitationMonitor>();
 
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()

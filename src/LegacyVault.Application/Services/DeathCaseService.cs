@@ -24,6 +24,7 @@ public sealed class DeathCaseService : IDeathCaseService
     private readonly IDeathCaseVerifierPicker verifierPicker;
     private readonly IDeathCaseDataProtector dataProtector;
     private readonly IAssetContentStore contentStore;
+    private readonly IOwnerIdentityReader identityReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -35,6 +36,7 @@ public sealed class DeathCaseService : IDeathCaseService
         IDeathCaseVerifierPicker verifierPicker,
         IDeathCaseDataProtector dataProtector,
         IAssetContentStore contentStore,
+        IOwnerIdentityReader identityReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -45,6 +47,7 @@ public sealed class DeathCaseService : IDeathCaseService
         this.verifierPicker = verifierPicker;
         this.dataProtector = dataProtector;
         this.contentStore = contentStore;
+        this.identityReader = identityReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -399,6 +402,24 @@ public sealed class DeathCaseService : IDeathCaseService
             deathCase.Flags.Add(flag);
             deathCaseRepository.AddFlag(flag);
         }
+
+        // DEATH-13: số CCCD trên hồ sơ khác CCCD đã xác minh của Owner → đặt cờ, chặn duyệt tới khi Verifier xem xét.
+        // TODO(LV-02): so đủ 12 số với danh tính đã gắn; hiện chỉ có 4 số cuối của lượt eKYC đạt.
+        string? verifiedLast4 = await identityReader.FindVerifiedCitizenIdLast4Async(vault.OwnerId, ct);
+        if (DeathCaseRules.IsIdentityMismatch(verifiedLast4, data.OwnerCitizenId))
+        {
+            DeathCaseFlag mismatch = new DeathCaseFlag();
+            mismatch.CaseId = deathCase.Id;
+            mismatch.VersionId = version.Id;
+            mismatch.Kind = DeathCaseFlagKind.IdentityMismatch;
+            mismatch.Detail = "Số CCCD trên hồ sơ không khớp với CCCD Owner đã xác minh.";
+            mismatch.CreatedAt = now;
+            deathCase.Flags.Add(mismatch);
+            deathCaseRepository.AddFlag(mismatch);
+        }
+
+        // Bản bổ sung mới: hết trạng thái quá hạn bổ sung.
+        deathCase.SupplementOverdueAt = null;
 
         // DEATH-08, DEATH-11: lần đầu, hoặc đổi trọng yếu so với bản đã báo → xếp thông báo Pending (outbox, D3)
         // và dừng đồng hồ 72 giờ cho tới khi job gửi được thư. Đổi không trọng yếu thì giữ nguyên đồng hồ.

@@ -79,6 +79,9 @@ public sealed class CheckInMonitor : BackgroundService
                 {
                     ICheckInJob job = scope.ServiceProvider.GetRequiredService<ICheckInJob>();
                     await job.ProcessPeriodAsync(periodId, ct);
+                    // Sang AWAITING_CHECK → sự cố giao Executor (DMS-05); không có Executor → "bị kẹt" có người và ngày xem lại.
+                    IOperationsRecorder recorder = scope.ServiceProvider.GetRequiredService<IOperationsRecorder>();
+                    await recorder.RecordCheckInPeriodAsync(periodId, ct);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

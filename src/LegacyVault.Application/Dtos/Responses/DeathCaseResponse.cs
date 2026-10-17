@@ -114,4 +114,10 @@ public class DeathCaseSupplementRequestResponse
     public List<string> RequestedParts { get; set; } = new List<string>();
 
     public DateTimeOffset RequestedAt { get; set; }
+
+    /// <summary>Hạn bổ sung; null với dữ liệu cũ chưa có hạn.</summary>
+    public DateTimeOffset? DueAt { get; set; }
+
+    /// <summary>true khi đã quá hạn bổ sung; Verifier sẽ quyết định bước tiếp theo.</summary>
+    public bool Overdue { get; set; }
 }

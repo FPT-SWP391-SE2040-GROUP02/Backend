@@ -717,6 +717,60 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 
 - **Chưa làm:** ghi nhật ký cho thiết lập/kích hoạt kế hoạch, mời Executor, hồ sơ chứng tử và bàn giao (thuộc các module khác, cần chủ module đồng ý); lịch sử người nhận xem/tải nội dung (`HandoverAccessLogs`) chưa có API đọc cho Owner; Admin tra cứu nhật ký toàn hệ thống (ADMIN-06).
 
+### 6.14. Owner báo còn sống (F2C)
+
+Owner xem hồ sơ chứng tử của kho và báo "Tôi còn sống" (SRS §6.3, ALIVE-01..09); Verifier được giao hồ sơ kết luận.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/v1/vaults/{vaultId}/death-case` | — | 200 `OwnerDeathCaseResponse` (có `objection` nếu đã báo) | 404 `VAULT_NOT_FOUND` / `DEATH_CASE_NOT_FOUND` |
+| POST | `/v1/vaults/{vaultId}/death-case/objection` | — | 200 | 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_ALREADY_REJECTED`) / `EDIT_CONFLICT` |
+| POST | `/v1/vaults/{vaultId}/death-case/objection/selfie` | `multipart`, field `file` (JPEG/PNG ≤ 8 MiB) | 200 | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_WINDOW_CLOSED` / `SELFIE_ATTEMPTS_EXCEEDED`), 413, 503 `EKYC_SERVICE_UNAVAILABLE` |
+| GET | `/v1/verifier/death-cases/{caseId}/objection` | — | 200 `ObjectionResponse` | 404 |
+| POST | `/v1/verifier/death-cases/{caseId}/objection/conclude` | `{ conclusion, reason }` | 200 `ObjectionResponse` | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_NOT_OPEN` / `ALIVE_EVIDENCE_REQUIRED`) / `EDIT_CONFLICT` |
+
+- **Báo** (hồ sơ `UNDER_REVIEW` / `SUPPLEMENT_REQUIRED` / `APPROVED_FOR_HANDOVER`): trong một giao dịch, hồ sơ sang `SUSPENDED`, kế hoạch sang `BLOCKED`, mọi grant `ACTIVE` sang `BLOCKED`. Từ đó: không duyệt (`DEATH_CASE_NOT_ALLOWED` / `NOT_UNDER_REVIEW`), không nhận lượt hay đồng ý (`HANDOVER_NOT_ALLOWED` / `PLAN_NOT_IN_HANDOVER`), không tải (`GRANT_NOT_ACTIVE` / `BLOCKED`), Owner không sửa kho (`VAULT_NOT_EDITABLE` / `PLAN_LOCKED`). Thao tác nhận chạy cùng lúc với báo thua `RowVersion` của kế hoạch (nhận lượt, đồng ý, từ chối đều ghi `plan.UpdatedAt`).
+- **Báo lặp** (ALIVE-09): chỉ tăng `reportCount`; `selfieDeadlineAt` (7 ngày từ lần báo đầu) và hold không đổi. Sau khi phản đối bị bác, báo lại bị chặn (`OBJECTION_ALREADY_REJECTED`) vì chưa có đường nộp bằng chứng mới.
+- **Selfie** so với mẫu khuôn mặt qua `IOwnerFaceVerifier`. Tối đa 3 lần không khớp trong 24 giờ; lỗi kỹ thuật không tính. **Mẫu khuôn mặt chưa tồn tại (LV-02)** nên bản mặc định luôn trả `503`; Verifier vẫn kết luận được sau 7 ngày.
+- **Kết luận** (`ALIVE_CONFIRMED` / `OBJECTION_REJECTED` / `INSUFFICIENT_EVIDENCE`, bắt buộc lý do), chỉ Verifier đang được giao hồ sơ:
+  - `ALIVE_CONFIRMED`: chỉ khi selfie đã đạt hoặc đã quá 7 ngày. Hồ sơ `REJECTED`, lượt chưa xong `CANCELLED`, grant `REVOKED`, kế hoạch `ACTIVE` với kỳ điểm danh mới.
+  - `OBJECTION_REJECTED`: trả hồ sơ, kế hoạch và grant về trạng thái trước; **không tự duyệt chứng tử**.
+  - `INSUFFICIENT_EVIDENCE`: giữ chặn, ghi lý do và hạn mới (`verifierDueAt`).
+- Hàng chờ Verifier hiện hồ sơ `SUSPENDED`. `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED` (chờ LV-07).
+- **Chưa làm:** sự cố theo dõi và thông báo Verifier/Executor/người nhận (LV-07/LV-14); thử thách camera (EKYC-10); đăng nhập lại trước khi báo.
+
+
+### 6.15. Hold, sự cố và Admin
+
+Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cần Bearer; quyền kiểm từ DB: không phải Admin đang hoạt động → `404` như khu vực không tồn tại (SEC-04). **Không có endpoint nào đọc nội dung tài sản, trang giấy chứng tử hay danh tính**; Admin không duyệt thay và không tự thay Executor bằng người Owner chưa cho phép.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/v1/admin/dashboard` | — | 200 `AdminDashboardResponse` (sự cố mở/quá hạn/chưa có người, hold, hồ sơ chưa có Verifier) | 404 |
+| GET | `/v1/admin/users?search=&role=&status=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminUserResponse>` (không có mật khẩu) | 400, 404 |
+| PUT | `/v1/admin/users/{userId}/role` | `{ role: USER/VERIFIER/ADMIN, reason }` | 200 | 400, 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CANNOT_CHANGE_SELF`, `LAST_ADMIN`) |
+| PUT | `/v1/admin/users/{userId}/status` | `{ status: ACTIVE/LOCKED/DISABLED, reason }` | 200 | như trên |
+| POST | `/v1/admin/death-cases/{caseId}/reassign-verifier` | `{ verifierUserId, reason }` | 204 (gọi lặp cùng người: 204) | 400 (không phải Verifier hợp lệ / là chủ kho, Executor, người gửi), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CASE_NOT_PENDING`) / `EDIT_CONFLICT` |
+| GET | `/v1/admin/incidents?status=&type=&assigneeUserId=&overdueOnly=` | — | 200 `PaginatedList<IncidentSummaryResponse>` | 400 |
+| GET | `/v1/admin/incidents/{id}` | — | 200 `IncidentDetailResponse` (kèm lịch sử `events`) | 404 `INCIDENT_NOT_FOUND` |
+| POST | `/v1/admin/incidents/{id}/assign` | `{ assigneeUserId, reason, etag }` | 200 | 400 (không phải Admin/Verifier hoạt động, hoặc là chủ kho/Executor của kho), 409 `EDIT_CONFLICT` / `INCIDENT_NOT_OPEN` |
+| POST | `/v1/admin/incidents/{id}/notes` | `{ note }` | 200 | 404 |
+| POST | `/v1/admin/incidents/{id}/review` | `{ nextReviewAt, note, etag }` | 200 | 400 (quá 7 ngày), 409 |
+| POST | `/v1/admin/incidents/{id}/resolve` | `{ note, etag }` | 200 (gọi lặp: trạng thái hiện tại) | 409 `EDIT_CONFLICT` |
+| GET | `/v1/admin/holds?status=&vaultId=` | — | 200 `PaginatedList<HoldResponse>` | 400 |
+| GET | `/v1/admin/holds/{id}` | — | 200 | 404 `HOLD_NOT_FOUND` |
+| POST | `/v1/admin/holds` | `{ vaultId, scope?: VAULT/CONTAINER, targetId?, reason, reviewAt? }` | **201** `HoldResponse` | 400 (`reviewAt` quá 7 ngày), 404 `VAULT_NOT_FOUND` / `CONTAINER_NOT_FOUND` |
+| POST | `/v1/admin/holds/{id}/review` | `{ nextReviewAt, etag }` | 200 | 400, 409 |
+| POST | `/v1/admin/holds/{id}/release` | `{ reason, etag }` | 200 (gọi lặp: trạng thái hiện tại) | 409 `ADMIN_ACTION_NOT_ALLOWED` (`HOLD_OWNER_ALIVE`) / `EDIT_CONFLICT` |
+
+- **Hold** (`Holds`): phạm vi, loại (`OWNER_ALIVE` đặt tự động khi Owner báo còn sống và chỉ gỡ khi Verifier kết luận; `ADMIN`; `DISPUTE`), lý do, người phụ trách, `reviewAt` (tối đa 7 ngày một lần), thời điểm gỡ. Hold đang hiệu lực chặn: duyệt chứng tử (`DEATH_CASE_NOT_ALLOWED` / `HOLD_ACTIVE`), nhận lượt và đồng ý (`HANDOVER_NOT_ALLOWED` / `HOLD_ACTIVE`), liệt kê và tải tài sản (`GRANT_NOT_ACTIVE` / `HOLD_ACTIVE`), kích hoạt kế hoạch (`missingRequirements` có `HOLD_ACTIVE`) và dọn dữ liệu (đồng hồ lưu tạm dừng). Đặt/gỡ hold ghi `plan.UpdatedAt` nên thao tác nhận chạy cùng lúc thua `RowVersion`.
+- **Sự cố** (`Incidents`, `IncidentEvents`): loại `NO_VERIFIER`, `NO_EXECUTOR`, `CHECK_IN_OVERDUE`, `NOTIFICATION_FAILED`, `OWNER_ALIVE`, `INTEGRATION`, `MANUAL`. Mỗi (loại, đối tượng) chỉ một sự cố đang mở (chỉ mục unique có lọc). **Luôn có người phụ trách (hoặc Admin ít việc nhất), hạn và ngày xem lại**; chưa ai nhận được thì `assigneeUserId = null` kèm `nextReviewAt` sau 1 ngày và job giao cho Admin khi có.
+- **Tự động tạo:** job phân công Verifier không có người (`NO_VERIFIER`, tự đóng khi giao được); kỳ điểm danh sang `AWAITING_CHECK` (`CHECK_IN_OVERDUE` giao Executor chính, không có Executor thì `NO_EXECUTOR` giao Admin; tự đóng khi Owner điểm danh, DMS-05); Owner báo còn sống (`OWNER_ALIVE` giao Verifier phụ trách, đóng khi kết luận).
+- **Job sự cố** (`Incident:JobEnabled`, `Incident:PollSeconds` mặc định 300): nhắc người phụ trách sau 48 giờ (một lần), báo mọi Admin sau 72 giờ (một lần), giao sự cố mồ côi. Quá hạn không tự đóng. Thư chỉ có loại sự cố, mã rút gọn và hạn.
+- **Nhật ký:** mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier, giao/đóng sự cố, đặt/gỡ hold) và F2C ghi `AuditLogs` trong cùng giao dịch.
+- **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); sự cố từ lỗi eKYC/thanh toán (chờ LV-02/LV-04); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; thu hồi phiên đăng nhập khi khóa tài khoản.
+
+
 ## 7. Tóm tắt thay đổi FE cần làm
 
 | # | Việc | File FE |
@@ -730,3 +784,27 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 # Executor setup and activation (15/10/2026)
 
 See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.
+
+## 9a. Tính đúng đắn dữ liệu khi chạy đồng thời (LV-01)
+
+- **Giữ chỗ dung lượng** (QUOTA-02): mỗi lần tải tài sản kiểm `đã dùng + chỗ đang giữ còn hạn + lần này ≤ hạn mức` và ghi chỗ giữ (bảng `StorageReservations`, 15 phút) trong một bước dưới khóa riêng của kho (`sp_getapplock`). Sáu lần tải 5 MiB cùng lúc vào kho 20 MiB chỉ nhận bốn lần. Tải lỗi thì trả chỗ; chỗ giữ quá hạn không còn tính; tải xong thì chỗ giữ chuyển `COMMITTED` trong cùng lần lưu với tài sản. Kích thước khai báo là trần: nội dung thật vượt khai báo thì `409 STORAGE_QUOTA_EXCEEDED`.
+- **Chống trùng CCCD** (QUOTA-04): cột `Beneficiaries.CitizenIdHash` = HMAC-SHA256 của số CCCD (không đảo ngược, không lưu CCCD rõ), unique theo `(VaultId, CitizenIdHash)`. Hai request cùng CCCD đến cùng lúc: một bên `201`, bên kia `200` trả hồ sơ đó (cùng họ tên, ngày sinh) hoặc `409 BENEFICIARY_IDENTITY_CONFLICT`. Khóa HMAC lấy từ `AssetEncryption:BlindIndexKey` (base64 32 byte, **không đổi khi xoay KEK**); bỏ trống thì suy ra từ KEK đang dùng, chỉ nên cho máy dev. Hồ sơ tạo trước migration có `CitizenIdHash = NULL` nên chưa được ràng buộc (vẫn dò trùng theo 4 số cuối như cũ).
+- **Chưa cấu hình email** ngoài Development: bộ gửi chỉ-ghi-log **ném lỗi** thay vì báo đã giao. Thông báo chứng tử giữ `PENDING` (không bắt đầu 72 giờ), hết số lần thử thì `FAILED`; lời mời nhận tài sản để `InvitationSentAt = null`; lời mời Executor trả `invitationSent = false`.
+- **Chưa làm:** dọn nội dung mồ côi khi process chết giữa lúc ghi nội dung và lưu DB; xác thực lại trong 10 phút cho thao tác giảm dữ liệu lúc ân hạn (OPLAN-01); khóa theo kho cho thanh toán/cleanup (chưa có module).
+
+## 9b. Hạn bổ sung và cờ DEATH-13
+
+- **Hạn bổ sung** (DEATH-01): yêu cầu bổ sung của Verifier có `dueAt` = lúc yêu cầu + 7 ngày (`supplementRequest.dueAt` trong response Executor). Job nền (`DeathCase:SupplementJobEnabled`, `DeathCase:SupplementPollSeconds`, mặc định 300 giây) ghi `supplementOverdueAt` khi hết hạn mà Executor chưa nộp bản mới; `supplementRequest.overdue = true`. Quá hạn **không tự quyết định**: hồ sơ vẫn `SUPPLEMENT_REQUIRED`, Verifier tự từ chối hoặc yêu cầu lại. Executor nộp bản mới thì mốc này bị xóa.
+- **DEATH-13**: khi Executor gửi, 4 số cuối CCCD trên hồ sơ khác 4 số cuối của lượt eKYC đạt gần nhất của Owner thì đặt cờ `IDENTITY_MISMATCH` (chặn duyệt tới khi Verifier xem xét). Owner chưa có eKYC đạt thì không kết luận. **Tạm thời**: so đủ 12 số khi có danh tính đã gắn (LV-02).
+- Phân công và giao lại Verifier quá 48 giờ do `DeathCaseAssignmentJob` có sẵn xử lý (mục 6.12); hồ sơ `SUSPENDED` (Owner báo còn sống) chưa được job này giao lại, chờ LV-07.
+
+## 10. Lưu và xóa dữ liệu sau bàn giao (SRS §7.7)
+
+Job `Retention:Enabled`, `Retention:PollSeconds` (mặc định 300 giây). Chỉ áp dụng cho kế hoạch `HANDOVER_IN_PROGRESS` / `CLOSED` / `BLOCKED`; kế hoạch đã về `ACTIVE` (Owner còn sống) và lượt `CANCELLED` **không bao giờ** bị dọn.
+
+- **Đồng hồ theo từng lượt** (cột mới trên `HandoverTurns`: `RetentionStatus`, `RetentionStartedAt`, `RetentionDeadline`, `RetentionRemainingSeconds`, `RetentionNoticeStage`, `DeletedAt`): `NOT_STARTED` → `RETENTION_ACTIVE` (30 ngày) → tới hạn thì dọn → `DELETED`.
+- **Lý do giữ** (tạm dừng, lưu phần còn lại, không đặt lại 30 ngày — RETENTION-04): còn trong 5 ngày phản hồi; claim đang xử lý (`IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`); grant còn hạn; Owner báo còn sống (kế hoạch `BLOCKED`). Mở link hay đăng nhập không phải lý do giữ (RETENTION-03).
+- **Dọn** (RETENTION-06): lượt còn mở thành `LAPSED`, link mời bị vô hiệu; phiên bản tài sản chỉ bị xóa khi không còn lượt nào khác chưa dọn cùng tham chiếu (RETENTION-02). Xóa = hủy khóa trước (ghi đè DEK đã bọc bằng 0, `AssetVersions.ContentDeletedAt`) trong giao dịch, xóa tệp sau (`StorageDeletedAt`, lỗi thì thử lại). Ghi `plan.UpdatedAt` nên nhận lượt/đồng ý chạy cùng lúc thua RowVersion. Tải nội dung đã dọn: `403 GRANT_NOT_ACTIVE` (`CONTENT_DELETED`). Dung lượng đã dùng không tính phiên bản đã dọn.
+- **Đóng kho** (SETUP-18): kế hoạch `CLOSED` và mọi lượt đã dọn thì dọn nốt nội dung còn lại của kho (kể cả tài sản ngoài gói) và kho thành `CLOSED`.
+- **Thư mốc** cho người nhận (email trong hồ sơ người nhận): lúc bắt đầu, còn 7 ngày, còn 24 giờ; gửi lỗi thì vòng sau gửi lại.
+- **Chưa làm:** giới hạn 30 ngày cho claim đang xử lý (CLAIM-06) và giữ tối đa 7 ngày khi đang xem xét (REVIEW-04) — chờ LV-09; thư mốc gửi lỗi phải giao người xử lý có hạn (RETENTION-05, LV-07); hold chung (LV-07); không xóa trang giấy chứng tử (hồ sơ bằng chứng, chưa có chính sách).

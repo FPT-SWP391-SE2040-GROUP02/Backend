@@ -15,8 +15,8 @@ namespace LegacyVault.Application.Services;
 /// <remarks>
 /// Thứ tự tạo: kiểm tra quyền/trạng thái/quota → mã hóa và ghi nội dung vào kho lưu trữ → INSERT DB.
 /// INSERT lỗi thì xóa object vừa ghi để không để lại nội dung mồ côi.
-/// Giới hạn đã biết: hai lần tải lên đồng thời cùng một kho có thể cùng qua bước kiểm tra quota
-/// (cần khóa theo kho khi làm phần thanh toán/quota đầy đủ).
+/// Quota: mỗi lần tải giữ chỗ 15 phút dưới khóa riêng của kho (IStorageReservationRepository), nên hai lần tải
+/// đồng thời không cùng vượt hạn mức (QUOTA-02).
 /// </remarks>
 public sealed partial class AssetService : IAssetService
 {
@@ -24,6 +24,9 @@ public sealed partial class AssetService : IAssetService
     private const int MaxFileNameLength = 255;
     private const int MaxContentTypeLength = 100;
     private const string DefaultContentType = "application/octet-stream";
+    /// <summary>QUOTA-02: giữ chỗ dung lượng 15 phút cho mỗi lần tải lên.</summary>
+    private static readonly TimeSpan ReservationHold = TimeSpan.FromMinutes(15);
+
     private const string TextContentType = "text/plain; charset=utf-8";
     private const string DefaultSortBy = "createdAt";
 
@@ -38,6 +41,7 @@ public sealed partial class AssetService : IAssetService
     private readonly IAssetRepository assetRepository;
     private readonly IAssetContentStore contentStore;
     private readonly IAuditLogRepository auditLogRepository;
+    private readonly IStorageReservationRepository reservations;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -47,6 +51,7 @@ public sealed partial class AssetService : IAssetService
         IAssetRepository assetRepository,
         IAssetContentStore contentStore,
         IAuditLogRepository auditLogRepository,
+        IStorageReservationRepository reservations,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -55,6 +60,7 @@ public sealed partial class AssetService : IAssetService
         this.assetRepository = assetRepository;
         this.contentStore = contentStore;
         this.auditLogRepository = auditLogRepository;
+        this.reservations = reservations;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -156,26 +162,35 @@ public sealed partial class AssetService : IAssetService
         VaultRules.EnsureEditable(vault);
 
         long quotaBytes = vault.Entitlement.StorageQuotaBytes;
-        long usedBytes = await vaultRepository.SumUsedBytesAsync(vault.Id, ct);
-        long remainingBytes = Math.Max(0, quotaBytes - usedBytes);
-        if (declaredLength > remainingBytes)
+        DateTimeOffset now = timeProvider.GetUtcNow();
+
+        // QUOTA-02: giữ chỗ 15 phút, tính cả phần các lần tải khác đang giữ. Kiểm và ghi chỗ giữ dưới khóa của kho.
+        ReservationOutcome outcome = new ReservationOutcome();
+        StorageReservation? reservation = await reservations.TryReserveAsync(
+            vault.Id, declaredLength, quotaBytes, now, ReservationHold, outcome, ct);
+        if (reservation == null)
         {
-            throw QuotaExceeded(quotaBytes, remainingBytes);
+            throw QuotaExceeded(quotaBytes, outcome.RemainingBytes);
         }
 
-        // Kích thước khai báo có thể sai: kho lưu trữ tự đếm byte thật và dừng khi vượt phần còn lại.
+        // Kích thước khai báo có thể sai: kho lưu trữ tự đếm byte thật và dừng khi vượt phần đã giữ chỗ.
         // Kho lưu trữ mã hóa nội dung trước khi ghi; ở đây chỉ nhận lại khóa đã bọc để lưu vào DB.
         StoredContent stored;
         try
         {
-            stored = await contentStore.SaveAsync(content, remainingBytes, ct);
+            stored = await contentStore.SaveAsync(content, declaredLength, ct);
         }
         catch (AppException ex) when (ex.Code == ErrorCode.FileTooLarge)
         {
-            throw QuotaExceeded(quotaBytes, remainingBytes);
+            await reservations.ReleaseAsync(reservation.Id, timeProvider.GetUtcNow());
+            throw QuotaExceeded(quotaBytes, outcome.RemainingBytes);
+        }
+        catch
+        {
+            await reservations.ReleaseAsync(reservation.Id, timeProvider.GetUtcNow());
+            throw;
         }
 
-        DateTimeOffset now = timeProvider.GetUtcNow();
         Asset asset = new Asset();
         asset.VaultId = vault.Id;
         asset.Kind = kind;
@@ -202,12 +217,15 @@ public sealed partial class AssetService : IAssetService
         auditLogRepository.Add(AuditRules.OwnerAction(
             vault.Id, vault.OwnerId, AuditAction.AssetCreated, AuditTargetType.Asset, asset.Id,
             asset.CurrentVersionNumber, now));
+        // Chỗ giữ chuyển sang đã dùng trong cùng lần lưu với tài sản.
+        reservations.MarkCommitted(reservation, now);
         try
         {
             await unitOfWork.SaveChangesAsync(ct);
         }
         catch
         {
+            await reservations.ReleaseAsync(reservation.Id, timeProvider.GetUtcNow());
             // Bù trừ: không để nội dung không có bản ghi trong kho lưu trữ. Không dùng ct vì request có thể đã bị hủy.
             await contentStore.DeleteAsync(stored.StorageKey, CancellationToken.None);
             throw;

@@ -26,4 +26,10 @@ public interface IBeneficiaryRepository
 
     /// <summary>Đánh dấu "sẽ DELETE" hồ sơ.</summary>
     void Remove(Beneficiary beneficiary);
+
+    /// <summary>Lỗi lưu do trùng khóa unique (hai request cùng CCCD đồng thời).</summary>
+    bool IsUniqueViolation(Exception exception);
+
+    /// <summary>Bỏ mọi thay đổi chưa lưu của request (ChangeTracker.Clear), gồm cả hồ sơ vừa Add và dòng nhật ký đi kèm.</summary>
+    void DiscardPendingChanges();
 }

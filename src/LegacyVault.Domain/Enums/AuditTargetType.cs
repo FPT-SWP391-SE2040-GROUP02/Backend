@@ -9,4 +9,8 @@ public enum AuditTargetType
     Container = 3,
     Beneficiary = 4,
     CheckIn = 5,
+    DeathCase = 6,
+    Hold = 7,
+    Incident = 8,
+    User = 9,
 }

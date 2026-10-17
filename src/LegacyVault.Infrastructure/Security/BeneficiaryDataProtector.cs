@@ -63,6 +63,7 @@ public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
             beneficiary.IdentityEncrypted = Encrypt(dataKey, identityPlain, BuildAad(beneficiary.Id, IdentityPart));
             beneficiary.ContactEncrypted = Encrypt(dataKey, contactPlain, BuildAad(beneficiary.Id, ContactPart));
             beneficiary.CitizenIdLast4 = data.CitizenId.Substring(data.CitizenId.Length - 4);
+            beneficiary.CitizenIdHash = dataKeyProtector.ComputeBlindIndex("beneficiary-citizen-id", data.CitizenId);
         }
         finally
         {
