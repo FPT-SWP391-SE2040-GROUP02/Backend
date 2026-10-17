@@ -124,8 +124,8 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         (User second, HttpClient secondClient) = await AddAdminAsync();
         Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/v1/admin/users/{second.Id}/status", new { status = "LOCKED", reason = "Khóa thử" })).StatusCode);
         HttpResponseMessage last = await secondClient.PutAsJsonAsync($"/api/v1/admin/users/{admin.Id}/role", new { role = "USER", reason = "thử" });
-        // second đã bị khóa nên không còn là Admin hợp lệ
-        Assert.Equal(HttpStatusCode.NotFound, last.StatusCode);
+        // second đã bị khóa: bị chặn ngay ở bước kiểm token dù access token còn hạn
+        await ApiTestHelpers.AssertProblemAsync(last, HttpStatusCode.Forbidden, "ACCOUNT_NOT_ACTIVE");
 
         // Nhật ký ghi người làm, đối tượng, lý do
         await ApiTestHelpers.WithDbAsync(factory, async db =>
