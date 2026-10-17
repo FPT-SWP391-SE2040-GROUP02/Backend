@@ -52,6 +52,9 @@ public static class ApplicationConfig
 
         // Nhật ký hoạt động (SEC-13)
         services.AddScoped<IAuditLogService, AuditLogService>();
+
+        // Executor theo dõi tiến độ bàn giao
+        services.AddScoped<IHandoverProgressService, HandoverProgressService>();
         return services;
     }
 }
