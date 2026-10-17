@@ -7,4 +7,7 @@ namespace LegacyVault.Application.Notifications;
 public interface IAppUrlProvider
 {
     string GetEmailVerificationUrl(string token);
+
+    /// <summary>Link tới trang đặt mật khẩu mới của web, kèm token gốc.</summary>
+    string GetPasswordResetUrl(string token);
 }
