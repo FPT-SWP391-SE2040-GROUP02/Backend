@@ -27,6 +27,7 @@ public sealed class DeathCaseService : IDeathCaseService
     private readonly IOwnerIdentityReader identityReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IAuditLogRepository auditLogRepository;
 
     public DeathCaseService(
         ICurrentUser currentUser,
@@ -38,7 +39,8 @@ public sealed class DeathCaseService : IDeathCaseService
         IAssetContentStore contentStore,
         IOwnerIdentityReader identityReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAuditLogRepository auditLogRepository)
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
@@ -50,6 +52,7 @@ public sealed class DeathCaseService : IDeathCaseService
         this.identityReader = identityReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.auditLogRepository = auditLogRepository;
     }
 
     public async Task<List<ExecutorVaultResponse>> GetMyVaultsAsync(CancellationToken ct)
@@ -110,6 +113,8 @@ public sealed class DeathCaseService : IDeathCaseService
         deathCase.Versions.Add(version);
 
         // AC-71, AC-91: hai Executor mở cùng lúc — DB chỉ cho một hồ sơ mở mỗi kho; bên thua đọc lại hồ sơ bên thắng.
+        // SEC-07: dòng nhật ký lưu cùng lần lưu của TryAddAsync; bên thua gọi DiscardPendingChanges nên dòng bị bỏ.
+        AddAudit(deathCase, userId, AuditAction.DeathCaseOpened, 1, now);
         bool added = await deathCaseRepository.TryAddAsync(deathCase, ct);
         if (added)
         {
@@ -460,6 +465,8 @@ public sealed class DeathCaseService : IDeathCaseService
         }
 
         deathCase.UpdatedAt = now;
+        // SEC-07: nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
+        AddAudit(deathCase, context.UserId, AuditAction.DeathCaseSubmitted, submittingVersionNo, now);
         try
         {
             await unitOfWork.SaveChangesAsync(ct);
@@ -543,6 +550,8 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         deathCase.CurrentVersionNo = next.VersionNo;
         deathCase.UpdatedAt = now;
+        // SEC-07: nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
+        AddAudit(deathCase, context.UserId, AuditAction.DeathCaseVersionCreated, next.VersionNo, now);
         try
         {
             await unitOfWork.SaveChangesAsync(ct);
@@ -554,6 +563,13 @@ public sealed class DeathCaseService : IDeathCaseService
             throw EditConflict();
         }
         return BuildResponse(deathCase);
+    }
+
+    /// <summary>SEC-07: dòng nhật ký của Executor trên hồ sơ; không có lý do (không ghi dữ liệu nhạy cảm).</summary>
+    private void AddAudit(DeathCase deathCase, Guid userId, AuditAction action, int versionNo, DateTimeOffset now)
+    {
+        auditLogRepository.Add(AuditRules.DeathCaseAction(
+            deathCase.VaultId, userId, AuditActorRole.Executor, action, deathCase.Id, versionNo, null, now));
     }
 
     /// <summary>Lỗi lưu do request khác ghi trước: xung đột phiên bản (EDIT_CONFLICT) hoặc vi phạm chỉ mục unique.</summary>
