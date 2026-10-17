@@ -21,15 +21,18 @@ public sealed class AuthController : ControllerBase
     private readonly IAuthService _authService;
     private readonly IRegistrationService _registrationService;
     private readonly AuthCookieWriter _cookieWriter;
+    private readonly IPasswordResetService _passwordResetService;
 
     public AuthController(
         IAuthService authService,
         IRegistrationService registrationService,
-        AuthCookieWriter cookieWriter)
+        AuthCookieWriter cookieWriter,
+        IPasswordResetService passwordResetService)
     {
         _authService = authService;
         _registrationService = registrationService;
         _cookieWriter = cookieWriter;
+        _passwordResetService = passwordResetService;
     }
 
     /// <summary>Cấp proof antiforgery theo principal hiện tại; không trả auth secrets.</summary>
@@ -197,4 +200,39 @@ public sealed class AuthController : ControllerBase
         return Ok(user);
     }
 
+    /// <summary>
+    /// POST /api/v1/auth/forgot-password — Gửi link đặt lại mật khẩu qua email.
+    /// Luôn trả 202 Accepted, không body, để không lộ email nào đã có tài khoản.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [EndpointSummary("Quên mật khẩu: gửi link đặt lại qua email")]
+    [EndpointDescription("Email hợp lệ ≤256 ký tự. Trả 202 không body cả khi email không tồn tại, tài khoản bị khóa hoặc chỉ dùng Google. Link hạn 30 phút, dùng một lần; yêu cầu mới vô hiệu link cũ; trong 60 giây kể từ link gần nhất thì không gửi thêm. Lỗi 400 VALIDATION_ERROR. Rate limit 5 request/phút/IP.")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [EnableRateLimiting(AuthRateLimitPolicies.PasswordReset)]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken ct)
+    {
+        await _passwordResetService.ForgotPasswordAsync(request, ct);
+        return Accepted();
+    }
+
+    /// <summary>
+    /// POST /api/v1/auth/reset-password — Đặt mật khẩu mới bằng token trong link.
+    /// Trả 204 và đăng xuất mọi thiết bị của tài khoản.
+    /// </summary>
+    [HttpPost("reset-password")]
+    [EndpointSummary("Đặt mật khẩu mới bằng token trong link email")]
+    [EndpointDescription("Token opaque ≤256 ký tự lấy từ link; newPassword 8–128; confirmPassword phải khớp. Thành công trả 204 không body, không tự đăng nhập; mọi refresh token của tài khoản bị thu hồi nên các thiết bị phải đăng nhập lại. Email chưa xác minh được coi là đã xác minh. Lỗi 400 VALIDATION_ERROR hoặc INVALID_RESET_TOKEN khi token sai, hết hạn, đã dùng hoặc tài khoản không còn hoạt động. Rate limit 5 request/phút/IP.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [EnableRateLimiting(AuthRateLimitPolicies.PasswordReset)]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken ct)
+    {
+        await _passwordResetService.ResetPasswordAsync(request, ct);
+        return NoContent();
+    }
 }

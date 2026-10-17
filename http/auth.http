@@ -94,3 +94,32 @@ Content-Type: application/json
   "email": "an@gmail.com",
   "password": "SaiMatKhau123!"
 }
+
+### 9. Quen mat khau -> 202 Accepted (khong body), ke ca email khong ton tai
+# Link dat lai in o console cua backend khi chay voi DevEmailSender; han 30 phut, dung mot lan
+POST {{api}}/forgot-password
+Content-Type: application/json
+
+{
+  "email": "an@gmail.com"
+}
+
+### 10. Dat lai mat khau bang token trong link -> 204 No Content, dang xuat moi thiet bi
+POST {{api}}/reset-password
+Content-Type: application/json
+
+{
+  "token": "thay-token-o-day",
+  "newPassword": "MatKhauMoi123!",
+  "confirmPassword": "MatKhauMoi123!"
+}
+
+### 11. Dung lai token da dung -> 400 INVALID_RESET_TOKEN
+POST {{api}}/reset-password
+Content-Type: application/json
+
+{
+  "token": "thay-token-o-day",
+  "newPassword": "MatKhauKhac123!",
+  "confirmPassword": "MatKhauKhac123!"
+}

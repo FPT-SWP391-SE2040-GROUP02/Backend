@@ -18,7 +18,7 @@ public sealed class AuthOpenApiTests
         var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
         var paths = document.GetProperty("paths");
         Assert.DoesNotContain(paths.EnumerateObject(), path => path.Name.StartsWith("/v1/auth/"));
-        Assert.Equal(10, paths.EnumerateObject().Count(path => path.Name.StartsWith("/api/v1/auth/")));
+        Assert.Equal(12, paths.EnumerateObject().Count(path => path.Name.StartsWith("/api/v1/auth/")));
         // Chỉ ẩn khỏi tài liệu: không xóa route runtime mà caller cũ có thể dùng.
         Assert.Equal(System.Net.HttpStatusCode.OK, (await client.GetAsync("/v1/auth/csrf")).StatusCode);
         var endpoints = new[]

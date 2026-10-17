@@ -23,4 +23,10 @@ public static class AuthRateLimitPolicies
 
     /// <summary>Độ dài cửa sổ giới hạn.</summary>
     public static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
+
+    /// <summary>Policy giới hạn quên mật khẩu và đặt lại mật khẩu (chống dội email và dò token).</summary>
+    public const string PasswordReset = "auth-password-reset";
+
+    /// <summary>Số lượt quên/đặt lại mật khẩu trong mỗi cửa sổ.</summary>
+    public const int PasswordResetPermitLimit = 5;
 }
