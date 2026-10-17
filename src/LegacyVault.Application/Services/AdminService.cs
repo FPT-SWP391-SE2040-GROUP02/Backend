@@ -20,7 +20,10 @@ public interface IAdminService
     /// </summary>
     Task<AdminUserResponse> ChangeRoleAsync(Guid userId, ChangeUserRoleRequest request, CancellationToken ct);
 
-    /// <summary>Khóa, mở khóa, vô hiệu hóa. Cùng ràng buộc với đổi vai trò.</summary>
+    /// <summary>
+    /// Khóa, mở khóa, vô hiệu hóa. Cùng ràng buộc với đổi vai trò.
+    /// Khóa hoặc vô hiệu hóa thì thu hồi mọi refresh token của tài khoản trong cùng lần lưu.
+    /// </summary>
     Task<AdminUserResponse> ChangeStatusAsync(Guid userId, ChangeUserStatusRequest request, CancellationToken ct);
 
     /// <summary>
@@ -53,6 +56,7 @@ public sealed class AdminService : IAdminService
     private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IRefreshTokenRepository refreshTokens;
 
     public AdminService(
         ICurrentUser currentUser,
@@ -66,7 +70,8 @@ public sealed class AdminService : IAdminService
         IHoldRepository holds,
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IRefreshTokenRepository refreshTokens)
     {
         this.currentUser = currentUser;
         this.users = users;
@@ -80,6 +85,7 @@ public sealed class AdminService : IAdminService
         this.audit = audit;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.refreshTokens = refreshTokens;
     }
 
     public async Task<PaginatedList<AdminUserResponse>> ListUsersAsync(
@@ -163,6 +169,16 @@ public sealed class AdminService : IAdminService
         DateTimeOffset now = timeProvider.GetUtcNow();
         user.Status = newStatus;
         user.UpdatedAt = now;
+        if (newStatus != UserStatus.Active)
+        {
+            // Khóa hoặc vô hiệu hóa: thu hồi mọi phiên để không thiết bị nào làm mới được access token.
+            // Access token còn hạn bị chặn ở bước kiểm token mỗi request (ActiveUserTokenValidator).
+            List<RefreshToken> sessions = await refreshTokens.FindActiveByUserAsync(user.Id, ct);
+            foreach (RefreshToken session in sessions)
+            {
+                session.RevokedAt = now;
+            }
+        }
         audit.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.UserStatusChanged,
             AuditTargetType.User, user.Id, null, AuditOutcome.Succeeded, newStatus.ToApiString() + ": " + reason, now));
         await unitOfWork.SaveChangesAsync(ct);
