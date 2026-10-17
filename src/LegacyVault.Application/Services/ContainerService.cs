@@ -391,8 +391,8 @@ public sealed class ContainerService : IContainerService
 
         // QUOTA-03 / QUOTA-05: suất đếm theo NGƯỜI khác nhau có chỉ định trong kho.
         // Người đã ở gói khác thì không tốn thêm suất; người mới thì phải còn suất.
-        // TODO: hai request gắn 2 người MỚI khác nhau cùng lúc có thể cùng qua bước đếm này và vượt suất
-        // (chờ chốt concurrency token cho HandoverPlan.ConfigVersion).
+        // QUOTA-05: hai request gắn 2 người MỚI cùng lúc đều BumpConfigVersion trên HandoverPlan (RowVersion),
+        // nên bên lưu sau bị 409 EDIT_CONFLICT; bên đến sau khi bên kia đã lưu thì đếm lại và bị BENEFICIARY_SLOTS_EXCEEDED.
         bool alreadyDesignated = await containerRepository.IsBeneficiaryDesignatedAsync(vault.Id, beneficiaryId, ct);
         if (!alreadyDesignated)
         {
