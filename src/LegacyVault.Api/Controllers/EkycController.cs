@@ -64,6 +64,18 @@ public sealed class EkycController : ControllerBase
         }
     }
 
+    /// <summary>Kiểm tra thông tin người dùng đã đối chiếu/sửa sau OCR; không thay kết quả từ ảnh.</summary>
+    [HttpPost("document/confirm")]
+    [ProducesResponseType<EkycStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<EkycStatusResponse> ConfirmDocument([FromBody] EkycDocumentConfirmationRequest request, CancellationToken ct)
+    {
+        return ekycService.ConfirmDocumentAsync(request, ct);
+    }
+
     /// <summary>Gửi ảnh mặt sau của tấm thẻ vừa đọc mặt trước để kiểm tra hai mặt cùng một thẻ (EKYC-04).</summary>
     [HttpPost("document-back")]
     [Consumes("multipart/form-data")]

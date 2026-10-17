@@ -300,6 +300,93 @@ public sealed class EkycConsentAndMatchTests
         Assert.True(Assert.Single(repository.Verifications).BackSideChecked);
     }
 
+    private static EkycDocumentConfirmationRequest Confirmation(Guid id, string purpose = "OWNER_ENROLLMENT", Guid? turnId = null)
+    {
+        return new EkycDocumentConfirmationRequest
+        {
+            VerificationId = id, Purpose = purpose, HandoverTurnId = turnId,
+            IdNumber = "079200012345", FullName = "Nguyễn Văn An",
+            DateOfBirth = new DateOnly(2000, 2, 1), ResidenceAddress = "Địa chỉ thử nghiệm",
+        };
+    }
+
+    [Fact]
+    public async Task Confirm_OwnerAcceptsCorrectedFieldsWithoutChangingVerification()
+    {
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, default);
+        EkycStatusResponse result = await service.ConfirmDocumentAsync(Confirmation(front.VerificationId!.Value), default);
+        Assert.Equal(front.VerificationId, result.VerificationId);
+        Assert.Equal("PENDING", result.Status);
+        Assert.Equal("NOT_CHECKED", result.IdentityMatch);
+        Assert.False(result.BackSideChecked);
+    }
+
+    [Fact]
+    public async Task Confirm_AcceptsEditedDeclarationWithoutReplacingImageEvidence()
+    {
+        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, userId);
+        client.Reading = Reading("079200099999", "Sai OCR", "2000-02-01");
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", turn.Id, default);
+        EkycStatusResponse result = await service.ConfirmDocumentAsync(Confirmation(front.VerificationId!.Value, "BENEFICIARY_CLAIM", turn.Id), default);
+        Assert.Equal("WRONG_PERSON", result.IdentityMatch);
+        Assert.Equal("PENDING", result.Status);
+        Assert.Equal("9999", result.CitizenIdLast4);
+        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
+    }
+
+    [Fact]
+    public async Task Confirm_RejectsDeclarationNotMatchingBeneficiary()
+    {
+        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, userId);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", turn.Id, default);
+        EkycDocumentConfirmationRequest request = Confirmation(front.VerificationId!.Value, "BENEFICIARY_CLAIM", turn.Id);
+        request.FullName = "Người khác";
+        AppException error = await Assert.ThrowsAsync<AppException>(() => service.ConfirmDocumentAsync(request, default));
+        Assert.Equal(ErrorCode.ValidationError, error.Code);
+    }
+
+    [Theory]
+    [InlineData("stale")]
+    [InlineData("purpose")]
+    [InlineData("turn")]
+    [InlineData("other-user")]
+    [InlineData("expired")]
+    public async Task Confirm_RejectsForeignStaleExpiredOrWrongContext(string scenario)
+    {
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, default);
+        EkycDocumentConfirmationRequest request = Confirmation(front.VerificationId!.Value);
+        EkycVerification verification = Assert.Single(repository.Verifications);
+        if (scenario == "stale") request.VerificationId = Guid.NewGuid();
+        if (scenario == "purpose") request.Purpose = "OWNER_ALIVE";
+        if (scenario == "turn") request.HandoverTurnId = Guid.NewGuid();
+        if (scenario == "other-user") verification.UserId = Guid.NewGuid();
+        if (scenario == "expired") verification.DocumentTokenExpiresAt = Now;
+        AppException error = await Assert.ThrowsAsync<AppException>(() => service.ConfirmDocumentAsync(request, default));
+        Assert.Equal(ErrorCode.EkycDocumentExpired, error.Code);
+    }
+
+    [Theory]
+    [InlineData("id")]
+    [InlineData("name")]
+    [InlineData("address")]
+    [InlineData("future")]
+    [InlineData("missing-date")]
+    public async Task Confirm_ValidatesDeclarationEvenWithoutController(string field)
+    {
+        EkycDocumentConfirmationRequest request = Confirmation(Guid.NewGuid());
+        if (field == "id") request.IdNumber = "１２３４５６７８９０１２";
+        if (field == "name") request.FullName = "  ";
+        if (field == "address") request.ResidenceAddress = new string('x', 1001);
+        if (field == "future") request.DateOfBirth = new DateOnly(2027, 1, 1);
+        if (field == "missing-date") request.DateOfBirth = null;
+        AppException error = await Assert.ThrowsAsync<AppException>(() => service.ConfirmDocumentAsync(request, default));
+        Assert.Equal(ErrorCode.ValidationError, error.Code);
+    }
+
     [Fact]
     public async Task Back_DifferentCard_RejectedAndNotChecked()
     {

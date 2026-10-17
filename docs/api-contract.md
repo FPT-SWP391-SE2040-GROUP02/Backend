@@ -522,6 +522,7 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
 | GET | `/v1/ekyc/me` | Đăng nhập | — | 200 `EkycStatusResponse` | 401 |
 | POST | `/v1/ekyc/consent` | Đăng nhập | JSON `{ "purpose", "noticeVersion" }` | 200 `EkycConsentResponse` | 400 `VALIDATION_ERROR`, 401 |
 | POST | `/v1/ekyc/document` | Đăng nhập | multipart `file` (ảnh mặt trước), `handoverTurnId` (chỉ khi mục đích `BENEFICIARY_CLAIM`) | 200 `EkycDocumentResponse` | 400 `EKYC_IMAGE_REJECTED` / `VALIDATION_ERROR`, 401, 404 `HANDOVER_NOT_FOUND`, 409 `EKYC_CONSENT_REQUIRED` / `HANDOVER_NOT_ALLOWED`, 413 `FILE_TOO_LARGE`, 503 `EKYC_SERVICE_UNAVAILABLE` |
+| POST | `/v1/ekyc/document/confirm` | Đăng nhập | JSON bản tự khai sau OCR (xem dưới) | 200 `EkycStatusResponse` | 400 `VALIDATION_ERROR`, 401, 404 `HANDOVER_NOT_FOUND`, 409 `EKYC_DOCUMENT_EXPIRED` / `HANDOVER_NOT_ALLOWED` |
 | POST | `/v1/ekyc/document-back` | Đăng nhập | multipart `file` (ảnh mặt sau) | 200 `EkycStatusResponse` | 400 `EKYC_DOCUMENT_MISMATCH` / `EKYC_IMAGE_REJECTED`, 401, 409 `EKYC_DOCUMENT_EXPIRED`, 413, 503 |
 | POST | `/v1/ekyc/liveness/start` | Đăng nhập | — | 200 `EkycLivenessResponse` | 401, 409 `EKYC_DOCUMENT_EXPIRED`, 503 |
 | POST | `/v1/ekyc/liveness/frame` | Đăng nhập | multipart `file` (một khung hình JPEG/PNG) | 200 `EkycLivenessResponse` | 400 `EKYC_IMAGE_REJECTED`, 401, 409 `EKYC_DOCUMENT_EXPIRED` / `EKYC_LIVENESS_REQUIRED`, 413, 503 |
@@ -532,6 +533,17 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
 // POST /v1/ekyc/document → 200 (thông tin chỉ trả lần này, server không lưu)
 { "verificationId": "0199...", "idNumber": "079200012345", "fullName": "NGUYỄN VĂN AN", "dateOfBirth": "2000-02-01",
   "residenceAddress": "", "canMatchFace": true, "expiresAt": "2026-10-14T08:30:00+00:00", "warnings": [] }
+
+// POST /v1/ekyc/document/confirm — chỉ sau khi người dùng kiểm tra/sửa và chủ động xác nhận
+{ "verificationId": "UUID từ document", "purpose": "OWNER_ENROLLMENT",
+  "idNumber": "079200012345", "fullName": "Nguyễn Văn An", "dateOfBirth": "2000-02-01",
+  "residenceAddress": "Địa chỉ người dùng đã đối chiếu" }
+// BENEFICIARY_CLAIM gửi thêm handoverTurnId, đúng lượt đã gửi ở document.
+// CCCD 12 chữ số ASCII, họ tên 1–200 ký tự, ngày sinh ISO hợp lệ không ở tương lai,
+// địa chỉ 1–1000 ký tự. Lượt pending mới nhất phải thuộc principal, đúng purpose/turn và còn hạn.
+// Bản tự khai người nhận phải khớp hồ sơ BE. Không lưu full PII, không sửa identityMatch,
+// citizenIdLast4 hoặc bằng chứng từ ảnh. Sai OCR vẫn cần chụp lại/review, không tự nâng MATCHED.
+// Endpoint kiểm tra bản khai; chưa có trạng thái xác nhận lưu DB hoặc guard bắt buộc ở các API cũ.
 
 // POST /v1/ekyc/face-match và GET /v1/ekyc/me → 200
 { "status": "PASSED", "verificationId": "0199...", "citizenIdLast4": "2345", "faceMatchScore": 0.52,
