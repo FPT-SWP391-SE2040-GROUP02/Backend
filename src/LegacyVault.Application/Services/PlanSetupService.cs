@@ -24,7 +24,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
-    TimeProvider time) : IPlanSetupService
+    TimeProvider time, IAssetRepository assets) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-15";
     public const string ScopeVersion = "executor-2026-10-15";
@@ -233,9 +233,13 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         if (primary is null) missing.Add("PRIMARY_EXECUTOR_REQUIRED");
         if (primary?.IsBeneficiary == true && !accepted.Any(e => e.Role == ExecutorRole.Backup && !e.IsBeneficiary && e.UserId != primary.UserId)) missing.Add("BACKUP_EXECUTOR_REQUIRED");
         if (vault.Plan.Status != PlanStatus.Draft) missing.Add("PLAN_NOT_DRAFT");
+        var openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
+        var outsideAssets = await assets.FindOutsideContainerByVaultIdAsync(vault.Id, ct);
+        var warnings = PlanSetupWarningRules.GetWarnings(accepted);
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
-            vault.Executors.OrderByDescending(e => e.InvitedAt).Select(Map).ToList());
+            vault.Executors.OrderByDescending(e => e.InvitedAt).Select(Map).ToList(),
+            PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), warnings.ToArray());
     }
 
     private async Task<Executor> FindTokenAsync(string token, CancellationToken ct)
