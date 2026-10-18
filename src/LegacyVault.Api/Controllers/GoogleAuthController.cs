@@ -17,6 +17,8 @@ namespace LegacyVault.Api.Controllers;
 [Tags("Auth")]
 [Route("api/v1/auth/google")]
 [Route("v1/auth/google")]
+// Response cấp token phiên như đăng nhập thường nên cấm trình duyệt và proxy lưu đệm.
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class GoogleAuthController : ControllerBase
 {
     private readonly IGoogleAuthService _googleAuthService;

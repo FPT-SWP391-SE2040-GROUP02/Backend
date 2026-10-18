@@ -13,6 +13,8 @@ namespace LegacyVault.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/admin")]
+// Response chứa danh sách tài khoản và dữ liệu vận hành nên cấm trình duyệt và proxy lưu đệm.
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AdminController : ControllerBase
 {
     private readonly IAdminService adminService;
