@@ -32,6 +32,7 @@ public sealed class JwtTokenService : ITokenService
 
         var claims = new List<Claim>
         {
+            // sub là Id người dùng: CurrentUser đọc lại claim này ở mỗi request để biết ai đang gọi.
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim("role", user.Role.ToString().ToUpperInvariant()),
@@ -56,6 +57,7 @@ public sealed class JwtTokenService : ITokenService
 
     public OpaqueToken CreateOpaqueToken()
     {
+        // Dùng cho refresh token và các link một lần: chuỗi gốc gửi cho người dùng, DB chỉ lưu SHA-256 của chuỗi.
         var bytes = RandomNumberGenerator.GetBytes(32);
         var value = Convert.ToHexString(bytes).ToLowerInvariant();
         var hash = HashOpaqueToken(value);

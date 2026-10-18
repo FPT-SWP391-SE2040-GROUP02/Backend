@@ -46,15 +46,14 @@ public sealed class RegistrationService : IRegistrationService
         var fullName = request.FullName.Trim();
         var now = _timeProvider.GetUtcNow();
 
-        // 1. Kiểm tra tài khoản đã tồn tại chưa
         var existing = await _userRepository.FindByEmailAsync(email, ct);
         if (existing != null)
         {
-            // Luôn trả thành công để không lộ email đã đăng ký (api-contract.md)
+            // Email đã có tài khoản: vẫn trả thành công để người lạ không dò được email nào đã đăng ký.
             return;
         }
 
-        // 2. Tạo tài khoản User mới: Role = User (ROLE-01), Status = Active, EmailVerifiedAt = null
+        // Ai đăng ký cũng là người dùng thường; email chưa xác minh cho tới khi mở link.
         var user = new User
         {
             Email = email,
@@ -68,11 +67,11 @@ public sealed class RegistrationService : IRegistrationService
 
         if (!await _userRepository.TryAddAsync(user, ct))
         {
-            // Race condition: request khác vừa thêm cùng email
+            // Request khác vừa tạo cùng email (chỉ mục duy nhất chặn lại): coi như email đã có tài khoản.
             return;
         }
 
-        // 3. Sinh token xác minh và lưu hash
+        // Token gốc chỉ nằm trong link email; DB giữ mã băm, hạn 24 giờ.
         var token = _tokenService.CreateOpaqueToken();
         var verificationToken = new EmailVerificationToken
         {
@@ -86,7 +85,6 @@ public sealed class RegistrationService : IRegistrationService
         _tokenRepository.Add(verificationToken);
         await _unitOfWork.SaveChangesAsync(ct);
 
-        // 4. Gửi email xác minh
         var verificationUrl = _appUrlProvider.GetEmailVerificationUrl(token.Value);
         await _emailSender.SendEmailVerificationAsync(user.Email, user.FullName, verificationUrl, ct);
     }
@@ -127,7 +125,7 @@ public sealed class RegistrationService : IRegistrationService
             return;
         }
 
-        // Vô hiệu hóa mọi token chưa dùng trước đó
+        // Link mới thay link cũ: các link chưa dùng được đánh dấu đã dùng nên không mở được nữa.
         var unused = await _tokenRepository.FindUnusedByUserAsync(user.Id, ct);
         foreach (var t in unused)
         {

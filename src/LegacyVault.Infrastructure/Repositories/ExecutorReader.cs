@@ -24,7 +24,8 @@ public sealed class ExecutorReader : IExecutorReader
             .OrderBy(e => e.Id)
             .ToListAsync(ct);
 
-        // Đưa Executor chính lên trước, giữ nguyên thứ tự còn lại.
+        // Đưa Executor chính lên trước, giữ nguyên thứ tự còn lại. Không dùng OrderBy(e => e.Role) trong SQL
+        // vì Role lưu dạng chữ, SQL sẽ sắp "Backup" trước "Primary".
         List<Executor> result = new List<Executor>();
         foreach (Executor executor in accepted)
         {

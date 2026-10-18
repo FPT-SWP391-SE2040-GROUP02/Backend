@@ -54,6 +54,7 @@ public sealed class PasswordResetService(
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
         List<PasswordResetToken> unused = await resetTokenRepository.FindUnusedByUserAsync(user.Id, ct);
+        // Link còn hạn được tạo chưa tới 60 giây: không tạo link mới, tránh dội thư vào hộp mail.
         foreach (PasswordResetToken token in unused)
         {
             if (token.CreatedAt > now.Subtract(ResendCooldown) && token.ExpiresAt > now)

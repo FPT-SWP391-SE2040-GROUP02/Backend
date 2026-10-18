@@ -39,6 +39,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
             throw CaseNotFound();
         }
         Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
+        // Người gọi không phải Executor đang hiệu lực của kho: trả 404 như không có hồ sơ, không lộ hồ sơ tồn tại.
         if (vault == null || !await IsActiveExecutorAsync(vault, userId, ct))
         {
             throw CaseNotFound();
@@ -57,6 +58,8 @@ public sealed class HandoverProgressService : IHandoverProgressService
         response.HandoverStarted = true;
 
         List<HandoverTurn> turns = await progressReader.FindTurnsWithItemsAsync(deathCase.PlanId, ct);
+        // Gom Id quyền tải và người nhận của mọi lượt để đọc lần tải đầu và 4 số cuối CCCD bằng hai truy vấn,
+        // không truy vấn lặp theo từng lượt.
         List<Guid> grantIds = new List<Guid>();
         List<Guid> beneficiaryIds = new List<Guid>();
         foreach (HandoverTurn turn in turns)
@@ -75,6 +78,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
 
         foreach (HandoverTurn turn in turns)
         {
+            // Không tìm thấy hồ sơ người nhận thì để trống, vẫn trả các lượt còn lại.
             string last4 = string.Empty;
             if (citizenIdLast4.ContainsKey(turn.BeneficiaryId))
             {
@@ -126,6 +130,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
         }
         else
         {
+            // Hết hạn quyết định, bị hủy hoặc hết hạn quyền tải.
             summary.Ended++;
         }
     }

@@ -78,7 +78,7 @@ public sealed class AuthService : IAuthService
         var email = request.Email.Trim().ToLowerInvariant();
         var now = _timeProvider.GetUtcNow();
 
-        // 1. Kiểm tra tạm khóa theo cặp email + dải IP (SEC-10)
+        // Đang bị tạm khóa vì sai mật khẩu nhiều lần (đếm theo cặp email và dải IP): từ chối ngay, báo số giây còn lại.
         var throttle = await _loginThrottleRepository.FindAsync(email, ipRange, ct);
         if (throttle != null && throttle.LockedUntil.HasValue && throttle.LockedUntil.Value > now)
         {
@@ -86,31 +86,30 @@ public sealed class AuthService : IAuthService
             throw new AccountLockedException(remaining);
         }
 
-        // 2. Tìm tài khoản
         var user = await _userRepository.FindByEmailAsync(email, ct);
 
-        // 3. Nếu không có user hoặc tài khoản không có mật khẩu (chỉ dùng Google)
         if (user == null || string.IsNullOrEmpty(user.PasswordHash))
         {
+            // Không có tài khoản hoặc tài khoản chỉ dùng Google: vẫn chạy băm giả để thời gian phản hồi
+            // giống khi có tài khoản, người lạ không đo thời gian để dò email nào đã đăng ký.
             _dummyHash ??= _passwordHasher.Hash(Guid.NewGuid().ToString());
             _passwordHasher.Verify(request.Password, _dummyHash);
 
             throw await RecordFailedLoginAsync(throttle, email, ipRange, now, ct);
         }
 
-        // 4. Kiểm tra mật khẩu
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             throw await RecordFailedLoginAsync(throttle, email, ipRange, now, ct);
         }
 
-        // 5. Kiểm tra trạng thái tài khoản SAU khi mật khẩu đúng (để người lạ không dò được trạng thái)
+        // Chỉ báo tài khoản bị khóa khi mật khẩu đã đúng, để người lạ không dò được trạng thái tài khoản.
         if (user.Status != UserStatus.Active)
         {
             throw new AccountNotActiveException();
         }
 
-        // 6. Đăng nhập đúng: xóa bộ đếm sai nếu có
+        // Đăng nhập đúng thì xóa bộ đếm sai của cặp email và dải IP này.
         if (throttle != null)
         {
             _loginThrottleRepository.Remove(throttle);
@@ -118,7 +117,8 @@ public sealed class AuthService : IAuthService
 
         user.LastLoginAt = now;
 
-        // 7. Mở phiên mới (FamilyId đại diện cho một lần đăng nhập của thiết bị)
+        // Mỗi lần đăng nhập là một FamilyId mới; các refresh token xoay vòng về sau đều mang FamilyId này,
+        // nhờ đó thu hồi được cả phiên khi phát hiện token cũ bị dùng lại.
         var familyId = Guid.CreateVersion7();
         var opaque = _tokenService.CreateOpaqueToken();
         var initialExpiresAt = now.Add(IdleTimeout);
@@ -203,7 +203,7 @@ public sealed class AuthService : IAuthService
             return null;
         }
 
-        // Kiểm tra thời hạn phiên (tối đa 12 giờ hoặc idle 30 phút, NFR-06)
+        // Quá 12 giờ kể từ lúc đăng nhập, hoặc nghỉ quá 30 phút từ lần cấp token gần nhất: hết phiên.
         var maxSessionLimit = tokenEntity.SessionStartedAt.Add(MaxSessionLifetime);
         if (maxSessionLimit <= now || tokenEntity.ExpiresAt <= now)
         {
@@ -212,7 +212,7 @@ public sealed class AuthService : IAuthService
             return null;
         }
 
-        // Kiểm tra tài khoản còn Active không
+        // Tài khoản đã bị khóa thì không cấp token mới, thu hồi luôn token này.
         if (tokenEntity.User.Status != UserStatus.Active)
         {
             tokenEntity.RevokedAt = now;
@@ -220,7 +220,7 @@ public sealed class AuthService : IAuthService
             return null;
         }
 
-        // Xoay vòng token
+        // Xoay vòng: thu hồi token cũ, cấp token mới cùng FamilyId và giữ mốc bắt đầu phiên để vẫn tính đủ 12 giờ.
         tokenEntity.RevokedAt = now;
 
         var newOpaque = _tokenService.CreateOpaqueToken();
