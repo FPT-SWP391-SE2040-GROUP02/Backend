@@ -759,7 +759,8 @@ Owner xem hồ sơ chứng tử của kho và báo "Tôi còn sống" (SRS §6.3
   - `ALIVE_CONFIRMED`: chỉ khi selfie đã đạt hoặc đã quá 7 ngày. Hồ sơ `REJECTED`, lượt chưa xong `CANCELLED`, grant `REVOKED`, kế hoạch `ACTIVE` với kỳ điểm danh mới.
   - `OBJECTION_REJECTED`: trả hồ sơ, kế hoạch và grant về trạng thái trước; **không tự duyệt chứng tử**.
   - `INSUFFICIENT_EVIDENCE`: giữ chặn, ghi lý do và hạn mới (`verifierDueAt`).
-- Hàng chờ Verifier hiện hồ sơ `SUSPENDED`. `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED` (chờ LV-07).
+- **Hạn Verifier** (ALIVE-04, ALIVE-08): `verifierDueAt` = muộn hơn giữa (lúc báo hoặc lúc giao + 48 giờ) và (`selfieDeadlineAt` + 48 giờ). `selfieDeadlineAt` (7 ngày) là hạn của cả lời báo, không bao giờ gia hạn. `INSUFFICIENT_EVIDENCE` đặt hạn mới 7 ngày.
+- Hàng chờ Verifier hiện hồ sơ `SUSPENDED`. `DeathCaseAssignmentJob` giao Verifier cho báo chưa có người, giao lại khi Verifier mất quyền hoặc quá `verifierDueAt` (ALIVE-08); không kết luận, không gỡ chặn; nhắc qua sự cố `OWNER_ALIVE` (`IncidentJob`). Verifier cũ nhận `404` sau khi bị giao lại. Admin chưa đổi Verifier tay được cho hồ sơ `SUSPENDED`.
 - **Chưa làm:** sự cố theo dõi và thông báo Verifier/Executor/người nhận (LV-07/LV-14); thử thách camera (EKYC-10); đăng nhập lại trước khi báo.
 
 
