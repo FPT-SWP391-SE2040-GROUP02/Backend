@@ -16,6 +16,7 @@ public sealed class EmailVerificationTokenRepository : IEmailVerificationTokenRe
 
     public Task<EmailVerificationToken?> FindByHashAsync(string tokenHash, CancellationToken ct)
     {
+        // Nạp kèm User để đặt lúc xác minh email ngay trong cùng lần lưu.
         return _db.EmailVerificationTokens
             .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);

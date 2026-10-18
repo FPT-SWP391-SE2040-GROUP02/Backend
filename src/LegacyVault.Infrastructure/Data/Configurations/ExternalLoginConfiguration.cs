@@ -24,9 +24,11 @@ public sealed class ExternalLoginConfiguration : IEntityTypeConfiguration<Extern
         builder.Property(e => e.ProviderEmail)
             .HasMaxLength(256);
 
+        // Một tài khoản Google chỉ gắn với một tài khoản LegacyVault.
         builder.HasIndex(e => new { e.Provider, e.ProviderSubject })
             .IsUnique();
 
+        // Một tài khoản LegacyVault gắn tối đa một tài khoản của mỗi nhà cung cấp.
         builder.HasIndex(e => new { e.UserId, e.Provider })
             .IsUnique();
 

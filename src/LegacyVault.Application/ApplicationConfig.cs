@@ -39,6 +39,7 @@ public static class ApplicationConfig
         services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();
         services.AddScoped<IDeathCaseAssignmentJob, DeathCaseAssignmentJob>();
 
+        // Tài khoản: đăng ký, xác minh email, đăng nhập, phiên, quên và đặt lại mật khẩu
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
         services.AddScoped<IPasswordResetService, PasswordResetService>();

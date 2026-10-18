@@ -107,6 +107,7 @@ public static class InfrastructureConfig
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
+        // Bản mặc định chỉ in link ra log; AddEmailServices bên dưới đăng ký sau nên thay bằng Gmail khi có cấu hình.
         services.AddSingleton<IEmailSender, DevEmailSender>();
         services.AddSingleton<IAppUrlProvider, AppUrlProvider>();
 
@@ -153,6 +154,7 @@ public static class InfrastructureConfig
                     throw new InvalidOperationException("Thiếu cấu hình Jwt:Audience.");
                 }
 
+                // Giữ nguyên tên claim "sub" trong token, không để ASP.NET đổi sang tên dài, CurrentUser mới đọc được.
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {

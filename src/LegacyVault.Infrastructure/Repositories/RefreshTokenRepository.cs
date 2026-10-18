@@ -16,6 +16,7 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
 
     public Task<RefreshToken?> FindByHashAsync(string tokenHash, CancellationToken ct)
     {
+        // Nạp kèm User để khi làm mới phiên kiểm được tài khoản còn hoạt động và cấp access token mới.
         return _db.RefreshTokens
             .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);

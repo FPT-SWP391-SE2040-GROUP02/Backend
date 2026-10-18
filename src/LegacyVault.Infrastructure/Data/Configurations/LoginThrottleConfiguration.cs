@@ -20,9 +20,11 @@ public sealed class LoginThrottleConfiguration : IEntityTypeConfiguration<LoginT
             .IsRequired()
             .HasMaxLength(64);
 
+        // Mỗi cặp email và dải IP có đúng một bộ đếm lần đăng nhập sai.
         builder.HasIndex(t => new { t.Email, t.IpRange })
             .IsUnique();
 
+        // Phục vụ tra theo dải IP và thời điểm bắt đầu đếm.
         builder.HasIndex(t => new { t.IpRange, t.WindowStartedAt });
     }
 }

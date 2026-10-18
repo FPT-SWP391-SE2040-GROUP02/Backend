@@ -24,6 +24,7 @@ public sealed class ExternalLoginLinkTicketConfiguration : IEntityTypeConfigurat
         builder.Property(t => t.ProviderEmail)
             .HasMaxLength(256);
 
+        // Vé chờ xác nhận mật khẩu khi email Google trùng tài khoản có sẵn; chỉ lưu mã băm của vé.
         builder.Property(t => t.TicketHash)
             .IsRequired()
             .HasMaxLength(64)

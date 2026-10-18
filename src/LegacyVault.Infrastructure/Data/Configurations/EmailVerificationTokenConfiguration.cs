@@ -12,6 +12,7 @@ public sealed class EmailVerificationTokenConfiguration : IEntityTypeConfigurati
 
         builder.HasKey(t => t.Id);
 
+        // Chỉ lưu SHA-256 của token trong link (64 ký tự hex); token gốc chỉ nằm trong email.
         builder.Property(t => t.TokenHash)
             .IsRequired()
             .HasMaxLength(64)

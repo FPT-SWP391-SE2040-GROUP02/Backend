@@ -3,6 +3,10 @@ using Microsoft.Extensions.Logging;
 
 namespace LegacyVault.Infrastructure.Notifications;
 
+/// <summary>
+/// Bản dùng khi chưa cấu hình Gmail (Email:Smtp): không gửi thư thật mà in link ra cửa sổ chạy API
+/// để người phát triển chép link thử. Có cấu hình thì EmailConfig dùng SmtpEmailSender thay thế.
+/// </summary>
 public sealed class DevEmailSender : IEmailSender
 {
     private readonly ILogger<DevEmailSender> _logger;

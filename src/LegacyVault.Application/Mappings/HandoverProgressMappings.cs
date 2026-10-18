@@ -25,6 +25,7 @@ public static class HandoverProgressMappings
             response.GrantExpiresAt = turn.Grant.ExpiresAt;
         }
 
+        // Hiển thị tài sản đúng thứ tự đã ghim lúc mở bàn giao.
         List<HandoverSnapshotItem> items = new List<HandoverSnapshotItem>(turn.Items);
         items.Sort(CompareByPosition);
         foreach (HandoverSnapshotItem item in items)

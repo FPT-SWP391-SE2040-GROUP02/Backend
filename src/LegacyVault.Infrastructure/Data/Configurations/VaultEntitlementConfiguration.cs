@@ -22,6 +22,7 @@ public sealed class VaultEntitlementConfiguration : IEntityTypeConfiguration<Vau
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        // Mỗi kho có đúng một dòng quyền dịch vụ (hạng, dung lượng, số suất người nhận).
         builder.HasIndex(e => e.VaultId)
             .IsUnique();
     }

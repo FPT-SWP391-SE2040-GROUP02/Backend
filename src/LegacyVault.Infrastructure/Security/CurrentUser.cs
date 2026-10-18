@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace LegacyVault.Infrastructure.Security;
 
+/// <summary>Cho biết ai đang gọi API, đọc từ JWT đã được kiểm chữ ký và hạn ở bước xác thực.</summary>
 public sealed class CurrentUser : ICurrentUser
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -35,6 +36,7 @@ public sealed class CurrentUser : ICurrentUser
                 return null;
             }
 
+            // Claim "sub" chứa Id người dùng do JwtTokenService đặt khi cấp token.
             var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
                 ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
 

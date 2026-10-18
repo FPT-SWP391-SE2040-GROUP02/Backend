@@ -16,6 +16,8 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired()
             .HasMaxLength(256);
 
+        // Email lưu dạng đã chuẩn hóa (chữ thường, bỏ khoảng trắng); chỉ mục duy nhất chặn hai tài khoản cùng email
+        // kể cả khi hai request đăng ký đến cùng lúc.
         builder.HasIndex(u => u.Email)
             .IsUnique();
 
@@ -26,6 +28,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Phone)
             .HasMaxLength(32);
 
+        // Chuỗi băm Argon2id; null với tài khoản chỉ đăng nhập bằng Google.
         builder.Property(u => u.PasswordHash)
             .HasMaxLength(256);
 
