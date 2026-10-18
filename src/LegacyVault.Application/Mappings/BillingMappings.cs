@@ -1,5 +1,6 @@
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
+using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Mappings;
@@ -37,6 +38,55 @@ public static class BillingMappings
         response.Notice = NoAutoHandoverNotice;
         response.ServerTime = serverTime;
         return response;
+    }
+
+    /// <summary>
+    /// Đơn → response. QR chỉ có khi đơn còn Pending. Link QR ghép theo mẫu SePay, mọi giá trị đều được escape.
+    /// </summary>
+    public static PaymentOrderResponse ToResponse(
+        this PaymentOrder order, IBillingBankSettings bank, DateTimeOffset serverTime)
+    {
+        PaymentOrderResponse response = new PaymentOrderResponse();
+        response.Id = order.Id;
+        response.Kind = order.Kind.ToApiString();
+        response.Status = order.Status.ToApiString();
+        response.Tier = order.Tier.ToApiString();
+        response.Years = order.Years;
+        response.ExtraSlots = order.ExtraSlots;
+        response.TierAmount = order.TierAmount;
+        response.SlotAmount = order.SlotAmount;
+        response.TotalAmount = order.TotalAmount;
+        response.Currency = BillingPrices.Currency;
+        response.StorageQuotaBytes = order.StorageQuotaBytes;
+        response.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
+        response.PaymentCode = order.PaymentCode;
+        response.TransferContent = order.PaymentCode;
+        response.Bank.BankCode = bank.BankCode;
+        response.Bank.AccountNumber = bank.AccountNumber;
+        response.Bank.AccountName = bank.AccountName;
+        if (order.Status == PaymentOrderStatus.Pending)
+        {
+            response.QrImageUrl = BuildQrImageUrl(order, bank);
+        }
+        else
+        {
+            response.QrImageUrl = null;
+        }
+        response.ExpiresAt = order.ExpiresAt;
+        response.CreatedAt = order.CreatedAt;
+        response.PaidAt = order.PaidAt;
+        response.CancelledAt = order.CancelledAt;
+        response.ServerTime = serverTime;
+        response.Notice = NoAutoHandoverNotice;
+        return response;
+    }
+
+    private static string BuildQrImageUrl(PaymentOrder order, IBillingBankSettings bank)
+    {
+        return "https://qr.sepay.vn/img?acc=" + Uri.EscapeDataString(bank.AccountNumber)
+            + "&bank=" + Uri.EscapeDataString(bank.BankCode)
+            + "&amount=" + order.TotalAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + "&des=" + Uri.EscapeDataString(order.PaymentCode);
     }
 
     /// <summary>Bảng giá hiện hành từ BillingPrices, không đọc DB.</summary>

@@ -69,4 +69,8 @@ public enum AuditAction
     DeathCaseRejected = 30,
     /// <summary>Verifier duyệt hồ sơ chứng tử và mở bàn giao (DEATH-06).</summary>
     DeathCaseApproved = 31,
+    /// <summary>Owner tạo đơn thanh toán (SRS §8.3).</summary>
+    PaymentOrderCreated = 32,
+    /// <summary>Owner hủy đơn thanh toán đang chờ.</summary>
+    PaymentOrderCancelled = 33,
 }

@@ -350,6 +350,54 @@ public sealed class BillingRulesTests
         Assert.False(BillingRules.IsOwnerEkycFresh(noTime, Now));
     }
 
+    private static PaymentOrder NewOrder(PaymentOrderStatus status, DateTimeOffset expiresAt)
+    {
+        PaymentOrder order = new PaymentOrder();
+        order.Kind = PaymentOrderKind.Purchase;
+        order.Tier = ServiceTier.Xs;
+        order.Years = 3;
+        order.ExtraSlots = 1;
+        order.Status = status;
+        order.ExpiresAt = expiresAt;
+        return order;
+    }
+
+    [Theory]
+    [InlineData(PaymentOrderStatus.Pending, -1, true)]
+    [InlineData(PaymentOrderStatus.Pending, 0, true)]
+    [InlineData(PaymentOrderStatus.Pending, 1, false)]
+    [InlineData(PaymentOrderStatus.Paid, -60, false)]
+    [InlineData(PaymentOrderStatus.Cancelled, -60, false)]
+    [InlineData(PaymentOrderStatus.Expired, -60, false)]
+    public void D7_IsExpired_OnlyPendingOrderAtOrPastExpiry(PaymentOrderStatus status, int secondsUntilExpiry, bool expected)
+    {
+        // Chuẩn bị
+        PaymentOrder order = NewOrder(status, Now.AddSeconds(secondsUntilExpiry));
+
+        // Hành động / Kiểm tra
+        Assert.Equal(expected, BillingRules.IsExpired(order, Now));
+    }
+
+    [Fact]
+    public void Sec83_IsSameSelection_ComparesKindTierYearsAndExtraSlots()
+    {
+        // Chuẩn bị
+        PaymentOrder order = NewOrder(PaymentOrderStatus.Pending, Now.AddMinutes(15));
+        BillingQuote same = BillingRules.QuotePurchase("XS", 3, 1);
+        BillingQuote otherTier = BillingRules.QuotePurchase("XS_MAX", 3, 1);
+        BillingQuote otherYears = BillingRules.QuotePurchase("XS", 1, 1);
+        BillingQuote otherSlots = BillingRules.QuotePurchase("XS", 3, 2);
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 0);
+        BillingQuote addon = BillingRules.QuoteAddon(entitlement, 1, Now);
+
+        // Hành động / Kiểm tra
+        Assert.True(BillingRules.IsSameSelection(order, same));
+        Assert.False(BillingRules.IsSameSelection(order, otherTier));
+        Assert.False(BillingRules.IsSameSelection(order, otherYears));
+        Assert.False(BillingRules.IsSameSelection(order, otherSlots));
+        Assert.False(BillingRules.IsSameSelection(order, addon));
+    }
+
     [Fact]
     public void Pay04_NewPaymentCode_HasPrefixLengthAndAllowedCharactersOnly()
     {

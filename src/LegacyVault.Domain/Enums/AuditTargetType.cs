@@ -13,4 +13,5 @@ public enum AuditTargetType
     Hold = 7,
     Incident = 8,
     User = 9,
+    PaymentOrder = 10,
 }

@@ -172,6 +172,23 @@ public static class BillingRules
         return byLifetime;
     }
 
+    /// <summary>Đơn còn Pending nhưng đã tới hoặc qua hạn thanh toán (D7: không có job, kiểm lúc đọc/tạo/hủy/trả).</summary>
+    public static bool IsExpired(PaymentOrder order, DateTimeOffset now)
+    {
+        return order.Status == PaymentOrderStatus.Pending && now >= order.ExpiresAt;
+    }
+
+    /// <summary>
+    /// Cùng lựa chọn với báo giá mới (§8.3: cùng lựa chọn thì trả lại đơn cũ): so loại đơn, hạng, số năm, số suất.
+    /// </summary>
+    public static bool IsSameSelection(PaymentOrder order, BillingQuote quote)
+    {
+        return order.Kind == quote.Kind
+            && order.Tier == quote.Tier
+            && order.Years == quote.Years
+            && order.ExtraSlots == quote.ExtraSlots;
+    }
+
     /// <summary>
     /// Mã thanh toán "LV" + 8 ký tự ngẫu nhiên an toàn (RandomNumberGenerator), cũng là nội dung chuyển khoản.
     /// Không dùng System.Random vì mã đoán được sẽ cho phép chuyển khoản vào đơn của người khác.
@@ -208,6 +225,18 @@ public static class BillingRules
             }
         }
         throw ValidationErrors.For("tier", "Hạng dịch vụ chỉ có thể là XS hoặc XS_MAX.");
+    }
+
+    public static AppException NotPayable(PaymentOrderNotPayableReason reason, string message)
+    {
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["reason"] = reason.ToApiString();
+        return new AppException(AppErrorType.Conflict, ErrorCode.PaymentOrderNotPayable, message, extensions);
+    }
+
+    public static AppException OrderNotFound()
+    {
+        return new AppException(AppErrorType.NotFound, ErrorCode.PaymentOrderNotFound, "Không tìm thấy đơn thanh toán.");
     }
 
     public static AppException NotAllowed(PaymentNotAllowedReason reason, string message)
