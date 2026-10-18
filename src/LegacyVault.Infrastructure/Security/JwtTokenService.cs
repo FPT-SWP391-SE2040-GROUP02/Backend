@@ -22,6 +22,11 @@ public sealed class JwtTokenService : ITokenService
 
     public AccessToken CreateAccessToken(User user)
     {
+        ArgumentNullException.ThrowIfNull(user);
+        if (user.Id == Guid.Empty || !Enum.IsDefined(user.Role))
+        {
+            throw new ArgumentException("User ID hoặc role không hợp lệ.", nameof(user));
+        }
         var now = _timeProvider.GetUtcNow();
         var expiresAt = now.AddMinutes(_settings.AccessTokenMinutes);
 
@@ -59,12 +64,16 @@ public sealed class JwtTokenService : ITokenService
 
     public string HashOpaqueToken(string value)
     {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value.Trim()));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     internal static SymmetricSecurityKey CreateSigningKey(string key)
     {
+        if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
+        {
+            throw new ArgumentException("Khóa ký JWT không đủ số byte UTF-8.", nameof(key));
+        }
         return new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
     }
 }

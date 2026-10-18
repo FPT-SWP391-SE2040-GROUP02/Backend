@@ -1,7 +1,8 @@
-# Thu API xac thuc theo docs/api-contract.md va SRS 3.15
+# Thử API xác thực hiện có theo docs/api-contract.md mục 3, 6.1–6.3.
 # Trinh duyet/REST Client tu dong luu va gui cookie lv_refresh giua cac request
+# Chỉ dùng tài khoản dev. Các giá trị bên dưới là placeholder; không commit token/mật khẩu thật.
 
-@api = http://localhost:5000/v1/auth
+@api = http://localhost:5000/api/v1/auth
 
 ### 1. Dang ky tai khoan moi (ROLE-01, AUTH-04) -> 202 Accepted (khong body)
 POST {{api}}/register
@@ -15,7 +16,7 @@ Content-Type: application/json
 }
 
 ### 2. Xac minh email bang token -> 200 OK UserResponse
-# Token nhan duoc trong console log cua backend khi chay voi DevEmailSender
+# Token lấy từ email xác minh gửi tới tài khoản dev; không yêu cầu ghi token vào log.
 POST {{api}}/verify-email
 Content-Type: application/json
 
@@ -31,9 +32,16 @@ Content-Type: application/json
   "email": "an@gmail.com"
 }
 
+### Lấy proof trước login; lấy lại theo principal mới trước refresh/logout
+# @name csrf
+GET {{api}}/csrf
+
+@csrfToken = {{csrf.response.body.requestToken}}
+
 ### 4. Dang nhap -> 200 OK AuthSessionResponse + Set-Cookie lv_refresh
 # @name login
 POST {{api}}/login
+X-CSRF-Token: {{csrfToken}}
 Content-Type: application/json
 
 {
@@ -49,22 +57,69 @@ Content-Type: application/json
 GET {{api}}/session
 Authorization: Bearer {{accessToken}}
 
+### Lấy proof anonymous mới trước refresh (GET và POST đều không gửi Bearer)
+# @name refreshCsrf
+GET {{api}}/csrf
+
 ### 6. Lam moi phien (dung cookie lv_refresh) -> 200 OK AuthSessionResponse + cookie moi
+# @name refresh
 POST {{api}}/refresh
+X-CSRF-Token: {{refreshCsrf.response.body.requestToken}}
+
+### Lấy proof theo Bearer mới trước logout; giữ cùng principal cho POST tiếp theo
+# @name logoutCsrf
+GET {{api}}/csrf
+Authorization: Bearer {{refresh.response.body.accessToken}}
 
 ### 7. Dang xuat -> 204 No Content + xoa cookie lv_refresh
 POST {{api}}/logout
+Authorization: Bearer {{refresh.response.body.accessToken}}
+X-CSRF-Token: {{logoutCsrf.response.body.requestToken}}
 Content-Type: application/json
 
 {
   "revokeAllDevices": false
 }
 
+### Lấy proof anonymous mới cho ví dụ lỗi login độc lập
+# @name failedLoginCsrf
+GET {{api}}/csrf
+
 ### 8. Thu dang nhap sai mat khau -> 401 INVALID_CREDENTIALS (attemptsRemaining giam dan)
 POST {{api}}/login
+X-CSRF-Token: {{failedLoginCsrf.response.body.requestToken}}
 Content-Type: application/json
 
 {
   "email": "an@gmail.com",
   "password": "SaiMatKhau123!"
+}
+
+### 9. Quen mat khau -> 202 Accepted (khong body), ke ca email khong ton tai
+# Link dat lai in o console cua backend khi chay voi DevEmailSender; han 30 phut, dung mot lan
+POST {{api}}/forgot-password
+Content-Type: application/json
+
+{
+  "email": "an@gmail.com"
+}
+
+### 10. Dat lai mat khau bang token trong link -> 204 No Content, dang xuat moi thiet bi
+POST {{api}}/reset-password
+Content-Type: application/json
+
+{
+  "token": "thay-token-o-day",
+  "newPassword": "MatKhauMoi123!",
+  "confirmPassword": "MatKhauMoi123!"
+}
+
+### 11. Dung lai token da dung -> 400 INVALID_RESET_TOKEN
+POST {{api}}/reset-password
+Content-Type: application/json
+
+{
+  "token": "thay-token-o-day",
+  "newPassword": "MatKhauKhac123!",
+  "confirmPassword": "MatKhauKhac123!"
 }

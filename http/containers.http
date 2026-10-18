@@ -1,0 +1,133 @@
+# Thử CRUD gói (Container) và thêm/gỡ tài sản trong gói — chỉ Development.
+#
+# Chuẩn bị giống http/vault-assets.http: chạy migration, chạy API (profile http), tạo tài khoản bằng http/auth.http,
+# đăng nhập bên dưới để lấy token, tạo kho rồi điền vaultId.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập — lấy access token (hết hạn sau 15 phút thì gửi lại request này)
+# Tài khoản tạo bằng http/auth.http: đăng ký → xác minh email (token xác minh in ở console của API).
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Kho của tôi — lấy vaultId, xem planConfigVersion
+GET {{baseUrl}}/vaults/me
+Authorization: Bearer {{token}}
+
+### Điền vaultId từ response trên
+@vaultId = 00000000-0000-0000-0000-000000000000
+
+### Tạo gói (201, DRAFT, missingRequirements = NO_ASSET, NO_DESIGNATION)
+POST {{baseUrl}}/vaults/{{vaultId}}/containers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Tài liệu gia đình", "description": "Giấy tờ nhà, sổ tiết kiệm" }
+
+### Danh sách gói chưa lưu trữ, sắp theo tên
+GET {{baseUrl}}/vaults/{{vaultId}}/containers?sortBy=name&pageSize=10
+Authorization: Bearer {{token}}
+
+### Danh sách gồm cả gói đã lưu trữ
+GET {{baseUrl}}/vaults/{{vaultId}}/containers?includeArchived=true
+Authorization: Bearer {{token}}
+
+### sortBy sai → 400 VALIDATION_ERROR
+GET {{baseUrl}}/vaults/{{vaultId}}/containers?sortBy=status
+Authorization: Bearer {{token}}
+
+### Điền containerId và etag từ response tạo gói
+@containerId = 00000000-0000-0000-0000-000000000000
+@etag = "0"
+
+### Xem một gói
+GET {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}
+Authorization: Bearer {{token}}
+
+### Đổi tên gói (gửi lại etag; etag cũ → 409 EDIT_CONFLICT)
+PUT {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "name": "Tài liệu nhà đất" }
+
+### Xóa mô tả (description rỗng = xóa)
+PUT {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "description": "" }
+
+### Lưu trữ gói (gọi lại lần 2 vẫn 200, cùng kết quả)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}
+Authorization: Bearer {{token}}
+
+### Lưu trữ gói READY cuối cùng của kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}?confirmPlanDeactivation=true
+Authorization: Bearer {{token}}
+
+### ---------- Thêm / gỡ tài sản trong gói ----------
+# Hạng Free đưa tài sản vào gói → 403 PAID_TIER_REQUIRED (SETUP-17).
+# Muốn thử luồng trả phí: nâng kho lên XS trong SSMS (CHỈ DB local, không chạy trên môi trường thật):
+#    UPDATE VaultEntitlements
+#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200, IncludedBeneficiarySlots = 2,
+#        ServiceExpiresAt = DATEADD(DAY, 365, SYSDATETIMEOFFSET())
+#    WHERE VaultId = '<vaultId>';
+# Hoặc dùng http/plan-dev.sql.
+
+### Tạo tài sản dạng chữ để đưa vào gói — lấy id từ response
+POST {{baseUrl}}/vaults/{{vaultId}}/assets/text
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Sổ tiết kiệm", "content": "Ngân hàng A, số sổ ..." }
+
+### Điền assetId từ response trên
+@assetId = 00000000-0000-0000-0000-000000000000
+
+### Đưa tài sản vào gói (gửi lại lần 2 vẫn 200; tài sản đang ở gói khác → 409 ASSET_ALREADY_IN_CONTAINER)
+POST {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/assets
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "assetId": "{{assetId}}" }
+
+### Gỡ tài sản khỏi gói (không xóa tài sản, không giải phóng dung lượng — QUOTA-02)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/assets/{{assetId}}
+Authorization: Bearer {{token}}
+
+### Gỡ tài sản cuối cùng của gói READY cuối cùng khi kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/assets/{{assetId}}?confirmPlanDeactivation=true
+Authorization: Bearer {{token}}
+
+### ---------- Gắn / gỡ người nhận trong gói ----------
+# Cần kho đã nâng lên XS (xem lệnh UPDATE ở trên; XS có 2 suất) và hồ sơ người nhận tạo bằng http/beneficiaries.http.
+# Gói có tài sản + người nhận thì tự chuyển READY.
+
+### Điền beneficiaryId từ http/beneficiaries.http
+@beneficiaryId = 00000000-0000-0000-0000-000000000000
+
+### Gắn người nhận vào gói (gửi lại lần 2 vẫn 200; người mới vượt suất → 409 BENEFICIARY_SLOTS_EXCEEDED)
+POST {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/beneficiaries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "beneficiaryId": "{{beneficiaryId}}" }
+
+### Xem suất đang dùng (usedBeneficiarySlots) và tổng suất
+GET {{baseUrl}}/vaults/me
+Authorization: Bearer {{token}}
+
+### Gỡ người nhận khỏi gói (không xóa hồ sơ; người còn ở gói khác vẫn chiếm suất)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/beneficiaries/{{beneficiaryId}}
+Authorization: Bearer {{token}}
+
+### Gỡ người nhận cuối cùng của gói READY cuối cùng khi kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/{{containerId}}/beneficiaries/{{beneficiaryId}}?confirmPlanDeactivation=true
+Authorization: Bearer {{token}}

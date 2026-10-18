@@ -1,0 +1,86 @@
+# Thử eKYC — chỉ Development.
+#
+# Chuẩn bị:
+#  1. Chạy dịch vụ eKYC (ekyc-prototype-v2\START.cmd) ở http://127.0.0.1:8879. Dịch vụ hiện chỉ nhận Host
+#     localhost nên chạy cùng máy với API. Địa chỉ cấu hình ở Ekyc:BaseUrl (appsettings.Development.json).
+#  2. Chạy migration, chạy API (profile http), đăng nhập bằng http/auth.http.
+# Ảnh thử: thay đường dẫn sau dấu "<" bằng ảnh trên máy. Không commit ảnh CCCD thật.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập — lấy access token
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Kết quả eKYC hiện tại (chưa làm → NOT_STARTED)
+GET {{baseUrl}}/ekyc/me
+Authorization: Bearer {{token}}
+
+### Đồng ý trước khi chụp (bắt buộc, hiệu lực 30 phút). purpose: OWNER_ENROLLMENT | BENEFICIARY_CLAIM | OWNER_ALIVE
+POST {{baseUrl}}/ekyc/consent
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "purpose": "OWNER_ENROLLMENT", "noticeVersion": "2026-10-v1" }
+
+### Gửi mặt trước CCCD (mục đích BENEFICIARY_CLAIM thì thêm field handoverTurnId = id lượt đang IDENTITY_IN_PROGRESS)
+POST {{baseUrl}}/ekyc/document
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="file"; filename="front.jpg"
+Content-Type: image/jpeg
+
+< C:\duong-dan\mat-truoc.jpg
+--lv--
+
+### Gửi mặt sau CCCD để kiểm tra cùng một thẻ (gọi sau khi canMatchFace = true)
+POST {{baseUrl}}/ekyc/document-back
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="file"; filename="back.jpg"
+Content-Type: image/jpeg
+
+< C:\duong-dan\mat-sau.jpg
+--lv--
+
+### Thử thách camera: bắt đầu (gọi sau khi canMatchFace = true; phiên 90 giây)
+POST {{baseUrl}}/ekyc/liveness/start
+Authorization: Bearer {{token}}
+
+### Thử thách camera: gửi một khung hình (lặp nhiều lần theo hướng dẫn prompt)
+POST {{baseUrl}}/ekyc/liveness/frame
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="file"; filename="frame.jpg"
+Content-Type: image/jpeg
+
+< C:\duong-dan\khung-hinh.jpg
+--lv--
+
+### Thử thách camera: chốt khi passed = true (so khớp selfie của chính phiên với thẻ)
+POST {{baseUrl}}/ekyc/liveness/complete
+Authorization: Bearer {{token}}
+
+### Gửi ảnh selfie để so khớp (chỉ sau khi thử thách camera đã passed = true, trong 30 phút)
+POST {{baseUrl}}/ekyc/face-match
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=lv
+
+--lv
+Content-Disposition: form-data; name="file"; filename="selfie.jpg"
+Content-Type: image/jpeg
+
+< C:\duong-dan\selfie.jpg
+--lv--

@@ -1,0 +1,67 @@
+# Thử giai đoạn nhận tài sản (người nhận) — chỉ Development.
+#
+# Chuẩn bị:
+#   1. Chạy migration và API (profile http). Tạo kho có gói READY (xem http/containers.http, http/beneficiaries.http).
+#   2. Mở bàn giao bằng SQL: chạy http/handover-dev.sql (thay <vaultId>). Script tạo các token cố định dev-token-1, dev-token-2, ...
+#   3. Đăng nhập bằng một tài khoản KHÁC chủ kho và đã xác minh email (http/auth.http), lấy access token.
+#
+# Ở Development, Handover:RequireIdentityVerification=false nên "claim" đi thẳng tới READY_TO_ACCEPT.
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập tài khoản người nhận
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "nguoinhan@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### 1) Kiểm link mời (công khai, không cần đăng nhập)
+GET {{baseUrl}}/handover/invitations/dev-token-1
+
+### 2) Nhận lượt
+# @name claim
+POST {{baseUrl}}/handover/invitations/dev-token-1/claim
+Authorization: Bearer {{token}}
+
+###
+@turnId = {{claim.response.body.$.id}}
+
+### 3) Xem các lượt của tôi
+GET {{baseUrl}}/handover/turns/me
+Authorization: Bearer {{token}}
+
+### 4) Xem một lượt
+GET {{baseUrl}}/handover/turns/{{turnId}}
+Authorization: Bearer {{token}}
+
+### 4a) Chốt xác minh danh tính (chỉ khi Handover:RequireIdentityVerification = true; cần eKYC BENEFICIARY_CLAIM đạt và khớp, xem ekyc.http)
+POST {{baseUrl}}/handover/turns/{{turnId}}/identity/complete
+Authorization: Bearer {{token}}
+
+### 5) Đồng ý nhận (mở quyền xem và tải 30 ngày)
+# @name accept
+POST {{baseUrl}}/handover/turns/{{turnId}}/accept
+Authorization: Bearer {{token}}
+
+###
+@grantId = {{accept.response.body.$.grant.id}}
+
+### 6) Danh sách tài sản
+# @name assets
+GET {{baseUrl}}/handover/grants/{{grantId}}/assets
+Authorization: Bearer {{token}}
+
+###
+@itemId = {{assets.response.body.$[0].id}}
+
+### 7) Tải một tài sản (lưu ý: nội dung được kiểm toàn vẹn trước khi gửi byte đầu tiên)
+GET {{baseUrl}}/handover/grants/{{grantId}}/assets/{{itemId}}/content
+Authorization: Bearer {{token}}
+
+### 8) Từ chối (thay cho bước 5, chỉ khi lượt đang READY_TO_ACCEPT)
+POST {{baseUrl}}/handover/turns/{{turnId}}/decline
+Authorization: Bearer {{token}}

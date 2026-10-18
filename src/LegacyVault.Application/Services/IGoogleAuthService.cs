@@ -1,4 +1,4 @@
-using LegacyVault.Application.Dtos.Requests;
+    using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 
 namespace LegacyVault.Application.Services;

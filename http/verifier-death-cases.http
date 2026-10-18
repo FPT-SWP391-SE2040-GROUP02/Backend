@@ -1,0 +1,107 @@
+# Thử Verifier xét hồ sơ chứng tử (F2B nhánh B) — chỉ Development. API: docs/api-contract.md mục 6.12.
+#
+# Chuẩn bị:
+#   1. Owner có kho trả phí và ít nhất một gói READY (tài sản + người nhận được chỉ định) TRƯỚC khi Executor gửi hồ sơ
+#      (gửi hồ sơ khóa cấu hình kho). Không có gói READY thì duyệt bị 409 HANDOVER_NOT_ALLOWED (NOTHING_TO_HAND_OVER).
+#   2. Chạy http/death-case-dev.sql (kế hoạch ACTIVE, Executor Accepted, một tài khoản thành Verifier), rồi làm đến hết bước 7
+#      của http/death-cases.http (Executor gửi hồ sơ).
+#   3. Hồ sơ được giao cho MỘT Verifier xoay vòng: xem bảng DeathCaseAssignments (dòng EndedAt = NULL; lệnh có sẵn ở cuối
+#      http/death-case-dev.sql) để biết ĐÚNG tài khoản được giao. Đăng nhập tài khoản đó ở bước dưới.
+#   4. Muốn thử DUYỆT: chạy lệnh "Cho phép duyệt" ở cuối http/death-case-dev.sql (coi như Owner đã nhận thư cách đây 80 giờ).
+#   5. Phân công do job nền (F2B nhánh C) quản lý, không có API riêng. dueAt = hạn ra quyết định, không sớm hơn 48 giờ sau
+#      khi hết phản đối nên hồ sơ còn trong 72 giờ phản đối có dueAt xa hơn (D1). Hồ sơ SUPPLEMENT_REQUIRED có thể hiện dueAt
+#      đã qua vì đang chờ Executor (D2). Job nhắc email trước hạn 12 giờ; quá hạn hoặc Verifier mất quyền thì giao người khác,
+#      lúc đó hồ sơ biến mất khỏi danh sách của bạn (404). Thử nhắc/giao lại: mục "Cho phép nhắc / giao lại" ở http/death-case-dev.sql.
+#
+# Luồng: danh sách → chi tiết → xem trang → xem xét cờ → yêu cầu bổ sung → (Executor gửi lại, xem 5b) → từ chối hoặc duyệt.
+# Hồ sơ không giao cho bạn (hoặc phân công đã kết thúc) luôn là 404 DEATH_CASE_NOT_FOUND. Tài khoản không phải Verifier: 403 ROLE_NOT_ALLOWED.
+# Mọi thao tác ghi cần etag MỚI NHẤT và làm đổi etag; luôn lấy lại từ response của thao tác trước (hoặc GET chi tiết).
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập tài khoản Verifier được giao
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "verifier@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### 1) Hồ sơ đang giao cho tôi — sortBy: dueAt (mặc định) | assignedAt (không phân biệt hoa thường); hồ sơ còn mở đứng trước.
+# searchTerm bị bỏ qua. Chỉ có 4 số cuối CCCD.
+GET {{baseUrl}}/verifier/death-cases?pageIndex=1&pageSize=10&sortBy=dueAt&isAscending=true
+Authorization: Bearer {{token}}
+
+### Điền caseId từ danh sách
+@caseId = 00000000-0000-0000-0000-000000000000
+
+### 2) Chi tiết (no-store). reviewVersion có CCCD 12 số; versions[] (bản cũ) chỉ có 4 số cuối.
+# approveBlockers cho biết vì sao chưa duyệt được: NOT_UNDER_REVIEW, NEWER_VERSION_PENDING, OWNER_NOT_NOTIFIED,
+# OBJECTION_PERIOD_NOT_OVER, FLAGS_NOT_REVIEWED, và VERIFIER_CONFLICT (cuối danh sách) nếu bạn là Owner/Executor/người gửi.
+# @name detail
+GET {{baseUrl}}/verifier/death-cases/{{caseId}}
+Authorization: Bearer {{token}}
+
+###
+@etag = {{detail.response.body.$.etag}}
+@fileId = {{detail.response.body.$.reviewVersion.files[0].id}}
+
+### 3) Xem một trang giấy (byte gốc; tải về, không lưu đệm). Trang hỏng/mất → 500 CONTENT_INTEGRITY_FAILED.
+# Chỉ xem được trang của bản ĐÃ GỬI (kể cả bản cũ); bản nháp hoặc hồ sơ khác → 404.
+GET {{baseUrl}}/verifier/death-cases/{{caseId}}/files/{{fileId}}/content
+Authorization: Bearer {{token}}
+
+### 4) Xem xét một cờ của bản đang xét (DEATH-10) — chỉ khi hồ sơ có cờ (flags[0]). Gọi lặp giữ ghi chú đầu.
+# Cờ CHECKIN_AFTER_DEATH xuất hiện khi Owner điểm danh sau ngày mất lúc Executor gửi (xem cuối http/death-case-dev.sql).
+@flagId = {{detail.response.body.$.flags[0].id}}
+
+# @name reviewFlag
+POST {{baseUrl}}/verifier/death-cases/{{caseId}}/flags/{{flagId}}/review
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "note": "Đã đối chiếu với Owner, điểm danh trước ngày mất." }
+
+###
+@etagAfterFlag = {{reviewFlag.response.body.$.etag}}
+
+### 5a) Yêu cầu Executor bổ sung. requestedParts là mã VIẾT HOA như missingRequirements:
+# OWNER_FULL_NAME, OWNER_CITIZEN_ID, DATE_OF_DEATH, CERTIFICATE_NUMBER, ISSUED_ON, ISSUED_BY, FILES.
+# Hồ sơ chuyển SUPPLEMENT_REQUIRED (phân công và đồng hồ 72 giờ giữ nguyên). Gọi lặp cùng nội dung: 200.
+# (Nếu đã xem xét cờ ở bước 4 thì dùng {{etagAfterFlag}} thay cho {{etag}}.)
+# @name supplement
+POST {{baseUrl}}/verifier/death-cases/{{caseId}}/request-supplement
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "reason": "Ảnh giấy chứng tử bị mờ, không đọc được nơi cấp.", "requestedParts": ["FILES", "ISSUED_BY"] }
+
+### 5b) EXECUTOR gửi lại (đăng nhập tài khoản Executor, http/death-cases.http):
+#   - GET /executor/death-cases/{caseId} → thấy supplementRequest { versionNo, reason, requestedParts, requestedAt };
+#   - POST /executor/death-cases/{caseId}/versions (etag mới) → sửa bản nháp (PUT .../draft) → POST .../submit.
+#   Hồ sơ về UNDER_REVIEW, supplementRequest = null, hạn xét của bạn (assignment.dueAt) tính lại = lúc gửi + 48 giờ.
+#   Thao tác của Verifier làm đổi etag của hồ sơ: Executor đang sửa bản nháp có thể nhận 409 EDIT_CONFLICT và phải tải lại.
+# Sau đó đăng nhập lại Verifier, chạy lại bước 2 để lấy etag mới (reviewVersion là bản mới), rồi chọn 6a hoặc 6b.
+
+### 6a) TỪ CHỐI hồ sơ (lý do bắt buộc, Executor thấy rejectReason). Hồ sơ đóng, kế hoạch về trạng thái trước khi gửi
+# (job điểm danh có thể tính lại trong vòng 60 giây), thông báo Owner đang chờ bị hủy (CANCELLED). Gọi lặp: 200.
+# Sau đó Executor mở hồ sơ mới (POST /executor/vaults/{vaultId}/death-case) và Verifier thấy previousCase của hồ sơ mới.
+POST {{baseUrl}}/verifier/death-cases/{{caseId}}/reject
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "reason": "Giấy chứng tử không khớp thông tin Owner." }
+
+### 6b) DUYỆT hồ sơ và mở bàn giao F3 (DEATH-06). Cần: Owner đã nhận thư và hết 72 giờ (lệnh "Cho phép duyệt" trong
+# http/death-case-dev.sql), hết cờ chưa xem xét, Executor không có bản nháp mới hơn, có gói READY. Dùng etag MỚI NHẤT.
+# Chưa duyệt được → 409 DEATH_CASE_NOT_ALLOWED kèm reason và approveBlockers; không có gói READY → 409 HANDOVER_NOT_ALLOWED.
+# Response lần đầu có handover { turnCount, invitationsSent, invitationsFailed }; kế hoạch sang HANDOVER_IN_PROGRESS,
+# KHÔNG cấp quyền tải (người nhận phải nhận lời mời ở F3). Gọi lặp trên hồ sơ đã duyệt: 200, handover = null.
+# Duyệt và từ chối cùng lúc: bên thua nhận 200 (cùng quyết định) hoặc 409 CASE_CLOSED (quyết định khác).
+POST {{baseUrl}}/verifier/death-cases/{{caseId}}/approve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "etag": "{{etag}}", "reason": "Giấy chứng tử hợp lệ, thông tin khớp." }

@@ -35,6 +35,15 @@ public class VaultResponse
     /// <summary>Tổng suất = suất kèm hạng + suất mua thêm.</summary>
     public int BeneficiarySlots { get; set; }
 
+    /// <summary>Suất kèm hạng (QUOTA-06).</summary>
+    public int IncludedBeneficiarySlots { get; set; }
+
+    /// <summary>Suất mua thêm (QUOTA-06).</summary>
+    public int ExtraBeneficiarySlots { get; set; }
+
+    /// <summary>Số người nhận khác nhau đang có chỉ định trong kho (QUOTA-03, QUOTA-06).</summary>
+    public int UsedBeneficiarySlots { get; set; }
+
     /// <summary>Số gói chưa lưu trữ (NFR-14: tối đa 50).</summary>
     public int ActiveContainerCount { get; set; }
 

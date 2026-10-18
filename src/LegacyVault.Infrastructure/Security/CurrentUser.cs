@@ -35,11 +35,8 @@ public sealed class CurrentUser : ICurrentUser
                 return null;
             }
 
-            var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-            if (string.IsNullOrEmpty(sub))
-            {
-                sub = principal.FindFirstValue(ClaimTypes.NameIdentifier);
-            }
+            var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
+                ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (Guid.TryParse(sub, out var id))
             {
@@ -52,12 +49,6 @@ public sealed class CurrentUser : ICurrentUser
 
     private ClaimsPrincipal? GetPrincipal()
     {
-        var context = _httpContextAccessor.HttpContext;
-        if (context == null)
-        {
-            return null;
-        }
-
-        return context.User;
+        return _httpContextAccessor.HttpContext?.User;
     }
 }

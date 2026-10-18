@@ -1,0 +1,100 @@
+# Thử thiết lập và kích hoạt kế hoạch — CHỈ môi trường local.
+# SETUP-01, SETUP-10, EKYC-01, AC-46, ASSET-03/AC-68.
+# Chuẩn bị Owner đã xác minh email, kho trả phí còn hạn, eKYC OwnerEnrollment đạt và ít nhất một gói READY.
+# Tạo gói/tài sản/người nhận bằng http/containers.http; dữ liệu trả phí/eKYC giả lập xem http/plan-dev.sql.
+# Đăng nhập bằng http/auth.http rồi điền các token bên dưới. Không commit token hay dữ liệu thật.
+# Primary và Backup phải là các tài khoản hoạt động, đã xác minh email, khác Owner và khác nhau.
+# Token lời mời lấy từ link trong thư đã nhận; API không trả token. Cấu hình gửi thư Executor xem docs/PLAN-SETUP-API.md.
+# invitationSentAt = null nghĩa là chưa xác nhận gửi thư. Không dùng token của lời mời cũ sau khi gửi lại.
+
+@baseUrl = http://localhost:5000/api/v1
+@ownerToken =
+@primaryToken =
+@backupToken =
+@vaultId = 00000000-0000-0000-0000-000000000000
+@primaryEmail = primary@example.test
+@backupEmail = backup@example.test
+@primaryInvitationToken =
+@backupInvitationToken =
+@scopeVersion = executor-2026-10-15
+@configVersion = 0
+
+### GET màn kích hoạt — 200; không tự kích hoạt
+# containers: READY sẽ bàn giao, DRAFT còn thiếu; không có ARCHIVED.
+# assetsOutsideContainer: tài sản lẻ, không lặp tài sản trong gói DRAFT.
+# warnings: thiếu Backup đã chấp nhận thì có NO_BACKUP_EXECUTOR; nút kích hoạt theo canActivate.
+GET {{baseUrl}}/vaults/{{vaultId}}/plan-setup
+Authorization: Bearer {{ownerToken}}
+
+### Owner mời Executor chính — 201; điền primaryEmail của tài khoản thử
+POST {{baseUrl}}/vaults/{{vaultId}}/executors
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "email": "{{primaryEmail}}",
+  "role": "PRIMARY"
+}
+
+### Executor chính đọc phạm vi nhiệm vụ trong tài liệu/GET setup rồi chấp nhận
+# Điền primaryInvitationToken từ thư mới nhất; dùng access token của Executor chính.
+POST {{baseUrl}}/executor-invitations/respond
+Authorization: Bearer {{primaryToken}}
+Content-Type: application/json
+
+{
+  "token": "{{primaryInvitationToken}}",
+  "accept": true,
+  "acknowledgeScope": true,
+  "scopeVersion": "{{scopeVersion}}"
+}
+
+### Khi các điều kiện khác đủ: canActivate = true dù vẫn có NO_BACKUP_EXECUTOR
+# Có thể chuyển thẳng đến GET cuối và kích hoạt để thử cảnh báo không chặn (Executor chính không là người nhận).
+GET {{baseUrl}}/vaults/{{vaultId}}/plan-setup
+Authorization: Bearer {{ownerToken}}
+
+### Owner mời Executor dự phòng — 201; tài khoản thử thứ ba
+POST {{baseUrl}}/vaults/{{vaultId}}/executors
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "email": "{{backupEmail}}",
+  "role": "BACKUP"
+}
+
+### Backup còn INVITED: warnings vẫn có NO_BACKUP_EXECUTOR
+GET {{baseUrl}}/vaults/{{vaultId}}/plan-setup
+Authorization: Bearer {{ownerToken}}
+
+### Executor dự phòng chấp nhận — dùng token lời mời Backup và access token Backup
+POST {{baseUrl}}/executor-invitations/respond
+Authorization: Bearer {{backupToken}}
+Content-Type: application/json
+
+{
+  "token": "{{backupInvitationToken}}",
+  "accept": true,
+  "acknowledgeScope": true,
+  "scopeVersion": "{{scopeVersion}}"
+}
+
+### GET lại ngay trước kích hoạt — sao chép configVersion vào biến đầu file
+# Mời/chấp nhận làm đổi configVersion; bản cũ trả 409 EDIT_CONFLICT.
+# Backup đã chấp nhận và đủ điều kiện: warnings = []; kiểm lại containers và assetsOutsideContainer.
+GET {{baseUrl}}/vaults/{{vaultId}}/plan-setup
+Authorization: Bearer {{ownerToken}}
+
+### Owner đọc chính sách hiện hành rồi xác nhận kích hoạt — 200 khi đủ điều kiện
+# Body dùng configVersion của GET mới nhất. Response vẫn có containers, assetsOutsideContainer, warnings.
+# Thiếu điều kiện: 409 PLAN_ACTIVATION_REQUIREMENTS_NOT_MET kèm missingRequirements.
+POST {{baseUrl}}/vaults/{{vaultId}}/activate
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{
+  "configVersion": {{configVersion}},
+  "policyVersion": "setup-2026-10-15",
+  "acknowledgePolicy": true
+}

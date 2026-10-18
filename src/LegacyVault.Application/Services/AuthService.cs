@@ -47,7 +47,33 @@ public sealed class AuthService : IAuthService
         _timeProvider = timeProvider;
     }
 
+    /// <summary>Đăng nhập cùng bộ đếm dưới Serializable; lỗi credentials chỉ phát sau commit bộ đếm.</summary>
     public async Task<AuthResult> LoginAsync(LoginRequest request, string ipRange, CancellationToken ct)
+    {
+        var outcome = await _unitOfWork.ExecuteSerializableAsync(async () =>
+        {
+            try
+            {
+                var result = await LoginCoreAsync(request, ipRange, ct);
+                return (Result: (AuthResult?)result, Failure: (ApiException?)null);
+            }
+            catch (InvalidCredentialsException failure)
+            {
+                return (Result: (AuthResult?)null, Failure: (ApiException?)failure);
+            }
+            catch (AccountLockedException failure)
+            {
+                return (Result: (AuthResult?)null, Failure: (ApiException?)failure);
+            }
+        }, ct);
+        if (outcome.Failure != null)
+        {
+            throw outcome.Failure;
+        }
+        return outcome.Result!;
+    }
+
+    private async Task<AuthResult> LoginCoreAsync(LoginRequest request, string ipRange, CancellationToken ct)
     {
         var email = request.Email.Trim().ToLowerInvariant();
         var now = _timeProvider.GetUtcNow();
@@ -66,10 +92,7 @@ public sealed class AuthService : IAuthService
         // 3. Nếu không có user hoặc tài khoản không có mật khẩu (chỉ dùng Google)
         if (user == null || string.IsNullOrEmpty(user.PasswordHash))
         {
-            if (_dummyHash == null)
-            {
-                _dummyHash = _passwordHasher.Hash(Guid.NewGuid().ToString());
-            }
+            _dummyHash ??= _passwordHasher.Hash(Guid.NewGuid().ToString());
             _passwordHasher.Verify(request.Password, _dummyHash);
 
             throw await RecordFailedLoginAsync(throttle, email, ipRange, now, ct);
@@ -136,11 +159,27 @@ public sealed class AuthService : IAuthService
         };
     }
 
+    /// <summary>Xoay token nguyên tử theo invariant đã chuyển từ test; giữ idle 30 phút/max 12 giờ của Backend.</summary>
     public async Task<AuthResult> RefreshAsync(string? refreshToken, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
         {
             throw new SessionExpiredException();
+        }
+        var result = await _unitOfWork.ExecuteSerializableAsync(() => RefreshCoreAsync(refreshToken, ct), ct);
+        if (result == null)
+        {
+            // Thu hồi family do replay phải commit trước khi phát lỗi HTTP.
+            throw new SessionExpiredException();
+        }
+        return result;
+    }
+
+    private async Task<AuthResult?> RefreshCoreAsync(string? refreshToken, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return null;
         }
 
         var now = _timeProvider.GetUtcNow();
@@ -149,7 +188,7 @@ public sealed class AuthService : IAuthService
         var tokenEntity = await _refreshTokenRepository.FindByHashAsync(hash, ct);
         if (tokenEntity == null)
         {
-            throw new SessionExpiredException();
+            return null;
         }
 
         // Phát hiện dùng lại token đã thu hồi: xâm phạm bảo mật, thu hồi cả family
@@ -161,7 +200,7 @@ public sealed class AuthService : IAuthService
                 t.RevokedAt = now;
             }
             await _unitOfWork.SaveChangesAsync(ct);
-            throw new SessionExpiredException();
+            return null;
         }
 
         // Kiểm tra thời hạn phiên (tối đa 12 giờ hoặc idle 30 phút, NFR-06)
@@ -170,7 +209,7 @@ public sealed class AuthService : IAuthService
         {
             tokenEntity.RevokedAt = now;
             await _unitOfWork.SaveChangesAsync(ct);
-            throw new SessionExpiredException();
+            return null;
         }
 
         // Kiểm tra tài khoản còn Active không
@@ -178,7 +217,7 @@ public sealed class AuthService : IAuthService
         {
             tokenEntity.RevokedAt = now;
             await _unitOfWork.SaveChangesAsync(ct);
-            throw new SessionExpiredException();
+            return null;
         }
 
         // Xoay vòng token
@@ -223,39 +262,82 @@ public sealed class AuthService : IAuthService
         };
     }
 
+    /// <summary>Thu hồi theo family/tài khoản dưới Serializable; không cho token revoked/expired thu hồi mọi thiết bị.</summary>
     public async Task LogoutAsync(string? refreshToken, bool revokeAllDevices, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(refreshToken))
         {
-            return;
+            if (!revokeAllDevices)
+            {
+                return;
+            }
+            if (!_currentUser.IsAuthenticated || !_currentUser.UserId.HasValue)
+            {
+                throw new SessionExpiredException();
+            }
         }
-
-        var now = _timeProvider.GetUtcNow();
-        var hash = _tokenService.HashOpaqueToken(refreshToken);
-
-        var tokenEntity = await _refreshTokenRepository.FindByHashAsync(hash, ct);
-        if (tokenEntity == null)
+        await _unitOfWork.ExecuteSerializableAsync(async () =>
         {
-            return;
-        }
+            await LogoutCoreAsync(refreshToken, revokeAllDevices, ct);
+            return true;
+        }, ct);
+    }
 
+    private async Task LogoutCoreAsync(string? refreshToken, bool revokeAllDevices, CancellationToken ct)
+    {
+        RefreshToken? cookieToken = null;
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+        {
+            cookieToken = await _refreshTokenRepository.FindByHashAsync(_tokenService.HashOpaqueToken(refreshToken), ct);
+        }
+        var now = _timeProvider.GetUtcNow();
         if (revokeAllDevices)
         {
-            var allTokens = await _refreshTokenRepository.FindActiveByUserAsync(tokenEntity.UserId, ct);
-            foreach (var t in allTokens)
+            Guid userId;
+            if (_currentUser.IsAuthenticated && _currentUser.UserId.HasValue)
             {
-                t.RevokedAt = now;
+                userId = _currentUser.UserId.Value;
+                var user = await _userRepository.FindByIdAsync(userId, ct);
+                if (user == null || user.Status != UserStatus.Active)
+                {
+                    throw new SessionExpiredException();
+                }
+                if (!string.IsNullOrWhiteSpace(refreshToken) && (cookieToken == null || cookieToken.UserId != userId))
+                {
+                    throw new SessionExpiredException();
+                }
+            }
+            else
+            {
+                if (cookieToken == null || cookieToken.RevokedAt != null || cookieToken.ExpiresAt <= now
+                    || cookieToken.SessionStartedAt.Add(MaxSessionLifetime) <= now
+                    || cookieToken.User.Status != UserStatus.Active)
+                {
+                    throw new SessionExpiredException();
+                }
+                userId = cookieToken.UserId;
+            }
+            var allTokens = await _refreshTokenRepository.FindActiveByUserAsync(userId, ct);
+            now = _timeProvider.GetUtcNow();
+            foreach (var token in allTokens)
+            {
+                token.RevokedAt = now;
             }
         }
         else
         {
-            var familyTokens = await _refreshTokenRepository.FindActiveByFamilyAsync(tokenEntity.FamilyId, ct);
-            foreach (var t in familyTokens)
+            if (cookieToken == null)
             {
-                t.RevokedAt = now;
+                return;
+            }
+            var familyTokens = await _refreshTokenRepository.FindActiveByFamilyAsync(cookieToken.FamilyId, ct);
+            now = _timeProvider.GetUtcNow();
+            foreach (var token in familyTokens)
+            {
+                token.RevokedAt = now;
             }
         }
-
         await _unitOfWork.SaveChangesAsync(ct);
     }
 

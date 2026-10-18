@@ -9,11 +9,10 @@ namespace LegacyVault.Application.Services;
 /// </summary>
 /// <remarks>
 /// Luật chung khi cài đặt:
-/// - Mọi thay đổi gói (tạo, đổi tên, lưu trữ, thêm/gỡ tài sản) tăng HandoverPlan.ConfigVersion (SETUP-04).
-/// - Status DRAFT/READY do backend tự tính lại sau mỗi thay đổi; READY cần ≥1 tài sản VÀ ≥1 chỉ định hợp lệ.
-///   Chưa có module chỉ định nên hiện gói luôn DRAFT — KHÔNG được coi là READY cho đủ điều kiện (SETUP-01).
-/// - Thao tác "thêm" (tạo, đổi tên, thêm tài sản) chặn khi kho CLOSED / có hồ sơ chứng tử / dịch vụ đang ân hạn;
-///   thao tác "giảm" (lưu trữ, gỡ tài sản) vẫn cho khi ân hạn (OPLAN-01).
+/// - Mọi thay đổi gói (tạo, đổi tên, lưu trữ, thêm/gỡ tài sản, thêm/gỡ người nhận) tăng HandoverPlan.ConfigVersion (SETUP-04).
+/// - Status DRAFT/READY do backend tự tính lại sau mỗi thay đổi; READY cần ≥1 tài sản VÀ ≥1 chỉ định người nhận (SETUP-16).
+/// - Thao tác "thêm" (tạo, đổi tên, thêm tài sản/người nhận) chặn khi kho CLOSED / có hồ sơ chứng tử / dịch vụ đang ân hạn;
+///   thao tác "giảm" (lưu trữ, gỡ tài sản/người nhận) vẫn cho khi ân hạn (OPLAN-01).
 /// Lỗi chung: 401 SESSION_EXPIRED, 404 VAULT_NOT_FOUND (không có kho / kho người khác),
 /// 409 VAULT_NOT_EDITABLE (+reason: VAULT_CLOSED / PLAN_LOCKED / SERVICE_READ_ONLY).
 /// </remarks>
@@ -43,7 +42,7 @@ public interface IContainerService
         Guid vaultId, Guid containerId, UpdateContainerRequest request, CancellationToken ct);
 
     /// <summary>
-    /// Lưu trữ gói: gỡ hết tài sản (và chỉ định khi có), chuyển ARCHIVED. Gói đã lưu trữ → trả nguyên trạng.
+    /// Lưu trữ gói: gỡ hết tài sản và chỉ định người nhận, chuyển ARCHIVED. Gói đã lưu trữ → trả nguyên trạng.
     /// Lỗi: 404 CONTAINER_NOT_FOUND, 409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED (SETUP-16).
     /// </summary>
     Task<ContainerResponse> ArchiveContainerAsync(
@@ -66,4 +65,21 @@ public interface IContainerService
     /// </summary>
     Task<ContainerResponse> RemoveAssetAsync(
         Guid vaultId, Guid containerId, Guid assetId, ConfirmPlanImpactRequest? request, CancellationToken ct);
+
+    /// <summary>
+    /// Chỉ định một hồ sơ người nhận CỦA KHO NÀY cho gói, rồi tính lại DRAFT/READY. Đã ở đúng gói này → trả nguyên trạng.
+    /// Người chưa ở gói nào của kho chiếm thêm một suất (QUOTA-03).
+    /// Lỗi: 404 CONTAINER_NOT_FOUND, 404 BENEFICIARY_NOT_FOUND, 409 CONTAINER_ARCHIVED,
+    /// 403 PAID_TIER_REQUIRED (hạng Free, SETUP-17), 409 BENEFICIARY_SLOTS_EXCEEDED (+usedSlots, maxSlots; QUOTA-05).
+    /// </summary>
+    Task<ContainerResponse> AddBeneficiaryAsync(
+        Guid vaultId, Guid containerId, AddContainerBeneficiaryRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Gỡ người nhận khỏi gói (KHÔNG xóa hồ sơ), rồi tính lại DRAFT/READY. Người nhận không ở trong gói → trả nguyên trạng.
+    /// Người còn ở gói khác vẫn chiếm suất (AC-103).
+    /// Lỗi: 404 CONTAINER_NOT_FOUND, 409 CONTAINER_ARCHIVED, 409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED.
+    /// </summary>
+    Task<ContainerResponse> RemoveBeneficiaryAsync(
+        Guid vaultId, Guid containerId, Guid beneficiaryId, ConfirmPlanImpactRequest? request, CancellationToken ct);
 }

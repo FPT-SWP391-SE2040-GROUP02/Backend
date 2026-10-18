@@ -42,6 +42,8 @@ Chỉ chạy SQL thì cần Docker. Để chạy/code API cần thêm [.NET SDK]
 
 **Visual Studio:** mở `LegacyVault.sln` → chọn `LegacyVault.Api` làm Startup Project → chọn profile **http** → F5 hoặc Ctrl+F5.
 
+**Local đã đối soát Google ngày 15/10/2026:** chọn profile **google-dev** để dùng `LegacyVault_OfficialDev` trên SQL Windows local `localhost,1433` với Windows authentication. DB này đã áp đủ migrations; profile này không dùng database Docker của `http`. Xem [Google Auth local recovery](docs/GOOGLE-AUTH-LOCAL-RECOVERY.md) để biết cấu hình, bằng chứng và rollback. Chỉ chạy một host trên cổng 5000.
+
 **Terminal:**
 
 ```powershell
@@ -192,6 +194,7 @@ Biến trên chỉ phục vụ kiểm thử tự động, không bắt buộc đ
 | Health ready trả 503 | Chờ Docker healthy, kiểm tra password/database/cấu hình ghi đè |
 | Cổng API 5000 bị chiếm | Dừng API cũ hoặc đổi profile và URL test |
 | Swagger chưa có login/register | Bộ khung chưa triển khai auth |
+| Lệnh eKYC trả `503 EKYC_SERVICE_UNAVAILABLE` | Dịch vụ eKYC chưa chạy, sai cổng hoặc `Ekyc:BaseUrl` để trống; xem mục 13 |
 
 ## 10. Git và trạng thái chức năng
 
@@ -201,4 +204,73 @@ Repo chính thức: [FPT-SWP391-SE2040-GROUP02/Backend](https://github.com/FPT-S
 
 Đã có: bốn project, DI, SQL Docker tự tạo database, EF Core, CORS, ProblemDetails, Swagger, health check và cấu hình CI.
 
-Chưa có: Auth, tài khoản demo, bảng nghiệp vụ, Vault/Assets, mã hóa, Google, eKYC, thanh toán, điểm danh, chứng tử, video/bàn giao, Admin/audit/jobs. Xem [backlog](docs/backlog.md); chạy được môi trường không đồng nghĩa hoàn thành SRS.
+Đã có thêm: đăng ký/xác minh email, đăng nhập email/mật khẩu (JWT + refresh cookie), đăng nhập Google; tạo/xem/sửa kho; tạo/xem tài sản mã hóa (tệp, chữ); gói: tạo/xem/đổi tên/lưu trữ, thêm/gỡ tài sản trong gói; điểm danh định kỳ (deadman switch) với job nền chuyển trạng thái và nhắc hạn — xem docs/api-contract.md mục 6. Email xác minh tài khoản và lời nhắc điểm danh gửi thật qua Gmail (MailKit) khi có cấu hình `Email:Smtp` — xem mục 11; chưa cấu hình thì chỉ ghi log. Lưu trữ gói READY cuối cùng (kế hoạch về nháp) cũng dừng lịch điểm danh.
+
+Nội dung tài sản được **mã hóa envelope** trước khi ghi đĩa: AES-256-GCM, mỗi phiên bản một DEK riêng, DEK được bọc bằng KEK trong mục `AssetEncryption` của cấu hình (không nằm trong DB). `appsettings.Development.json` có sẵn KEK mẫu `dev-local` — **chỉ dùng local**, giống mật khẩu SQL mẫu. Server thật đặt KEK qua biến môi trường `AssetEncryption__ActiveKeyId` và `AssetEncryption__Keys__<id>`; thiếu/sai KEK thì API không khởi động. Đổi KEK: thêm khóa mới, chuyển `ActiveKeyId`, **giữ khóa cũ** để mở các phiên bản đã lưu. Mất KEK = mất toàn bộ nội dung đã lưu.
+
+Database dev đã chạy các migration cũ (`InitialSchema`, `AddAssetVersionEncryption`, đã bỏ khi gộp với develop) thì xóa database rồi tạo lại theo migration hiện tại:
+
+```powershell
+dotnet ef database drop --force --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
+dotnet ef database update --project src/LegacyVault.Infrastructure --startup-project src/LegacyVault.Api -- --environment Development
+```
+
+Nhớ xóa luôn thư mục `src/LegacyVault.Api/App_Data/asset-content` vì nội dung trong đó không còn bản ghi tương ứng.
+
+Đoạn mô tả môi trường tối thiểu ở trên là checkpoint cũ, không phản ánh toàn bộ API hiện tại. Executor invite/resend/respond và kích hoạt kế hoạch nối điểm danh đã triển khai ngày 15/10/2026; xem [contract và giới hạn nghiệm thu](docs/PLAN-SETUP-API.md) cùng [API contract](docs/api-contract.md). Chạy được môi trường không đồng nghĩa hoàn thành SRS.
+
+## 11. Gửi email thật bằng Gmail (MailKit SMTP)
+
+Dịch vụ email dùng chung cho email xác minh tài khoản và lời nhắc điểm danh. **Chưa cấu hình thì hệ thống chỉ ghi log, không gửi email** (dev và test vẫn chạy bình thường).
+
+1. Tài khoản Gmail dùng để gửi cần bật **Xác minh 2 bước**, rồi tạo **Mật khẩu ứng dụng** tại <https://myaccount.google.com/apppasswords> (16 ký tự). Gmail không cho dùng mật khẩu đăng nhập thường.
+2. Đặt bí mật **bằng user-secrets** (chỉ nằm trên máy bạn, không vào Git):
+
+```powershell
+dotnet user-secrets set "Email:Smtp:UserName" "ten-ban@gmail.com" --project src/LegacyVault.Api
+dotnet user-secrets set "Email:Smtp:Password" "mat-khau-ung-dung-16-ky-tu" --project src/LegacyVault.Api
+```
+
+3. Khởi động lại API. Thử bằng cách đăng ký một tài khoản bằng email thật: email xác minh sẽ tới hộp thư.
+
+Server thật đặt biến môi trường `Email__Smtp__UserName` và `Email__Smtp__Password` (không viết vào `appsettings.json`, không commit). Các giá trị không bí mật (`Host`, `Port`, `SecureSocket`, `FromName`, `FromAddress`) nằm ở mục `Email:Smtp` của `appsettings.json`. Gmail chỉ cho gửi từ chính tài khoản đã đăng nhập (hoặc bí danh đã xác minh), nên để trống `FromAddress`. Cấu hình sai (cổng, `SecureSocket`, địa chỉ gửi) thì API không khởi động. Gmail giới hạn khoảng 500 thư/ngày cho tài khoản thường.
+
+
+## 12. Lưu nội dung tài sản trên Cloudflare R2
+
+Mặc định (`AssetStorage:Provider` = `Local`) nội dung đã mã hóa nằm trên đĩa server, ở thư mục `AssetStorage:RootPath`. Muốn lưu lên bucket R2 thì đổi `Provider` thành `R2`. R2 chỉ giữ dữ liệu đã mã hóa; KEK vẫn nằm ở server, nên không có KEK thì không đọc được nội dung (SEC-02, SEC-11).
+
+1. Tạo bucket **private** (không bật truy cập công khai) và một API token R2 có quyền đọc/ghi object trên bucket đó.
+2. Đặt cấu hình **bằng user-secrets**, không viết vào `appsettings*.json`:
+
+```powershell
+dotnet user-secrets set "AssetStorage:Provider" "R2" --project src/LegacyVault.Api
+dotnet user-secrets set "AssetStorage:R2:AccountId" "<account-id>" --project src/LegacyVault.Api
+dotnet user-secrets set "AssetStorage:R2:BucketName" "<ten-bucket>" --project src/LegacyVault.Api
+dotnet user-secrets set "AssetStorage:R2:AccessKeyId" "<access-key-id>" --project src/LegacyVault.Api
+dotnet user-secrets set "AssetStorage:R2:SecretAccessKey" "<secret-access-key>" --project src/LegacyVault.Api
+```
+
+3. Khởi động lại API. Thiếu một trong bốn giá trị `R2` thì API không khởi động.
+
+Server thật đặt biến môi trường `AssetStorage__Provider`, `AssetStorage__R2__AccountId`... Đổi `Provider` không chuyển dữ liệu cũ: tài sản đã lưu trên đĩa sẽ không đọc được khi chạy với R2, và ngược lại. Test tự động luôn ép `Provider` = `Local`, nên `dotnet test` không ghi vào bucket thật dù máy có user-secrets R2.
+
+## 13. Chạy dịch vụ eKYC để thử các luồng xác minh
+
+eKYC (đọc căn cước, so khuôn mặt, thử thách camera) là **chương trình Python riêng**, nằm ở repo `FPT-SWP391-SE2040-GROUP02/ekyc-model` chứ không nằm trong repo này. Backend gọi nó qua HTTP. Không cần dịch vụ này để build hay chạy `dotnet test` (test dùng bản giả lập); chỉ cần khi muốn thử eKYC thật qua Swagger, `http/ekyc.http` hoặc Frontend.
+
+Chạy trên **Windows 64-bit**, dịch vụ eKYC và Backend **cùng một máy**:
+
+1. Cài **Python 3.12 (64-bit)**, ví dụ `winget install Python.Python.3.12`. Các bản khác (3.13, 3.14, 32-bit) không được chấp nhận.
+2. Clone repo `ekyc-model` ra một thư mục riêng (không clone vào trong repo Backend), rồi chạy **một lần** `setup.cmd`. Lệnh này tự tạo `.venv`, cài thư viện, cài PyTorch bản CPU và tải model; cần Internet, chiếm khoảng 2 GB đĩa và mất vài phút đến hơn chục phút.
+3. Chạy `START.cmd` (giữ cửa sổ mở, dừng bằng Ctrl+C). Mở `http://127.0.0.1:8879/api/health`: phải thấy `ocr`, `face`, `landmarks`, `anti_spoof` đều là `true`.
+4. Chạy Backend như bình thường. `appsettings.Development.json` đã đặt sẵn `Ekyc:BaseUrl = http://127.0.0.1:8879` và `Ekyc:TimeoutSeconds = 120`, nên không cần cấu hình thêm. Lần gọi eKYC đầu chậm vì dịch vụ phải nạp model.
+
+Thử bằng `http/ekyc.http`. Luồng đầy đủ gọi theo thứ tự: `consent` → `document` (mặt trước) → `document-back` (tùy chọn) → thử thách camera (`liveness/start`, `liveness/frame` nhiều lần, `liveness/complete`). Thử thách camera cần khung hình thật từ camera nên thực tế phải làm qua Frontend; chi tiết hợp đồng ở `docs/api-contract.md` mục 6.10. Muốn thử cho người nhận thì xem thêm `docs/HANDOVER-RECEIVE-API.md`.
+
+Lưu ý:
+
+- Ảnh căn cước và khuôn mặt thật **không commit** vào repo. Dùng ảnh của chính bạn để thử.
+- Mặc định dịch vụ chỉ nhận kết nối từ chính máy đó. Muốn chạy ở máy khác (ví dụ một máy chung cho cả nhóm) thì làm theo mục "Bảo mật mạng" trong README của `ekyc-model`: đặt `EKYC_HOST`, `EKYC_ALLOWED_HOSTS` và **bắt buộc `EKYC_API_KEY`** ở dịch vụ, đồng thời đặt khóa tương ứng cho Backend bằng `dotnet user-secrets set "Ekyc:ApiKey" "<khóa>" --project src/LegacyVault.Api` (không ghi vào `appsettings*.json`).
+- Đổi cổng dịch vụ (`EKYC_PORT`) thì phải đổi `Ekyc:BaseUrl` cho khớp.
+- Sự cố thường gặp (sai phiên bản Python, `setup.cmd` lỗi mạng, cổng bận, model báo `false`) nằm trong README của `ekyc-model`.

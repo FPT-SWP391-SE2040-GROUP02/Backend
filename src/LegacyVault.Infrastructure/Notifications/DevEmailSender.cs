@@ -30,4 +30,23 @@ public sealed class DevEmailSender : IEmailSender
 
         return Task.CompletedTask;
     }
+
+    public Task SendPasswordResetAsync(string toEmail, string fullName, string resetUrl, CancellationToken ct)
+    {
+        try
+        {
+            _logger.LogInformation(
+                "======================================================================\n" +
+                "[EMAIL DAT LAI MAT KHAU] Gui toi: {Email} ({FullName})\n" +
+                "Link dat lai: {ResetUrl}\n" +
+                "======================================================================",
+                toEmail, fullName, resetUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Khong the ghi log/gui email dat lai mat khau toi {Email}", toEmail);
+        }
+
+        return Task.CompletedTask;
+    }
 }
