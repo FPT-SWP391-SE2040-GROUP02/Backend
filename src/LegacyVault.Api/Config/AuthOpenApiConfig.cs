@@ -83,7 +83,9 @@ public static class AuthOpenApiConfig
             };
             foreach (var (path, item) in document.Paths)
             {
-                if (!path.StartsWith("/api/v1/auth/") || item.Operations is null) continue;
+                if (item.Operations is null) continue;
+                // Gắn Bearer cho mọi API để nút Authorize của Swagger gửi token cho cả /vaults, /billing...
+                var isAuthPath = path.StartsWith("/api/v1/auth/");
                 foreach (var operation in item.Operations.Values)
                 {
                     operation.Security = [new OpenApiSecurityRequirement
@@ -91,7 +93,7 @@ public static class AuthOpenApiConfig
                         [new OpenApiSecuritySchemeReference("Bearer", document)] = [],
                     }];
                     // Public Auth vẫn nhận Bearer tùy chọn để proof và POST cùng principal.
-                    if (!path.EndsWith("/session")) operation.Security.Add(new OpenApiSecurityRequirement());
+                    if (isAuthPath && !path.EndsWith("/session")) operation.Security.Add(new OpenApiSecurityRequirement());
                 }
             }
             return Task.CompletedTask;
