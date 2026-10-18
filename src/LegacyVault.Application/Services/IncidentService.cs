@@ -51,6 +51,14 @@ public interface IIncidentService
     /// <summary>Nội bộ: đóng sự cố đang mở của (loại, đối tượng) nếu có. KHÔNG SaveChanges.</summary>
     Task ResolveByTargetAsync(IncidentType type, string targetType, Guid? targetId, string note, CancellationToken ct);
 
+    /// <summary>
+    /// Nội bộ: đổi người phụ trách sự cố đang mở của (loại, đối tượng) khi việc được giao cho người khác (ALIVE-08).
+    /// Hạn nhắc tính lại từ bây giờ (ReminderAfter), RemindedCount về 0, ghi sự kiện Assigned. Không có sự cố mở hoặc
+    /// đã đúng người thì không làm gì. KHÔNG SaveChanges.
+    /// </summary>
+    Task ReassignByTargetAsync(
+        IncidentType type, string targetType, Guid? targetId, Guid newAssigneeUserId, string note, CancellationToken ct);
+
     Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
         string? status, string? type, Guid? assigneeUserId, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct);
 
@@ -154,6 +162,29 @@ public sealed class IncidentService : IIncidentService
         open.ResolutionNote = AuditRules.NormalizeReason(note);
         open.UpdatedAt = now;
         AddEvent(open, IncidentEventKind.Resolved, null, note, now);
+    }
+
+    public async Task ReassignByTargetAsync(
+        IncidentType type, string targetType, Guid? targetId, Guid newAssigneeUserId, string note, CancellationToken ct)
+    {
+        Incident? open = await incidents.FindOpenAsync(type, targetType, targetId, ct);
+        if (open == null)
+        {
+            return;
+        }
+        if (open.AssigneeUserId == newAssigneeUserId)
+        {
+            return;
+        }
+        // Người làm là hệ thống (job nền) nên không kiểm Admin, không etag, không ghi AuditLogs.
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        open.AssigneeUserId = newAssigneeUserId;
+        open.Status = IncidentStatus.InProgress;
+        open.RemindedCount = 0;
+        open.DueAt = now + IncidentRules.ReminderAfter;
+        open.NextReviewAt = now + IncidentRules.MaxReviewInterval;
+        open.UpdatedAt = now;
+        AddEvent(open, IncidentEventKind.Assigned, null, note, now);
     }
 
     public async Task<PaginatedList<IncidentSummaryResponse>> ListAsync(

@@ -12,6 +12,9 @@ public static class ObjectionRules
     /// <summary>Hạn Verifier kết luận sau khi báo / sau khi yêu cầu bổ sung căn cứ.</summary>
     public static readonly TimeSpan VerifierWindow = TimeSpan.FromDays(7);
 
+    /// <summary>SRS §6.5: Verifier có 48 giờ để kết luận (sau khi được giao, và không sớm hơn hết hạn selfie + 48 giờ).</summary>
+    public static readonly TimeSpan VerifierDecisionWindow = TimeSpan.FromHours(48);
+
     /// <summary>EKYC-20: tối đa 3 lần selfie không khớp trong 24 giờ.</summary>
     public const int MaxSelfieFailures = 3;
 
@@ -64,6 +67,31 @@ public static class ObjectionRules
     public static bool HasAliveEvidence(DeathCaseObjection objection, DateTimeOffset now)
     {
         return objection.SelfiePassedAt != null || !IsSelfieWindowOpen(objection, now);
+    }
+
+    /// <summary>
+    /// ALIVE-04, ALIVE-08, ASSIGN-04: hạn Verifier kết luận = mốc muộn hơn giữa (start + 48 giờ) và (hết hạn selfie + 48 giờ).
+    /// start là lúc báo, lúc giao hoặc giao lại. Hạn selfie 7 ngày của cả lời báo không bao giờ đổi (ALIVE-03).
+    /// </summary>
+    public static DateTimeOffset ComputeVerifierDueAt(DateTimeOffset start, DateTimeOffset selfieDeadlineAt)
+    {
+        DateTimeOffset fromStart = start + VerifierDecisionWindow;
+        DateTimeOffset fromSelfieDeadline = selfieDeadlineAt + VerifierDecisionWindow;
+        if (fromSelfieDeadline > fromStart)
+        {
+            return fromSelfieDeadline;
+        }
+        return fromStart;
+    }
+
+    /// <summary>TIME-01: đúng lúc hết hạn là quá hạn. Chưa có hạn (chưa có Verifier) thì không tính quá hạn.</summary>
+    public static bool IsVerifierOverdue(DeathCaseObjection objection, DateTimeOffset now)
+    {
+        if (objection.VerifierDueAt == null)
+        {
+            return false;
+        }
+        return now >= objection.VerifierDueAt.Value;
     }
 
     /// <summary>Lượt đã kết thúc không bị hủy lại.</summary>

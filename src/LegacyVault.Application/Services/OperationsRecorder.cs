@@ -119,7 +119,8 @@ public sealed class OperationsRecorder : IOperationsRecorder
             return;
         }
 
-        List<Executor> active = await executorReader.GetActiveAsync(plan.VaultId, ct);
+        // ASSIGN-02: Executor chính bị khóa thì sự cố giao cho Executor dự phòng còn hoạt động.
+        List<Executor> active = await executorReader.GetAvailableAsync(plan.VaultId, ct);
         Guid? assignee = null;
         if (active.Count > 0)
         {

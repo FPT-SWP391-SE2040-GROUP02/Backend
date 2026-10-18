@@ -11,7 +11,8 @@ namespace LegacyVault.Application.Services;
 /// <remarks>
 /// ALIVE-05..07: kết luận và mọi hệ quả (hồ sơ, lượt, grant, kế hoạch, kỳ điểm danh) lưu trong MỘT giao dịch.
 /// Bác phản đối KHÔNG tự duyệt chứng tử: hồ sơ chỉ trở về trạng thái trước đó.
-/// TODO(LV-07): thông báo người nhận có grant bị thu hồi (ALIVE-07), nhắc Verifier quá hạn và giao người khác (ALIVE-08).
+/// ALIVE-08: DeathCaseAssignmentJob giao lại Verifier quá hạn/mất quyền.
+/// TODO(LV-07): thông báo người nhận có grant bị thu hồi (ALIVE-07).
 /// </remarks>
 public sealed class VerifierObjectionService : IVerifierObjectionService
 {
