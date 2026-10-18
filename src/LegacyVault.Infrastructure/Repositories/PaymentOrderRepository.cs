@@ -22,6 +22,11 @@ public sealed class PaymentOrderRepository : IPaymentOrderRepository
             .FirstOrDefaultAsync(o => o.Id == orderId && o.VaultId == vaultId, ct);
     }
 
+    public Task<PaymentOrder?> FindByIdAsync(Guid orderId, CancellationToken ct)
+    {
+        return context.PaymentOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct);
+    }
+
     public Task<PaymentOrder?> FindPendingByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
         return context.PaymentOrders

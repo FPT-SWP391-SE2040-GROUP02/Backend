@@ -9,6 +9,12 @@ public class BillingSettings
     public const string SectionName = "Billing";
 
     public BillingBankSection Bank { get; set; } = new BillingBankSection();
+
+    /// <summary>
+    /// Công tắc endpoint giả lập trả tiền (dev-pay). Mặc định tắt; chỉ có tác dụng khi môi trường là Development
+    /// (xem BillingDevSettings). Không đặt true trong appsettings.json hay môi trường thật.
+    /// </summary>
+    public bool DevPaymentEnabled { get; set; }
 }
 
 public class BillingBankSection

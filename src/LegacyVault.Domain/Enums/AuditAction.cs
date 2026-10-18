@@ -73,4 +73,6 @@ public enum AuditAction
     PaymentOrderCreated = 32,
     /// <summary>Owner hủy đơn thanh toán đang chờ.</summary>
     PaymentOrderCancelled = 33,
+    /// <summary>Đơn thanh toán được thanh toán và quyền dịch vụ được cấp (job/webhook, không có người dùng).</summary>
+    PaymentPaid = 34,
 }

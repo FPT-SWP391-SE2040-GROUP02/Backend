@@ -172,6 +172,49 @@ public static class BillingRules
         return byLifetime;
     }
 
+    /// <summary>
+    /// Cấp quyền cho đơn PURCHASE (D8, PAY-08): chỉ khi quyền dịch vụ vẫn còn Free. Kỳ mới bắt đầu lúc thanh toán thành công,
+    /// dài số năm × 365 ngày; dung lượng và suất kèm theo lấy từ đơn (đã chốt lúc tạo). Sai điều kiện → không cấp.
+    /// </summary>
+    public static void ApplyPurchase(VaultEntitlement entitlement, PaymentOrder order, DateTimeOffset paidAt)
+    {
+        if (entitlement.Status != EntitlementStatus.Free || order.Years == null)
+        {
+            throw NotPayable(PaymentOrderNotPayableReason.EntitlementChanged,
+                "Quyền dịch vụ của kho đã thay đổi kể từ lúc tạo đơn nên không thể cấp tự động.");
+        }
+
+        entitlement.Tier = order.Tier;
+        entitlement.Status = EntitlementStatus.PaidActive;
+        entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
+        entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
+        entitlement.ExtraBeneficiarySlots = order.ExtraSlots;
+        entitlement.ServiceExpiresAt = paidAt.AddDays(order.Years.Value * BillingPrices.DaysPerYear);
+        entitlement.UpdatedAt = paidAt;
+    }
+
+    /// <summary>
+    /// Cấp quyền cho đơn ADDON (D8, ADDON-02, ADDON-03): chỉ tăng số suất thêm, giữ nguyên hạn. Chỉ cấp khi quyền vẫn là
+    /// PaidActive cùng hạng, đúng kỳ lúc tạo đơn (hạn không đổi) và kỳ chưa hết; ngược lại không tự cấp.
+    /// </summary>
+    public static void ApplyAddon(VaultEntitlement entitlement, PaymentOrder order, DateTimeOffset paidAt)
+    {
+        bool unchanged = entitlement.Status == EntitlementStatus.PaidActive
+            && entitlement.Tier == order.Tier
+            && entitlement.ServiceExpiresAt != null
+            && order.BaseServiceExpiresAt != null
+            && entitlement.ServiceExpiresAt.Value == order.BaseServiceExpiresAt.Value
+            && entitlement.ServiceExpiresAt.Value > paidAt;
+        if (!unchanged)
+        {
+            throw NotPayable(PaymentOrderNotPayableReason.EntitlementChanged,
+                "Kỳ dịch vụ của kho đã thay đổi hoặc đã hết kể từ lúc tạo đơn nên không thể cấp tự động.");
+        }
+
+        entitlement.ExtraBeneficiarySlots = entitlement.ExtraBeneficiarySlots + order.ExtraSlots;
+        entitlement.UpdatedAt = paidAt;
+    }
+
     /// <summary>Đơn còn Pending nhưng đã tới hoặc qua hạn thanh toán (D7: không có job, kiểm lúc đọc/tạo/hủy/trả).</summary>
     public static bool IsExpired(PaymentOrder order, DateTimeOffset now)
     {

@@ -77,6 +77,7 @@ public static class InfrastructureConfig
         services.AddScoped<IPaymentOrderRepository, PaymentOrderRepository>();
         services.Configure<BillingSettings>(configuration.GetSection(BillingSettings.SectionName));
         services.AddSingleton<IBillingBankSettings, BillingBankSettings>();
+        services.AddSingleton<IBillingDevSettings, BillingDevSettings>();
 
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();

@@ -11,6 +11,12 @@ public interface IPaymentOrderRepository
     /// </summary>
     Task<PaymentOrder?> FindByIdForVaultAsync(Guid vaultId, Guid orderId, CancellationToken ct);
 
+    /// <summary>
+    /// Đơn theo Id, không giới hạn kho (có theo dõi thay đổi). Chỉ dùng ở luồng ghi nhận thanh toán không có
+    /// người dùng đăng nhập (webhook H2); luồng của Owner dùng FindByIdForVaultAsync. Không có → null.
+    /// </summary>
+    Task<PaymentOrder?> FindByIdAsync(Guid orderId, CancellationToken ct);
+
     /// <summary>Đơn đang Pending của kho (PAY-04: tối đa một), có theo dõi thay đổi. Không có → null.</summary>
     Task<PaymentOrder?> FindPendingByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
