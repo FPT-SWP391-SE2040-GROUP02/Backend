@@ -107,6 +107,10 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 423 | `ACCOUNT_LOCKED` | Sai mật khẩu 5 lần trong 15 phút | `attemptsRemaining: 0`, `remainingSeconds` |
 | 500 | `INTERNAL_ERROR` | Lỗi bất ngờ | `traceId` |
 | 400 | `INVALID_RESET_TOKEN` | Link đặt lại mật khẩu sai, hết hạn, đã dùng hoặc tài khoản không còn hoạt động | |
+| 409 | `PAYMENT_NOT_ALLOWED` | Báo giá hoặc tạo đơn thanh toán không được lúc này (mục 6.18) | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `OWNER_EKYC_REQUIRED` / `RENEWAL_NOT_SUPPORTED` |
+| 409 | `PAYMENT_ORDER_PENDING` | Kho đang có đơn `PENDING` còn hạn với lựa chọn khác; hủy đơn cũ trước (PAY-04) | `orderId` |
+| 409 | `PAYMENT_ORDER_NOT_PAYABLE` | Hủy hoặc ghi nhận thanh toán một đơn không còn ở trạng thái cho phép | `reason`: `PAID` / `EXPIRED` / `CANCELLED` / `VAULT_CLOSED` / `ENTITLEMENT_CHANGED` |
+| 404 | `PAYMENT_ORDER_NOT_FOUND` | Không có đơn thanh toán, hoặc đơn của kho khác; cũng là kết quả của `dev-pay` khi công tắc dev tắt | |
 
 ---
 
@@ -736,6 +740,9 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 | `DEATH_CASE_SUPPLEMENT_REQUESTED` | `DEATH_CASE` | Verifier yêu cầu bổ sung; `reason` chỉ chứa mã phần cần bổ sung (ví dụ `DATE_OF_DEATH,FILES`), không chứa lý do tự do |
 | `DEATH_CASE_REJECTED` | `DEATH_CASE` | Verifier từ chối hồ sơ |
 | `DEATH_CASE_APPROVED` | `DEATH_CASE` | Verifier duyệt, mở bàn giao |
+| `PAYMENT_ORDER_CREATED` | `PAYMENT_ORDER` | Owner tạo đơn thanh toán (gọi lặp trả lại đơn cũ thì không ghi thêm); `targetId` là đơn |
+| `PAYMENT_ORDER_CANCELLED` | `PAYMENT_ORDER` | Owner hủy đơn đang chờ (hủy lặp không ghi thêm) |
+| `PAYMENT_PAID` | `PAYMENT_ORDER` | Đơn được thanh toán và quyền dịch vụ được cấp (`actorRole = SYSTEM`, không có `actorUserId`; không ghi số tiền hay mã thanh toán) |
 
 - **Hồ sơ chứng tử:** chỉ ghi thao tác Executor/Verifier đã lưu thành công (7 loại ở bảng trên); không ghi sửa nháp, thêm/xóa trang giấy, gọi lặp, thao tác bị từ chối, và `reason` không chép lý do tự do vì Owner xem được nhật ký (SEC-13). Lý do đầy đủ nằm ở quyết định của hồ sơ.
 - **Chưa làm:** ghi nhật ký cho thiết lập/kích hoạt kế hoạch, mời Executor và bàn giao (thuộc các module khác, cần chủ module đồng ý); lịch sử người nhận xem/tải nội dung (`HandoverAccessLogs`) chưa có API đọc cho Owner; Admin tra cứu nhật ký toàn hệ thống (ADMIN-06).
@@ -847,6 +854,117 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 - Không cần CSRF (không dùng cookie). Rate limit 5 request/phút/IP cho mỗi API.
 - Lỗi kiểm dữ liệu ở nhóm `/auth` trả Content-Type `application/json` (do `[Produces]` của AuthController), body vẫn là ProblemDetails có `code`.
 
+### 6.18. Thanh toán (Billing)
+
+Mua dịch vụ, mua thêm suất người nhận và giả lập trả tiền (SRS §8.1–8.3, §11.5, AC-90, AC-94, AC-95). Cần đăng nhập (Bearer). Kho luôn là kho của người đang đăng nhập: **không gửi `vaultId`, số tiền, loại đơn hay trạng thái** (SEC-04, PAY-11). Thử tay bằng `http/billing.http`.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/api/v1/billing/plans` | — | 200 `BillingPlansResponse` | 401 |
+| POST | `/api/v1/billing/quote` | `{ tier?, years?, extraSlots }` | 200 `BillingQuoteResponse` (không ghi DB) | 400 `VALIDATION_ERROR`, 404 `VAULT_NOT_FOUND`, 409 `PAYMENT_NOT_ALLOWED` |
+| POST | `/api/v1/billing/orders` | như `quote` | **201** đơn mới / **200** trả lại đơn `PENDING` cùng lựa chọn; `PaymentOrderResponse` | 400, 404 `VAULT_NOT_FOUND`, 409 `PAYMENT_NOT_ALLOWED`, 409 `PAYMENT_ORDER_PENDING` |
+| GET | `/api/v1/billing/orders/current` | — | 200 `PaymentOrderResponse` / **204** không có đơn chờ | 404 `VAULT_NOT_FOUND` |
+| GET | `/api/v1/billing/orders/{orderId}` | — | 200 `PaymentOrderResponse` | 404 `PAYMENT_ORDER_NOT_FOUND` |
+| POST | `/api/v1/billing/orders/{orderId}/cancel` | — | 200 `PaymentOrderResponse` | 404 `PAYMENT_ORDER_NOT_FOUND`, 409 `PAYMENT_ORDER_NOT_PAYABLE`, 409 `EDIT_CONFLICT` |
+| POST | `/api/v1/billing/orders/{orderId}/dev-pay` | — | 200 `PaymentOrderResponse` (đơn `PAID`) | 404, 409 `PAYMENT_ORDER_NOT_PAYABLE`, 409 `EDIT_CONFLICT` |
+
+**Body `quote` / `orders`:** `tier` là `"XS"` hoặc `"XS_MAX"`, `years` là `1`, `3` hoặc `5` (bắt buộc khi mua mới); `extraSlots` là số suất người nhận mua thêm. Backend tự xác định loại đơn từ quyền dịch vụ của kho, client không gửi:
+
+| Kho đang ở | Loại đơn | Ghi chú |
+|---|---|---|
+| `serviceStatus = FREE` | `PURCHASE` (mua mới) | Cần eKYC Owner (`OwnerEnrollment`) đạt trong 90 ngày; `extraSlots` 0–20 |
+| `PAID_ACTIVE` và còn hạn | `ADDON` (mua thêm suất) | `tier` và `years` gửi vào bị bỏ qua; `extraSlots` 1–20; không đổi hạn |
+| Hết hạn, `GRACE_READ_ONLY`, `EXPIRED_REVIEW` | — | 409 `PAYMENT_NOT_ALLOWED` / `RENEWAL_NOT_SUPPORTED` (gia hạn chưa có) |
+
+Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạch đang `DEATH_CASE_OPEN` / `HANDOVER_IN_PROGRESS` / `BLOCKED` (`PLAN_LOCKED`). Kiểm tra theo đúng thứ tự: kho (404) → kho đóng → kế hoạch khóa → loại đơn → eKYC → giá trị `tier` / `years` / `extraSlots` (400 `VALIDATION_ERROR`, theo tên trường).
+
+```json
+// BillingPlansResponse
+{
+  "policyVersion": "2026-10",
+  "currency": "VND",
+  "tiers": [
+    {
+      "tier": "XS",
+      "storageQuotaBytes": 209715200,
+      "includedBeneficiarySlots": 2,
+      "prices": [
+        { "years": 1, "amount": 199000, "serviceDays": 365 },
+        { "years": 3, "amount": 499000, "serviceDays": 1095 },
+        { "years": 5, "amount": 799000, "serviceDays": 1825 }
+      ]
+    },
+    { "tier": "XS_MAX", "storageQuotaBytes": 524288000, "includedBeneficiarySlots": 5, "prices": [ "..." ] }
+  ],
+  "extraSlot": { "pricePerYear": 49000, "maxPerOrder": 20 },
+  "notice": "Thanh toán không tự kích hoạt bàn giao."
+}
+
+// BillingQuoteResponse (POST /billing/quote) — ví dụ XS 3 năm + 1 suất (AC-94)
+{
+  "kind": "PURCHASE",
+  "tier": "XS",
+  "years": 3,
+  "extraSlots": 1,
+  "tierAmount": 499000,
+  "slotAmount": 147000,
+  "totalAmount": 646000,
+  "currency": "VND",
+  "storageQuotaBytes": 209715200,
+  "includedBeneficiarySlots": 2,
+  "beneficiarySlots": 3,
+  "serviceDays": 1095,
+  "serviceStartsAt": "ON_PAYMENT",
+  "serviceExpiresAt": null,
+  "policyVersion": "2026-10",
+  "notice": "Thanh toán không tự kích hoạt bàn giao.",
+  "serverTime": "2026-10-18T12:00:00+00:00"
+}
+
+// PaymentOrderResponse
+{
+  "id": "0199e7a4-5c1b-7c3e-9a51-3f0f5d2b8a10",
+  "kind": "PURCHASE",
+  "status": "PENDING",
+  "tier": "XS",
+  "years": 3,
+  "extraSlots": 1,
+  "tierAmount": 499000,
+  "slotAmount": 147000,
+  "totalAmount": 646000,
+  "currency": "VND",
+  "storageQuotaBytes": 209715200,
+  "includedBeneficiarySlots": 2,
+  "paymentCode": "LV7K2M9QXA",
+  "transferContent": "LV7K2M9QXA",
+  "bank": { "bankCode": "MBBank", "accountNumber": "0000000000", "accountName": "LEGACYVAULT TEST" },
+  "qrImageUrl": "https://qr.sepay.vn/img?acc=0000000000&bank=MBBank&amount=646000&des=LV7K2M9QXA",
+  "expiresAt": "2026-10-18T12:15:00+00:00",
+  "createdAt": "2026-10-18T12:00:00+00:00",
+  "paidAt": null,
+  "cancelledAt": null,
+  "serverTime": "2026-10-18T12:00:01+00:00",
+  "notice": "Thanh toán không tự kích hoạt bàn giao."
+}
+```
+
+| Trường | Giá trị |
+|---|---|
+| `kind` | `PURCHASE`, `ADDON` |
+| `status` | `PENDING`, `PAID`, `EXPIRED`, `CANCELLED` |
+| `tier` | `XS`, `XS_MAX` (đơn `ADDON` là hạng hiện tại của kho) |
+
+- **Giá do backend tính:** mua mới = giá hạng + `49.000 × extraSlots × số năm` (ADDON-01); mua thêm giữa kỳ = `ceil(49.000 × extraSlots × số giây còn lại / 31.536.000)` (ADDON-02; ví dụ còn đúng 180 ngày, 1 suất = 24.165 đ). Giá, dung lượng, số suất và `policyVersion` được **chốt trên đơn** lúc tạo (PAY-11).
+- **Một đơn chờ mỗi kho** (PAY-04): tạo lại cùng lựa chọn khi đang có đơn `PENDING` còn hạn thì trả lại đơn cũ (200); khác lựa chọn thì 409 `PAYMENT_ORDER_PENDING` kèm `orderId`. Muốn đổi thì hủy đơn cũ trước. Hai request cùng lúc vẫn chỉ ra một đơn.
+- **Hạn đơn:** mua mới = lúc tạo + 15 phút; mua thêm suất = mốc sớm hơn giữa lúc tạo + 15 phút và hết kỳ hiện tại (ADDON-03). FE tính thời gian còn lại theo `serverTime`, không theo đồng hồ máy khách.
+- **Chưa có job hết hạn đơn:** đơn `PENDING` đã quá hạn được đổi sang `EXPIRED` ngay trong lần đọc, tạo hoặc hủy tiếp theo. `GET /orders/current` trả 204 sau khi đánh dấu. Đơn không còn `PENDING` thì `qrImageUrl = null`.
+- **Mã thanh toán:** `LV` + 8 ký tự ngẫu nhiên (bỏ `0`, `O`, `1`, `I`), duy nhất toàn hệ thống; nội dung chuyển khoản phải đúng bằng mã này. Đơn không trả `ownerId`, `vaultId`, `rowVersion`. `includedBeneficiarySlots` là suất kèm theo hạng đã chốt; tổng suất của kho đọc ở `GET /vaults/me`.
+- **Hủy đơn:** hủy lặp vẫn 200 (trả đơn đã hủy). Đơn đã `PAID` → 409 `PAYMENT_ORDER_NOT_PAYABLE` (`reason = PAID`), đã quá hạn → `EXPIRED`.
+- **Cấp quyền** (D8): khi đơn được thanh toán, **chỉ** quyền dịch vụ của kho được ghi. Mua mới: hạng, `PAID_ACTIVE`, dung lượng, suất kèm theo, suất thêm = `extraSlots`, hạn = lúc trả + số năm × 365 ngày (PAY-08). Mua thêm suất: `extraBeneficiarySlots += extraSlots`, giữ nguyên hạn. Mỗi đơn chỉ cấp một lần (trả lặp trả lại đơn `PAID`). Không đổi kế hoạch (vẫn `DRAFT` nếu đang `DRAFT`, SETUP-14), không tính là điểm danh, không gỡ chặn (PAY-09). Đơn tạo trước khi kế hoạch bị khóa, tiền tới đúng hạn vẫn được cấp (§8.3). Không cấp và trả 409 `PAYMENT_ORDER_NOT_PAYABLE` khi: đơn đã hủy (`CANCELLED`), tiền tới sau hạn đơn (`EXPIRED`), kho đã đóng (`VAULT_CLOSED`), hoặc quyền dịch vụ đã đổi so với lúc tạo đơn (`ENTITLEMENT_CHANGED`: mua mới nhưng kho không còn Free; mua thêm nhưng hạn đã đổi, đã hết hạn hoặc không còn `PAID_ACTIVE`).
+- **`dev-pay` (chỉ Development):** giả lập trả tiền cho đơn của kho mình, gọi đúng hàm cấp quyền mà webhook SePay sẽ dùng. Không có body. Route chỉ được đăng ký khi môi trường là Development **và** `Billing:DevPaymentEnabled = true`; ngoài ra là 404. Hai thao tác trả tiền chạy cùng lúc có thể nhận 409 `EDIT_CONFLICT`; thử lại sẽ thấy đơn `PAID`.
+- **Cấu hình** (`Billing`): `Bank.BankCode`, `Bank.AccountNumber`, `Bank.AccountName` (thông tin công khai để hiện QR; `appsettings.Development.json` dùng số tài khoản giả, tài khoản thật đặt trong user-secrets hoặc biến môi trường) và `DevPaymentEnabled` (mặc định tắt). Chưa cấu hình ngân hàng thì tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
+- **Chưa làm (H2 và chức năng gia hạn):** webhook SePay thật, bảng giao dịch, chống trùng, đối chiếu và sự cố F4; gia hạn sớm và muộn, kỳ chờ, hết kỳ → ân hạn → rà soát, nhắc hạn, job hết hạn đơn.
+
 ## 7. Tóm tắt thay đổi FE cần làm
 
 | # | Việc | File FE |
@@ -857,6 +975,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 | 4 | Không dùng `ApiResponse<T>` cho API này (BE không bọc envelope) | `shared/types` |
 | 5 | Bổ sung hằng trạng thái: `LOCKED`, `DISABLED`, `OPEN`, `CLOSED`, `READY`, `ARCHIVED`, `PAID_ACTIVE`... (hiện `STATUS` chưa có) | `shared/constants` |
 | 6 | Gọi route có tiền tố `/v1` (base URL đã có `/api`) | các `features/*/api` |
+| 7 | Màn thanh toán đang mock contract cũ: đổi sang DTO và endpoint `/billing/*` ở mục 6.18 (hạng `XS` / `XS_MAX`, năm 1/3/5, suất thêm; không còn `RECIPIENT_PLUS`, voucher, monthly/lifetime); không gửi số tiền, chỉ hiển thị `totalAmount` từ response | `features/billing/*` |
 # Executor setup and activation (15/10/2026)
 
 See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.
