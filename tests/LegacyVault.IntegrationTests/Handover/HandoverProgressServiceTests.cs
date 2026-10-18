@@ -232,6 +232,11 @@ public sealed class FakeProgressExecutorReader : IExecutorReader
         }
         return Task.FromResult(result);
     }
+
+    public Task<List<Executor>> GetAvailableAsync(Guid vaultId, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
 }
 
 /// <summary>Nguồn dữ liệu tiến độ giả: hồ sơ, lượt, lần tải đầu và 4 số cuối CCCD nằm trong bộ nhớ.</summary>
