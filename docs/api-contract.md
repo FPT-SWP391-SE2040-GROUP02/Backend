@@ -854,6 +854,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 
 - Link gửi qua email dạng `{App:ClientUrl}/reset-password?token=...`, hạn 30 phút, dùng một lần; yêu cầu mới vô hiệu link cũ; trong 60 giây kể từ link gần nhất thì không gửi thêm.
 - `forgot-password` luôn 202, kể cả email không tồn tại, tài khoản bị khóa hoặc chỉ dùng Google (không lộ tài khoản).
+- Với DTO hợp lệ, lỗi xử lý/gửi thư cũng giữ phản hồi 202 trung tính để lỗi SMTP không biến thành cách dò email tồn tại; log chỉ ghi loại exception, không ghi recipient/token/body. Request bị hủy vẫn truyền cancellation. Validation/rate limit vẫn trả 400/429 trước action. 202 không xác nhận thư đã giao; chưa có outbox/retry cho luồng này. Khi SMTP chưa cấu hình, sender dev không giao thư và không ghi link reset vào log.
 - `reset-password` thành công: đổi mật khẩu, thu hồi mọi refresh token (mọi thiết bị phải đăng nhập lại), email chưa xác minh được coi là đã xác minh. Không tự đăng nhập; FE chuyển về trang đăng nhập.
 - Không cần CSRF (không dùng cookie). Rate limit 5 request/phút/IP cho mỗi API.
 - Lỗi kiểm dữ liệu ở nhóm `/auth` trả Content-Type `application/json` (do `[Produces]` của AuthController), body vẫn là ProblemDetails có `code`.

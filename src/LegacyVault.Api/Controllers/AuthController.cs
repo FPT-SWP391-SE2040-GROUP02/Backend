@@ -212,9 +212,21 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [EnableRateLimiting(AuthRateLimitPolicies.PasswordReset)]
     [AllowAnonymous]
-    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken ct)
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request,
+        [FromServices] ILogger<AuthController> logger, CancellationToken ct)
     {
-        await _passwordResetService.ForgotPasswordAsync(request, ct);
+        try
+        {
+            await _passwordResetService.ForgotPasswordAsync(request, ct);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // SMTP fails only for existing accounts. Keep the same public acknowledgement,
+            // otherwise a delivery outage exposes which emails have a password account.
+            // ponytail: no recovery-mail outbox yet; add one when reliable delivery retries are required.
+            logger.LogWarning("Password recovery request failed with {ExceptionType}; delivery not confirmed.",
+                exception.GetType().Name);
+        }
         return Accepted();
     }
 
