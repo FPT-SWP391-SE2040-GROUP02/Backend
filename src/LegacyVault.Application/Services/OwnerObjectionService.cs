@@ -102,7 +102,8 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         objection.VerifierUserId = FindActiveVerifier(deathCase);
         if (objection.VerifierUserId != null)
         {
-            objection.VerifierDueAt = now + ObjectionRules.VerifierWindow;
+            // D2a, SRS §6.5: Verifier kết luận trong 48 giờ sau hạn selfie.
+            objection.VerifierDueAt = ObjectionRules.ComputeVerifierDueAt(now, objection.SelfieDeadlineAt);
         }
 
         // Chặn ngay: hồ sơ, kế hoạch và mọi grant đang có (ALIVE-01, ALIVE-07).

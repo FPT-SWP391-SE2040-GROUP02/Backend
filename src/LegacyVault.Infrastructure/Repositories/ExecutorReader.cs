@@ -42,4 +42,35 @@ public sealed class ExecutorReader : IExecutorReader
         }
         return result;
     }
+
+    public async Task<List<Executor>> GetAvailableAsync(Guid vaultId, CancellationToken ct)
+    {
+        // ASSIGN-02: chỉ lấy Executor đã chấp nhận mà tài khoản còn Active (dòng Executor của người bị khóa vẫn là Accepted).
+        List<Executor> accepted = await context.Set<Executor>()
+            .AsNoTracking()
+            .Where(e => e.VaultId == vaultId
+                && e.Status == ExecutorStatus.Accepted
+                && e.User != null
+                && e.User.Status == UserStatus.Active)
+            .OrderBy(e => e.Id)
+            .ToListAsync(ct);
+
+        // Đưa Executor chính lên trước, giữ nguyên thứ tự còn lại.
+        List<Executor> result = new List<Executor>();
+        foreach (Executor executor in accepted)
+        {
+            if (executor.Role == ExecutorRole.Primary)
+            {
+                result.Add(executor);
+            }
+        }
+        foreach (Executor executor in accepted)
+        {
+            if (executor.Role != ExecutorRole.Primary)
+            {
+                result.Add(executor);
+            }
+        }
+        return result;
+    }
 }
