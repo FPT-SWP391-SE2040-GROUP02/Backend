@@ -122,13 +122,16 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
             .AnyAsync(p => p.PlanId == planId && p.CheckedInAt != null && p.CheckedInAt >= cutoffUtc, ct);
     }
 
-    public async Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, CancellationToken ct)
+    public async Task<Guid?> FindVerifierCandidateAsync(
+        List<Guid> excludedUserIds, List<string> excludedEmails, CancellationToken ct)
     {
         // SQL Server xếp NULL trước khi tăng dần: Verifier chưa từng được giao đứng đầu.
+        // ROLE-03: loại thêm tài khoản có email trùng người nhận (danh sách rỗng thì điều kiện luôn đúng).
         Guid? candidateId = await context.Set<User>()
             .Where(u => u.Role == UserRole.Verifier
                 && u.Status == UserStatus.Active
-                && !excludedUserIds.Contains(u.Id))
+                && !excludedUserIds.Contains(u.Id)
+                && !excludedEmails.Contains(u.Email))
             .Select(u => new
             {
                 u.Id,

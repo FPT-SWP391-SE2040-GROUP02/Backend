@@ -11,4 +11,7 @@ public interface IEmailSender
 {
     /// <summary>Gửi link xác minh email (AUTH-04). verificationUrl đã chứa token gốc.</summary>
     Task SendEmailVerificationAsync(string toEmail, string fullName, string verificationUrl, CancellationToken ct);
+
+    /// <summary>Gửi link đặt lại mật khẩu khi người dùng quên mật khẩu. resetUrl đã chứa token gốc.</summary>
+    Task SendPasswordResetAsync(string toEmail, string fullName, string resetUrl, CancellationToken ct);
 }

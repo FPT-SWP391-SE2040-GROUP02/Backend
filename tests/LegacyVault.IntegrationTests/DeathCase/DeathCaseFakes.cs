@@ -89,7 +89,7 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         return Task.FromResult(false);
     }
 
-    public Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, CancellationToken ct)
+    public Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, List<string> excludedEmails, CancellationToken ct)
     {
         return Task.FromResult<Guid?>(null);
     }

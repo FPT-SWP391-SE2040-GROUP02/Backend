@@ -25,6 +25,18 @@ public static class AuditRules
     }
 
     /// <summary>
+    /// SEC-07: thao tác thành công của Executor hoặc Verifier trên hồ sơ chứng tử. versionNo là số bản liên quan.
+    /// reason chỉ nhận mã (ví dụ requestedParts), không nhận lý do tự do vì Owner xem được nhật ký (SEC-13).
+    /// </summary>
+    public static AuditLog DeathCaseAction(
+        Guid vaultId, Guid actorUserId, AuditActorRole actorRole, AuditAction action, Guid caseId,
+        int versionNo, string? reason, DateTimeOffset now)
+    {
+        return Create(vaultId, actorUserId, actorRole, action, AuditTargetType.DeathCase, caseId, versionNo,
+            AuditOutcome.Succeeded, reason, now);
+    }
+
+    /// <summary>
     /// Dòng nhật ký đầy đủ trường. reason được bỏ khoảng trắng hai đầu và cắt còn tối đa 500 ký tự;
     /// người gọi KHÔNG được truyền mật khẩu, token, số CCCD, tên tài sản hay nội dung file vào reason (SEC-07).
     /// </summary>

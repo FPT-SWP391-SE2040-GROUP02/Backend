@@ -266,7 +266,7 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
         using (IServiceScope scope = factory.Services.CreateScope())
         {
             IDeathCaseRepository repository = scope.ServiceProvider.GetRequiredService<IDeathCaseRepository>();
-            return await repository.FindVerifierCandidateAsync(excludedUserIds, CancellationToken.None);
+            return await repository.FindVerifierCandidateAsync(excludedUserIds, new List<string>(), CancellationToken.None);
         }
     }
 
