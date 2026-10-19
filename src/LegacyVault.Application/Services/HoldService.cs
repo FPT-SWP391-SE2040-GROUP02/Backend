@@ -68,6 +68,7 @@ public interface IHoldService
 /// - Hold luôn có lý do, người phụ trách và ngày xem lại tối đa 7 ngày (SRS §6.4).
 /// - Đặt hoặc gỡ ghi plan.UpdatedAt trong cùng giao dịch: nhận lượt, đồng ý, duyệt chạy cùng lúc thua RowVersion của kế hoạch.
 /// - Không có thao tác nào ở đây đọc nội dung tài sản; Admin không mở kho (ASSIGN-05).
+/// - Gỡ hold (hết hold của kho) thì dời hạn phản hồi, hạn quyết định và hạn grant đúng bằng thời gian đã dừng (TIME-04, H1).
 /// </remarks>
 public sealed class HoldService : IHoldService
 {
@@ -76,6 +77,7 @@ public sealed class HoldService : IHoldService
     private readonly IVaultRepository vaults;
     private readonly IContainerRepository containers;
     private readonly IHoldRepository holds;
+    private readonly IObjectionRepository objections;
     private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -86,10 +88,12 @@ public sealed class HoldService : IHoldService
         IVaultRepository vaults,
         IContainerRepository containers,
         IHoldRepository holds,
+        IObjectionRepository objections,
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
+        this.objections = objections;
         this.currentUser = currentUser;
         this.users = users;
         this.vaults = vaults;
@@ -136,6 +140,11 @@ public sealed class HoldService : IHoldService
         hold.ReleasedByUserId = byUserId;
         hold.ReleaseReason = AuditRules.NormalizeReason(reason);
         hold.UpdatedAt = now;
+        Vault? vault = await vaults.FindByIdAsync(vaultId, ct);
+        if (vault != null)
+        {
+            await ResumeHandoverClockAsync(vault, hold, now, ct);
+        }
         audit.Add(AuditRules.Create(vaultId, byUserId, AuditActorRole.Verifier, AuditAction.HoldReleased,
             AuditTargetType.Hold, hold.Id, null, AuditOutcome.Succeeded, "OWNER_ALIVE", now));
     }
@@ -293,6 +302,7 @@ public sealed class HoldService : IHoldService
         if (vault != null)
         {
             vault.Plan.UpdatedAt = now;
+            await ResumeHandoverClockAsync(vault, hold, now, ct);
         }
         audit.Add(AuditRules.Create(hold.VaultId, adminId, AuditActorRole.Admin, AuditAction.HoldReleased,
             AuditTargetType.Hold, hold.Id, null, AuditOutcome.Succeeded, reason, now));
@@ -324,6 +334,25 @@ public sealed class HoldService : IHoldService
         hold.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
         return OperationsMapper.ToResponse(hold, now);
+    }
+
+    /// <summary>
+    /// TIME-04: hold cuối cùng của kho vừa được gỡ thì dời các hạn đang chạy của lượt và grant đúng bằng thời gian đã dừng.
+    /// Còn hold khác đang hiệu lực thì chưa dời; lần gỡ cuối sẽ dời cho cả đợt dừng liên tục.
+    /// </summary>
+    private async Task ResumeHandoverClockAsync(Vault vault, Hold released, DateTimeOffset now, CancellationToken ct)
+    {
+        (List<Hold> vaultHolds, int _) = await holds.ListAsync(null, vault.Id, 1, 100, ct);
+        foreach (Hold other in vaultHolds)
+        {
+            if (other.Id != released.Id && other.Status == HoldStatus.Active)
+            {
+                return;
+            }
+        }
+        DateTimeOffset pausedFrom = HandoverClockRules.FindPauseStart(released, vaultHolds, now);
+        List<HandoverTurn> turns = await objections.FindTurnsWithGrantsAsync(vault.Plan.Id, ct);
+        HandoverClockRules.ExtendAfterPause(turns, pausedFrom, now);
     }
 
     private async Task<Hold> LoadAsync(Guid holdId, CancellationToken ct)
