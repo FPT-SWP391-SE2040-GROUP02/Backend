@@ -46,6 +46,12 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
                     .Where(c => c.VaultId == e.VaultId && c.Status != DeathCaseStatus.Rejected)
                     .Select(c => (Guid?)c.Id)
                     .FirstOrDefault(),
+                LastRejectedDeathCaseId = context.Set<DeathCase>()
+                    .Where(c => c.VaultId == e.VaultId && c.Status == DeathCaseStatus.Rejected)
+                    .OrderByDescending(c => c.CreatedAt)
+                    .ThenByDescending(c => c.Id)
+                    .Select(c => (Guid?)c.Id)
+                    .FirstOrDefault(),
             })
             .ToListAsync(ct);
         return rows;

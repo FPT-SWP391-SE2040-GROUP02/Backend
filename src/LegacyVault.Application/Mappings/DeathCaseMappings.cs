@@ -82,6 +82,7 @@ public static class DeathCaseMappings
         // DMS-05: quá hạn điểm danh = đang trong thời gian chờ hoặc đã hết thời gian chờ.
         response.CheckInOverdue = row.PlanStatus == PlanStatus.CheckinOverdue || row.PlanStatus == PlanStatus.AwaitingCheck;
         response.OpenDeathCaseId = row.OpenDeathCaseId;
+        response.LastRejectedDeathCaseId = row.LastRejectedDeathCaseId;
         return response;
     }
 

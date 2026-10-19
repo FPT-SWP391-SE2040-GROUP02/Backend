@@ -18,4 +18,7 @@ public class ExecutorVaultResponse
 
     /// <summary>Hồ sơ chứng tử đang mở của kho (kể cả bản nháp); null khi chưa có.</summary>
     public Guid? OpenDeathCaseId { get; set; }
+
+    /// <summary>Hồ sơ bị từ chối gần nhất của kho; Executor mở bằng GET hồ sơ để xem lý do. Null khi chưa có.</summary>
+    public Guid? LastRejectedDeathCaseId { get; set; }
 }
