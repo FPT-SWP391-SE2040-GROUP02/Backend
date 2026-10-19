@@ -73,6 +73,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     // Thanh toán (SRS §8)
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

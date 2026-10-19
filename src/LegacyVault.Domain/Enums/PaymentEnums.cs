@@ -21,3 +21,16 @@ public enum PaymentOrderStatus
     /// <summary>Owner hủy đơn.</summary>
     Cancelled = 3,
 }
+
+/// <summary>Trạng thái xử lý giao dịch tiền vào (SRS §8.5, PAY-05).</summary>
+public enum PaymentTransactionStatus
+{
+    /// <summary>Đã lưu, chưa đối chiếu với đơn.</summary>
+    Received = 0,
+    /// <summary>Khớp đơn và đã cấp quyền dịch vụ.</summary>
+    Matched = 1,
+    /// <summary>Không khớp, cần Admin đối chiếu; không tự cấp quyền (PAY-07).</summary>
+    ReconciliationRequired = 2,
+    /// <summary>Admin đã xử lý (chưa dùng ở H2).</summary>
+    Resolved = 3,
+}
