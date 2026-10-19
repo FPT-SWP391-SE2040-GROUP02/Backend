@@ -16,8 +16,8 @@ public enum OwnerFaceOutcome
 /// Không so với ảnh tải lên hay ảnh giấy tờ cũ. Cài đặt ở Infrastructure.
 /// </summary>
 /// <remarks>
-/// TODO(LV-02): mẫu khuôn mặt chưa được lưu ở đâu cả; bản mặc định luôn trả Unavailable. Khi LV-02 xong,
-/// thay bản cài đặt này, không đổi service gọi.
+/// Mẫu là vector mã hóa trong bảng OwnerFaceTemplates, tạo khi Owner hoàn thành thử thách camera của lượt OWNER_ENROLLMENT
+/// (EkycService.CompleteLivenessAsync). Owner chưa có mẫu thì trả Unavailable.
 /// </remarks>
 public interface IOwnerFaceVerifier
 {

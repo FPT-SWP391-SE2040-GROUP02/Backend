@@ -24,7 +24,7 @@ Test: 683 test tích hợp qua trên SQL Server (Docker). Chưa push.
 - Nhật ký (`AuditLogs`) cho thao tác Admin và F2C.
 
 ## Còn lại (chưa làm)
-- **Đợt 3 LV-02:** phiên eKYC theo mục đích, ghi đồng ý, danh tính đã gắn, mẫu khuôn mặt, thử thách camera. *Chặn bởi quyết định: dịch vụ eKYC Python có trả mẫu khuôn mặt (vector) không.*
+- **Đợt 3 LV-02:** đã có phiên eKYC theo mục đích, ghi đồng ý, thử thách camera và **mẫu khuôn mặt Owner** (dịch vụ eKYC thêm `/api/face-embedding`; BE lưu vector mã hóa ở `OwnerFaceTemplates`, so selfie Owner báo còn sống bằng cosine; migration `AddOwnerFaceTemplates`). Danh tính đã gắn (CCCD đủ 12 số mã hóa, EKYC-24/27) đã có: bảng `OwnerIdentities`, đối chiếu khi đăng ký lại, DEATH-13 so đủ 12 số (migration `AddOwnerIdentities`). Còn thiếu: job xóa mẫu theo hạn (EKYC-29), giới hạn 3 lần thất bại/24 giờ theo tài khoản + IP (EKYC-20), phiên eKYC dùng một lần có hạn 15 phút.
 - **Đợt 4 LV-09 (không video):** claim có trạng thái, eKYC người nhận, Executor kết luận đúng người, hạn claim 30 ngày và giữ dữ liệu 7 ngày khi xem xét. *Chặn bởi quyết định: bỏ video có được chấp nhận.*
 - **Đợt 5 LV-14:** outbox thông báo, gửi lại lời mời F3, tính hạn từ lúc thông báo được giao, giới hạn tần suất.
 - **Đợt 7:** quên mật khẩu và `/me/login-methods` (LV-12), sửa tài sản và phiên bản, bản ghi JSON, xuất PDF (LV-10), xác thực lại khi ân hạn.

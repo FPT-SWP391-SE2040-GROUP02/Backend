@@ -210,6 +210,19 @@ public static class DeathCaseRules
         return !string.Equals(caseLast4, verifiedLast4, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// DEATH-13, EKYC-27: so ĐỦ 12 số CCCD khai trên hồ sơ với danh tính đã gắn của Owner. Hồ sơ chưa có số thì không
+    /// kết luận được, trả false.
+    /// </summary>
+    public static bool IsIdentityMismatchFull(string boundCitizenId, string? caseCitizenId)
+    {
+        if (string.IsNullOrEmpty(caseCitizenId))
+        {
+            return false;
+        }
+        return !string.Equals(boundCitizenId, caseCitizenId, StringComparison.Ordinal);
+    }
+
     public static DateTimeOffset CheckInCutoffUtc(DateOnly dateOfDeath)
     {
         DateTime nextDayStart = dateOfDeath.AddDays(1).ToDateTime(TimeOnly.MinValue);

@@ -20,6 +20,7 @@ public sealed class EkycLivenessTests
     private readonly FakeEkycVerificationRepository repository = new FakeEkycVerificationRepository();
     private readonly FakeEkycConsentRepository consentRepository = new FakeEkycConsentRepository();
     private readonly FakeEkycClient client = new FakeEkycClient();
+    private readonly FakeOwnerFaceTemplateRepository templateRepository = new FakeOwnerFaceTemplateRepository();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider clock = new FixedTimeProvider(Now);
     private readonly EkycService service;
@@ -29,7 +30,9 @@ public sealed class EkycLivenessTests
     {
         currentUser.UserId = userId;
         service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
-            new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), client, unitOfWork, clock);
+            new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), templateRepository,
+            FaceTemplateTestSupport.CreateProtector(), new FakeOwnerIdentityRepository(),
+            FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock);
         consentRepository.Consents.Add(new EkycConsent
         {
             UserId = userId,

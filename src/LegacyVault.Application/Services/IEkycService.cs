@@ -73,6 +73,8 @@ public interface IEkycService
     /// <summary>
     /// Chốt thử thách: lấy selfie của chính phiên đã đạt (EKYC-13) rồi so khớp với khuôn mặt trên thẻ. Chống giả mạo
     /// và động tác phải đạt riêng từng cái trong phiên (EKYC-14). Mỗi lượt chỉ so khớp một lần.
+    /// Lượt OWNER_ENROLLMENT đạt thì tạo luôn mẫu khuôn mặt Owner từ selfie của phiên (EKYC-22) nếu Owner chưa có mẫu
+    /// (EKYC-23); không lấy được vector (dịch vụ lỗi, ảnh không có đúng một mặt) thì lượt giữ nguyên Pending để thử lại.
     /// Lỗi: 409 EKYC_DOCUMENT_EXPIRED, 409 EKYC_LIVENESS_REQUIRED, 409 EKYC_LIVENESS_NOT_PASSED (chưa làm xong
     /// động tác hoặc chống giả mạo chưa đạt), 503 EKYC_SERVICE_UNAVAILABLE.
     /// </summary>

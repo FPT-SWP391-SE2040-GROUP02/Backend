@@ -38,6 +38,15 @@ public sealed class EkycVerificationConfiguration : IEntityTypeConfiguration<Eky
             .HasMaxLength(64)
             .IsUnicode(false);
 
+        // Danh tính tạm (mã hóa) của lượt OWNER_ENROLLMENT đang chờ selfie; null ở các lượt khác và sau khi chốt.
+        builder.Property(v => v.EnrollmentIdentityKeyId)
+            .HasMaxLength(64)
+            .IsUnicode(false);
+
+        builder.Property(v => v.EnrollmentWrappedDataKey)
+            .HasMaxLength(60)
+            .IsFixedLength();
+
         // Mã phiên của dịch vụ eKYC, cùng kiểu với DocumentToken.
         builder.Property(v => v.LivenessSessionId)
             .HasMaxLength(64)

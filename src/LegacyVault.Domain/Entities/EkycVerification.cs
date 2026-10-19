@@ -7,7 +7,7 @@ namespace LegacyVault.Domain.Entities;
 /// </summary>
 /// <remarks>
 /// - Chỉ lưu KẾT QUẢ. Không lưu ảnh giấy tờ, ảnh khuôn mặt, vector đặc trưng; ảnh chỉ đi qua dịch vụ eKYC
-///   rồi bị bỏ. Họ tên, ngày sinh, địa chỉ đọc từ giấy tờ chỉ trả cho FE một lần, không ghi DB.
+///   rồi bị bỏ. (Vector của Owner đăng ký đạt nằm ở bảng riêng OwnerFaceTemplates, mã hóa, không ở đây.) Họ tên, ngày sinh, địa chỉ đọc từ giấy tờ chỉ trả cho FE một lần, không ghi DB.
 /// - Chỉ 4 số cuối CCCD để dạng rõ (giống Beneficiary.CitizenIdLast4), đủ để đối chiếu mà không định danh được.
 /// - DocumentToken là mã tham chiếu của dịch vụ eKYC (giữ khuôn mặt trên giấy tờ trong RAM của dịch vụ đó,
 ///   tối đa 30 phút). Chỉ server biết, không trả cho FE, và bị xóa ngay khi đã so khớp (SEC-04).
@@ -49,6 +49,20 @@ public class EkycVerification
 
     /// <summary>Hạn dùng của DocumentToken (phía dịch vụ eKYC giữ 30 phút).</summary>
     public DateTimeOffset? DocumentTokenExpiresAt { get; set; }
+
+    /// <summary>
+    /// Chỉ với lượt OWNER_ENROLLMENT đang chờ selfie: Id của KEK đã bọc EnrollmentWrappedDataKey. Cùng hai cột dưới
+    /// giữ bản MÃ HÓA của CCCD, họ tên, ngày sinh đọc từ mặt trước để gắn danh tính khi lượt đạt (EKYC-27), vì giấy tờ
+    /// và selfie là hai request khác nhau mà FE không được gửi lại dữ liệu (EKYC-16). Xóa ngay khi lượt chốt kết quả
+    /// hoặc bị lượt mới thay.
+    /// </summary>
+    public string? EnrollmentIdentityKeyId { get; set; }
+
+    /// <summary>DEK của bản tạm, đã bọc bằng KEK (60 byte).</summary>
+    public byte[]? EnrollmentWrappedDataKey { get; set; }
+
+    /// <summary>Đã mã hóa: JSON {citizenId, fullName, dateOfBirth}.</summary>
+    public byte[]? EnrollmentIdentityEncrypted { get; set; }
 
     /// <summary>Điểm cosine giữa selfie và ảnh giấy tờ; null khi chưa so khớp. Không phải xác suất.</summary>
     public double? FaceMatchScore { get; set; }
