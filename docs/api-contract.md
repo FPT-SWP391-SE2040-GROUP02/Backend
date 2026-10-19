@@ -74,6 +74,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 404 | `VAULT_NOT_FOUND` | Chưa có kho, hoặc kho của người khác | |
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
+| 409 | `ASSET_IN_USE` | Tài sản còn trong gói hoặc đã ghim vào bàn giao nên không xóa được (+`reason`) | |
 | 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
 | 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
@@ -418,6 +419,11 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 | POST | `/v1/vaults/{vaultId}/assets/text` | Đăng nhập | `{ name, description?, content }` | **201** `AssetResponse` | 400, 404, 409 như trên |
 | GET | `/v1/vaults/{vaultId}/assets` | Đăng nhập | Query phân trang; `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<AssetResponse>` | 400, 404 |
 | GET | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 200 `AssetResponse` | 404 `VAULT_NOT_FOUND` / `ASSET_NOT_FOUND` |
+| GET | `/v1/vaults/{vaultId}/assets/{assetId}/content` | Đăng nhập (Owner) | Query `version?` (mặc định phiên bản hiện tại) | 200 nội dung gốc (`application/octet-stream`, `Content-Disposition: attachment`, `Cache-Control: no-store`) | 404 `ASSET_NOT_FOUND` (kể cả phiên bản không có/đã dọn), 500 `CONTENT_INTEGRITY_FAILED` |
+| PUT | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | `{ name?, description?, etag }` | 200 `AssetResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
+| POST | `/v1/vaults/{vaultId}/assets/{assetId}/versions` | Đăng nhập | `multipart/form-data`: `file`, `etag` (tài sản dạng `FILE`) | **201** `AssetResponse` (phiên bản mới) | 400, 404, 409 `EDIT_CONFLICT` / `STORAGE_QUOTA_EXCEEDED` / `VAULT_NOT_EDITABLE`, 413 `FILE_TOO_LARGE` |
+| POST | `/v1/vaults/{vaultId}/assets/{assetId}/versions/text` | Đăng nhập | `{ content, etag }` (tài sản dạng `TEXT`) | **201** `AssetResponse` | như trên |
+| DELETE | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 204 | 404, 409 `ASSET_IN_USE` (+`reason`: `IN_CONTAINER` \| `PINNED_IN_HANDOVER`) / `VAULT_NOT_EDITABLE` |
 
 ```json
 // AssetResponse — chỉ metadata, KHÔNG có nội dung tài sản
@@ -444,7 +450,11 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 - `name` của tệp không gửi thì lấy theo tên tệp. Tên/mô tả **không mã hóa**: không ghi mật khẩu vào đây; bí mật để trong `content`/tệp.
 - Nội dung tệp và `content` được BE mã hóa (AES-256-GCM, khóa riêng mỗi phiên bản) trước khi lưu. FE gửi nội dung gốc qua HTTPS, **không** tự mã hóa hay Base64 nội dung. `sizeBytes` là kích thước nội dung gốc, cũng là số tính vào quota.
 - Hạng Free được lưu tài sản trong 20 MiB; mọi phiên bản đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản không ở gói nào.
-- Chưa có (làm sau cùng phần bảo mật): tải nội dung về, thay nội dung (phiên bản mới), đổi tên/xóa tài sản.
+- **Tải nội dung (LV-10):** chỉ Owner của kho. Server giải mã hai lượt: lượt đầu vào `Stream.Null` để kiểm kích thước và SHA-256 trước khi gửi byte đầu tiên; nội dung hỏng trả 500 và không có byte nội dung nào. Mỗi lần tải ghi nhật ký `AssetContentDownloaded` (chỉ id và số phiên bản, không tên tài sản).
+- **Thay nội dung không ghi đè:** tạo phiên bản mới (khóa DEK riêng), phiên bản cũ vẫn tải được bằng `?version=N` và vẫn tính quota; snapshot đã ghim vẫn trỏ đúng phiên bản cũ. Tài sản `FILE` chỉ nhận `/versions` (multipart), `TEXT` chỉ nhận `/versions/text`; sai loại → `400 VALIDATION_ERROR`. Hai request tạo cùng số phiên bản chỉ một thắng, request còn lại `409 EDIT_CONFLICT`.
+- **Đổi tên/mô tả và thay nội dung** là thao tác "thêm": chặn khi kho đóng, kế hoạch bị khóa (đang chờ/bàn giao) hoặc dịch vụ chỉ đọc. Kho đang có hold: `409 VAULT_NOT_EDITABLE` với `reason = HOLD_ACTIVE`.
+- **Xóa** là thao tác "giảm" (vẫn cho khi ân hạn, chặn khi kho đóng/kế hoạch khóa). Chỉ xóa được khi tài sản không còn trong gói nào (gỡ khỏi gói trước), chưa ghim vào snapshot của lượt bàn giao nào và kho không có hold. Xóa hết mọi phiên bản và nội dung đã mã hóa, giải phóng quota. Nội dung được xóa sau khi bản ghi đã xóa; nếu kho lưu trữ lỗi, object mồ côi (đã mã hóa) có thể còn lại.
+- Xuất cấu hình PDF (XS Max) và khôi phục tài sản đã xóa chưa có.
 
 ### 6.8. Người nhận (Beneficiary)
 
