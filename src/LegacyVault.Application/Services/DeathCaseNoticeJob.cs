@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Services;
 
 /// <remarks>
 /// - D3: gửi hồ sơ chỉ tạo dòng Pending; job này gửi thư. SMTP nhận → Delivered, DeliveredAt;
-///   lỗi → tăng AttemptCount, đủ 5 lần → Failed (TODO: tạo sự cố F4, có người và hạn xử lý theo DEATH-08).
+///   lỗi → tăng AttemptCount, đủ 5 lần → Failed và mở sự cố F4 có người phụ trách, có hạn xử lý (DEATH-08, INCIDENT NotificationFailed).
 /// - DEATH-08: 72 giờ chỉ bắt đầu khi thông báo của bản NotifiedVersionNo được giao.
 /// - DEATH-11: thông báo của bản cũ (đã có bản trọng yếu mới hơn) được giao thì KHÔNG khởi động đồng hồ.
 /// - Mỗi thông báo một SaveChanges. Gửi thư thành công nhưng lưu lỗi (xung đột) thì vòng sau gửi lại:
@@ -25,6 +25,7 @@ public sealed class DeathCaseNoticeJob : IDeathCaseNoticeJob
     private readonly IDeathCaseRepository deathCaseRepository;
     private readonly IUserRepository userRepository;
     private readonly IDeathCaseNoticeSender noticeSender;
+    private readonly IIncidentService incidentService;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -32,9 +33,11 @@ public sealed class DeathCaseNoticeJob : IDeathCaseNoticeJob
         IDeathCaseRepository deathCaseRepository,
         IUserRepository userRepository,
         IDeathCaseNoticeSender noticeSender,
+        IIncidentService incidentService,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
+        this.incidentService = incidentService;
         this.deathCaseRepository = deathCaseRepository;
         this.userRepository = userRepository;
         this.noticeSender = noticeSender;
@@ -116,8 +119,12 @@ public sealed class DeathCaseNoticeJob : IDeathCaseNoticeJob
         }
         else if (notice.AttemptCount >= DeathCaseRules.MaxNoticeAttempts)
         {
-            // TODO: F4 — tạo sự cố có người và hạn xử lý khi mọi kênh đều lỗi (DEATH-08). Hiện monitor chỉ ghi log.
+            // DEATH-08: mọi kênh đều lỗi thì tạo sự cố có người phụ trách và hạn; lưu cùng giao dịch với dòng Failed
+            // nên không có chuyện Failed mà không có sự cố. Chưa có ai nhận thì RaiseAsync chọn Admin ít việc nhất.
             notice.Status = DeathCaseNoticeStatus.Failed;
+            await incidentService.RaiseAsync(IncidentType.NotificationFailed, deathCase.VaultId,
+                IncidentRules.TargetDeathCase, deathCase.Id,
+                "Không gửi được thông báo hồ sơ chứng tử cho Owner sau nhiều lần thử.", null, ct);
         }
 
         await unitOfWork.SaveChangesAsync(ct);

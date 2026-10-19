@@ -47,7 +47,8 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     private async Task<(HttpClient Owner, HttpClient Recipient, Guid VaultId)> PrepareAsync(bool passedEkyc = true)
     {
         var (owner, vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        var recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        // M4: người nhận phải dùng đúng email được mời (InviteAsync mặc định mời executor@example.test).
+        var recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "executor@example.test");
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             var vault = await db.Vaults.SingleAsync(v => v.Id == vaultId);
@@ -64,9 +65,9 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         return (owner, recipient, vaultId);
     }
 
-    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string role = "PRIMARY", Guid? beneficiaryId = null)
+    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string role = "PRIMARY", Guid? beneficiaryId = null, string email = "executor@example.test")
     {
-        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email = "executor@example.test", role, beneficiaryId });
+        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email, role, beneficiaryId });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain(mail.Token, raw);
@@ -143,6 +144,26 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task AccountWithDifferentEmailCannotAcceptForwardedInvitation()
+    {
+        // M4, SETUP-20: link bị chuyển tiếp cho tài khoản email khác thì không nhận được vai trò Executor
+        var (owner, recipient, vaultId) = await PrepareAsync();
+        await InviteAsync(owner, vaultId);
+        var stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+
+        var denied = await RespondAsync(stranger, mail.Token);
+
+        await ApiTestHelpers.AssertProblemAsync(denied, HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            var executor = await db.Set<Executor>().SingleAsync(e => e.VaultId == vaultId);
+            Assert.Equal(ExecutorStatus.Invited, executor.Status);
+            Assert.Null(executor.UserId);
+        });
+        Assert.Equal(HttpStatusCode.OK, (await RespondAsync(recipient, mail.Token)).StatusCode);
+    }
+
+    [SqlFact]
     public async Task ActivationRejectsStaleConfigPolicyAndMissingExecutor()
     {
         var (owner, _, vaultId) = await PrepareAsync();
@@ -178,9 +199,9 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         var request = await ActivationAsync(owner, vaultId);
         var denied = await ApiTestHelpers.AssertProblemAsync(await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request), HttpStatusCode.Conflict, "PLAN_ACTIVATION_REQUIREMENTS_NOT_MET");
         Assert.Contains("BACKUP_EXECUTOR_REQUIRED", denied.GetProperty("missingRequirements").EnumerateArray().Select(e => e.GetString()));
-        await InviteAsync(owner, vaultId, "BACKUP");
+        await InviteAsync(owner, vaultId, "BACKUP", email: "backup@example.test");
         await ApiTestHelpers.AssertProblemAsync(await RespondAsync(primary, mail.Token), HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
-        var backup = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        var backup = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "backup@example.test");
         Assert.Equal(HttpStatusCode.OK, (await RespondAsync(backup, mail.Token)).StatusCode);
         request = await ActivationAsync(owner, vaultId);
         Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request)).StatusCode);

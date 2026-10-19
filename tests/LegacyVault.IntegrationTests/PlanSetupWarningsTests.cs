@@ -168,7 +168,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
         DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
         await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Passed, createdAt);
-        HttpClient primary = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        HttpClient primary = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "primary@example.test");
         await InviteAsync(owner, vaultId, "primary@example.test", "PRIMARY");
         await AcceptAsync(primary);
 
@@ -200,10 +200,10 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
         DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
         await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Passed, createdAt);
-        HttpClient primary = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        HttpClient primary = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "primary@example.test");
         await InviteAsync(owner, vaultId, "primary@example.test", "PRIMARY");
         await AcceptAsync(primary);
-        HttpClient backup = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        HttpClient backup = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "backup@example.test");
         ExecutorInvitationResponse invitation = await InviteAsync(owner, vaultId, "backup@example.test", "BACKUP");
 
         // Hành động

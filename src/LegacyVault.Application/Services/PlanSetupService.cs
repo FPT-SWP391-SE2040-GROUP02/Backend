@@ -123,7 +123,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         unitOfWork.ExecuteSerializableAsync(async () =>
         {
             var userId = currentUser.RequireUserId();
-            await UsableUserAsync(userId, ct);
+            var responder = await UsableUserAsync(userId, ct);
             if (request.ScopeVersion != ScopeVersion || (request.Accept && !request.AcknowledgeScope))
                 throw new AppException(AppErrorType.Validation, ErrorCode.PolicyAcknowledgementRequired, "Cần đọc và xác nhận phạm vi nhiệm vụ hiện hành.");
             var item = await FindTokenAsync(request.Token, ct);
@@ -133,6 +133,9 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (item.UserId == userId && ((request.Accept && item.Status == ExecutorStatus.Accepted) || (!request.Accept && item.Status == ExecutorStatus.Declined)))
                 return Map(item);
             if (item.Status != ExecutorStatus.Invited || item.ExpiresAt <= time.GetUtcNow()) throw InvalidInvitation();
+            // M4, SETUP-20: người trả lời phải dùng tài khoản có email đã xác minh trùng email được mời; link bị chuyển tiếp
+            // hay tài khoản email khác không nhận được vai trò Executor.
+            if (!string.Equals(responder.Email?.Trim(), item.InviteeEmail?.Trim(), StringComparison.OrdinalIgnoreCase)) throw NotAllowed("INVITEE_EMAIL_MISMATCH");
             VaultRules.EnsureEditable(vault);
             if (vault.Plan.Status != PlanStatus.Draft && !PlanRules.IsRunning(vault.Plan.Status)) throw NotAllowed("PLAN_NOT_DRAFT");
             if (request.Accept && vault.Executors.Any(e => e.Id != item.Id && e.UserId == userId && e.Status == ExecutorStatus.Accepted)) throw NotAllowed("INDEPENDENT_EXECUTOR_REQUIRED");

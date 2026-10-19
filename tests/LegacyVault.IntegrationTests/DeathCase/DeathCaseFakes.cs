@@ -1,5 +1,7 @@
+using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
@@ -159,5 +161,62 @@ public sealed class FakeDeathCaseNoticeSender : IDeathCaseNoticeSender
         }
         Sent.Add(notice);
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>Dịch vụ sự cố giả: chỉ ghi lại các sự cố được mở, các thao tác của Admin không dùng trong test job.</summary>
+public sealed class FakeIncidentService : IIncidentService
+{
+    public List<(IncidentType Type, Guid? VaultId, string TargetType, Guid? TargetId, Guid? Preferred)> Raised { get; }
+        = new List<(IncidentType, Guid?, string, Guid?, Guid?)>();
+
+    public Task<Incident> RaiseAsync(
+        IncidentType type, Guid? vaultId, string targetType, Guid? targetId, string summary,
+        Guid? preferredAssigneeUserId, CancellationToken ct)
+    {
+        Raised.Add((type, vaultId, targetType, targetId, preferredAssigneeUserId));
+        return Task.FromResult(new Incident());
+    }
+
+    public Task ResolveByTargetAsync(IncidentType type, string targetType, Guid? targetId, string note, CancellationToken ct)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task ReassignByTargetAsync(
+        IncidentType type, string targetType, Guid? targetId, Guid newAssigneeUserId, string note, CancellationToken ct)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
+        string? status, string? type, Guid? assigneeUserId, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task<IncidentDetailResponse> GetAsync(Guid incidentId, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task<IncidentDetailResponse> AssignAsync(Guid incidentId, Guid assigneeUserId, string reason, string etag, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task<IncidentDetailResponse> AddNoteAsync(Guid incidentId, string note, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task<IncidentDetailResponse> ReviewAsync(Guid incidentId, DateTimeOffset nextReviewAt, string note, string etag, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task<IncidentDetailResponse> ResolveAsync(Guid incidentId, string note, string etag, CancellationToken ct)
+    {
+        throw new NotSupportedException();
     }
 }

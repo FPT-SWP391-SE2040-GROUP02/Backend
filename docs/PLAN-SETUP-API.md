@@ -8,7 +8,7 @@ Implemented 15/10/2026. Canonical prefix is `/api/v1` only. Swagger UI: `/swagge
 | POST `/vaults/{vaultId}/executors` | Owner: email, role PRIMARY/BACKUP, optional beneficiaryId | 201 invitation metadata; no raw token |
 | POST `/vaults/{vaultId}/executors/{executorId}/resend` | Owner: etag | Rotates token and expiry; old link invalid |
 | POST `/executor-invitations/inspect` | Public: token | Minimal role/status/expiry/scope; no owner/vault content |
-| POST `/executor-invitations/respond` | Verified active account: token, accept, acknowledgeScope, scopeVersion | Explicit accept/decline; Owner and second claimant rejected |
+| POST `/executor-invitations/respond` | Verified active account: token, accept, acknowledgeScope, scopeVersion | Explicit accept/decline; Owner, second claimant and an account whose verified email differs from the invited email (409 `EXECUTOR_NOT_ALLOWED`, reason `INVITEE_EMAIL_MISMATCH`) are rejected |
 | POST `/vaults/{vaultId}/activate` | Owner: configVersion, policyVersion, acknowledgePolicy=true | Recheck requirements, atomically activate and open first period |
 
 Paths in the table follow `/api/v1`. Request/response schemas are generated from DTOs in OpenAPI. FE validates wire responses with Zod.

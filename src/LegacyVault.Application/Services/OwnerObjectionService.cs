@@ -15,7 +15,8 @@ namespace LegacyVault.Application.Services;
 ///   chạy cùng lúc với báo sẽ thua RowVersion của kế hoạch (AC-34).
 /// - ALIVE-09: báo lặp chỉ tăng bộ đếm, không đổi hạn, không tạo hold trùng (chỉ mục unique có lọc).
 /// - Selfie so với mẫu khuôn mặt qua IOwnerFaceVerifier; lỗi kỹ thuật không tính là thất bại (EKYC-19).
-/// - TODO(LV-07): tạo sự cố theo dõi, báo Verifier/Executor bằng thông báo.
+/// - M2, ALIVE-09: sau khi bị bác, Owner mở lại bằng selfie mới đạt (ReopenAfterRejectionAsync); báo trơn vẫn bị từ chối.
+/// - TODO(LV-07): báo Verifier/Executor bằng thông báo (sự cố theo dõi đã được mở cùng lúc chặn).
 /// </remarks>
 public sealed class OwnerObjectionService : IOwnerObjectionService
 {
@@ -80,7 +81,8 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         DeathCaseObjection? latest = await objections.FindLatestByCaseAsync(deathCase.Id, ct);
         if (latest != null && latest.Conclusion == ObjectionConclusion.ObjectionRejected)
         {
-            // ALIVE-09: sau khi bị bác, muốn mở lại phải có bằng chứng mới (chưa có đường nộp bằng chứng mới).
+            // ALIVE-09: sau khi bị bác, muốn mở lại phải có bằng chứng mới: nộp selfie mới qua POST objection/selfie
+            // (ReopenAfterRejectionAsync). Báo trơn không đủ.
             throw ObjectionMapper.NotAllowed(DeathCaseNotAllowedReason.ObjectionAlreadyRejected);
         }
         if (!ObjectionRules.CanReport(deathCase.Status))
@@ -88,6 +90,17 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
             throw ObjectionMapper.CaseNotFound();
         }
 
+        await OpenObjectionAsync(vault, deathCase, now, false, ct);
+        return await BuildAsync(deathCase, ct);
+    }
+
+    /// <summary>
+    /// Tạo lời báo mới và chặn ngay hồ sơ, kế hoạch, grant, hold, sự cố trong MỘT giao dịch (ALIVE-01, ALIVE-07).
+    /// selfiePassed = true khi mở lại sau khi bị bác: selfie mới đạt chính là bằng chứng mới (ALIVE-09).
+    /// </summary>
+    private async Task OpenObjectionAsync(
+        Vault vault, DeathCase deathCase, DateTimeOffset now, bool selfiePassed, CancellationToken ct)
+    {
         DeathCaseObjection objection = new DeathCaseObjection();
         objection.CaseId = deathCase.Id;
         objection.VaultId = vault.Id;
@@ -99,6 +112,11 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         objection.SelfieDeadlineAt = now + ObjectionRules.SelfieWindow;
         objection.PreviousCaseStatus = deathCase.Status;
         objection.PreviousPlanStatus = vault.Plan.Status;
+        if (selfiePassed)
+        {
+            // M2, ALIVE-09: mở lại sau khi bị bác bằng phiên selfie mới đạt (bằng chứng mới).
+            objection.SelfiePassedAt = now;
+        }
         objection.VerifierUserId = FindActiveVerifier(deathCase);
         if (objection.VerifierUserId != null)
         {
@@ -135,7 +153,6 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         {
             throw ObjectionMapper.EditConflict();
         }
-        return await BuildAsync(deathCase, ct);
     }
 
     public async Task<OwnerDeathCaseResponse> SubmitSelfieAsync(
@@ -146,7 +163,7 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         DeathCaseObjection? objection = await objections.FindOpenByCaseAsync(deathCase.Id, ct);
         if (objection == null)
         {
-            throw ObjectionMapper.CaseNotFound();
+            return await ReopenAfterRejectionAsync(vault, deathCase, content, fileName, contentType, ct);
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -181,6 +198,47 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         }
         objection.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
+        return await BuildAsync(deathCase, ct);
+    }
+
+    /// <summary>
+    /// M2, ALIVE-09: lời báo trước đã bị bác thì Owner chỉ mở lại được bằng bằng chứng mới là phiên selfie mới khớp mẫu khuôn mặt.
+    /// Selfie khớp: mở lời báo mới đã có selfie đạt (chặn lại như lần đầu). Không khớp: ghi thất bại trên lời báo cũ
+    /// để vẫn có giới hạn 3 lần trong 24 giờ (EKYC-20). Chưa từng báo hoặc hồ sơ không còn báo được thì 404.
+    /// </summary>
+    private async Task<OwnerDeathCaseResponse> ReopenAfterRejectionAsync(
+        Vault vault, DeathCase deathCase, Stream content, string fileName, string contentType, CancellationToken ct)
+    {
+        DeathCaseObjection? latest = await objections.FindLatestByCaseAsync(deathCase.Id, ct);
+        if (latest == null || latest.Conclusion != ObjectionConclusion.ObjectionRejected
+            || !ObjectionRules.CanReport(deathCase.Status))
+        {
+            throw ObjectionMapper.CaseNotFound();
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        if (ObjectionRules.RecentFailures(latest, now) >= ObjectionRules.MaxSelfieFailures)
+        {
+            throw ObjectionMapper.NotAllowed(DeathCaseNotAllowedReason.SelfieAttemptsExceeded);
+        }
+
+        byte[] image = await ReadImageAsync(content, contentType, ct);
+        OwnerFaceOutcome outcome = await faceVerifier.VerifyAsync(vault.OwnerId, image, fileName, contentType, ct);
+        if (outcome == OwnerFaceOutcome.Unavailable)
+        {
+            throw new AppException(AppErrorType.ServiceUnavailable, ErrorCode.EkycServiceUnavailable,
+                "Chưa so khớp được khuôn mặt lúc này. Vui lòng thử lại sau.");
+        }
+
+        if (outcome != OwnerFaceOutcome.Matched)
+        {
+            ObjectionRules.RecordFailure(latest, now);
+            latest.UpdatedAt = now;
+            await unitOfWork.SaveChangesAsync(ct);
+            return await BuildAsync(deathCase, ct);
+        }
+
+        await OpenObjectionAsync(vault, deathCase, now, true, ct);
         return await BuildAsync(deathCase, ct);
     }
 

@@ -30,7 +30,7 @@ Test: 683 test tích hợp qua trên SQL Server (Docker). Chưa push.
 - **Đợt 7:** quên mật khẩu và `/me/login-methods` (LV-12), sửa tài sản và phiên bản, bản ghi JSON, xuất PDF (LV-10), xác thực lại khi ân hạn.
 - **Frontend** (không trong repo này).
 - **SePay (LV-04):** ngoài phạm vi theo yêu cầu.
-- Hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT`, `DISPUTE`; `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; thu hồi phiên đăng nhập khi khóa tài khoản.
+- Hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT`, `DISPUTE`; `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`.
 
 ## Lưu ý khi chạy
 - Áp migration: `dotnet ef database update` (7 migration mới).
