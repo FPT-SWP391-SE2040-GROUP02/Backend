@@ -42,6 +42,7 @@ public static class ApplicationConfig
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
         services.AddScoped<IPasswordResetService, PasswordResetService>();
+        services.AddScoped<ILoginMethodService, LoginMethodService>();
 
         // Đăng nhập Google
         services.AddScoped<IGoogleAuthService, GoogleAuthService>();

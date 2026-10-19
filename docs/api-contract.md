@@ -272,7 +272,7 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 
 ### 6.4. Phương thức đăng nhập của tôi
 
-> **Dự kiến, chưa triển khai endpoint.** Hiện chỉ có `ILoginMethodService` và DTO, chưa có service implementation/controller/DI. Không gọi các route dưới đây từ UI chính thức; không xem các mã lỗi dưới đây là response đã kiểm chứng. Đây là quản lý phương thức của user đang đăng nhập, khác luồng công khai `/auth/google/link-confirm` đã triển khai ở mục 6.3. Chưa chốt CSRF/rate limit cho các route dự kiến này.
+> **Đã triển khai** (`LoginMethodsController`, `LoginMethodService`; kiểm thử bằng fake trong `LoginMethodServiceTests`, chưa E2E với Google thật). Dùng Bearer, giới hạn 10 request/phút/IP (policy `login-methods`). Thao tác thêm/bỏ phải xác thực lại (mật khẩu hiện tại và/hoặc Google ID token mới trùng `sub` đã liên kết). Không đổi `User.Email` theo email Google.
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
@@ -288,7 +288,8 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 ```
 
 - `REAUTHENTICATION_FAILED` là 401 nhưng phiên vẫn còn: interceptor **không** được coi là hết phiên.
-- Quên/đặt lại mật khẩu, OTP, passkey và 2FA cũng chưa có endpoint trong Backend hiện tại; UI/scaffold hoặc type FE không chứng minh đã có API.
+- Gỡ phương thức không còn lại cái nào → `409 LAST_LOGIN_METHOD`. Gỡ Google khi chưa liên kết, hoặc gỡ mật khẩu khi chưa có mật khẩu, trả `204` (idempotent). Đặt mật khẩu khi đã có → `409 LOGIN_METHOD_ALREADY_EXISTS`.
+- OTP và passkey chưa có endpoint trong Backend hiện tại; UI/scaffold hoặc type FE không chứng minh đã có API.
 
 ### 6.5. Kho
 
