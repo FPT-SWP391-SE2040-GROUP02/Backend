@@ -19,10 +19,10 @@ public static class ApiTestHelpers
     public const string BeneficiaryEmail = "nguoinhan@example.com";
 
     /// <summary>Thêm một user Active vào DB và trả HttpClient đã gắn Bearer token của user đó.</summary>
-    public static async Task<HttpClient> CreateClientForNewUserAsync(ApiFactory factory, bool emailVerified)
+    public static async Task<HttpClient> CreateClientForNewUserAsync(ApiFactory factory, bool emailVerified, string? email = null)
     {
         User user = new User();
-        user.Email = $"{Guid.NewGuid():N}@test.local";
+        user.Email = email ?? $"{Guid.NewGuid():N}@test.local";
         user.FullName = "Người thử";
         user.Role = UserRole.User;
         user.Status = UserStatus.Active;

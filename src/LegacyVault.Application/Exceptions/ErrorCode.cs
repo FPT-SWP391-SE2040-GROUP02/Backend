@@ -11,6 +11,7 @@ namespace LegacyVault.Application.Exceptions;
 public enum ErrorCode
 {
     ValidationError,
+    EmailAlreadyExists,
     SessionExpired,
     AccountNotActive,
     EmailNotVerified,
@@ -36,6 +37,7 @@ public enum ErrorCode
     AssetAlreadyInContainer,
     BeneficiaryNotFound,
     BeneficiaryIdentityConflict,
+    // Không còn dùng (bỏ SETUP-19). Giữ nguyên vị trí trong enum để không đổi giá trị các mã phía sau.
     MinorConfirmationRequired,
     BeneficiaryInUse,
     BeneficiarySlotsExceeded,

@@ -15,6 +15,9 @@ namespace LegacyVault.Application.Services;
 /// </remarks>
 public interface IEkycService
 {
+    /// <summary>Kiểm tra bản tự khai đã sửa, giữ nguyên kết quả đối chiếu từ ảnh.</summary>
+    Task<EkycStatusResponse> ConfirmDocumentAsync(EkycDocumentConfirmationRequest request, CancellationToken ct);
+
     /// <summary>
     /// Ghi nhận người dùng đồng ý cho chụp giấy tờ và khuôn mặt (EKYC-03). Phải gọi trước khi gửi mặt trước;
     /// đồng ý có hiệu lực 30 phút và gắn mục đích cho lượt eKYC kế tiếp (EKYC-01).

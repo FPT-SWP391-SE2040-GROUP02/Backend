@@ -27,10 +27,13 @@ public static class DeathCaseNoticeEmail
             + "Email này không chứa nội dung kho của bạn.";
 
         string text = $"Xin chào {fullName},\n\n{paragraph}\n\nĐăng nhập: {link}\n\n{note}\n";
-        string html = $"<p>Xin chào {WebUtility.HtmlEncode(fullName)},</p>"
-            + $"<p>{WebUtility.HtmlEncode(paragraph)}</p>"
-            + $"<p><a href=\"{WebUtility.HtmlEncode(link)}\">Đăng nhập LegacyVault</a> ({WebUtility.HtmlEncode(link)})</p>"
-            + $"<p><small>{WebUtility.HtmlEncode(note)}</small></p>";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            "Yêu cầu xác nhận tình trạng của bạn",
+            fullName,
+            paragraph,
+            link,
+            "Xác nhận tình trạng ngay",
+            note);
         return new EmailContent(subject, text, html);
     }
 }

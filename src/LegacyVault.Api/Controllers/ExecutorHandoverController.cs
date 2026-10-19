@@ -17,10 +17,14 @@ namespace LegacyVault.Api.Controllers;
 public sealed class ExecutorHandoverController : ControllerBase
 {
     private readonly IHandoverProgressService handoverProgressService;
+    private readonly IHandoverInvitationService handoverInvitationService;
 
-    public ExecutorHandoverController(IHandoverProgressService handoverProgressService)
+    public ExecutorHandoverController(
+        IHandoverProgressService handoverProgressService,
+        IHandoverInvitationService handoverInvitationService)
     {
         this.handoverProgressService = handoverProgressService;
+        this.handoverInvitationService = handoverInvitationService;
     }
 
     /// <summary>
@@ -34,5 +38,20 @@ public sealed class ExecutorHandoverController : ControllerBase
     public Task<HandoverProgressResponse> GetHandoverProgress(Guid caseId, CancellationToken ct)
     {
         return handoverProgressService.GetProgressAsync(caseId, ct);
+    }
+
+    /// <summary>
+    /// Gửi lại lời mời nhận tài sản cho một lượt chưa ai nhận (INVITE-02, INVITE-04). Link cũ hết dùng, hạn phản hồi không đặt lại
+    /// (trừ khi lời mời chưa từng được giao). Giãn cách tối thiểu 15 phút giữa hai lần gửi.
+    /// </summary>
+    [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/resend-invitation")]
+    [ProducesResponseType<ResendHandoverInvitationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public Task<ResendHandoverInvitationResponse> ResendInvitation(Guid caseId, Guid turnId, CancellationToken ct)
+    {
+        return handoverInvitationService.ResendAsync(caseId, turnId, ct);
     }
 }

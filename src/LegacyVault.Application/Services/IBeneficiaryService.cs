@@ -4,7 +4,7 @@ using LegacyVault.Application.Dtos.Responses;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Hồ sơ người nhận cấp kho: danh bạ người nhận, dùng lại cho nhiều gói (§5.2 bước 7; QUOTA-04, SETUP-17, SETUP-19).
+/// Hồ sơ người nhận cấp kho: danh bạ người nhận, dùng lại cho nhiều gói (§5.2 bước 7; QUOTA-04, SETUP-17).
 /// </summary>
 /// <remarks>
 /// Luật chung khi cài đặt:
@@ -22,7 +22,7 @@ public interface IBeneficiaryService
     /// <summary>
     /// Tạo hồ sơ. Đã có hồ sơ cùng CCCD, cùng họ tên (chuẩn hóa) và ngày sinh → trả hồ sơ cũ, Created = false.
     /// Lỗi: 403 PAID_TIER_REQUIRED (hạng Free, SETUP-17), 400 VALIDATION_ERROR,
-    /// 409 MINOR_CONFIRMATION_REQUIRED (SETUP-19), 409 BENEFICIARY_IDENTITY_CONFLICT (+beneficiaryId, QUOTA-04).
+    /// 409 BENEFICIARY_IDENTITY_CONFLICT (+beneficiaryId, QUOTA-04). Không kiểm tuổi; ngày sinh ở tương lai → 400.
     /// </summary>
     Task<CreateBeneficiaryResult> CreateBeneficiaryAsync(
         Guid vaultId, CreateBeneficiaryRequest request, CancellationToken ct);
@@ -40,7 +40,7 @@ public interface IBeneficiaryService
     /// <summary>
     /// Sửa họ tên/ngày sinh/liên hệ (request.Etag bắt buộc; không đổi được CCCD). Không có gì đổi → trả nguyên trạng.
     /// Hồ sơ đang ở gói mà có thay đổi thì tăng ConfigVersion (SETUP-04).
-    /// Lỗi: 404 BENEFICIARY_NOT_FOUND, 409 EDIT_CONFLICT, 400 VALIDATION_ERROR, 409 MINOR_CONFIRMATION_REQUIRED.
+    /// Lỗi: 404 BENEFICIARY_NOT_FOUND, 409 EDIT_CONFLICT, 400 VALIDATION_ERROR.
     /// </summary>
     Task<BeneficiaryResponse> UpdateBeneficiaryAsync(
         Guid vaultId, Guid beneficiaryId, UpdateBeneficiaryRequest request, CancellationToken ct);

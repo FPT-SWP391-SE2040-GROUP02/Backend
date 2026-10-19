@@ -33,20 +33,8 @@ public sealed class DevEmailSender : IEmailSender
 
     public Task SendPasswordResetAsync(string toEmail, string fullName, string resetUrl, CancellationToken ct)
     {
-        try
-        {
-            _logger.LogInformation(
-                "======================================================================\n" +
-                "[EMAIL DAT LAI MAT KHAU] Gui toi: {Email} ({FullName})\n" +
-                "Link dat lai: {ResetUrl}\n" +
-                "======================================================================",
-                toEmail, fullName, resetUrl);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Khong the ghi log/gui email dat lai mat khau toi {Email}", toEmail);
-        }
-
+        // Reset URL grants access to the account; never write it or recipient PII to logs.
+        _logger.LogInformation("Password reset email not delivered: SMTP is not configured.");
         return Task.CompletedTask;
     }
 }

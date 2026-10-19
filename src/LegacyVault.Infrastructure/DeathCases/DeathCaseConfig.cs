@@ -42,6 +42,7 @@ public static class DeathCaseConfig
         // Chọn bộ gửi lúc cần dùng: có Email:Smtp đầy đủ thì gửi thật, không thì chỉ ghi log (như HandoverConfig).
         services.AddSingleton<IDeathCaseNoticeSender>(provider => ChooseSender(provider));
         services.AddSingleton<IDeathCaseVerifierReminderSender>(provider => ChooseReminderSender(provider));
+        services.AddSingleton<IDeathCaseExecutorNoticeSender>(provider => ChooseExecutorNoticeSender(provider));
         return services;
     }
 
@@ -63,5 +64,15 @@ public static class DeathCaseConfig
             return ActivatorUtilities.CreateInstance<SmtpDeathCaseVerifierReminderSender>(provider);
         }
         return ActivatorUtilities.CreateInstance<LogDeathCaseVerifierReminderSender>(provider);
+    }
+
+    private static IDeathCaseExecutorNoticeSender ChooseExecutorNoticeSender(IServiceProvider provider)
+    {
+        SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
+        if (smtp.IsConfigured)
+        {
+            return ActivatorUtilities.CreateInstance<SmtpDeathCaseExecutorNoticeSender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LogDeathCaseExecutorNoticeSender>(provider);
     }
 }

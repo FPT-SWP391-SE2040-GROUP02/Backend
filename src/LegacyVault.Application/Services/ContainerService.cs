@@ -410,7 +410,7 @@ public sealed class ContainerService : IContainerService
         designation.BeneficiaryId = beneficiaryId;
         designation.CreatedAt = now;
         // Thêm vào danh sách trước để RecalculateStatus và beneficiaryIds trong response tính cả người mới.
-        // SETUP-08 / SETUP-19: mọi hồ sơ đã lưu đều hợp lệ, kể cả người chưa đủ 18 tuổi.
+        // SETUP-08: mọi hồ sơ đã lưu đều hợp lệ, không kiểm tuổi (đã bỏ SETUP-19).
         container.Designations.Add(designation);
         container.UpdatedAt = now;
         ContainerRules.RecalculateStatus(container);

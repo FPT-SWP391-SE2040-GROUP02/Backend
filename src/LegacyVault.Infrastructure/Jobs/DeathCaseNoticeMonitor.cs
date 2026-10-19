@@ -81,7 +81,7 @@ public sealed class DeathCaseNoticeMonitor : BackgroundService
                     DeathCaseNoticeStatus? status = await job.ProcessNoticeAsync(id, ct);
                     if (status == DeathCaseNoticeStatus.Failed)
                     {
-                        // TODO: F4 — tạo sự cố có người và hạn xử lý thay cho dòng log này (DEATH-08).
+                        // Sự cố F4 đã được job mở cùng giao dịch (DEATH-08); dòng log chỉ để theo dõi.
                         logger.LogWarning("Thông báo hồ sơ chứng tử {NoticeId} gửi lỗi đủ số lần thử, chuyển FAILED.", id);
                     }
                 }

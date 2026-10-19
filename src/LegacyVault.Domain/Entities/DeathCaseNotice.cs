@@ -7,7 +7,7 @@ namespace LegacyVault.Domain.Entities;
 /// </summary>
 /// <remarks>
 /// - DEATH-08: gửi hồ sơ chỉ tạo dòng Pending trong cùng SaveChanges; job gửi thư, SMTP nhận → Delivered,
-///   72 giờ phản đối tính từ DeliveredAt. Lỗi thì thử lại, đủ 5 lần → Failed (TODO: sự cố F4).
+///   72 giờ phản đối tính từ DeliveredAt. Lỗi thì thử lại, đủ 5 lần → Failed và mở sự cố F4 (DEATH-08).
 /// - DEATH-11: đổi trọng yếu ở phiên bản mới thì tạo thông báo mới cho VersionNo đó.
 /// - TIME-02: thông báo đã Delivered không gửi lại. UpdatedAt là concurrency token để hai job không cùng xử lý.
 /// - Không lưu địa chỉ email: job đọc email Owner lúc gửi qua RecipientUserId.

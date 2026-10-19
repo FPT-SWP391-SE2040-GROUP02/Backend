@@ -17,6 +17,9 @@ public sealed class ExecutorVaultRow
 
     /// <summary>Hồ sơ đang mở của kho (kể cả Draft); null khi chưa có.</summary>
     public Guid? OpenDeathCaseId { get; set; }
+
+    /// <summary>Hồ sơ bị từ chối gần nhất của kho, để Executor mở lại xem lý do; null khi chưa có.</summary>
+    public Guid? LastRejectedDeathCaseId { get; set; }
 }
 
 /// <summary>

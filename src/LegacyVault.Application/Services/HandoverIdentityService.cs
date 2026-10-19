@@ -14,6 +14,7 @@ public sealed class HandoverIdentityService : IHandoverIdentityService
     private readonly IHandoverRepository handover;
     private readonly IEkycVerificationRepository verifications;
     private readonly IHandoverService handoverService;
+    private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -25,7 +26,21 @@ public sealed class HandoverIdentityService : IHandoverIdentityService
         IHandoverService handoverService,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
+        : this(currentUser, vaults, handover, verifications, handoverService, new NoHoldReader(), unitOfWork, timeProvider)
     {
+    }
+
+    public HandoverIdentityService(
+        ICurrentUser currentUser,
+        IVaultRepository vaults,
+        IHandoverRepository handover,
+        IEkycVerificationRepository verifications,
+        IHandoverService handoverService,
+        IHoldReader holdReader,
+        IUnitOfWork unitOfWork,
+        TimeProvider timeProvider)
+    {
+        this.holdReader = holdReader;
         this.currentUser = currentUser;
         this.vaults = vaults;
         this.handover = handover;
@@ -66,6 +81,12 @@ public sealed class HandoverIdentityService : IHandoverIdentityService
             throw NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
 
+        // ACCEPT-01, STATE-02: kho đang bị giữ thì chưa chuyển sang "sẵn sàng nhận" (cùng luật với nhận lượt và đồng ý).
+        if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
+        {
+            throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa hoàn tất xác minh được.");
+        }
+
         EkycVerification? verification = await verifications.FindLatestByHandoverTurnAsync(userId, turnId, ct);
         string? reason = HandoverIdentityRules.GetBlockingReason(verification, turnId);
         if (reason != null)
@@ -73,7 +94,10 @@ public sealed class HandoverIdentityService : IHandoverIdentityService
             throw NotAllowed(reason, HandoverIdentityRules.GetMessage(reason));
         }
 
-        HandoverRules.MarkReadyToAccept(turn, timeProvider.GetUtcNow());
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        HandoverRules.MarkReadyToAccept(turn, now);
+        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống (ALIVE-01).
+        vault.Plan.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
         return await handoverService.GetTurnAsync(turnId, ct);
     }

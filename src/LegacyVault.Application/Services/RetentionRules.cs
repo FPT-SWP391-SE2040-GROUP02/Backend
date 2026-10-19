@@ -9,6 +9,9 @@ public static class RetentionRules
     /// <summary>RETENTION-01: 30 ngày lưu trước khi xóa.</summary>
     public static readonly TimeSpan RetentionWindow = TimeSpan.FromDays(30);
 
+    /// <summary>CLAIM-06, RETENTION-04: claim đang xử lý giữ dữ liệu tối đa 30 ngày kể từ lúc nhận lượt.</summary>
+    public static readonly TimeSpan ClaimHoldWindow = TimeSpan.FromDays(30);
+
     public const string HoldAwaitingResponse = "AWAITING_RESPONSE";
     public const string HoldClaimInProgress = "CLAIM_IN_PROGRESS";
     public const string HoldGrantActive = "GRANT_ACTIVE";
@@ -52,9 +55,11 @@ public static class RetentionRules
             // §7.7 bước 1: đồng hồ chỉ chạy sau 5 ngày không phản hồi.
             return HoldAwaitingResponse;
         }
-        if (turn.Status == HandoverTurnStatus.IdentityInProgress || turn.Status == HandoverTurnStatus.ReadyToAccept)
+        if ((turn.Status == HandoverTurnStatus.IdentityInProgress || turn.Status == HandoverTurnStatus.ReadyToAccept)
+            && !IsClaimHoldExpired(turn, now))
         {
-            // RETENTION-04: claim đang xử lý. TODO(LV-09): giới hạn 30 ngày từ hồ sơ đủ đầu tiên (CLAIM-06).
+            // RETENTION-04: claim đang xử lý, giữ tối đa 30 ngày (CLAIM-06). Hết 30 ngày mà chưa xong thì không giữ nữa,
+            // đồng hồ lưu chạy tiếp phần còn lại; lượt không bị kẹt mãi ở bước xác minh danh tính.
             return HoldClaimInProgress;
         }
         if (turn.Grant != null && HandoverRules.EffectiveGrantStatus(turn.Grant, now) == HandoverGrantStatus.Active)
@@ -62,6 +67,16 @@ public static class RetentionRules
             return HoldGrantActive;
         }
         return null;
+    }
+
+    /// <summary>
+    /// CLAIM-06: mốc tính 30 ngày là lúc nhận lượt (ClaimedAt), vì hệ thống chưa lưu riêng thời điểm "tiếp nhận đầy đủ lần đầu".
+    /// Không có ClaimedAt (dữ liệu cũ) thì dùng InvitedAt để vẫn có giới hạn.
+    /// </summary>
+    private static bool IsClaimHoldExpired(HandoverTurn turn, DateTimeOffset now)
+    {
+        DateTimeOffset start = turn.ClaimedAt ?? turn.InvitedAt;
+        return now >= start + ClaimHoldWindow;
     }
 
     /// <summary>

@@ -16,9 +16,10 @@ public class BeneficiaryResponse
 
     public string? Phone { get; set; }
 
-    /// <summary>Chưa đủ 18 tuổi tính theo ngày hiện tại ở Việt Nam (SETUP-19).</summary>
+    /// <summary>Chưa đủ 18 tuổi tính theo ngày hiện tại ở Việt Nam. Chỉ để hiển thị, không ảnh hưởng quy tắc nào.</summary>
     public bool IsMinor { get; set; }
 
+    /// <summary>Không còn dùng từ khi bỏ SETUP-19: hồ sơ mới luôn null. Giữ lại để FE cũ không vỡ.</summary>
     public DateTimeOffset? MinorAcknowledgedAt { get; set; }
 
     /// <summary>Id các gói đang chỉ định người này, theo thứ tự gắn. Rỗng khi chưa ở gói nào.</summary>

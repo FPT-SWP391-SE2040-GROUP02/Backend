@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Ekyc;
@@ -169,6 +171,47 @@ public sealed class EkycService : IEkycService
         response.CanMatchFace = true;
         response.ExpiresAt = verification.DocumentTokenExpiresAt;
         return response;
+    }
+
+    public async Task<EkycStatusResponse> ConfirmDocumentAsync(EkycDocumentConfirmationRequest request, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        List<ValidationResult> errors = new();
+        if (!Validator.TryValidateObject(request, new ValidationContext(request), errors, true))
+        {
+            throw ValidationErrors.For("document", "Kiểm tra lại thông tin giấy tờ đã nhập.");
+        }
+        if (request.DateOfBirth > DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime))
+        {
+            throw ValidationErrors.For("dateOfBirth", "Ngày sinh không được ở tương lai.");
+        }
+
+        EkycPurpose purpose = ParsePurpose(request.Purpose);
+        EkycVerification verification = await RequirePendingVerificationAsync(userId, ct);
+        if (verification.Id != request.VerificationId || verification.Purpose != purpose ||
+            verification.HandoverTurnId != request.HandoverTurnId)
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycDocumentExpired,
+                "Lượt xác minh đã thay đổi. Vui lòng đọc lại mặt trước giấy tờ.");
+        }
+
+        BeneficiaryPersonalData? expected = await LoadExpectedPersonAsync(purpose, request.HandoverTurnId, userId, ct);
+        if (expected != null)
+        {
+            EkycDocumentReading declaration = new()
+            {
+                IdNumber = request.IdNumber,
+                FullName = request.FullName.Trim(),
+                DateOfBirth = request.DateOfBirth!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            };
+            if (EkycRules.CompareIdentity(declaration, expected) != EkycIdentityMatch.Matched)
+            {
+                throw ValidationErrors.For("document", "Thông tin xác nhận chưa khớp hồ sơ người nhận. Kiểm tra lại giấy tờ.");
+            }
+        }
+
+        // Bản tự khai chỉ được kiểm tra trong request, không lưu PII hoặc nâng kết quả từ ảnh thành MATCHED.
+        return verification.ToResponse();
     }
 
     public async Task<EkycStatusResponse> SubmitBackAsync(

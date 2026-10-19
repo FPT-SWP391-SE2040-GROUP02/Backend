@@ -135,7 +135,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     public async Task Revoke_PendingInvitation_LinkDead_RepeatOk_StaleEtagConflict()
     {
         (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
-        HttpClient executor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        HttpClient executor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "mot@example.test");
         ExecutorInvitationResponse invited = await InviteAsync(owner, vaultId, "mot@example.test", "PRIMARY");
         string token = mail.Token;
 
@@ -172,8 +172,8 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     public async Task Setup06_ReplacePrimaryOnRunningPlan_OldKeepsRoleUntilNewAccepts()
     {
         (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
-        HttpClient oldExecutor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
-        HttpClient newExecutor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        HttpClient oldExecutor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "cu@example.test");
+        HttpClient newExecutor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "moi@example.test");
         ExecutorInvitationResponse first = await InviteAsync(owner, vaultId, "cu@example.test", "PRIMARY");
         await AcceptAsync(oldExecutor, mail.Token);
         await ActivateAsync(owner, vaultId);

@@ -83,7 +83,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         DateOnly today = GetTodayInVietnam();
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vault.Id;
-        ApplyMinorRule(beneficiary, data.DateOfBirth, request.ConfirmMinor, today, now);
+        EnsureDateOfBirthNotInFuture(data.DateOfBirth, today);
 
         // QUOTA-04: hồ sơ chung trong kho, một số CCCD chỉ có một hồ sơ.
         MatchedBeneficiary? existing = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
@@ -235,14 +235,12 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         DateOnly today = GetTodayInVietnam();
-        DateTimeOffset? acknowledgedBefore = beneficiary.MinorAcknowledgedAt;
-        ApplyMinorRule(beneficiary, updated.DateOfBirth, request.ConfirmMinor, today, now);
+        EnsureDateOfBirthNotInFuture(updated.DateOfBirth, today);
 
         bool changed = !string.Equals(updated.FullName, current.FullName, StringComparison.Ordinal)
             || updated.DateOfBirth != current.DateOfBirth
             || !string.Equals(updated.Email, current.Email, StringComparison.Ordinal)
-            || !string.Equals(updated.Phone, current.Phone, StringComparison.Ordinal)
-            || beneficiary.MinorAcknowledgedAt != acknowledgedBefore;
+            || !string.Equals(updated.Phone, current.Phone, StringComparison.Ordinal);
 
         List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
 
@@ -388,34 +386,15 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     }
 
     /// <summary>
-    /// SETUP-19 / AC-105: dưới 18 tuổi vẫn lưu được nhưng Owner phải xác nhận cảnh báo
-    /// "người này hiện chưa nhận được qua app". Đã xác nhận trước đó thì không bắt xác nhận lại.
-    /// Từ 18 tuổi trở lên thì bỏ dấu xác nhận.
+    /// Ngày sinh không được ở tương lai (400). Không kiểm tuổi: người nhận dưới 18 tuổi vẫn lưu bình thường
+    /// (đã bỏ SETUP-19 / AC-105), isMinor chỉ để hiển thị.
     /// </summary>
-    private static void ApplyMinorRule(
-        Beneficiary beneficiary, DateOnly dateOfBirth, bool confirmMinor, DateOnly today, DateTimeOffset now)
+    private static void EnsureDateOfBirthNotInFuture(DateOnly dateOfBirth, DateOnly today)
     {
         if (dateOfBirth > today)
         {
             throw ValidationErrors.For("dateOfBirth", "Ngày sinh không được ở tương lai.");
         }
-
-        if (!BeneficiaryRules.IsMinor(dateOfBirth, today))
-        {
-            beneficiary.MinorAcknowledgedAt = null;
-            return;
-        }
-
-        if (beneficiary.MinorAcknowledgedAt != null)
-        {
-            return;
-        }
-        if (!confirmMinor)
-        {
-            throw new AppException(AppErrorType.Conflict, ErrorCode.MinorConfirmationRequired,
-                "Người nhận chưa đủ 18 tuổi, hiện chưa nhận được qua app. Vui lòng xác nhận để lưu.");
-        }
-        beneficiary.MinorAcknowledgedAt = now;
     }
 
     /// <summary>
