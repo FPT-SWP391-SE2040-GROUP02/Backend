@@ -20,6 +20,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public const string ConnectionVariable = "LEGACYVAULT_TEST_CONNECTION";
 
+    /// <summary>Key giả của webhook SePay trong cấu hình test.</summary>
+    public const string SePayTestApiKey = "test-sepay-webhook-key";
+
     private readonly string connectionString;
 
     public ApiFactory(string connectionString, string storageRoot)
@@ -107,6 +110,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Executor:InvitationJobEnabled"] = "false";
             settings["Retention:Enabled"] = "false";
             settings["Incident:JobEnabled"] = "false";
+            // Key giả cho webhook SePay (chỉ dùng trong test); key thật chỉ đặt bằng user-secrets.
+            settings["Billing:SePay:WebhookApiKey"] = SePayTestApiKey;
+            settings["Billing:SePay:Environment"] = "Test";
             // Môi trường Development nạp user-secrets của người chạy test: ép trống thông tin Gmail để test
             // KHÔNG BAO GIỜ gửi thư thật (mặc định dùng bản chỉ ghi log).
             settings["Email:Smtp:UserName"] = "";

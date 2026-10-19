@@ -71,6 +71,7 @@ public enum ErrorCode
     PaymentOrderPending,
     PaymentOrderNotPayable,
     PaymentOrderNotFound,
+    WebhookUnauthorized,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

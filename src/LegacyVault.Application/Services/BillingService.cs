@@ -27,6 +27,7 @@ public sealed class BillingService : IBillingService
     private readonly IUnitOfWork unitOfWork;
     private readonly IBillingBankSettings bankSettings;
     private readonly IBillingDevSettings devSettings;
+    private readonly PaymentGranter paymentGranter;
     private readonly TimeProvider timeProvider;
 
     public BillingService(
@@ -38,6 +39,7 @@ public sealed class BillingService : IBillingService
         IUnitOfWork unitOfWork,
         IBillingBankSettings bankSettings,
         IBillingDevSettings devSettings,
+        PaymentGranter paymentGranter,
         TimeProvider timeProvider)
     {
         this.currentUser = currentUser;
@@ -48,6 +50,7 @@ public sealed class BillingService : IBillingService
         this.unitOfWork = unitOfWork;
         this.bankSettings = bankSettings;
         this.devSettings = devSettings;
+        this.paymentGranter = paymentGranter;
         this.timeProvider = timeProvider;
     }
 
@@ -256,60 +259,19 @@ public sealed class BillingService : IBillingService
     }
 
     /// <summary>
-    /// Phần cấp quyền dùng chung của dev-pay và webhook (không tự mở transaction; người gọi bọc Serializable).
-    /// Thứ tự: đơn đã trả → đơn đã hủy / quá hạn → kho đóng → cấp quyền → đổi đơn → nhật ký → lưu một lần.
+    /// Cấp quyền dùng chung của dev-pay và ApplyPaymentAsync (người gọi bọc Serializable). Luật cấp quyền nằm ở
+    /// PaymentGranter (webhook SePay dùng chung); ở đây chỉ lưu một lần và dựng phản hồi.
     /// </summary>
     private async Task<PaymentOrderResponse> GrantEntitlementAsync(PaymentOrder order, DateTimeOffset paidAt, CancellationToken ct)
     {
         DateTimeOffset serverTime = timeProvider.GetUtcNow();
 
-        // PAY-04: một đơn chỉ cấp quyền một lần; trả lặp chỉ trả lại đơn.
-        if (order.Status == PaymentOrderStatus.Paid)
+        bool granted = await paymentGranter.GrantAsync(order, paidAt, ct);
+        if (granted)
         {
-            return order.ToResponse(bankSettings, serverTime);
+            // RowVersion của đơn: hai lần ghi nhận song song chỉ một bên thắng (409 EDIT_CONFLICT cho bên còn lại).
+            await unitOfWork.SaveChangesAsync(ct);
         }
-        if (order.Status == PaymentOrderStatus.Cancelled)
-        {
-            throw BillingRules.NotPayable(PaymentOrderNotPayableReason.Cancelled, "Đơn đã bị hủy nên không thể thanh toán.");
-        }
-        // PAY-06: so với giờ tiền vào, không phải trạng thái Expired do D7 đánh dấu lúc đọc.
-        if (paidAt >= order.ExpiresAt)
-        {
-            throw BillingRules.NotPayable(PaymentOrderNotPayableReason.Expired, "Đơn đã hết hạn thanh toán.");
-        }
-
-        Vault? vault = await vaultRepository.FindByIdAsync(order.VaultId, ct);
-        if (vault == null)
-        {
-            throw BillingRules.OrderNotFound();
-        }
-        // AC-104: kho đã đóng thì không cấp quyền, không khôi phục.
-        if (vault.Status == VaultStatus.Closed)
-        {
-            throw BillingRules.NotPayable(PaymentOrderNotPayableReason.VaultClosed, "Kho đã đóng nên không thể cấp dịch vụ.");
-        }
-
-        // §8.3: không kiểm trạng thái kế hoạch lúc trả; đơn tạo trước vẫn được cấp. SETUP-14: không đổi kế hoạch.
-        if (order.Kind == PaymentOrderKind.Purchase)
-        {
-            BillingRules.ApplyPurchase(vault.Entitlement, order, paidAt);
-        }
-        else
-        {
-            BillingRules.ApplyAddon(vault.Entitlement, order, paidAt);
-        }
-
-        order.Status = PaymentOrderStatus.Paid;
-        order.PaidAt = paidAt;
-        order.UpdatedAt = paidAt;
-
-        // Nhật ký của hệ thống (không có người dùng) vì webhook cũng đi đường này. Không ghi số tiền hay mã thanh toán (SEC-07).
-        auditLogRepository.Add(AuditRules.Create(
-            vault.Id, null, AuditActorRole.System, AuditAction.PaymentPaid, AuditTargetType.PaymentOrder,
-            order.Id, null, AuditOutcome.Succeeded, null, paidAt));
-
-        // RowVersion của đơn: hai lần ghi nhận song song chỉ một bên thắng (409 EDIT_CONFLICT cho bên còn lại).
-        await unitOfWork.SaveChangesAsync(ct);
         return order.ToResponse(bankSettings, serverTime);
     }
 

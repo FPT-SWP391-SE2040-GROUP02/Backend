@@ -59,6 +59,8 @@ public static class ApplicationConfig
 
         // Thanh toán (SRS §8)
         services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<PaymentGranter>();
+        services.AddScoped<ISePayWebhookService, SePayWebhookService>();
         return services;
     }
 }
