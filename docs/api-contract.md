@@ -751,7 +751,7 @@ Owner xem hồ sơ chứng tử của kho và báo "Tôi còn sống" (SRS §6.3
 |---|---|---|---|---|
 | GET | `/v1/vaults/{vaultId}/death-case` | — | 200 `OwnerDeathCaseResponse` (có `objection` nếu đã báo) | 404 `VAULT_NOT_FOUND` / `DEATH_CASE_NOT_FOUND` |
 | POST | `/v1/vaults/{vaultId}/death-case/objection` | — | 200 | 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_ALREADY_REJECTED`) / `EDIT_CONFLICT` |
-| POST | `/v1/vaults/{vaultId}/death-case/objection/selfie` | `multipart`, field `file` (JPEG/PNG ≤ 8 MiB) | 200 | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_WINDOW_CLOSED` / `SELFIE_ATTEMPTS_EXCEEDED`), 413, 503 `EKYC_SERVICE_UNAVAILABLE` |
+| POST | `/v1/vaults/{vaultId}/death-case/objection/selfie` | `multipart`, field `file` (JPEG/PNG ≤ 8 MiB) | 200 | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_WINDOW_CLOSED` / `SELFIE_ATTEMPTS_EXCEEDED`), 413, 503 `EKYC_SERVICE_UNAVAILABLE`. Sau khi lời báo bị bác (`OBJECTION_REJECTED`), selfie khớp là bằng chứng mới và mở lại lời báo (ALIVE-09); không khớp thì tính vào giới hạn 3 lần/24 giờ |
 | GET | `/v1/verifier/death-cases/{caseId}/objection` | — | 200 `ObjectionResponse` | 404 |
 | POST | `/v1/verifier/death-cases/{caseId}/objection/conclude` | `{ conclusion, reason }` | 200 `ObjectionResponse` | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_NOT_OPEN` / `ALIVE_EVIDENCE_REQUIRED`) / `EDIT_CONFLICT` |
 
@@ -795,7 +795,7 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 - **Tự động tạo:** job phân công Verifier không có người (`NO_VERIFIER`, tự đóng khi giao được); kỳ điểm danh sang `AWAITING_CHECK` (`CHECK_IN_OVERDUE` giao Executor chính, không có Executor thì `NO_EXECUTOR` giao Admin; tự đóng khi Owner điểm danh, DMS-05); Owner báo còn sống (`OWNER_ALIVE` giao Verifier phụ trách, đóng khi kết luận).
 - **Job sự cố** (`Incident:JobEnabled`, `Incident:PollSeconds` mặc định 300): nhắc người phụ trách sau 48 giờ (một lần), báo mọi Admin sau 72 giờ (một lần), giao sự cố mồ côi. Quá hạn không tự đóng. Thư chỉ có loại sự cố, mã rút gọn và hạn.
 - **Nhật ký:** mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier, giao/đóng sự cố, đặt/gỡ hold) và F2C ghi `AuditLogs` trong cùng giao dịch.
-- **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); sự cố từ lỗi eKYC/thanh toán (chờ LV-02/LV-04); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; thu hồi phiên đăng nhập khi khóa tài khoản.
+- **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); sự cố từ lỗi eKYC/thanh toán (chờ LV-02/LV-04); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; khóa tài khoản hiện thu hồi mọi refresh token (access token đã cấp còn sống tối đa `Jwt:AccessTokenMinutes`).
 
 ### 6.16. Executor theo dõi tiến độ bàn giao
 
@@ -804,6 +804,11 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `/api/v1/executor/death-cases/{caseId}/handover-progress` | Executor đang hiệu lực của kho | — | 200 `HandoverProgressResponse` | 401, 404 `DEATH_CASE_NOT_FOUND` |
+| POST | `/api/v1/executor/death-cases/{caseId}/handover-turns/{turnId}/resend-invitation` | Executor đang hiệu lực của kho | — | 200 `ResendHandoverInvitationResponse` `{ turnId, invitationSentAt, responseDeadline }` | 401, 404 `DEATH_CASE_NOT_FOUND` / `HANDOVER_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`PLAN_NOT_IN_HANDOVER` / `WRONG_STATE` / `HOLD_ACTIVE` / `RESEND_TOO_SOON` / `NO_EMAIL`), 503 `HANDOVER_NOT_ALLOWED` (`INVITATION_SEND_FAILED`) |
+
+**Gửi lại lời mời (INVITE-02, INVITE-04):** chỉ cho lượt chưa ai nhận (`INVITED`, `INITIAL_RESPONSE_EXPIRED`). Mỗi lần gửi lại tạo token mới và link cũ hết dùng (DB chỉ giữ mã băm). Hạn phản hồi không đặt lại, trừ khi lời mời chưa từng được giao thì hạn 5 ngày tính từ lần giao thành công đầu tiên. Cách nhau tối thiểu 15 phút. Người nhận không có email thì `NO_EMAIL` (chưa có kênh khác). Gửi lỗi thì không đổi gì.
+
+**Hold và đồng hồ bàn giao (TIME-04):** kho có hold hoặc kế hoạch `BLOCKED` thì job không chuyển lượt/grant sang hết hạn; hoàn tất xác minh danh tính cũng bị chặn (`HOLD_ACTIVE`). Gỡ hold cuối cùng của kho thì hạn phản hồi, hạn quyết định và hạn grant đang chạy được dời đúng bằng thời gian đã dừng.
 
 ```json
 // HandoverProgressResponse
