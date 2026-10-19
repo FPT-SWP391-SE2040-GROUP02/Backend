@@ -49,6 +49,9 @@ public static class InfrastructureConfig
         services.AddScoped<ILoginThrottleRepository, LoginThrottleRepository>();
         services.AddScoped<IEmailVerificationTokenRepository, EmailVerificationTokenRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        // Xác thực hai bước TOTP của Admin: khóa, mã khôi phục, thử thách; bí mật bọc bằng KEK của DataKeyProtector.
+        services.AddScoped<ITwoFactorRepository, TwoFactorRepository>();
+        services.AddSingleton<ITotpSecretProtector, TotpSecretProtector>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IVaultRepository, VaultRepository>();
         services.AddScoped<IContainerRepository, ContainerRepository>();

@@ -23,6 +23,13 @@ public class GoogleLoginResponse
 
     public string? MaskedEmail { get; set; }
 
+    /// <summary>true khi Admin đã bật xác thực hai bước: có ChallengeToken, chưa có phiên (SignedIn = false).</summary>
+    public bool TwoFactorRequired { get; set; }
+
+    public string? ChallengeToken { get; set; }
+
+    public int? ChallengeExpiresIn { get; set; }
+
     /// <summary>Chuyển kết quả nội bộ của service thành JSON an toàn để trả cho FE.</summary>
     public static GoogleLoginResponse From(GoogleLoginResult result)
     {
@@ -34,6 +41,9 @@ public class GoogleLoginResponse
             Session = result.Auth?.Session,
             LinkTicket = result.LinkTicket,
             MaskedEmail = result.MaskedEmail,
+            TwoFactorRequired = result.TwoFactor != null,
+            ChallengeToken = result.TwoFactor?.ChallengeToken,
+            ChallengeExpiresIn = result.TwoFactor?.ExpiresIn,
         };
     }
 }

@@ -45,6 +45,7 @@ public static class AuthSecurityConfig
                 ("plan-setup", 10),
                 ("executor-invitations", 30),
                 ("login-methods", 10),
+                ("two-factor", 5),
                 (AuthRateLimitPolicies.PasswordReset, AuthRateLimitPolicies.PasswordResetPermitLimit),
             };
             foreach (var (name, limit) in policies)

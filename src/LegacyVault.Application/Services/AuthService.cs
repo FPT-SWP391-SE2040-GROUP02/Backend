@@ -26,6 +26,7 @@ public sealed class AuthService : IAuthService
     private readonly ITokenService _tokenService;
     private readonly ICurrentUser _currentUser;
     private readonly TimeProvider _timeProvider;
+    private readonly ITwoFactorService? _twoFactorService;
 
     public AuthService(
         IUserRepository userRepository,
@@ -35,8 +36,10 @@ public sealed class AuthService : IAuthService
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         ICurrentUser currentUser,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ITwoFactorService? twoFactorService = null)
     {
+        _twoFactorService = twoFactorService;
         _userRepository = userRepository;
         _loginThrottleRepository = loginThrottleRepository;
         _refreshTokenRepository = refreshTokenRepository;
@@ -114,6 +117,16 @@ public sealed class AuthService : IAuthService
         if (throttle != null)
         {
             _loginThrottleRepository.Remove(throttle);
+        }
+
+        // 6b. Admin đã bật xác thực hai bước: chưa cấp phiên, trả thử thách để FE hỏi mã TOTP.
+        if (_twoFactorService != null)
+        {
+            var challenge = await _twoFactorService.ChallengeIfRequiredAsync(user, request.RememberMe, ct);
+            if (challenge != null)
+            {
+                return new AuthResult { TwoFactor = challenge };
+            }
         }
 
         user.LastLoginAt = now;

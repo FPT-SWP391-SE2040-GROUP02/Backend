@@ -231,6 +231,28 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 - `rememberMe = true` thì cookie sống qua khi tắt trình duyệt, nhưng phiên vẫn tối đa 12 giờ.
 - Login chỉ nhận email hợp lệ ≤256 ký tự, password bắt buộc ≤128, rememberMe boolean mặc định false. `AuthSessionResponse` là raw body; `user` bên trong chính là `UserResponse`. Không có `refreshToken` trong JSON. `expiresIn: 900` ở ví dụ là cấu hình mặc định, không phải giá trị client được hardcode.
 
+### 6.2a. Xác thực hai bước TOTP (Admin)
+
+Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như cũ. Khi đã bật, mọi đăng nhập Admin (mật khẩu, Google, link-confirm) **chưa cấp phiên**: server trả thử thách, FE hỏi mã 6 số (hoặc mã khôi phục) rồi gọi `verify`. Bí mật TOTP lưu đã bọc bằng KEK; mã khôi phục và token thử thách chỉ lưu hash. Kiểm thử bằng fake (`TwoFactorServiceTests`), chưa E2E với ứng dụng xác thực thật.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/auth/2fa/status` | Admin | — | 200 `{ enabled, setupPending, recoveryCodesRemaining }` | 401, 403 `TWO_FACTOR_ADMIN_ONLY` |
+| POST | `/api/v1/auth/2fa/setup` | Admin | — | 200 `{ secret, otpAuthUri }` | 403, 409 `TWO_FACTOR_ALREADY_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/enable` | Admin | `{ code }` mã TOTP đầu tiên | 200 `{ recoveryCodes[8] }` (hiển thị một lần) | 401 `INVALID_TWO_FACTOR_CODE`, 409 `TWO_FACTOR_SETUP_REQUIRED` / `TWO_FACTOR_ALREADY_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/disable` | Admin | `{ code }` TOTP hoặc mã khôi phục | 204 | 401 `INVALID_TWO_FACTOR_CODE`, 409 `TWO_FACTOR_NOT_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/verify` | Công khai + CSRF | `{ challengeToken, code }` | 200 `AuthSessionResponse` + cookie `lv_refresh` | 401 `INVALID_TWO_FACTOR_CODE` / `TWO_FACTOR_CHALLENGE_INVALID`, 429 |
+
+```jsonc
+// POST /auth/login (và POST /auth/google, /auth/google/link-confirm) khi Admin đã bật 2FA → 200, KHÔNG có cookie
+{ "twoFactorRequired": true, "challengeToken": "opaque", "expiresIn": 300 }
+// /auth/google trả thêm dạng phẳng: { signedIn: false, twoFactorRequired: true, challengeToken, challengeExpiresIn }
+```
+
+- Thử thách sống 5 phút, dùng một lần, sai 5 lần thì bị hủy (phải đăng nhập lại). Mỗi mã TOTP chỉ dùng được một lần; chấp nhận lệch ±1 bước 30 giây.
+- Mã khôi phục dạng `XXXXXX-XXXXXX`, dùng một lần, không phân biệt hoa thường. Mất cả ứng dụng lẫn mã khôi phục cần Admin khác xử lý ngoài API (chưa có endpoint đặt lại 2FA).
+- `INVALID_TWO_FACTOR_CODE` là 401 nhưng với `setup/enable/disable` phiên vẫn còn: FE không coi là hết phiên.
+
 ### 6.3. Đăng nhập Google
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |

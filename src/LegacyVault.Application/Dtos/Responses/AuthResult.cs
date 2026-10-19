@@ -18,4 +18,7 @@ public class AuthResult
 
     /// <summary>true = "Ghi nhớ đăng nhập" → cookie refresh sống qua khi tắt trình duyệt.</summary>
     public bool IsPersistent { get; set; }
+
+    /// <summary>Khác null khi Admin đã bật xác thực hai bước: chưa có phiên/refresh token, chỉ có thử thách.</summary>
+    public TwoFactorChallengeResponse? TwoFactor { get; set; }
 }

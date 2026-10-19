@@ -26,4 +26,7 @@ public class GoogleLoginResult
 
     /// <summary>true khi lần đăng nhập này vừa tạo tài khoản mới từ Google.</summary>
     public bool AccountCreated { get; set; }
+
+    /// <summary>Khác null khi Admin đã bật xác thực hai bước: chưa có phiên, FE hỏi mã TOTP.</summary>
+    public TwoFactorChallengeResponse? TwoFactor { get; set; }
 }

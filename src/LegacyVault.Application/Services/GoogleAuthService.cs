@@ -32,6 +32,7 @@ public sealed class GoogleAuthService : IGoogleAuthService
     private readonly LoginSessionIssuer _sessionIssuer;
     private readonly LoginThrottleGuard _throttleGuard;
     private readonly TimeProvider _timeProvider;
+    private readonly ITwoFactorService? _twoFactorService;
 
     public GoogleAuthService(
         IGoogleTokenVerifier googleTokenVerifier,
@@ -43,8 +44,10 @@ public sealed class GoogleAuthService : IGoogleAuthService
         IUnitOfWork unitOfWork,
         LoginSessionIssuer sessionIssuer,
         LoginThrottleGuard throttleGuard,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ITwoFactorService? twoFactorService = null)
     {
+        _twoFactorService = twoFactorService;
         _googleTokenVerifier = googleTokenVerifier;
         _userRepository = userRepository;
         _externalLoginRepository = externalLoginRepository;
@@ -139,7 +142,17 @@ public sealed class GoogleAuthService : IGoogleAuthService
             throw new GoogleAccountAlreadyLinkedException();
         }
 
-        // 5. Mở phiên như đăng nhập thường.
+        // 5. Admin đã bật xác thực hai bước: chưa cấp phiên, trả thử thách.
+        if (_twoFactorService != null)
+        {
+            var challenge = await _twoFactorService.ChallengeIfRequiredAsync(user, request.RememberMe, ct);
+            if (challenge != null)
+            {
+                return new AuthResult { TwoFactor = challenge };
+            }
+        }
+
+        // 6. Mở phiên như đăng nhập thường.
         return await _sessionIssuer.OpenSessionAsync(user, request.RememberMe, ct);
     }
 
@@ -159,6 +172,15 @@ public sealed class GoogleAuthService : IGoogleAuthService
             if (linkedUser.Status != UserStatus.Active)
             {
                 throw new AccountNotActiveException();
+            }
+
+            if (_twoFactorService != null)
+            {
+                var challenge = await _twoFactorService.ChallengeIfRequiredAsync(linkedUser, rememberMe, ct);
+                if (challenge != null)
+                {
+                    return new GoogleLoginResult { SignedIn = false, TwoFactor = challenge, ReturnUrl = returnUrl };
+                }
             }
 
             existingLink.LastUsedAt = now;
