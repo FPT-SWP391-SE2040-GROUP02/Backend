@@ -20,6 +20,10 @@ public sealed class EkycService : IEkycService
     private readonly IHandoverRepository handoverRepository;
     private readonly IBeneficiaryRepository beneficiaryRepository;
     private readonly IBeneficiaryDataProtector beneficiaryProtector;
+    private readonly IOwnerFaceTemplateRepository faceTemplateRepository;
+    private readonly IFaceTemplateProtector faceTemplateProtector;
+    private readonly IOwnerIdentityRepository identityRepository;
+    private readonly IOwnerIdentityProtector identityProtector;
     private readonly IEkycClient ekycClient;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -31,6 +35,10 @@ public sealed class EkycService : IEkycService
         IHandoverRepository handoverRepository,
         IBeneficiaryRepository beneficiaryRepository,
         IBeneficiaryDataProtector beneficiaryProtector,
+        IOwnerFaceTemplateRepository faceTemplateRepository,
+        IFaceTemplateProtector faceTemplateProtector,
+        IOwnerIdentityRepository identityRepository,
+        IOwnerIdentityProtector identityProtector,
         IEkycClient ekycClient,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
@@ -41,6 +49,10 @@ public sealed class EkycService : IEkycService
         this.handoverRepository = handoverRepository;
         this.beneficiaryRepository = beneficiaryRepository;
         this.beneficiaryProtector = beneficiaryProtector;
+        this.faceTemplateRepository = faceTemplateRepository;
+        this.faceTemplateProtector = faceTemplateProtector;
+        this.identityRepository = identityRepository;
+        this.identityProtector = identityProtector;
         this.ekycClient = ekycClient;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
@@ -95,6 +107,13 @@ public sealed class EkycService : IEkycService
         // Đọc trước, hủy lượt cũ sau: ảnh lỗi thì lượt Pending đang có vẫn giữ nguyên.
         EkycDocumentReading reading = await ekycClient.ReadFrontAsync(image, fileName, contentType, ct);
 
+        // EKYC-24, EKYC-27: Owner đăng ký phải đọc được đủ CCCD, họ tên, ngày sinh, và đã gắn danh tính thì phải ra đúng danh tính đó.
+        OwnerIdentityData? enrollmentIdentity = null;
+        if (purpose == EkycPurpose.OwnerEnrollment && reading.DocumentToken != null)
+        {
+            enrollmentIdentity = await CheckEnrollmentIdentityAsync(userId, reading, ct);
+        }
+
         EkycIdentityMatch identityMatch = EkycIdentityMatch.NotChecked;
         if (expected != null)
         {
@@ -107,6 +126,10 @@ public sealed class EkycService : IEkycService
             await TryDeleteDocumentAsync(previous.DocumentToken, ct);
             previous.DocumentToken = null;
             previous.DocumentTokenExpiresAt = null;
+        }
+        if (previous != null)
+        {
+            ClearPendingIdentity(previous);
         }
 
         EkycDocumentResponse response = new EkycDocumentResponse
@@ -137,6 +160,10 @@ public sealed class EkycService : IEkycService
         verification.DocumentToken = reading.DocumentToken;
         verification.DocumentTokenExpiresAt = now + EkycRules.DocumentTokenLifetime;
         verification.CreatedAt = now;
+        if (enrollmentIdentity != null)
+        {
+            identityProtector.ProtectPending(verification, enrollmentIdentity);
+        }
         verificationRepository.Add(verification);
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -328,6 +355,12 @@ public sealed class EkycService : IEkycService
         // Tự so lại với ngưỡng của server, không tin cờ matched do dịch vụ ngoài trả về.
         if (comparison.Score >= EkycRules.MatchThreshold)
         {
+            // EKYC-22: Owner đăng ký đạt thì tạo mẫu khuôn mặt từ chính selfie của phiên này, lưu cùng lần chốt kết quả.
+            // Lấy vector trước khi chốt: dịch vụ lỗi thì lượt vẫn Pending để thử lại, không có lượt đạt mà thiếu mẫu.
+            if (verification.Purpose == EkycPurpose.OwnerEnrollment)
+            {
+                await AddFaceTemplateAsync(userId, verification.Id, selfie, now, ct);
+            }
             await FinishAsync(verification, EkycStatus.Passed, now, ct);
         }
         else
@@ -336,6 +369,31 @@ public sealed class EkycService : IEkycService
         }
         await TryDeleteLivenessAsync(sessionId, ct);
         return verification.ToResponse();
+    }
+
+    /// <summary>
+    /// Tạo mẫu khuôn mặt Owner từ selfie của phiên thử thách đã đạt (EKYC-22). Đã có mẫu thì giữ nguyên, không thay bằng
+    /// mẫu mới (EKYC-23). Chỉ đánh dấu INSERT; lưu cùng lần FinishAsync.
+    /// </summary>
+    private async Task AddFaceTemplateAsync(
+        Guid userId, Guid verificationId, byte[] selfie, DateTimeOffset now, CancellationToken ct)
+    {
+        OwnerFaceTemplate? existing = await faceTemplateRepository.FindLatestByUserIdAsync(userId, ct);
+        if (existing != null)
+        {
+            return;
+        }
+
+        EkycFaceEmbedding embedding = await ekycClient.GetFaceEmbeddingAsync(selfie, "liveness.jpg", "image/jpeg", ct);
+
+        OwnerFaceTemplate template = new OwnerFaceTemplate();
+        template.UserId = userId;
+        template.Version = 1;
+        template.ModelName = embedding.ModelName;
+        template.SourceVerificationId = verificationId;
+        template.CreatedAt = now;
+        faceTemplateProtector.Protect(template, embedding.Values);
+        faceTemplateRepository.Add(template);
     }
 
     /// <summary>Lượt eKYC mới nhất phải còn chờ selfie (đã đọc mặt trước, còn trong 30 phút).</summary>
@@ -445,9 +503,85 @@ public sealed class EkycService : IEkycService
             "Không tìm thấy nội dung bàn giao.");
     }
 
+    /// <summary>
+    /// Đọc danh tính từ mặt trước của Owner đăng ký và đối chiếu với danh tính đã gắn nếu có (EKYC-24).
+    /// Đọc chưa đủ hoặc OCR chưa chắc: 400 EKYC_IMAGE_REJECTED, chụp lại. CCCD khác rõ ràng: 409 EKYC_IDENTITY_MISMATCH.
+    /// Lỗi thì hủy khuôn mặt vừa giữ ở dịch vụ eKYC. Trả danh tính đọc được để giữ tạm (mã hóa) trên lượt.
+    /// </summary>
+    private async Task<OwnerIdentityData> CheckEnrollmentIdentityAsync(
+        Guid userId, EkycDocumentReading reading, CancellationToken ct)
+    {
+        OwnerIdentityData? readIdentity = EkycRules.TryReadOwnerIdentity(reading);
+        if (readIdentity == null)
+        {
+            await TryDeleteDocumentAsync(reading.DocumentToken!, ct);
+            throw new AppException(AppErrorType.Validation, ErrorCode.EkycImageRejected,
+                "Chưa đọc rõ số CCCD, họ tên hoặc ngày sinh. Vui lòng chụp lại mặt trước rõ hơn.");
+        }
+
+        OwnerIdentity? bound = await identityRepository.FindByUserIdAsync(userId, ct);
+        if (bound != null)
+        {
+            OwnerIdentityData expected = identityProtector.Unprotect(bound);
+            EkycIdentityMatch match = EkycRules.CompareIdentity(reading, expected);
+            if (match == EkycIdentityMatch.WrongPerson)
+            {
+                await TryDeleteDocumentAsync(reading.DocumentToken!, ct);
+                throw new AppException(AppErrorType.Conflict, ErrorCode.EkycIdentityMismatch,
+                    "Giấy tờ không khớp với danh tính đã gắn cho tài khoản này.");
+            }
+            if (match == EkycIdentityMatch.NeedsReview)
+            {
+                await TryDeleteDocumentAsync(reading.DocumentToken!, ct);
+                throw new AppException(AppErrorType.Validation, ErrorCode.EkycImageRejected,
+                    "Chưa đọc rõ giấy tờ để đối chiếu với danh tính đã gắn. Vui lòng chụp lại mặt trước rõ hơn.");
+            }
+        }
+        return readIdentity;
+    }
+
+    /// <summary>
+    /// Gắn danh tính cho Owner khi lượt OWNER_ENROLLMENT đạt (EKYC-27). Đã có danh tính thì giữ nguyên (đã đối chiếu
+    /// lúc đọc giấy tờ, EKYC-24). Chỉ đánh dấu INSERT; lưu cùng lần FinishAsync.
+    /// </summary>
+    private async Task BindIdentityAsync(EkycVerification verification, DateTimeOffset now, CancellationToken ct)
+    {
+        OwnerIdentity? existing = await identityRepository.FindByUserIdAsync(verification.UserId, ct);
+        if (existing != null)
+        {
+            return;
+        }
+        OwnerIdentityData? pending = identityProtector.UnprotectPending(verification);
+        if (pending == null)
+        {
+            return;
+        }
+
+        OwnerIdentity identity = new OwnerIdentity();
+        identity.UserId = verification.UserId;
+        identity.SourceVerificationId = verification.Id;
+        identity.CreatedAt = now;
+        identityProtector.Protect(identity, pending);
+        identityRepository.Add(identity);
+    }
+
+    /// <summary>Xóa bản tạm của danh tính trên lượt eKYC (đã gắn xong, đã thất bại, hoặc bị lượt mới thay).</summary>
+    private static void ClearPendingIdentity(EkycVerification verification)
+    {
+        verification.EnrollmentIdentityKeyId = null;
+        verification.EnrollmentWrappedDataKey = null;
+        verification.EnrollmentIdentityEncrypted = null;
+    }
+
     /// <summary>Chốt kết quả, xóa mã tham chiếu ở cả DB và dịch vụ eKYC để mỗi lượt chỉ so khớp một lần.</summary>
     private async Task FinishAsync(EkycVerification verification, EkycStatus status, DateTimeOffset now, CancellationToken ct)
     {
+        if (status == EkycStatus.Passed && verification.Purpose == EkycPurpose.OwnerEnrollment)
+        {
+            await BindIdentityAsync(verification, now, ct);
+        }
+        ClearPendingIdentity(verification);
+
         string? documentToken = verification.DocumentToken;
         verification.Status = status;
         verification.CompletedAt = now;

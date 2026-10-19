@@ -82,6 +82,19 @@ public sealed class AuthHttpSecurityTests
         Assert.Contains(response.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith("lv_refresh="));
     }
 
+    [Theory]
+    [InlineData("login")]
+    [InlineData("refresh")]
+    public async Task TokenIssuingResponsesAreNoStore(string route)
+    {
+        await using var factory = new AuthFactory();
+        using var client = factory.CreateClient();
+        await AddProofAsync(client);
+        var response = await client.PostAsJsonAsync("/api/v1/auth/" + route, new { email = "user@example.test", password = "fixture" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
+    }
+
     [Fact]
     public async Task LimiterBlocksBeforeServiceAndEmitsRetryAfter()
     {

@@ -24,7 +24,7 @@ public static class DeathCaseConfig
         services.AddScoped<IDeathCaseRepository, DeathCaseRepository>();
         services.AddScoped<IDeathCaseReviewRepository, DeathCaseReviewRepository>();
         services.AddScoped<IObjectionRepository, ObjectionRepository>();
-        services.AddSingleton<IOwnerFaceVerifier, UnavailableOwnerFaceVerifier>();
+        services.AddScoped<IOwnerFaceVerifier, OwnerFaceVerifier>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
 
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.

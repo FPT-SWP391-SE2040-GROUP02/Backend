@@ -12,6 +12,8 @@ namespace LegacyVault.Api.Controllers;
 [Authorize]
 [Route("api/v1/ekyc")]
 // Cố ý KHÔNG đặt [Produces("application/json")]: giống CheckInsController, để lỗi validate 400 giữ problem+json.
+// Response chứa kết quả đọc giấy tờ và trạng thái xác minh nên cấm trình duyệt và proxy lưu đệm.
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class EkycController : ControllerBase
 {
     /// <summary>Ảnh tối đa 8 MiB (EkycRules.MaxImageBytes) cộng phần đầu multipart.</summary>
