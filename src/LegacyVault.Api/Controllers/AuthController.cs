@@ -16,6 +16,8 @@ namespace LegacyVault.Api.Controllers;
 [Tags("Auth")]
 [Route("api/v1/auth")]
 [Route("v1/auth")]
+// Response chứa token phiên hoặc thông tin tài khoản nên cấm trình duyệt và proxy lưu đệm.
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;

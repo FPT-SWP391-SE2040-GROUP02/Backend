@@ -15,7 +15,7 @@ namespace LegacyVault.Application.Services;
 ///   chạy cùng lúc với báo sẽ thua RowVersion của kế hoạch (AC-34).
 /// - ALIVE-09: báo lặp chỉ tăng bộ đếm, không đổi hạn, không tạo hold trùng (chỉ mục unique có lọc).
 /// - Selfie so với mẫu khuôn mặt qua IOwnerFaceVerifier; lỗi kỹ thuật không tính là thất bại (EKYC-19).
-/// - TODO(LV-07): tạo sự cố theo dõi, báo Verifier/Executor bằng thông báo. TODO(LV-02): mẫu khuôn mặt thật.
+/// - TODO(LV-07): tạo sự cố theo dõi, báo Verifier/Executor bằng thông báo.
 /// </remarks>
 public sealed class OwnerObjectionService : IOwnerObjectionService
 {

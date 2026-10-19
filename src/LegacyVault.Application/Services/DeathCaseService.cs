@@ -409,9 +409,19 @@ public sealed class DeathCaseService : IDeathCaseService
         }
 
         // DEATH-13: số CCCD trên hồ sơ khác CCCD đã xác minh của Owner → đặt cờ, chặn duyệt tới khi Verifier xem xét.
-        // TODO(LV-02): so đủ 12 số với danh tính đã gắn; hiện chỉ có 4 số cuối của lượt eKYC đạt.
-        string? verifiedLast4 = await identityReader.FindVerifiedCitizenIdLast4Async(vault.OwnerId, ct);
-        if (DeathCaseRules.IsIdentityMismatch(verifiedLast4, data.OwnerCitizenId))
+        // Có danh tính đã gắn (EKYC-27) thì so đủ 12 số; chưa có (Owner đăng ký trước đó) thì chỉ so 4 số cuối của lượt đạt.
+        string? boundCitizenId = await identityReader.FindBoundCitizenIdAsync(vault.OwnerId, ct);
+        bool identityMismatch;
+        if (boundCitizenId != null)
+        {
+            identityMismatch = DeathCaseRules.IsIdentityMismatchFull(boundCitizenId, data.OwnerCitizenId);
+        }
+        else
+        {
+            string? verifiedLast4 = await identityReader.FindVerifiedCitizenIdLast4Async(vault.OwnerId, ct);
+            identityMismatch = DeathCaseRules.IsIdentityMismatch(verifiedLast4, data.OwnerCitizenId);
+        }
+        if (identityMismatch)
         {
             DeathCaseFlag mismatch = new DeathCaseFlag();
             mismatch.CaseId = deathCase.Id;

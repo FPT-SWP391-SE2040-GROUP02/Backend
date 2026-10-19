@@ -122,4 +122,61 @@ public sealed class EkycHttpClientTests
 
         Assert.Equal(ErrorCode.EkycServiceUnavailable, error.Code);
     }
+
+    private static string EmbeddingBody(int count, string model)
+    {
+        List<string> numbers = new List<string>();
+        for (int index = 0; index < count; index++)
+        {
+            numbers.Add((index / 128.0).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return "{\"model\":\"" + model + "\",\"dimension\":" + count + ",\"embedding\":[" + string.Join(",", numbers) + "]}";
+    }
+
+    [Fact]
+    public async Task GetFaceEmbedding_ReadsModelAndAll128Values()
+    {
+        EkycHttpClient client = CreateClient(HttpStatusCode.OK, EmbeddingBody(128, "sface"));
+
+        EkycFaceEmbedding embedding = await client.GetFaceEmbeddingAsync(Image, "s.jpg", "image/jpeg", CancellationToken.None);
+
+        Assert.Equal("sface", embedding.ModelName);
+        Assert.Equal(128, embedding.Values.Length);
+        Assert.Equal(0f, embedding.Values[0]);
+        Assert.Equal(127f / 128f, embedding.Values[127]);
+    }
+
+    [Fact]
+    public async Task GetFaceEmbedding_WrongLength_IsServiceUnavailable()
+    {
+        EkycHttpClient client = CreateClient(HttpStatusCode.OK, EmbeddingBody(64, "sface"));
+
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => client.GetFaceEmbeddingAsync(Image, "s.jpg", "image/jpeg", CancellationToken.None));
+
+        Assert.Equal(ErrorCode.EkycServiceUnavailable, error.Code);
+    }
+
+    [Fact]
+    public async Task GetFaceEmbedding_MissingModelName_IsServiceUnavailable()
+    {
+        EkycHttpClient client = CreateClient(HttpStatusCode.OK, EmbeddingBody(128, string.Empty));
+
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => client.GetFaceEmbeddingAsync(Image, "s.jpg", "image/jpeg", CancellationToken.None));
+
+        Assert.Equal(ErrorCode.EkycServiceUnavailable, error.Code);
+    }
+
+    [Fact]
+    public async Task GetFaceEmbedding_NoSingleFace_IsImageRejected()
+    {
+        EkycHttpClient client = CreateClient(
+            HttpStatusCode.UnprocessableEntity, "{\"detail\":\"Ảnh cần có đúng một khuôn mặt.\"}");
+
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => client.GetFaceEmbeddingAsync(Image, "s.jpg", "image/jpeg", CancellationToken.None));
+
+        Assert.Equal(ErrorCode.EkycImageRejected, error.Code);
+    }
 }

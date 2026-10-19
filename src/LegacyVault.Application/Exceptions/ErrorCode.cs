@@ -66,6 +66,7 @@ public enum ErrorCode
     EkycLivenessRequired,
     EkycLivenessNotPassed,
     InvalidResetToken,
+    EkycIdentityMismatch,
     PaymentNotAllowed,
     PaymentOrderPending,
     PaymentOrderNotPayable,

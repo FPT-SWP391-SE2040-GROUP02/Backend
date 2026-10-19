@@ -43,4 +43,11 @@ public interface IEkycClient
 
     /// <summary>Xóa khuôn mặt đã giữ theo documentToken. Không báo lỗi nếu mã không còn.</summary>
     Task DeleteDocumentAsync(string documentToken, CancellationToken ct);
+
+    /// <summary>
+    /// Lấy vector đặc trưng của đúng một khuôn mặt trong ảnh, để tạo hoặc so với mẫu khuôn mặt Owner (EKYC-22, EKYC-26).
+    /// Dịch vụ không lưu vector. Ảnh không có đúng một khuôn mặt thì 400 EKYC_IMAGE_REJECTED; phản hồi sai dạng
+    /// (không đủ 128 số) thì 503 EKYC_SERVICE_UNAVAILABLE.
+    /// </summary>
+    Task<EkycFaceEmbedding> GetFaceEmbeddingAsync(byte[] image, string fileName, string contentType, CancellationToken ct);
 }
