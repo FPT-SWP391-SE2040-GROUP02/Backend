@@ -675,7 +675,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 { "id": "0199...", "status": "UNDER_REVIEW", "reviewVersionNo": 1, "ownerCitizenIdLast4": "8901",
   "dateOfDeath": "2026-10-10", "submittedAt": "2026-10-15T03:05:00+00:00",
   "assignedAt": "2026-10-15T03:05:00+00:00", "dueAt": "2026-10-17T03:05:00+00:00",
-  "objectionEndsAt": null, "unreviewedFlagCount": 0, "closedAt": null }
+  "objectionEndsAt": null, "supplementOverdueAt": null, "unreviewedFlagCount": 0, "closedAt": null }
 
 // VerifierDeathCaseResponse
 {
@@ -690,6 +690,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
   "decisions": [],
   "ownerNotice": { "status": "DELIVERED", "deliveredAt": "..." },
   "objectionEndsAt": "...",
+  "supplementOverdueAt": null,
   "assignment": { "assignedAt": "...", "dueAt": "..." },
   "canApprove": false, "approveBlockers": ["OBJECTION_PERIOD_NOT_OVER"],
   "previousCase": null, "handover": null
@@ -699,6 +700,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 - **Dữ liệu trả (DATA-02, cách hiểu):** `reviewVersion` (bản Executor gửi gần nhất, `reviewVersionNo`) có đủ họ tên, **CCCD 12 số**, số giấy, nơi cấp, vì Verifier được giao là "người cần" (SEC-05) và ảnh giấy chứng tử vốn có số đầy đủ. Câu "không trả CCCD đầy đủ trước khi xác minh xong" áp cho **người nhận ở F3**, không áp cho CCCD của Owner trong hồ sơ chứng tử. `versions[]` (các bản đã gửi khác) chỉ có cột không mã hóa (4 số cuối, ngày mất, `submittedAt`, metadata trang). Danh sách chỉ có 4 số cuối. Verifier **không bao giờ** thấy bản nháp. Không trả thông tin Executor, email Owner, khóa lưu trữ, SHA-256, Id người quyết định.
 - **`approveBlockers`** (cộng dồn, theo thứ tự): `NOT_UNDER_REVIEW` (hồ sơ không ở `UNDER_REVIEW`), `NEWER_VERSION_PENDING` (Executor đang có bản nháp mới hơn bản đang xét), `OWNER_NOT_NOTIFIED` (đồng hồ 72 giờ chưa chạy), `OBJECTION_PERIOD_NOT_OVER` (DEATH-09), `FLAGS_NOT_REVIEWED` (DEATH-10, chỉ cờ của bản đang xét). `VERIFIER_CONFLICT` (ROLE-03: Verifier là Owner, Executor đang hiệu lực của kho, người gửi bản đang xét hoặc người nhận của kho) được thêm vào **cuối** danh sách ở response chi tiết và response ghi, để FE không hiện nút duyệt với người sẽ bị chặn. `canApprove` = danh sách rỗng. Chưa có hold/phản đối F2C.
 - **`ownerNotice.status`**: `PENDING` | `DELIVERED` | `FAILED` | `CANCELLED`.
+- **`supplementOverdueAt`** (DEATH-01, có ở danh sách và chi tiết): lúc job nền đánh dấu Executor bổ sung quá hạn 7 ngày kể từ khi Verifier yêu cầu bổ sung; `null` khi chưa quá hạn. Về `null` khi Executor gửi lại bản mới. Chỉ để hiển thị (FE hiện nhãn "Bổ sung quá hạn"); hồ sơ vẫn `SUPPLEMENT_REQUIRED`, Verifier tự quyết định từ chối hay chờ tiếp.
 - **`previousCase`** (DEATH-12): hồ sơ bị từ chối trước đó của cùng kho (`id`, `closedAt`, `rejectReason`), hoặc `null`.
 - **Xem trang (DATA-06):** gọi bằng Bearer access token ngắn hạn, gắn đúng người dùng, **không** phải đường link ký sẵn dùng chung. Chỉ xem được trang của bản **đã gửi** của đúng hồ sơ (kể cả bản cũ); trang của bản nháp hoặc của hồ sơ khác là `404`. Nội dung được giải mã hai lượt: lượt 1 kiểm toàn vẹn (kích thước, SHA-256), chỉ khi qua mới gửi byte đầu tiên; hỏng hoặc mất tệp thì `500 CONTENT_INTEGRITY_FAILED` và không có byte nội dung nào. Response: `Content-Type` giữ nguyên nếu là PDF/JPEG/PNG/WEBP (còn lại `application/octet-stream`), `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`. Máy chủ ghi log "đã xem trang" (chỉ Id hồ sơ, Id tệp, Id người xem); TODO chuyển sang nhật ký kiểm toán (SEC-07, DATA-07).
 
