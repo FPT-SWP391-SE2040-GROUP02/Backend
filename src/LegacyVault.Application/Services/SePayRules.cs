@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
@@ -129,6 +131,100 @@ public static class SePayRules
 
         DateTimeOffset vietnamTime = new DateTimeOffset(local, VietnamOffset);
         return vietnamTime.ToUniversalTime();
+    }
+
+    /// <summary>
+    /// Thứ tự đối chiếu giao dịch với đơn (SRS §8.3 bước 6–8, PAY-03..07), gặp điều nào thì dừng và trả lý do đó.
+    /// Trả null khi giao dịch hợp lệ để cấp quyền (PaymentGranter còn kiểm tra thêm kho đóng, quyền dịch vụ đã đổi).
+    /// order là đơn tìm theo mã thanh toán (null nếu không có mã hoặc không tìm thấy đơn).
+    /// Đơn đã hết hạn (Expired do D7) mà tiền vào trước hạn vẫn hợp lệ (PAY-06).
+    /// </summary>
+    public static string? FindReconciliationReason(
+        PaymentTransaction transaction, string bankAccountNumber, PaymentOrder? order)
+    {
+        // Chỉ tiền vào mới có thể thanh toán đơn.
+        bool isIncoming = string.Equals(transaction.TransferType, "in", StringComparison.OrdinalIgnoreCase);
+        if (!isIncoming)
+        {
+            return PaymentReconciliationReasons.NotIncoming;
+        }
+
+        // PAY-03: tiền phải vào đúng tài khoản nhận; chưa cấu hình tài khoản nhận thì không giao dịch nào khớp.
+        if (string.IsNullOrWhiteSpace(bankAccountNumber))
+        {
+            return PaymentReconciliationReasons.WrongAccount;
+        }
+        bool sameAccount = string.Equals(
+            transaction.AccountNumber.Trim(), bankAccountNumber.Trim(), StringComparison.OrdinalIgnoreCase);
+        if (!sameAccount)
+        {
+            return PaymentReconciliationReasons.WrongAccount;
+        }
+
+        if (string.IsNullOrWhiteSpace(transaction.MatchedPaymentCode))
+        {
+            return PaymentReconciliationReasons.CodeMissing;
+        }
+        if (order == null)
+        {
+            return PaymentReconciliationReasons.OrderNotFound;
+        }
+
+        // AC-28: đúng từng đồng, thiếu hay thừa đều chuyển đối chiếu.
+        if (transaction.TransferAmount != order.TotalAmount)
+        {
+            return PaymentReconciliationReasons.AmountMismatch;
+        }
+        if (order.Status == PaymentOrderStatus.Paid)
+        {
+            return PaymentReconciliationReasons.AlreadyPaid;
+        }
+        if (order.Status == PaymentOrderStatus.Cancelled)
+        {
+            return PaymentReconciliationReasons.OrderCancelled;
+        }
+
+        // PAY-06: so giờ tiền vào với hạn đơn, không dựa vào trạng thái Expired.
+        if (transaction.TransactionAt == null)
+        {
+            return PaymentReconciliationReasons.TimeUnknown;
+        }
+        if (transaction.TransactionAt.Value >= order.ExpiresAt)
+        {
+            return PaymentReconciliationReasons.LateAfterExpiry;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Có gắn giao dịch lệch vào đơn không: chỉ khi đã qua các bước chưa cần đến đơn (tiền vào, đúng tài khoản, có mã, thấy đơn),
+    /// để Admin biết giao dịch thuộc đơn nào. Tiền ra, sai tài khoản, thiếu mã, không thấy đơn thì không gắn.
+    /// </summary>
+    public static bool ShouldLinkToOrder(string reason)
+    {
+        if (reason == PaymentReconciliationReasons.NotIncoming)
+        {
+            return false;
+        }
+        if (reason == PaymentReconciliationReasons.WrongAccount)
+        {
+            return false;
+        }
+        if (reason == PaymentReconciliationReasons.CodeMissing)
+        {
+            return false;
+        }
+        if (reason == PaymentReconciliationReasons.OrderNotFound)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Giao dịch tiền ra không phải sự cố; mọi lý do khác đều mở sự cố cho Admin (E7).</summary>
+    public static bool ShouldRaiseIncident(string reason)
+    {
+        return reason != PaymentReconciliationReasons.NotIncoming;
     }
 
     /// <summary>Cắt chuỗi cho vừa độ dài cột; rỗng hoặc toàn khoảng trắng → null.</summary>

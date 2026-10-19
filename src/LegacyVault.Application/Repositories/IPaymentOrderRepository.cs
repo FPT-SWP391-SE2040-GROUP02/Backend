@@ -17,6 +17,12 @@ public interface IPaymentOrderRepository
     /// </summary>
     Task<PaymentOrder?> FindByIdAsync(Guid orderId, CancellationToken ct);
 
+    /// <summary>
+    /// Đơn theo mã thanh toán (nội dung chuyển khoản), có theo dõi thay đổi. Dùng ở luồng webhook SePay
+    /// để đối chiếu giao dịch với đơn (PAY-02). Không có → null.
+    /// </summary>
+    Task<PaymentOrder?> FindByPaymentCodeAsync(string paymentCode, CancellationToken ct);
+
     /// <summary>Đơn đang Pending của kho (PAY-04: tối đa một), có theo dõi thay đổi. Không có → null.</summary>
     Task<PaymentOrder?> FindPendingByVaultIdAsync(Guid vaultId, CancellationToken ct);
 

@@ -1,16 +1,18 @@
 using System.Net;
 using System.Net.Http.Json;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Payment;
 
 /// <summary>
 /// Webhook SePay bước nhận và lưu (SRS §8.3 bước 6, §8.5, PAY-01, PAY-05, AC-29): xác thực key, kiểm dữ liệu,
-/// chống trùng, lưu trạng thái Received. Chạy API thật trên SQL Server database tạm.
+/// chống trùng, lưu giao dịch (việc đối chiếu chi tiết nằm ở SePayWebhookReconcileTests). Chạy API thật trên SQL Server database tạm.
 /// </summary>
 public sealed class SePayWebhookStoreTests : IAsyncLifetime
 {
@@ -40,13 +42,23 @@ public sealed class SePayWebhookStoreTests : IAsyncLifetime
     }
 
     /// <summary>Payload hợp lệ của SePay (số tài khoản và nội dung giả).</summary>
-    private static Dictionary<string, object?> ValidPayload(long id)
+    /// <summary>Số tài khoản nhận tiền theo cấu hình của chính factory (user-secrets của người chạy test có thể ghi đè appsettings).</summary>
+    private string BankAccountNumber()
+    {
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IBillingBankSettings bank = scope.ServiceProvider.GetRequiredService<IBillingBankSettings>();
+            return bank.AccountNumber;
+        }
+    }
+
+    private Dictionary<string, object?> ValidPayload(long id)
     {
         Dictionary<string, object?> payload = new Dictionary<string, object?>();
         payload["id"] = id;
         payload["gateway"] = "MBBank";
         payload["transactionDate"] = "2026-10-19 14:30:15";
-        payload["accountNumber"] = "0000000000";
+        payload["accountNumber"] = BankAccountNumber();
         payload["subAccount"] = null;
         payload["code"] = null;
         payload["content"] = "chuyen tien LVK7M2P9QX cam on";
@@ -147,7 +159,7 @@ public sealed class SePayWebhookStoreTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Pay05_Webhook_ValidKey_SavesReceivedTransactionAndReturnsExactSuccessBody()
+    public async Task Pay05_Webhook_ValidKey_SavesTransactionAndReturnsExactSuccessBody()
     {
         // Chuẩn bị
         Dictionary<string, object?> payload = ValidPayload(2001);
@@ -163,15 +175,17 @@ public sealed class SePayWebhookStoreTests : IAsyncLifetime
         PaymentTransaction saved = await LoadSingleTransactionAsync(2001);
         Assert.Equal("SePay", saved.Provider);
         Assert.Equal("Test", saved.Environment);
-        Assert.Equal(PaymentTransactionStatus.Received, saved.Status);
+        // Mã trong nội dung không thuộc đơn nào nên giao dịch được đối chiếu xong ở trạng thái cần đối chiếu (chi tiết ở SePayWebhookReconcileTests)
+        Assert.Equal(PaymentTransactionStatus.ReconciliationRequired, saved.Status);
+        Assert.Equal("ORDER_NOT_FOUND", saved.ReconciliationReason);
         Assert.Equal("MBBank", saved.Gateway);
-        Assert.Equal("0000000000", saved.AccountNumber);
+        Assert.Equal(BankAccountNumber(), saved.AccountNumber);
         Assert.Equal("in", saved.TransferType);
         Assert.Equal(199000, saved.TransferAmount);
         Assert.Equal("FT26289000001", saved.ReferenceCode);
         Assert.Equal("LVK7M2P9QX", saved.MatchedPaymentCode);
         Assert.Null(saved.PaymentOrderId);
-        Assert.Null(saved.ProcessedAt);
+        Assert.NotNull(saved.ProcessedAt);
         Assert.Equal(new DateTimeOffset(2026, 10, 19, 7, 30, 15, TimeSpan.Zero), saved.TransactionAt);
     }
 
@@ -197,7 +211,7 @@ public sealed class SePayWebhookStoreTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Pay05_Ac29_Webhook_SameIdSentInParallel_AllReturn200AndKeepOneRow()
+    public async Task Pay05_Ac29_Webhook_SameIdSentInParallel_KeepsOneRowAndNeverFailsWith5xx()
     {
         // Chuẩn bị
         List<Task<HttpResponseMessage>> requests = new List<Task<HttpResponseMessage>>();
@@ -209,11 +223,24 @@ public sealed class SePayWebhookStoreTests : IAsyncLifetime
         }
         HttpResponseMessage[] responses = await Task.WhenAll(requests);
 
-        // Kiểm tra: unique (Provider, ProviderTransactionId) giữ đúng một dòng, request thua không trả lỗi
+        // Kiểm tra: unique (Provider, ProviderTransactionId) giữ đúng một dòng. Request thua có thể nhận 409 (xung đột
+        // khi hai request cùng đối chiếu một giao dịch) để SePay gửi lại; không request nào được lỗi 5xx.
+        int succeeded = 0;
         foreach (HttpResponseMessage response in responses)
         {
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            bool acceptable = response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Conflict;
+            Assert.True(acceptable, "Trạng thái không mong đợi: " + response.StatusCode);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                succeeded++;
+            }
         }
+        Assert.True(succeeded >= 1);
+        Assert.Equal(1, await CountTransactionsAsync());
+
+        // SePay gửi lại sau 409: lần này giao dịch đã xử lý xong nên trả success.
+        HttpResponseMessage retry = await SendAsync(ValidPayload(4001), ValidAuthorization());
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         Assert.Equal(1, await CountTransactionsAsync());
     }
 
@@ -265,9 +292,9 @@ public sealed class SePayWebhookStoreTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Pay05_Webhook_OutgoingTransferIsStoredAsReceived()
+    public async Task Pay05_Webhook_OutgoingTransferIsStoredAsNotIncoming()
     {
-        // Chuẩn bị: tiền ra vẫn được lưu để đối chiếu sau (NOT_INCOMING); loại giao dịch chuẩn hóa chữ thường
+        // Chuẩn bị: tiền ra vẫn được lưu (lý do NOT_INCOMING); loại giao dịch chuẩn hóa chữ thường
         Dictionary<string, object?> payload = ValidPayload(7001);
         payload["transferType"] = "OUT";
 
@@ -278,7 +305,8 @@ public sealed class SePayWebhookStoreTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         PaymentTransaction saved = await LoadSingleTransactionAsync(7001);
         Assert.Equal("out", saved.TransferType);
-        Assert.Equal(PaymentTransactionStatus.Received, saved.Status);
+        Assert.Equal(PaymentTransactionStatus.ReconciliationRequired, saved.Status);
+        Assert.Equal("NOT_INCOMING", saved.ReconciliationReason);
     }
 
     [SqlFact]
