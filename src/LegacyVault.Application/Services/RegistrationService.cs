@@ -50,8 +50,10 @@ public sealed class RegistrationService : IRegistrationService
         var existing = await _userRepository.FindByEmailAsync(email, ct);
         if (existing != null)
         {
-            // Luôn trả thành công để không lộ email đã đăng ký (api-contract.md)
-            return;
+            throw new AppException(
+                AppErrorType.Conflict,
+                ErrorCode.EmailAlreadyExists,
+                "Địa chỉ email này đã được sử dụng. Vui lòng đăng nhập hoặc dùng tính năng Quên mật khẩu.");
         }
 
         // 2. Tạo tài khoản User mới: Role = User (ROLE-01), Status = Active, EmailVerifiedAt = null
@@ -97,18 +99,37 @@ public sealed class RegistrationService : IRegistrationService
         var hash = _tokenService.HashOpaqueToken(request.Token);
 
         var tokenEntity = await _tokenRepository.FindByHashAsync(hash, ct);
-        if (tokenEntity == null || tokenEntity.UsedAt != null || tokenEntity.ExpiresAt <= now)
+        if (tokenEntity == null || tokenEntity.ExpiresAt <= now)
         {
+            throw new InvalidVerificationTokenException();
+        }
+
+        var user = tokenEntity.User;
+
+        // Nếu token đã được sử dụng nhưng tài khoản đã được xác minh email thành công:
+        // Trả về UserResponse hợp lệ thay vì báo lỗi link hỏng (idempotent verification)
+        if (tokenEntity.UsedAt != null)
+        {
+            if (user.EmailVerifiedAt != null)
+            {
+                return MapUser(user);
+            }
             throw new InvalidVerificationTokenException();
         }
 
         tokenEntity.UsedAt = now;
 
-        var user = tokenEntity.User;
         if (user.EmailVerifiedAt == null)
         {
             user.EmailVerifiedAt = now;
             user.UpdatedAt = now;
+        }
+
+        // Vô hiệu hóa dọn dẹp các token chưa dùng còn lại của user này
+        var unused = await _tokenRepository.FindUnusedByUserAsync(user.Id, ct);
+        foreach (var t in unused)
+        {
+            t.UsedAt = now;
         }
 
         await _unitOfWork.SaveChangesAsync(ct);
@@ -127,13 +148,7 @@ public sealed class RegistrationService : IRegistrationService
             return;
         }
 
-        // Vô hiệu hóa mọi token chưa dùng trước đó
-        var unused = await _tokenRepository.FindUnusedByUserAsync(user.Id, ct);
-        foreach (var t in unused)
-        {
-            t.UsedAt = now;
-        }
-
+        // Không vội xóa các token chưa dùng, để người dùng bấm link nào trong hộp thư cũng hợp lệ
         var token = _tokenService.CreateOpaqueToken();
         var verificationToken = new EmailVerificationToken
         {
@@ -147,8 +162,8 @@ public sealed class RegistrationService : IRegistrationService
         _tokenRepository.Add(verificationToken);
         await _unitOfWork.SaveChangesAsync(ct);
 
-        var verificationUrl = _appUrlProvider.GetEmailVerificationUrl(token.Value);
-        await _emailSender.SendEmailVerificationAsync(user.Email, user.FullName, verificationUrl, ct);
+        var verifyUrl = _appUrlProvider.GetEmailVerificationUrl(token.Value);
+        await _emailSender.SendEmailVerificationAsync(user.Email, user.FullName, verifyUrl, ct);
     }
 
     private static UserResponse MapUser(User user)

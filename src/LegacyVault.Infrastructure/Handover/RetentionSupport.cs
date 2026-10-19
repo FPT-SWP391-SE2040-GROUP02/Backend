@@ -41,10 +41,13 @@ public static class RetentionNoticeEmail
         const string note = "Email này không chứa nội dung tài sản. Nếu bạn không biết về việc này, hãy bỏ qua.";
 
         string text = $"Xin chào {notice.FullName},\n\n{paragraph}\n\nĐăng nhập: {link}\n\n{note}\n";
-        string html = $"<p>Xin chào {WebUtility.HtmlEncode(notice.FullName)},</p>"
-            + $"<p>{WebUtility.HtmlEncode(paragraph)}</p>"
-            + $"<p><a href=\"{WebUtility.HtmlEncode(link)}\">Đăng nhập LegacyVault</a></p>"
-            + $"<p><small>{WebUtility.HtmlEncode(note)}</small></p>";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            subject,
+            notice.FullName,
+            paragraph,
+            link,
+            "Đăng nhập nhận dữ liệu",
+            note);
         return new EmailContent(subject, text, html);
     }
 }

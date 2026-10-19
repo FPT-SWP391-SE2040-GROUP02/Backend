@@ -49,10 +49,13 @@ public static class CheckInReminderEmail
 
         const string note = "Lưu ý: đăng nhập hoặc thanh toán không được tính là điểm danh. Email này không chứa nội dung tài sản của bạn.";
         string text = $"Xin chào {fullName},\n\n{paragraph}\n\nĐiểm danh tại: {checkInUrl}\n\n{note}\n";
-        string html = $"<p>Xin chào {WebUtility.HtmlEncode(fullName)},</p>"
-            + $"<p>{WebUtility.HtmlEncode(paragraph)}</p>"
-            + $"<p><a href=\"{WebUtility.HtmlEncode(checkInUrl)}\">Điểm danh</a> ({WebUtility.HtmlEncode(checkInUrl)})</p>"
-            + $"<p><small>{WebUtility.HtmlEncode(note)}</small></p>";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            subject,
+            fullName,
+            paragraph,
+            checkInUrl,
+            "Điểm danh ngay",
+            note);
         return new EmailContent(subject, text, html);
     }
 
