@@ -70,6 +70,15 @@ public static class ObjectionRules
     }
 
     /// <summary>
+    /// ALIVE-05: lời báo đã có selfie khớp mẫu khuôn mặt thì Verifier không được bác phản đối;
+    /// chỉ được xác nhận còn sống hoặc ghi chưa đủ căn cứ.
+    /// </summary>
+    public static bool CanReject(DeathCaseObjection objection)
+    {
+        return objection.SelfiePassedAt == null;
+    }
+
+    /// <summary>
     /// ALIVE-04, ALIVE-08, ASSIGN-04: hạn Verifier kết luận = mốc muộn hơn giữa (start + 48 giờ) và (hết hạn selfie + 48 giờ).
     /// start là lúc báo, lúc giao hoặc giao lại. Hạn selfie 7 ngày của cả lời báo không bao giờ đổi (ALIVE-03).
     /// </summary>
