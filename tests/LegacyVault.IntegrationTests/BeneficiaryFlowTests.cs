@@ -94,7 +94,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Setup19_FutureDateOfBirthIsRejected()
+    public async Task Beneficiary_FutureDateOfBirthIsRejected()
     {
         // Chuẩn bị
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -201,26 +201,41 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Setup19_Ac105_MinorNeedsConfirmation()
+    public async Task Beneficiary_MinorIsSavedWithoutConfirmation()
     {
-        // Chuẩn bị: người nhận 10 tuổi.
+        // Chuẩn bị: người nhận 10 tuổi. Đã bỏ SETUP-19 nên không cần xác nhận gì.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         string tenYearsAgo = TodayInVietnam().AddYears(-10).ToString("yyyy-MM-dd");
 
         // Hành động
-        HttpResponseMessage withoutConfirm = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+        HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
             new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, phone = "0901 234.567" });
-        HttpResponseMessage withConfirm = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
-            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, phone = "0901 234.567", confirmMinor = true });
 
-        // Kiểm tra
-        await ApiTestHelpers.AssertProblemAsync(withoutConfirm, HttpStatusCode.Conflict, "MINOR_CONFIRMATION_REQUIRED");
-        Assert.Equal(HttpStatusCode.Created, withConfirm.StatusCode);
-        JsonElement created = await ApiTestHelpers.ReadJsonAsync(withConfirm);
+        // Kiểm tra: lưu được ngay; isMinor chỉ để hiển thị, minorAcknowledgedAt luôn null với hồ sơ mới.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        JsonElement created = await ApiTestHelpers.ReadJsonAsync(response);
         Assert.True(created.GetProperty("isMinor").GetBoolean());
-        Assert.NotEqual(JsonValueKind.Null, created.GetProperty("minorAcknowledgedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("minorAcknowledgedAt").ValueKind);
         Assert.Equal("0901234567", created.GetProperty("phone").GetString());
         Assert.Equal(JsonValueKind.Null, created.GetProperty("email").ValueKind);
+    }
+
+    [SqlFact]
+    public async Task Beneficiary_LegacyConfirmMinorFieldIsIgnored()
+    {
+        // Chuẩn bị: FE cũ còn gửi confirmMinor = true dù API không còn trường này.
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        string tenYearsAgo = TodayInVietnam().AddYears(-10).ToString("yyyy-MM-dd");
+
+        // Hành động
+        HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, phone = "0901 234.567", confirmMinor = true });
+
+        // Kiểm tra: trường thừa bị bỏ qua, không lỗi và không ghi dấu xác nhận.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        JsonElement created = await ApiTestHelpers.ReadJsonAsync(response);
+        Assert.True(created.GetProperty("isMinor").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("minorAcknowledgedAt").ValueKind);
     }
 
     [SqlFact]

@@ -26,7 +26,4 @@ public class UpdateBeneficiaryRequest
 
     [MaxLength(20, ErrorMessage = "Số điện thoại tối đa 20 ký tự.")]
     public string? Phone { get; set; }
-
-    /// <summary>Owner xác nhận cảnh báo người nhận chưa đủ 18 tuổi (SETUP-19).</summary>
-    public bool ConfirmMinor { get; set; } = false;
 }
