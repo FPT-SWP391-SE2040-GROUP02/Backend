@@ -42,6 +42,12 @@ public class HandoverTurn
     /// <summary>Chỉ đặt khi máy chủ email đã nhận thư mời; null nghĩa là chưa gửi được (INVITE-04).</summary>
     public DateTimeOffset? InvitationSentAt { get; set; }
 
+    /// <summary>Số lần gửi lời mời tự động thất bại (OPS-04). Đủ 5 lần thì ngừng thử và mở sự cố NotificationFailed.</summary>
+    public int InvitationAttempts { get; set; }
+
+    /// <summary>Lần gửi lời mời gần nhất bị lỗi; dùng để giãn cách giữa các lần thử lại.</summary>
+    public DateTimeOffset? InvitationLastAttemptAt { get; set; }
+
     /// <summary>Tài khoản đã nhận lượt qua link; null khi chưa ai nhận.</summary>
     public Guid? ClaimantUserId { get; set; }
 

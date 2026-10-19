@@ -45,6 +45,17 @@ Lượt (`HandoverTurn`): `INVITED → IDENTITY_IN_PROGRESS → READY_TO_ACCEPT 
 Đúng giây hạn là đã hết hạn (`now >= hạn`), kể cả khi job nền chưa chạy. Job nền quét mỗi `Handover:Job:PollSeconds` giây (mặc định 60).
 Kế hoạch tự chuyển `Closed` khi mọi lượt của nó đã kết thúc.
 
+### Gửi lại lời mời tự động (OPS-04)
+
+Lượt được lưu **trước** khi gửi thư, nên nếu lần gửi đầu lỗi hoặc tiến trình dừng giữa chừng thì `InvitationSentAt` vẫn là `null`.
+`HandoverInvitationRetryJob` (chạy trong cùng vòng quét của `HandoverMonitor`) xử lý các lượt như vậy:
+
+- Chọn lượt còn `INVITED`, chưa ai nhận, `InvitationSentAt = null`, đã tạo ít nhất 2 phút và mới thử dưới 5 lần.
+- Giãn cách giữa các lần thử tăng dần: lần lỗi thứ n chờ n x 5 phút. Kho có hold hoặc kế hoạch không còn `HANDOVER_IN_PROGRESS` thì tạm dừng, không tính là lần lỗi.
+- Mỗi lần gửi dùng token mới; DB chỉ lưu mã băm mới sau khi email được nhận, nên gửi lỗi thì link cũ còn nguyên. Giao thành công lần đầu thì hạn phản hồi 5 ngày bắt đầu tính từ lúc đó (INVITE-04).
+- Đủ 5 lần lỗi, hoặc người nhận không có email: ngừng thử và mở sự cố `NOTIFICATION_FAILED` (đối tượng `HANDOVER_TURN`) có người phụ trách để Executor/Admin xử lý; Executor vẫn có thể gửi lại thủ công bằng `resend-invitation`. Giao được về sau thì sự cố tự đóng.
+- Log và sự cố không chứa email, token hay tên gói. Hai tiến trình cùng xử lý một lượt thì bên lưu sau bị xung đột (`RowVersion`).
+
 ## 5. API
 
 Tiền tố `/api/v1/handover`. Tất cả cần `Authorization: Bearer` trừ endpoint đầu tiên.

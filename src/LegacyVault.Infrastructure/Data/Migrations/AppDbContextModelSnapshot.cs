@@ -1485,6 +1485,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<bool>("IdentityBypassed")
                         .HasColumnType("bit");
 
+                    b.Property<int>("InvitationAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("InvitationLastAttemptAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset?>("InvitationSentAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1990,6 +1996,74 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("StorageReservations", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.TwoFactorChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("RememberMe")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nchar(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("TwoFactorChallenges", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.TwoFactorRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nchar(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("TwoFactorRecoveryCodes", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2042,6 +2116,42 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.UserTotp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("EnabledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("KeyId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("LastUsedStep")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("WrappedSecret")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varbinary(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("UserTotps", (string)null);
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.Vault", b =>
@@ -2542,6 +2652,39 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.TwoFactorChallenge", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.TwoFactorRecoveryCode", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.UserTotp", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.User", "User")
                         .WithMany()

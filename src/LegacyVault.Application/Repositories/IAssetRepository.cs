@@ -25,4 +25,17 @@ public interface IAssetRepository
 
     /// <summary>Đánh dấu "sẽ INSERT" tài sản mới (kèm Versions).</summary>
     void Add(Asset asset);
+
+    /// <summary>
+    /// Thêm phiên bản mới của tài sản rồi lưu ngay (cùng các thay đổi đang chờ, ví dụ CurrentVersionNumber).
+    /// Trả false khi DB báo trùng (AssetId, VersionNumber): request khác vừa tạo phiên bản này.
+    /// Khi trả false, mọi thay đổi chưa lưu đã bị bỏ theo dõi.
+    /// </summary>
+    Task<bool> TryAddVersionAsync(AssetVersion version, CancellationToken ct);
+
+    /// <summary>true khi tài sản đã được ghim vào snapshot của một lượt bàn giao (không được xóa).</summary>
+    Task<bool> IsPinnedInHandoverAsync(Guid assetId, CancellationToken ct);
+
+    /// <summary>Đánh dấu "sẽ DELETE" tài sản cùng các phiên bản đã nạp.</summary>
+    void Remove(Asset asset);
 }

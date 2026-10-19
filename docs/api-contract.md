@@ -74,6 +74,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 404 | `VAULT_NOT_FOUND` | Chưa có kho, hoặc kho của người khác | |
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
+| 409 | `ASSET_IN_USE` | Tài sản còn trong gói hoặc đã ghim vào bàn giao nên không xóa được (+`reason`) | |
 | 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
 | 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
@@ -230,6 +231,28 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 - `rememberMe = true` thì cookie sống qua khi tắt trình duyệt, nhưng phiên vẫn tối đa 12 giờ.
 - Login chỉ nhận email hợp lệ ≤256 ký tự, password bắt buộc ≤128, rememberMe boolean mặc định false. `AuthSessionResponse` là raw body; `user` bên trong chính là `UserResponse`. Không có `refreshToken` trong JSON. `expiresIn: 900` ở ví dụ là cấu hình mặc định, không phải giá trị client được hardcode.
 
+### 6.2a. Xác thực hai bước TOTP (Admin)
+
+Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như cũ. Khi đã bật, mọi đăng nhập Admin (mật khẩu, Google, link-confirm) **chưa cấp phiên**: server trả thử thách, FE hỏi mã 6 số (hoặc mã khôi phục) rồi gọi `verify`. Bí mật TOTP lưu đã bọc bằng KEK; mã khôi phục và token thử thách chỉ lưu hash. Kiểm thử bằng fake (`TwoFactorServiceTests`), chưa E2E với ứng dụng xác thực thật.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/auth/2fa/status` | Admin | — | 200 `{ enabled, setupPending, recoveryCodesRemaining }` | 401, 403 `TWO_FACTOR_ADMIN_ONLY` |
+| POST | `/api/v1/auth/2fa/setup` | Admin | — | 200 `{ secret, otpAuthUri }` | 403, 409 `TWO_FACTOR_ALREADY_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/enable` | Admin | `{ code }` mã TOTP đầu tiên | 200 `{ recoveryCodes[8] }` (hiển thị một lần) | 401 `INVALID_TWO_FACTOR_CODE`, 409 `TWO_FACTOR_SETUP_REQUIRED` / `TWO_FACTOR_ALREADY_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/disable` | Admin | `{ code }` TOTP hoặc mã khôi phục | 204 | 401 `INVALID_TWO_FACTOR_CODE`, 409 `TWO_FACTOR_NOT_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/verify` | Công khai + CSRF | `{ challengeToken, code }` | 200 `AuthSessionResponse` + cookie `lv_refresh` | 401 `INVALID_TWO_FACTOR_CODE` / `TWO_FACTOR_CHALLENGE_INVALID`, 429 |
+
+```jsonc
+// POST /auth/login (và POST /auth/google, /auth/google/link-confirm) khi Admin đã bật 2FA → 200, KHÔNG có cookie
+{ "twoFactorRequired": true, "challengeToken": "opaque", "expiresIn": 300 }
+// /auth/google trả thêm dạng phẳng: { signedIn: false, twoFactorRequired: true, challengeToken, challengeExpiresIn }
+```
+
+- Thử thách sống 5 phút, dùng một lần, sai 5 lần thì bị hủy (phải đăng nhập lại). Mỗi mã TOTP chỉ dùng được một lần; chấp nhận lệch ±1 bước 30 giây.
+- Mã khôi phục dạng `XXXXXX-XXXXXX`, dùng một lần, không phân biệt hoa thường. Mất cả ứng dụng lẫn mã khôi phục cần Admin khác xử lý ngoài API (chưa có endpoint đặt lại 2FA).
+- `INVALID_TWO_FACTOR_CODE` là 401 nhưng với `setup/enable/disable` phiên vẫn còn: FE không coi là hết phiên.
+
 ### 6.3. Đăng nhập Google
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
@@ -271,7 +294,7 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 
 ### 6.4. Phương thức đăng nhập của tôi
 
-> **Dự kiến, chưa triển khai endpoint.** Hiện chỉ có `ILoginMethodService` và DTO, chưa có service implementation/controller/DI. Không gọi các route dưới đây từ UI chính thức; không xem các mã lỗi dưới đây là response đã kiểm chứng. Đây là quản lý phương thức của user đang đăng nhập, khác luồng công khai `/auth/google/link-confirm` đã triển khai ở mục 6.3. Chưa chốt CSRF/rate limit cho các route dự kiến này.
+> **Đã triển khai** (`LoginMethodsController`, `LoginMethodService`; kiểm thử bằng fake trong `LoginMethodServiceTests`, chưa E2E với Google thật). Dùng Bearer, giới hạn 10 request/phút/IP (policy `login-methods`). Thao tác thêm/bỏ phải xác thực lại (mật khẩu hiện tại và/hoặc Google ID token mới trùng `sub` đã liên kết). Không đổi `User.Email` theo email Google.
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
@@ -287,7 +310,8 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 ```
 
 - `REAUTHENTICATION_FAILED` là 401 nhưng phiên vẫn còn: interceptor **không** được coi là hết phiên.
-- Quên/đặt lại mật khẩu, OTP, passkey và 2FA cũng chưa có endpoint trong Backend hiện tại; UI/scaffold hoặc type FE không chứng minh đã có API.
+- Gỡ phương thức không còn lại cái nào → `409 LAST_LOGIN_METHOD`. Gỡ Google khi chưa liên kết, hoặc gỡ mật khẩu khi chưa có mật khẩu, trả `204` (idempotent). Đặt mật khẩu khi đã có → `409 LOGIN_METHOD_ALREADY_EXISTS`.
+- OTP và passkey chưa có endpoint trong Backend hiện tại; UI/scaffold hoặc type FE không chứng minh đã có API.
 
 ### 6.5. Kho
 
@@ -394,6 +418,11 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 | POST | `/v1/vaults/{vaultId}/assets/text` | Đăng nhập | `{ name, description?, content }` | **201** `AssetResponse` | 400, 404, 409 như trên |
 | GET | `/v1/vaults/{vaultId}/assets` | Đăng nhập | Query phân trang; `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<AssetResponse>` | 400, 404 |
 | GET | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 200 `AssetResponse` | 404 `VAULT_NOT_FOUND` / `ASSET_NOT_FOUND` |
+| GET | `/v1/vaults/{vaultId}/assets/{assetId}/content` | Đăng nhập (Owner) | Query `version?` (mặc định phiên bản hiện tại) | 200 nội dung gốc (`application/octet-stream`, `Content-Disposition: attachment`, `Cache-Control: no-store`) | 404 `ASSET_NOT_FOUND` (kể cả phiên bản không có/đã dọn), 500 `CONTENT_INTEGRITY_FAILED` |
+| PUT | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | `{ name?, description?, etag }` | 200 `AssetResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
+| POST | `/v1/vaults/{vaultId}/assets/{assetId}/versions` | Đăng nhập | `multipart/form-data`: `file`, `etag` (tài sản dạng `FILE`) | **201** `AssetResponse` (phiên bản mới) | 400, 404, 409 `EDIT_CONFLICT` / `STORAGE_QUOTA_EXCEEDED` / `VAULT_NOT_EDITABLE`, 413 `FILE_TOO_LARGE` |
+| POST | `/v1/vaults/{vaultId}/assets/{assetId}/versions/text` | Đăng nhập | `{ content, etag }` (tài sản dạng `TEXT`) | **201** `AssetResponse` | như trên |
+| DELETE | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 204 | 404, 409 `ASSET_IN_USE` (+`reason`: `IN_CONTAINER` \| `PINNED_IN_HANDOVER`) / `VAULT_NOT_EDITABLE` |
 
 ```json
 // AssetResponse — chỉ metadata, KHÔNG có nội dung tài sản
@@ -420,7 +449,11 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 - `name` của tệp không gửi thì lấy theo tên tệp. Tên/mô tả **không mã hóa**: không ghi mật khẩu vào đây; bí mật để trong `content`/tệp.
 - Nội dung tệp và `content` được BE mã hóa (AES-256-GCM, khóa riêng mỗi phiên bản) trước khi lưu. FE gửi nội dung gốc qua HTTPS, **không** tự mã hóa hay Base64 nội dung. `sizeBytes` là kích thước nội dung gốc, cũng là số tính vào quota.
 - Hạng Free được lưu tài sản trong 20 MiB; mọi phiên bản đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản không ở gói nào.
-- Chưa có (làm sau cùng phần bảo mật): tải nội dung về, thay nội dung (phiên bản mới), đổi tên/xóa tài sản.
+- **Tải nội dung (LV-10):** chỉ Owner của kho. Server giải mã hai lượt: lượt đầu vào `Stream.Null` để kiểm kích thước và SHA-256 trước khi gửi byte đầu tiên; nội dung hỏng trả 500 và không có byte nội dung nào. Mỗi lần tải ghi nhật ký `AssetContentDownloaded` (chỉ id và số phiên bản, không tên tài sản).
+- **Thay nội dung không ghi đè:** tạo phiên bản mới (khóa DEK riêng), phiên bản cũ vẫn tải được bằng `?version=N` và vẫn tính quota; snapshot đã ghim vẫn trỏ đúng phiên bản cũ. Tài sản `FILE` chỉ nhận `/versions` (multipart), `TEXT` chỉ nhận `/versions/text`; sai loại → `400 VALIDATION_ERROR`. Hai request tạo cùng số phiên bản chỉ một thắng, request còn lại `409 EDIT_CONFLICT`.
+- **Đổi tên/mô tả và thay nội dung** là thao tác "thêm": chặn khi kho đóng, kế hoạch bị khóa (đang chờ/bàn giao) hoặc dịch vụ chỉ đọc. Kho đang có hold: `409 VAULT_NOT_EDITABLE` với `reason = HOLD_ACTIVE`.
+- **Xóa** là thao tác "giảm" (vẫn cho khi ân hạn, chặn khi kho đóng/kế hoạch khóa). Chỉ xóa được khi tài sản không còn trong gói nào (gỡ khỏi gói trước), chưa ghim vào snapshot của lượt bàn giao nào và kho không có hold. Xóa hết mọi phiên bản và nội dung đã mã hóa, giải phóng quota. Nội dung được xóa sau khi bản ghi đã xóa; nếu kho lưu trữ lỗi, object mồ côi (đã mã hóa) có thể còn lại.
+- Xuất cấu hình PDF (XS Max) và khôi phục tài sản đã xóa chưa có.
 
 ### 6.8. Người nhận (Beneficiary)
 

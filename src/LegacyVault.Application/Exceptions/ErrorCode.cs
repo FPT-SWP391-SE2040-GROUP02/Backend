@@ -19,6 +19,8 @@ public enum ErrorCode
     VaultNotEditable,
     EditConflict,
     AssetNotFound,
+    /// <summary>409: tài sản còn trong gói hoặc đã được ghim vào snapshot bàn giao nên không xóa được.</summary>
+    AssetInUse,
     HandoverInvitationInvalid,
     HandoverNotFound,
     HandoverNotAllowed,

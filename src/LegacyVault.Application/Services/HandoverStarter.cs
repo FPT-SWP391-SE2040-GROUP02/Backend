@@ -127,10 +127,14 @@ public sealed class HandoverStarter : IHandoverStarter
             catch (Exception)
             {
                 result.InvitationsFailed++;
+                // Ghi nhận lần thử lỗi để job gửi lại (HandoverInvitationRetryJob) biết đã thử và giãn cách đúng.
+                HandoverTurn failedTurn = turns.First(t => t.Id == invitation.TurnId);
+                failedTurn.InvitationAttempts = failedTurn.InvitationAttempts + 1;
+                failedTurn.InvitationLastAttemptAt = timeProvider.GetUtcNow();
             }
         }
 
-        if (result.InvitationsSent > 0)
+        if (result.InvitationsSent > 0 || result.InvitationsFailed > 0)
         {
             await unitOfWork.SaveChangesAsync(ct);
         }
