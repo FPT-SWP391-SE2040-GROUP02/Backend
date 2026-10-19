@@ -21,6 +21,7 @@ public sealed class HandoverIdentityTests
     private readonly FakeVaultRepository vaults = new FakeVaultRepository();
     private readonly FakeHandoverRepository repository = new FakeHandoverRepository();
     private readonly FakeEkycVerificationRepository verifications = new FakeEkycVerificationRepository();
+    private readonly FakeHoldReader holds = new FakeHoldReader();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
     private readonly HandoverIdentityService service;
@@ -37,7 +38,7 @@ public sealed class HandoverIdentityTests
         HandoverService handoverService = new HandoverService(
             currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(), unitOfWork, time);
         service = new HandoverIdentityService(
-            currentUser, vaults, repository, verifications, handoverService, unitOfWork, time);
+            currentUser, vaults, repository, verifications, handoverService, holds, unitOfWork, time);
     }
 
     private HandoverTurn AddTurn(HandoverTurnStatus status, Guid? claimant)
@@ -99,6 +100,19 @@ public sealed class HandoverIdentityTests
         Assert.Equal("READY_TO_ACCEPT", response.Status);
         Assert.Equal(Now.AddDays(7), turn.DecisionDeadline);
         Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Complete_ActiveHold_RejectedEvenWhenEkycPassed()
+    {
+        // M5, ACCEPT-01: kho đang bị giữ thì chưa sang "sẵn sàng nhận", dù eKYC đã đạt
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, claimantId);
+        AddVerification(turn, EkycStatus.Passed, EkycIdentityMatch.Matched);
+        holds.Active = true;
+
+        Assert.Equal("HOLD_ACTIVE", await ReasonOfRejectionAsync(turn.Id));
+        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
+        Assert.Null(turn.DecisionDeadline);
     }
 
     [Fact]
