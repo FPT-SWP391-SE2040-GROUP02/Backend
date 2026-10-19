@@ -116,6 +116,11 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         }
         else
         {
+            // ALIVE-05: selfie đã khớp thì không bác được; kiểm tra trước mọi thay đổi entity.
+            if (!ObjectionRules.CanReject(objection))
+            {
+                throw ObjectionMapper.NotAllowed(DeathCaseNotAllowedReason.OwnerSelfiePassed);
+            }
             await ApplyObjectionRejectedAsync(context, objection, now, ct);
         }
 

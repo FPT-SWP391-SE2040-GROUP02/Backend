@@ -38,6 +38,24 @@ public sealed class ObjectionRulesTests
     }
 
     [Fact]
+    public void Alive05_CanReject_FalseOnceSelfiePassed()
+    {
+        // Chuẩn bị: một lời báo chưa có selfie đạt, một lời báo đã có
+        DeathCaseObjection noSelfie = new DeathCaseObjection();
+        noSelfie.SelfiePassedAt = null;
+        DeathCaseObjection passed = new DeathCaseObjection();
+        passed.SelfiePassedAt = new DateTimeOffset(2026, 10, 5, 8, 0, 0, TimeSpan.Zero);
+
+        // Hành động
+        bool canRejectNoSelfie = ObjectionRules.CanReject(noSelfie);
+        bool canRejectPassed = ObjectionRules.CanReject(passed);
+
+        // Kiểm tra: selfie đã khớp thì không bác được
+        Assert.True(canRejectNoSelfie);
+        Assert.False(canRejectPassed);
+    }
+
+    [Fact]
     public void Time01_IsVerifierOverdue_ExactMomentIsOverdue_NullDueIsNot()
     {
         // Chuẩn bị
