@@ -798,7 +798,7 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 | POST | `/v1/admin/holds/{id}/release` | `{ reason, etag }` | 200 (gọi lặp: trạng thái hiện tại) | 409 `ADMIN_ACTION_NOT_ALLOWED` (`HOLD_OWNER_ALIVE`) / `EDIT_CONFLICT` |
 
 - **Hold** (`Holds`): phạm vi, loại (`OWNER_ALIVE` đặt tự động khi Owner báo còn sống và chỉ gỡ khi Verifier kết luận; `ADMIN`; `DISPUTE`), lý do, người phụ trách, `reviewAt` (tối đa 7 ngày một lần), thời điểm gỡ. Hold đang hiệu lực chặn: duyệt chứng tử (`DEATH_CASE_NOT_ALLOWED` / `HOLD_ACTIVE`), nhận lượt và đồng ý (`HANDOVER_NOT_ALLOWED` / `HOLD_ACTIVE`), liệt kê và tải tài sản (`GRANT_NOT_ACTIVE` / `HOLD_ACTIVE`), kích hoạt kế hoạch (`missingRequirements` có `HOLD_ACTIVE`) và dọn dữ liệu (đồng hồ lưu tạm dừng). Đặt/gỡ hold ghi `plan.UpdatedAt` nên thao tác nhận chạy cùng lúc thua `RowVersion`.
-- **Sự cố** (`Incidents`, `IncidentEvents`): loại `NO_VERIFIER`, `NO_EXECUTOR`, `CHECK_IN_OVERDUE`, `NOTIFICATION_FAILED`, `OWNER_ALIVE`, `INTEGRATION`, `MANUAL`. Mỗi (loại, đối tượng) chỉ một sự cố đang mở (chỉ mục unique có lọc). **Luôn có người phụ trách (hoặc Admin ít việc nhất), hạn và ngày xem lại**; chưa ai nhận được thì `assigneeUserId = null` kèm `nextReviewAt` sau 1 ngày và job giao cho Admin khi có.
+- **Sự cố** (`Incidents`, `IncidentEvents`): loại `NO_VERIFIER`, `NO_EXECUTOR`, `CHECK_IN_OVERDUE`, `NOTIFICATION_FAILED`, `OWNER_ALIVE`, `INTEGRATION`, `MANUAL`, `PAYMENT` (giao dịch thanh toán lệch cần đối chiếu, mục 6.18). Mỗi (loại, đối tượng) chỉ một sự cố đang mở (chỉ mục unique có lọc). **Luôn có người phụ trách (hoặc Admin ít việc nhất), hạn và ngày xem lại**; chưa ai nhận được thì `assigneeUserId = null` kèm `nextReviewAt` sau 1 ngày và job giao cho Admin khi có.
 - **Tự động tạo:** job phân công Verifier không có người (`NO_VERIFIER`, tự đóng khi giao được); kỳ điểm danh sang `AWAITING_CHECK` (`CHECK_IN_OVERDUE` giao Executor chính, không có Executor thì `NO_EXECUTOR` giao Admin; tự đóng khi Owner điểm danh, DMS-05); Owner báo còn sống (`OWNER_ALIVE` giao Verifier phụ trách, đóng khi kết luận).
 - **Job sự cố** (`Incident:JobEnabled`, `Incident:PollSeconds` mặc định 300): nhắc người phụ trách sau 48 giờ (một lần), báo mọi Admin sau 72 giờ (một lần), giao sự cố mồ côi. Quá hạn không tự đóng. Thư chỉ có loại sự cố, mã rút gọn và hạn.
 - **Nhật ký:** mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier, giao/đóng sự cố, đặt/gỡ hold) và F2C ghi `AuditLogs` trong cùng giao dịch.
@@ -859,7 +859,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 
 ### 6.18. Thanh toán (Billing)
 
-Mua dịch vụ, mua thêm suất người nhận và giả lập trả tiền (SRS §8.1–8.3, §11.5, AC-90, AC-94, AC-95). Cần đăng nhập (Bearer). Kho luôn là kho của người đang đăng nhập: **không gửi `vaultId`, số tiền, loại đơn hay trạng thái** (SEC-04, PAY-11). Thử tay bằng `http/billing.http`.
+Mua dịch vụ, mua thêm suất người nhận, giả lập trả tiền và nhận tiền thật qua webhook SePay (SRS §8.1–8.5, §11.5, §11.6, AC-90, AC-94, AC-95). Các endpoint `/billing/*` cần đăng nhập (Bearer), riêng webhook SePay xác thực bằng API key (xem "Webhook SePay" bên dưới). Kho luôn là kho của người đang đăng nhập: **không gửi `vaultId`, số tiền, loại đơn hay trạng thái** (SEC-04, PAY-11). Thử tay bằng `http/billing.http` và `http/billing-webhook.http`.
 
 | Method | URL | Body | Thành công | Lỗi |
 |---|---|---|---|---|
@@ -870,6 +870,8 @@ Mua dịch vụ, mua thêm suất người nhận và giả lập trả tiền (
 | GET | `/api/v1/billing/orders/{orderId}` | — | 200 `PaymentOrderResponse` | 404 `PAYMENT_ORDER_NOT_FOUND` |
 | POST | `/api/v1/billing/orders/{orderId}/cancel` | — | 200 `PaymentOrderResponse` | 404 `PAYMENT_ORDER_NOT_FOUND`, 409 `PAYMENT_ORDER_NOT_PAYABLE`, 409 `EDIT_CONFLICT` |
 | POST | `/api/v1/billing/orders/{orderId}/dev-pay` | — | 200 `PaymentOrderResponse` (đơn `PAID`) | 404, 409 `PAYMENT_ORDER_NOT_PAYABLE`, 409 `EDIT_CONFLICT` |
+| POST | `/api/v1/billing/sepay/webhook` | JSON của SePay (xem dưới) + header `Authorization: Apikey <key>` | 200 đúng `{"success":true}` | 400 `VALIDATION_ERROR`, 401 `WEBHOOK_UNAUTHORIZED`, 409 `EDIT_CONFLICT`, 500 |
+| GET | `/api/v1/admin/payment-transactions?status=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminPaymentTransactionResponse>` (Admin, chỉ đọc) | 400 `VALIDATION_ERROR`, 401, 404 (không phải Admin) |
 
 **Body `quote` / `orders`:** `tier` là `"XS"` hoặc `"XS_MAX"`, `years` là `1`, `3` hoặc `5` (bắt buộc khi mua mới); `extraSlots` là số suất người nhận mua thêm. Backend tự xác định loại đơn từ quyền dịch vụ của kho, client không gửi:
 
@@ -965,8 +967,41 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
 - **Hủy đơn:** hủy lặp vẫn 200 (trả đơn đã hủy). Đơn đã `PAID` → 409 `PAYMENT_ORDER_NOT_PAYABLE` (`reason = PAID`), đã quá hạn → `EXPIRED`.
 - **Cấp quyền** (D8): khi đơn được thanh toán, **chỉ** quyền dịch vụ của kho được ghi. Mua mới: hạng, `PAID_ACTIVE`, dung lượng, suất kèm theo, suất thêm = `extraSlots`, hạn = lúc trả + số năm × 365 ngày (PAY-08). Mua thêm suất: `extraBeneficiarySlots += extraSlots`, giữ nguyên hạn. Mỗi đơn chỉ cấp một lần (trả lặp trả lại đơn `PAID`). Không đổi kế hoạch (vẫn `DRAFT` nếu đang `DRAFT`, SETUP-14), không tính là điểm danh, không gỡ chặn (PAY-09). Đơn tạo trước khi kế hoạch bị khóa, tiền tới đúng hạn vẫn được cấp (§8.3). Không cấp và trả 409 `PAYMENT_ORDER_NOT_PAYABLE` khi: đơn đã hủy (`CANCELLED`), tiền tới sau hạn đơn (`EXPIRED`), kho đã đóng (`VAULT_CLOSED`), hoặc quyền dịch vụ đã đổi so với lúc tạo đơn (`ENTITLEMENT_CHANGED`: mua mới nhưng kho không còn Free; mua thêm nhưng hạn đã đổi, đã hết hạn hoặc không còn `PAID_ACTIVE`).
 - **`dev-pay` (chỉ Development):** giả lập trả tiền cho đơn của kho mình, gọi đúng hàm cấp quyền mà webhook SePay sẽ dùng. Không có body. Route chỉ được đăng ký khi môi trường là Development **và** `Billing:DevPaymentEnabled = true`; ngoài ra là 404. Hai thao tác trả tiền chạy cùng lúc có thể nhận 409 `EDIT_CONFLICT`; thử lại sẽ thấy đơn `PAID`.
-- **Cấu hình** (`Billing`): `Bank.BankCode`, `Bank.AccountNumber`, `Bank.AccountName` (thông tin công khai để hiện QR; `appsettings.Development.json` dùng số tài khoản giả, tài khoản thật đặt trong user-secrets hoặc biến môi trường) và `DevPaymentEnabled` (mặc định tắt). Chưa cấu hình ngân hàng thì tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
-- **Chưa làm (H2 và chức năng gia hạn):** webhook SePay thật, bảng giao dịch, chống trùng, đối chiếu và sự cố F4; gia hạn sớm và muộn, kỳ chờ, hết kỳ → ân hạn → rà soát, nhắc hạn, job hết hạn đơn.
+- **Cấu hình** (`Billing`): `Bank.BankCode`, `Bank.AccountNumber`, `Bank.AccountName` (thông tin công khai để hiện QR; `appsettings.Development.json` dùng số tài khoản giả, tài khoản thật đặt trong user-secrets hoặc biến môi trường), `DevPaymentEnabled` (mặc định tắt), `SePay:Environment` (`Test` mặc định hoặc `Live`; giá trị khác là lỗi cấu hình) và `SePay:WebhookApiKey` (**secret**, xem dưới). Chưa cấu hình ngân hàng thì tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
+- **Chưa làm:** gia hạn sớm và muộn, kỳ chờ, hết kỳ → ân hạn → rà soát, nhắc hạn, job hết hạn đơn; xác thực HMAC; thao tác Admin đóng giao dịch (`RESOLVED` chưa được dùng); hoàn tiền (làm thủ công ngoài app, PAY-07).
+
+#### Webhook SePay (SRS §8.3 bước 6–9, §8.5, PAY-01..07, AC-28, AC-29, AC-30, AC-97, AC-104)
+
+`POST /api/v1/billing/sepay/webhook` do **SePay** gọi, không phải FE. Không dùng JWT của người dùng, không CSRF. Thử tay bằng `http/billing-webhook.http`.
+
+- **Xác thực:** header `Authorization: Apikey <key>`, so sánh thời gian cố định với `Billing:SePay:WebhookApiKey`. Thiếu, sai, hoặc server chưa cấu hình key → `401 WEBHOOK_UNAUTHORIZED`, không lưu gì (kể cả khi gửi JWT của người dùng). Key là secret: chỉ đặt bằng user-secrets hoặc biến môi trường, không ghi vào appsettings, log hay tài liệu:
+
+```powershell
+dotnet user-secrets set "Billing:SePay:WebhookApiKey" "<key>" --project src/LegacyVault.Api
+```
+
+  Test và Live là hai cấu hình và hai key riêng (PAY-01): đặt `Billing:SePay:Environment`, mỗi giao dịch được lưu kèm môi trường.
+- **Body** (JSON của SePay; trường khác bị bỏ qua): `id` (ID giao dịch phía SePay, > 0), `gateway`, `transactionDate` (giờ Việt Nam `yyyy-MM-dd HH:mm:ss`, đổi sang UTC; sai định dạng thì không có giờ tiền vào), `accountNumber`, `code`, `content`, `transferType` (`in` hoặc `out`), `transferAmount` (đồng, ≥ 0), `referenceCode`. Thiếu `id`, `transferAmount`, `accountNumber`, `transferType` hoặc giá trị sai → `400 VALIDATION_ERROR`. Kiểm key trước kiểm dữ liệu.
+- **Phản hồi:** chỉ trả `200` với body đúng `{"success":true}` **sau khi** giao dịch đã được lưu (PAY-05). Lưu lỗi hoặc xung đột đồng thời (`409 EDIT_CONFLICT`, hoặc `500`) thì không trả success để SePay gửi lại (tối đa 7 lần trong khoảng 33 phút); giao dịch chưa đối chiếu xong được xử lý tiếp ở lần gửi lại. Webhook gửi lặp cùng `id` luôn trả success, không tạo dòng hay cấp quyền thêm (AC-29).
+- **Mã thanh toán** (nội dung chuyển khoản): lấy từ `code` của SePay nếu có (tối đa 16 ký tự), không thì tìm `LV` + 8 ký tự hợp lệ trong `content`, không phân biệt hoa thường.
+- **Đối chiếu** theo thứ tự, gặp điều nào dừng ở đó. Khớp hết → cấp quyền đúng như `dev-pay` (đơn `PAID`, giờ trả = giờ tiền vào, nhật ký `PAYMENT_PAID`). Lệch → giao dịch `RECONCILIATION_REQUIRED` kèm `reconciliationReason`, **không cấp quyền**, Admin không có thao tác ghi `PAID` (PAY-07):
+
+| `reconciliationReason` | Khi nào |
+|---|---|
+| `NOT_INCOMING` | `transferType` không phải `in` (không mở sự cố) |
+| `WRONG_ACCOUNT` | Số tài khoản khác `Billing:Bank:AccountNumber` (PAY-03) |
+| `CODE_MISSING` | Không tìm thấy mã thanh toán |
+| `ORDER_NOT_FOUND` | Có mã nhưng không đơn nào mang mã đó |
+| `AMOUNT_MISMATCH` | Số tiền khác `totalAmount` của đơn, thiếu hay thừa đều lệch, không cộng dồn (AC-28) |
+| `ALREADY_PAID` | Đơn đã được thanh toán bởi giao dịch khác (PAY-04, AC-97) |
+| `ORDER_CANCELLED` | Đơn đã bị hủy (PAY-07) |
+| `TIME_UNKNOWN` | Không đọc được giờ tiền vào |
+| `LATE_AFTER_EXPIRY` | Giờ tiền vào từ hạn đơn trở đi (PAY-06, AC-30). Đơn đã `EXPIRED` mà tiền vào trước hạn vẫn được cấp |
+| `VAULT_CLOSED`, `ENTITLEMENT_CHANGED`, `EXPIRED`, `CANCELLED`, `PAID` | Khi bước cấp quyền từ chối, cùng `reason` của `PAYMENT_ORDER_NOT_PAYABLE` (AC-104, ADDON-03) |
+
+  Giao dịch lệch (trừ `NOT_INCOMING`) gắn `paymentOrderId` khi đã xác định được đơn, và mở một sự cố loại `PAYMENT` (xem 6.15) với `targetType = PaymentTransaction`, `targetId` = Id giao dịch; nội dung sự cố chỉ có mã lý do, không có số tiền, mã đơn hay số tài khoản (SEC-07).
+- **Trạng thái giao dịch** (`status`): `RECEIVED` (đã lưu, chưa đối chiếu xong), `MATCHED`, `RECONCILIATION_REQUIRED`, `RESOLVED` (chưa dùng). Một đơn có tối đa một giao dịch `MATCHED`.
+- **Admin xem giao dịch** (`GET /api/v1/admin/payment-transactions`, ADMIN-09): chỉ đọc, mới nhất trước, `status` lọc theo bốn giá trị trên (giá trị khác → 400). Mỗi phần tử: `id`, `provider`, `environment`, `providerTransactionId`, `status`, `reconciliationReason`, `transferType` (`IN` / `OUT`), `transferAmount`, `currency`, `paymentOrderId`, `paymentCode`, `gateway`, `referenceCode`, `transactionAt`, `receivedAt`, `processedAt`. **Không có** nội dung chuyển khoản, số tài khoản, key hay `rowVersion`. Người không phải Admin đang hoạt động nhận 404 (SEC-04); không có API nào sửa hay ghi `PAID` cho giao dịch.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 

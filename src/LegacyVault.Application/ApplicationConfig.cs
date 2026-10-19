@@ -61,6 +61,7 @@ public static class ApplicationConfig
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<PaymentGranter>();
         services.AddScoped<ISePayWebhookService, SePayWebhookService>();
+        services.AddScoped<IAdminPaymentService, AdminPaymentService>();
         return services;
     }
 }

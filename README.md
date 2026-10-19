@@ -82,6 +82,8 @@ docker compose stop
 | `appsettings.json` | Logging/cấu hình chung; không chứa password server triển khai |
 | `launchSettings.json` | Profile http, môi trường Development, API cổng 5000 |
 | `global.json` | SDK nhóm dùng |
+
+Thanh toán dùng mục `Billing:*` (`Bank`, `DevPaymentEnabled`, `SePay:Environment`); `Billing:SePay:WebhookApiKey` là secret, chỉ đặt bằng user-secrets hoặc biến môi trường, không ghi vào appsettings. Chi tiết ở `docs/api-contract.md` mục 6.18.
 | `Directory.Packages.props` | Phiên bản NuGet tập trung |
 
 Compose dùng tên project `legacyvault-starter` để không phụ thuộc tên thư mục clone. Cổng 14331 tránh SQL 14330 của project cũ. Không chạy hai checkout với cùng project/cổng cùng lúc.

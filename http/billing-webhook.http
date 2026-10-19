@@ -1,0 +1,136 @@
+# Thử webhook SePay (SRS §8.5) — CHỈ môi trường local. Contract: docs/api-contract.md mục 6.18, phần "Webhook SePay".
+#
+# Chuẩn bị:
+#  1. Đặt key webhook bằng user-secrets (KHÔNG ghi vào file này, không commit):
+#       dotnet user-secrets set "Billing:SePay:WebhookApiKey" "<key>" --project src/LegacyVault.Api
+#     rồi điền đúng key đó vào @apiKey bên dưới trên máy bạn, và xóa trước khi lưu/commit.
+#  2. Tạo đơn bằng http/billing.http (POST /billing/orders), lấy "paymentCode" và "totalAmount" trong response
+#     điền vào @paymentCode và @amount.
+#  3. @accountNumber phải bằng Billing:Bank:AccountNumber đang chạy (appsettings.Development.json dùng số giả 0000000000).
+#
+# Dữ liệu dưới đây hoàn toàn giả. SePay gửi giờ giao dịch theo giờ Việt Nam, định dạng yyyy-MM-dd HH:mm:ss:
+# sửa @transactionDate cho nằm TRƯỚC hạn đơn (đơn hết hạn sau 15 phút) thì mới được cấp quyền (PAY-06).
+# Mỗi lần thử một giao dịch mới thì đổi "id" (ID giao dịch SePay); gửi lại cùng id là webhook lặp (AC-29).
+
+@baseUrl = http://localhost:5000/api/v1
+@apiKey =
+@adminToken =
+@accountNumber = 0000000000
+@paymentCode = LV00000000
+@amount = 199000
+@transactionDate = 2026-10-19 14:30:15
+
+### Khớp đơn — 200 {"success":true}; đơn PAID và kho được cấp quyền một lần
+# Giao dịch MATCHED. Gửi lặp cùng id: vẫn 200, không cấp thêm.
+POST {{baseUrl}}/billing/sepay/webhook
+Authorization: Apikey {{apiKey}}
+Content-Type: application/json
+
+{
+  "id": 900001,
+  "gateway": "MBBank",
+  "transactionDate": "{{transactionDate}}",
+  "accountNumber": "{{accountNumber}}",
+  "code": null,
+  "content": "chuyen tien {{paymentCode}}",
+  "transferType": "in",
+  "transferAmount": {{amount}},
+  "referenceCode": "FT00000000001"
+}
+
+### Sai số tiền (thiếu 1 đồng) — 200; giao dịch RECONCILIATION_REQUIRED / AMOUNT_MISMATCH, không cấp, có sự cố PAYMENT
+POST {{baseUrl}}/billing/sepay/webhook
+Authorization: Apikey {{apiKey}}
+Content-Type: application/json
+
+{
+  "id": 900002,
+  "gateway": "MBBank",
+  "transactionDate": "{{transactionDate}}",
+  "accountNumber": "{{accountNumber}}",
+  "content": "chuyen tien {{paymentCode}}",
+  "transferType": "in",
+  "transferAmount": 198999,
+  "referenceCode": "FT00000000002"
+}
+
+### Sai tài khoản nhận — 200; WRONG_ACCOUNT
+POST {{baseUrl}}/billing/sepay/webhook
+Authorization: Apikey {{apiKey}}
+Content-Type: application/json
+
+{
+  "id": 900003,
+  "gateway": "MBBank",
+  "transactionDate": "{{transactionDate}}",
+  "accountNumber": "9999999999",
+  "content": "chuyen tien {{paymentCode}}",
+  "transferType": "in",
+  "transferAmount": {{amount}},
+  "referenceCode": "FT00000000003"
+}
+
+### Không có mã thanh toán trong nội dung — 200; CODE_MISSING
+POST {{baseUrl}}/billing/sepay/webhook
+Authorization: Apikey {{apiKey}}
+Content-Type: application/json
+
+{
+  "id": 900004,
+  "gateway": "MBBank",
+  "transactionDate": "{{transactionDate}}",
+  "accountNumber": "{{accountNumber}}",
+  "content": "chuyen tien an trua",
+  "transferType": "in",
+  "transferAmount": {{amount}},
+  "referenceCode": "FT00000000004"
+}
+
+### Giao dịch tiền ra — 200; NOT_INCOMING (không mở sự cố)
+POST {{baseUrl}}/billing/sepay/webhook
+Authorization: Apikey {{apiKey}}
+Content-Type: application/json
+
+{
+  "id": 900005,
+  "gateway": "MBBank",
+  "transactionDate": "{{transactionDate}}",
+  "accountNumber": "{{accountNumber}}",
+  "content": "rut tien",
+  "transferType": "out",
+  "transferAmount": {{amount}},
+  "referenceCode": "FT00000000005"
+}
+
+### Thiếu số tiền — 400 VALIDATION_ERROR (không lưu gì)
+POST {{baseUrl}}/billing/sepay/webhook
+Authorization: Apikey {{apiKey}}
+Content-Type: application/json
+
+{
+  "id": 900006,
+  "accountNumber": "{{accountNumber}}",
+  "content": "chuyen tien {{paymentCode}}",
+  "transferType": "in"
+}
+
+### Key sai hoặc thiếu — 401 WEBHOOK_UNAUTHORIZED (không lưu gì)
+POST {{baseUrl}}/billing/sepay/webhook
+Authorization: Apikey khong-phai-key-that
+Content-Type: application/json
+
+{
+  "id": 900007,
+  "accountNumber": "{{accountNumber}}",
+  "content": "chuyen tien {{paymentCode}}",
+  "transferType": "in",
+  "transferAmount": {{amount}}
+}
+
+### Admin xem giao dịch cần đối chiếu — 200; chỉ đọc, mới nhất trước. Cần token Admin (@adminToken); người khác: 404
+GET {{baseUrl}}/admin/payment-transactions?status=RECONCILIATION_REQUIRED&pageIndex=1&pageSize=20
+Authorization: Bearer {{adminToken}}
+
+### Admin xem tất cả giao dịch (lọc status: RECEIVED, MATCHED, RECONCILIATION_REQUIRED, RESOLVED)
+GET {{baseUrl}}/admin/payment-transactions
+Authorization: Bearer {{adminToken}}
