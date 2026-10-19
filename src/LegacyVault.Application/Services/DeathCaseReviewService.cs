@@ -3,6 +3,7 @@ using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Application.Storage;
@@ -36,6 +37,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     private readonly TimeProvider timeProvider;
     private readonly IDeathCaseVerifierPicker verifierPicker;
     private readonly IAuditLogRepository auditLogRepository;
+    private readonly IDeathCaseExecutorNoticeSender executorNoticeSender;
 
     public DeathCaseReviewService(
         ICurrentUser currentUser,
@@ -51,7 +53,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IDeathCaseVerifierPicker verifierPicker,
-        IAuditLogRepository auditLogRepository)
+        IAuditLogRepository auditLogRepository,
+        IDeathCaseExecutorNoticeSender executorNoticeSender)
     {
         this.currentUser = currentUser;
         this.userRepository = userRepository;
@@ -67,6 +70,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         this.timeProvider = timeProvider;
         this.verifierPicker = verifierPicker;
         this.auditLogRepository = auditLogRepository;
+        this.executorNoticeSender = executorNoticeSender;
     }
 
     public async Task<PaginatedList<VerifierDeathCaseSummaryResponse>> ListAsync(PaginationRequest pagination, CancellationToken ct)
@@ -241,8 +245,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         deathCase.UpdatedAt = now;
         // SEC-07: Reason chỉ chứa mã phần cần bổ sung đã chuẩn hóa, không chép lý do tự do (Owner xem được nhật ký).
         AddAudit(context, AuditAction.DeathCaseSupplementRequested, requestedParts, now);
-        // TODO: gửi email cho Executor khi có yêu cầu bổ sung.
         await unitOfWork.SaveChangesAsync(ct);
+        // Báo Executor sau khi đã lưu: gửi thư lỗi không làm hỏng quyết định đã ghi.
+        await NotifyExecutorsAsync(deathCase, DeathCaseDecisionKind.SupplementRequested, decision.DueAt, ct);
         return await BuildResponseAsync(context, null, ct);
     }
 
@@ -327,6 +332,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
             }
             throw;
         }
+        // Báo Executor sau khi đã lưu, chỉ khi chính lần gọi này từ chối (lần gọi lặp đã trả về ở trên).
+        await NotifyExecutorsAsync(deathCase, DeathCaseDecisionKind.Rejected, null, ct);
         return await BuildResponseAsync(context, null, ct);
     }
 
@@ -684,6 +691,36 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     }
 
     /// <summary>SEC-07: dòng nhật ký của Verifier trên bản hồ sơ đang xét. reason chỉ nhận mã, không nhận lý do tự do.</summary>
+    /// <summary>
+    /// Gửi thư cho mọi Executor đang nhận việc được của kho (đã chấp nhận, tài khoản còn hoạt động), vì ai trong số đó
+    /// cũng có thể nộp bản bổ sung hoặc mở hồ sơ mới. Bỏ qua tài khoản không còn hoặc không có email.
+    /// </summary>
+    private async Task NotifyExecutorsAsync(
+        DeathCase deathCase, DeathCaseDecisionKind kind, DateTimeOffset? supplementDueAt, CancellationToken ct)
+    {
+        List<Executor> executors = await executorReader.GetAvailableAsync(deathCase.VaultId, ct);
+        foreach (Executor executor in executors)
+        {
+            if (executor.UserId == null)
+            {
+                continue;
+            }
+            User? user = await userRepository.FindByIdAsync(executor.UserId.Value, ct);
+            if (user == null || string.IsNullOrWhiteSpace(user.Email))
+            {
+                continue;
+            }
+            DeathCaseExecutorNotice notice = new DeathCaseExecutorNotice();
+            notice.CaseId = deathCase.Id;
+            notice.ToEmail = user.Email;
+            notice.FullName = user.FullName;
+            notice.CaseCode = DeathCaseRules.CaseCode(deathCase.Id);
+            notice.Kind = kind;
+            notice.SupplementDueAt = supplementDueAt;
+            await executorNoticeSender.SendAsync(notice, ct);
+        }
+    }
+
     private void AddAudit(ReviewContext context, AuditAction action, string? reason, DateTimeOffset now)
     {
         DeathCaseVersion reviewVersion = DeathCaseReviewRules.FindReviewVersion(context.DeathCase);
