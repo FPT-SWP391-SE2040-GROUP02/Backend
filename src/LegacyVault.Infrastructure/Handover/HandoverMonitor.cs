@@ -68,6 +68,39 @@ public sealed class HandoverMonitor : BackgroundService
             (job, id, token) => job.ProcessDecisionExpiryAsync(id, token), ct);
         await RunKindAsync("grant", (job, token) => job.FindExpiredGrantIdsAsync(token),
             (job, id, token) => job.ProcessGrantExpiryAsync(id, token), ct);
+        await RunInvitationRetryAsync(ct);
+    }
+
+    /// <summary>OPS-04: gửi lại lời mời F3 chưa giao được (lần gửi đầu lỗi hoặc tiến trình dừng trước khi gửi).</summary>
+    private async Task RunInvitationRetryAsync(CancellationToken ct)
+    {
+        IReadOnlyList<Guid> ids;
+        using (IServiceScope scope = scopeFactory.CreateScope())
+        {
+            IHandoverInvitationRetryJob job = scope.ServiceProvider.GetRequiredService<IHandoverInvitationRetryJob>();
+            ids = await job.FindPendingTurnIdsAsync(ct);
+        }
+
+        foreach (Guid id in ids)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using (IServiceScope scope = scopeFactory.CreateScope())
+                {
+                    IHandoverInvitationRetryJob job = scope.ServiceProvider.GetRequiredService<IHandoverInvitationRetryJob>();
+                    await job.ProcessTurnAsync(id, ct);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning("Gửi lại lời mời của lượt {Id} lỗi: {ExceptionType}", id, ex.GetType().Name);
+            }
+        }
     }
 
     private async Task RunKindAsync(

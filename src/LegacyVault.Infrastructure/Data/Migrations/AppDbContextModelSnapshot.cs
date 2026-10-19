@@ -1485,6 +1485,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<bool>("IdentityBypassed")
                         .HasColumnType("bit");
 
+                    b.Property<int>("InvitationAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("InvitationLastAttemptAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset?>("InvitationSentAt")
                         .HasColumnType("datetimeoffset");
 
