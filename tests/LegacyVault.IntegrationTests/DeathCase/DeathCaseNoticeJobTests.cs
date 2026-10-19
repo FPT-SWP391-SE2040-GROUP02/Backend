@@ -18,6 +18,7 @@ public sealed class DeathCaseNoticeJobTests
     private readonly FakeDeathCaseRepository repository = new FakeDeathCaseRepository();
     private readonly FakeUserRepository users = new FakeUserRepository();
     private readonly FakeDeathCaseNoticeSender sender = new FakeDeathCaseNoticeSender();
+    private readonly FakeIncidentService incidents = new FakeIncidentService();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly User owner;
     private readonly User executor;
@@ -96,6 +97,36 @@ public sealed class DeathCaseNoticeJobTests
         Assert.Equal(5, notice.AttemptCount);
         Assert.Null(deathCase.ObjectionStartsAt);
         Assert.Empty(pendingAfter);
+
+        // DEATH-08, H3: mọi kênh đều lỗi thì mở sự cố có người xử lý, không để hồ sơ kẹt vĩnh viễn
+        Assert.Single(incidents.Raised);
+        Assert.Equal(IncidentType.NotificationFailed, incidents.Raised[0].Type);
+        Assert.Equal(deathCase.VaultId, incidents.Raised[0].VaultId);
+        Assert.Equal(deathCase.Id, incidents.Raised[0].TargetId);
+    }
+
+    [Fact]
+    public async Task Death08_FourthFailureDoesNotRaiseIncidentYet()
+    {
+        DeathCase deathCase = AddCase(notifiedVersionNo: 1);
+        DeathCaseNotice notice = AddNotice(deathCase, versionNo: 1, attemptCount: 3);
+        sender.Fail = true;
+
+        await CreateJob().ProcessNoticeAsync(notice.Id, CancellationToken.None);
+
+        Assert.Equal(DeathCaseNoticeStatus.Pending, notice.Status);
+        Assert.Empty(incidents.Raised);
+    }
+
+    [Fact]
+    public async Task Death08_DeliveredNoticeRaisesNoIncident()
+    {
+        DeathCase deathCase = AddCase(notifiedVersionNo: 1);
+        DeathCaseNotice notice = AddNotice(deathCase, versionNo: 1, attemptCount: 0);
+
+        await CreateJob().ProcessNoticeAsync(notice.Id, CancellationToken.None);
+
+        Assert.Empty(incidents.Raised);
     }
 
     [Fact]
@@ -193,7 +224,7 @@ public sealed class DeathCaseNoticeJobTests
 
     private DeathCaseNoticeJob CreateJob()
     {
-        return new DeathCaseNoticeJob(repository, users, sender, unitOfWork, new FixedTimeProvider(Now));
+        return new DeathCaseNoticeJob(repository, users, sender, incidents, unitOfWork, new FixedTimeProvider(Now));
     }
 
     private DeathCase AddCase(int notifiedVersionNo)
