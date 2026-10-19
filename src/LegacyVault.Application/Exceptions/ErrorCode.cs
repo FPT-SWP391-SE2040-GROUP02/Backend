@@ -11,6 +11,7 @@ namespace LegacyVault.Application.Exceptions;
 public enum ErrorCode
 {
     ValidationError,
+    EmailAlreadyExists,
     SessionExpired,
     AccountNotActive,
     EmailNotVerified,

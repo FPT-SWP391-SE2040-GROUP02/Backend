@@ -26,10 +26,13 @@ public static class HandoverInvitationEmail
         const string note = "Nếu bạn không biết về lời mời này, hãy bỏ qua email. Email này không chứa nội dung tài sản.";
 
         string text = $"Xin chào {fullName},\n\n{paragraph}\n\nMở liên kết: {link}\n\n{note}\n";
-        string html = $"<p>Xin chào {WebUtility.HtmlEncode(fullName)},</p>"
-            + $"<p>{WebUtility.HtmlEncode(paragraph)}</p>"
-            + $"<p><a href=\"{WebUtility.HtmlEncode(link)}\">Mở liên kết</a> ({WebUtility.HtmlEncode(link)})</p>"
-            + $"<p><small>{WebUtility.HtmlEncode(note)}</small></p>";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            "Thông báo nhận bàn giao di sản số",
+            fullName,
+            paragraph,
+            link,
+            "Tiếp nhận bàn giao di sản",
+            note);
         return new EmailContent(subject, text, html);
     }
 }

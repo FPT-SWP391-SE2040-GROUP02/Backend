@@ -9,9 +9,9 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ConnectionStrings__Default": "Server=localhost,1433;Database=LegacyVault_OfficialDev;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;Connect Timeout=5",
-        "CheckIn__Enabled": "false",
-        "ExecutorInvitations__DeliveryEnabled": "false",
-        "Handover__Job__Enabled": "false"
+        "CheckIn__Enabled": "true",
+        "ExecutorInvitations__DeliveryEnabled": "true",
+        "Handover__Job__Enabled": "true"
       }
     },
     "http": {
