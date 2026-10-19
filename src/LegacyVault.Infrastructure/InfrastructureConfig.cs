@@ -181,6 +181,12 @@ public static class InfrastructureConfig
         services.Configure<EkycSettings>(configuration.GetSection(EkycSettings.SectionName));
         services.AddScoped<IEkycVerificationRepository, EkycVerificationRepository>();
         services.AddScoped<IEkycConsentRepository, EkycConsentRepository>();
+        // Mẫu khuôn mặt Owner (EKYC-22, PRIV-03): vector mã hóa envelope, dùng chung DataKeyProtector của tài sản.
+        services.AddScoped<IOwnerFaceTemplateRepository, OwnerFaceTemplateRepository>();
+        services.AddSingleton<IFaceTemplateProtector, FaceTemplateProtector>();
+        // Danh tính đã gắn của Owner (EKYC-27, DATA-02): CCCD đủ 12 số, họ tên, ngày sinh mã hóa envelope.
+        services.AddScoped<IOwnerIdentityRepository, OwnerIdentityRepository>();
+        services.AddSingleton<IOwnerIdentityProtector, OwnerIdentityProtector>();
         services.AddHttpClient<IEkycClient, EkycHttpClient>((provider, client) =>
         {
             EkycSettings settings = provider.GetRequiredService<IOptions<EkycSettings>>().Value;

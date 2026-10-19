@@ -13,6 +13,9 @@ public static class EkycRules
     /// <summary>Ngưỡng cosine của SFace dùng để coi hai khuôn mặt là một người. Server cố định, FE không được đổi.</summary>
     public const double MatchThreshold = 0.363;
 
+    /// <summary>Số chiều vector đặc trưng của SFace; vector khác số chiều này bị xem là phản hồi lạ của dịch vụ.</summary>
+    public const int FaceEmbeddingLength = 128;
+
     /// <summary>Ảnh tối đa 8 MiB, bằng giới hạn của dịch vụ eKYC.</summary>
     public const int MaxImageBytes = 8 * 1024 * 1024;
 
@@ -78,6 +81,33 @@ public static class EkycRules
         return last4;
     }
 
+    /// <summary>
+    /// Độ tương đồng cosine giữa hai vector đặc trưng khuôn mặt, cùng công thức với SFace (FR_COSINE) của dịch vụ eKYC
+    /// nên dùng chung ngưỡng MatchThreshold. Khác số chiều hoặc một vector toàn 0 thì trả -1 (không bao giờ khớp).
+    /// </summary>
+    public static double CosineSimilarity(float[] first, float[] second)
+    {
+        if (first.Length == 0 || first.Length != second.Length)
+        {
+            return -1;
+        }
+
+        double dot = 0;
+        double firstNorm = 0;
+        double secondNorm = 0;
+        for (int index = 0; index < first.Length; index++)
+        {
+            dot += (double)first[index] * second[index];
+            firstNorm += (double)first[index] * first[index];
+            secondNorm += (double)second[index] * second[index];
+        }
+        if (firstNorm == 0 || secondNorm == 0)
+        {
+            return -1;
+        }
+        return dot / (Math.Sqrt(firstNorm) * Math.Sqrt(secondNorm));
+    }
+
     /// <summary>Lần đồng ý còn dùng được: đúng phiên bản thông báo hiện hành và chưa quá hạn (EKYC-03).</summary>
     public static bool IsConsentValid(EkycConsent? consent, DateTimeOffset now)
     {
@@ -120,6 +150,50 @@ public static class EkycRules
     /// </summary>
     public static EkycIdentityMatch CompareIdentity(EkycDocumentReading reading, BeneficiaryPersonalData expected)
     {
+        return CompareIdentity(reading, expected.CitizenId, expected.FullName, expected.DateOfBirth);
+    }
+
+    /// <summary>
+    /// So giấy tờ vừa đọc với danh tính đã gắn của Owner (EKYC-24). Cùng luật với người nhận: Matched / NeedsReview
+    /// (OCR không chắc, hoặc CCCD trùng mà tên/ngày sinh lệch) / WrongPerson (CCCD khác rõ ràng).
+    /// </summary>
+    public static EkycIdentityMatch CompareIdentity(EkycDocumentReading reading, OwnerIdentityData expected)
+    {
+        return CompareIdentity(reading, expected.CitizenId, expected.FullName, expected.DateOfBirth);
+    }
+
+    /// <summary>
+    /// Lấy danh tính đọc được để gắn cho Owner (EKYC-27). Phải có đủ CCCD 12 số, họ tên và ngày sinh hợp lệ;
+    /// thiếu một thứ thì trả null (OCR chưa chắc: yêu cầu chụp lại, không ai duyệt thay Owner).
+    /// </summary>
+    public static OwnerIdentityData? TryReadOwnerIdentity(EkycDocumentReading reading)
+    {
+        if (reading.IdNumber.Length != 12 || !IsAllDigits(reading.IdNumber))
+        {
+            return null;
+        }
+        string fullName = NormalizeName(reading.FullName);
+        if (fullName.Length == 0)
+        {
+            return null;
+        }
+        DateOnly dateOfBirth;
+        if (!DateOnly.TryParseExact(reading.DateOfBirth, BirthDateFormats, CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out dateOfBirth))
+        {
+            return null;
+        }
+
+        OwnerIdentityData data = new OwnerIdentityData();
+        data.CitizenId = reading.IdNumber;
+        data.FullName = fullName;
+        data.DateOfBirth = dateOfBirth;
+        return data;
+    }
+
+    private static EkycIdentityMatch CompareIdentity(
+        EkycDocumentReading reading, string expectedCitizenId, string expectedFullName, DateOnly expectedDateOfBirth)
+    {
         bool readIdUsable = reading.IdNumber.Length == 12 && IsAllDigits(reading.IdNumber);
         if (!readIdUsable)
         {
@@ -127,7 +201,7 @@ public static class EkycRules
             return EkycIdentityMatch.NeedsReview;
         }
 
-        if (!string.Equals(reading.IdNumber, expected.CitizenId, StringComparison.Ordinal))
+        if (!string.Equals(reading.IdNumber, expectedCitizenId, StringComparison.Ordinal))
         {
             // MATCH-05 chỉ áp dụng khi khác "rõ ràng"; OCR đang có cảnh báo thì có thể chỉ là đọc sai.
             if (reading.Warnings.Count > 0)
@@ -138,7 +212,7 @@ public static class EkycRules
         }
 
         // CCCD trùng: tên hoặc ngày sinh lệch có thể do Owner nhập sai (MATCH-06), để Executor xem.
-        if (NormalizeName(reading.FullName) != NormalizeName(expected.FullName))
+        if (NormalizeName(reading.FullName) != NormalizeName(expectedFullName))
         {
             return EkycIdentityMatch.NeedsReview;
         }
@@ -149,7 +223,7 @@ public static class EkycRules
         {
             return EkycIdentityMatch.NeedsReview;
         }
-        if (readBirth != expected.DateOfBirth)
+        if (readBirth != expectedDateOfBirth)
         {
             return EkycIdentityMatch.NeedsReview;
         }

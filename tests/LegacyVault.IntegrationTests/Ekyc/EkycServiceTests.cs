@@ -32,7 +32,8 @@ public sealed class EkycServiceTests
     {
         currentUser.UserId = userId;
         service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
-            beneficiaryRepository, protector, client, unitOfWork, clock);
+            beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
+            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock);
 
         // Mặc định đã đồng ý cho mục đích OWNER_ENROLLMENT để các test cũ vẫn đi đúng luồng.
         AddConsent(EkycPurpose.OwnerEnrollment, Now);
@@ -105,7 +106,13 @@ public sealed class EkycServiceTests
     {
         await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
         clock.Now = Now.AddMinutes(1);
-        client.Reading = new EkycDocumentReading { IdNumber = "079200012345", DocumentToken = "token-2" };
+        client.Reading = new EkycDocumentReading
+        {
+            IdNumber = "079200012345",
+            FullName = "NGUYEN VAN AN",
+            DateOfBirth = "01/02/2000",
+            DocumentToken = "token-2",
+        };
 
         await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
 

@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Services;
 
 namespace LegacyVault.Infrastructure.Ekyc;
 
@@ -134,6 +135,50 @@ public sealed class EkycHttpClient : IEkycClient
             result.Score = ReadDouble(root, "score");
             result.Matched = ReadBoolean(root, "matched");
             return result;
+        }
+    }
+
+    public async Task<EkycFaceEmbedding> GetFaceEmbeddingAsync(
+        byte[] image, string fileName, string contentType, CancellationToken ct)
+    {
+        using (MultipartFormDataContent form = new MultipartFormDataContent())
+        {
+            form.Add(CreateImageContent(image, contentType), "selfie", fileName);
+
+            JsonElement root = await PostAsync("api/face-embedding", form, ct);
+
+            // Chỉ nhận đúng vector 128 số thực hữu hạn; sai dạng thì coi như dịch vụ trả phản hồi lạ.
+            if (!root.TryGetProperty("embedding", out JsonElement array) || array.ValueKind != JsonValueKind.Array
+                || array.GetArrayLength() != EkycRules.FaceEmbeddingLength)
+            {
+                throw Unavailable();
+            }
+
+            float[] values = new float[EkycRules.FaceEmbeddingLength];
+            int index = 0;
+            foreach (JsonElement item in array.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Number)
+                {
+                    throw Unavailable();
+                }
+                float value = (float)item.GetDouble();
+                if (!float.IsFinite(value))
+                {
+                    throw Unavailable();
+                }
+                values[index] = value;
+                index++;
+            }
+
+            EkycFaceEmbedding embedding = new EkycFaceEmbedding();
+            embedding.ModelName = ReadString(root, "model");
+            embedding.Values = values;
+            if (embedding.ModelName.Length == 0)
+            {
+                throw Unavailable();
+            }
+            return embedding;
         }
     }
 
