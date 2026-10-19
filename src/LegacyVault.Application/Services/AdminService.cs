@@ -50,6 +50,7 @@ public sealed class AdminService : IAdminService
     private readonly IIncidentService incidentService;
     private readonly IIncidentRepository incidents;
     private readonly IHoldRepository holds;
+    private readonly IRefreshTokenRepository refreshTokens;
     private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -64,10 +65,12 @@ public sealed class AdminService : IAdminService
         IIncidentService incidentService,
         IIncidentRepository incidents,
         IHoldRepository holds,
+        IRefreshTokenRepository refreshTokens,
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
+        this.refreshTokens = refreshTokens;
         this.currentUser = currentUser;
         this.users = users;
         this.adminUsers = adminUsers;
@@ -163,6 +166,16 @@ public sealed class AdminService : IAdminService
         DateTimeOffset now = timeProvider.GetUtcNow();
         user.Status = newStatus;
         user.UpdatedAt = now;
+        if (newStatus != UserStatus.Active)
+        {
+            // ROLE-04: khóa hoặc vô hiệu hóa thì thu hồi mọi phiên đăng nhập (refresh token) trong cùng giao dịch.
+            // Access token đã cấp còn sống tối đa vài phút (Jwt:AccessTokenMinutes); các service nghiệp vụ kiểm Status ở mỗi thao tác.
+            List<RefreshToken> sessions = await refreshTokens.FindActiveByUserAsync(user.Id, ct);
+            foreach (RefreshToken session in sessions)
+            {
+                session.RevokedAt = now;
+            }
+        }
         audit.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.UserStatusChanged,
             AuditTargetType.User, user.Id, null, AuditOutcome.Succeeded, newStatus.ToApiString() + ": " + reason, now));
         await unitOfWork.SaveChangesAsync(ct);
