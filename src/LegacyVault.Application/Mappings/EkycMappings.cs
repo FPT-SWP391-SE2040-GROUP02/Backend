@@ -26,6 +26,28 @@ public static class EkycMappings
     }
 
     /// <summary>
+    /// Phản hồi gửi mặt sau: trạng thái lượt như <see cref="ToResponse(EkycVerification)"/> kèm nơi cư trú đọc từ
+    /// mặt sau. Địa chỉ chỉ đi qua phản hồi, không lưu vào lượt eKYC.
+    /// </summary>
+    public static EkycBackResponse ToBackResponse(this EkycVerification verification, string residenceAddress)
+    {
+        EkycBackResponse response = new EkycBackResponse();
+        response.Status = verification.Status.ToApiString();
+        response.Purpose = verification.Purpose.ToApiString();
+        response.IdentityMatch = verification.IdentityMatch.ToApiString();
+        response.BackSideChecked = verification.BackSideChecked;
+        response.VerificationId = verification.Id;
+        response.CitizenIdLast4 = verification.CitizenIdLast4;
+        response.FaceMatchScore = verification.FaceMatchScore;
+        response.MatchThreshold = EkycRules.MatchThreshold;
+        response.SpoofCheckPassed = verification.SpoofCheckPassed;
+        response.CreatedAt = verification.CreatedAt;
+        response.CompletedAt = verification.CompletedAt;
+        response.ResidenceAddress = residenceAddress;
+        return response;
+    }
+
+    /// <summary>
     /// Tiến độ thử thách camera cho FE. Bỏ mã phiên và điểm số; thời hạn phiên chỉ có khi vừa tạo phiên (includeExpiry).
     /// </summary>
     public static EkycLivenessResponse ToResponse(this EkycLivenessState state, bool includeExpiry)

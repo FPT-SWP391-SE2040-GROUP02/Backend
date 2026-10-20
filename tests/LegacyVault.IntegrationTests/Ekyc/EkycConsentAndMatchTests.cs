@@ -301,6 +301,50 @@ public sealed class EkycConsentAndMatchTests
         Assert.True(Assert.Single(repository.Verifications).BackSideChecked);
     }
 
+    [Fact]
+    public async Task Back_ReturnsResidenceAddressFromBack_BeforeAnyConfirmation()
+    {
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        client.BackReading = new EkycBackReading { IdNumber = "079200012345", ResidenceAddress = "12 Đường Thử, Quận 1, TP. Hồ Chí Minh" };
+
+        // Chưa gọi ConfirmDocumentAsync: mặt sau vẫn được nhận để người dùng có địa chỉ đối chiếu rồi mới xác nhận (BR-88).
+        EkycBackResponse response = await service.SubmitBackAsync(
+            Image(), "back.jpg", "image/jpeg", CancellationToken.None);
+
+        Assert.True(response.BackSideChecked);
+        Assert.Equal("12 Đường Thử, Quận 1, TP. Hồ Chí Minh", response.ResidenceAddress);
+    }
+
+    [Fact]
+    public async Task Back_NoAddressOnBack_ReturnsEmptyAddress()
+    {
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        client.BackReading = new EkycBackReading { IdNumber = "079200012345", ResidenceAddress = string.Empty };
+
+        EkycBackResponse response = await service.SubmitBackAsync(
+            Image(), "back.jpg", "image/jpeg", CancellationToken.None);
+
+        Assert.Equal(string.Empty, response.ResidenceAddress);
+    }
+
+    [Fact]
+    public async Task Back_AddressIsNeverStoredOrReturnedByStatus()
+    {
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        client.BackReading = new EkycBackReading { IdNumber = "079200012345", ResidenceAddress = "Địa chỉ không được lưu" };
+
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
+
+        // Lượt eKYC và phản hồi trạng thái (GET /ekyc/me) không có chỗ chứa địa chỉ: chỉ phản hồi mặt sau mới có.
+        EkycVerification stored = Assert.Single(repository.Verifications);
+        Assert.Null(typeof(EkycVerification).GetProperty("ResidenceAddress"));
+        Assert.Null(typeof(EkycStatusResponse).GetProperty("ResidenceAddress"));
+        Assert.True(stored.BackSideChecked);
+    }
+
     private static EkycDocumentConfirmationRequest Confirmation(Guid id, string purpose = "OWNER_ENROLLMENT", Guid? turnId = null)
     {
         return new EkycDocumentConfirmationRequest

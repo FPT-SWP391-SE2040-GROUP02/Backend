@@ -41,10 +41,12 @@ public interface IEkycService
     /// <summary>
     /// Gửi mặt sau của chính tấm thẻ vừa đọc mặt trước (EKYC-04). Mã trong MRZ mặt sau phải trùng 4 số cuối mặt
     /// trước. Thẻ không có MRZ chứa số căn cước thì không kết luận được và BackSideChecked giữ false.
+    /// Phản hồi kèm nơi cư trú đọc từ mặt sau (rỗng khi không đọc được) để người dùng đối chiếu; không lưu (BR-88).
+    /// Có thể gọi trước khi xác nhận bản khai: chỉ cần đã đọc mặt trước.
     /// Lỗi: 409 EKYC_DOCUMENT_EXPIRED (chưa đọc mặt trước hoặc quá 30 phút), 400 EKYC_DOCUMENT_MISMATCH
     /// (hai mặt không cùng thẻ), 400 EKYC_IMAGE_REJECTED.
     /// </summary>
-    Task<EkycStatusResponse> SubmitBackAsync(
+    Task<EkycBackResponse> SubmitBackAsync(
         Stream content, string fileName, string contentType, CancellationToken ct);
 
     /// <summary>

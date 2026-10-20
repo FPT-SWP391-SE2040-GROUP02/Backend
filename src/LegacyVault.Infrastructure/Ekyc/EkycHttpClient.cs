@@ -86,9 +86,11 @@ public sealed class EkycHttpClient : IEkycClient
                 fields = nested;
             }
 
-            // Chỉ lấy số căn cước từ MRZ; nơi cư trú mặt sau không dùng và không được giữ lại.
+            // Số căn cước từ MRZ để so với mặt trước. Nơi cư trú mặt sau chỉ được chuyển tiếp cho người dùng đối
+            // chiếu trong phản hồi (thẻ mới in địa chỉ ở mặt sau); không lưu và không ghi log.
             EkycBackReading reading = new EkycBackReading();
             reading.IdNumber = ReadString(fields, "id_number");
+            reading.ResidenceAddress = ReadString(fields, "residence_address");
             if (root.TryGetProperty("warnings", out JsonElement warnings)
                 && warnings.ValueKind == JsonValueKind.Array)
             {
