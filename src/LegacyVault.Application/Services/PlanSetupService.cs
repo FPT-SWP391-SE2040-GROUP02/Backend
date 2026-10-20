@@ -223,7 +223,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         if (await holdReader.HasActiveHoldAsync(vault.Id, ct)) missing.Add("HOLD_ACTIVE");
         if (!Paid(vault)) missing.Add("PAID_SERVICE_REQUIRED");
         // EKYC-01: chỉ lượt eKYC đăng ký Owner. Đã từng đạt thì giữ, chụp lại giữa chừng không làm mất kết quả.
-        if (!await ekyc.HasPassedByUserAndPurposeAsync(vault.OwnerId, EkycPurpose.OwnerEnrollment, ct)) missing.Add("OWNER_EKYC_REQUIRED");
+        if (await ekyc.FindLatestPassedByUserAndPurposeAsync(vault.OwnerId, EkycPurpose.OwnerEnrollment, ct) == null) missing.Add("OWNER_EKYC_REQUIRED");
         if (await containers.CountReadyByVaultIdAsync(vault.Id, ct) == 0) missing.Add("READY_CONTAINER_REQUIRED");
         var accepted = new List<Executor>();
         foreach (var item in vault.Executors.Where(e => e.Status == ExecutorStatus.Accepted && e.UserId.HasValue && e.AcceptedAt.HasValue && e.AcceptedScopeVersion == ScopeVersion))
