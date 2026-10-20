@@ -26,13 +26,17 @@ public sealed class EkycController : ControllerBase
         this.ekycService = ekycService;
     }
 
-    /// <summary>Kết quả eKYC mới nhất. Chưa từng làm → status NOT_STARTED.</summary>
+    /// <summary>
+    /// Kết quả eKYC mới nhất. Chưa từng làm → status NOT_STARTED. Có ?purpose=OWNER_ENROLLMENT thì chỉ xét mục đích đó
+    /// và giữ lượt đã đạt của Owner (xác minh một lần).
+    /// </summary>
     [HttpGet("me")]
     [ProducesResponseType<EkycStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    public Task<EkycStatusResponse> GetMyStatus(CancellationToken ct)
+    public Task<EkycStatusResponse> GetMyStatus([FromQuery] string? purpose, CancellationToken ct)
     {
-        return ekycService.GetMyStatusAsync(ct);
+        return ekycService.GetMyStatusAsync(purpose, ct);
     }
 
     /// <summary>Người dùng đồng ý cho chụp giấy tờ và khuôn mặt (EKYC-03). Gọi trước khi gửi mặt trước.</summary>

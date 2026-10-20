@@ -434,10 +434,33 @@ public sealed class EkycService : IEkycService
         }
     }
 
-    public async Task<EkycStatusResponse> GetMyStatusAsync(CancellationToken ct)
+    public Task<EkycStatusResponse> GetMyStatusAsync(CancellationToken ct)
+    {
+        return GetMyStatusAsync(null, ct);
+    }
+
+    public async Task<EkycStatusResponse> GetMyStatusAsync(string? purpose, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
-        EkycVerification? verification = await verificationRepository.FindLatestByUserIdAsync(userId, ct);
+        EkycVerification? verification;
+        if (purpose == null)
+        {
+            verification = await verificationRepository.FindLatestByUserIdAsync(userId, ct);
+        }
+        else
+        {
+            EkycPurpose parsed = ParsePurpose(purpose);
+            verification = null;
+            if (parsed == EkycPurpose.OwnerEnrollment)
+            {
+                // Owner chỉ xác minh một lần: đã đạt thì giữ kết quả đó, không để lượt chụp lại đè lên.
+                verification = await verificationRepository.FindLatestPassedByUserAndPurposeAsync(userId, parsed, ct);
+            }
+            if (verification == null)
+            {
+                verification = await verificationRepository.FindLatestByUserAndPurposeAsync(userId, parsed, ct);
+            }
+        }
         if (verification == null)
         {
             return EkycMappings.NotStarted();

@@ -75,6 +75,54 @@ public sealed class EkycServiceTests
     }
 
     [Fact]
+    public async Task Status_OwnerEnrollmentPassed_NewerOtherPurposeOrPendingDoesNotHideIt()
+    {
+        EkycVerification passed = new EkycVerification
+        {
+            UserId = userId,
+            Purpose = EkycPurpose.OwnerEnrollment,
+            Status = EkycStatus.Passed,
+            CreatedAt = Now.AddHours(-2),
+        };
+        repository.Verifications.Add(passed);
+        repository.Verifications.Add(new EkycVerification
+        {
+            UserId = userId,
+            Purpose = EkycPurpose.OwnerEnrollment,
+            Status = EkycStatus.Pending,
+            CreatedAt = Now.AddHours(-1),
+        });
+        repository.Verifications.Add(new EkycVerification
+        {
+            UserId = userId,
+            Purpose = EkycPurpose.BeneficiaryClaim,
+            Status = EkycStatus.Failed,
+            CreatedAt = Now,
+        });
+
+        EkycStatusResponse response = await service.GetMyStatusAsync("OWNER_ENROLLMENT", CancellationToken.None);
+
+        Assert.Equal("PASSED", response.Status);
+        Assert.Equal(passed.Id, response.VerificationId);
+    }
+
+    [Fact]
+    public async Task Status_OwnerEnrollmentNeverStarted_ReturnsNotStartedEvenIfOtherPurposePassed()
+    {
+        repository.Verifications.Add(new EkycVerification
+        {
+            UserId = userId,
+            Purpose = EkycPurpose.BeneficiaryClaim,
+            Status = EkycStatus.Passed,
+            CreatedAt = Now,
+        });
+
+        EkycStatusResponse response = await service.GetMyStatusAsync("OWNER_ENROLLMENT", CancellationToken.None);
+
+        Assert.Equal("NOT_STARTED", response.Status);
+    }
+
+    [Fact]
     public async Task Document_SavesOnlyResultAndLast4()
     {
         EkycDocumentResponse response = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);

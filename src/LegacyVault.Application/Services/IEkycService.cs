@@ -87,4 +87,11 @@ public interface IEkycService
 
     /// <summary>Kết quả eKYC mới nhất; chưa từng làm thì Status NOT_STARTED.</summary>
     Task<EkycStatusResponse> GetMyStatusAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Kết quả eKYC theo đúng một mục đích (UPPER_SNAKE_CASE). Với OWNER_ENROLLMENT, đã từng đạt thì trả lượt đạt gần nhất:
+    /// Owner xác minh một lần, lượt khác (điểm danh, người nhận) hay chụp lại giữa chừng không làm mất kết quả đó.
+    /// Mục đích không hợp lệ: 400. Chưa từng làm: Status NOT_STARTED.
+    /// </summary>
+    Task<EkycStatusResponse> GetMyStatusAsync(string? purpose, CancellationToken ct);
 }
