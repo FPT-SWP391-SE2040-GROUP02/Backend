@@ -82,13 +82,13 @@ public sealed class EkycController : ControllerBase
     [HttpPost("document-back")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
-    [ProducesResponseType<EkycStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<EkycBackResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
-    public async Task<EkycStatusResponse> SubmitBack([FromForm] EkycImageForm form, CancellationToken ct)
+    public async Task<EkycBackResponse> SubmitBack([FromForm] EkycImageForm form, CancellationToken ct)
     {
         IFormFile file = form.File!;
         await using (Stream content = file.OpenReadStream())

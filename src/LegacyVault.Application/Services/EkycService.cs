@@ -214,7 +214,7 @@ public sealed class EkycService : IEkycService
         return verification.ToResponse();
     }
 
-    public async Task<EkycStatusResponse> SubmitBackAsync(
+    public async Task<EkycBackResponse> SubmitBackAsync(
         Stream content, string fileName, string contentType, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
@@ -240,7 +240,9 @@ public sealed class EkycService : IEkycService
         // Thẻ không có MRZ chứa số căn cước thì không kết luận được: giữ false, không coi là lỗi.
         verification.BackSideChecked = reading.IdNumber.Length > 0;
         await unitOfWork.SaveChangesAsync(ct);
-        return verification.ToResponse();
+
+        // BR-88: nơi cư trú đọc từ mặt sau chỉ trả cho người dùng đối chiếu; không gán vào lượt eKYC nên không lưu.
+        return verification.ToBackResponse(reading.ResidenceAddress);
     }
 
     public async Task<EkycStatusResponse> SubmitSelfieAsync(
