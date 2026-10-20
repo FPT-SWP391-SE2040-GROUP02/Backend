@@ -36,6 +36,13 @@ public sealed class EkycVerificationRepository : IEkycVerificationRepository
             .FirstOrDefaultAsync(ct);
     }
 
+    public Task<bool> HasPassedByUserAndPurposeAsync(Guid userId, EkycPurpose purpose, CancellationToken ct)
+    {
+        return context.EkycVerifications
+            .AsNoTracking()
+            .AnyAsync(v => v.UserId == userId && v.Purpose == purpose && v.Status == EkycStatus.Passed, ct);
+    }
+
     public Task<EkycVerification?> FindLatestByHandoverTurnAsync(Guid userId, Guid handoverTurnId, CancellationToken ct)
     {
         return context.EkycVerifications

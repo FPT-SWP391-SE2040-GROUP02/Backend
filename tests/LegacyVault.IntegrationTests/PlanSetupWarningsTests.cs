@@ -110,6 +110,25 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task EKYC01_NewerOwnerEnrollmentPending_DoesNotRevokePassedEnrollment()
+    {
+        // Chuẩn bị: Owner đã đạt, sau đó mở lại màn eKYC và chụp giấy tờ (lượt mới đang chờ selfie).
+        (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
+        DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
+        await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Passed, createdAt);
+        await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Pending, createdAt.AddMinutes(1));
+
+        // Hành động
+        HttpResponseMessage response = await owner.GetAsync($"/api/v1/vaults/{vaultId}/plan-setup");
+
+        // Kiểm tra
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        PlanSetupResponse? setup = await response.Content.ReadFromJsonAsync<PlanSetupResponse>();
+        Assert.NotNull(setup);
+        Assert.DoesNotContain("OWNER_EKYC_REQUIRED", setup.MissingRequirements);
+    }
+
+    [SqlFact]
     public async Task SETUP01_PlanSetupListsReadyAndDraftContainersButNotArchived()
     {
         // Chuẩn bị
