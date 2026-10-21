@@ -155,13 +155,13 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Renewal_ChooseHigherTier_GrantsXsMaxAtRenewal()
+    public async Task Renewal_AfterExpiry_ChooseHigherTier_GrantsXsMaxFromPayment()
     {
-        // Chuẩn bị: XS còn 30 ngày, gia hạn 1 năm lên XS Max
+        // Chuẩn bị: kho XS đang ân hạn, gia hạn 1 năm lên XS Max
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
-        await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(30));
-        VaultEntitlement before = await LoadEntitlementAsync(vaultId);
-        Guid orderId = await CreateOrderAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0, renew = true });
+        await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(-30));
+        await ApiTestHelpers.SetEntitlementStatusAsync(factory, vaultId, EntitlementStatus.GraceReadOnly);
+        Guid orderId = await CreateOrderAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0 });
 
         // Hành động
         await DevPayOkAsync(client, orderId);
@@ -171,7 +171,24 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
         Assert.Equal(ServiceTier.XsMax, after.Tier);
         Assert.Equal(500 * 1048576L, after.StorageQuotaBytes);
         Assert.Equal(5, after.IncludedBeneficiarySlots);
-        Assert.Equal(before.ServiceExpiresAt!.Value.AddDays(365), after.ServiceExpiresAt);
+        Assert.Equal(EntitlementStatus.PaidActive, after.Status);
+    }
+
+    [SqlFact]
+    public async Task Renewal_EarlyRenewalWithDifferentTier_Returns400AndWritesNothing()
+    {
+        // Chuẩn bị: XS còn 30 ngày
+        (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
+        await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(30));
+
+        // Hành động: gia hạn sớm nhưng chọn XS Max (phải dùng nâng hạng để trả phần chênh)
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/v1/billing/orders", new { tier = "XS_MAX", years = 1, extraSlots = 0, renew = true });
+
+        // Kiểm tra
+        await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(0, await BillingTestData.CountOrdersAsync(factory, vaultId, null));
+        Assert.Equal(ServiceTier.Xs, (await LoadEntitlementAsync(vaultId)).Tier);
     }
 
     [SqlFact]
@@ -186,8 +203,7 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(e => e.Tier, ServiceTier.XsMax)
                     .SetProperty(e => e.StorageQuotaBytes, 500 * 1048576L)
-                    .SetProperty(e => e.IncludedBeneficiarySlots, 5)
-                    .SetProperty(e => e.ServiceExpiresAt, DateTimeOffset.UtcNow.AddDays(30)));
+                    .SetProperty(e => e.IncludedBeneficiarySlots, 5));
         });
         JsonElement container = await ApiTestHelpers.CreateContainerAsync(client, vaultId, "Gói thử");
         Guid containerId = container.GetProperty("id").GetGuid();

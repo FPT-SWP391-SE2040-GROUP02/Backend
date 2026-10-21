@@ -110,10 +110,10 @@ public sealed class BillingRenewalRulesTests
     }
 
     [Fact]
-    public void QuoteRenewal_CanChooseHigherTierAtRenewal()
+    public void QuoteRenewal_AfterExpiry_CanChooseHigherTier()
     {
-        // Chuẩn bị: đang XS, gia hạn lên XS Max 1 năm
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(10), 0);
+        // Chuẩn bị: kho XS đang ân hạn, gia hạn lên XS Max 1 năm (kỳ mới tính từ lúc trả nên chọn hạng tự do)
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.GraceReadOnly, Now.AddDays(-10), 0);
 
         // Hành động
         BillingQuote quote = BillingRules.QuoteRenewal(entitlement, "XS_MAX", 1, 0, Now);
@@ -122,6 +122,19 @@ public sealed class BillingRenewalRulesTests
         Assert.Equal(399000, quote.TotalAmount);
         Assert.Equal(500 * MiB, quote.StorageQuotaBytes);
         Assert.Equal(5, quote.IncludedBeneficiarySlots);
+    }
+
+    [Theory]
+    [InlineData("XS_MAX")]
+    [InlineData("xs_max")]
+    public void QuoteRenewal_EarlyRenewalWithDifferentTier_Returns400OnTier(string tier)
+    {
+        // Chuẩn bị: XS còn hạn; đổi hạng lúc gia hạn sớm sẽ được cấp ngay và cho dùng hạng mới không đúng giá
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(10), 0);
+
+        // Hành động / Kiểm tra
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(entitlement, tier, 1, 0, Now));
+        AssertValidationOnField(exception, "tier");
     }
 
     [Fact]
@@ -242,12 +255,11 @@ public sealed class BillingRenewalRulesTests
     }
 
     [Fact]
-    public void ApplyRenewal_ChangesTierQuotaAndSlotsToTheOrder()
+    public void ApplyRenewal_AfterExpiry_ChangesTierQuotaAndSlotsToTheOrder()
     {
-        // Chuẩn bị: đang XS có 2 suất thêm, gia hạn lên XS Max không giữ suất thêm
-        DateTimeOffset expiresAt = Now.AddDays(10);
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, expiresAt, 2);
-        PaymentOrder order = NewRenewalOrder(ServiceTier.XsMax, 1, 0, expiresAt);
+        // Chuẩn bị: kho XS đang ân hạn có 2 suất thêm, gia hạn lên XS Max không giữ suất thêm
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.GraceReadOnly, Now.AddDays(-10), 2);
+        PaymentOrder order = NewRenewalOrder(ServiceTier.XsMax, 1, 0, null);
 
         // Hành động
         BillingRules.ApplyRenewal(entitlement, order, Now);
@@ -257,6 +269,19 @@ public sealed class BillingRenewalRulesTests
         Assert.Equal(500 * MiB, entitlement.StorageQuotaBytes);
         Assert.Equal(5, entitlement.IncludedBeneficiarySlots);
         Assert.Equal(0, entitlement.ExtraBeneficiarySlots);
+    }
+
+    [Fact]
+    public void ApplyRenewal_EarlyRenewalButTierChangedSinceOrder_IsRejected()
+    {
+        // Chuẩn bị: đơn gia hạn sớm XS nhưng kho đã lên XS Max bằng đơn nâng hạng trong lúc chờ trả
+        DateTimeOffset expiresAt = Now.AddDays(100);
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.XsMax, EntitlementStatus.PaidActive, expiresAt, 0);
+        PaymentOrder order = NewRenewalOrder(ServiceTier.Xs, 1, 0, expiresAt);
+
+        // Hành động / Kiểm tra: không hạ hạng của kho
+        Assert.Throws<AppException>(() => BillingRules.ApplyRenewal(entitlement, order, Now));
+        Assert.Equal(ServiceTier.XsMax, entitlement.Tier);
     }
 
     [Fact]

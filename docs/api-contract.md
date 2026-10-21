@@ -934,8 +934,8 @@ Mua dịch vụ, mua thêm suất người nhận, giả lập trả tiền và 
 | `serviceStatus = FREE` | `PURCHASE` (mua mới) | Cần eKYC Owner (`OwnerEnrollment`) đạt trong 90 ngày; `extraSlots` 0–20 |
 | `PAID_ACTIVE` và còn hạn | `ADDON` (mua thêm suất) | `tier` và `years` gửi vào bị bỏ qua; `extraSlots` 1–20; không đổi hạn |
 | `PAID_ACTIVE` còn hạn, đang hạng `XS`, gửi `tier = "XS_MAX"` **và** `extraSlots = 0` | `UPGRADE` (nâng hạng giữa kỳ) | `years` bị bỏ qua; không cần eKYC; giá và cách cấp quyền xem bên dưới. Kèm `extraSlots` ≥ 1 vẫn là `ADDON` (tier bị bỏ qua). Kho đã ở `XS_MAX` không có đường nâng hạng |
-| `PAID_ACTIVE` còn hạn, gửi `renew = true` | `RENEWAL` (gia hạn sớm) | Bắt buộc `tier`, `years`; `extraSlots` 0–20 là số suất thêm **của kỳ mới** (không tự giữ suất cũ); không cần eKYC; kỳ mới nối tiếp hạn cũ |
-| Đã hết hạn: `PAID_ACTIVE` quá hạn, `GRACE_READ_ONLY` (ân hạn 180 ngày), `EXPIRED_REVIEW` (chờ rà soát) | `RENEWAL` (gia hạn muộn) | Như trên nhưng không cần `renew`; không cần eKYC; kỳ mới tính từ lúc thanh toán; không cộng bù ngày ân hạn |
+| `PAID_ACTIVE` còn hạn, gửi `renew = true` | `RENEWAL` (gia hạn sớm) | Bắt buộc `tier`, `years`; `tier` phải **giữ nguyên hạng hiện tại** (đổi hạng → 400 `VALIDATION_ERROR` theo `tier`: lên hạng dùng `UPGRADE`, hạ hạng chờ hết kỳ); `extraSlots` 0–20 là số suất thêm **của kỳ mới** (không tự giữ suất cũ); không cần eKYC; kỳ mới nối tiếp hạn cũ |
+| Đã hết hạn: `PAID_ACTIVE` quá hạn, `GRACE_READ_ONLY` (ân hạn 180 ngày), `EXPIRED_REVIEW` (chờ rà soát) | `RENEWAL` (gia hạn muộn) | Như trên nhưng không cần `renew`, và **được chọn hạng tự do** (kỳ mới tính từ lúc trả); không cần eKYC; kỳ mới tính từ lúc thanh toán; không cộng bù ngày ân hạn |
 
 Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạch đang `DEATH_CASE_OPEN` / `HANDOVER_IN_PROGRESS` / `BLOCKED` (`PLAN_LOCKED`). Kiểm tra theo đúng thứ tự: kho (404) → kho đóng → kế hoạch khóa → loại đơn → eKYC → giá trị `tier` / `years` / `extraSlots` (400 `VALIDATION_ERROR`, theo tên trường).
 
@@ -1013,7 +1013,7 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
 |---|---|
 | `kind` | `PURCHASE`, `ADDON`, `UPGRADE`, `RENEWAL` |
 | `status` | `PENDING`, `PAID`, `EXPIRED`, `CANCELLED` |
-| `tier` | `XS`, `XS_MAX` (đơn `ADDON` là hạng hiện tại của kho; đơn `UPGRADE` là `XS_MAX`; đơn `RENEWAL` là hạng được chọn cho kỳ mới, có thể khác hạng hiện tại) |
+| `tier` | `XS`, `XS_MAX` (đơn `ADDON` là hạng hiện tại của kho; đơn `UPGRADE` là `XS_MAX`; đơn `RENEWAL` là hạng của kỳ mới: giữ nguyên hạng hiện tại khi còn hạn, tự do khi đã hết hạn) |
 
 - **Giá gia hạn** (`RENEWAL`): giá hạng của kỳ mới + `49.000 × extraSlots × số năm` (như mua mới). Ví dụ XS 3 năm giữ 1 suất = 646.000 đ. Phản hồi quote/order: `serviceStartsAt` = `AFTER_CURRENT_TERM` (còn hạn: nối tiếp, `serviceExpiresAt` là hạn hiện tại) hoặc `ON_PAYMENT` (đã hết hạn: tính từ lúc trả). Gia hạn sang hạng hoặc số suất **nhỏ hơn mức đang dùng** (dung lượng đã dùng, số suất người nhận đã dùng) → 409 `PAYMENT_NOT_ALLOWED` / `USAGE_EXCEEDS_PLAN`; không tự xóa dữ liệu. Hạn đơn là 15 phút (không bị chặn bởi hết kỳ).
 - **Giá nâng hạng** (`UPGRADE`): phần chênh giá theo thời gian còn lại của kỳ hiện tại = `ceil((giá XS_MAX − giá XS của kỳ N năm) × số giây còn lại / (N × 31.536.000))`, N là số năm của đơn `PURCHASE` đã thanh toán gần nhất của kho (không có đơn mua thì N = 1); số giây còn lại không vượt tổng số giây của kỳ. Ví dụ mua XS 3 năm, còn 1,5 năm: (999.000 − 499.000) × 1/2 = 250.000 đ. Phản hồi: `years = null`, `tierAmount` = số tiền nâng hạng, `slotAmount = 0`, `serviceExpiresAt` = hạn hiện tại (giữ nguyên), `beneficiarySlots` = 5 + suất thêm đang có. Hạn đơn như `ADDON` (mốc sớm hơn giữa 15 phút và hết kỳ).

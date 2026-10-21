@@ -213,9 +213,10 @@ public static class BillingRules
 
     /// <summary>
     /// Báo giá gia hạn: giá = giá hạng của kỳ mới + 49.000 × số suất thêm × số năm (suất thêm lấy theo lựa chọn, tối đa 20).
-    /// Hạng được chọn tự do (cùng hạng hoặc đổi hạng); việc dữ liệu hiện có có vừa hạng mới hay không do
-    /// <see cref="EnsureUsageFitsRenewal"/> kiểm tra. Kho còn hạn: kỳ mới nối tiếp hạn cũ (BaseServiceExpiresAt = hạn cũ);
-    /// đã hết hạn hoặc ân hạn: kỳ mới tính từ lúc thanh toán (BaseServiceExpiresAt = null).
+    /// Kho còn hạn: kỳ mới nối tiếp hạn cũ (BaseServiceExpiresAt = hạn cũ) và phải giữ nguyên hạng, vì hạng được cấp ngay
+    /// lúc trả: đổi hạng ở đây sẽ cho dùng hạng mới trong phần còn lại của kỳ cũ mà không đúng giá (lên hạng dùng nâng hạng;
+    /// hạ hạng chờ hết kỳ). Đã hết hạn hoặc ân hạn: kỳ mới tính từ lúc thanh toán (BaseServiceExpiresAt = null) nên chọn hạng
+    /// tự do; việc dữ liệu hiện có có vừa hạng mới hay không do <see cref="EnsureUsageFitsRenewal"/> kiểm tra.
     /// </summary>
     public static BillingQuote QuoteRenewal(
         VaultEntitlement entitlement, string? tierText, int? years, int extraSlots, DateTimeOffset now)
@@ -228,6 +229,11 @@ public static class BillingRules
             && entitlement.ServiceExpiresAt.Value > now)
         {
             quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
+            if (quote.Tier != entitlement.Tier)
+            {
+                throw ValidationErrors.For("tier",
+                    "Gia hạn khi còn hạn giữ nguyên hạng hiện tại. Muốn lên hạng cao hơn hãy dùng nâng hạng; muốn hạ hạng hãy chờ hết kỳ.");
+            }
         }
         return quote;
     }
@@ -269,6 +275,7 @@ public static class BillingRules
         {
             // Đơn gia hạn sớm: kỳ hiện tại phải còn nguyên như lúc tạo đơn.
             bool unchanged = entitlement.Status == EntitlementStatus.PaidActive
+                && entitlement.Tier == order.Tier
                 && entitlement.ServiceExpiresAt != null
                 && entitlement.ServiceExpiresAt.Value == order.BaseServiceExpiresAt.Value;
             if (!unchanged)
