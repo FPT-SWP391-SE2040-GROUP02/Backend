@@ -21,7 +21,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private const string DefaultSortBy = "createdAt";
     private const int MaxSearchDigits = 4;
 
-    /// <summary>Ngày sinh và tuổi tính theo giờ Việt Nam (UTC+07:00).</summary>
+    /// <summary>Ngày si    nh và tuổi tính theo giờ Việt Nam (UTC+07:00).</summary>
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
     private readonly ICurrentUser currentUser;
@@ -83,7 +83,6 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         DateOnly today = GetTodayInVietnam();
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vault.Id;
-        ApplyMinorRule(beneficiary, data.DateOfBirth, request.ConfirmMinor, today, now);
 
         // QUOTA-04: hồ sơ chung trong kho, một số CCCD chỉ có một hồ sơ.
         MatchedBeneficiary? existing = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
@@ -236,7 +235,6 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         DateTimeOffset now = timeProvider.GetUtcNow();
         DateOnly today = GetTodayInVietnam();
         DateTimeOffset? acknowledgedBefore = beneficiary.MinorAcknowledgedAt;
-        ApplyMinorRule(beneficiary, updated.DateOfBirth, request.ConfirmMinor, today, now);
 
         bool changed = !string.Equals(updated.FullName, current.FullName, StringComparison.Ordinal)
             || updated.DateOfBirth != current.DateOfBirth
@@ -387,36 +385,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         return DateOnly.FromDateTime(nowInVietnam.DateTime);
     }
 
-    /// <summary>
-    /// SETUP-19 / AC-105: dưới 18 tuổi vẫn lưu được nhưng Owner phải xác nhận cảnh báo
-    /// "người này hiện chưa nhận được qua app". Đã xác nhận trước đó thì không bắt xác nhận lại.
-    /// Từ 18 tuổi trở lên thì bỏ dấu xác nhận.
-    /// </summary>
-    private static void ApplyMinorRule(
-        Beneficiary beneficiary, DateOnly dateOfBirth, bool confirmMinor, DateOnly today, DateTimeOffset now)
-    {
-        if (dateOfBirth > today)
-        {
-            throw ValidationErrors.For("dateOfBirth", "Ngày sinh không được ở tương lai.");
-        }
-
-        if (!BeneficiaryRules.IsMinor(dateOfBirth, today))
-        {
-            beneficiary.MinorAcknowledgedAt = null;
-            return;
-        }
-
-        if (beneficiary.MinorAcknowledgedAt != null)
-        {
-            return;
-        }
-        if (!confirmMinor)
-        {
-            throw new AppException(AppErrorType.Conflict, ErrorCode.MinorConfirmationRequired,
-                "Người nhận chưa đủ 18 tuổi, hiện chưa nhận được qua app. Vui lòng xác nhận để lưu.");
-        }
-        beneficiary.MinorAcknowledgedAt = now;
-    }
+    
 
     /// <summary>
     /// QUOTA-04: tìm hồ sơ cùng số CCCD trong kho. Lọc theo 4 số cuối rồi giải mã từng hồ sơ và so số đầy đủ.
