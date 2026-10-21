@@ -1,3 +1,4 @@
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
@@ -144,10 +145,41 @@ public sealed class OwnerIdentityBindingTests
     }
 
     [Fact]
-    public async Task SecondEnrollment_SamePerson_IsAllowed_AndKeepsTheBoundIdentity()
+    public async Task SecondEnrollment_AfterPassed_IsLocked_AndKeepsTheBoundIdentity()
     {
         await EnrollAsync();
         OwnerIdentity bound = Assert.Single(identities.Identities);
+        clock.Now = Now.AddMinutes(1);
+        client.Reading = Reading("079200012345", "NGUYEN VAN AN", "01/02/2000", "token-2");
+
+        AppException error = await Assert.ThrowsAsync<AppException>(() => SubmitDocumentAsync());
+
+        Assert.Equal(ErrorCode.EkycAlreadyVerified, error.Code);
+        Assert.Equal(AppErrorType.Conflict, error.Type);
+        Assert.Same(bound, Assert.Single(identities.Identities));
+        Assert.Equal(EkycStatus.Passed, Assert.Single(repository.Verifications).Status);
+    }
+
+    [Fact]
+    public async Task Consent_AfterPassed_IsLocked()
+    {
+        await EnrollAsync();
+        EkycConsentRequest request = new EkycConsentRequest();
+        request.Purpose = "OWNER_ENROLLMENT";
+        request.NoticeVersion = EkycRules.NoticeVersion;
+
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => service.RecordConsentAsync(request, CancellationToken.None));
+
+        Assert.Equal(ErrorCode.EkycAlreadyVerified, error.Code);
+    }
+
+    [Fact]
+    public async Task SecondEnrollment_AfterFailed_IsAllowed_AndKeepsTheBoundIdentity()
+    {
+        await EnrollAsync();
+        OwnerIdentity bound = Assert.Single(identities.Identities);
+        repository.Verifications[0].Status = EkycStatus.Failed;
         clock.Now = Now.AddMinutes(1);
         client.Reading = Reading("079200012345", "nguyen  van an", "2000-02-01", "token-2");
 
@@ -162,6 +194,7 @@ public sealed class OwnerIdentityBindingTests
     public async Task SecondEnrollment_OtherCitizenId_IsRejected_AndFaceIsDiscarded()
     {
         await EnrollAsync();
+        repository.Verifications[0].Status = EkycStatus.Failed;
         clock.Now = Now.AddMinutes(1);
         client.Reading = Reading("079200099999", "NGUYEN VAN AN", "01/02/2000", "token-2");
 
@@ -177,6 +210,7 @@ public sealed class OwnerIdentityBindingTests
     public async Task SecondEnrollment_SameIdButOtherName_AsksToRetake()
     {
         await EnrollAsync();
+        repository.Verifications[0].Status = EkycStatus.Failed;
         clock.Now = Now.AddMinutes(1);
         client.Reading = Reading("079200012345", "TRAN THI BICH", "01/02/2000", "token-2");
 

@@ -62,6 +62,7 @@ public sealed class EkycService : IEkycService
     {
         Guid userId = currentUser.RequireUserId();
         EkycPurpose purpose = ParsePurpose(request.Purpose);
+        await RequireNotVerifiedAsync(userId, purpose, ct);
         if (request.NoticeVersion != EkycRules.NoticeVersion)
         {
             throw ValidationErrors.For("noticeVersion", "Thông báo đã thay đổi, vui lòng đọc lại rồi đồng ý.");
@@ -98,6 +99,7 @@ public sealed class EkycService : IEkycService
                 "Vui lòng đọc thông báo và đồng ý trước khi chụp giấy tờ.");
         }
         EkycPurpose purpose = consent.Purpose;
+        await RequireNotVerifiedAsync(userId, purpose, ct);
 
         // EKYC-02: người được chỉ định lấy từ backend (lượt bàn giao đã ghim), không nhận từ FE.
         BeneficiaryPersonalData? expected = await LoadExpectedPersonAsync(purpose, handoverTurnId, userId, ct);
@@ -396,6 +398,24 @@ public sealed class EkycService : IEkycService
         template.CreatedAt = now;
         faceTemplateProtector.Protect(template, embedding.Values);
         faceTemplateRepository.Add(template);
+    }
+
+    /// <summary>
+    /// Owner đã có lượt OWNER_ENROLLMENT mới nhất đạt thì khóa, không cho xác minh lại. Chưa đạt (chưa làm, đang chờ,
+    /// thất bại) thì cho tiếp tục. Các mục đích khác không khóa ở đây (người nhận bị khóa bởi trạng thái lượt bàn giao).
+    /// </summary>
+    private async Task RequireNotVerifiedAsync(Guid userId, EkycPurpose purpose, CancellationToken ct)
+    {
+        if (purpose != EkycPurpose.OwnerEnrollment)
+        {
+            return;
+        }
+        EkycVerification? latest = await verificationRepository.FindLatestByUserAndPurposeAsync(userId, purpose, ct);
+        if (latest != null && latest.Status == EkycStatus.Passed)
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycAlreadyVerified,
+                "Danh tính đã được xác minh, không cần xác minh lại.");
+        }
     }
 
     /// <summary>Lượt eKYC mới nhất phải còn chờ selfie (đã đọc mặt trước, còn trong 30 phút).</summary>
