@@ -59,6 +59,19 @@ public sealed class BillingController : ControllerBase
         return Ok(result.Order);
     }
 
+    /// <summary>
+    /// Lịch sử đơn thanh toán của kho mình, phân trang (mới nhất trước khi isAscending = false). sortBy chỉ nhận createdAt.
+    /// </summary>
+    [HttpGet("orders")]
+    [ProducesResponseType<PaginatedList<PaymentOrderSummaryResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<PaginatedList<PaymentOrderSummaryResponse>> GetOrders(
+        [FromQuery] PaginationRequest pagination, CancellationToken ct)
+    {
+        return billingService.GetOrdersAsync(pagination, ct);
+    }
+
     /// <summary>Đơn đang chờ thanh toán của kho mình. Không có → 204.</summary>
     [HttpGet("orders/current")]
     [ProducesResponseType<PaymentOrderResponse>(StatusCodes.Status200OK)]

@@ -132,6 +132,30 @@ public sealed class BillingService : IBillingService
             "Không thể tạo đơn thanh toán lúc này. Vui lòng thử lại.");
     }
 
+    public async Task<PaginatedList<PaymentOrderSummaryResponse>> GetOrdersAsync(
+        PaginationRequest pagination, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        Vault vault = await LoadVaultAsync(userId, ct);
+
+        // Giá trị lạ → 400, không đưa chuỗi client gửi vào truy vấn.
+        if (!string.IsNullOrWhiteSpace(pagination.SortBy)
+            && !string.Equals(pagination.SortBy, "createdAt", StringComparison.OrdinalIgnoreCase))
+        {
+            throw ValidationErrors.For("sortBy", "Chỉ sắp xếp theo createdAt.");
+        }
+
+        (List<PaymentOrder> Items, int TotalCount) page = await paymentOrderRepository.FindPageByVaultIdAsync(
+            vault.Id, pagination.PageIndex, pagination.PageSize, pagination.IsAscending, ct);
+        List<PaymentOrderSummaryResponse> responses = new List<PaymentOrderSummaryResponse>();
+        foreach (PaymentOrder order in page.Items)
+        {
+            responses.Add(order.ToSummaryResponse(now));
+        }
+        return responses.ToPaginatedList(page.TotalCount, pagination);
+    }
+
     public async Task<PaymentOrderResponse?> GetCurrentOrderAsync(CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();

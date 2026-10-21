@@ -40,6 +40,13 @@ public interface IPaymentOrderRepository
     /// </summary>
     Task<int?> FindLatestPaidPurchaseYearsAsync(Guid vaultId, CancellationToken ct);
 
+    /// <summary>
+    /// Một trang đơn của kho theo thời điểm tạo (mới nhất trước khi isAscending = false), kèm tổng số đơn. Chỉ đọc,
+    /// không theo dõi thay đổi.
+    /// </summary>
+    Task<(List<PaymentOrder> Items, int TotalCount)> FindPageByVaultIdAsync(
+        Guid vaultId, int pageIndex, int pageSize, bool isAscending, CancellationToken ct);
+
     /// <summary>Bỏ mọi thay đổi chưa lưu của request (sau khi TryAddAsync trả false).</summary>
     void DiscardPendingChanges();
 }

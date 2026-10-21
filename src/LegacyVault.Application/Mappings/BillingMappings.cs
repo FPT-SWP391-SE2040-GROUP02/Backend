@@ -53,6 +53,36 @@ public static class BillingMappings
     }
 
     /// <summary>
+    /// Đơn → dòng lịch sử. Đơn Pending đã tới hạn hiện là EXPIRED để Owner thấy đúng trạng thái dù chưa có job hết hạn
+    /// (D7); không ghi DB.
+    /// </summary>
+    public static PaymentOrderSummaryResponse ToSummaryResponse(this PaymentOrder order, DateTimeOffset now)
+    {
+        PaymentOrderSummaryResponse response = new PaymentOrderSummaryResponse();
+        response.Id = order.Id;
+        response.Kind = order.Kind.ToApiString();
+        if (BillingRules.IsExpired(order, now))
+        {
+            response.Status = PaymentOrderStatus.Expired.ToApiString();
+        }
+        else
+        {
+            response.Status = order.Status.ToApiString();
+        }
+        response.Tier = order.Tier.ToApiString();
+        response.Years = order.Years;
+        response.ExtraSlots = order.ExtraSlots;
+        response.TotalAmount = order.TotalAmount;
+        response.Currency = BillingPrices.Currency;
+        response.PaymentCode = order.PaymentCode;
+        response.CreatedAt = order.CreatedAt;
+        response.ExpiresAt = order.ExpiresAt;
+        response.PaidAt = order.PaidAt;
+        response.CancelledAt = order.CancelledAt;
+        return response;
+    }
+
+    /// <summary>
     /// Đơn → response. QR chỉ có khi đơn còn Pending. Link QR ghép theo mẫu SePay, mọi giá trị đều được escape.
     /// </summary>
     public static PaymentOrderResponse ToResponse(

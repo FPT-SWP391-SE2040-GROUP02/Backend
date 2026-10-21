@@ -23,6 +23,11 @@ public interface IBillingService
     /// <summary>Đơn Pending còn hạn của kho; không có (hoặc vừa hết hạn) → null.</summary>
     Task<PaymentOrderResponse?> GetCurrentOrderAsync(CancellationToken ct);
 
+    /// <summary>
+    /// Lịch sử đơn thanh toán của kho mình, phân trang. sortBy chỉ nhận createdAt; isAscending = false để xem mới nhất trước.
+    /// </summary>
+    Task<PaginatedList<PaymentOrderSummaryResponse>> GetOrdersAsync(PaginationRequest pagination, CancellationToken ct);
+
     /// <summary>Một đơn của kho mình; đơn không tồn tại hoặc của người khác → 404 PAYMENT_ORDER_NOT_FOUND.</summary>
     Task<PaymentOrderResponse> GetOrderAsync(Guid orderId, CancellationToken ct);
 

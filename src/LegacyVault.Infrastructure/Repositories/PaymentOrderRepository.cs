@@ -54,6 +54,29 @@ public sealed class PaymentOrderRepository : IPaymentOrderRepository
         return latest.Years;
     }
 
+    public async Task<(List<PaymentOrder> Items, int TotalCount)> FindPageByVaultIdAsync(
+        Guid vaultId, int pageIndex, int pageSize, bool isAscending, CancellationToken ct)
+    {
+        IQueryable<PaymentOrder> query = context.PaymentOrders.AsNoTracking().Where(o => o.VaultId == vaultId);
+        int totalCount = await query.CountAsync(ct);
+
+        // ThenBy(Id) giữ thứ tự ổn định khi nhiều đơn cùng thời điểm tạo.
+        if (isAscending)
+        {
+            query = query.OrderBy(o => o.CreatedAt).ThenBy(o => o.Id);
+        }
+        else
+        {
+            query = query.OrderByDescending(o => o.CreatedAt).ThenByDescending(o => o.Id);
+        }
+
+        List<PaymentOrder> items = await query
+            .Skip((pageIndex - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+        return (items, totalCount);
+    }
+
     public async Task<bool> TryAddAsync(PaymentOrder order, CancellationToken ct)
     {
         context.PaymentOrders.Add(order);
