@@ -74,6 +74,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 404 | `VAULT_NOT_FOUND` | Chưa có kho, hoặc kho của người khác | |
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
+| 409 | `ASSET_IN_USE` | Tài sản còn trong gói hoặc đã ghim vào bàn giao nên không xóa được (+`reason`) | |
 | 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
 | 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
@@ -99,7 +100,6 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `ASSET_ALREADY_IN_CONTAINER` | Tài sản đang ở gói khác | `containerId` |
 | 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kế hoạch không còn gói sẵn sàng; cần Owner xác nhận | |
 | 409 | `BENEFICIARY_IDENTITY_CONFLICT` | Kho đã có hồ sơ cùng số CCCD nhưng khác họ tên hoặc ngày sinh | `beneficiaryId` |
-| 409 | `MINOR_CONFIRMATION_REQUIRED` | Người nhận chưa đủ 18 tuổi; cần Owner xác nhận cảnh báo | |
 | 409 | `BENEFICIARY_IN_USE` | Xóa hồ sơ người nhận đang ở gói; gỡ khỏi các gói trước | `containerIds` |
 | 409 | `BENEFICIARY_SLOTS_EXCEEDED` | Gắn thêm một người nhận mới vượt số suất của kho | `usedSlots`, `maxSlots` |
 | 409 | `GOOGLE_ACCOUNT_ALREADY_LINKED` | Google này đã gắn tài khoản khác / tài khoản đã có Google | |
@@ -231,6 +231,28 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 - `rememberMe = true` thì cookie sống qua khi tắt trình duyệt, nhưng phiên vẫn tối đa 12 giờ.
 - Login chỉ nhận email hợp lệ ≤256 ký tự, password bắt buộc ≤128, rememberMe boolean mặc định false. `AuthSessionResponse` là raw body; `user` bên trong chính là `UserResponse`. Không có `refreshToken` trong JSON. `expiresIn: 900` ở ví dụ là cấu hình mặc định, không phải giá trị client được hardcode.
 
+### 6.2a. Xác thực hai bước TOTP (Admin)
+
+Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như cũ. Khi đã bật, mọi đăng nhập Admin (mật khẩu, Google, link-confirm) **chưa cấp phiên**: server trả thử thách, FE hỏi mã 6 số (hoặc mã khôi phục) rồi gọi `verify`. Bí mật TOTP lưu đã bọc bằng KEK; mã khôi phục và token thử thách chỉ lưu hash. Kiểm thử bằng fake (`TwoFactorServiceTests`), chưa E2E với ứng dụng xác thực thật.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/auth/2fa/status` | Admin | — | 200 `{ enabled, setupPending, recoveryCodesRemaining }` | 401, 403 `TWO_FACTOR_ADMIN_ONLY` |
+| POST | `/api/v1/auth/2fa/setup` | Admin | — | 200 `{ secret, otpAuthUri }` | 403, 409 `TWO_FACTOR_ALREADY_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/enable` | Admin | `{ code }` mã TOTP đầu tiên | 200 `{ recoveryCodes[8] }` (hiển thị một lần) | 401 `INVALID_TWO_FACTOR_CODE`, 409 `TWO_FACTOR_SETUP_REQUIRED` / `TWO_FACTOR_ALREADY_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/disable` | Admin | `{ code }` TOTP hoặc mã khôi phục | 204 | 401 `INVALID_TWO_FACTOR_CODE`, 409 `TWO_FACTOR_NOT_ENABLED`, 429 |
+| POST | `/api/v1/auth/2fa/verify` | Công khai + CSRF | `{ challengeToken, code }` | 200 `AuthSessionResponse` + cookie `lv_refresh` | 401 `INVALID_TWO_FACTOR_CODE` / `TWO_FACTOR_CHALLENGE_INVALID`, 429 |
+
+```jsonc
+// POST /auth/login (và POST /auth/google, /auth/google/link-confirm) khi Admin đã bật 2FA → 200, KHÔNG có cookie
+{ "twoFactorRequired": true, "challengeToken": "opaque", "expiresIn": 300 }
+// /auth/google trả thêm dạng phẳng: { signedIn: false, twoFactorRequired: true, challengeToken, challengeExpiresIn }
+```
+
+- Thử thách sống 5 phút, dùng một lần, sai 5 lần thì bị hủy (phải đăng nhập lại). Mỗi mã TOTP chỉ dùng được một lần; chấp nhận lệch ±1 bước 30 giây.
+- Mã khôi phục dạng `XXXXXX-XXXXXX`, dùng một lần, không phân biệt hoa thường. Mất cả ứng dụng lẫn mã khôi phục cần Admin khác xử lý ngoài API (chưa có endpoint đặt lại 2FA).
+- `INVALID_TWO_FACTOR_CODE` là 401 nhưng với `setup/enable/disable` phiên vẫn còn: FE không coi là hết phiên.
+
 ### 6.3. Đăng nhập Google
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
@@ -272,7 +294,7 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 
 ### 6.4. Phương thức đăng nhập của tôi
 
-> **Dự kiến, chưa triển khai endpoint.** Hiện chỉ có `ILoginMethodService` và DTO, chưa có service implementation/controller/DI. Không gọi các route dưới đây từ UI chính thức; không xem các mã lỗi dưới đây là response đã kiểm chứng. Đây là quản lý phương thức của user đang đăng nhập, khác luồng công khai `/auth/google/link-confirm` đã triển khai ở mục 6.3. Chưa chốt CSRF/rate limit cho các route dự kiến này.
+> **Đã triển khai** (`LoginMethodsController`, `LoginMethodService`; kiểm thử bằng fake trong `LoginMethodServiceTests`, chưa E2E với Google thật). Dùng Bearer, giới hạn 10 request/phút/IP (policy `login-methods`). Thao tác thêm/bỏ phải xác thực lại (mật khẩu hiện tại và/hoặc Google ID token mới trùng `sub` đã liên kết). Không đổi `User.Email` theo email Google.
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
@@ -288,7 +310,8 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
 ```
 
 - `REAUTHENTICATION_FAILED` là 401 nhưng phiên vẫn còn: interceptor **không** được coi là hết phiên.
-- Quên/đặt lại mật khẩu, OTP, passkey và 2FA cũng chưa có endpoint trong Backend hiện tại; UI/scaffold hoặc type FE không chứng minh đã có API.
+- Gỡ phương thức không còn lại cái nào → `409 LAST_LOGIN_METHOD`. Gỡ Google khi chưa liên kết, hoặc gỡ mật khẩu khi chưa có mật khẩu, trả `204` (idempotent). Đặt mật khẩu khi đã có → `409 LOGIN_METHOD_ALREADY_EXISTS`.
+- OTP và passkey chưa có endpoint trong Backend hiện tại; UI/scaffold hoặc type FE không chứng minh đã có API.
 
 ### 6.5. Kho
 
@@ -395,6 +418,11 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 | POST | `/v1/vaults/{vaultId}/assets/text` | Đăng nhập | `{ name, description?, content }` | **201** `AssetResponse` | 400, 404, 409 như trên |
 | GET | `/v1/vaults/{vaultId}/assets` | Đăng nhập | Query phân trang; `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<AssetResponse>` | 400, 404 |
 | GET | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 200 `AssetResponse` | 404 `VAULT_NOT_FOUND` / `ASSET_NOT_FOUND` |
+| GET | `/v1/vaults/{vaultId}/assets/{assetId}/content` | Đăng nhập (Owner) | Query `version?` (mặc định phiên bản hiện tại) | 200 nội dung gốc (`application/octet-stream`, `Content-Disposition: attachment`, `Cache-Control: no-store`) | 404 `ASSET_NOT_FOUND` (kể cả phiên bản không có/đã dọn), 500 `CONTENT_INTEGRITY_FAILED` |
+| PUT | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | `{ name?, description?, etag }` | 200 `AssetResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
+| POST | `/v1/vaults/{vaultId}/assets/{assetId}/versions` | Đăng nhập | `multipart/form-data`: `file`, `etag` (tài sản dạng `FILE`) | **201** `AssetResponse` (phiên bản mới) | 400, 404, 409 `EDIT_CONFLICT` / `STORAGE_QUOTA_EXCEEDED` / `VAULT_NOT_EDITABLE`, 413 `FILE_TOO_LARGE` |
+| POST | `/v1/vaults/{vaultId}/assets/{assetId}/versions/text` | Đăng nhập | `{ content, etag }` (tài sản dạng `TEXT`) | **201** `AssetResponse` | như trên |
+| DELETE | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 204 | 404, 409 `ASSET_IN_USE` (+`reason`: `IN_CONTAINER` \| `PINNED_IN_HANDOVER`) / `VAULT_NOT_EDITABLE` |
 
 ```json
 // AssetResponse — chỉ metadata, KHÔNG có nội dung tài sản
@@ -421,7 +449,11 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 - `name` của tệp không gửi thì lấy theo tên tệp. Tên/mô tả **không mã hóa**: không ghi mật khẩu vào đây; bí mật để trong `content`/tệp.
 - Nội dung tệp và `content` được BE mã hóa (AES-256-GCM, khóa riêng mỗi phiên bản) trước khi lưu. FE gửi nội dung gốc qua HTTPS, **không** tự mã hóa hay Base64 nội dung. `sizeBytes` là kích thước nội dung gốc, cũng là số tính vào quota.
 - Hạng Free được lưu tài sản trong 20 MiB; mọi phiên bản đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản không ở gói nào.
-- Chưa có (làm sau cùng phần bảo mật): tải nội dung về, thay nội dung (phiên bản mới), đổi tên/xóa tài sản.
+- **Tải nội dung (LV-10):** chỉ Owner của kho. Server giải mã hai lượt: lượt đầu vào `Stream.Null` để kiểm kích thước và SHA-256 trước khi gửi byte đầu tiên; nội dung hỏng trả 500 và không có byte nội dung nào. Mỗi lần tải ghi nhật ký `AssetContentDownloaded` (chỉ id và số phiên bản, không tên tài sản).
+- **Thay nội dung không ghi đè:** tạo phiên bản mới (khóa DEK riêng), phiên bản cũ vẫn tải được bằng `?version=N` và vẫn tính quota; snapshot đã ghim vẫn trỏ đúng phiên bản cũ. Tài sản `FILE` chỉ nhận `/versions` (multipart), `TEXT` chỉ nhận `/versions/text`; sai loại → `400 VALIDATION_ERROR`. Hai request tạo cùng số phiên bản chỉ một thắng, request còn lại `409 EDIT_CONFLICT`.
+- **Đổi tên/mô tả và thay nội dung** là thao tác "thêm": chặn khi kho đóng, kế hoạch bị khóa (đang chờ/bàn giao) hoặc dịch vụ chỉ đọc. Kho đang có hold: `409 VAULT_NOT_EDITABLE` với `reason = HOLD_ACTIVE`.
+- **Xóa** là thao tác "giảm" (vẫn cho khi ân hạn, chặn khi kho đóng/kế hoạch khóa). Chỉ xóa được khi tài sản không còn trong gói nào (gỡ khỏi gói trước), chưa ghim vào snapshot của lượt bàn giao nào và kho không có hold. Xóa hết mọi phiên bản và nội dung đã mã hóa, giải phóng quota. Nội dung được xóa sau khi bản ghi đã xóa; nếu kho lưu trữ lỗi, object mồ côi (đã mã hóa) có thể còn lại.
+- Xuất cấu hình PDF (XS Max) và khôi phục tài sản đã xóa chưa có.
 
 ### 6.8. Người nhận (Beneficiary)
 
@@ -430,9 +462,9 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `.../beneficiaries` | Đăng nhập | Query phân trang; `sortBy`: chỉ `createdAt` (mặc định); `searchTerm`: 1–4 chữ số | 200 `PaginatedList<BeneficiaryResponse>` | 400, 404 |
-| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone?, confirmMinor? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `MINOR_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` |
+| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `VAULT_NOT_EDITABLE` |
 | GET | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | 200 `BeneficiaryResponse` | 404 `VAULT_NOT_FOUND` / `BENEFICIARY_NOT_FOUND` |
-| PUT | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | `{ etag, fullName?, dateOfBirth?, email?, phone?, confirmMinor? }` | 200 `BeneficiaryResponse` | 400, 404, 409 `EDIT_CONFLICT` / `MINOR_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` |
+| PUT | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | `{ etag, fullName?, dateOfBirth?, email?, phone? }` | 200 `BeneficiaryResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
 | DELETE | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | **204** | 404, 409 `BENEFICIARY_IN_USE` / `VAULT_NOT_EDITABLE` |
 
 ```json
@@ -442,8 +474,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
   "fullName": "Nguyễn Văn An",
   "dateOfBirth": "1990-05-20",
   "email": "an.nguyen@example.com",
-  "phone": "0901 234 567",
-  "confirmMinor": false
+  "phone": "0901 234 567"
 }
 
 // BeneficiaryResponse — KHÔNG có số CCCD đầy đủ
@@ -471,7 +502,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **CCCD:** đúng 12 chữ số, được gõ khoảng trắng (BE bỏ đi), giữ số 0 đầu. **Không sửa được** sau khi tạo; muốn đổi thì xóa hồ sơ rồi tạo lại.
 - **Liên hệ:** cần ít nhất `email` hoặc `phone`. Khi tạo, `""` coi như không có. Khi sửa, `null`/không gửi = giữ nguyên, `""` = xóa. Email được đổi sang chữ thường; số điện thoại bỏ khoảng trắng, dấu chấm, dấu gạch, phải có 9–15 chữ số (cho phép `+` đầu).
 - **Trùng CCCD trong kho:** cùng CCCD, cùng họ tên (không phân biệt hoa thường, bỏ khoảng trắng thừa) và cùng ngày sinh → **200** trả hồ sơ cũ, không đổi gì (kể cả liên hệ). Khác họ tên hoặc ngày sinh → `409 BENEFICIARY_IDENTITY_CONFLICT` kèm `beneficiaryId`; FE mở hồ sơ đó cho Owner sửa cho thống nhất.
-- **Dưới 18 tuổi** (tính theo giờ Việt Nam): lần đầu lưu cần `confirmMinor: true`, không thì `409 MINOR_CONFIRMATION_REQUIRED`; FE hiện cảnh báo "người này hiện chưa nhận được qua app" rồi gọi lại. Đã xác nhận rồi thì các lần sửa sau không cần gửi lại. Ngày sinh ở tương lai → 400.
+- **Tuổi:** không kiểm tra tuổi. `isMinor` chỉ để hiển thị; `minorAcknowledgedAt` không còn dùng (hồ sơ mới luôn `null`). Trường `confirmMinor` của FE cũ nếu còn gửi sẽ bị bỏ qua, không lỗi. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
 - `containerIds`: các gói đang có người này, theo thứ tự gắn; rỗng khi chưa ở gói nào.
 - Tạo hồ sơ **không** tăng `planConfigVersion` và không chiếm suất; suất chỉ tính khi hồ sơ được gắn vào gói (mục 6.6).
@@ -525,7 +556,7 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
 | POST | `/v1/ekyc/consent` | Đăng nhập | JSON `{ "purpose", "noticeVersion" }` | 200 `EkycConsentResponse` | 400 `VALIDATION_ERROR`, 401 |
 | POST | `/v1/ekyc/document` | Đăng nhập | multipart `file` (ảnh mặt trước), `handoverTurnId` (chỉ khi mục đích `BENEFICIARY_CLAIM`) | 200 `EkycDocumentResponse` | 400 `EKYC_IMAGE_REJECTED` / `VALIDATION_ERROR`, 401, 404 `HANDOVER_NOT_FOUND`, 409 `EKYC_CONSENT_REQUIRED` / `HANDOVER_NOT_ALLOWED` / `EKYC_IDENTITY_MISMATCH`, 413 `FILE_TOO_LARGE`, 503 `EKYC_SERVICE_UNAVAILABLE` |
 | POST | `/v1/ekyc/document/confirm` | Đăng nhập | JSON bản tự khai sau OCR (xem dưới) | 200 `EkycStatusResponse` | 400 `VALIDATION_ERROR`, 401, 404 `HANDOVER_NOT_FOUND`, 409 `EKYC_DOCUMENT_EXPIRED` / `HANDOVER_NOT_ALLOWED` |
-| POST | `/v1/ekyc/document-back` | Đăng nhập | multipart `file` (ảnh mặt sau) | 200 `EkycStatusResponse` | 400 `EKYC_DOCUMENT_MISMATCH` / `EKYC_IMAGE_REJECTED`, 401, 409 `EKYC_DOCUMENT_EXPIRED`, 413, 503 |
+| POST | `/v1/ekyc/document-back` | Đăng nhập | multipart `file` (ảnh mặt sau) | 200 `EkycBackResponse` (= `EkycStatusResponse` + `residenceAddress`) | 400 `EKYC_DOCUMENT_MISMATCH` / `EKYC_IMAGE_REJECTED`, 401, 409 `EKYC_DOCUMENT_EXPIRED`, 413, 503 |
 | POST | `/v1/ekyc/liveness/start` | Đăng nhập | — | 200 `EkycLivenessResponse` | 401, 409 `EKYC_DOCUMENT_EXPIRED`, 503 |
 | POST | `/v1/ekyc/liveness/frame` | Đăng nhập | multipart `file` (một khung hình JPEG/PNG) | 200 `EkycLivenessResponse` | 400 `EKYC_IMAGE_REJECTED`, 401, 409 `EKYC_DOCUMENT_EXPIRED` / `EKYC_LIVENESS_REQUIRED`, 413, 503 |
 | POST | `/v1/ekyc/liveness/complete` | Đăng nhập | — | 200 `EkycStatusResponse` | 400 `EKYC_IMAGE_REJECTED`, 401, 409 `EKYC_DOCUMENT_EXPIRED` / `EKYC_LIVENESS_REQUIRED` / `EKYC_LIVENESS_NOT_PASSED`, 503 |
@@ -555,6 +586,7 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
 - **Đồng ý trước khi chụp (EKYC-03):** gọi `POST /ekyc/consent` với `purpose` (`OWNER_ENROLLMENT` | `BENEFICIARY_CLAIM` | `OWNER_ALIVE`) và `noticeVersion` (hiện `2026-10-v1`; sai phiên bản → `400 VALIDATION_ERROR`). Đồng ý có hiệu lực 30 phút (`expiresAt`) và quyết định `purpose` của lượt eKYC kế tiếp. **Thay đổi hợp đồng:** `POST /ekyc/document` không còn chạy được nếu chưa đồng ý (`409 EKYC_CONSENT_REQUIRED`), FE phải gọi `consent` trước.
 - **Đối chiếu với người được chỉ định (EKYC-02, MATCH-01..07):** mục đích `BENEFICIARY_CLAIM` bắt buộc gửi `handoverTurnId` (lượt đang ở `IDENTITY_IN_PROGRESS` và thuộc về người gọi, kho người khác → `404`); mục đích khác gửi `handoverTurnId` → `400`. Server tự lấy hồ sơ người nhận của lượt đó, **không** nhận danh tính từ FE. `EkycDocumentResponse.identityMatch` và `EkycStatusResponse.identityMatch`: `NOT_CHECKED` | `MATCHED` (CCCD, họ tên NFC không phân biệt hoa thường, ngày sinh đọc từ dịch vụ eKYC dạng `yyyy-MM-dd`, chấp nhận thêm `dd/MM/yyyy`, đều trùng) | `NEEDS_REVIEW` (OCR không chắc, hoặc CCCD trùng mà tên/ngày sinh lệch) | `WRONG_PERSON` (CCCD khác rõ ràng, OCR không cảnh báo). Response **không** trả CCCD/họ tên/ngày sinh mong đợi (CLAIM-05). eKYC chỉ ghi kết quả; việc đóng lượt khi `WRONG_PERSON` (MATCH-05) thuộc luồng bàn giao.
 - **Mặt sau (EKYC-04):** gọi `POST /ekyc/document-back` sau khi `canMatchFace = true`. Dịch vụ đọc số căn cước trong dòng MRZ mặt sau; 4 số cuối phải trùng mặt trước, khác thì `400 EKYC_DOCUMENT_MISMATCH`. Thẻ không có MRZ chứa số căn cước thì không kết luận được: `backSideChecked = false`, không phải lỗi. Hiện **chưa** chặn `face-match` khi chưa kiểm mặt sau. Chưa đọc mã QR (EKYC-06, EKYC-07): dịch vụ eKYC (Python) chưa có chức năng này.
+- **Nơi cư trú ở mặt sau (BR-88):** thẻ căn cước gắn chip kiểu mới in địa chỉ ở mặt sau nên mặt trước thường trả `residenceAddress` rỗng. `POST /ekyc/document-back` trả thêm `residenceAddress` đọc từ mặt sau (rỗng khi không đọc được). Địa chỉ chỉ đi qua phản hồi này để người dùng đối chiếu rồi điền vào bản khai ở `POST /ekyc/document/confirm`: **không lưu DB, không ghi log**, `GET /ekyc/me` không bao giờ trả. Mặt sau có thể gửi **trước** bước xác nhận bản khai, chỉ cần đã đọc mặt trước và còn trong 30 phút. `ResidenceAddress` ở bước xác nhận vẫn bắt buộc (người dùng tự nhập khi mặt sau không đọc được).
 - **Thử thách camera (EKYC-10..14):** dịch vụ eKYC chọn ngẫu nhiên 2 động tác (chớp mắt và quay đầu sang trái hoặc phải, thứ tự ngẫu nhiên). Thứ tự gọi sau khi `canMatchFace = true`: `liveness/start` (nhận `actions`, `prompt`, `expiresInSeconds` = 90) → gửi từng khung hình vào `liveness/frame` (khoảng vài khung hình mỗi giây, nhận `completed`, `currentIndex`, `prompt`, `frameHint`, `passed`) → khi `passed = true` gọi `liveness/complete`. Backend giữ mã phiên (FE không gửi và không thấy mã phiên, nên không dùng được phiên của người khác); selfie lấy từ **chính phiên đã đạt**, so khớp mặt với thẻ rồi chốt `PASSED`/`FAILED` như `face-match`. Phiên thất bại (`failedReason` khác rỗng: đổi người giữa chừng, quá nhiều khung hình) thì gọi lại `liveness/start`; gọi lại cũng hủy phiên cũ. Response không có điểm chống giả mạo (CLAIM-05).
 - **Hai đường so khớp mặt, cả hai đều phải qua thử thách camera trước:** (1) **đường thử thách**: `liveness/complete` lấy selfie của phiên đã đạt và so khớp luôn, không cần gửi thêm ảnh; (2) **đường ảnh selfie**: `face-match` gửi một ảnh, nhưng chỉ được nhận sau khi thử thách đã đạt (`passed = true` ở `liveness/frame`), chưa bắt đầu thì `409 EKYC_LIVENESS_REQUIRED`, đã bắt đầu mà chưa đạt thì `409 EKYC_LIVENESS_NOT_PASSED`. Đường (2) chỉ kiểm cờ đã qua thử thách, không ràng buộc ảnh gửi với người trong thử thách; muốn ràng buộc thì dùng đường (1).
 - **Mẫu khuôn mặt Owner (EKYC-22, EKYC-23, PRIV-03):** khi `liveness/complete` ra `PASSED` cho lượt `OWNER_ENROLLMENT` và Owner chưa có mẫu, server lấy vector đặc trưng (128 số, dịch vụ eKYC `POST /api/face-embedding`) của **chính selfie trong phiên** rồi lưu **mã hóa** (AES-256-GCM, DEK riêng bọc bằng KEK) vào bảng `OwnerFaceTemplates`, phiên bản 1. Response không có vector. Mẫu đã có thì không bị thay (EKYC-23). Không lấy được vector (dịch vụ lỗi) thì lượt giữ `PENDING` và trả `503 EKYC_SERVICE_UNAVAILABLE`, FE gọi lại `liveness/complete` được. Đường `face-match` (ảnh selfie tải lên) **không** tạo mẫu vì SRS chỉ cho tạo mẫu từ selfie trực tiếp của phiên. Mục đích khác `OWNER_ENROLLMENT` không tạo mẫu. Server chưa có việc xóa mẫu theo hạn (EKYC-29).
@@ -644,7 +676,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 { "id": "0199...", "status": "UNDER_REVIEW", "reviewVersionNo": 1, "ownerCitizenIdLast4": "8901",
   "dateOfDeath": "2026-10-10", "submittedAt": "2026-10-15T03:05:00+00:00",
   "assignedAt": "2026-10-15T03:05:00+00:00", "dueAt": "2026-10-17T03:05:00+00:00",
-  "objectionEndsAt": null, "unreviewedFlagCount": 0, "closedAt": null }
+  "objectionEndsAt": null, "supplementOverdueAt": null, "unreviewedFlagCount": 0, "closedAt": null }
 
 // VerifierDeathCaseResponse
 {
@@ -659,6 +691,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
   "decisions": [],
   "ownerNotice": { "status": "DELIVERED", "deliveredAt": "..." },
   "objectionEndsAt": "...",
+  "supplementOverdueAt": null,
   "assignment": { "assignedAt": "...", "dueAt": "..." },
   "canApprove": false, "approveBlockers": ["OBJECTION_PERIOD_NOT_OVER"],
   "previousCase": null, "handover": null
@@ -668,6 +701,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 - **Dữ liệu trả (DATA-02, cách hiểu):** `reviewVersion` (bản Executor gửi gần nhất, `reviewVersionNo`) có đủ họ tên, **CCCD 12 số**, số giấy, nơi cấp, vì Verifier được giao là "người cần" (SEC-05) và ảnh giấy chứng tử vốn có số đầy đủ. Câu "không trả CCCD đầy đủ trước khi xác minh xong" áp cho **người nhận ở F3**, không áp cho CCCD của Owner trong hồ sơ chứng tử. `versions[]` (các bản đã gửi khác) chỉ có cột không mã hóa (4 số cuối, ngày mất, `submittedAt`, metadata trang). Danh sách chỉ có 4 số cuối. Verifier **không bao giờ** thấy bản nháp. Không trả thông tin Executor, email Owner, khóa lưu trữ, SHA-256, Id người quyết định.
 - **`approveBlockers`** (cộng dồn, theo thứ tự): `NOT_UNDER_REVIEW` (hồ sơ không ở `UNDER_REVIEW`), `NEWER_VERSION_PENDING` (Executor đang có bản nháp mới hơn bản đang xét), `OWNER_NOT_NOTIFIED` (đồng hồ 72 giờ chưa chạy), `OBJECTION_PERIOD_NOT_OVER` (DEATH-09), `FLAGS_NOT_REVIEWED` (DEATH-10, chỉ cờ của bản đang xét). `VERIFIER_CONFLICT` (ROLE-03: Verifier là Owner, Executor đang hiệu lực của kho, người gửi bản đang xét hoặc người nhận của kho) được thêm vào **cuối** danh sách ở response chi tiết và response ghi, để FE không hiện nút duyệt với người sẽ bị chặn. `canApprove` = danh sách rỗng. Chưa có hold/phản đối F2C.
 - **`ownerNotice.status`**: `PENDING` | `DELIVERED` | `FAILED` | `CANCELLED`.
+- **`supplementOverdueAt`** (DEATH-01, có ở danh sách và chi tiết): lúc job nền đánh dấu Executor bổ sung quá hạn 7 ngày kể từ khi Verifier yêu cầu bổ sung; `null` khi chưa quá hạn. Về `null` khi Executor gửi lại bản mới. Chỉ để hiển thị (FE hiện nhãn "Bổ sung quá hạn"); hồ sơ vẫn `SUPPLEMENT_REQUIRED`, Verifier tự quyết định từ chối hay chờ tiếp.
 - **`previousCase`** (DEATH-12): hồ sơ bị từ chối trước đó của cùng kho (`id`, `closedAt`, `rejectReason`), hoặc `null`.
 - **Xem trang (DATA-06):** gọi bằng Bearer access token ngắn hạn, gắn đúng người dùng, **không** phải đường link ký sẵn dùng chung. Chỉ xem được trang của bản **đã gửi** của đúng hồ sơ (kể cả bản cũ); trang của bản nháp hoặc của hồ sơ khác là `404`. Nội dung được giải mã hai lượt: lượt 1 kiểm toàn vẹn (kích thước, SHA-256), chỉ khi qua mới gửi byte đầu tiên; hỏng hoặc mất tệp thì `500 CONTENT_INTEGRITY_FAILED` và không có byte nội dung nào. Response: `Content-Type` giữ nguyên nếu là PDF/JPEG/PNG/WEBP (còn lại `application/octet-stream`), `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`. Máy chủ ghi log "đã xem trang" (chỉ Id hồ sơ, Id tệp, Id người xem); TODO chuyển sang nhật ký kiểm toán (SEC-07, DATA-07).
 
@@ -766,14 +800,15 @@ Owner xem hồ sơ chứng tử của kho và báo "Tôi còn sống" (SRS §6.3
 | POST | `/v1/vaults/{vaultId}/death-case/objection` | — | 200 | 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_ALREADY_REJECTED`) / `EDIT_CONFLICT` |
 | POST | `/v1/vaults/{vaultId}/death-case/objection/selfie` | `multipart`, field `file` (JPEG/PNG ≤ 8 MiB) | 200 | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_WINDOW_CLOSED` / `SELFIE_ATTEMPTS_EXCEEDED`), 413, 503 `EKYC_SERVICE_UNAVAILABLE`. Sau khi lời báo bị bác (`OBJECTION_REJECTED`), selfie khớp là bằng chứng mới và mở lại lời báo (ALIVE-09); không khớp thì tính vào giới hạn 3 lần/24 giờ |
 | GET | `/v1/verifier/death-cases/{caseId}/objection` | — | 200 `ObjectionResponse` | 404 |
-| POST | `/v1/verifier/death-cases/{caseId}/objection/conclude` | `{ conclusion, reason }` | 200 `ObjectionResponse` | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_NOT_OPEN` / `ALIVE_EVIDENCE_REQUIRED`) / `EDIT_CONFLICT` |
+| POST | `/v1/verifier/death-cases/{caseId}/objection/conclude` | `{ conclusion, reason }` | 200 `ObjectionResponse` | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_NOT_OPEN` / `ALIVE_EVIDENCE_REQUIRED` / `OWNER_SELFIE_PASSED`) / `EDIT_CONFLICT` |
 
 - **Báo** (hồ sơ `UNDER_REVIEW` / `SUPPLEMENT_REQUIRED` / `APPROVED_FOR_HANDOVER`): trong một giao dịch, hồ sơ sang `SUSPENDED`, kế hoạch sang `BLOCKED`, mọi grant `ACTIVE` sang `BLOCKED`. Từ đó: không duyệt (`DEATH_CASE_NOT_ALLOWED` / `NOT_UNDER_REVIEW`), không nhận lượt hay đồng ý (`HANDOVER_NOT_ALLOWED` / `PLAN_NOT_IN_HANDOVER`), không tải (`GRANT_NOT_ACTIVE` / `BLOCKED`), Owner không sửa kho (`VAULT_NOT_EDITABLE` / `PLAN_LOCKED`). Thao tác nhận chạy cùng lúc với báo thua `RowVersion` của kế hoạch (nhận lượt, đồng ý, từ chối đều ghi `plan.UpdatedAt`).
-- **Báo lặp** (ALIVE-09): chỉ tăng `reportCount`; `selfieDeadlineAt` (7 ngày từ lần báo đầu) và hold không đổi. Sau khi phản đối bị bác, báo lại bị chặn (`OBJECTION_ALREADY_REJECTED`) vì chưa có đường nộp bằng chứng mới.
+- **Báo lặp** (ALIVE-09): chỉ tăng `reportCount`; `selfieDeadlineAt` (7 ngày từ lần báo đầu) và hold không đổi. Sau khi phản đối bị bác, báo trơn vẫn bị chặn (`OBJECTION_ALREADY_REJECTED`); muốn mở lại thì Owner gửi selfie khớp qua `POST .../objection/selfie`, và lời báo mở lại đó không bị bác lần nữa (ALIVE-05).
 - **Selfie** so với mẫu khuôn mặt qua `IOwnerFaceVerifier`. Tối đa 3 lần không khớp trong 24 giờ; lỗi kỹ thuật không tính. Selfie được so với mẫu khuôn mặt Owner (xem mục 6.10): server lấy vector của selfie rồi tự tính cosine với mẫu đã lưu, ngưỡng `0.363`. **Owner chưa có mẫu** (chưa hoàn thành `OWNER_ENROLLMENT` bằng thử thách camera) hoặc dịch vụ eKYC lỗi thì trả `503`, không tính là một lần không khớp; ảnh không có đúng một khuôn mặt trả `400 EKYC_IMAGE_REJECTED` và cũng không tính. Verifier vẫn kết luận được sau 7 ngày.
 - **Kết luận** (`ALIVE_CONFIRMED` / `OBJECTION_REJECTED` / `INSUFFICIENT_EVIDENCE`, bắt buộc lý do), chỉ Verifier đang được giao hồ sơ:
   - `ALIVE_CONFIRMED`: chỉ khi selfie đã đạt hoặc đã quá 7 ngày. Hồ sơ `REJECTED`, lượt chưa xong `CANCELLED`, grant `REVOKED`, kế hoạch `ACTIVE` với kỳ điểm danh mới.
   - `OBJECTION_REJECTED`: trả hồ sơ, kế hoạch và grant về trạng thái trước; **không tự duyệt chứng tử**.
+  - Luật ALIVE-05: lời báo đã có selfie khớp (`selfiePassed = true`) thì Verifier không được bác; trả `409 DEATH_CASE_NOT_ALLOWED` với `reason = OWNER_SELFIE_PASSED`, không ghi gì. Chỉ được `ALIVE_CONFIRMED` hoặc `INSUFFICIENT_EVIDENCE` (hồ sơ vẫn bị chặn).
   - `INSUFFICIENT_EVIDENCE`: giữ chặn, ghi lý do và hạn mới (`verifierDueAt`).
 - **Hạn Verifier** (ALIVE-04, ALIVE-08): `verifierDueAt` = muộn hơn giữa (lúc báo hoặc lúc giao + 48 giờ) và (`selfieDeadlineAt` + 48 giờ). `selfieDeadlineAt` (7 ngày) là hạn của cả lời báo, không bao giờ gia hạn. `INSUFFICIENT_EVIDENCE` đặt hạn mới 7 ngày.
 - Hàng chờ Verifier hiện hồ sơ `SUSPENDED`. `DeathCaseAssignmentJob` giao Verifier cho báo chưa có người, giao lại khi Verifier mất quyền hoặc quá `verifierDueAt` (ALIVE-08); không kết luận, không gỡ chặn; nhắc qua sự cố `OWNER_ALIVE` (`IncidentJob`). Verifier cũ nhận `404` sau khi bị giao lại. Admin chưa đổi Verifier tay được cho hồ sơ `SUSPENDED`.

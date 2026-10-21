@@ -45,7 +45,7 @@ public class Beneficiary
     /// <summary>Đã mã hóa: JSON {email, phone}. Thông tin liên hệ là dữ liệu cá nhân (§11.6).</summary>
     public byte[] ContactEncrypted { get; set; } = Array.Empty<byte>();
 
-    /// <summary>Lúc Owner xác nhận cảnh báo người nhận chưa đủ 18 tuổi (SETUP-19); null khi đã đủ 18 tuổi.</summary>
+    /// <summary>Không còn dùng từ khi bỏ SETUP-19; giữ cột để không phải migration. Hồ sơ mới luôn null, hồ sơ cũ giữ nguyên giá trị.</summary>
     public DateTimeOffset? MinorAcknowledgedAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

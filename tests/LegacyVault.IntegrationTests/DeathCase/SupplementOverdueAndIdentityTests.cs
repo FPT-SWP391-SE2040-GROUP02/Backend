@@ -99,6 +99,94 @@ public sealed class SupplementOverdueAndIdentityTests : IAsyncLifetime
         });
     }
 
+    /// <summary>Verifier yêu cầu bổ sung, đẩy hạn về quá khứ rồi chạy job để hồ sơ có SupplementOverdueAt.</summary>
+    private async Task MakeSupplementOverdueAsync(DeathCaseReviewTestData.SubmittedCase submitted)
+    {
+        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+        HttpResponseMessage requested = await DeathCaseReviewTestData.RequestSupplementAsync(
+            submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(),
+            "Cần ảnh rõ hơn", new[] { "FILES" });
+        Assert.Equal(HttpStatusCode.OK, requested.StatusCode);
+
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<DeathCaseDecision>().Where(d => d.CaseId == submitted.CaseId)
+                .ExecuteUpdateAsync(x => x.SetProperty(d => d.DueAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
+        });
+        Assert.True(await RunJobAsync(submitted.CaseId));
+    }
+
+    /// <summary>Verifier lấy danh sách và trả về dòng của hồ sơ caseId (phải có đúng một dòng).</summary>
+    private async Task<JsonElement> GetVerifierListItemAsync(HttpClient verifier, Guid caseId)
+    {
+        HttpResponseMessage response = await verifier.GetAsync(DeathCaseReviewTestData.VerifierListUrl);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        JsonElement list = await ApiTestHelpers.ReadJsonAsync(response);
+        foreach (JsonElement item in list.GetProperty("items").EnumerateArray())
+        {
+            if (item.GetProperty("id").GetGuid() == caseId)
+            {
+                return item;
+            }
+        }
+        throw new InvalidOperationException("Hồ sơ không có trong danh sách của Verifier.");
+    }
+
+    [SqlFact]
+    public async Task Death01_VerifierSeesSupplementOverdue_InListAndDetail()
+    {
+        // Chuẩn bị: hồ sơ SUPPLEMENT_REQUIRED đã quá hạn bổ sung 7 ngày, job đã đánh dấu
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        await MakeSupplementOverdueAsync(submitted);
+
+        // Hành động: Verifier đọc danh sách và chi tiết
+        JsonElement listItem = await GetVerifierListItemAsync(submitted.Verifier.Client, submitted.CaseId);
+        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+
+        // Kiểm tra: cả hai đều có supplementOverdueAt, hồ sơ vẫn chờ bổ sung (không tự từ chối)
+        Assert.Equal("SUPPLEMENT_REQUIRED", listItem.GetProperty("status").GetString());
+        Assert.NotEqual(JsonValueKind.Null, listItem.GetProperty("supplementOverdueAt").ValueKind);
+        Assert.Equal("SUPPLEMENT_REQUIRED", detail.GetProperty("status").GetString());
+        Assert.NotEqual(JsonValueKind.Null, detail.GetProperty("supplementOverdueAt").ValueKind);
+    }
+
+    [SqlFact]
+    public async Task Death01_VerifierSupplementOverdue_NullBeforeDueAndAfterResubmit()
+    {
+        // Chuẩn bị: Verifier yêu cầu bổ sung nhưng chưa tới hạn 7 ngày
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        JsonElement firstDetail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+        HttpResponseMessage requested = await DeathCaseReviewTestData.RequestSupplementAsync(
+            submitted.Verifier.Client, submitted.CaseId, firstDetail.GetProperty("etag").GetString(),
+            "Cần ảnh rõ hơn", new[] { "FILES" });
+        Assert.Equal(HttpStatusCode.OK, requested.StatusCode);
+
+        // Hành động + Kiểm tra 1: chưa quá hạn thì cả danh sách và chi tiết đều null
+        JsonElement beforeList = await GetVerifierListItemAsync(submitted.Verifier.Client, submitted.CaseId);
+        JsonElement beforeDetail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+        Assert.Equal(JsonValueKind.Null, beforeList.GetProperty("supplementOverdueAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, beforeDetail.GetProperty("supplementOverdueAt").ValueKind);
+
+        // Hành động: quá hạn rồi Executor gửi lại bản mới (DeathCaseService xóa SupplementOverdueAt)
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<DeathCaseDecision>().Where(d => d.CaseId == submitted.CaseId)
+                .ExecuteUpdateAsync(x => x.SetProperty(d => d.DueAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
+        });
+        Assert.True(await RunJobAsync(submitted.CaseId));
+        JsonElement overdueDetail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+        Assert.NotEqual(JsonValueKind.Null, overdueDetail.GetProperty("supplementOverdueAt").ValueKind);
+
+        JsonElement resubmitted = await DeathCaseReviewTestData.ResubmitAsync(submitted);
+        Assert.Equal("UNDER_REVIEW", resubmitted.GetProperty("status").GetString());
+
+        // Kiểm tra 2: sau khi gửi lại thì về null ở cả danh sách và chi tiết
+        JsonElement afterList = await GetVerifierListItemAsync(submitted.Verifier.Client, submitted.CaseId);
+        JsonElement afterDetail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
+        Assert.Equal(JsonValueKind.Null, afterList.GetProperty("supplementOverdueAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, afterDetail.GetProperty("supplementOverdueAt").ValueKind);
+    }
+
     [SqlFact]
     public async Task Death13_CitizenIdDiffersFromVerifiedOwner_FlagBlocksApproval()
     {

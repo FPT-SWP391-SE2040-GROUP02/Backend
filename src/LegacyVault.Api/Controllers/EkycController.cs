@@ -26,13 +26,17 @@ public sealed class EkycController : ControllerBase
         this.ekycService = ekycService;
     }
 
-    /// <summary>Kết quả eKYC mới nhất. Chưa từng làm → status NOT_STARTED.</summary>
+    /// <summary>
+    /// Kết quả eKYC mới nhất. Chưa từng làm → status NOT_STARTED. Có ?purpose=OWNER_ENROLLMENT thì chỉ xét mục đích đó
+    /// và giữ lượt đã đạt của Owner (xác minh một lần).
+    /// </summary>
     [HttpGet("me")]
     [ProducesResponseType<EkycStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    public Task<EkycStatusResponse> GetMyStatus(CancellationToken ct)
+    public Task<EkycStatusResponse> GetMyStatus([FromQuery] string? purpose, CancellationToken ct)
     {
-        return ekycService.GetMyStatusAsync(ct);
+        return ekycService.GetMyStatusAsync(purpose, ct);
     }
 
     /// <summary>Người dùng đồng ý cho chụp giấy tờ và khuôn mặt (EKYC-03). Gọi trước khi gửi mặt trước.</summary>
@@ -82,13 +86,13 @@ public sealed class EkycController : ControllerBase
     [HttpPost("document-back")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
-    [ProducesResponseType<EkycStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<EkycBackResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
-    public async Task<EkycStatusResponse> SubmitBack([FromForm] EkycImageForm form, CancellationToken ct)
+    public async Task<EkycBackResponse> SubmitBack([FromForm] EkycImageForm form, CancellationToken ct)
     {
         IFormFile file = form.File!;
         await using (Stream content = file.OpenReadStream())

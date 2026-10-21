@@ -21,7 +21,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private const string DefaultSortBy = "createdAt";
     private const int MaxSearchDigits = 4;
 
-    /// <summary>Ngày si    nh và tuổi tính theo giờ Việt Nam (UTC+07:00).</summary>
+    /// <summary>Ngày sinh và tuổi tính theo giờ Việt Nam (UTC+07:00).</summary>
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
     private readonly ICurrentUser currentUser;
@@ -83,6 +83,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         DateOnly today = GetTodayInVietnam();
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vault.Id;
+        EnsureDateOfBirthNotInFuture(data.DateOfBirth, today);
 
         // QUOTA-04: hồ sơ chung trong kho, một số CCCD chỉ có một hồ sơ.
         MatchedBeneficiary? existing = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
@@ -234,13 +235,12 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         DateOnly today = GetTodayInVietnam();
-        DateTimeOffset? acknowledgedBefore = beneficiary.MinorAcknowledgedAt;
+        EnsureDateOfBirthNotInFuture(updated.DateOfBirth, today);
 
         bool changed = !string.Equals(updated.FullName, current.FullName, StringComparison.Ordinal)
             || updated.DateOfBirth != current.DateOfBirth
             || !string.Equals(updated.Email, current.Email, StringComparison.Ordinal)
-            || !string.Equals(updated.Phone, current.Phone, StringComparison.Ordinal)
-            || beneficiary.MinorAcknowledgedAt != acknowledgedBefore;
+            || !string.Equals(updated.Phone, current.Phone, StringComparison.Ordinal);
 
         List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
 
@@ -385,7 +385,17 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         return DateOnly.FromDateTime(nowInVietnam.DateTime);
     }
 
-    
+    /// <summary>
+    /// Ngày sinh không được ở tương lai (400). Không kiểm tuổi: người nhận dưới 18 tuổi vẫn lưu bình thường
+    /// (đã bỏ SETUP-19 / AC-105), isMinor chỉ để hiển thị.
+    /// </summary>
+    private static void EnsureDateOfBirthNotInFuture(DateOnly dateOfBirth, DateOnly today)
+    {
+        if (dateOfBirth > today)
+        {
+            throw ValidationErrors.For("dateOfBirth", "Ngày sinh không được ở tương lai.");
+        }
+    }
 
     /// <summary>
     /// QUOTA-04: tìm hồ sơ cùng số CCCD trong kho. Lọc theo 4 số cuối rồi giải mã từng hồ sơ và so số đầy đủ.

@@ -333,14 +333,14 @@ public sealed class DesignationFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Setup19_Ac105_MinorBeneficiaryMakesContainerReadyAndUsesSlot()
+    public async Task MinorBeneficiaryMakesContainerReadyAndUsesSlot()
     {
-        // Chuẩn bị: người nhận 10 tuổi đã được xác nhận; gói có tài sản.
+        // Chuẩn bị: người nhận 10 tuổi (không cần xác nhận); gói có tài sản.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         string tenYearsAgo = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime)
             .AddYears(-10).ToString("yyyy-MM-dd");
         HttpResponseMessage createMinor = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
-            new { citizenId = CitizenA, fullName = "Bé A", dateOfBirth = tenYearsAgo, phone = "0901234567", confirmMinor = true });
+            new { citizenId = CitizenA, fullName = "Bé A", dateOfBirth = tenYearsAgo, phone = "0901234567" });
         Assert.Equal(HttpStatusCode.Created, createMinor.StatusCode);
         Guid minorId = (await ApiTestHelpers.ReadJsonAsync(createMinor)).GetProperty("id").GetGuid();
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");

@@ -80,6 +80,11 @@ public sealed class GoogleAuthController : ControllerBase
         var ipRange = ClientIpRange.From(HttpContext);
         var result = await _googleAuthService.ConfirmGoogleLinkAsync(request, ipRange, ct);
 
+        if (result.TwoFactor != null)
+        {
+            return Ok(result.TwoFactor);
+        }
+
         _cookieWriter.Append(Response, result);
         return Ok(result.Session);
     }

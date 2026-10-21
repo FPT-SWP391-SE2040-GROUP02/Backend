@@ -13,6 +13,12 @@ public interface IEkycVerificationRepository
     Task<EkycVerification?> FindLatestByUserAndPurposeAsync(Guid userId, EkycPurpose purpose, CancellationToken ct);
 
     /// <summary>
+    /// Lượt đạt (PASSED) gần nhất của người dùng theo đúng mục đích, chỉ đọc (EKYC-01). Không có → null. Lượt chụp lại
+    /// đang chờ hoặc thất bại sau đó không xóa kết quả đã đạt.
+    /// </summary>
+    Task<EkycVerification?> FindLatestPassedByUserAndPurposeAsync(Guid userId, EkycPurpose purpose, CancellationToken ct);
+
+    /// <summary>
     /// Lượt eKYC mới nhất của người dùng cho đúng một lượt bàn giao (EkycVerification.HandoverTurnId), chỉ đọc.
     /// Chưa có → null. Dùng ở luồng nhận tài sản để biết người nhận đã xác minh cho lượt đó chưa.
     /// </summary>

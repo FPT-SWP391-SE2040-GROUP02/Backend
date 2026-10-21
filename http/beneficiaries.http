@@ -55,12 +55,12 @@ Content-Type: application/json
 
 { "citizenId": "012345678901", "fullName": "Nguyễn Văn An", "dateOfBirth": "1991-01-01", "email": "an.nguyen@example.com" }
 
-### Người nhận dưới 18 tuổi chưa xác nhận → 409 MINOR_CONFIRMATION_REQUIRED; đổi confirmMinor = true → 201
+### Người nhận dưới 18 tuổi → 201 (không cần xác nhận)
 POST {{baseUrl}}/vaults/{{vaultId}}/beneficiaries
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "citizenId": "079200001234", "fullName": "Nguyễn Thị Cúc", "dateOfBirth": "2016-03-01", "phone": "0912345678", "confirmMinor": false }
+{ "citizenId": "079200001234", "fullName": "Nguyễn Thị Cúc", "dateOfBirth": "2016-03-01", "phone": "0912345678" }
 
 ### Danh sách hồ sơ (mới nhất trước)
 GET {{baseUrl}}/vaults/{{vaultId}}/beneficiaries?isAscending=false&pageSize=10

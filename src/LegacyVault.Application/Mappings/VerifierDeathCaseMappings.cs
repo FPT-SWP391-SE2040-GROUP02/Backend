@@ -21,6 +21,7 @@ public static class VerifierDeathCaseMappings
         response.AssignedAt = row.AssignedAt;
         response.DueAt = row.DueAt;
         response.ObjectionEndsAt = row.ObjectionEndsAt;
+        response.SupplementOverdueAt = row.SupplementOverdueAt;
         response.UnreviewedFlagCount = row.UnreviewedFlagCount;
         response.ClosedAt = row.ClosedAt;
         return response;
@@ -88,6 +89,7 @@ public static class VerifierDeathCaseMappings
         response.Decisions = ToDecisionResponses(deathCase);
         response.OwnerNotice = ToNoticeResponse(deathCase);
         response.ObjectionEndsAt = deathCase.ObjectionEndsAt;
+        response.SupplementOverdueAt = deathCase.SupplementOverdueAt;
 
         VerifierAssignmentResponse assignmentResponse = new VerifierAssignmentResponse();
         assignmentResponse.AssignedAt = assignment.AssignedAt;

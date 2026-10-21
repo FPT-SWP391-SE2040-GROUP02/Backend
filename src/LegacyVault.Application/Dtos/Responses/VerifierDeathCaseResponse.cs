@@ -41,6 +41,12 @@ public class VerifierDeathCaseResponse
 
     public DateTimeOffset? ObjectionEndsAt { get; set; }
 
+    /// <summary>
+    /// DEATH-01: lúc job đánh dấu Executor bổ sung quá hạn 7 ngày; null = chưa quá hạn hoặc đã gửi lại.
+    /// Chỉ để hiển thị, không tự từ chối.
+    /// </summary>
+    public DateTimeOffset? SupplementOverdueAt { get; set; }
+
     public VerifierAssignmentResponse Assignment { get; set; } = new VerifierAssignmentResponse();
 
     /// <summary>true khi approveBlockers rỗng.</summary>

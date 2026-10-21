@@ -18,7 +18,8 @@ public sealed class AuthOpenApiTests
         var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
         var paths = document.GetProperty("paths");
         Assert.DoesNotContain(paths.EnumerateObject(), path => path.Name.StartsWith("/v1/auth/"));
-        Assert.Equal(12, paths.EnumerateObject().Count(path => path.Name.StartsWith("/api/v1/auth/")));
+        // 12 route Auth gốc + 5 route xác thực hai bước của Admin (/api/v1/auth/2fa/*).
+        Assert.Equal(17, paths.EnumerateObject().Count(path => path.Name.StartsWith("/api/v1/auth/")));
         // Chỉ ẩn khỏi tài liệu: không xóa route runtime mà caller cũ có thể dùng.
         Assert.Equal(System.Net.HttpStatusCode.OK, (await client.GetAsync("/v1/auth/csrf")).StatusCode);
         var endpoints = new[]
@@ -60,7 +61,8 @@ public sealed class AuthOpenApiTests
         }
         Assert.Equal("bearer", document.GetProperty("components").GetProperty("securitySchemes")
             .GetProperty("Bearer").GetProperty("scheme").GetString());
-        Assert.False(paths.TryGetProperty("/api/v1/me/login-methods", out _));
+        // Phương thức đăng nhập (AUTH-03) đã triển khai nên phải có trong tài liệu OpenAPI.
+        Assert.True(paths.TryGetProperty("/api/v1/me/login-methods", out _));
         var examples = paths.GetProperty("/api/v1/auth/google").GetProperty("post").GetProperty("responses")
             .GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("examples");
         Assert.Equal(JsonValueKind.Object, examples.GetProperty("signedIn").GetProperty("value").GetProperty("session").ValueKind);

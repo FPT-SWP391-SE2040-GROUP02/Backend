@@ -43,4 +43,7 @@ public enum DeathCaseNotAllowedReason
 
     /// <summary>Kho đang có hold (Admin hoặc báo còn sống) nên chưa duyệt được.</summary>
     HoldActive,
+
+    /// <summary>F2C: lời báo đã có selfie khớp mẫu khuôn mặt, Verifier không được bác phản đối (ALIVE-05).</summary>
+    OwnerSelfiePassed,
 }

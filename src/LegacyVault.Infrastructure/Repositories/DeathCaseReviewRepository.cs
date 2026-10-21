@@ -51,6 +51,7 @@ public sealed class DeathCaseReviewRepository : IDeathCaseReviewRepository
                     .Select(a => a.DueAt)
                     .First(),
                 ObjectionEndsAt = c.ObjectionEndsAt,
+                SupplementOverdueAt = c.SupplementOverdueAt,
                 UnreviewedFlagCount = c.Flags.Count(f => f.ReviewedAt == null
                     && c.Versions.Any(v => v.Id == f.VersionId && v.VersionNo == c.ReviewVersionNo)),
                 ClosedAt = c.ClosedAt,

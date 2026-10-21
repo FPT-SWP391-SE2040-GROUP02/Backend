@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Services;
 /// <remarks>
 /// Cần container đã nạp Assets và Designations.
 /// SETUP-08: hồ sơ người nhận đã lưu luôn đủ số CCCD, họ tên, ngày sinh nên mọi chỉ định đều hợp lệ;
-/// SETUP-19: người nhận chưa đủ 18 tuổi vẫn tính.
+/// Không kiểm tuổi người nhận (đã bỏ SETUP-19): người nhận chưa đủ 18 tuổi vẫn tính như mọi người khác.
 /// </remarks>
 public static class ContainerRules
 {

@@ -19,6 +19,8 @@ public enum ErrorCode
     VaultNotEditable,
     EditConflict,
     AssetNotFound,
+    /// <summary>409: tài sản còn trong gói hoặc đã được ghim vào snapshot bàn giao nên không xóa được.</summary>
+    AssetInUse,
     HandoverInvitationInvalid,
     HandoverNotFound,
     HandoverNotAllowed,
@@ -37,6 +39,7 @@ public enum ErrorCode
     AssetAlreadyInContainer,
     BeneficiaryNotFound,
     BeneficiaryIdentityConflict,
+    // Không còn dùng (bỏ SETUP-19). Giữ nguyên vị trí trong enum để không đổi giá trị các mã phía sau.
     MinorConfirmationRequired,
     BeneficiaryInUse,
     BeneficiarySlotsExceeded,

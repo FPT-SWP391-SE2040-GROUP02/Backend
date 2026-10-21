@@ -108,7 +108,7 @@ public sealed class AuthController : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [EndpointSummary("Đăng nhập bằng email và mật khẩu")]
-    [EndpointDescription("Cần CSRF proof và cookie antiforgery từ GET /api/v1/auth/csrf. Trả raw AuthSessionResponse: accessToken chỉ giữ RAM; refresh token chỉ nằm cookie HttpOnly lv_refresh. rememberMe chỉ quyết định cookie persistent; idle 30 phút, tối đa 12 giờ. Lỗi 401 INVALID_CREDENTIALS, 403 ACCOUNT_NOT_ACTIVE, 423 ACCOUNT_LOCKED; 5 lần sai trong 15 phút khóa 15 phút. Rate limit chung email/Google/link-confirm: 5 request/phút/IP.")]
+    [EndpointDescription("Cần CSRF proof và cookie antiforgery từ GET /api/v1/auth/csrf. Trả raw AuthSessionResponse: accessToken chỉ giữ RAM; refresh token chỉ nằm cookie HttpOnly lv_refresh. rememberMe chỉ quyết định cookie persistent; idle 30 phút, tối đa 12 giờ. Admin đã bật xác thực hai bước (api-contract 6.2a) nhận 200 TwoFactorChallengeResponse {twoFactorRequired:true, challengeToken, expiresIn} thay cho phiên, không có cookie; gọi POST /auth/2fa/verify để hoàn tất. Lỗi 401 INVALID_CREDENTIALS, 403 ACCOUNT_NOT_ACTIVE, 423 ACCOUNT_LOCKED; 5 lần sai trong 15 phút khóa 15 phút. Rate limit chung email/Google/link-confirm: 5 request/phút/IP.")]
     [ProducesResponseType<AuthSessionResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
@@ -122,6 +122,12 @@ public sealed class AuthController : ControllerBase
     {
         var ipRange = ClientIpRange.From(HttpContext);
         var result = await _authService.LoginAsync(request, ipRange, ct);
+
+        // Admin đã bật xác thực hai bước: chưa có phiên, không đặt cookie; FE gọi POST /auth/2fa/verify.
+        if (result.TwoFactor != null)
+        {
+            return Ok(result.TwoFactor);
+        }
 
         _cookieWriter.Append(Response, result);
         return Ok(result.Session);

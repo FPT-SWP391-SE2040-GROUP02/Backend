@@ -27,6 +27,12 @@ public class VerifierDeathCaseSummaryResponse
 
     public DateTimeOffset? ObjectionEndsAt { get; set; }
 
+    /// <summary>
+    /// DEATH-01: lúc job đánh dấu Executor bổ sung quá hạn 7 ngày; null = chưa quá hạn hoặc đã gửi lại.
+    /// Chỉ để hiển thị, không tự từ chối.
+    /// </summary>
+    public DateTimeOffset? SupplementOverdueAt { get; set; }
+
     /// <summary>DEATH-10: số cờ của bản đang xét chưa được xem xét.</summary>
     public int UnreviewedFlagCount { get; set; }
 

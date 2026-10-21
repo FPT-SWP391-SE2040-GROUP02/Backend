@@ -3,7 +3,7 @@ namespace LegacyVault.Application.Services;
 /// <summary>Luật tuổi của người nhận, dùng chung cho BeneficiaryService và BeneficiaryMappings.</summary>
 public static class BeneficiaryRules
 {
-    /// <summary>SETUP-19: dưới 18 tuổi thì Owner phải xác nhận cảnh báo.</summary>
+    /// <summary>Mốc 18 tuổi, chỉ dùng tính isMinor để hiển thị (đã bỏ luật xác nhận SETUP-19).</summary>
     public const int AdultAge = 18;
 
     /// <summary>
