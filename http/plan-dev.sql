@@ -3,6 +3,9 @@
 -- Chọn đúng database local của API trong SSMS; điền hai Id từ kho và tài khoản Owner của bạn.
 -- Nếu dùng sqlcmd, thêm -I (QUOTED_IDENTIFIER ON) vì database có chỉ mục lọc.
 -- Không đổi trạng thái HandoverPlans bằng SQL; kích hoạt qua http/plan-setup.http.
+-- Thử thanh toán: dùng POST /billing/orders/{id}/dev-pay trong http/billing.http thay vì UPDATE tay VaultEntitlements;
+-- dev-pay cấp quyền qua đúng nghiệp vụ thanh toán (chỉ Development). Script này chỉ dùng khi cần nhảy thẳng sang
+-- XS còn hạn + eKYC mà không đi qua đơn thanh toán.
 
 SET QUOTED_IDENTIFIER ON;
 

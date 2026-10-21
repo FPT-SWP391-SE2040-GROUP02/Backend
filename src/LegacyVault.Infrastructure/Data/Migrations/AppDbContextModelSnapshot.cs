@@ -1915,6 +1915,198 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("PasswordResetTokens", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.PaymentOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("BaseServiceExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("ExtraSlots")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IncludedBeneficiarySlots")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PaymentCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("PolicyVersion")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<long>("SlotAmount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<long>("StorageQuotaBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Tier")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<long>("TierAmount")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TotalAmount")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("Years")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentCode")
+                        .IsUnique();
+
+                    b.HasIndex("VaultId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_PaymentOrders_VaultId_Pending")
+                        .HasFilter("[Status] = 'Pending'");
+
+                    b.HasIndex("VaultId", "CreatedAt");
+
+                    b.ToTable("PaymentOrders", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.PaymentTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Content")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<string>("Gateway")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("MatchedPaymentCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid?>("PaymentOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<long>("ProviderTransactionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ReconciliationReason")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ReferenceCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("TransactionAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<long>("TransferAmount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TransferType")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "ProviderTransactionId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "ReceivedAt");
+
+                    b.HasIndex(new[] { "PaymentOrderId" }, "IX_PaymentTransactions_PaymentOrderId");
+
+                    b.HasIndex(new[] { "PaymentOrderId" }, "IX_PaymentTransactions_PaymentOrderId_Matched")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Matched'");
+
+                    b.ToTable("PaymentTransactions", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2649,6 +2841,23 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.PaymentOrder", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Vault", null)
+                        .WithMany()
+                        .HasForeignKey("VaultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.PaymentTransaction", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.PaymentOrder", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.RefreshToken", b =>

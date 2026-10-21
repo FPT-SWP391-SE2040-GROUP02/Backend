@@ -17,6 +17,8 @@ public enum IncidentType
     Integration = 5,
     /// <summary>Admin hoặc nhân viên tạo thủ công.</summary>
     Manual = 6,
+    /// <summary>Giao dịch thanh toán không khớp đơn, cần Admin đối chiếu thủ công (PAY-07).</summary>
+    Payment = 7,
 }
 
 public enum IncidentStatus

@@ -1,0 +1,28 @@
+### Công cụ thử nghiệm của Admin (chỉ chạy ở Development)
+# 1. Đăng nhập bằng tài khoản Admin (auth.http), chép accessToken vào @token.
+# 2. Gọi "Danh sách kho", chép vaultId của kho thử vào @vaultId.
+
+@baseUrl = http://localhost:5000
+@token = dan-access-token-admin-vao-day
+@vaultId = 00000000-0000-0000-0000-000000000000
+
+### Danh sách kho để chọn
+GET {{baseUrl}}/api/v1/admin/dev-tools/vaults
+Authorization: Bearer {{token}}
+
+### Trạng thái đồng hồ và các mốc của một kho
+GET {{baseUrl}}/api/v1/admin/dev-tools/vaults/{{vaultId}}/clock
+Authorization: Bearer {{token}}
+
+### Tua tới mốc: CHECKIN_OVERDUE | GRACE_ENDED | OBJECTION_WINDOW_ENDED | SELFIE_DEADLINE_PASSED
+POST {{baseUrl}}/api/v1/admin/dev-tools/vaults/{{vaultId}}/time-travel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "milestone": "CHECKIN_OVERDUE"
+}
+
+### Về thời gian hiện tại (giữ nguyên trạng thái đã phát sinh)
+POST {{baseUrl}}/api/v1/admin/dev-tools/vaults/{{vaultId}}/reset-clock
+Authorization: Bearer {{token}}

@@ -33,6 +33,7 @@ app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
+app.MapBillingDevEndpoints();
 
 // Liveness không phụ thuộc SQL; readiness chỉ đạt khi kết nối được database.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });

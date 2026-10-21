@@ -5,6 +5,7 @@ using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Application.Services;
 using LegacyVault.Application.Storage;
+using LegacyVault.Infrastructure.Billing;
 using LegacyVault.Infrastructure.Data;
 using LegacyVault.Infrastructure.Ekyc;
 using LegacyVault.Infrastructure.Health;
@@ -74,6 +75,15 @@ public static class InfrastructureConfig
         });
         services.AddScoped<IOwnerIdentityReader, OwnerIdentityReader>();
         services.AddScoped<IStorageReservationRepository, StorageReservationRepository>();
+
+        // Thanh toán (SRS §8): đơn thanh toán và thông tin tài khoản nhận tiền.
+        services.AddScoped<IPaymentOrderRepository, PaymentOrderRepository>();
+        services.Configure<BillingSettings>(configuration.GetSection(BillingSettings.SectionName));
+        services.AddSingleton<IBillingBankSettings, BillingBankSettings>();
+        services.AddSingleton<IBillingDevSettings, BillingDevSettings>();
+        // Webhook SePay (SRS §8.5): giao dịch tiền vào và cấu hình nhận webhook.
+        services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddSingleton<IBillingSePaySettings, BillingSePaySettings>();
 
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();
@@ -204,6 +214,9 @@ public static class InfrastructureConfig
             }
             client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
         });
+
+        // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
+        services.AddScoped<IDevToolsRepository, DevToolsRepository>();
 
         return services;
     }
