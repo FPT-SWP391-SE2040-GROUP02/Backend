@@ -215,6 +215,9 @@ public static class InfrastructureConfig
             client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
         });
 
+        // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
+        services.AddScoped<IDevToolsRepository, DevToolsRepository>();
+
         return services;
     }
 

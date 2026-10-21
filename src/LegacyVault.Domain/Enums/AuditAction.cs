@@ -77,10 +77,14 @@ public enum AuditAction
     AssetDeleted = 34,
     /// <summary>Owner tải nội dung tài sản của chính mình.</summary>
     AssetContentDownloaded = 35,
+    /// <summary>Admin tua thời gian của một kho thử bằng công cụ thử nghiệm (chỉ có ở Development).</summary>
+    DevTimeTravel = 36,
+    /// <summary>Admin đưa đồng hồ của kho thử về thời gian thực (chỉ có ở Development).</summary>
+    DevClockReset = 37,
     /// <summary>Owner tạo đơn thanh toán (SRS §8.3).</summary>
-    PaymentOrderCreated = 36,
+    PaymentOrderCreated = 38,
     /// <summary>Owner hủy đơn thanh toán đang chờ.</summary>
-    PaymentOrderCancelled = 37,
+    PaymentOrderCancelled = 39,
     /// <summary>Đơn thanh toán được thanh toán và quyền dịch vụ được cấp (job/webhook, không có người dùng).</summary>
-    PaymentPaid = 38,
+    PaymentPaid = 40,
 }

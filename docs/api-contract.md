@@ -112,6 +112,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `PAYMENT_ORDER_PENDING` | Kho đang có đơn `PENDING` còn hạn với lựa chọn khác; hủy đơn cũ trước (PAY-04) | `orderId` |
 | 409 | `PAYMENT_ORDER_NOT_PAYABLE` | Hủy hoặc ghi nhận thanh toán một đơn không còn ở trạng thái cho phép | `reason`: `PAID` / `EXPIRED` / `CANCELLED` / `VAULT_CLOSED` / `ENTITLEMENT_CHANGED` |
 | 404 | `PAYMENT_ORDER_NOT_FOUND` | Không có đơn thanh toán, hoặc đơn của kho khác; cũng là kết quả của `dev-pay` khi công tắc dev tắt | |
+| 409 | `DEV_TOOL_NOT_ALLOWED` | Công cụ thử nghiệm (chỉ Development): kho không có mốc này ở trạng thái hiện tại hoặc đã qua mốc | `milestone`, `state` |
 
 ---
 
@@ -793,6 +794,8 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 | `PAYMENT_ORDER_CREATED` | `PAYMENT_ORDER` | Owner tạo đơn thanh toán (gọi lặp trả lại đơn cũ thì không ghi thêm); `targetId` là đơn |
 | `PAYMENT_ORDER_CANCELLED` | `PAYMENT_ORDER` | Owner hủy đơn đang chờ (hủy lặp không ghi thêm) |
 | `PAYMENT_PAID` | `PAYMENT_ORDER` | Đơn được thanh toán và quyền dịch vụ được cấp (`actorRole = SYSTEM`, không có `actorUserId`; không ghi số tiền hay mã thanh toán) |
+| `DEV_TIME_TRAVEL` | `CHECK_IN` / `DEATH_CASE` | Admin tua thời gian kho thử bằng công cụ thử nghiệm, `reason` là mã mốc (chỉ có ở Development) |
+| `DEV_CLOCK_RESET` | `VAULT` | Admin đưa đồng hồ kho thử về thời gian thực (chỉ có ở Development) |
 
 - **Hồ sơ chứng tử:** chỉ ghi thao tác Executor/Verifier đã lưu thành công (7 loại ở bảng trên); không ghi sửa nháp, thêm/xóa trang giấy, gọi lặp, thao tác bị từ chối, và `reason` không chép lý do tự do vì Owner xem được nhật ký (SEC-13). Lý do đầy đủ nằm ở quyết định của hồ sơ.
 - **Chưa làm:** ghi nhật ký cho thiết lập/kích hoạt kế hoạch, mời Executor và bàn giao (thuộc các module khác, cần chủ module đồng ý); lịch sử người nhận xem/tải nội dung (`HandoverAccessLogs`) chưa có API đọc cho Owner; Admin tra cứu nhật ký toàn hệ thống (ADMIN-06).
@@ -1062,6 +1065,28 @@ dotnet user-secrets set "Billing:SePay:WebhookApiKey" "<key>" --project src/Lega
   Giao dịch lệch (trừ `NOT_INCOMING`) gắn `paymentOrderId` khi đã xác định được đơn, và mở một sự cố loại `PAYMENT` (xem 6.15) với `targetType = PaymentTransaction`, `targetId` = Id giao dịch; nội dung sự cố chỉ có mã lý do, không có số tiền, mã đơn hay số tài khoản (SEC-07).
 - **Trạng thái giao dịch** (`status`): `RECEIVED` (đã lưu, chưa đối chiếu xong), `MATCHED`, `RECONCILIATION_REQUIRED`, `RESOLVED` (chưa dùng). Một đơn có tối đa một giao dịch `MATCHED`.
 - **Admin xem giao dịch** (`GET /api/v1/admin/payment-transactions`, ADMIN-09): chỉ đọc, mới nhất trước, `status` lọc theo bốn giá trị trên (giá trị khác → 400). Mỗi phần tử: `id`, `provider`, `environment`, `providerTransactionId`, `status`, `reconciliationReason`, `transferType` (`IN` / `OUT`), `transferAmount`, `currency`, `paymentOrderId`, `paymentCode`, `gateway`, `referenceCode`, `transactionAt`, `receivedAt`, `processedAt`. **Không có** nội dung chuyển khoản, số tài khoản, key hay `rowVersion`. Người không phải Admin đang hoạt động nhận 404 (SEC-04); không có API nào sửa hay ghi `PAID` cho giao dịch.
+
+### 6.19. Công cụ thử nghiệm của Admin (chỉ Development)
+
+Tua thời gian của một kho thử để chạy hết luồng điểm danh, chứng tử và báo còn sống mà không phải chờ ngày thật. **Chỉ chạy ở môi trường Development**; môi trường khác trả 404 như không tồn tại. Chỉ Admin đang hoạt động (đọc từ DB), người khác 404 `USER_NOT_FOUND`.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/api/v1/admin/dev-tools/vaults` | — | 200 `DevVaultOptionResponse[]` `{ vaultId, vaultName, ownerName, planStatus }` (tối đa 200 kho, mới nhất trước) | 401, 404 |
+| GET | `/api/v1/admin/dev-tools/vaults/{vaultId}/clock` | — | 200 `DevClockResponse` | 401, 404 `USER_NOT_FOUND` / `VAULT_NOT_FOUND` |
+| POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/time-travel` | `{ milestone }` | 200 `DevClockResponse` (trạng thái sau khi tua) | 400 `VALIDATION_ERROR`, 401, 404, 409 `DEV_TOOL_NOT_ALLOWED` |
+| POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/reset-clock` | — | 200 `DevClockResponse` | 401, 404 |
+
+- `DevClockResponse`: `{ vaultId, planStatus, checkInState: ON_TIME | OVERDUE | NOT_RUNNING, clockState: REAL_TIME | SHIFTED, milestones: [{ key, state: AVAILABLE | PASSED | NOT_APPLICABLE, note }] }`. `note` là lý do không tua được.
+- `milestone` (theo thứ tự hiển thị):
+  - `CHECKIN_OVERDUE`: kỳ điểm danh đang mở qua hạn, vẫn còn thời gian chờ → kế hoạch `CHECKIN_OVERDUE`. Cần kế hoạch `ACTIVE`.
+  - `GRACE_ENDED`: hết thời gian chờ → kế hoạch `AWAITING_CHECK`, mở sự cố cho Executor (hoặc `NO_EXECUTOR`). Cần kế hoạch `ACTIVE` hoặc `CHECKIN_OVERDUE`.
+  - `OBJECTION_WINDOW_ENDED`: hết 72 giờ phản đối của hồ sơ chứng tử đang mở → Verifier duyệt được ngay. Cần hồ sơ đã báo Owner.
+  - `SELFIE_DEADLINE_PASSED`: hết hạn selfie 7 ngày của lời báo còn sống đang mở → Verifier kết luận "còn sống" được khi không có eKYC thật. Không áp dụng khi selfie đã đạt.
+- Tua chỉ dời hạn tương ứng về quá khứ; trạng thái mới do luật và job sẵn có quyết định. Với hai mốc điểm danh, API chạy luôn vòng xử lý của job điểm danh nên kết quả có ngay trong response.
+- `reset-clock` chỉ ghi nhận đồng hồ về thời gian thực (`clockState = REAL_TIME`); trạng thái đã phát sinh khi tua (kế hoạch, sự cố) giữ nguyên, không hoàn tác.
+- Mỗi lần tua ghi nhật ký `DEV_TIME_TRAVEL`, mỗi lần về thời gian hiện tại ghi `DEV_CLOCK_RESET`; Owner của kho thấy các dòng này trong nhật ký kho.
+- FE chỉ hiện mục "Công cụ thử nghiệm" trong khu Admin khi chạy `npm run dev`.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 
