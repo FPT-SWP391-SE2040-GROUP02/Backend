@@ -108,6 +108,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 423 | `ACCOUNT_LOCKED` | Sai mật khẩu 5 lần trong 15 phút | `attemptsRemaining: 0`, `remainingSeconds` |
 | 500 | `INTERNAL_ERROR` | Lỗi bất ngờ | `traceId` |
 | 400 | `INVALID_RESET_TOKEN` | Link đặt lại mật khẩu sai, hết hạn, đã dùng hoặc tài khoản không còn hoạt động | |
+| 409 | `DEV_TOOL_NOT_ALLOWED` | Công cụ thử nghiệm (chỉ Development): kho không có mốc này ở trạng thái hiện tại hoặc đã qua mốc | `milestone`, `state` |
 
 ---
 
@@ -786,6 +787,8 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 | `DEATH_CASE_SUPPLEMENT_REQUESTED` | `DEATH_CASE` | Verifier yêu cầu bổ sung; `reason` chỉ chứa mã phần cần bổ sung (ví dụ `DATE_OF_DEATH,FILES`), không chứa lý do tự do |
 | `DEATH_CASE_REJECTED` | `DEATH_CASE` | Verifier từ chối hồ sơ |
 | `DEATH_CASE_APPROVED` | `DEATH_CASE` | Verifier duyệt, mở bàn giao |
+| `DEV_TIME_TRAVEL` | `CHECK_IN` / `DEATH_CASE` | Admin tua thời gian kho thử bằng công cụ thử nghiệm, `reason` là mã mốc (chỉ có ở Development) |
+| `DEV_CLOCK_RESET` | `VAULT` | Admin đưa đồng hồ kho thử về thời gian thực (chỉ có ở Development) |
 
 - **Hồ sơ chứng tử:** chỉ ghi thao tác Executor/Verifier đã lưu thành công (7 loại ở bảng trên); không ghi sửa nháp, thêm/xóa trang giấy, gọi lặp, thao tác bị từ chối, và `reason` không chép lý do tự do vì Owner xem được nhật ký (SEC-13). Lý do đầy đủ nằm ở quyết định của hồ sơ.
 - **Chưa làm:** ghi nhật ký cho thiết lập/kích hoạt kế hoạch, mời Executor và bàn giao (thuộc các module khác, cần chủ module đồng ý); lịch sử người nhận xem/tải nội dung (`HandoverAccessLogs`) chưa có API đọc cho Owner; Admin tra cứu nhật ký toàn hệ thống (ADMIN-06).
@@ -903,6 +906,28 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 - `reset-password` thành công: đổi mật khẩu, thu hồi mọi refresh token (mọi thiết bị phải đăng nhập lại), email chưa xác minh được coi là đã xác minh. Không tự đăng nhập; FE chuyển về trang đăng nhập.
 - Không cần CSRF (không dùng cookie). Rate limit 5 request/phút/IP cho mỗi API.
 - Lỗi kiểm dữ liệu ở nhóm `/auth` trả Content-Type `application/json` (do `[Produces]` của AuthController), body vẫn là ProblemDetails có `code`.
+
+### 6.18. Công cụ thử nghiệm của Admin (chỉ Development)
+
+Tua thời gian của một kho thử để chạy hết luồng điểm danh, chứng tử và báo còn sống mà không phải chờ ngày thật. **Chỉ chạy ở môi trường Development**; môi trường khác trả 404 như không tồn tại. Chỉ Admin đang hoạt động (đọc từ DB), người khác 404 `USER_NOT_FOUND`.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/api/v1/admin/dev-tools/vaults` | — | 200 `DevVaultOptionResponse[]` `{ vaultId, vaultName, ownerName, planStatus }` (tối đa 200 kho, mới nhất trước) | 401, 404 |
+| GET | `/api/v1/admin/dev-tools/vaults/{vaultId}/clock` | — | 200 `DevClockResponse` | 401, 404 `USER_NOT_FOUND` / `VAULT_NOT_FOUND` |
+| POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/time-travel` | `{ milestone }` | 200 `DevClockResponse` (trạng thái sau khi tua) | 400 `VALIDATION_ERROR`, 401, 404, 409 `DEV_TOOL_NOT_ALLOWED` |
+| POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/reset-clock` | — | 200 `DevClockResponse` | 401, 404 |
+
+- `DevClockResponse`: `{ vaultId, planStatus, checkInState: ON_TIME | OVERDUE | NOT_RUNNING, clockState: REAL_TIME | SHIFTED, milestones: [{ key, state: AVAILABLE | PASSED | NOT_APPLICABLE, note }] }`. `note` là lý do không tua được.
+- `milestone` (theo thứ tự hiển thị):
+  - `CHECKIN_OVERDUE`: kỳ điểm danh đang mở qua hạn, vẫn còn thời gian chờ → kế hoạch `CHECKIN_OVERDUE`. Cần kế hoạch `ACTIVE`.
+  - `GRACE_ENDED`: hết thời gian chờ → kế hoạch `AWAITING_CHECK`, mở sự cố cho Executor (hoặc `NO_EXECUTOR`). Cần kế hoạch `ACTIVE` hoặc `CHECKIN_OVERDUE`.
+  - `OBJECTION_WINDOW_ENDED`: hết 72 giờ phản đối của hồ sơ chứng tử đang mở → Verifier duyệt được ngay. Cần hồ sơ đã báo Owner.
+  - `SELFIE_DEADLINE_PASSED`: hết hạn selfie 7 ngày của lời báo còn sống đang mở → Verifier kết luận "còn sống" được khi không có eKYC thật. Không áp dụng khi selfie đã đạt.
+- Tua chỉ dời hạn tương ứng về quá khứ; trạng thái mới do luật và job sẵn có quyết định. Với hai mốc điểm danh, API chạy luôn vòng xử lý của job điểm danh nên kết quả có ngay trong response.
+- `reset-clock` chỉ ghi nhận đồng hồ về thời gian thực (`clockState = REAL_TIME`); trạng thái đã phát sinh khi tua (kế hoạch, sự cố) giữ nguyên, không hoàn tác.
+- Mỗi lần tua ghi nhật ký `DEV_TIME_TRAVEL`, mỗi lần về thời gian hiện tại ghi `DEV_CLOCK_RESET`; Owner của kho thấy các dòng này trong nhật ký kho.
+- FE chỉ hiện mục "Công cụ thử nghiệm" trong khu Admin khi chạy `npm run dev`.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 

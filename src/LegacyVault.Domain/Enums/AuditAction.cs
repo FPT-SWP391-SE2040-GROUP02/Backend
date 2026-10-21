@@ -77,4 +77,8 @@ public enum AuditAction
     AssetDeleted = 34,
     /// <summary>Owner tải nội dung tài sản của chính mình.</summary>
     AssetContentDownloaded = 35,
+    /// <summary>Admin tua thời gian của một kho thử bằng công cụ thử nghiệm (chỉ có ở Development).</summary>
+    DevTimeTravel = 36,
+    /// <summary>Admin đưa đồng hồ của kho thử về thời gian thực (chỉ có ở Development).</summary>
+    DevClockReset = 37,
 }

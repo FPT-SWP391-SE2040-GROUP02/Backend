@@ -58,6 +58,9 @@ public static class ApplicationConfig
 
         // Executor theo dõi tiến độ bàn giao
         services.AddScoped<IHandoverProgressService, HandoverProgressService>();
+
+        // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
+        services.AddScoped<IDevToolsService, DevToolsService>();
         return services;
     }
 }
