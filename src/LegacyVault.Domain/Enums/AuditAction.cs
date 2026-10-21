@@ -77,4 +77,10 @@ public enum AuditAction
     AssetDeleted = 34,
     /// <summary>Owner tải nội dung tài sản của chính mình.</summary>
     AssetContentDownloaded = 35,
+    /// <summary>Owner tạo đơn thanh toán (SRS §8.3).</summary>
+    PaymentOrderCreated = 36,
+    /// <summary>Owner hủy đơn thanh toán đang chờ.</summary>
+    PaymentOrderCancelled = 37,
+    /// <summary>Đơn thanh toán được thanh toán và quyền dịch vụ được cấp (job/webhook, không có người dùng).</summary>
+    PaymentPaid = 38,
 }

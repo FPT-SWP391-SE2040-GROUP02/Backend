@@ -58,6 +58,12 @@ public static class ApplicationConfig
 
         // Executor theo dõi tiến độ bàn giao
         services.AddScoped<IHandoverProgressService, HandoverProgressService>();
+
+        // Thanh toán (SRS §8)
+        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<PaymentGranter>();
+        services.AddScoped<ISePayWebhookService, SePayWebhookService>();
+        services.AddScoped<IAdminPaymentService, AdminPaymentService>();
         return services;
     }
 }

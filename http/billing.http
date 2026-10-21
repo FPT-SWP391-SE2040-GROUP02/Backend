@@ -1,0 +1,102 @@
+# Thử thanh toán dịch vụ (SRS §8) — CHỈ môi trường local. Contract: docs/api-contract.md mục 6.18.
+#
+# Chuẩn bị:
+#  1. Đăng nhập bằng http/auth.http rồi điền @token. Không commit token hay dữ liệu thật.
+#  2. Owner đã xác minh email và đã tạo kho (http/auth.http, POST /vaults).
+#  3. Kho Free (mua mới) cần eKYC Owner (purpose OwnerEnrollment) đạt trong 90 ngày: xem http/ekyc.http,
+#     hoặc dùng http/plan-dev.sql để chèn một lượt eKYC giả lập trên DB local.
+#  4. Kho đã trả phí còn hạn thì request tạo đơn là MUA THÊM SUẤT (ADDON); chỉ gửi extraSlots.
+#  5. Số tiền, loại đơn và trạng thái KHÔNG bao giờ gửi từ client: backend tự tính và tự xác định.
+#
+# Tài khoản nhận tiền lấy từ cấu hình Billing:Bank (appsettings.Development.json dùng số tài khoản giả).
+# dev-pay giả lập trả tiền, chỉ có khi môi trường Development và Billing:DevPaymentEnabled = true;
+# ngoài ra đường dẫn đó là 404. Thanh toán không tự kích hoạt bàn giao và không đổi kế hoạch.
+
+@baseUrl = http://localhost:5000/api/v1
+@token =
+@orderId = 00000000-0000-0000-0000-000000000000
+
+### Bảng giá hiện hành — 200
+GET {{baseUrl}}/billing/plans
+Authorization: Bearer {{token}}
+
+### Báo giá mua mới (kho Free): XS 3 năm + 1 suất — 200, totalAmount 646000; không tạo đơn
+# 409 PAYMENT_NOT_ALLOWED + reason: OWNER_EKYC_REQUIRED / PLAN_LOCKED / VAULT_CLOSED / RENEWAL_NOT_SUPPORTED
+POST {{baseUrl}}/billing/quote
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tier": "XS",
+  "years": 3,
+  "extraSlots": 1
+}
+
+### Báo giá XS Max 5 năm — 200, totalAmount 1599000
+POST {{baseUrl}}/billing/quote
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tier": "XS_MAX",
+  "years": 5,
+  "extraSlots": 0
+}
+
+### Báo giá mua thêm suất giữa kỳ (kho đã trả phí còn hạn) — tier và years bỏ trống
+# Giá = ceil(49000 x số suất x số giây còn lại / 31536000); còn đúng 180 ngày mua 1 suất = 24165.
+POST {{baseUrl}}/billing/quote
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "extraSlots": 1
+}
+
+### Tạo đơn mua mới — 201 đơn PENDING (hạn 15 phút, có mã chuyển khoản và QR)
+# Gửi lại cùng lựa chọn khi đang có đơn PENDING còn hạn: 200 và trả đơn cũ.
+# Khác lựa chọn: 409 PAYMENT_ORDER_PENDING (kèm orderId của đơn cũ); hủy đơn cũ trước khi đổi.
+# Điền @orderId bên trên bằng "id" trong response.
+POST {{baseUrl}}/billing/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tier": "XS",
+  "years": 3,
+  "extraSlots": 1
+}
+
+### Tạo đơn mua thêm suất giữa kỳ — 201; hạn đơn là mốc sớm hơn giữa 15 phút và hết kỳ hiện tại
+POST {{baseUrl}}/billing/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "extraSlots": 1
+}
+
+### Đơn đang chờ thanh toán của kho — 200; không có (hoặc vừa hết hạn) thì 204
+GET {{baseUrl}}/billing/orders/current
+Authorization: Bearer {{token}}
+
+### Xem một đơn — 200; đơn của người khác hoặc id lạ: 404 PAYMENT_ORDER_NOT_FOUND
+# Đơn PENDING đã quá hạn được đánh dấu EXPIRED ngay trong lần đọc này (chưa có job nền).
+GET {{baseUrl}}/billing/orders/{{orderId}}
+Authorization: Bearer {{token}}
+
+### Hủy đơn — 200 (hủy lặp vẫn 200); đơn đã trả hoặc đã hết hạn: 409 PAYMENT_ORDER_NOT_PAYABLE
+POST {{baseUrl}}/billing/orders/{{orderId}}/cancel
+Authorization: Bearer {{token}}
+
+### Giả lập trả tiền (chỉ Development) — 200, đơn PAID và quyền dịch vụ của kho được cấp một lần
+# Mua mới: hạng, dung lượng, suất kèm theo, hạn = lúc trả + số năm x 365 ngày; kế hoạch vẫn DRAFT.
+# Mua thêm suất: tăng extraBeneficiarySlots, giữ nguyên hạn.
+# 409 PAYMENT_ORDER_NOT_PAYABLE + reason: CANCELLED / EXPIRED / VAULT_CLOSED / ENTITLEMENT_CHANGED.
+# Kiểm tra kết quả bằng GET {{baseUrl}}/vaults/me (serviceTier, serviceStatus, serviceExpiresAt, beneficiarySlots).
+POST {{baseUrl}}/billing/orders/{{orderId}}/dev-pay
+Authorization: Bearer {{token}}
+
+### Xem kho sau khi trả — serviceTier, serviceStatus, storageQuotaBytes, beneficiarySlots
+GET {{baseUrl}}/vaults/me
+Authorization: Bearer {{token}}
