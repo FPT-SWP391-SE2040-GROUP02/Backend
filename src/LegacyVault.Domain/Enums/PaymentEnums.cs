@@ -10,6 +10,9 @@ public enum PaymentOrderKind
 
     /// <summary>Nâng hạng giữa kỳ (XS lên XS Max): trả phần chênh theo thời gian còn lại, giữ nguyên hạn.</summary>
     Upgrade = 2,
+
+    /// <summary>Gia hạn: còn hạn thì nối tiếp hạn cũ, đã hết hạn hoặc đang ân hạn thì tính từ lúc thanh toán.</summary>
+    Renewal = 3,
 }
 
 /// <summary>Trạng thái đơn thanh toán.</summary>

@@ -21,6 +21,7 @@ public sealed class BillingService : IBillingService
 
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
+    private readonly IContainerRepository containerRepository;
     private readonly IEkycVerificationRepository ekycRepository;
     private readonly IPaymentOrderRepository paymentOrderRepository;
     private readonly IAuditLogRepository auditLogRepository;
@@ -33,6 +34,7 @@ public sealed class BillingService : IBillingService
     public BillingService(
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
+        IContainerRepository containerRepository,
         IEkycVerificationRepository ekycRepository,
         IPaymentOrderRepository paymentOrderRepository,
         IAuditLogRepository auditLogRepository,
@@ -44,6 +46,7 @@ public sealed class BillingService : IBillingService
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
+        this.containerRepository = containerRepository;
         this.ekycRepository = ekycRepository;
         this.paymentOrderRepository = paymentOrderRepository;
         this.auditLogRepository = auditLogRepository;
@@ -68,7 +71,7 @@ public sealed class BillingService : IBillingService
         BillingEligibility eligibility = await CheckEligibilityAsync(userId, request, now, ct);
 
         // Dữ liệu: tính giá bằng đúng hàm mà bước tạo đơn dùng (D2).
-        BillingQuote quote = BuildQuote(request, eligibility, now);
+        BillingQuote quote = await BuildCheckedQuoteAsync(request, eligibility, now, ct);
         return quote.ToResponse(now);
     }
 
@@ -79,7 +82,7 @@ public sealed class BillingService : IBillingService
 
         // Quyền + trạng thái: cùng các kiểm tra và cùng cách tính giá như báo giá.
         BillingEligibility eligibility = await CheckEligibilityAsync(userId, request, now, ct);
-        BillingQuote quote = BuildQuote(request, eligibility, now);
+        BillingQuote quote = await BuildCheckedQuoteAsync(request, eligibility, now, ct);
 
         // Chưa cấu hình tài khoản nhận tiền thì không phát đơn: Owner sẽ không có nơi để trả.
         EnsureBankConfigured();
@@ -286,7 +289,8 @@ public sealed class BillingService : IBillingService
 
         BillingRules.EnsureVaultAndPlanAllowPayment(vault);
 
-        PaymentOrderKind kind = BillingRules.DetermineKind(vault.Entitlement, request.Tier, request.ExtraSlots, now);
+        PaymentOrderKind kind = BillingRules.DetermineKind(
+            vault.Entitlement, request.Tier, request.ExtraSlots, request.Renew, now);
 
         if (kind == PaymentOrderKind.Purchase)
         {
@@ -318,12 +322,34 @@ public sealed class BillingService : IBillingService
         return VaultRules.EnsureOwnedBy(found, userId);
     }
 
+    /// <summary>
+    /// Tính giá rồi, với đơn gia hạn, kiểm tra dữ liệu đang dùng có vừa hạng và số suất được chọn không.
+    /// Báo giá và tạo đơn dùng chung hàm này nên hai bước luôn cùng kết luận (D2).
+    /// </summary>
+    private async Task<BillingQuote> BuildCheckedQuoteAsync(
+        BillingSelectionRequest request, BillingEligibility eligibility, DateTimeOffset now, CancellationToken ct)
+    {
+        BillingQuote quote = BuildQuote(request, eligibility, now);
+        if (quote.Kind == PaymentOrderKind.Renewal)
+        {
+            long usedBytes = await vaultRepository.SumUsedBytesAsync(eligibility.Vault.Id, ct);
+            int usedSlots = await containerRepository.CountUsedBeneficiarySlotsAsync(eligibility.Vault.Id, ct);
+            BillingRules.EnsureUsageFitsRenewal(quote, usedBytes, usedSlots);
+        }
+        return quote;
+    }
+
     /// <summary>Tính giá theo loại đơn đã xác định; báo giá và tạo đơn dùng chung (D2).</summary>
     private static BillingQuote BuildQuote(BillingSelectionRequest request, BillingEligibility eligibility, DateTimeOffset now)
     {
         if (eligibility.Kind == PaymentOrderKind.Purchase)
         {
             return BillingRules.QuotePurchase(request.Tier, request.Years, request.ExtraSlots);
+        }
+        if (eligibility.Kind == PaymentOrderKind.Renewal)
+        {
+            return BillingRules.QuoteRenewal(
+                eligibility.Vault.Entitlement, request.Tier, request.Years, request.ExtraSlots, now);
         }
         if (eligibility.Kind == PaymentOrderKind.Upgrade)
         {

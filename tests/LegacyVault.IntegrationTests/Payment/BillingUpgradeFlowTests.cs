@@ -174,7 +174,7 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Upgrade_ExpiredVault_Returns409RenewalNotSupported()
+    public async Task Upgrade_ExpiredVault_IsRenewalAndNeedsYears()
     {
         // Chuẩn bị: kho đang ân hạn
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
@@ -184,10 +184,8 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
         // Hành động
         HttpResponseMessage response = await QuoteUpgradeAsync(client);
 
-        // Kiểm tra
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
-            response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
-        Assert.Equal("RENEWAL_NOT_SUPPORTED", problem.GetProperty("reason").GetString());
+        // Kiểm tra: kho ân hạn chỉ còn gia hạn, nên thiếu số năm là lỗi dữ liệu (không phải nâng hạng)
+        await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
     }
 
     [SqlFact]

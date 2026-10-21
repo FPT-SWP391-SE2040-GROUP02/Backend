@@ -29,6 +29,18 @@ public static class BillingMappings
         {
             response.ServiceStartsAt = "ON_PAYMENT";
         }
+        else if (quote.Kind == PaymentOrderKind.Renewal)
+        {
+            // Còn hạn: nối tiếp hạn cũ (serviceExpiresAt là hạn cũ); đã hết hạn: tính từ lúc thanh toán.
+            if (quote.BaseServiceExpiresAt != null)
+            {
+                response.ServiceStartsAt = "AFTER_CURRENT_TERM";
+            }
+            else
+            {
+                response.ServiceStartsAt = "ON_PAYMENT";
+            }
+        }
         else
         {
             response.ServiceStartsAt = null;

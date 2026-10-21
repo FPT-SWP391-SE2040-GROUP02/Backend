@@ -174,13 +174,13 @@ public sealed class BillingUpgradeRulesTests
     }
 
     [Fact]
-    public void DetermineKind_ExpiredPaidVault_StillRequiresRenewal()
+    public void DetermineKind_ExpiredPaidVault_IsRenewalNotUpgrade()
     {
         // Chuẩn bị
         VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(-1), 0);
 
-        // Hành động + kiểm tra: hết hạn thì không nâng hạng được
-        Assert.Throws<AppException>(() => BillingRules.DetermineKind(entitlement, "XS_MAX", 0, Now));
+        // Hành động + kiểm tra: hết hạn thì không nâng hạng giữa kỳ được, chỉ gia hạn
+        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(entitlement, "XS_MAX", 0, Now));
     }
 
     private static PaymentOrder NewUpgradeOrder(DateTimeOffset baseExpiresAt)

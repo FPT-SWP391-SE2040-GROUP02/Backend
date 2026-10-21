@@ -293,29 +293,23 @@ public sealed class BillingRulesTests
     [InlineData(EntitlementStatus.PaidActive, -1)]
     [InlineData(EntitlementStatus.GraceReadOnly, 30)]
     [InlineData(EntitlementStatus.ExpiredReview, -300)]
-    public void Sec83_DetermineKind_NeedsRenewal_NotSupported(EntitlementStatus status, int daysUntilExpiry)
+    public void Sec83_DetermineKind_NeedsRenewal_IsRenewal(EntitlementStatus status, int daysUntilExpiry)
     {
         // Chuẩn bị: hết hạn, ân hạn hoặc chờ rà soát đều thuộc RENEWAL
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, status, Now.AddDays(daysUntilExpiry), 0);
 
-        // Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.DetermineKind(entitlement, Now));
-
-        // Kiểm tra
-        AssertPaymentNotAllowed(exception, "RENEWAL_NOT_SUPPORTED");
+        // Hành động / Kiểm tra: chỉ còn đường gia hạn
+        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(entitlement, Now));
     }
 
     [Fact]
     public void Sec83_PaidActiveWithoutExpiry_NotTreatedAsAddon()
     {
-        // Chuẩn bị: dữ liệu bất thường, không có hạn thì không bán thêm suất
+        // Chuẩn bị: dữ liệu bất thường, không có hạn thì không bán thêm suất, chỉ cho gia hạn
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, null, 0);
 
-        // Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.DetermineKind(entitlement, Now));
-
-        // Kiểm tra
-        AssertPaymentNotAllowed(exception, "RENEWAL_NOT_SUPPORTED");
+        // Hành động / Kiểm tra
+        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(entitlement, Now));
     }
 
     [Theory]

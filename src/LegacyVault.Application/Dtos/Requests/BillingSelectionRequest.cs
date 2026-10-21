@@ -20,4 +20,9 @@ public class BillingSelectionRequest
 
     /// <summary>Số suất người nhận mua thêm (0–20; mua thêm giữa kỳ thì 1–20).</summary>
     public int ExtraSlots { get; set; }
+
+    /// <summary>
+    /// true = gia hạn kỳ hiện tại (khi kho còn hạn). Kho đã hết hạn hoặc đang ân hạn luôn là gia hạn dù không gửi.
+    /// </summary>
+    public bool Renew { get; set; }
 }

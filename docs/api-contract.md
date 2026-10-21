@@ -108,7 +108,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 423 | `ACCOUNT_LOCKED` | Sai mật khẩu 5 lần trong 15 phút | `attemptsRemaining: 0`, `remainingSeconds` |
 | 500 | `INTERNAL_ERROR` | Lỗi bất ngờ | `traceId` |
 | 400 | `INVALID_RESET_TOKEN` | Link đặt lại mật khẩu sai, hết hạn, đã dùng hoặc tài khoản không còn hoạt động | |
-| 409 | `PAYMENT_NOT_ALLOWED` | Báo giá hoặc tạo đơn thanh toán không được lúc này (mục 6.18) | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `OWNER_EKYC_REQUIRED` / `RENEWAL_NOT_SUPPORTED` |
+| 409 | `PAYMENT_NOT_ALLOWED` | Báo giá hoặc tạo đơn thanh toán không được lúc này (mục 6.18) | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `OWNER_EKYC_REQUIRED` / `RENEWAL_NOT_SUPPORTED` / `USAGE_EXCEEDS_PLAN` |
 | 409 | `PAYMENT_ORDER_PENDING` | Kho đang có đơn `PENDING` còn hạn với lựa chọn khác; hủy đơn cũ trước (PAY-04) | `orderId` |
 | 409 | `PAYMENT_ORDER_NOT_PAYABLE` | Hủy hoặc ghi nhận thanh toán một đơn không còn ở trạng thái cho phép | `reason`: `PAID` / `EXPIRED` / `CANCELLED` / `VAULT_CLOSED` / `ENTITLEMENT_CHANGED` |
 | 404 | `PAYMENT_ORDER_NOT_FOUND` | Không có đơn thanh toán, hoặc đơn của kho khác; cũng là kết quả của `dev-pay` khi công tắc dev tắt | |
@@ -927,14 +927,15 @@ Mua dịch vụ, mua thêm suất người nhận, giả lập trả tiền và 
 | POST | `/api/v1/billing/sepay/webhook` | JSON của SePay (xem dưới) + header `Authorization: Apikey <key>` | 200 đúng `{"success":true}` | 400 `VALIDATION_ERROR`, 401 `WEBHOOK_UNAUTHORIZED`, 409 `EDIT_CONFLICT`, 500 |
 | GET | `/api/v1/admin/payment-transactions?status=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminPaymentTransactionResponse>` (Admin, chỉ đọc) | 400 `VALIDATION_ERROR`, 401, 404 (không phải Admin) |
 
-**Body `quote` / `orders`:** `tier` là `"XS"` hoặc `"XS_MAX"`, `years` là `1`, `3` hoặc `5` (bắt buộc khi mua mới); `extraSlots` là số suất người nhận mua thêm. Backend tự xác định loại đơn từ quyền dịch vụ của kho, client không gửi:
+**Body `quote` / `orders`:** `tier` là `"XS"` hoặc `"XS_MAX"`, `years` là `1`, `3` hoặc `5` (bắt buộc khi mua mới); `extraSlots` là số suất người nhận mua thêm; `renew` (bool, mặc định `false`) = true để **gia hạn** khi kho còn hạn. Backend tự xác định loại đơn từ quyền dịch vụ của kho, client không gửi:
 
 | Kho đang ở | Loại đơn | Ghi chú |
 |---|---|---|
 | `serviceStatus = FREE` | `PURCHASE` (mua mới) | Cần eKYC Owner (`OwnerEnrollment`) đạt trong 90 ngày; `extraSlots` 0–20 |
 | `PAID_ACTIVE` và còn hạn | `ADDON` (mua thêm suất) | `tier` và `years` gửi vào bị bỏ qua; `extraSlots` 1–20; không đổi hạn |
 | `PAID_ACTIVE` còn hạn, đang hạng `XS`, gửi `tier = "XS_MAX"` **và** `extraSlots = 0` | `UPGRADE` (nâng hạng giữa kỳ) | `years` bị bỏ qua; không cần eKYC; giá và cách cấp quyền xem bên dưới. Kèm `extraSlots` ≥ 1 vẫn là `ADDON` (tier bị bỏ qua). Kho đã ở `XS_MAX` không có đường nâng hạng |
-| Hết hạn, `GRACE_READ_ONLY`, `EXPIRED_REVIEW` | — | 409 `PAYMENT_NOT_ALLOWED` / `RENEWAL_NOT_SUPPORTED` (gia hạn chưa có) |
+| `PAID_ACTIVE` còn hạn, gửi `renew = true` | `RENEWAL` (gia hạn sớm) | Bắt buộc `tier`, `years`; `extraSlots` 0–20 là số suất thêm **của kỳ mới** (không tự giữ suất cũ); không cần eKYC; kỳ mới nối tiếp hạn cũ |
+| Đã hết hạn: `PAID_ACTIVE` quá hạn, `GRACE_READ_ONLY` (ân hạn 180 ngày), `EXPIRED_REVIEW` (chờ rà soát) | `RENEWAL` (gia hạn muộn) | Như trên nhưng không cần `renew`; không cần eKYC; kỳ mới tính từ lúc thanh toán; không cộng bù ngày ân hạn |
 
 Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạch đang `DEATH_CASE_OPEN` / `HANDOVER_IN_PROGRESS` / `BLOCKED` (`PLAN_LOCKED`). Kiểm tra theo đúng thứ tự: kho (404) → kho đóng → kế hoạch khóa → loại đơn → eKYC → giá trị `tier` / `years` / `extraSlots` (400 `VALIDATION_ERROR`, theo tên trường).
 
@@ -1010,10 +1011,11 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
 
 | Trường | Giá trị |
 |---|---|
-| `kind` | `PURCHASE`, `ADDON`, `UPGRADE` |
+| `kind` | `PURCHASE`, `ADDON`, `UPGRADE`, `RENEWAL` |
 | `status` | `PENDING`, `PAID`, `EXPIRED`, `CANCELLED` |
-| `tier` | `XS`, `XS_MAX` (đơn `ADDON` là hạng hiện tại của kho; đơn `UPGRADE` là `XS_MAX`) |
+| `tier` | `XS`, `XS_MAX` (đơn `ADDON` là hạng hiện tại của kho; đơn `UPGRADE` là `XS_MAX`; đơn `RENEWAL` là hạng được chọn cho kỳ mới, có thể khác hạng hiện tại) |
 
+- **Giá gia hạn** (`RENEWAL`): giá hạng của kỳ mới + `49.000 × extraSlots × số năm` (như mua mới). Ví dụ XS 3 năm giữ 1 suất = 646.000 đ. Phản hồi quote/order: `serviceStartsAt` = `AFTER_CURRENT_TERM` (còn hạn: nối tiếp, `serviceExpiresAt` là hạn hiện tại) hoặc `ON_PAYMENT` (đã hết hạn: tính từ lúc trả). Gia hạn sang hạng hoặc số suất **nhỏ hơn mức đang dùng** (dung lượng đã dùng, số suất người nhận đã dùng) → 409 `PAYMENT_NOT_ALLOWED` / `USAGE_EXCEEDS_PLAN`; không tự xóa dữ liệu. Hạn đơn là 15 phút (không bị chặn bởi hết kỳ).
 - **Giá nâng hạng** (`UPGRADE`): phần chênh giá theo thời gian còn lại của kỳ hiện tại = `ceil((giá XS_MAX − giá XS của kỳ N năm) × số giây còn lại / (N × 31.536.000))`, N là số năm của đơn `PURCHASE` đã thanh toán gần nhất của kho (không có đơn mua thì N = 1); số giây còn lại không vượt tổng số giây của kỳ. Ví dụ mua XS 3 năm, còn 1,5 năm: (999.000 − 499.000) × 1/2 = 250.000 đ. Phản hồi: `years = null`, `tierAmount` = số tiền nâng hạng, `slotAmount = 0`, `serviceExpiresAt` = hạn hiện tại (giữ nguyên), `beneficiarySlots` = 5 + suất thêm đang có. Hạn đơn như `ADDON` (mốc sớm hơn giữa 15 phút và hết kỳ).
 - **Giá do backend tính:** mua mới = giá hạng + `49.000 × extraSlots × số năm` (ADDON-01); mua thêm giữa kỳ = `ceil(49.000 × extraSlots × số giây còn lại / 31.536.000)` (ADDON-02; ví dụ còn đúng 180 ngày, 1 suất = 24.165 đ). Giá, dung lượng, số suất và `policyVersion` được **chốt trên đơn** lúc tạo (PAY-11).
 - **Một đơn chờ mỗi kho** (PAY-04): tạo lại cùng lựa chọn khi đang có đơn `PENDING` còn hạn thì trả lại đơn cũ (200); khác lựa chọn thì 409 `PAYMENT_ORDER_PENDING` kèm `orderId`. Muốn đổi thì hủy đơn cũ trước. Hai request cùng lúc vẫn chỉ ra một đơn.
@@ -1021,10 +1023,10 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
 - **Chưa có job hết hạn đơn:** đơn `PENDING` đã quá hạn được đổi sang `EXPIRED` ngay trong lần đọc, tạo hoặc hủy tiếp theo. `GET /orders/current` trả 204 sau khi đánh dấu. Đơn không còn `PENDING` thì `qrImageUrl = null`.
 - **Mã thanh toán:** `LV` + 8 ký tự ngẫu nhiên (bỏ `0`, `O`, `1`, `I`), duy nhất toàn hệ thống; nội dung chuyển khoản phải đúng bằng mã này. Đơn không trả `ownerId`, `vaultId`, `rowVersion`. `includedBeneficiarySlots` là suất kèm theo hạng đã chốt; tổng suất của kho đọc ở `GET /vaults/me`.
 - **Hủy đơn:** hủy lặp vẫn 200 (trả đơn đã hủy). Đơn đã `PAID` → 409 `PAYMENT_ORDER_NOT_PAYABLE` (`reason = PAID`), đã quá hạn → `EXPIRED`.
-- **Cấp quyền** (D8): khi đơn được thanh toán, **chỉ** quyền dịch vụ của kho được ghi. Mua mới: hạng, `PAID_ACTIVE`, dung lượng, suất kèm theo, suất thêm = `extraSlots`, hạn = lúc trả + số năm × 365 ngày (PAY-08). Mua thêm suất: `extraBeneficiarySlots += extraSlots`, giữ nguyên hạn. Nâng hạng: hạng `XS_MAX`, dung lượng 500 MiB, suất kèm theo 5; giữ nguyên hạn và suất thêm; chỉ cấp khi quyền vẫn là `PAID_ACTIVE` hạng `XS`, đúng hạn lúc tạo đơn và kỳ chưa hết, ngược lại `ENTITLEMENT_CHANGED`. Mỗi đơn chỉ cấp một lần (trả lặp trả lại đơn `PAID`). Không đổi kế hoạch (vẫn `DRAFT` nếu đang `DRAFT`, SETUP-14), không tính là điểm danh, không gỡ chặn (PAY-09). Đơn tạo trước khi kế hoạch bị khóa, tiền tới đúng hạn vẫn được cấp (§8.3). Không cấp và trả 409 `PAYMENT_ORDER_NOT_PAYABLE` khi: đơn đã hủy (`CANCELLED`), tiền tới sau hạn đơn (`EXPIRED`), kho đã đóng (`VAULT_CLOSED`), hoặc quyền dịch vụ đã đổi so với lúc tạo đơn (`ENTITLEMENT_CHANGED`: mua mới nhưng kho không còn Free; mua thêm nhưng hạn đã đổi, đã hết hạn hoặc không còn `PAID_ACTIVE`).
+- **Cấp quyền** (D8): khi đơn được thanh toán, **chỉ** quyền dịch vụ của kho được ghi. Mua mới: hạng, `PAID_ACTIVE`, dung lượng, suất kèm theo, suất thêm = `extraSlots`, hạn = lúc trả + số năm × 365 ngày (PAY-08). Mua thêm suất: `extraBeneficiarySlots += extraSlots`, giữ nguyên hạn. Gia hạn: hạng, dung lượng, suất kèm theo và suất thêm theo đơn, trạng thái về `PAID_ACTIVE`; hạn mới = (hạn cũ nếu đơn gia hạn sớm và hạn đó chưa qua, ngược lại lúc trả) + số năm × 365 ngày; chỉ cấp khi kỳ chưa đổi so với lúc tạo đơn (gia hạn sớm cần đúng hạn cũ; gia hạn muộn cần kho chưa có kỳ còn hạn), ngược lại `ENTITLEMENT_CHANGED`. Nâng hạng: hạng `XS_MAX`, dung lượng 500 MiB, suất kèm theo 5; giữ nguyên hạn và suất thêm; chỉ cấp khi quyền vẫn là `PAID_ACTIVE` hạng `XS`, đúng hạn lúc tạo đơn và kỳ chưa hết, ngược lại `ENTITLEMENT_CHANGED`. Mỗi đơn chỉ cấp một lần (trả lặp trả lại đơn `PAID`). Không đổi kế hoạch (vẫn `DRAFT` nếu đang `DRAFT`, SETUP-14), không tính là điểm danh, không gỡ chặn (PAY-09). Đơn tạo trước khi kế hoạch bị khóa, tiền tới đúng hạn vẫn được cấp (§8.3). Không cấp và trả 409 `PAYMENT_ORDER_NOT_PAYABLE` khi: đơn đã hủy (`CANCELLED`), tiền tới sau hạn đơn (`EXPIRED`), kho đã đóng (`VAULT_CLOSED`), hoặc quyền dịch vụ đã đổi so với lúc tạo đơn (`ENTITLEMENT_CHANGED`: mua mới nhưng kho không còn Free; mua thêm nhưng hạn đã đổi, đã hết hạn hoặc không còn `PAID_ACTIVE`).
 - **`dev-pay` (chỉ Development):** giả lập trả tiền cho đơn của kho mình, gọi đúng hàm cấp quyền mà webhook SePay sẽ dùng. Không có body. Route chỉ được đăng ký khi môi trường là Development **và** `Billing:DevPaymentEnabled = true`; ngoài ra là 404. Hai thao tác trả tiền chạy cùng lúc có thể nhận 409 `EDIT_CONFLICT`; thử lại sẽ thấy đơn `PAID`.
 - **Cấu hình** (`Billing`): `Bank.BankCode`, `Bank.AccountNumber`, `Bank.AccountName` (thông tin công khai để hiện QR; `appsettings.Development.json` dùng số tài khoản giả, tài khoản thật đặt trong user-secrets hoặc biến môi trường), `DevPaymentEnabled` (mặc định tắt), `SePay:Environment` (`Test` mặc định hoặc `Live`; giá trị khác là lỗi cấu hình) và `SePay:WebhookApiKey` (**secret**, xem dưới). Chưa cấu hình ngân hàng thì tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
-- **Chưa làm:** gia hạn sớm và muộn (nâng hạng giữa kỳ đã có; xem `UPGRADE`), kỳ chờ, hết kỳ → ân hạn → rà soát, nhắc hạn, job hết hạn đơn; xác thực HMAC; thao tác Admin đóng giao dịch (`RESOLVED` chưa được dùng); hoàn tiền (làm thủ công ngoài app, PAY-07).
+- **Chưa làm:** job tự chuyển `PAID_ACTIVE` → `GRACE_READ_ONLY` → `EXPIRED_REVIEW` theo hạn (gia hạn và nâng hạng giữa kỳ đã có, xem `RENEWAL`, `UPGRADE`; gia hạn nhận cả kho quá hạn dù chưa có job đổi trạng thái), kỳ chờ, nhắc hạn, job hết hạn đơn; xác thực HMAC; thao tác Admin đóng giao dịch (`RESOLVED` chưa được dùng); hoàn tiền (làm thủ công ngoài app, PAY-07).
 
 #### Webhook SePay (SRS §8.3 bước 6–9, §8.5, PAY-01..07, AC-28, AC-29, AC-30, AC-97, AC-104)
 

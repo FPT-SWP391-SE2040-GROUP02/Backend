@@ -295,7 +295,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Sec83_Quote_GraceReadOnly_RenewalNotSupported()
+    public async Task Sec83_Quote_GraceReadOnly_IsRenewalStartingOnPayment()
     {
         // Chuẩn bị
         (HttpClient client, Guid vaultId, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
@@ -305,24 +305,26 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         // Hành động
         HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
 
-        // Kiểm tra
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
-        Assert.Equal("RENEWAL_NOT_SUPPORTED", problem.GetProperty("reason").GetString());
+        // Kiểm tra: ân hạn thì gia hạn, kỳ mới tính từ lúc thanh toán
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        JsonElement quote = await ApiTestHelpers.ReadJsonAsync(response);
+        Assert.Equal("RENEWAL", quote.GetProperty("kind").GetString());
+        Assert.Equal("ON_PAYMENT", quote.GetProperty("serviceStartsAt").GetString());
+        Assert.Equal(199000, quote.GetProperty("totalAmount").GetInt64());
     }
 
     [SqlFact]
-    public async Task Sec83_Quote_PaidActiveButExpired_RenewalNotSupported()
+    public async Task Sec83_Quote_PaidActiveButExpired_IsRenewalAndNeedsTier()
     {
         // Chuẩn bị: còn PaidActive nhưng đã quá hạn (job chuyển ân hạn chưa chạy)
         (HttpClient client, Guid vaultId, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
         await MakePaidActiveAsync(vaultId, daysLeft: -1);
 
-        // Hành động
+        // Hành động: hết hạn nên chỉ còn gia hạn; không gửi hạng và số năm
         HttpResponseMessage response = await QuoteAsync(client, new { extraSlots = 1 });
 
-        // Kiểm tra
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
-        Assert.Equal("RENEWAL_NOT_SUPPORTED", problem.GetProperty("reason").GetString());
+        // Kiểm tra: thiếu hạng là lỗi dữ liệu, không còn bị từ chối vì "chưa hỗ trợ gia hạn"
+        await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
     }
 
     [SqlFact]

@@ -11,4 +11,7 @@ public enum PaymentNotAllowedReason
     OwnerEkycRequired,
     /// <summary>Gia hạn, kỳ chờ, ân hạn chưa hỗ trợ ở phiên bản này.</summary>
     RenewalNotSupported,
+
+    /// <summary>Gia hạn sang hạng hoặc số suất nhỏ hơn mức đang dùng (dung lượng hoặc suất người nhận).</summary>
+    UsageExceedsPlan,
 }

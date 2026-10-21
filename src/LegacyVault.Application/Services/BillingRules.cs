@@ -21,7 +21,7 @@ public static class BillingRules
 
     /// <summary>
     /// Backend tự xác định loại đơn từ quyền dịch vụ của kho (§8.3):
-    /// Free → PURCHASE; PaidActive còn hạn → ADDON; còn lại (gia hạn, ân hạn, chờ rà soát) chưa hỗ trợ.
+    /// Free → PURCHASE; PaidActive còn hạn → ADDON; còn lại (hết hạn, ân hạn, chờ rà soát) → RENEWAL.
     /// </summary>
     public static PaymentOrderKind DetermineKind(VaultEntitlement entitlement, DateTimeOffset now)
     {
@@ -35,8 +35,8 @@ public static class BillingRules
         {
             return PaymentOrderKind.Addon;
         }
-        throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported,
-            "Kho đang ở trạng thái cần gia hạn dịch vụ. Chức năng gia hạn chưa được hỗ trợ.");
+        // Hết hạn, ân hạn hoặc chờ rà soát (kể cả PaidActive đã quá hạn khi chưa có job chuyển trạng thái): chỉ còn gia hạn.
+        return PaymentOrderKind.Renewal;
     }
 
     /// <summary>
@@ -47,10 +47,27 @@ public static class BillingRules
     public static PaymentOrderKind DetermineKind(
         VaultEntitlement entitlement, string? requestedTierText, int extraSlots, DateTimeOffset now)
     {
+        return DetermineKind(entitlement, requestedTierText, extraSlots, false, now);
+    }
+
+    /// <summary>
+    /// Như bản trên, thêm cờ gia hạn: kho PaidActive còn hạn mà client gửi renew = true thì là gia hạn sớm (RENEWAL).
+    /// Kho đã hết hạn, ân hạn hoặc chờ rà soát luôn là RENEWAL. Free luôn là PURCHASE.
+    /// </summary>
+    public static PaymentOrderKind DetermineKind(
+        VaultEntitlement entitlement, string? requestedTierText, int extraSlots, bool renew, DateTimeOffset now)
+    {
         PaymentOrderKind kind = DetermineKind(entitlement, now);
-        if (kind == PaymentOrderKind.Addon && IsUpgradeRequest(entitlement, requestedTierText, extraSlots))
+        if (kind == PaymentOrderKind.Addon)
         {
-            return PaymentOrderKind.Upgrade;
+            if (renew)
+            {
+                return PaymentOrderKind.Renewal;
+            }
+            if (IsUpgradeRequest(entitlement, requestedTierText, extraSlots))
+            {
+                return PaymentOrderKind.Upgrade;
+            }
         }
         return kind;
     }
@@ -192,6 +209,98 @@ public static class BillingRules
         quote.ServiceDays = null;
         quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
         return quote;
+    }
+
+    /// <summary>
+    /// Báo giá gia hạn: giá = giá hạng của kỳ mới + 49.000 × số suất thêm × số năm (suất thêm lấy theo lựa chọn, tối đa 20).
+    /// Hạng được chọn tự do (cùng hạng hoặc đổi hạng); việc dữ liệu hiện có có vừa hạng mới hay không do
+    /// <see cref="EnsureUsageFitsRenewal"/> kiểm tra. Kho còn hạn: kỳ mới nối tiếp hạn cũ (BaseServiceExpiresAt = hạn cũ);
+    /// đã hết hạn hoặc ân hạn: kỳ mới tính từ lúc thanh toán (BaseServiceExpiresAt = null).
+    /// </summary>
+    public static BillingQuote QuoteRenewal(
+        VaultEntitlement entitlement, string? tierText, int? years, int extraSlots, DateTimeOffset now)
+    {
+        BillingQuote quote = QuotePurchase(tierText, years, extraSlots);
+        quote.Kind = PaymentOrderKind.Renewal;
+        quote.BaseServiceExpiresAt = null;
+        if (entitlement.Status == EntitlementStatus.PaidActive
+            && entitlement.ServiceExpiresAt != null
+            && entitlement.ServiceExpiresAt.Value > now)
+        {
+            quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
+        }
+        return quote;
+    }
+
+    /// <summary>
+    /// Gia hạn sang hạng hoặc số suất không đủ chứa dữ liệu đang dùng (dung lượng đã dùng hoặc suất người nhận đã dùng)
+    /// thì không cho tạo đơn (409 PAYMENT_NOT_ALLOWED / USAGE_EXCEEDS_PLAN); không tự xóa dữ liệu để vừa hạng.
+    /// </summary>
+    public static void EnsureUsageFitsRenewal(BillingQuote quote, long usedBytes, int usedBeneficiarySlots)
+    {
+        if (usedBytes > quote.StorageQuotaBytes)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.UsageExceedsPlan,
+                "Dung lượng đang dùng vượt hạn mức của hạng được chọn. Chọn hạng lớn hơn hoặc giảm dữ liệu trước.");
+        }
+        if (usedBeneficiarySlots > quote.TotalBeneficiarySlots)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.UsageExceedsPlan,
+                "Số suất người nhận đang dùng vượt số suất của lựa chọn này. Chọn thêm suất hoặc gỡ bớt người nhận trước.");
+        }
+    }
+
+    /// <summary>
+    /// Cấp quyền cho đơn RENEWAL: hạng, dung lượng, suất kèm theo và suất thêm theo đơn; trạng thái về PaidActive.
+    /// Hạn mới = (hạn cũ nếu đơn tạo lúc còn hạn và hạn đó chưa qua, ngược lại lúc trả) + số năm × 365 ngày.
+    /// Chỉ cấp khi quyền chưa đổi so với lúc tạo đơn: đơn nối tiếp cần đúng hạn cũ; đơn tính từ lúc trả cần kho vẫn đang
+    /// hết hạn hoặc ân hạn (chưa có kỳ mới).
+    /// </summary>
+    public static void ApplyRenewal(VaultEntitlement entitlement, PaymentOrder order, DateTimeOffset paidAt)
+    {
+        if (entitlement.Status == EntitlementStatus.Free || order.Years == null)
+        {
+            throw NotPayable(PaymentOrderNotPayableReason.EntitlementChanged,
+                "Quyền dịch vụ của kho đã thay đổi kể từ lúc tạo đơn nên không thể cấp tự động.");
+        }
+
+        DateTimeOffset start = paidAt;
+        if (order.BaseServiceExpiresAt != null)
+        {
+            // Đơn gia hạn sớm: kỳ hiện tại phải còn nguyên như lúc tạo đơn.
+            bool unchanged = entitlement.Status == EntitlementStatus.PaidActive
+                && entitlement.ServiceExpiresAt != null
+                && entitlement.ServiceExpiresAt.Value == order.BaseServiceExpiresAt.Value;
+            if (!unchanged)
+            {
+                throw NotPayable(PaymentOrderNotPayableReason.EntitlementChanged,
+                    "Kỳ dịch vụ của kho đã thay đổi kể từ lúc tạo đơn nên không thể cấp tự động.");
+            }
+            if (order.BaseServiceExpiresAt.Value > paidAt)
+            {
+                start = order.BaseServiceExpiresAt.Value;
+            }
+        }
+        else
+        {
+            // Đơn gia hạn muộn: nếu giữa chừng kho đã có kỳ còn hạn khác thì không cấp chồng.
+            bool activeNow = entitlement.Status == EntitlementStatus.PaidActive
+                && entitlement.ServiceExpiresAt != null
+                && entitlement.ServiceExpiresAt.Value > paidAt;
+            if (activeNow)
+            {
+                throw NotPayable(PaymentOrderNotPayableReason.EntitlementChanged,
+                    "Kho đã có kỳ dịch vụ còn hạn kể từ lúc tạo đơn nên không thể cấp tự động.");
+            }
+        }
+
+        entitlement.Tier = order.Tier;
+        entitlement.Status = EntitlementStatus.PaidActive;
+        entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
+        entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
+        entitlement.ExtraBeneficiarySlots = order.ExtraSlots;
+        entitlement.ServiceExpiresAt = start.AddDays(order.Years.Value * BillingPrices.DaysPerYear);
+        entitlement.UpdatedAt = paidAt;
     }
 
     /// <summary>
