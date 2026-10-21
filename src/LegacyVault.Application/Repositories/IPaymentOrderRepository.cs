@@ -34,6 +34,12 @@ public interface IPaymentOrderRepository
     /// </summary>
     Task<bool> TryAddAsync(PaymentOrder order, CancellationToken ct);
 
+    /// <summary>
+    /// Số năm của đơn PURCHASE đã thanh toán gần nhất của kho (kỳ hiện tại được mua theo đơn này), dùng để tính
+    /// giá nâng hạng. Không có đơn mua nào (ví dụ kho tạo bằng SQL dev) → null. Chỉ đọc, không theo dõi thay đổi.
+    /// </summary>
+    Task<int?> FindLatestPaidPurchaseYearsAsync(Guid vaultId, CancellationToken ct);
+
     /// <summary>Bỏ mọi thay đổi chưa lưu của request (sau khi TryAddAsync trả false).</summary>
     void DiscardPendingChanges();
 }

@@ -65,7 +65,7 @@ public sealed class BillingService : IBillingService
         // Người đăng nhập → kho → điều kiện (§8.3 bước 1–5).
         Guid userId = currentUser.RequireUserId();
         DateTimeOffset now = timeProvider.GetUtcNow();
-        BillingEligibility eligibility = await CheckEligibilityAsync(userId, now, ct);
+        BillingEligibility eligibility = await CheckEligibilityAsync(userId, request, now, ct);
 
         // Dữ liệu: tính giá bằng đúng hàm mà bước tạo đơn dùng (D2).
         BillingQuote quote = BuildQuote(request, eligibility, now);
@@ -78,7 +78,7 @@ public sealed class BillingService : IBillingService
         DateTimeOffset now = timeProvider.GetUtcNow();
 
         // Quyền + trạng thái: cùng các kiểm tra và cùng cách tính giá như báo giá.
-        BillingEligibility eligibility = await CheckEligibilityAsync(userId, now, ct);
+        BillingEligibility eligibility = await CheckEligibilityAsync(userId, request, now, ct);
         BillingQuote quote = BuildQuote(request, eligibility, now);
 
         // Chưa cấu hình tài khoản nhận tiền thì không phát đơn: Owner sẽ không có nơi để trả.
@@ -279,13 +279,14 @@ public sealed class BillingService : IBillingService
     /// Các kiểm tra chung của báo giá và tạo đơn, theo đúng thứ tự: kho của người dùng (404) → kho đóng →
     /// kế hoạch bị khóa → loại đơn → eKYC Owner (chỉ mua mới).
     /// </summary>
-    private async Task<BillingEligibility> CheckEligibilityAsync(Guid userId, DateTimeOffset now, CancellationToken ct)
+    private async Task<BillingEligibility> CheckEligibilityAsync(
+        Guid userId, BillingSelectionRequest request, DateTimeOffset now, CancellationToken ct)
     {
         Vault vault = await LoadVaultAsync(userId, ct);
 
         BillingRules.EnsureVaultAndPlanAllowPayment(vault);
 
-        PaymentOrderKind kind = BillingRules.DetermineKind(vault.Entitlement, now);
+        PaymentOrderKind kind = BillingRules.DetermineKind(vault.Entitlement, request.Tier, request.ExtraSlots, now);
 
         if (kind == PaymentOrderKind.Purchase)
         {
@@ -302,6 +303,11 @@ public sealed class BillingService : IBillingService
         BillingEligibility eligibility = new BillingEligibility();
         eligibility.Vault = vault;
         eligibility.Kind = kind;
+        if (kind == PaymentOrderKind.Upgrade)
+        {
+            // Giá nâng hạng tính theo kỳ (số năm) của đơn mua đã trả gần nhất.
+            eligibility.PaidYears = await paymentOrderRepository.FindLatestPaidPurchaseYearsAsync(vault.Id, ct);
+        }
         return eligibility;
     }
 
@@ -318,6 +324,11 @@ public sealed class BillingService : IBillingService
         if (eligibility.Kind == PaymentOrderKind.Purchase)
         {
             return BillingRules.QuotePurchase(request.Tier, request.Years, request.ExtraSlots);
+        }
+        if (eligibility.Kind == PaymentOrderKind.Upgrade)
+        {
+            return BillingRules.QuoteUpgrade(
+                eligibility.Vault.Entitlement, eligibility.PaidYears, request.ExtraSlots, now);
         }
         return BillingRules.QuoteAddon(eligibility.Vault.Entitlement, request.ExtraSlots, now);
     }
@@ -405,5 +416,8 @@ public sealed class BillingService : IBillingService
         public Vault Vault { get; set; } = null!;
 
         public PaymentOrderKind Kind { get; set; }
+
+        /// <summary>Số năm của đơn mua đã trả gần nhất; chỉ nạp khi là nâng hạng.</summary>
+        public int? PaidYears { get; set; }
     }
 }

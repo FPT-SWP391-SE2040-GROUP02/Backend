@@ -38,6 +38,22 @@ public sealed class PaymentOrderRepository : IPaymentOrderRepository
             .FirstOrDefaultAsync(o => o.VaultId == vaultId && o.Status == PaymentOrderStatus.Pending, ct);
     }
 
+    public async Task<int?> FindLatestPaidPurchaseYearsAsync(Guid vaultId, CancellationToken ct)
+    {
+        PaymentOrder? latest = await context.PaymentOrders
+            .AsNoTracking()
+            .Where(o => o.VaultId == vaultId
+                && o.Kind == PaymentOrderKind.Purchase
+                && o.Status == PaymentOrderStatus.Paid)
+            .OrderByDescending(o => o.PaidAt)
+            .FirstOrDefaultAsync(ct);
+        if (latest == null)
+        {
+            return null;
+        }
+        return latest.Years;
+    }
+
     public async Task<bool> TryAddAsync(PaymentOrder order, CancellationToken ct)
     {
         context.PaymentOrders.Add(order);

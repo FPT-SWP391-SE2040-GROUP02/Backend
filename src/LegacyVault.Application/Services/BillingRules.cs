@@ -40,6 +40,45 @@ public static class BillingRules
     }
 
     /// <summary>
+    /// Như bản không có lựa chọn: kho PaidActive còn hạn đang ở XS mà client chọn XS_MAX và không mua thêm suất
+    /// (extraSlots = 0) thì là nâng hạng giữa kỳ (UPGRADE); mọi lựa chọn khác vẫn là ADDON (hạng và số năm client gửi bị
+    /// bỏ qua như trước, ví dụ XS_MAX kèm extraSlots = 1 vẫn là mua thêm suất).
+    /// </summary>
+    public static PaymentOrderKind DetermineKind(
+        VaultEntitlement entitlement, string? requestedTierText, int extraSlots, DateTimeOffset now)
+    {
+        PaymentOrderKind kind = DetermineKind(entitlement, now);
+        if (kind == PaymentOrderKind.Addon && IsUpgradeRequest(entitlement, requestedTierText, extraSlots))
+        {
+            return PaymentOrderKind.Upgrade;
+        }
+        return kind;
+    }
+
+    /// <summary>
+    /// Chỉ có một đường nâng hạng: kho đang ở XS chọn XS_MAX và không mua thêm suất. Mua thêm suất cần extraSlots từ 1
+    /// nên extraSlots = 0 không thể là mua thêm suất. Hạ hạng hoặc chọn cùng hạng không phải nâng hạng.
+    /// </summary>
+    public static bool IsUpgradeRequest(VaultEntitlement entitlement, string? requestedTierText, int extraSlots)
+    {
+        if (extraSlots != 0)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(requestedTierText))
+        {
+            return false;
+        }
+        if (entitlement.Tier != ServiceTier.Xs)
+        {
+            return false;
+        }
+        string normalized = requestedTierText.Trim().ToUpperInvariant();
+        return normalized == ServiceTier.XsMax.ToApiString();
+    }
+
+    /// <summary>
     /// Kho đã đóng, hoặc kế hoạch đang chứng tử/bàn giao/bị chặn thì không tạo đơn mới (§8.3).
     /// Cần vault đã nạp Plan.
     /// </summary>
@@ -156,13 +195,68 @@ public static class BillingRules
     }
 
     /// <summary>
+    /// Báo giá nâng hạng giữa kỳ XS → XS_MAX: trả phần chênh giá theo thời gian còn lại của kỳ hiện tại.
+    /// Giá = ceil((giá XS_MAX − giá XS của kỳ N năm đã mua) × số giây còn lại / (N × 365 ngày tính bằng giây)).
+    /// N lấy từ đơn mua đã trả gần nhất (<paramref name="paidYears"/>); không có thì dùng bảng giá 1 năm. Số giây còn lại
+    /// không vượt tổng số giây của kỳ. Tính hoàn toàn bằng số nguyên long. Hạn dịch vụ giữ nguyên; dung lượng và suất
+    /// kèm theo lên theo XS_MAX; suất mua thêm đang có được giữ.
+    /// </summary>
+    public static BillingQuote QuoteUpgrade(VaultEntitlement entitlement, int? paidYears, int extraSlots, DateTimeOffset now)
+    {
+        if (extraSlots != 0)
+        {
+            throw ValidationErrors.For("extraSlots", "Nâng hạng không kèm mua thêm suất; mua thêm suất ở một đơn khác.");
+        }
+        if (entitlement.ServiceExpiresAt == null)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported, "Kho không có kỳ dịch vụ còn hạn.");
+        }
+        TimeSpan remaining = entitlement.ServiceExpiresAt.Value - now;
+        long remainingSeconds = remaining.Ticks / TimeSpan.TicksPerSecond;
+        if (remainingSeconds < 1)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported, "Kỳ dịch vụ đã hết hạn.");
+        }
+
+        int years = 1;
+        if (paidYears != null && BillingPrices.IsSupportedYears(paidYears.Value))
+        {
+            years = paidYears.Value;
+        }
+        long priceDifference = BillingPrices.GetTierPrice(ServiceTier.XsMax, years)
+            - BillingPrices.GetTierPrice(ServiceTier.Xs, years);
+        long periodSeconds = BillingPrices.SecondsPerYear * years;
+        if (remainingSeconds > periodSeconds)
+        {
+            remainingSeconds = periodSeconds;
+        }
+        long numerator = priceDifference * remainingSeconds;
+        long price = (numerator + periodSeconds - 1) / periodSeconds;
+
+        BillingQuote quote = new BillingQuote();
+        quote.Kind = PaymentOrderKind.Upgrade;
+        quote.Tier = ServiceTier.XsMax;
+        quote.Years = null;
+        quote.ExtraSlots = 0;
+        quote.TierAmount = price;
+        quote.SlotAmount = 0;
+        quote.TotalAmount = price;
+        quote.StorageQuotaBytes = BillingPrices.GetStorageQuotaBytes(ServiceTier.XsMax);
+        quote.IncludedBeneficiarySlots = BillingPrices.GetIncludedSlots(ServiceTier.XsMax);
+        quote.TotalBeneficiarySlots = quote.IncludedBeneficiarySlots + entitlement.ExtraBeneficiarySlots;
+        quote.ServiceDays = null;
+        quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
+        return quote;
+    }
+
+    /// <summary>
     /// Hạn của đơn (ADDON-03): PURCHASE = lúc tạo + 15 phút; ADDON = mốc sớm hơn giữa lúc tạo + 15 phút và hết kỳ hiện tại.
     /// </summary>
     public static DateTimeOffset ComputeOrderExpiresAt(
         PaymentOrderKind kind, DateTimeOffset now, DateTimeOffset? serviceExpiresAt)
     {
         DateTimeOffset byLifetime = now + BillingPrices.OrderLifetime;
-        if (kind == PaymentOrderKind.Addon && serviceExpiresAt != null)
+        if ((kind == PaymentOrderKind.Addon || kind == PaymentOrderKind.Upgrade) && serviceExpiresAt != null)
         {
             if (serviceExpiresAt.Value < byLifetime)
             {
@@ -212,6 +306,30 @@ public static class BillingRules
         }
 
         entitlement.ExtraBeneficiarySlots = entitlement.ExtraBeneficiarySlots + order.ExtraSlots;
+        entitlement.UpdatedAt = paidAt;
+    }
+
+    /// <summary>
+    /// Cấp quyền cho đơn UPGRADE: đổi hạng sang hạng của đơn, nâng dung lượng và suất kèm theo, giữ nguyên hạn và suất
+    /// mua thêm. Chỉ cấp khi quyền vẫn là PaidActive hạng XS, đúng kỳ lúc tạo đơn (hạn không đổi) và kỳ chưa hết.
+    /// </summary>
+    public static void ApplyUpgrade(VaultEntitlement entitlement, PaymentOrder order, DateTimeOffset paidAt)
+    {
+        bool unchanged = entitlement.Status == EntitlementStatus.PaidActive
+            && entitlement.Tier == ServiceTier.Xs
+            && entitlement.ServiceExpiresAt != null
+            && order.BaseServiceExpiresAt != null
+            && entitlement.ServiceExpiresAt.Value == order.BaseServiceExpiresAt.Value
+            && entitlement.ServiceExpiresAt.Value > paidAt;
+        if (!unchanged)
+        {
+            throw NotPayable(PaymentOrderNotPayableReason.EntitlementChanged,
+                "Hạng hoặc kỳ dịch vụ của kho đã thay đổi hoặc đã hết kể từ lúc tạo đơn nên không thể cấp tự động.");
+        }
+
+        entitlement.Tier = order.Tier;
+        entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
+        entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
         entitlement.UpdatedAt = paidAt;
     }
 
