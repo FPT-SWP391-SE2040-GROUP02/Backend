@@ -81,4 +81,10 @@ public enum AuditAction
     DevTimeTravel = 36,
     /// <summary>Admin đưa đồng hồ của kho thử về thời gian thực (chỉ có ở Development).</summary>
     DevClockReset = 37,
+    /// <summary>Owner tạo đơn thanh toán (SRS §8.3).</summary>
+    PaymentOrderCreated = 38,
+    /// <summary>Owner hủy đơn thanh toán đang chờ.</summary>
+    PaymentOrderCancelled = 39,
+    /// <summary>Đơn thanh toán được thanh toán và quyền dịch vụ được cấp (job/webhook, không có người dùng).</summary>
+    PaymentPaid = 40,
 }
