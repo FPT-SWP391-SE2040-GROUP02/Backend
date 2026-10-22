@@ -31,4 +31,7 @@ public class BeneficiaryResponse
 
     /// <summary>Gửi lại trong body (trường etag) khi sửa.</summary>
     public string Etag { get; set; } = string.Empty;
+
+    /// <summary>True khi hồ sơ cùng CCCD đã tồn tại trong kho (tạo mới nhưng trả về hồ sơ cũ theo QUOTA-04).</summary>
+    public bool IsExisting { get; set; }
 }
