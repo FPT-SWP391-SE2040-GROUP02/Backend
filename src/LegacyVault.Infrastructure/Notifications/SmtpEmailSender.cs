@@ -25,7 +25,8 @@ public sealed class SmtpEmailSender : IEmailSender
             "Cảm ơn bạn đã đăng ký tài khoản tại LegacyVault. Vui lòng nhấn vào nút bên dưới để hoàn tất việc xác minh email và bắt đầu bảo vệ di sản số của bạn.",
             verificationUrl,
             "Xác minh email ngay",
-            note);
+            note,
+            "Xác minh email");
 
         return mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
     }
@@ -42,7 +43,9 @@ public sealed class SmtpEmailSender : IEmailSender
             "Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản LegacyVault của bạn. Hãy nhấn vào nút bên dưới để tiến hành thiết lập mật khẩu mới an toàn.",
             resetUrl,
             "Đặt lại mật khẩu",
-            note);
+            note,
+            "Đặt lại mật khẩu",
+            true);
 
         return mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
     }

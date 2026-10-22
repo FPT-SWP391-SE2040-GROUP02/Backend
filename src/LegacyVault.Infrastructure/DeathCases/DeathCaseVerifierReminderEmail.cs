@@ -33,7 +33,8 @@ public static class DeathCaseVerifierReminderEmail
             paragraph,
             link,
             "Xem hồ sơ thẩm định",
-            note);
+            note,
+            "Nhắc xét duyệt");
         return new EmailContent(subject, text, html);
     }
 }

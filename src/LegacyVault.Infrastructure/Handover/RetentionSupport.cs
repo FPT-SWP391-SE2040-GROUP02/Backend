@@ -47,7 +47,8 @@ public static class RetentionNoticeEmail
             paragraph,
             link,
             "Đăng nhập nhận dữ liệu",
-            note);
+            note,
+            "Mốc lưu giữ dữ liệu");
         return new EmailContent(subject, text, html);
     }
 }
