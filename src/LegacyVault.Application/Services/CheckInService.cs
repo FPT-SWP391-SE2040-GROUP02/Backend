@@ -104,6 +104,28 @@ public sealed class CheckInService : ICheckInService
         return await BuildResponseAsync(plan, new PaginationRequest(), ct);
     }
 
+    public async Task<CheckInStatusResponse> CheckInViaSmartwatchAsync(
+        SmartwatchCheckInRequest request, CancellationToken ct)
+    {
+        if (request == null)
+        {
+            throw ValidationErrors.For("request", "Dữ liệu điểm danh không được để trống.");
+        }
+
+        if (!request.IsOnWrist)
+        {
+            throw ValidationErrors.For("isOnWrist", "Đồng hồ không được đeo trên tay. Yêu cầu đeo đồng hồ để xác thực nhịp tim.");
+        }
+
+        if (request.HeartRate < 40 || request.HeartRate > 180)
+        {
+            throw ValidationErrors.For("heartRate", "Nhịp tim không hợp lệ hoặc cảm biến chưa đo được tín hiệu sống (yêu cầu từ 40 đến 180 bpm).");
+        }
+
+        // Tái sử dụng logic nghiệp vụ điểm danh chuẩn (đóng kỳ, mở kỳ mới, debounce 60s)
+        return await CheckInAsync(ct);
+    }
+
     public async Task<CheckInStatusResponse> UpdateSettingsAsync(
         UpdateCheckInSettingsRequest request, CancellationToken ct)
     {
