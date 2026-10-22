@@ -13,6 +13,12 @@ public static class LegacyVaultEmailTheme
 {
     private const string FontStack = "'Be Vietnam Pro','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
+    /// <summary>Mã nội tuyến của logo; SmtpMailSender đính ảnh vào thư khi HTML có tham chiếu "cid:" này.</summary>
+    public const string LogoContentId = "legacyvault-logo";
+
+    /// <summary>Tên tài nguyên nhúng của ảnh logo (Notifications/Assets/email-logo.png, 336x96, nền #1A4B3B).</summary>
+    public const string LogoResourceName = "LegacyVault.Infrastructure.Notifications.email-logo.png";
+
     /// <param name="kicker">Nhãn nhỏ phía trên tiêu đề, ví dụ "Nhắc điểm danh". Null hoặc rỗng thì bỏ qua.</param>
     /// <param name="securityCallout">true thì ghi chú nằm trong khung vàng "Lưu ý bảo mật" (dùng cho đặt lại mật khẩu);
     /// false thì là dòng ghi chú thường dưới đường kẻ.</param>
@@ -74,8 +80,8 @@ public static class LegacyVaultEmailTheme
 <table role=""presentation"" width=""100%"" border=""0"" cellspacing=""0"" cellpadding=""0"" style=""background-color:#EFECE3;"">
 <tr><td align=""center"" style=""padding:32px 16px;"">
 <table role=""presentation"" width=""100%"" border=""0"" cellspacing=""0"" cellpadding=""0"" style=""max-width:616px;background-color:#FFFFFF;border:1px solid #D9D4C4;border-radius:16px;overflow:hidden;"">
-<tr><td style=""background-color:#1A4B3B;padding:22px 32px;font-family:{FontStack};"">
-<span style=""color:#EFECE3;font-size:20px;font-weight:600;letter-spacing:0.2px;"">LegacyVault</span>
+<tr><td bgcolor=""#1A4B3B"" style=""background-color:#1A4B3B;padding:18px 32px;font-family:{FontStack};"">
+<img src=""cid:{LogoContentId}"" alt=""LegacyVault"" width=""168"" height=""48"" style=""display:block;border:0;outline:none;width:168px;height:48px;color:#EFECE3;font-size:20px;font-weight:600;"">
 </td></tr>
 <tr><td style=""padding:36px 32px 28px 32px;font-family:{FontStack};"">
 {kickerHtml}

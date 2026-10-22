@@ -41,6 +41,7 @@ public sealed class SmtpMailSender
         BodyBuilder body = new BodyBuilder();
         body.TextBody = textBody;
         body.HtmlBody = htmlBody;
+        AttachLogoIfReferenced(body, htmlBody);
         message.Body = body.ToMessageBody();
 
         using (SmtpClient client = new SmtpClient())
@@ -53,6 +54,24 @@ public sealed class SmtpMailSender
             }
             await client.SendAsync(message, ct);
             await client.DisconnectAsync(true, ct);
+        }
+    }
+
+    /// <summary>Đính logo nội tuyến để Gmail và Outlook hiện ngay, không cần người nhận bấm "tải ảnh".</summary>
+    private static void AttachLogoIfReferenced(BodyBuilder body, string htmlBody)
+    {
+        if (!htmlBody.Contains("cid:" + LegacyVaultEmailTheme.LogoContentId, StringComparison.Ordinal))
+        {
+            return;
+        }
+        using (Stream? stream = typeof(SmtpMailSender).Assembly.GetManifestResourceStream(LegacyVaultEmailTheme.LogoResourceName))
+        {
+            if (stream == null)
+            {
+                return;
+            }
+            MimeEntity logo = body.LinkedResources.Add("email-logo.png", stream, new ContentType("image", "png"));
+            logo.ContentId = LegacyVaultEmailTheme.LogoContentId;
         }
     }
 }

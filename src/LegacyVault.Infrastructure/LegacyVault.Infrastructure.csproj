@@ -11,4 +11,7 @@
     <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Notifications\Assets\email-logo.png" LogicalName="LegacyVault.Infrastructure.Notifications.email-logo.png" />
+  </ItemGroup>
 </Project>
