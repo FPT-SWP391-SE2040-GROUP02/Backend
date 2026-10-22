@@ -103,6 +103,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             // Tắt job nền điểm danh: test tự gọi ICheckInJob khi cần, tránh job chạy xen vào dữ liệu test.
             settings["CheckIn:Enabled"] = "false";
             settings["Handover:Job:Enabled"] = "false";
+            settings["Handover:RequireIdentityVerification"] = "false";
             settings["ExecutorInvitations:DeliveryEnabled"] = "false";
             settings["DeathCase:NoticeJobEnabled"] = "false";
             settings["DeathCase:AssignmentJobEnabled"] = "false";
