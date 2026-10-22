@@ -26,7 +26,8 @@ public sealed class ExecutorInvitationSender(SmtpMailSender sender, IOptions<Smt
             lead,
             link,
             "Xem & Phản hồi lời mời Executor",
-            notice);
+            notice,
+            "Lời mời nhiệm vụ");
 
         try
         {

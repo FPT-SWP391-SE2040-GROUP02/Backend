@@ -32,7 +32,8 @@ public static class HandoverInvitationEmail
             paragraph,
             link,
             "Tiếp nhận bàn giao di sản",
-            note);
+            note,
+            "Thông báo bàn giao");
         return new EmailContent(subject, text, html);
     }
 }

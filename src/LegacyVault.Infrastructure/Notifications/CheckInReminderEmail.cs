@@ -55,7 +55,8 @@ public static class CheckInReminderEmail
             paragraph,
             checkInUrl,
             "Điểm danh ngay",
-            note);
+            note,
+            "Nhắc điểm danh");
         return new EmailContent(subject, text, html);
     }
 

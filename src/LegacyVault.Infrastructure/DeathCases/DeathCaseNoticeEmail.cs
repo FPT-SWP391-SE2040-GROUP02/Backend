@@ -33,7 +33,8 @@ public static class DeathCaseNoticeEmail
             paragraph,
             link,
             "Xác nhận tình trạng ngay",
-            note);
+            note,
+            "Cảnh báo bàn giao");
         return new EmailContent(subject, text, html);
     }
 }
