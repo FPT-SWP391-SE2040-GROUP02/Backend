@@ -29,4 +29,11 @@ public interface ICheckInService
     /// Lỗi: 400 VALIDATION_ERROR, 409 EDIT_CONFLICT (etag cũ), 409 VAULT_NOT_EDITABLE (PLAN_LOCKED / VAULT_CLOSED).
     /// </summary>
     Task<CheckInStatusResponse> UpdateSettingsAsync(UpdateCheckInSettingsRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Điểm danh sinh trắc học qua Smartwatch (Galaxy Watch): kiểm tra nhịp tim và trạng thái đeo trên tay.
+    /// Lỗi: 400 VALIDATION_ERROR (nhịp tim ngoài ngưỡng, không tiếp xúc da tay),
+    /// 409 CHECKIN_NOT_ALLOWED, 409 EDIT_CONFLICT.
+    /// </summary>
+    Task<CheckInStatusResponse> CheckInViaSmartwatchAsync(SmartwatchCheckInRequest request, CancellationToken ct);
 }

@@ -21,13 +21,16 @@ namespace LegacyVault.Api.Controllers;
 public sealed class VerifierDeathCasesController : ControllerBase
 {
     private readonly IDeathCaseReviewService reviewService;
+    private readonly IAiNotaryAssistantService aiAssistantService;
     private readonly ILogger<VerifierDeathCasesController> logger;
 
     public VerifierDeathCasesController(
         IDeathCaseReviewService reviewService,
+        IAiNotaryAssistantService aiAssistantService,
         ILogger<VerifierDeathCasesController> logger)
     {
         this.reviewService = reviewService;
+        this.aiAssistantService = aiAssistantService;
         this.logger = logger;
     }
 
@@ -165,5 +168,20 @@ public sealed class VerifierDeathCasesController : ControllerBase
     {
         Response.Headers["Cache-Control"] = "no-store";
         return await reviewService.ApproveAsync(caseId, request, ct);
+    }
+
+    /// <summary>
+    /// Trợ lý Gemini AI Co-Pilot hỗ trợ Công chứng viên thẩm định và rà soát rủi ro pháp lý của hồ sơ báo tử.
+    /// </summary>
+    [HttpPost("death-cases/{caseId:guid}/ai-assess")]
+    [ProducesResponseType<AiDossierAnalysisResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AiDossierAnalysisResponse>> AssessWithAi(
+        Guid caseId, CancellationToken ct)
+    {
+        Response.Headers["Cache-Control"] = "no-store";
+        return Ok(await aiAssistantService.AssessDossierAsync(caseId, ct));
     }
 }

@@ -30,6 +30,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly IContainerRepository containerRepository;
     private readonly IBeneficiaryDataProtector dataProtector;
     private readonly IAuditLogRepository auditLogRepository;
+    private readonly IUserRepository userRepository;
+    private readonly IOwnerIdentityReader ownerIdentityReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -40,6 +42,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         IContainerRepository containerRepository,
         IBeneficiaryDataProtector dataProtector,
         IAuditLogRepository auditLogRepository,
+        IUserRepository userRepository,
+        IOwnerIdentityReader ownerIdentityReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -49,6 +53,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         this.containerRepository = containerRepository;
         this.dataProtector = dataProtector;
         this.auditLogRepository = auditLogRepository;
+        this.userRepository = userRepository;
+        this.ownerIdentityReader = ownerIdentityReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -78,6 +84,20 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         data.Email = request.Email;
         data.Phone = request.Phone;
         NormalizeContact(data);
+        string? ownerCitizenId = await ownerIdentityReader.FindBoundCitizenIdAsync(vault.OwnerId, ct);
+        if (ownerCitizenId != null && string.Equals(data.CitizenId, ownerCitizenId, StringComparison.Ordinal))
+        {
+            throw ValidationErrors.For("citizenId", "Số CCCD người thụ hưởng không được trùng với CCCD của Chủ kho.");
+        }
+        if (!string.IsNullOrWhiteSpace(data.Email))
+        {
+            User? owner = await userRepository.FindByIdAsync(vault.OwnerId, ct);
+            if (owner != null && !string.IsNullOrWhiteSpace(owner.Email) &&
+                string.Equals(data.Email.Trim(), owner.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
+            }
+        }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         DateOnly today = GetTodayInVietnam();
@@ -138,6 +158,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         CreateBeneficiaryResult same = new CreateBeneficiaryResult();
         same.Created = false;
         same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, existingContainerIds, today);
+        same.Beneficiary.IsExisting = true;
         return same;
     }
 
@@ -232,6 +253,15 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             updated.Phone = request.Phone;
         }
         NormalizeContact(updated);
+        if (!string.IsNullOrWhiteSpace(updated.Email))
+        {
+            User? owner = await userRepository.FindByIdAsync(vault.OwnerId, ct);
+            if (owner != null && !string.IsNullOrWhiteSpace(owner.Email) &&
+                string.Equals(updated.Email.Trim(), owner.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
+            }
+        }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         DateOnly today = GetTodayInVietnam();
@@ -482,7 +512,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["beneficiaryId"] = beneficiaryId;
         return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiaryIdentityConflict,
-            "Đã có người nhận cùng số CCCD nhưng khác họ tên hoặc ngày sinh. Vui lòng sửa cho thống nhất.", extensions);
+            "Số CCCD này đã tồn tại trong danh sách người nhận của kho (với thông tin khác). Vui lòng kiểm tra lại.", extensions);
     }
 
     [GeneratedRegex("^\\+?[0-9]{9,15}$")]

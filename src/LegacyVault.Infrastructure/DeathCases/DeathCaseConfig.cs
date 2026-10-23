@@ -2,11 +2,13 @@ using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Services;
 using LegacyVault.Infrastructure.Ekyc;
 using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
 using LegacyVault.Infrastructure.Security;
+using LegacyVault.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -26,6 +28,7 @@ public static class DeathCaseConfig
         services.AddScoped<IObjectionRepository, ObjectionRepository>();
         services.AddScoped<IOwnerFaceVerifier, OwnerFaceVerifier>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
+        services.AddScoped<IAiNotaryAssistantService, GeminiNotaryAssistantService>();
 
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.
         services.AddSingleton<IDeathCaseDataProtector, DeathCaseDataProtector>();

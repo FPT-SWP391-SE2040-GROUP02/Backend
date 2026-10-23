@@ -17,6 +17,7 @@ public static class ApplicationConfig
 
         // Điểm danh (deadman switch)
         services.AddScoped<ICheckInService, CheckInService>();
+        services.AddSingleton<ISmartwatchPairingStore, SmartwatchPairingStore>();
         services.AddScoped<ICheckInScheduler, CheckInScheduler>();
         services.AddScoped<ICheckInJob, CheckInJob>();
 

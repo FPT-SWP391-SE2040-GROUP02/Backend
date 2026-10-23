@@ -45,6 +45,21 @@ public sealed class CheckInsController : ControllerBase
         return checkInService.CheckInAsync(ct);
     }
 
+    /// <summary>
+    /// Điểm danh sinh trắc học qua Smartwatch (Galaxy Watch): kiểm tra nhịp tim và trạng thái đeo trên tay.
+    /// </summary>
+    [HttpPost("check-ins/smartwatch")]
+    [Consumes("application/json")]
+    [ProducesResponseType<CheckInStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<CheckInStatusResponse> CheckInViaSmartwatch([FromBody] SmartwatchCheckInRequest request, CancellationToken ct)
+    {
+        return checkInService.CheckInViaSmartwatchAsync(request, ct);
+    }
+
     /// <summary>Đổi chu kỳ (30/60/90 ngày) và thời gian chờ (7/14/30 ngày); áp dụng từ kỳ sau nếu đang có kỳ chạy.</summary>
     [HttpPatch("vaults/me/check-in-settings")]
     [Consumes("application/json")]
