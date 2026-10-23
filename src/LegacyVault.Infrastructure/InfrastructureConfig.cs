@@ -116,6 +116,18 @@ public static class InfrastructureConfig
         // KEK cho mã hóa nội dung tài sản. Sai/thiếu khóa thì API không khởi động, tránh lưu nội dung không mở lại được.
         services.AddOptions<AssetEncryptionSettings>()
             .Bind(configuration.GetSection("AssetEncryption"))
+            .PostConfigure(settings =>
+            {
+                if (settings.BlindIndexKey != null) settings.BlindIndexKey = settings.BlindIndexKey.Trim().Trim('"').Trim('\'');
+                if (settings.ActiveKeyId != null) settings.ActiveKeyId = settings.ActiveKeyId.Trim().Trim('"').Trim('\'');
+                if (settings.Keys != null)
+                {
+                    foreach (var key in settings.Keys.Keys.ToList())
+                    {
+                        settings.Keys[key] = settings.Keys[key]?.Trim().Trim('"').Trim('\'') ?? string.Empty;
+                    }
+                }
+            })
             .Validate(settings => DataKeyProtector.FindConfigurationError(settings) == null,
                 "Cấu hình AssetEncryption không hợp lệ (cần ActiveKeyId và Keys là base64 32 byte). "
                 + "Khi chạy local, chọn profile http (Development).")
@@ -145,6 +157,12 @@ public static class InfrastructureConfig
         // JWT Bearer Authentication
         services.AddOptions<JwtSettings>()
             .Bind(configuration.GetSection(JwtSettings.SectionName))
+            .PostConfigure(settings =>
+            {
+                if (settings.SigningKey != null) settings.SigningKey = settings.SigningKey.Trim().Trim('"').Trim('\'');
+                if (settings.Issuer != null) settings.Issuer = settings.Issuer.Trim().Trim('"').Trim('\'');
+                if (settings.Audience != null) settings.Audience = settings.Audience.Trim().Trim('"').Trim('\'');
+            })
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.SigningKey) && Encoding.UTF8.GetByteCount(settings.SigningKey) >= 32,
                 "Cấu hình Jwt:SigningKey phải có độ dài tối thiểu 32 bytes.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Issuer),
@@ -159,7 +177,7 @@ public static class InfrastructureConfig
             .AddJwtBearer(options =>
             {
                 var jwtSection = configuration.GetSection(JwtSettings.SectionName);
-                var signingKey = jwtSection["SigningKey"];
+                var signingKey = jwtSection["SigningKey"]?.Trim().Trim('"').Trim('\'');
                 if (string.IsNullOrWhiteSpace(signingKey) || Encoding.UTF8.GetByteCount(signingKey) < 32)
                 {
                     throw new InvalidOperationException("Cấu hình Jwt:SigningKey thiếu hoặc ngắn hơn 32 bytes.");
