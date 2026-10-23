@@ -1,5 +1,6 @@
 using MailKit.Net.Smtp;
 using MailKit.Security;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
 
@@ -9,19 +10,15 @@ namespace LegacyVault.Infrastructure.Notifications;
 /// Dịch vụ email dùng chung: gửi một thư qua SMTP (Gmail) bằng MailKit. Các bộ gửi theo nghiệp vụ
 /// (xác minh email, nhắc điểm danh) chỉ dựng nội dung rồi gọi lớp này.
 /// </summary>
-/// <remarks>
-/// - Mỗi lần gửi mở một kết nối riêng (lưu lượng thấp, tránh giữ kết nối treo với Gmail).
-/// - Gửi lỗi thì ném exception nguyên vẹn để nơi gọi quyết định (job nhắc điểm danh giữ lời nhắc ở trạng thái chờ và thử lại).
-/// - Không ghi log nội dung thư, địa chỉ người nhận hay mật khẩu (OPS-04, SEC-06).
-/// - Không có UserName thì bỏ qua đăng nhập (dùng cho máy chủ SMTP nội bộ/test).
-/// </remarks>
 public sealed class SmtpMailSender
 {
     private readonly SmtpSettings settings;
+    private readonly ILogger<SmtpMailSender>? logger;
 
-    public SmtpMailSender(IOptions<SmtpSettings> options)
+    public SmtpMailSender(IOptions<SmtpSettings> options, ILogger<SmtpMailSender>? logger = null)
     {
         settings = options.Value;
+        this.logger = logger;
     }
 
     public async Task SendAsync(
@@ -49,20 +46,32 @@ public sealed class SmtpMailSender
             client.Timeout = settings.TimeoutSeconds * 1000;
             try
             {
-                await client.ConnectAsync(settings.Host, settings.Port, secureSocket.Value, ct);
-            }
-            catch (Exception) when (settings.Host.Equals("smtp.gmail.com", StringComparison.OrdinalIgnoreCase) && settings.Port == 587)
-            {
-                // Dự phòng cổng 465 (SSL) nếu môi trường cloud chặn hoặc timeout cổng 587
-                await client.ConnectAsync("smtp.gmail.com", 465, SecureSocketOptions.SslOnConnect, ct);
-            }
+                logger?.LogInformation("SMTP: Đang kết nối tới {Host}:{Port} ({SecureSocket}) để gửi thư '{Subject}' tới {ToEmail}...",
+                    settings.Host, settings.Port, secureSocket.Value, subject, toEmail);
 
-            if (!string.IsNullOrEmpty(settings.UserName))
-            {
-                await client.AuthenticateAsync(settings.UserName, settings.ResolvePassword(), ct);
+                try
+                {
+                    await client.ConnectAsync(settings.Host, settings.Port, secureSocket.Value, ct);
+                }
+                catch (Exception ex) when (settings.Host.Equals("smtp.gmail.com", StringComparison.OrdinalIgnoreCase) && settings.Port == 587)
+                {
+                    logger?.LogWarning("SMTP: Kết nối 587 gặp lỗi ({Message}), tự động chuyển sang cổng 465 SSL...", ex.Message);
+                    await client.ConnectAsync("smtp.gmail.com", 465, SecureSocketOptions.SslOnConnect, ct);
+                }
+
+                if (!string.IsNullOrEmpty(settings.UserName))
+                {
+                    await client.AuthenticateAsync(settings.UserName, settings.ResolvePassword(), ct);
+                }
+                await client.SendAsync(message, ct);
+                await client.DisconnectAsync(true, ct);
+                logger?.LogInformation("SMTP: Gửi email '{Subject}' tới {ToEmail} THÀNH CÔNG!", subject, toEmail);
             }
-            await client.SendAsync(message, ct);
-            await client.DisconnectAsync(true, ct);
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "SMTP: Lỗi khi gửi email tới {ToEmail}: {Message}", toEmail, ex.Message);
+                throw;
+            }
         }
     }
 

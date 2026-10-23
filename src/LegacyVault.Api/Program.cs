@@ -70,6 +70,14 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapBillingDevEndpoints();
 
+app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastructure.Notifications.SmtpMailSender mailSender, CancellationToken ct) =>
+{
+    await mailSender.SendAsync(to, "Người dùng thử nghiệm", "Thử nghiệm gửi email từ LegacyVault",
+        "Chào bạn, đây là email kiểm tra kết nối SMTP từ LegacyVault.",
+        "<div style='font-family: sans-serif; padding: 20px; background: #f4f6f8; border-radius: 8px;'><h2 style='color: #1a56db;'>LegacyVault SMTP Test</h2><p>Xin chúc mừng! Hệ thống gửi email tự động từ <b>legacyvault8386@gmail.com</b> đã hoạt động thành công 100%.</p></div>", ct);
+    return Results.Ok(new { success = true, message = $"Đã gửi email thử nghiệm tới {to}" });
+}).AllowAnonymous();
+
 // Liveness không phụ thuộc SQL; readiness chỉ đạt khi kết nối được database.
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "LegacyVault API", version = "v1" }));
 app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
