@@ -407,7 +407,7 @@ public sealed class EkycHttpClient : IEkycClient
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            logger?.LogError(ex, "eKYC: Quá thời gian chờ (Timeout {Timeout}s) khi gọi {BaseAddress}{Path}", httpClient.Timeout.TotalSeconds, path);
+            logger?.LogError(ex, "eKYC: Quá thời gian chờ (Timeout {Timeout}s) khi gọi {BaseAddress}{Path}", httpClient.Timeout.TotalSeconds, httpClient.BaseAddress, path);
             // HttpClient hết thời gian chờ (không phải người dùng hủy request).
             throw Unavailable();
         }
