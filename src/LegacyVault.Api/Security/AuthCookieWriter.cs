@@ -1,7 +1,9 @@
+using LegacyVault.Api.Config;
 using LegacyVault.Application.Dtos.Responses;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Api.Security;
 
@@ -11,10 +13,12 @@ public sealed class AuthCookieWriter
     public const string CookiePath = "/api/v1/auth";
 
     private readonly IWebHostEnvironment _environment;
+    private readonly AuthCookieSettings _cookieSettings;
 
-    public AuthCookieWriter(IWebHostEnvironment environment)
+    public AuthCookieWriter(IWebHostEnvironment environment, IOptions<AuthCookieSettings> cookieSettings)
     {
         _environment = environment;
+        _cookieSettings = cookieSettings.Value;
     }
 
     public void Append(HttpResponse response, AuthResult result)
@@ -22,9 +26,10 @@ public sealed class AuthCookieWriter
         var options = new CookieOptions
         {
             HttpOnly = true,
-            SameSite = SameSiteMode.Lax,
+            SameSite = _cookieSettings.CrossSiteCookies ? SameSiteMode.None : SameSiteMode.Lax,
             Path = CookiePath,
-            Secure = !_environment.IsDevelopment(),
+            // SameSite=None bắt buộc Secure; local (http) không dùng chế độ cross-site nên vẫn cho phép http.
+            Secure = !_environment.IsDevelopment() || _cookieSettings.CrossSiteCookies,
         };
 
         if (result.IsPersistent)
@@ -40,6 +45,8 @@ public sealed class AuthCookieWriter
         response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
         {
             Path = CookiePath,
+            SameSite = _cookieSettings.CrossSiteCookies ? SameSiteMode.None : SameSiteMode.Lax,
+            Secure = !_environment.IsDevelopment() || _cookieSettings.CrossSiteCookies,
         });
     }
 }

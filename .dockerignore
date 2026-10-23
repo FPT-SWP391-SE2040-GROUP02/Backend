@@ -1,0 +1,10 @@
+**/.git
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/TestResults
+**/*.user
+**/*.suo
+**/App_Data/asset-content/*
+!**/App_Data/asset-content/.gitkeep

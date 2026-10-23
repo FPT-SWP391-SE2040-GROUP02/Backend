@@ -9,7 +9,7 @@ namespace LegacyVault.Api.Config;
 
 public static class ApiConfig
 {
-    public static IServiceCollection AddApiConfig(this IServiceCollection services)
+    public static IServiceCollection AddApiConfig(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddControllersWithViews()
             .ConfigureApiBehaviorOptions(options =>
@@ -20,7 +20,7 @@ public static class ApiConfig
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddOpenApi(AuthOpenApiConfig.Configure);
         services.AddSingleton<AuthCookieWriter>();
-        services.AddAuthSecurity();
+        services.AddAuthSecurity(configuration);
 
         // Cấu hình JWT của Auth (InfrastructureConfig.AddJwtBearer): bổ sung OnChallenge để 401 trả
         // ProblemDetails có code SESSION_EXPIRED, khớp docs/api-contract.md mục 2 và 3.

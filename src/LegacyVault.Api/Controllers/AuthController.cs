@@ -232,8 +232,8 @@ public sealed class AuthController : ControllerBase
             // SMTP fails only for existing accounts. Keep the same public acknowledgement,
             // otherwise a delivery outage exposes which emails have a password account.
             // ponytail: no recovery-mail outbox yet; add one when reliable delivery retries are required.
-            logger.LogWarning("Password recovery request failed with {ExceptionType}; delivery not confirmed.",
-                exception.GetType().Name);
+            logger.LogWarning(exception, "Password recovery request failed with {ExceptionType} ({Message}); delivery not confirmed.",
+                exception.GetType().Name, exception.Message);
         }
         return Accepted();
     }

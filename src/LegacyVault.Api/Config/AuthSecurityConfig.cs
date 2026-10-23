@@ -2,15 +2,17 @@ using System.Globalization;
 using System.Net;
 using System.Threading.RateLimiting;
 using LegacyVault.Api.Security;
+using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Api.Config;
 
 /// <summary>Antiforgery và rate limit Auth chuyển từ repository test, giữ response raw của Backend.</summary>
 public static class AuthSecurityConfig
 {
-    public static IServiceCollection AddAuthSecurity(this IServiceCollection services)
+    public static IServiceCollection AddAuthSecurity(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddAntiforgery();
+        services.Configure<AuthCookieSettings>(configuration.GetSection(AuthCookieSettings.SectionName));
         services.AddOptions<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>()
             .Configure<IHostEnvironment>((options, environment) =>
             {
@@ -23,6 +25,14 @@ public static class AuthSecurityConfig
                 if (environment.IsDevelopment())
                 {
                     options.Cookie.SecurePolicy = CookieSecurePolicy.None;
+                }
+            })
+            .Configure<IOptions<AuthCookieSettings>>((options, cookieSettings) =>
+            {
+                if (cookieSettings.Value.CrossSiteCookies)
+                {
+                    options.Cookie.SameSite = SameSiteMode.None;
+                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 }
             });
         services.AddRateLimiter(options =>

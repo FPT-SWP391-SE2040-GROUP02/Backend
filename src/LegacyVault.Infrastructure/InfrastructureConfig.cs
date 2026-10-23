@@ -38,7 +38,18 @@ public static class InfrastructureConfig
             .ValidateOnStart();
 
         services.AddDbContext<AppDbContext>((provider, options) =>
-            options.UseSqlServer(provider.GetRequiredService<IOptions<DatabaseSettings>>().Value.Default));
+        {
+            var raw = provider.GetRequiredService<IOptions<DatabaseSettings>>().Value.Default ?? string.Empty;
+            if (raw.StartsWith("ConnectionStrings__Default=", StringComparison.OrdinalIgnoreCase))
+            {
+                raw = raw["ConnectionStrings__Default=".Length..].Trim();
+            }
+            else if (raw.StartsWith("ConnectionStrings:Default=", StringComparison.OrdinalIgnoreCase))
+            {
+                raw = raw["ConnectionStrings:Default=".Length..].Trim();
+            }
+            options.UseSqlServer(raw);
+        });
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
 
