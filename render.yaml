@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: legacyvault-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: singapore
+    healthCheckPath: /health/live
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_HTTP_PORTS
+        value: 10000
+      - key: AllowedHosts
+        value: "*"
+      - key: ConnectionStrings__Default
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        sync: false
+      - key: App__ClientUrl
+        sync: false
+      - key: Jwt__SigningKey
+        generateValue: true
+      - key: Jwt__Issuer
+        value: LegacyVault
+      - key: Jwt__Audience
+        value: LegacyVault
+      - key: GoogleAuth__ClientId
+        sync: false
+      - key: Gemini__ApiKey
+        sync: false
