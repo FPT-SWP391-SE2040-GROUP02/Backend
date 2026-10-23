@@ -56,7 +56,7 @@ public sealed class CheckInMonitor : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogError("Vòng quét điểm danh lỗi: {ExceptionType}", ex.GetType().Name);
+                logger.LogError(ex, "Vòng quét điểm danh lỗi: {Message}", ex.Message);
             }
         }
     }

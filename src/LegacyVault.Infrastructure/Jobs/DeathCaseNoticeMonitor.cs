@@ -56,7 +56,7 @@ public sealed class DeathCaseNoticeMonitor : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogError("Vòng quét thông báo hồ sơ chứng tử lỗi: {ExceptionType}", ex.GetType().Name);
+                logger.LogError(ex, "Vòng quét thông báo hồ sơ chứng tử lỗi: {Message}", ex.Message);
             }
         }
     }

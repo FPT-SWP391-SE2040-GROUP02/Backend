@@ -55,7 +55,7 @@ public sealed class HandoverMonitor : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogError("Vòng quét bàn giao lỗi: {ExceptionType}", ex.GetType().Name);
+                logger.LogError(ex, "Vòng quét bàn giao lỗi: {Message}", ex.Message);
             }
         }
     }

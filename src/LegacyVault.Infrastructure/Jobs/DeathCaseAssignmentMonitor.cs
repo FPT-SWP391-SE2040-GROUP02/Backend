@@ -57,7 +57,7 @@ public sealed class DeathCaseAssignmentMonitor : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogError("Vòng quét phân công Verifier hồ sơ chứng tử lỗi: {ExceptionType}", ex.GetType().Name);
+                logger.LogError(ex, "Vòng quét phân công Verifier hồ sơ chứng tử lỗi: {Message}", ex.Message);
             }
         }
     }

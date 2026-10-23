@@ -60,7 +60,7 @@ public sealed class ExecutorInvitationMonitor(IServiceScopeFactory scopeFactory,
             }
             catch (Exception ex)
             {
-                logger.LogError("Vòng quét lời mời Executor lỗi: {ExceptionType}", ex.GetType().Name);
+                logger.LogError(ex, "Vòng quét lời mời Executor lỗi: {Message}", ex.Message);
             }
         }
     }
