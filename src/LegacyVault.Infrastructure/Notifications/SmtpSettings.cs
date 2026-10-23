@@ -29,8 +29,24 @@ public sealed class SmtpSettings
     /// <summary>Địa chỉ Gmail dùng để đăng nhập SMTP.</summary>
     public string UserName { get; set; } = string.Empty;
 
-    /// <summary>Mật khẩu ứng dụng Gmail (không phải mật khẩu tài khoản).</summary>
+    public string ResolveUserName()
+    {
+        return (UserName ?? string.Empty).Trim().Trim('"').Trim('\'');
+    }
+
+    public string ResolveHost()
+    {
+        string host = (Host ?? string.Empty).Trim().Trim('"').Trim('\'');
+        return string.IsNullOrWhiteSpace(host) ? "smtp.gmail.com" : host;
+    }
+
+    /// <summary>Mật khẩu ứng dụng Gmail (không phải mật khẩu tài khoản). Tự động loại bỏ khoảng trắng nếu copy từ Google.</summary>
     public string Password { get; set; } = string.Empty;
+
+    public string ResolvePassword()
+    {
+        return (Password ?? string.Empty).Trim().Trim('"').Trim('\'').Replace(" ", "").Trim();
+    }
 
     /// <summary>Địa chỉ người gửi; để trống thì dùng UserName (Gmail chỉ cho gửi từ tài khoản đã đăng nhập hoặc bí danh đã xác minh).</summary>
     public string FromAddress { get; set; } = string.Empty;
@@ -39,35 +55,69 @@ public sealed class SmtpSettings
 
     public int TimeoutSeconds { get; set; } = 20;
 
-    /// <summary>Đủ Host, UserName và Password thì mới gửi email thật.</summary>
+    /// <summary>
+    /// URL Webhook chuyển tiếp email qua HTTPS (ví dụ Google Apps Script Web App).
+    /// Giúp vượt qua việc Render chặn cổng SMTP 25, 465, 587 trên gói Free.
+    /// </summary>
+    public string WebhookUrl { get; set; } = string.Empty;
+
+    public string ResolveWebhookUrl()
+    {
+        return (WebhookUrl ?? string.Empty).Trim().Trim('"').Trim('\'');
+    }
+
+    /// <summary>
+    /// API Key của Brevo (Sendinblue) để gửi email qua HTTPS port 443 không bị firewall chặn.
+    /// </summary>
+    public string BrevoApiKey { get; set; } = string.Empty;
+
+    public string ResolveBrevoApiKey()
+    {
+        return (BrevoApiKey ?? string.Empty).Trim().Trim('"').Trim('\'');
+    }
+
+    /// <summary>Đủ WebhookUrl, BrevoApiKey, hoặc Host/UserName/Password thì mới gửi email thật.</summary>
     public bool IsConfigured
     {
         get
         {
-            return !string.IsNullOrWhiteSpace(Host)
-                && !string.IsNullOrWhiteSpace(UserName)
-                && !string.IsNullOrWhiteSpace(Password);
+            if (!string.IsNullOrWhiteSpace(ResolveWebhookUrl()) || !string.IsNullOrWhiteSpace(ResolveBrevoApiKey()))
+            {
+                return true;
+            }
+            return !string.IsNullOrWhiteSpace(ResolveHost())
+                && !string.IsNullOrWhiteSpace(ResolveUserName())
+                && !string.IsNullOrWhiteSpace(ResolvePassword());
         }
     }
 
     public string ResolveFromAddress()
     {
-        if (!string.IsNullOrWhiteSpace(FromAddress))
+        string from = (FromAddress ?? string.Empty).Trim().Trim('"').Trim('\'');
+        if (!string.IsNullOrWhiteSpace(from))
         {
-            return FromAddress;
+            return from;
         }
-        return UserName;
+        return ResolveUserName();
     }
 
     /// <summary>Đổi SecureSocket (chữ) sang giá trị của MailKit; sai tên → null.</summary>
     public SecureSocketOptions? ParseSecureSocket()
     {
-        SecureSocketOptions value;
-        if (Enum.TryParse(SecureSocket, ignoreCase: true, out value))
+        string cleaned = (SecureSocket ?? string.Empty).Trim().Trim('"').Trim('\'');
+        if (Port == 465 && (string.IsNullOrWhiteSpace(cleaned) || cleaned.Equals("StartTls", StringComparison.OrdinalIgnoreCase)))
+        {
+            return SecureSocketOptions.SslOnConnect;
+        }
+        if (Port == 587 && (string.IsNullOrWhiteSpace(cleaned) || cleaned.Equals("SslOnConnect", StringComparison.OrdinalIgnoreCase)))
+        {
+            return SecureSocketOptions.StartTls;
+        }
+        if (Enum.TryParse(cleaned, ignoreCase: true, out SecureSocketOptions value))
         {
             return value;
         }
-        return null;
+        return Port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
     }
 
     /// <summary>

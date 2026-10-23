@@ -9,7 +9,25 @@ public sealed class AppUrlProvider : IAppUrlProvider
 
     public AppUrlProvider(IConfiguration configuration)
     {
-        _clientBaseUrl = configuration["App:ClientUrl"]?.TrimEnd('/') ?? "http://localhost:5173";
+        string? url = configuration["App:ClientUrl"]
+            ?? configuration["App__ClientUrl"]
+            ?? configuration["APP_CLIENTURL"]
+            ?? configuration["APP__CLIENTURL"];
+
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            url = url.Trim().Trim('"').Trim('\'');
+        }
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            string? env = configuration["ASPNETCORE_ENVIRONMENT"];
+            url = string.Equals(env?.Trim().Trim('"').Trim('\''), "Production", StringComparison.OrdinalIgnoreCase)
+                ? "https://legacyvault-swart.vercel.app"
+                : "http://localhost:5173";
+        }
+
+        _clientBaseUrl = url.TrimEnd('/');
     }
 
     public string GetEmailVerificationUrl(string token)

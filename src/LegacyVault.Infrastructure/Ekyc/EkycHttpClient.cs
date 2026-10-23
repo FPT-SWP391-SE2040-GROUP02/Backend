@@ -5,6 +5,7 @@ using System.Text.Json;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
+using Microsoft.Extensions.Logging;
 
 namespace LegacyVault.Infrastructure.Ekyc;
 
@@ -22,10 +23,12 @@ public sealed class EkycHttpClient : IEkycClient
     private const string UnavailableMessage = "Dịch vụ xác minh danh tính tạm thời không khả dụng. Vui lòng thử lại sau.";
 
     private readonly HttpClient httpClient;
+    private readonly ILogger<EkycHttpClient>? logger;
 
-    public EkycHttpClient(HttpClient httpClient)
+    public EkycHttpClient(HttpClient httpClient, ILogger<EkycHttpClient>? logger = null)
     {
         this.httpClient = httpClient;
+        this.logger = logger;
     }
 
     public async Task<EkycDocumentReading> ReadFrontAsync(
@@ -360,6 +363,9 @@ public sealed class EkycHttpClient : IEkycClient
         EnsureConfigured();
         try
         {
+            logger?.LogInformation("eKYC: Đang gọi {BaseAddress}{Path} (Timeout {Timeout}s)...",
+                httpClient.BaseAddress, path, httpClient.Timeout.TotalSeconds);
+
             using (HttpResponseMessage response = await httpClient.PostAsync(path, form, ct))
             {
                 string body = await response.Content.ReadAsStringAsync(ct);
@@ -371,6 +377,7 @@ public sealed class EkycHttpClient : IEkycClient
                         return document.RootElement.Clone();
                     }
                 }
+                logger?.LogWarning("eKYC: Dịch vụ trả HTTP {StatusCode} cho {Path}: {Body}", response.StatusCode, path, body);
                 if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
                 {
                     throw new AppException(AppErrorType.Validation, ErrorCode.EkycImageRejected,
@@ -388,16 +395,19 @@ public sealed class EkycHttpClient : IEkycClient
                 throw Unavailable();
             }
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
+            logger?.LogError(ex, "eKYC: Lỗi kết nối HTTP tới {BaseAddress}{Path}: {Message}", httpClient.BaseAddress, path, ex.Message);
             throw Unavailable();
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
+            logger?.LogError(ex, "eKYC: Lỗi phân tích JSON từ {Path}", path);
             throw Unavailable();
         }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
+            logger?.LogError(ex, "eKYC: Quá thời gian chờ (Timeout {Timeout}s) khi gọi {BaseAddress}{Path}", httpClient.Timeout.TotalSeconds, httpClient.BaseAddress, path);
             // HttpClient hết thời gian chờ (không phải người dùng hủy request).
             throw Unavailable();
         }
@@ -408,6 +418,7 @@ public sealed class EkycHttpClient : IEkycClient
     {
         if (httpClient.BaseAddress == null)
         {
+            logger?.LogError("eKYC: httpClient.BaseAddress rỗng hoặc chưa được cấu hình.");
             throw Unavailable();
         }
     }

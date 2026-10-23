@@ -70,7 +70,47 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapBillingDevEndpoints();
 
+app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastructure.Notifications.SmtpMailSender mailSender, Microsoft.Extensions.Options.IOptions<LegacyVault.Infrastructure.Notifications.SmtpSettings> smtpOpts, CancellationToken ct) =>
+{
+    try
+    {
+        var settings = smtpOpts.Value;
+        if (!settings.IsConfigured)
+        {
+            return Results.Json(new
+            {
+                success = false,
+                error = "Email chưa được cấu hình. Cần Email__WebhookUrl, Email__BrevoApiKey hoặc (Email__Smtp__UserName và Email__Smtp__Password).",
+                provider = "None",
+                userNameSet = !string.IsNullOrWhiteSpace(settings.ResolveUserName()),
+                passwordSet = !string.IsNullOrWhiteSpace(settings.ResolvePassword())
+            }, statusCode: 400);
+        }
+
+        string provider = !string.IsNullOrWhiteSpace(settings.ResolveWebhookUrl()) ? "Webhook (Google Apps Script HTTPS)" :
+                          !string.IsNullOrWhiteSpace(settings.ResolveBrevoApiKey()) ? "Brevo HTTPS API" :
+                          $"SMTP ({settings.ResolveHost()}:{settings.Port})";
+
+        await mailSender.SendAsync(to, "Người dùng thử nghiệm", "Thử nghiệm gửi email từ LegacyVault",
+            "Chào bạn, đây là email kiểm tra kết nối email từ LegacyVault.",
+            "<div style='font-family: sans-serif; padding: 20px; background: #f4f6f8; border-radius: 8px;'><h2 style='color: #1a56db;'>LegacyVault Email Test</h2><p>Xin chúc mừng! Hệ thống gửi email tự động từ <b>" + settings.ResolveFromAddress() + "</b> qua <b>" + provider + "</b> đã hoạt động thành công 100%.</p></div>", ct);
+        return Results.Ok(new { success = true, provider, message = $"Đã gửi email thử nghiệm tới {to} từ {settings.ResolveFromAddress()} qua {provider}" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new
+        {
+            success = false,
+            error = ex.Message,
+            errorType = ex.GetType().Name,
+            details = ex.ToString()
+        }, statusCode: 500);
+    }
+}).AllowAnonymous();
+
 // Liveness không phụ thuộc SQL; readiness chỉ đạt khi kết nối được database.
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "LegacyVault API", version = "v1" }));
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {

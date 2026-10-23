@@ -33,6 +33,13 @@ public static class InfrastructureConfig
 
         services.AddOptions<DatabaseSettings>()
             .Bind(configuration.GetSection("ConnectionStrings"))
+            .PostConfigure(settings =>
+            {
+                if (settings.Default != null)
+                {
+                    settings.Default = settings.Default.Trim().Trim('"').Trim('\'');
+                }
+            })
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Default),
                 "Thiếu ConnectionStrings:Default. Khi chạy local, chọn profile http (Development).")
             .ValidateOnStart();
@@ -40,13 +47,14 @@ public static class InfrastructureConfig
         services.AddDbContext<AppDbContext>((provider, options) =>
         {
             var raw = provider.GetRequiredService<IOptions<DatabaseSettings>>().Value.Default ?? string.Empty;
+            raw = raw.Trim().Trim('"').Trim('\'');
             if (raw.StartsWith("ConnectionStrings__Default=", StringComparison.OrdinalIgnoreCase))
             {
-                raw = raw["ConnectionStrings__Default=".Length..].Trim();
+                raw = raw["ConnectionStrings__Default=".Length..].Trim().Trim('"').Trim('\'');
             }
             else if (raw.StartsWith("ConnectionStrings:Default=", StringComparison.OrdinalIgnoreCase))
             {
-                raw = raw["ConnectionStrings:Default=".Length..].Trim();
+                raw = raw["ConnectionStrings:Default=".Length..].Trim().Trim('"').Trim('\'');
             }
             options.UseSqlServer(raw);
         });
@@ -116,6 +124,18 @@ public static class InfrastructureConfig
         // KEK cho mã hóa nội dung tài sản. Sai/thiếu khóa thì API không khởi động, tránh lưu nội dung không mở lại được.
         services.AddOptions<AssetEncryptionSettings>()
             .Bind(configuration.GetSection("AssetEncryption"))
+            .PostConfigure(settings =>
+            {
+                if (settings.BlindIndexKey != null) settings.BlindIndexKey = settings.BlindIndexKey.Trim().Trim('"').Trim('\'');
+                if (settings.ActiveKeyId != null) settings.ActiveKeyId = settings.ActiveKeyId.Trim().Trim('"').Trim('\'');
+                if (settings.Keys != null)
+                {
+                    foreach (var key in settings.Keys.Keys.ToList())
+                    {
+                        settings.Keys[key] = settings.Keys[key]?.Trim().Trim('"').Trim('\'') ?? string.Empty;
+                    }
+                }
+            })
             .Validate(settings => DataKeyProtector.FindConfigurationError(settings) == null,
                 "Cấu hình AssetEncryption không hợp lệ (cần ActiveKeyId và Keys là base64 32 byte). "
                 + "Khi chạy local, chọn profile http (Development).")
@@ -145,6 +165,12 @@ public static class InfrastructureConfig
         // JWT Bearer Authentication
         services.AddOptions<JwtSettings>()
             .Bind(configuration.GetSection(JwtSettings.SectionName))
+            .PostConfigure(settings =>
+            {
+                if (settings.SigningKey != null) settings.SigningKey = settings.SigningKey.Trim().Trim('"').Trim('\'');
+                if (settings.Issuer != null) settings.Issuer = settings.Issuer.Trim().Trim('"').Trim('\'');
+                if (settings.Audience != null) settings.Audience = settings.Audience.Trim().Trim('"').Trim('\'');
+            })
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.SigningKey) && Encoding.UTF8.GetByteCount(settings.SigningKey) >= 32,
                 "Cấu hình Jwt:SigningKey phải có độ dài tối thiểu 32 bytes.")
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Issuer),
@@ -159,7 +185,7 @@ public static class InfrastructureConfig
             .AddJwtBearer(options =>
             {
                 var jwtSection = configuration.GetSection(JwtSettings.SectionName);
-                var signingKey = jwtSection["SigningKey"];
+                var signingKey = jwtSection["SigningKey"]?.Trim().Trim('"').Trim('\'');
                 if (string.IsNullOrWhiteSpace(signingKey) || Encoding.UTF8.GetByteCount(signingKey) < 32)
                 {
                     throw new InvalidOperationException("Cấu hình Jwt:SigningKey thiếu hoặc ngắn hơn 32 bytes.");
@@ -202,7 +228,28 @@ public static class InfrastructureConfig
         services.AddScoped<IExternalLoginLinkTicketRepository, ExternalLoginLinkTicketRepository>();
 
         // eKYC: gọi dịch vụ Python riêng qua HTTP. Chưa cấu hình Ekyc:BaseUrl thì mọi lệnh eKYC trả 503.
-        services.Configure<EkycSettings>(configuration.GetSection(EkycSettings.SectionName));
+        services.AddOptions<EkycSettings>()
+            .Bind(configuration.GetSection(EkycSettings.SectionName))
+            .PostConfigure(settings =>
+            {
+                if (settings.BaseUrl != null)
+                {
+                    settings.BaseUrl = settings.BaseUrl.Trim().Trim('"').Trim('\'');
+                }
+                if (settings.ApiKey != null)
+                {
+                    settings.ApiKey = settings.ApiKey.Trim().Trim('"').Trim('\'');
+                }
+                string? rawTimeout = configuration["Ekyc:TimeoutSeconds"] ?? configuration["Ekyc__TimeoutSeconds"];
+                if (!string.IsNullOrWhiteSpace(rawTimeout) && int.TryParse(rawTimeout.Trim().Trim('"').Trim('\''), out int t) && t > 0)
+                {
+                    settings.TimeoutSeconds = t;
+                }
+                else if (settings.TimeoutSeconds <= 0)
+                {
+                    settings.TimeoutSeconds = 120;
+                }
+            });
         services.AddScoped<IEkycVerificationRepository, EkycVerificationRepository>();
         services.AddScoped<IEkycConsentRepository, EkycConsentRepository>();
         // Mẫu khuôn mặt Owner (EKYC-22, PRIV-03): vector mã hóa envelope, dùng chung DataKeyProtector của tài sản.
@@ -214,16 +261,18 @@ public static class InfrastructureConfig
         services.AddHttpClient<IEkycClient, EkycHttpClient>((provider, client) =>
         {
             EkycSettings settings = provider.GetRequiredService<IOptions<EkycSettings>>().Value;
-            if (!string.IsNullOrWhiteSpace(settings.BaseUrl))
+            string baseUrl = (settings.BaseUrl ?? string.Empty).Trim().Trim('"').Trim('\'');
+            if (!string.IsNullOrWhiteSpace(baseUrl))
             {
                 // Dấu "/" cuối để địa chỉ tương đối "api/ocr" nối đúng vào BaseUrl có đường dẫn.
-                client.BaseAddress = new Uri(settings.BaseUrl.TrimEnd('/') + "/");
+                client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
             }
-            if (!string.IsNullOrWhiteSpace(settings.ApiKey))
+            string apiKey = (settings.ApiKey ?? string.Empty).Trim().Trim('"').Trim('\'');
+            if (!string.IsNullOrWhiteSpace(apiKey))
             {
-                client.DefaultRequestHeaders.Add("X-Ekyc-Key", settings.ApiKey);
+                client.DefaultRequestHeaders.Add("X-Ekyc-Key", apiKey);
             }
-            client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+            client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds > 0 ? settings.TimeoutSeconds : 120);
         });
 
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
