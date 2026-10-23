@@ -106,7 +106,7 @@ public class VerifierFlagResponse
 {
     public Guid Id { get; set; }
 
-    /// <summary>CHECKIN_AFTER_DEATH | IDENTITY_MISMATCH.</summary>
+    /// <summary>CHECKIN_AFTER_DEATH | IDENTITY_MISMATCH | CERTIFICATE_UNVERIFIED.</summary>
     public string Kind { get; set; } = string.Empty;
 
     public string Detail { get; set; } = string.Empty;

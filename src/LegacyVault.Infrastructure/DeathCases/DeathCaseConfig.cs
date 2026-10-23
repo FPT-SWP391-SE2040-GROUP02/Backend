@@ -29,6 +29,8 @@ public static class DeathCaseConfig
         services.AddScoped<IOwnerFaceVerifier, OwnerFaceVerifier>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
         services.AddScoped<IAiNotaryAssistantService, GeminiNotaryAssistantService>();
+        // AI nhận diện trang giấy có phải giấy chứng tử khi Executor gửi hồ sơ.
+        services.AddScoped<IDeathCertificateClassifier, GeminiDeathCertificateClassifier>();
 
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.
         services.AddSingleton<IDeathCaseDataProtector, DeathCaseDataProtector>();

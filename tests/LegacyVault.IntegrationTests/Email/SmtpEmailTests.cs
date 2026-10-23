@@ -159,7 +159,8 @@ public sealed class SmtpEmailTests
     [InlineData("smtp.gmail.com", "user@gmail.com", "app-password", true)]
     [InlineData("smtp.gmail.com", "", "app-password", false)]
     [InlineData("smtp.gmail.com", "user@gmail.com", "", false)]
-    [InlineData("", "user@gmail.com", "app-password", false)]
+    // Host trống thì dùng mặc định smtp.gmail.com nên vẫn đủ cấu hình.
+    [InlineData("", "user@gmail.com", "app-password", true)]
     public void Settings_IsConfiguredNeedsHostUserAndPassword(string host, string user, string password, bool expected)
     {
         SmtpSettings settings = new SmtpSettings();
@@ -194,7 +195,6 @@ public sealed class SmtpEmailTests
     [Theory]
     [InlineData(0, "StartTls", "user@gmail.com")]
     [InlineData(70000, "StartTls", "user@gmail.com")]
-    [InlineData(587, "Nope", "user@gmail.com")]
     [InlineData(587, "StartTls", "not-an-email")]
     public void Settings_FindErrorReportsInvalidValuesWhenConfigured(int port, string secureSocket, string fromAddress)
     {
@@ -206,6 +206,21 @@ public sealed class SmtpEmailTests
         settings.FromAddress = fromAddress;
 
         Assert.NotNull(settings.FindError());
+    }
+
+    [Theory]
+    [InlineData(587, "Nope", MailKit.Security.SecureSocketOptions.StartTls)]
+    [InlineData(465, "Nope", MailKit.Security.SecureSocketOptions.SslOnConnect)]
+    [InlineData(465, "StartTls", MailKit.Security.SecureSocketOptions.SslOnConnect)]
+    [InlineData(587, "SslOnConnect", MailKit.Security.SecureSocketOptions.StartTls)]
+    public void Settings_SecureSocketFollowsPortWhenMissingOrWrong(
+        int port, string secureSocket, MailKit.Security.SecureSocketOptions expected)
+    {
+        SmtpSettings settings = new SmtpSettings();
+        settings.Port = port;
+        settings.SecureSocket = secureSocket;
+
+        Assert.Equal(expected, settings.ParseSecureSocket());
     }
 
     [Fact]
