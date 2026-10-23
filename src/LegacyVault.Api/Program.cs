@@ -70,8 +70,19 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapBillingDevEndpoints();
 
-app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastructure.Notifications.SmtpMailSender mailSender, Microsoft.Extensions.Options.IOptions<LegacyVault.Infrastructure.Notifications.SmtpSettings> smtpOpts, CancellationToken ct) =>
+// Thử gửi email (chỉ Admin đang hoạt động): endpoint mở sẽ cho người lạ dùng server gửi thư tới địa chỉ bất kỳ.
+app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastructure.Notifications.SmtpMailSender mailSender, Microsoft.Extensions.Options.IOptions<LegacyVault.Infrastructure.Notifications.SmtpSettings> smtpOpts, LegacyVault.Application.Security.ICurrentUser currentUser, LegacyVault.Application.Repositories.IUserRepository users, CancellationToken ct) =>
 {
+    LegacyVault.Domain.Entities.User? caller = null;
+    if (currentUser.UserId != null)
+    {
+        caller = await users.FindByIdAsync(currentUser.UserId.Value, ct);
+    }
+    if (caller == null || caller.Role != LegacyVault.Domain.Enums.UserRole.Admin || caller.Status != LegacyVault.Domain.Enums.UserStatus.Active)
+    {
+        return Results.NotFound();
+    }
+
     try
     {
         var settings = smtpOpts.Value;
@@ -102,11 +113,10 @@ app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastruct
         {
             success = false,
             error = ex.Message,
-            errorType = ex.GetType().Name,
-            details = ex.ToString()
+            errorType = ex.GetType().Name
         }, statusCode: 500);
     }
-}).AllowAnonymous();
+}).RequireAuthorization();
 
 // Liveness không phụ thuộc SQL; readiness chỉ đạt khi kết nối được database.
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "LegacyVault API", version = "v1" }));

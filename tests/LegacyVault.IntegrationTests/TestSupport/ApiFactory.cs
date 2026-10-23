@@ -121,6 +121,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             // KHÔNG BAO GIỜ gửi thư thật (mặc định dùng bản chỉ ghi log).
             settings["Email:Smtp:UserName"] = "";
             settings["Email:Smtp:Password"] = "";
+            settings["Email:Smtp:WebhookUrl"] = "";
+            settings["Email:Smtp:BrevoApiKey"] = "";
             // Không gọi Gemini thật từ test dù user-secrets có key.
             settings["Gemini:ApiKey"] = "";
             configuration.AddInMemoryCollection(settings);
