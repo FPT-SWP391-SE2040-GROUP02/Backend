@@ -30,8 +30,14 @@ public sealed class SmtpMailSender
             throw new InvalidOperationException("Email:Smtp:SecureSocket không hợp lệ.");
         }
 
+        string host = settings.ResolveHost();
+        string userName = settings.ResolveUserName();
+        string password = settings.ResolvePassword();
+        string fromAddress = settings.ResolveFromAddress();
+        string fromName = (settings.FromName ?? "LegacyVault").Trim().Trim('"').Trim('\'');
+
         MimeMessage message = new MimeMessage();
-        message.From.Add(new MailboxAddress(settings.FromName, settings.ResolveFromAddress()));
+        message.From.Add(new MailboxAddress(fromName, fromAddress));
         message.To.Add(new MailboxAddress(toName, toEmail));
         message.Subject = subject;
 
@@ -44,24 +50,29 @@ public sealed class SmtpMailSender
         using (SmtpClient client = new SmtpClient())
         {
             client.Timeout = settings.TimeoutSeconds * 1000;
+            // Bỏ qua kiểm tra chứng chỉ thu hồi trên môi trường container/Linux để tránh timeout mạng
+            client.CheckCertificateRevocation = false;
             try
             {
                 logger?.LogInformation("SMTP: Đang kết nối tới {Host}:{Port} ({SecureSocket}) để gửi thư '{Subject}' tới {ToEmail}...",
-                    settings.Host, settings.Port, secureSocket.Value, subject, toEmail);
+                    host, settings.Port, secureSocket.Value, subject, toEmail);
 
                 try
                 {
-                    await client.ConnectAsync(settings.Host, settings.Port, secureSocket.Value, ct);
+                    await client.ConnectAsync(host, settings.Port, secureSocket.Value, ct);
                 }
-                catch (Exception ex) when (settings.Host.Equals("smtp.gmail.com", StringComparison.OrdinalIgnoreCase) && settings.Port == 587)
+                catch (Exception ex) when (host.Equals("smtp.gmail.com", StringComparison.OrdinalIgnoreCase))
                 {
-                    logger?.LogWarning("SMTP: Kết nối 587 gặp lỗi ({Message}), tự động chuyển sang cổng 465 SSL...", ex.Message);
-                    await client.ConnectAsync("smtp.gmail.com", 465, SecureSocketOptions.SslOnConnect, ct);
+                    int fallbackPort = settings.Port == 465 ? 587 : 465;
+                    var fallbackSocket = fallbackPort == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
+                    logger?.LogWarning("SMTP: Kết nối tới {Host}:{Port} gặp lỗi ({Message}), tự động chuyển sang cổng {FallbackPort} ({FallbackSocket})...",
+                        host, settings.Port, ex.Message, fallbackPort, fallbackSocket);
+                    await client.ConnectAsync(host, fallbackPort, fallbackSocket, ct);
                 }
 
-                if (!string.IsNullOrEmpty(settings.UserName))
+                if (!string.IsNullOrEmpty(userName))
                 {
-                    await client.AuthenticateAsync(settings.UserName, settings.ResolvePassword(), ct);
+                    await client.AuthenticateAsync(userName, password, ct);
                 }
                 await client.SendAsync(message, ct);
                 await client.DisconnectAsync(true, ct);

@@ -45,11 +45,23 @@ public static class EmailConfig
                 {
                     settings.FromName = altSenderName;
                 }
-                string? altPort = configuration["SMTP:PORT"] ?? configuration["SMTP__PORT"] ?? configuration["Smtp:Port"];
-                if (int.TryParse(altPort, out int port) && port > 0)
+                string? rawPort = configuration["Email:Smtp:Port"] ?? configuration["Email__Smtp__Port"] ?? configuration["SMTP:PORT"] ?? configuration["SMTP__PORT"] ?? configuration["Smtp:Port"];
+                if (!string.IsNullOrWhiteSpace(rawPort))
                 {
-                    settings.Port = port;
+                    string cleanedPort = rawPort.Trim().Trim('"').Trim('\'');
+                    if (int.TryParse(cleanedPort, out int port) && port > 0)
+                    {
+                        settings.Port = port;
+                    }
                 }
+
+                // Cắt bỏ dấu nháy kép / nháy đơn thừa nếu dán từ môi trường
+                settings.Host = settings.Host?.Trim().Trim('"').Trim('\'') ?? "smtp.gmail.com";
+                settings.UserName = settings.UserName?.Trim().Trim('"').Trim('\'') ?? string.Empty;
+                settings.Password = settings.Password?.Trim().Trim('"').Trim('\'') ?? string.Empty;
+                settings.FromAddress = settings.FromAddress?.Trim().Trim('"').Trim('\'') ?? string.Empty;
+                settings.FromName = settings.FromName?.Trim().Trim('"').Trim('\'') ?? "LegacyVault";
+                settings.SecureSocket = settings.SecureSocket?.Trim().Trim('"').Trim('\'') ?? "StartTls";
             })
             .Validate(settings => settings.FindError() == null,
                 "Cấu hình Email:Smtp không hợp lệ (Port 1–65535, SecureSocket đúng tên, FromAddress là email).")

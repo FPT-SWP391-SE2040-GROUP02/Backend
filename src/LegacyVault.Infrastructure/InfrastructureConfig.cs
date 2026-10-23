@@ -33,6 +33,13 @@ public static class InfrastructureConfig
 
         services.AddOptions<DatabaseSettings>()
             .Bind(configuration.GetSection("ConnectionStrings"))
+            .PostConfigure(settings =>
+            {
+                if (settings.Default != null)
+                {
+                    settings.Default = settings.Default.Trim().Trim('"').Trim('\'');
+                }
+            })
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Default),
                 "Thiếu ConnectionStrings:Default. Khi chạy local, chọn profile http (Development).")
             .ValidateOnStart();
@@ -40,13 +47,14 @@ public static class InfrastructureConfig
         services.AddDbContext<AppDbContext>((provider, options) =>
         {
             var raw = provider.GetRequiredService<IOptions<DatabaseSettings>>().Value.Default ?? string.Empty;
+            raw = raw.Trim().Trim('"').Trim('\'');
             if (raw.StartsWith("ConnectionStrings__Default=", StringComparison.OrdinalIgnoreCase))
             {
-                raw = raw["ConnectionStrings__Default=".Length..].Trim();
+                raw = raw["ConnectionStrings__Default=".Length..].Trim().Trim('"').Trim('\'');
             }
             else if (raw.StartsWith("ConnectionStrings:Default=", StringComparison.OrdinalIgnoreCase))
             {
-                raw = raw["ConnectionStrings:Default=".Length..].Trim();
+                raw = raw["ConnectionStrings:Default=".Length..].Trim().Trim('"').Trim('\'');
             }
             options.UseSqlServer(raw);
         });
