@@ -54,11 +54,19 @@ services:
         sync: false
 
       # --- Asset storage + encryption (bắt buộc, API không khởi động nếu thiếu) ---
-      # Local: ghi vào container disk (mất khi redeploy). R2: xem docs/deployment.
+      # Dùng Cloudflare R2 để lưu file mã hóa an toàn trên Production
       - key: AssetStorage__Provider
-        value: Local
+        value: R2
       - key: AssetStorage__RootPath
         value: App_Data/asset-content
+      - key: AssetStorage__R2__AccountId
+        sync: false
+      - key: AssetStorage__R2__BucketName
+        sync: false
+      - key: AssetStorage__R2__AccessKeyId
+        sync: false
+      - key: AssetStorage__R2__SecretAccessKey
+        sync: false
       # Base64 32 byte. Tạo: $b=New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
       - key: AssetEncryption__ActiveKeyId
         sync: false

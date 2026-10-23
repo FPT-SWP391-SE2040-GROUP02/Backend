@@ -32,9 +32,19 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 // Tắt mặc định để local/CI không đổi schema ngoài dự kiến.
 if (builder.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+    try
+    {
+        Console.WriteLine("--> [Database Migration] Đang bắt đầu cập nhật schema cơ sở dữ liệu...");
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+        Console.WriteLine("--> [Database Migration] Cập nhật schema cơ sở dữ liệu thành công!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"--> [Database Migration LỖI]: {ex.Message}");
+        app.Logger.LogError(ex, "Lỗi khi chạy Migration tự động lúc khởi động.");
+    }
 }
 
 app.UseExceptionHandler();
