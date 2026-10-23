@@ -77,9 +77,8 @@ services:
         sync: false
 
       # --- eKYC ---
-      # Để trống thì mọi lệnh eKYC trả 503 (đúng contract, không giả thành công).
       - key: Ekyc__BaseUrl
-        sync: false
+        value: https://legacyvault-ekyc.onrender.com
       - key: Ekyc__ApiKey
         sync: false
       - key: Ekyc__TimeoutSeconds
