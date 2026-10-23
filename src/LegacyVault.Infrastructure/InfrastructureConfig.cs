@@ -228,7 +228,28 @@ public static class InfrastructureConfig
         services.AddScoped<IExternalLoginLinkTicketRepository, ExternalLoginLinkTicketRepository>();
 
         // eKYC: gọi dịch vụ Python riêng qua HTTP. Chưa cấu hình Ekyc:BaseUrl thì mọi lệnh eKYC trả 503.
-        services.Configure<EkycSettings>(configuration.GetSection(EkycSettings.SectionName));
+        services.AddOptions<EkycSettings>()
+            .Bind(configuration.GetSection(EkycSettings.SectionName))
+            .PostConfigure(settings =>
+            {
+                if (settings.BaseUrl != null)
+                {
+                    settings.BaseUrl = settings.BaseUrl.Trim().Trim('"').Trim('\'');
+                }
+                if (settings.ApiKey != null)
+                {
+                    settings.ApiKey = settings.ApiKey.Trim().Trim('"').Trim('\'');
+                }
+                string? rawTimeout = configuration["Ekyc:TimeoutSeconds"] ?? configuration["Ekyc__TimeoutSeconds"];
+                if (!string.IsNullOrWhiteSpace(rawTimeout) && int.TryParse(rawTimeout.Trim().Trim('"').Trim('\''), out int t) && t > 0)
+                {
+                    settings.TimeoutSeconds = t;
+                }
+                else if (settings.TimeoutSeconds <= 0)
+                {
+                    settings.TimeoutSeconds = 120;
+                }
+            });
         services.AddScoped<IEkycVerificationRepository, EkycVerificationRepository>();
         services.AddScoped<IEkycConsentRepository, EkycConsentRepository>();
         // Mẫu khuôn mặt Owner (EKYC-22, PRIV-03): vector mã hóa envelope, dùng chung DataKeyProtector của tài sản.
@@ -240,16 +261,18 @@ public static class InfrastructureConfig
         services.AddHttpClient<IEkycClient, EkycHttpClient>((provider, client) =>
         {
             EkycSettings settings = provider.GetRequiredService<IOptions<EkycSettings>>().Value;
-            if (!string.IsNullOrWhiteSpace(settings.BaseUrl))
+            string baseUrl = (settings.BaseUrl ?? string.Empty).Trim().Trim('"').Trim('\'');
+            if (!string.IsNullOrWhiteSpace(baseUrl))
             {
                 // Dấu "/" cuối để địa chỉ tương đối "api/ocr" nối đúng vào BaseUrl có đường dẫn.
-                client.BaseAddress = new Uri(settings.BaseUrl.TrimEnd('/') + "/");
+                client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
             }
-            if (!string.IsNullOrWhiteSpace(settings.ApiKey))
+            string apiKey = (settings.ApiKey ?? string.Empty).Trim().Trim('"').Trim('\'');
+            if (!string.IsNullOrWhiteSpace(apiKey))
             {
-                client.DefaultRequestHeaders.Add("X-Ekyc-Key", settings.ApiKey);
+                client.DefaultRequestHeaders.Add("X-Ekyc-Key", apiKey);
             }
-            client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+            client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds > 0 ? settings.TimeoutSeconds : 120);
         });
 
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
