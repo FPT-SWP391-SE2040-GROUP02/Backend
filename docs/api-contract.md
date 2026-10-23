@@ -304,6 +304,7 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `/v1/me/login-methods` | Đăng nhập | — | 200 `LoginMethodResponse[]` | 401 |
+| POST | `/v1/me/login-methods/password/verify` | Đăng nhập | `{ currentPassword }` | 204 (chỉ kiểm tra, không đổi dữ liệu) | 400, 401 `REAUTHENTICATION_FAILED` |
 | POST | `/v1/me/login-methods/google` | Đăng nhập | `{ idToken, nonce?, currentPassword }` | 201 `LoginMethodResponse` | 401 `REAUTHENTICATION_FAILED` / `INVALID_GOOGLE_TOKEN`, 409 `GOOGLE_ACCOUNT_ALREADY_LINKED` |
 | POST | `/v1/me/login-methods/google/unlink` | Đăng nhập | `{ currentPassword }` | 204 | 401 `REAUTHENTICATION_FAILED`, 409 `LAST_LOGIN_METHOD` |
 | POST | `/v1/me/login-methods/password` | Đăng nhập | `{ googleIdToken, nonce?, newPassword, confirmPassword }` | 204 | 401, 409 `LOGIN_METHOD_ALREADY_EXISTS` |

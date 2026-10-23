@@ -24,6 +24,12 @@ public interface ILoginMethodService
     Task<LoginMethodResponse> LinkGoogleAsync(LinkGoogleRequest request, CancellationToken ct);
 
     /// <summary>
+    /// Chỉ kiểm tra mật khẩu app hiện tại, không đổi dữ liệu. Tài khoản chưa có mật khẩu coi như sai.
+    /// Lỗi: 401 REAUTHENTICATION_FAILED. Thêm/bỏ phương thức vẫn tự xác thực lại, không dựa vào lần kiểm tra này.
+    /// </summary>
+    Task VerifyPasswordAsync(VerifyPasswordRequest request, CancellationToken ct);
+
+    /// <summary>
     /// Bỏ liên kết Google. Chưa liên kết → thành công luôn (idempotent).
     /// Lỗi: 409 LAST_LOGIN_METHOD (chưa có mật khẩu app), 401 REAUTHENTICATION_FAILED.
     /// </summary>
