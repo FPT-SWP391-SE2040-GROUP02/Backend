@@ -71,6 +71,8 @@ app.MapControllers();
 app.MapBillingDevEndpoints();
 
 // Liveness không phụ thuộc SQL; readiness chỉ đạt khi kết nối được database.
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "LegacyVault API", version = "v1" }));
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
