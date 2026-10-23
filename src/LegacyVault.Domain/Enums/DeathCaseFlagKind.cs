@@ -7,4 +7,6 @@ public enum DeathCaseFlagKind
     CheckinAfterDeath = 0,
     /// <summary>Danh tính Owner khai trong hồ sơ không khớp. Chỉ khai báo, chưa có chức năng đặt cờ này.</summary>
     IdentityMismatch = 1,
+    /// <summary>AI không kiểm tra được các trang giấy có phải giấy chứng tử (chưa có key, lỗi, tệp quá lớn). Verifier tự xem kỹ.</summary>
+    CertificateUnverified = 2,
 }

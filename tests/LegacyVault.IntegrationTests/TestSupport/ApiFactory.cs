@@ -1,10 +1,13 @@
+using LegacyVault.Application.Services;
 using LegacyVault.Infrastructure.Data;
+using LegacyVault.IntegrationTests.DeathCases;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace LegacyVault.IntegrationTests.TestSupport;
 
@@ -118,8 +121,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             // KHÔNG BAO GIỜ gửi thư thật (mặc định dùng bản chỉ ghi log).
             settings["Email:Smtp:UserName"] = "";
             settings["Email:Smtp:Password"] = "";
+            // Không gọi Gemini thật từ test dù user-secrets có key.
+            settings["Gemini:ApiKey"] = "";
             configuration.AddInMemoryCollection(settings);
         });
-        builder.ConfigureServices(services => ConfigureAdditionalServices?.Invoke(services));
+        builder.ConfigureServices(services =>
+        {
+            // Mặc định AI nhận ra mọi trang là giấy chứng tử; test cần kết quả khác thì thay trong ConfigureAdditionalServices.
+            services.RemoveAll<IDeathCertificateClassifier>();
+            services.AddSingleton<IDeathCertificateClassifier>(new FakeDeathCertificateClassifier());
+            ConfigureAdditionalServices?.Invoke(services);
+        });
     }
 }
