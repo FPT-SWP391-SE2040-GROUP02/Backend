@@ -55,7 +55,15 @@ public static class EmailConfig
                     }
                 }
 
+                string? altWebhook = configuration["Email:WebhookUrl"] ?? configuration["Email__WebhookUrl"] ?? configuration["EMAIL_WEBHOOK_URL"];
+                if (!string.IsNullOrWhiteSpace(altWebhook)) settings.WebhookUrl = altWebhook;
+
+                string? altBrevo = configuration["Email:BrevoApiKey"] ?? configuration["Email__BrevoApiKey"] ?? configuration["BREVO_API_KEY"];
+                if (!string.IsNullOrWhiteSpace(altBrevo)) settings.BrevoApiKey = altBrevo;
+
                 // Cắt bỏ dấu nháy kép / nháy đơn thừa nếu dán từ môi trường
+                settings.WebhookUrl = settings.WebhookUrl?.Trim().Trim('"').Trim('\'') ?? string.Empty;
+                settings.BrevoApiKey = settings.BrevoApiKey?.Trim().Trim('"').Trim('\'') ?? string.Empty;
                 settings.Host = settings.Host?.Trim().Trim('"').Trim('\'') ?? "smtp.gmail.com";
                 settings.UserName = settings.UserName?.Trim().Trim('"').Trim('\'') ?? string.Empty;
                 settings.Password = settings.Password?.Trim().Trim('"').Trim('\'') ?? string.Empty;

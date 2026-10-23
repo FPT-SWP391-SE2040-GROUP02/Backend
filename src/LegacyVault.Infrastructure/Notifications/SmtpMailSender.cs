@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
@@ -7,8 +8,8 @@ using MimeKit;
 namespace LegacyVault.Infrastructure.Notifications;
 
 /// <summary>
-/// Dịch vụ email dùng chung: gửi một thư qua SMTP (Gmail) bằng MailKit. Các bộ gửi theo nghiệp vụ
-/// (xác minh email, nhắc điểm danh) chỉ dựng nội dung rồi gọi lớp này.
+/// Dịch vụ email dùng chung: hỗ trợ gửi qua Webhook (Google Apps Script), Brevo HTTPS API,
+/// hoặc SMTP trực tiếp (Gmail qua MailKit).
 /// </summary>
 public sealed class SmtpMailSender
 {
@@ -24,6 +25,23 @@ public sealed class SmtpMailSender
     public async Task SendAsync(
         string toEmail, string toName, string subject, string textBody, string htmlBody, CancellationToken ct)
     {
+        // 1. Ưu tiên gửi qua Google Apps Script Webhook (Port 443 HTTPS - không bao giờ bị chặn firewall)
+        string webhookUrl = settings.ResolveWebhookUrl();
+        if (!string.IsNullOrWhiteSpace(webhookUrl))
+        {
+            await SendViaWebhookAsync(webhookUrl, toEmail, toName, subject, textBody, htmlBody, ct);
+            return;
+        }
+
+        // 2. Ưu tiên gửi qua Brevo HTTPS API (Port 443 HTTPS - cho phép người gửi @gmail.com miễn phí)
+        string brevoKey = settings.ResolveBrevoApiKey();
+        if (!string.IsNullOrWhiteSpace(brevoKey))
+        {
+            await SendViaBrevoApiAsync(brevoKey, toEmail, toName, subject, textBody, htmlBody, ct);
+            return;
+        }
+
+        // 3. Fallback gửi qua giao thức SMTP thông thường (MailKit)
         SecureSocketOptions? secureSocket = settings.ParseSecureSocket();
         if (secureSocket == null)
         {
@@ -84,6 +102,83 @@ public sealed class SmtpMailSender
                 throw;
             }
         }
+    }
+
+    private async Task SendViaWebhookAsync(
+        string webhookUrl, string toEmail, string toName, string subject, string textBody, string htmlBody, CancellationToken ct)
+    {
+        logger?.LogInformation("Email: Đang gửi thư '{Subject}' tới {ToEmail} qua Webhook HTTPS ({WebhookUrl})...",
+            subject, toEmail, webhookUrl);
+
+        using var handler = new HttpClientHandler
+        {
+            AllowAutoRedirect = true,
+            CheckCertificateRevocationList = false
+        };
+        using var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds > 0 ? settings.TimeoutSeconds : 25)
+        };
+
+        var payload = new
+        {
+            to = toEmail,
+            toName = toName,
+            subject = subject,
+            text = textBody,
+            html = htmlBody,
+            fromName = (settings.FromName ?? "LegacyVault").Trim().Trim('"').Trim('\''),
+            fromEmail = settings.ResolveFromAddress()
+        };
+
+        var response = await client.PostAsJsonAsync(webhookUrl, payload, ct);
+        // Google Apps Script trả 200 hoặc 302 sau khi gửi thư thành công
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Redirect && response.StatusCode != System.Net.HttpStatusCode.Moved)
+        {
+            string errorBody = await response.Content.ReadAsStringAsync(ct);
+            logger?.LogError("Email: Gửi qua Webhook thất bại với HTTP {StatusCode}: {Error}", response.StatusCode, errorBody);
+            throw new HttpRequestException($"Webhook gửi email thất bại: HTTP {(int)response.StatusCode} - {errorBody}");
+        }
+
+        logger?.LogInformation("Email: Gửi thư '{Subject}' tới {ToEmail} qua Webhook THÀNH CÔNG!", subject, toEmail);
+    }
+
+    private async Task SendViaBrevoApiAsync(
+        string apiKey, string toEmail, string toName, string subject, string textBody, string htmlBody, CancellationToken ct)
+    {
+        logger?.LogInformation("Email: Đang gửi thư '{Subject}' tới {ToEmail} qua Brevo HTTPS API...", subject, toEmail);
+
+        using var client = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds > 0 ? settings.TimeoutSeconds : 25)
+        };
+        client.DefaultRequestHeaders.Add("api-key", apiKey);
+
+        var payload = new
+        {
+            sender = new
+            {
+                name = (settings.FromName ?? "LegacyVault").Trim().Trim('"').Trim('\''),
+                email = settings.ResolveFromAddress()
+            },
+            to = new[]
+            {
+                new { email = toEmail, name = string.IsNullOrWhiteSpace(toName) ? toEmail : toName }
+            },
+            subject = subject,
+            htmlContent = htmlBody,
+            textContent = textBody
+        };
+
+        var response = await client.PostAsJsonAsync("https://api.brevo.com/v3/smtp/email", payload, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            string errorBody = await response.Content.ReadAsStringAsync(ct);
+            logger?.LogError("Email: Gửi qua Brevo API thất bại với HTTP {StatusCode}: {Error}", response.StatusCode, errorBody);
+            throw new HttpRequestException($"Brevo API gửi email thất bại: HTTP {(int)response.StatusCode} - {errorBody}");
+        }
+
+        logger?.LogInformation("Email: Gửi thư '{Subject}' tới {ToEmail} qua Brevo API THÀNH CÔNG!", subject, toEmail);
     }
 
     /// <summary>Đính logo nội tuyến để Gmail và Outlook hiện ngay, không cần người nhận bấm "tải ảnh".</summary>

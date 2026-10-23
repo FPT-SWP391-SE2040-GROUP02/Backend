@@ -80,18 +80,21 @@ app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastruct
             return Results.Json(new
             {
                 success = false,
-                error = "SMTP chưa được cấu hình. Cần Email__Smtp__UserName và Email__Smtp__Password.",
-                host = settings.ResolveHost(),
-                port = settings.Port,
+                error = "Email chưa được cấu hình. Cần Email__WebhookUrl, Email__BrevoApiKey hoặc (Email__Smtp__UserName và Email__Smtp__Password).",
+                provider = "None",
                 userNameSet = !string.IsNullOrWhiteSpace(settings.ResolveUserName()),
                 passwordSet = !string.IsNullOrWhiteSpace(settings.ResolvePassword())
             }, statusCode: 400);
         }
 
+        string provider = !string.IsNullOrWhiteSpace(settings.ResolveWebhookUrl()) ? "Webhook (Google Apps Script HTTPS)" :
+                          !string.IsNullOrWhiteSpace(settings.ResolveBrevoApiKey()) ? "Brevo HTTPS API" :
+                          $"SMTP ({settings.ResolveHost()}:{settings.Port})";
+
         await mailSender.SendAsync(to, "Người dùng thử nghiệm", "Thử nghiệm gửi email từ LegacyVault",
-            "Chào bạn, đây là email kiểm tra kết nối SMTP từ LegacyVault.",
-            "<div style='font-family: sans-serif; padding: 20px; background: #f4f6f8; border-radius: 8px;'><h2 style='color: #1a56db;'>LegacyVault SMTP Test</h2><p>Xin chúc mừng! Hệ thống gửi email tự động từ <b>" + settings.ResolveFromAddress() + "</b> đã hoạt động thành công 100%.</p></div>", ct);
-        return Results.Ok(new { success = true, message = $"Đã gửi email thử nghiệm tới {to} từ {settings.ResolveFromAddress()}" });
+            "Chào bạn, đây là email kiểm tra kết nối email từ LegacyVault.",
+            "<div style='font-family: sans-serif; padding: 20px; background: #f4f6f8; border-radius: 8px;'><h2 style='color: #1a56db;'>LegacyVault Email Test</h2><p>Xin chúc mừng! Hệ thống gửi email tự động từ <b>" + settings.ResolveFromAddress() + "</b> qua <b>" + provider + "</b> đã hoạt động thành công 100%.</p></div>", ct);
+        return Results.Ok(new { success = true, provider, message = $"Đã gửi email thử nghiệm tới {to} từ {settings.ResolveFromAddress()} qua {provider}" });
     }
     catch (Exception ex)
     {

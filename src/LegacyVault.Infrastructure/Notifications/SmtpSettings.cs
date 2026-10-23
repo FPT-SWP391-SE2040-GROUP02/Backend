@@ -55,11 +55,36 @@ public sealed class SmtpSettings
 
     public int TimeoutSeconds { get; set; } = 20;
 
-    /// <summary>Đủ Host, UserName và Password thì mới gửi email thật.</summary>
+    /// <summary>
+    /// URL Webhook chuyển tiếp email qua HTTPS (ví dụ Google Apps Script Web App).
+    /// Giúp vượt qua việc Render chặn cổng SMTP 25, 465, 587 trên gói Free.
+    /// </summary>
+    public string WebhookUrl { get; set; } = string.Empty;
+
+    public string ResolveWebhookUrl()
+    {
+        return (WebhookUrl ?? string.Empty).Trim().Trim('"').Trim('\'');
+    }
+
+    /// <summary>
+    /// API Key của Brevo (Sendinblue) để gửi email qua HTTPS port 443 không bị firewall chặn.
+    /// </summary>
+    public string BrevoApiKey { get; set; } = string.Empty;
+
+    public string ResolveBrevoApiKey()
+    {
+        return (BrevoApiKey ?? string.Empty).Trim().Trim('"').Trim('\'');
+    }
+
+    /// <summary>Đủ WebhookUrl, BrevoApiKey, hoặc Host/UserName/Password thì mới gửi email thật.</summary>
     public bool IsConfigured
     {
         get
         {
+            if (!string.IsNullOrWhiteSpace(ResolveWebhookUrl()) || !string.IsNullOrWhiteSpace(ResolveBrevoApiKey()))
+            {
+                return true;
+            }
             return !string.IsNullOrWhiteSpace(ResolveHost())
                 && !string.IsNullOrWhiteSpace(ResolveUserName())
                 && !string.IsNullOrWhiteSpace(ResolvePassword());
