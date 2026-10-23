@@ -29,8 +29,13 @@ public sealed class SmtpSettings
     /// <summary>Địa chỉ Gmail dùng để đăng nhập SMTP.</summary>
     public string UserName { get; set; } = string.Empty;
 
-    /// <summary>Mật khẩu ứng dụng Gmail (không phải mật khẩu tài khoản).</summary>
+    /// <summary>Mật khẩu ứng dụng Gmail (không phải mật khẩu tài khoản). Tự động loại bỏ khoảng trắng nếu copy từ Google.</summary>
     public string Password { get; set; } = string.Empty;
+
+    public string ResolvePassword()
+    {
+        return (Password ?? string.Empty).Replace(" ", "").Trim();
+    }
 
     /// <summary>Địa chỉ người gửi; để trống thì dùng UserName (Gmail chỉ cho gửi từ tài khoản đã đăng nhập hoặc bí danh đã xác minh).</summary>
     public string FromAddress { get; set; } = string.Empty;
@@ -46,7 +51,7 @@ public sealed class SmtpSettings
         {
             return !string.IsNullOrWhiteSpace(Host)
                 && !string.IsNullOrWhiteSpace(UserName)
-                && !string.IsNullOrWhiteSpace(Password);
+                && !string.IsNullOrWhiteSpace(ResolvePassword());
         }
     }
 

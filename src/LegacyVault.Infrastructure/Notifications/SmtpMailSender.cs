@@ -47,10 +47,19 @@ public sealed class SmtpMailSender
         using (SmtpClient client = new SmtpClient())
         {
             client.Timeout = settings.TimeoutSeconds * 1000;
-            await client.ConnectAsync(settings.Host, settings.Port, secureSocket.Value, ct);
+            try
+            {
+                await client.ConnectAsync(settings.Host, settings.Port, secureSocket.Value, ct);
+            }
+            catch (Exception) when (settings.Host.Equals("smtp.gmail.com", StringComparison.OrdinalIgnoreCase) && settings.Port == 587)
+            {
+                // Dự phòng cổng 465 (SSL) nếu môi trường cloud chặn hoặc timeout cổng 587
+                await client.ConnectAsync("smtp.gmail.com", 465, SecureSocketOptions.SslOnConnect, ct);
+            }
+
             if (!string.IsNullOrEmpty(settings.UserName))
             {
-                await client.AuthenticateAsync(settings.UserName, settings.Password, ct);
+                await client.AuthenticateAsync(settings.UserName, settings.ResolvePassword(), ct);
             }
             await client.SendAsync(message, ct);
             await client.DisconnectAsync(true, ct);
