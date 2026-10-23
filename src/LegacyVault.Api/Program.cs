@@ -16,7 +16,7 @@ if (int.TryParse(builder.Configuration["PORT"], out int renderPort) && renderPor
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddApiConfig();
+builder.Services.AddApiConfig(builder.Configuration);
 builder.Services.AddCorsConfig(builder.Configuration);
 
 var app = builder.Build();

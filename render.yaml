@@ -29,6 +29,9 @@ services:
         sync: false
       - key: App__ClientUrl
         sync: false
+      # FE (Vercel) và API (Render) khác site: cookie phiên phải SameSite=None; Secure.
+      - key: Auth__CrossSiteCookies
+        value: "true"
 
       # --- JWT ---
       # generateValue tạo chuỗi ngẫu nhiên; phải >= 32 byte (JwtSettings.ValidateOnStart).
