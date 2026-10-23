@@ -3,29 +3,119 @@ services:
     name: legacyvault-api
     runtime: docker
     dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: starter
     region: singapore
     healthCheckPath: /health/live
     envVars:
+      # --- Runtime ---
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      - key: ASPNETCORE_HTTP_PORTS
-        value: 10000
       - key: AllowedHosts
         value: "*"
+
+      # --- Database ---
+      # Render PostgreSQL/MySQL không dùng được: API cần SQL Server.
+      # Dùng SQL Server của nhóm (Azure SQL / SQL Server cloud) hoặc Neon-free không phù hợp.
       - key: ConnectionStrings__Default
         sync: false
+      # Bật migrate lúc khởi động container (mặc định false trong code).
+      - key: Database__MigrateOnStartup
+        value: "true"
+
+      # --- CORS / FE ---
+      # Chính xác origin Vercel, không dùng "*" (API dùng cookie + AllowCredentials).
       - key: Cors__AllowedOrigins__0
         sync: false
       - key: App__ClientUrl
         sync: false
+
+      # --- JWT ---
+      # generateValue tạo chuỗi ngẫu nhiên; phải >= 32 byte (JwtSettings.ValidateOnStart).
       - key: Jwt__SigningKey
         generateValue: true
       - key: Jwt__Issuer
         value: LegacyVault
       - key: Jwt__Audience
         value: LegacyVault
+      - key: Jwt__AccessTokenMinutes
+        value: "90"
+
+      # --- Google OAuth ---
+      # Phải trùng VITE_GOOGLE_CLIENT_ID của frontend.
       - key: GoogleAuth__ClientId
         sync: false
+
+      # --- Gemini (Verifier co-pilot) ---
       - key: Gemini__ApiKey
         sync: false
+
+      # --- Asset storage + encryption (bắt buộc, API không khởi động nếu thiếu) ---
+      # Local: ghi vào container disk (mất khi redeploy). R2: xem docs/deployment.
+      - key: AssetStorage__Provider
+        value: Local
+      - key: AssetStorage__RootPath
+        value: App_Data/asset-content
+      # Base64 32 byte. Tạo: $b=New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
+      - key: AssetEncryption__ActiveKeyId
+        sync: false
+      - key: AssetEncryption__Keys__prod-2026-10
+        sync: false
+      # Base64 32 byte; KHÔNG đổi sau khi đã có dữ liệu (chỉ số CCCD).
+      - key: AssetEncryption__BlindIndexKey
+        sync: false
+
+      # --- eKYC ---
+      # Để trống thì mọi lệnh eKYC trả 503 (đúng contract, không giả thành công).
+      - key: Ekyc__BaseUrl
+        sync: false
+      - key: Ekyc__ApiKey
+        sync: false
+      - key: Ekyc__TimeoutSeconds
+        value: "60"
+
+      # --- Email (SMTP) ---
+      # Không có thì hệ thống chỉ ghi log, KHÔNG gửi email thật.
+      - key: Email__Smtp__Host
+        value: smtp.gmail.com
+      - key: Email__Smtp__Port
+        value: "587"
+      - key: Email__Smtp__SecureSocket
+        value: StartTls
+      - key: Email__Smtp__UserName
+        sync: false
+      - key: Email__Smtp__Password
+        sync: false
+      - key: Email__Smtp__FromAddress
+        sync: false
+      - key: Email__Smtp__FromName
+        value: LegacyVault
+
+      # --- Billing (SePay) ---
+      - key: Billing__SePay__Environment
+        value: Test
+      - key: Billing__SePay__WebhookApiKey
+        sync: false
+      - key: Billing__Bank__BankCode
+        sync: false
+      - key: Billing__Bank__AccountNumber
+        sync: false
+      - key: Billing__Bank__AccountName
+        sync: false
+
+      # --- Jobs nền ---
+      # Bật job đổi trạng thái/xóa dữ liệu và gửi thư; bật khi đã có SMTP thật.
+      - key: CheckIn__Enabled
+        value: "true"
+      - key: Handover__Job__Enabled
+        value: "true"
+      - key: ExecutorInvitations__DeliveryEnabled
+        value: "true"
+      - key: DeathCase__NoticeJobEnabled
+        value: "true"
+      - key: DeathCase__AssignmentJobEnabled
+        value: "true"
+      - key: DeathCase__SupplementJobEnabled
+        value: "true"
+      - key: Retention__Enabled
+        value: "true"

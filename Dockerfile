@@ -28,7 +28,9 @@ RUN mkdir -p /app/App_Data/asset-content
 # Copy compiled binaries from build stage
 COPY --from=build /app/publish .
 
-# Environment defaults for container
+# Environment defaults for container.
+# Render sets PORT itself; Program.cs reads it and binds http://0.0.0.0:$PORT.
+# ASPNETCORE_HTTP_PORTS is only a fallback for plain `docker run`.
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_HTTP_PORTS=8080
 ENV AllowedHosts="*"
