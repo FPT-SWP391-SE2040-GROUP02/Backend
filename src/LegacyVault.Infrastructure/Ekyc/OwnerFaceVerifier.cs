@@ -39,7 +39,7 @@ public sealed class OwnerFaceVerifier : IOwnerFaceVerifier
         OwnerFaceTemplate? template = await templateRepository.FindLatestByUserIdAsync(ownerUserId, ct);
         if (template == null)
         {
-            return OwnerFaceOutcome.Unavailable;
+            return OwnerFaceOutcome.NoTemplate;
         }
 
         EkycFaceEmbedding probe;

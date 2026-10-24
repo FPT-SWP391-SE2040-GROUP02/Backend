@@ -7,8 +7,10 @@ public enum OwnerFaceOutcome
     Matched = 0,
     /// <summary>Không khớp (tính vào số lần thất bại).</summary>
     NotMatched = 1,
-    /// <summary>Chưa có mẫu khuôn mặt hoặc dịch vụ so khớp không dùng được: lỗi kỹ thuật, không tính là thất bại (EKYC-19).</summary>
+    /// <summary>Dịch vụ so khớp không dùng được hoặc mẫu không tương thích: lỗi kỹ thuật, không tính là thất bại (EKYC-19).</summary>
     Unavailable = 2,
+    /// <summary>Owner chưa có mẫu khuôn mặt (chưa hoàn tất eKYC): cũng không tính là thất bại (EKYC-19), nhưng cần báo rõ để Owner làm eKYC.</summary>
+    NoTemplate = 3,
 }
 
 /// <summary>
@@ -17,7 +19,7 @@ public enum OwnerFaceOutcome
 /// </summary>
 /// <remarks>
 /// Mẫu là vector mã hóa trong bảng OwnerFaceTemplates, tạo khi Owner hoàn thành thử thách camera của lượt OWNER_ENROLLMENT
-/// (EkycService.CompleteLivenessAsync). Owner chưa có mẫu thì trả Unavailable.
+/// (EkycService.CompleteLivenessAsync). Owner chưa có mẫu thì trả NoTemplate.
 /// </remarks>
 public interface IOwnerFaceVerifier
 {
