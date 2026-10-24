@@ -792,6 +792,7 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 | `PAYMENT_PAID` | `PAYMENT_ORDER` | Đơn được thanh toán và quyền dịch vụ được cấp (`actorRole = SYSTEM`, không có `actorUserId`; không ghi số tiền hay mã thanh toán) |
 | `DEV_TIME_TRAVEL` | `CHECK_IN` / `DEATH_CASE` | Admin tua thời gian kho thử bằng công cụ thử nghiệm, `reason` là mã mốc (chỉ có ở Development) |
 | `DEV_CLOCK_RESET` | `VAULT` | Admin đưa đồng hồ kho thử về thời gian thực (chỉ có ở Development) |
+| `DEV_EKYC_RESET` | `USER` | Admin xóa dữ liệu eKYC của một tài khoản để làm lại từ đầu (chỉ có ở Development; không gắn kho nên Owner không thấy) |
 
 - **Hồ sơ chứng tử:** chỉ ghi thao tác Executor/Verifier đã lưu thành công (7 loại ở bảng trên); không ghi sửa nháp, thêm/xóa trang giấy, gọi lặp, thao tác bị từ chối, và `reason` không chép lý do tự do vì Owner xem được nhật ký (SEC-13). Lý do đầy đủ nằm ở quyết định của hồ sơ.
 - **Chưa làm:** ghi nhật ký cho thiết lập/kích hoạt kế hoạch, mời Executor và bàn giao (thuộc các module khác, cần chủ module đồng ý); lịch sử người nhận xem/tải nội dung (`HandoverAccessLogs`) chưa có API đọc cho Owner; Admin tra cứu nhật ký toàn hệ thống (ADMIN-06).
@@ -1072,6 +1073,7 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 | GET | `/api/v1/admin/dev-tools/vaults/{vaultId}/clock` | — | 200 `DevClockResponse` | 401, 404 `USER_NOT_FOUND` / `VAULT_NOT_FOUND` |
 | POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/time-travel` | `{ milestone }` | 200 `DevClockResponse` (trạng thái sau khi tua) | 400 `VALIDATION_ERROR`, 401, 404, 409 `DEV_TOOL_NOT_ALLOWED` |
 | POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/reset-clock` | — | 200 `DevClockResponse` | 401, 404 |
+| POST | `/api/v1/admin/dev-tools/users/ekyc-reset` | `{ email }` | 200 `DevEkycResetResponse` `{ userId, email, verificationsRemoved, consentsRemoved, identityRemoved, faceTemplatesRemoved }` | 400 `VALIDATION_ERROR`, 401, 404 `USER_NOT_FOUND` |
 
 - `DevClockResponse`: `{ vaultId, planStatus, checkInState: ON_TIME | OVERDUE | NOT_RUNNING, clockState: REAL_TIME | SHIFTED, milestones: [{ key, state: AVAILABLE | PASSED | NOT_APPLICABLE, note }] }`. `note` là lý do không tua được.
 - `milestone` (theo thứ tự hiển thị):
@@ -1082,6 +1084,7 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 - Tua chỉ dời hạn tương ứng về quá khứ; trạng thái mới do luật và job sẵn có quyết định. Với hai mốc điểm danh, API chạy luôn vòng xử lý của job điểm danh nên kết quả có ngay trong response.
 - `reset-clock` chỉ ghi nhận đồng hồ về thời gian thực (`clockState = REAL_TIME`); trạng thái đã phát sinh khi tua (kế hoạch, sự cố) giữ nguyên, không hoàn tác.
 - Mỗi lần tua ghi nhật ký `DEV_TIME_TRAVEL`, mỗi lần về thời gian hiện tại ghi `DEV_CLOCK_RESET`; Owner của kho thấy các dòng này trong nhật ký kho.
+- **Đặt lại eKYC** (`users/ekyc-reset`): xóa mọi lượt eKYC (mọi mục đích), lần đồng ý chụp ảnh, danh tính đã gắn và mẫu khuôn mặt của tài khoản có email đã nhập (không phân biệt hoa thường). Email, vai trò, kho, vai Executor và hồ sơ giữ nguyên. Tài khoản chưa có eKYC thì trả các số `0`, không ghi nhật ký. Response không có dữ liệu định danh. Sau khi đặt lại, Owner phải eKYC lại trước khi mua gói mới hoặc kích hoạt kế hoạch, và có thể dùng CCCD khác (không còn `EKYC_IDENTITY_MISMATCH`).
 - FE chỉ hiện mục "Công cụ thử nghiệm" trong khu Admin khi chạy `npm run dev`.
 
 ## 7. Tóm tắt thay đổi FE cần làm
