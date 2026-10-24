@@ -82,6 +82,18 @@ public sealed class LoginMethodsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Đổi mật khẩu app; xác thực lại bằng mật khẩu hiện tại.</summary>
+    [HttpPost("password/change")]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken ct)
+    {
+        await loginMethodService.ChangePasswordAsync(request, ct);
+        return NoContent();
+    }
+
     /// <summary>Bỏ mật khẩu app, chỉ còn Google.</summary>
     [HttpPost("password/remove")]
     [Consumes("application/json")]
