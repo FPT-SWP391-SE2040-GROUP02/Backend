@@ -143,6 +143,45 @@ public sealed class DevToolsService(
         return await BuildClockAsync(vault, ct);
     }
 
+    public async Task<DevEkycResetResponse> ResetEkycAsync(DevEkycResetRequest request, CancellationToken ct)
+    {
+        Guid adminId = await RequireAdminAsync(ct);
+        string email = request.Email.Trim().ToLowerInvariant();
+        User? target = await users.FindByEmailAsync(email, ct);
+        if (target == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound,
+                "Không tìm thấy tài khoản với email này.");
+        }
+
+        List<EkycVerification> verifications = await repository.ListEkycVerificationsAsync(target.Id, ct);
+        List<EkycConsent> consents = await repository.ListEkycConsentsAsync(target.Id, ct);
+        OwnerIdentity? identity = await repository.FindOwnerIdentityAsync(target.Id, ct);
+        List<OwnerFaceTemplate> faceTemplates = await repository.ListOwnerFaceTemplatesAsync(target.Id, ct);
+
+        DevEkycResetResponse response = new DevEkycResetResponse();
+        response.UserId = target.Id;
+        response.Email = target.Email;
+        response.VerificationsRemoved = verifications.Count;
+        response.ConsentsRemoved = consents.Count;
+        response.IdentityRemoved = identity != null;
+        response.FaceTemplatesRemoved = faceTemplates.Count;
+
+        bool nothingToRemove = verifications.Count == 0 && consents.Count == 0
+            && identity == null && faceTemplates.Count == 0;
+        if (nothingToRemove)
+        {
+            return response;
+        }
+
+        repository.RemoveEkycData(verifications, consents, identity, faceTemplates);
+        // Nhật ký không gắn kho và không ghi số CCCD; chỉ ghi tài khoản bị đặt lại.
+        auditLogs.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.DevEkycReset,
+            AuditTargetType.User, target.Id, null, AuditOutcome.Succeeded, null, timeProvider.GetUtcNow()));
+        await unitOfWork.SaveChangesAsync(ct);
+        return response;
+    }
+
     private async Task<DevClockResponse> BuildClockAsync(Vault vault, CancellationToken ct)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();

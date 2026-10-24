@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Công cụ thử nghiệm của Admin: tua thời gian của kho thử. Chỉ chạy ở môi trường Development; môi trường khác
+/// Công cụ thử nghiệm của Admin: tua thời gian của kho thử, đặt lại eKYC của tài khoản thử. Chỉ chạy ở môi trường Development; môi trường khác
 /// trả 404 như khu vực không tồn tại. Quyền Admin kiểm từ DB trong service.
 /// </summary>
 [ApiController]
@@ -71,5 +71,20 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
             return NotFound();
         }
         return await devToolsService.ResetClockAsync(vaultId, ct);
+    }
+
+    /// <summary>Xóa dữ liệu eKYC của một tài khoản để làm lại eKYC từ đầu.</summary>
+    [HttpPost("users/ekyc-reset")]
+    [Consumes("application/json")]
+    [ProducesResponseType<DevEkycResetResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DevEkycResetResponse>> ResetEkyc(DevEkycResetRequest request, CancellationToken ct)
+    {
+        if (!environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+        return await devToolsService.ResetEkycAsync(request, ct);
     }
 }
