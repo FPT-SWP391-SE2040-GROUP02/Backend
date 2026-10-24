@@ -36,3 +36,7 @@ Content-Type: application/json
 {
   "email": "owner@example.test"
 }
+
+### Đưa kho về trước eKYC và mua gói (xóa eKYC của Owner, trả quyền dịch vụ về Free, hủy đơn đang chờ; chỉ khi kế hoạch còn Nháp)
+POST {{baseUrl}}/api/v1/admin/dev-tools/vaults/{{vaultId}}/rewind-before-ekyc
+Authorization: Bearer {{token}}
