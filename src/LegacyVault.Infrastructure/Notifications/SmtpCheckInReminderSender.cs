@@ -21,7 +21,8 @@ public sealed class SmtpCheckInReminderSender : ICheckInReminderSender
         {
             clientUrl = DefaultClientUrl;
         }
-        checkInUrl = clientUrl.TrimEnd('/') + "/checkin";
+        // Trang điểm danh của FE nằm ở /dms (không có route /checkin).
+        checkInUrl = clientUrl.TrimEnd('/') + "/dms";
     }
 
     public Task SendReminderAsync(

@@ -15,7 +15,7 @@ public sealed class SmtpEmailTests
     // 08:00 UTC = 15:00 giờ Việt Nam (UTC+7).
     private static readonly DateTimeOffset Due = new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 7, 8, 0, 0, TimeSpan.Zero);
-    private const string CheckInUrl = "http://localhost:5173/checkin";
+    private const string CheckInUrl = "http://localhost:5173/dms";
 
     private static SmtpSettings SettingsFor(FakeSmtpServer server)
     {
@@ -121,8 +121,8 @@ public sealed class SmtpEmailTests
 
         MimeMessage message = ParseOnlyMessage(server);
         Assert.Equal("an@test.local", message.To.Mailboxes.Single().Address);
-        Assert.Contains("http://localhost:5173/checkin", message.TextBody);
-        Assert.DoesNotContain("//checkin", message.TextBody);
+        Assert.Contains("http://localhost:5173/dms", message.TextBody);
+        Assert.DoesNotContain("//dms", message.TextBody);
     }
 
     [Fact]
