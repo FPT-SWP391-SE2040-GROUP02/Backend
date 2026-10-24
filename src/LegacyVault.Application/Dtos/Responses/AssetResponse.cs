@@ -12,25 +12,15 @@ public class AssetResponse
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
 
-    /// <summary>Phiên bản hiện hành (nội dung sẽ được bàn giao nếu tài sản nằm trong gói).</summary>
-    public AssetVersionResponse CurrentVersion { get; set; } = new AssetVersionResponse();
+    /// <summary>Tên tệp gốc; null với tài sản TEXT.</summary>
+    public string? FileName { get; set; }
+
+    public string ContentType { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
 
     /// <summary>Gửi lại trong body (trường etag) khi sửa tài sản.</summary>
     public string Etag { get; set; } = string.Empty;
-}
-
-/// <summary>Metadata một phiên bản nội dung.</summary>
-public class AssetVersionResponse
-{
-    public int VersionNumber { get; set; }
-
-    /// <summary>Tên tệp gốc; null với tài sản TEXT.</summary>
-    public string? FileName { get; set; }
-
-    public string ContentType { get; set; } = string.Empty;
-    public long SizeBytes { get; set; }
-    public DateTimeOffset CreatedAt { get; set; }
 }

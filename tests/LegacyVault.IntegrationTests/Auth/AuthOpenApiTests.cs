@@ -63,6 +63,7 @@ public sealed class AuthOpenApiTests
             .GetProperty("Bearer").GetProperty("scheme").GetString());
         // Phương thức đăng nhập (AUTH-03) đã triển khai nên phải có trong tài liệu OpenAPI.
         Assert.True(paths.TryGetProperty("/api/v1/me/login-methods", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/me/login-methods/password/verify", out _));
         var examples = paths.GetProperty("/api/v1/auth/google").GetProperty("post").GetProperty("responses")
             .GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("examples");
         Assert.Equal(JsonValueKind.Object, examples.GetProperty("signedIn").GetProperty("value").GetProperty("session").ValueKind);

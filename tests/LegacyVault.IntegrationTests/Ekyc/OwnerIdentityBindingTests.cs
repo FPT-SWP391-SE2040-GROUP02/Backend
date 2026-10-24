@@ -22,6 +22,8 @@ public sealed class OwnerIdentityBindingTests
     private readonly FakeCurrentUser currentUser = new FakeCurrentUser();
     private readonly FakeEkycVerificationRepository repository = new FakeEkycVerificationRepository();
     private readonly FakeEkycConsentRepository consentRepository = new FakeEkycConsentRepository();
+    private readonly FakeEkycBeneficiaryRepository beneficiaries = new FakeEkycBeneficiaryRepository();
+    private readonly FakeBeneficiaryDataProtector beneficiaryProtector = new FakeBeneficiaryDataProtector();
     private readonly FakeOwnerIdentityRepository identities = new FakeOwnerIdentityRepository();
     private readonly OwnerIdentityProtector identityProtector = FaceTemplateTestSupport.CreateIdentityProtector();
     private readonly FakeEkycClient client = new FakeEkycClient();
@@ -33,7 +35,7 @@ public sealed class OwnerIdentityBindingTests
     {
         currentUser.UserId = userId;
         service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
-            new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), new FakeOwnerFaceTemplateRepository(),
+            beneficiaries, beneficiaryProtector, new FakeOwnerFaceTemplateRepository(),
             FaceTemplateTestSupport.CreateProtector(), identities, identityProtector, client,
             new FakeUnitOfWork(), clock);
         AddConsent(EkycPurpose.OwnerEnrollment);
@@ -77,6 +79,36 @@ public sealed class OwnerIdentityBindingTests
         await SubmitDocumentAsync();
         await service.StartLivenessAsync(CancellationToken.None);
         return await service.CompleteLivenessAsync(CancellationToken.None);
+    }
+
+    private void AddBeneficiary(string citizenId)
+    {
+        Beneficiary beneficiary = new Beneficiary { CitizenIdLast4 = citizenId.Substring(citizenId.Length - 4) };
+        beneficiaries.Beneficiaries.Add(beneficiary);
+        beneficiaryProtector.Data[beneficiary.Id] = new BeneficiaryPersonalData { CitizenId = citizenId };
+    }
+
+    [Fact]
+    public async Task FirstEnrollment_IsRejected_WhenCitizenIdMatchesAnExistingBeneficiary()
+    {
+        AddBeneficiary("079200012345");
+
+        AppException error = await Assert.ThrowsAsync<AppException>(SubmitDocumentAsync);
+
+        Assert.Equal(ErrorCode.EkycIdentityMismatch, error.Code);
+        Assert.Contains("người nhận", error.Message);
+        Assert.Empty(identities.Identities);
+    }
+
+    [Fact]
+    public async Task FirstEnrollment_Passes_WhenBeneficiaryHasSameLast4ButDifferentCitizenId()
+    {
+        AddBeneficiary("001200012345");
+
+        EkycStatusResponse response = await EnrollAsync();
+
+        Assert.Equal("PASSED", response.Status);
+        Assert.Single(identities.Identities);
     }
 
     [Fact]

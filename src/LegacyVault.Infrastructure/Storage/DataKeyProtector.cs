@@ -171,7 +171,7 @@ public sealed partial class DataKeyProtector
     private static partial Regex KeyIdPattern();
 }
 
-/// <summary>DEK đã bọc và id của KEK đã dùng để bọc; cả hai được lưu vào AssetVersion.</summary>
+/// <summary>DEK đã bọc và id của KEK đã dùng để bọc; cả hai được lưu vào Asset.</summary>
 public sealed class WrappedDataKey
 {
     public string KeyId { get; set; } = string.Empty;

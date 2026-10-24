@@ -81,7 +81,7 @@ public sealed class DataIntegrityTests : IAsyncLifetime
         Assert.Equal(4, created);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            long used = await db.AssetVersions.Where(v => v.Asset.VaultId == vaultId).SumAsync(v => v.SizeBytes);
+            long used = await db.Assets.Where(a => a.VaultId == vaultId).SumAsync(a => a.SizeBytes);
             Assert.True(used <= 20 * MiB);
             Assert.Equal(0, await db.Set<StorageReservation>().CountAsync(r => r.Status == StorageReservationStatus.Active
                 && r.VaultId == vaultId));

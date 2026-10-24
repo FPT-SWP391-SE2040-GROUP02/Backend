@@ -46,15 +46,14 @@ JOIN Designations d ON d.Id = x.DesignationId
 JOIN Containers c ON c.Id = d.ContainerId
 JOIN HandoverPlans p ON p.VaultId = c.VaultId;
 
--- 5) Ghim snapshot: phiên bản hiện hành của từng tài sản trong gói
+-- 5) Ghim snapshot: từng tài sản trong gói
 INSERT INTO HandoverSnapshotItems
-    (Id, TurnId, AssetId, AssetVersionId, Name, Kind, FileName, ContentType, SizeBytes, Position)
-SELECT NEWID(), t.Id, a.Id, v.Id, a.Name, a.Kind, v.FileName, v.ContentType, v.SizeBytes,
+    (Id, TurnId, AssetId, Name, Kind, FileName, ContentType, SizeBytes, Position)
+SELECT NEWID(), t.Id, a.Id, a.Name, a.Kind, a.FileName, a.ContentType, a.SizeBytes,
        ROW_NUMBER() OVER (PARTITION BY t.Id ORDER BY ca.AddedAt, ca.Id) - 1
 FROM HandoverTurns t
 JOIN ContainerAssets ca ON ca.ContainerId = t.ContainerId
 JOIN Assets a ON a.Id = ca.AssetId
-JOIN AssetVersions v ON v.AssetId = a.Id AND v.VersionNumber = a.CurrentVersionNumber
 WHERE t.VaultId = @vaultId;
 
 -- 6) In các link để mở thử

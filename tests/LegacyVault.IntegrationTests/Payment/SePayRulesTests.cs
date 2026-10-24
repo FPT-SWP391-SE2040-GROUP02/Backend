@@ -137,6 +137,20 @@ public sealed class SePayRulesTests
     }
 
     [Fact]
+    public void Pay02_FindPaymentCode_CodeWithWhitespaceInContent_RecoversFullCode()
+    {
+        // Chuẩn bị: Momo hoặc ngân hàng chèn khoảng trắng ngắt quãng, ví dụ "LVLVXW6NC 5"
+        string truncatedCode = "LVLVXW6NC";
+        string content = "153191951032-0898477930-LVLVXW6NC 5 CKN 184682 C2ZMXM4V - CT CP DICH VU DI DONG TRUC TUYEN";
+
+        // Hành động
+        string? found = SePayRules.FindPaymentCode(truncatedCode, content);
+
+        // Kiểm tra: phục hồi đúng mã 10 ký tự chuẩn
+        Assert.Equal("LVLVXW6NC5", found);
+    }
+
+    [Fact]
     public void Pay02_FindPaymentCode_SkipsInvalidCandidateAndTakesFirstValid()
     {
         // Chuẩn bị: "LV0O1I..." chứa ký tự bị bỏ khỏi bảng mã (0, O, 1, I) nên không phải mã; mã hợp lệ đứng sau
