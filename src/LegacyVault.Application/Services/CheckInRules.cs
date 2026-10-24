@@ -12,8 +12,20 @@ public static class CheckInRules
     /// <summary>Thời gian chờ mặc định sau hạn điểm danh (ngày).</summary>
     public const int DefaultGraceDays = 7;
 
-    /// <summary>Điểm danh lặp trong khoảng này kể từ lần trước chỉ trả trạng thái hiện tại, không mở kỳ mới.</summary>
-    public static readonly TimeSpan DuplicateWindow = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
+
+    /// <summary>Mỗi ngày lịch Việt Nam chỉ ghi nhận một lần, dùng giờ server cho cả web và đồng hồ.</summary>
+    public static bool HasCheckedInToday(DateTimeOffset? lastCheckInAt, DateTimeOffset now)
+    {
+        if (lastCheckInAt == null)
+        {
+            return false;
+        }
+        DateTime lastDate = lastCheckInAt.Value.ToOffset(VietnamOffset).Date;
+        DateTime today = now.ToOffset(VietnamOffset).Date;
+        // Giữ khóa cả khi dữ liệu nằm ở tương lai (ví dụ kho vừa được tua giờ demo).
+        return lastDate >= today;
+    }
 
     private static readonly int[] AllowedCycleDays = { 30, 60, 90 };
     private static readonly int[] AllowedGraceDays = { 7, 14, 30 };

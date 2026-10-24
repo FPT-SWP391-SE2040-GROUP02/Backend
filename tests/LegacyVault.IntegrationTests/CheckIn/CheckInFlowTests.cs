@@ -123,6 +123,34 @@ public sealed class CheckInFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task WebAndWatchConcurrentCheckIn_OnlyOneNewPeriod()
+    {
+        (HttpClient client, _, Guid planId) = await CreateVaultWithPlanAsync(PlanStatus.Active);
+        HttpResponseMessage seeded = await client.PostAsync("/api/v1/check-ins", null);
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.CheckInSchedules.Where(s => s.PlanId == planId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastCheckInAt, DateTimeOffset.UtcNow.AddDays(-1)));
+        });
+
+        Task<HttpResponseMessage> web = client.PostAsync("/api/v1/check-ins", null);
+        Task<HttpResponseMessage> watch = client.PostAsJsonAsync("/api/v1/check-ins/smartwatch",
+            new { heartRate = 75, isOnWrist = true });
+        HttpResponseMessage[] responses = await Task.WhenAll(web, watch);
+        foreach (HttpResponseMessage response in responses)
+        {
+            Assert.True(response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Conflict);
+        }
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.OK);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(2, await db.CheckInPeriods.CountAsync(p => p.PlanId == planId));
+            Assert.Equal(1, await db.CheckInPeriods.CountAsync(p => p.PlanId == planId && p.ClosedAt == null));
+        });
+    }
+
+    [SqlFact]
     public async Task Settings_WhileRunning_StoresPendingAndAppliesOnNextCheckIn()
     {
         (HttpClient client, _, Guid planId) = await CreateVaultWithPlanAsync(PlanStatus.Active);
@@ -140,11 +168,11 @@ public sealed class CheckInFlowTests : IAsyncLifetime
         Assert.Equal(60, patched.GetProperty("settings").GetProperty("pendingCycleDays").GetInt32());
         Assert.Equal(dueBefore, patched.GetProperty("nextCheckInDueAt").GetDateTimeOffset());
 
-        // Lùi LastCheckInAt để qua cửa sổ chống bấm lặp 60 giây, rồi điểm danh lần nữa.
+        // Lùi lần điểm danh về hôm trước để kỳ tiếp theo được áp dụng cấu hình mới.
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             await db.CheckInSchedules.Where(s => s.PlanId == planId)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastCheckInAt, DateTimeOffset.UtcNow.AddMinutes(-5)));
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastCheckInAt, DateTimeOffset.UtcNow.AddDays(-1)));
         });
         HttpResponseMessage second = await client.PostAsync("/api/v1/check-ins", null);
 
@@ -245,7 +273,7 @@ public sealed class CheckInFlowTests : IAsyncLifetime
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             await db.CheckInSchedules.Where(s => s.PlanId == planId)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastCheckInAt, DateTimeOffset.UtcNow.AddMinutes(-5)));
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastCheckInAt, DateTimeOffset.UtcNow.AddDays(-1)));
         });
         HttpResponseMessage checkIn = await client.PostAsync("/api/v1/check-ins", null);
         JsonElement after = await ApiTestHelpers.ReadJsonAsync(checkIn);
