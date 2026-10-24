@@ -62,7 +62,7 @@ public sealed class AuditCheckInServiceTests
         SeedRunningVault();
 
         await service.CheckInAsync(CancellationToken.None);
-        clock.Now = Now.AddSeconds(10);
+        clock.Now = Now.AddHours(6);
         await service.CheckInAsync(CancellationToken.None);
 
         Assert.Single(auditLogs.Logs);

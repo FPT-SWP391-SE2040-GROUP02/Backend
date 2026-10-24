@@ -197,18 +197,64 @@ public sealed class CheckInServiceTests
     }
 
     [Fact]
-    public async Task CheckIn_ExactlyAtDuplicateWindowEdge_OpensNewPeriod()
+    public async Task CheckIn_SameVietnamDayAfterSeveralHours_DoesNotOpenNewPeriod()
     {
         Vault vault = SeedVault(PlanStatus.Active, withOpenPeriod: true);
         CheckInSchedule schedule = new CheckInSchedule();
         schedule.PlanId = vault.Plan.Id;
-        schedule.LastCheckInAt = Now.AddSeconds(-60);
+        schedule.LastCheckInAt = Now.AddHours(-6);
         repository.Schedules.Add(schedule);
 
         await service.CheckInAsync(CancellationToken.None);
 
+        Assert.Single(repository.Periods);
+        Assert.Equal(0, unitOfWork.SaveCount);
+        Assert.Equal(Now.AddHours(-6), schedule.LastCheckInAt);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CheckIn_WebAndWatchShareDailyLimit(bool watchFirst)
+    {
+        SeedVault(PlanStatus.Active, withOpenPeriod: true);
+        SmartwatchCheckInRequest request = new SmartwatchCheckInRequest();
+        request.HeartRate = 75;
+        request.IsOnWrist = true;
+        if (watchFirst)
+        {
+            await service.CheckInViaSmartwatchAsync(request, CancellationToken.None);
+        }
+        else
+        {
+            await service.CheckInAsync(CancellationToken.None);
+        }
+        clock.Now = Now.AddHours(6);
+        CheckInStatusResponse response;
+        if (watchFirst)
+        {
+            response = await service.CheckInAsync(CancellationToken.None);
+        }
+        else
+        {
+            response = await service.CheckInViaSmartwatchAsync(request, CancellationToken.None);
+        }
         Assert.Equal(2, repository.Periods.Count);
         Assert.Equal(1, unitOfWork.SaveCount);
+        Assert.Equal(Now, response.LastCheckInAt);
+        Assert.Equal(Now.AddDays(30), response.NextCheckInDueAt);
+    }
+
+    [Fact]
+    public async Task CheckIn_VietnamMidnightAllowsNewCheckInWithinSixtySeconds()
+    {
+        SeedVault(PlanStatus.Active, withOpenPeriod: true);
+        clock.Now = new DateTimeOffset(2026, 10, 14, 16, 59, 59, TimeSpan.Zero);
+        await service.CheckInAsync(CancellationToken.None);
+        clock.Now = clock.Now.AddSeconds(1);
+        await service.CheckInAsync(CancellationToken.None);
+        Assert.Equal(3, repository.Periods.Count);
+        Assert.Equal(2, unitOfWork.SaveCount);
     }
 
     [Fact]

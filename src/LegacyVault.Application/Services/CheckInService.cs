@@ -58,8 +58,7 @@ public sealed class CheckInService : ICheckInService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         CheckInSchedule? schedule = await checkInRepository.FindScheduleByPlanIdAsync(plan.Id, ct);
-        if (schedule != null && schedule.LastCheckInAt != null
-            && now - schedule.LastCheckInAt.Value < CheckInRules.DuplicateWindow)
+        if (schedule != null && CheckInRules.HasCheckedInToday(schedule.LastCheckInAt, now))
         {
             // Bấm lặp: không mở kỳ mới, chỉ trả trạng thái hiện tại.
             return await BuildResponseAsync(plan, new PaginationRequest(), ct);
@@ -122,7 +121,7 @@ public sealed class CheckInService : ICheckInService
             throw ValidationErrors.For("heartRate", "Nhịp tim không hợp lệ hoặc cảm biến chưa đo được tín hiệu sống (yêu cầu từ 40 đến 180 bpm).");
         }
 
-        // Tái sử dụng logic nghiệp vụ điểm danh chuẩn (đóng kỳ, mở kỳ mới, debounce 60s)
+        // Web và đồng hồ dùng chung giới hạn một lần mỗi ngày Việt Nam.
         return await CheckInAsync(ct);
     }
 
