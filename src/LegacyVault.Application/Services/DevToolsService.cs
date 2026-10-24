@@ -154,6 +154,98 @@ public sealed class DevToolsService(
                 "Không tìm thấy tài khoản với email này.");
         }
 
+        DevEkycResetResponse response = await RemoveEkycDataAsync(target, ct);
+        if (!HasRemovedEkycData(response))
+        {
+            return response;
+        }
+
+        // Nhật ký không gắn kho và không ghi số CCCD; chỉ ghi tài khoản bị đặt lại.
+        auditLogs.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.DevEkycReset,
+            AuditTargetType.User, target.Id, null, AuditOutcome.Succeeded, null, timeProvider.GetUtcNow()));
+        await unitOfWork.SaveChangesAsync(ct);
+        return response;
+    }
+
+    public async Task<DevRewindBeforeEkycResponse> RewindBeforeEkycAsync(Guid vaultId, CancellationToken ct)
+    {
+        Guid adminId = await RequireAdminAsync(ct);
+        Vault? vault = await repository.FindVaultWithEntitlementAsync(vaultId, ct);
+        if (vault == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
+        }
+        User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+        if (owner == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Không tìm thấy chủ kho.");
+        }
+        if (vault.Plan.Status != PlanStatus.Draft)
+        {
+            // Kế hoạch đã chạy dựa vào eKYC và gói đã trả; rút lại giữa chừng làm dữ liệu kế hoạch mâu thuẫn.
+            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+            extensions["reason"] = "PLAN_NOT_DRAFT";
+            throw new AppException(AppErrorType.Conflict, ErrorCode.DevToolNotAllowed,
+                "Kế hoạch đã kích hoạt nên không thể đưa kho về trước eKYC và mua gói.", extensions);
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        DevEkycResetResponse ekyc = await RemoveEkycDataAsync(owner, ct);
+
+        DevRewindBeforeEkycResponse response = new DevRewindBeforeEkycResponse();
+        response.VaultId = vault.Id;
+        response.OwnerEmail = owner.Email;
+        response.VerificationsRemoved = ekyc.VerificationsRemoved;
+        response.ConsentsRemoved = ekyc.ConsentsRemoved;
+        response.IdentityRemoved = ekyc.IdentityRemoved;
+        response.FaceTemplatesRemoved = ekyc.FaceTemplatesRemoved;
+        response.PreviousTier = vault.Entitlement.Tier.ToApiString();
+
+        // Trả quyền dịch vụ về đúng giá trị của kho mới tạo (VaultService).
+        VaultEntitlement entitlement = vault.Entitlement;
+        bool alreadyFree = entitlement.Tier == ServiceTier.Free
+            && entitlement.Status == EntitlementStatus.Free
+            && entitlement.StorageQuotaBytes == StorageLimits.FreeQuotaBytes
+            && entitlement.IncludedBeneficiarySlots == 0
+            && entitlement.ExtraBeneficiarySlots == 0
+            && entitlement.ServiceExpiresAt == null;
+        if (!alreadyFree)
+        {
+            entitlement.Tier = ServiceTier.Free;
+            entitlement.Status = EntitlementStatus.Free;
+            entitlement.StorageQuotaBytes = StorageLimits.FreeQuotaBytes;
+            entitlement.IncludedBeneficiarySlots = 0;
+            entitlement.ExtraBeneficiarySlots = 0;
+            entitlement.ServiceExpiresAt = null;
+            entitlement.UpdatedAt = now;
+            response.EntitlementReset = true;
+        }
+
+        // Đơn đã trả giữ nguyên làm lịch sử; chỉ hủy đơn đang chờ để tiền về sau không cấp lại quyền ngoài ý muốn.
+        List<PaymentOrder> pendingOrders = await repository.ListPendingPaymentOrdersAsync(vault.Id, ct);
+        foreach (PaymentOrder order in pendingOrders)
+        {
+            order.Status = PaymentOrderStatus.Cancelled;
+            order.CancelledAt = now;
+            order.UpdatedAt = now;
+        }
+        response.PendingOrdersCancelled = pendingOrders.Count;
+
+        bool changedAnything = HasRemovedEkycData(ekyc) || response.EntitlementReset || pendingOrders.Count > 0;
+        if (!changedAnything)
+        {
+            return response;
+        }
+
+        auditLogs.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.DevRewindBeforeEkyc,
+            AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
+        await unitOfWork.SaveChangesAsync(ct);
+        return response;
+    }
+
+    /// <summary>Đánh dấu xóa mọi dữ liệu eKYC của tài khoản (chưa lưu) và trả số lượng đã đánh dấu.</summary>
+    private async Task<DevEkycResetResponse> RemoveEkycDataAsync(User target, CancellationToken ct)
+    {
         List<EkycVerification> verifications = await repository.ListEkycVerificationsAsync(target.Id, ct);
         List<EkycConsent> consents = await repository.ListEkycConsentsAsync(target.Id, ct);
         OwnerIdentity? identity = await repository.FindOwnerIdentityAsync(target.Id, ct);
@@ -167,19 +259,21 @@ public sealed class DevToolsService(
         response.IdentityRemoved = identity != null;
         response.FaceTemplatesRemoved = faceTemplates.Count;
 
-        bool nothingToRemove = verifications.Count == 0 && consents.Count == 0
-            && identity == null && faceTemplates.Count == 0;
-        if (nothingToRemove)
+        if (HasRemovedEkycData(response))
         {
-            return response;
+            repository.RemoveEkycData(verifications, consents, identity, faceTemplates);
         }
-
-        repository.RemoveEkycData(verifications, consents, identity, faceTemplates);
-        // Nhật ký không gắn kho và không ghi số CCCD; chỉ ghi tài khoản bị đặt lại.
-        auditLogs.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.DevEkycReset,
-            AuditTargetType.User, target.Id, null, AuditOutcome.Succeeded, null, timeProvider.GetUtcNow()));
-        await unitOfWork.SaveChangesAsync(ct);
         return response;
+    }
+
+    private static bool HasRemovedEkycData(DevEkycResetResponse response)
+    {
+        if (response.VerificationsRemoved > 0 || response.ConsentsRemoved > 0
+            || response.IdentityRemoved || response.FaceTemplatesRemoved > 0)
+        {
+            return true;
+        }
+        return false;
     }
 
     private async Task<DevClockResponse> BuildClockAsync(Vault vault, CancellationToken ct)
