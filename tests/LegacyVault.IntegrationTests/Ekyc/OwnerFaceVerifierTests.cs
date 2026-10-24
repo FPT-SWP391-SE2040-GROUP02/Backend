@@ -39,11 +39,12 @@ public sealed class OwnerFaceVerifierTests
     }
 
     [Fact]
-    public async Task NoTemplate_IsUnavailable_AndDoesNotCallService()
+    public async Task NoTemplate_ReturnsNoTemplate_AndDoesNotCallService()
     {
         OwnerFaceOutcome outcome = await VerifyAsync();
 
-        Assert.Equal(OwnerFaceOutcome.Unavailable, outcome);
+        // Báo riêng (không lẫn với lỗi dịch vụ) để FE hướng Owner đi làm eKYC; vẫn không tính là thất bại (EKYC-19).
+        Assert.Equal(OwnerFaceOutcome.NoTemplate, outcome);
         Assert.Equal(0, client.EmbeddingCalls);
     }
 
@@ -73,7 +74,7 @@ public sealed class OwnerFaceVerifierTests
         OwnerFaceOutcome outcome = await verifier.VerifyAsync(
             Guid.NewGuid(), Selfie, "selfie.jpg", "image/jpeg", CancellationToken.None);
 
-        Assert.Equal(OwnerFaceOutcome.Unavailable, outcome);
+        Assert.Equal(OwnerFaceOutcome.NoTemplate, outcome);
     }
 
     [Fact]

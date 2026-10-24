@@ -29,6 +29,24 @@ public static class DevToolsRules
     /// <summary>Dời hạn về trước thời điểm hiện tại một khoảng nhỏ để job chắc chắn thấy đã quá hạn.</summary>
     public static readonly TimeSpan PastMargin = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Sau khi tua hạn về quá khứ, lần điểm danh gần nhất phải lùi theo (hạn trừ đi chu kỳ), nếu không Owner
+    /// vừa điểm danh hôm nay sẽ bị khóa "một lần mỗi ngày" dù kế hoạch đã quá hạn. Chỉ lùi, không bao giờ tiến.
+    /// </summary>
+    public static DateTimeOffset? LastCheckInAfterShiftedDue(DateTimeOffset? lastCheckInAt, DateTimeOffset dueAt, int cycleDays)
+    {
+        if (lastCheckInAt == null)
+        {
+            return null;
+        }
+        DateTimeOffset consistentLastCheckIn = dueAt.AddDays(-cycleDays);
+        if (lastCheckInAt.Value > consistentLastCheckIn)
+        {
+            return consistentLastCheckIn;
+        }
+        return lastCheckInAt;
+    }
+
     /// <summary>Thứ tự mốc hiển thị trên màn hình, từ trên xuống.</summary>
     public static List<string> AllMilestones()
     {

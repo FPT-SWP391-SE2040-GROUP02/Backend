@@ -182,6 +182,10 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
 
         byte[] image = await ReadImageAsync(content, contentType, ct);
         OwnerFaceOutcome outcome = await faceVerifier.VerifyAsync(vault.OwnerId, image, fileName, contentType, ct);
+        if (outcome == OwnerFaceOutcome.NoTemplate)
+        {
+            throw FaceTemplateMissing();
+        }
         if (outcome == OwnerFaceOutcome.Unavailable)
         {
             throw new AppException(AppErrorType.ServiceUnavailable, ErrorCode.EkycServiceUnavailable,
@@ -199,6 +203,18 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         objection.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
         return await BuildAsync(deathCase, ct);
+    }
+
+    /// <summary>
+    /// Owner chưa có mẫu khuôn mặt vì chưa hoàn tất eKYC. Giữ mã 503 EKYC_SERVICE_UNAVAILABLE (không tính thất bại, EKYC-19)
+    /// nhưng thêm reason để FE báo đúng việc cần làm thay vì nói dịch vụ chưa sẵn sàng.
+    /// </summary>
+    private static AppException FaceTemplateMissing()
+    {
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["reason"] = "FACE_TEMPLATE_MISSING";
+        return new AppException(AppErrorType.ServiceUnavailable, ErrorCode.EkycServiceUnavailable,
+            "Chủ kho chưa có mẫu khuôn mặt vì chưa hoàn tất xác minh eKYC.", extensions);
     }
 
     /// <summary>
@@ -224,6 +240,10 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
 
         byte[] image = await ReadImageAsync(content, contentType, ct);
         OwnerFaceOutcome outcome = await faceVerifier.VerifyAsync(vault.OwnerId, image, fileName, contentType, ct);
+        if (outcome == OwnerFaceOutcome.NoTemplate)
+        {
+            throw FaceTemplateMissing();
+        }
         if (outcome == OwnerFaceOutcome.Unavailable)
         {
             throw new AppException(AppErrorType.ServiceUnavailable, ErrorCode.EkycServiceUnavailable,
