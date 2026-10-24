@@ -26,9 +26,18 @@ public sealed class PasswordResetService(
     {
         string email = request.Email.Trim().ToLowerInvariant();
         User? user = await userRepository.FindByEmailAsync(email, ct);
-        if (user == null || !CanResetPassword(user))
+        if (user == null)
         {
-            // Không có tài khoản, bị khóa hoặc chỉ dùng Google: vẫn trả thành công để không lộ thông tin tài khoản.
+            // Theo yêu cầu nhóm: email chưa đăng ký thì báo rõ để người dùng nhập lại (đánh đổi: lộ email nào đã có tài khoản).
+            throw new AppException(
+                AppErrorType.NotFound,
+                ErrorCode.EmailNotFound,
+                "Email này chưa được đăng ký trong hệ thống.");
+        }
+
+        if (!CanResetPassword(user))
+        {
+            // Tài khoản bị khóa hoặc chỉ dùng Google: không gửi link, vẫn trả thành công.
             return;
         }
 

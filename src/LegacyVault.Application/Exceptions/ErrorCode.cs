@@ -12,6 +12,7 @@ public enum ErrorCode
 {
     ValidationError,
     EmailAlreadyExists,
+    EmailNotFound,
     SessionExpired,
     AccountNotActive,
     EmailNotVerified,

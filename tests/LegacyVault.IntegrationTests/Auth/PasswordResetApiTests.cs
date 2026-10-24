@@ -112,13 +112,13 @@ public sealed class PasswordResetApiTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Forgot_UnknownEmail_Returns202WithoutMail()
+    public async Task Forgot_UnknownEmail_Returns404WithoutMail()
     {
         HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response = await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { email = "khongco@test.local" });
 
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Empty(mail.ResetMails);
     }
 

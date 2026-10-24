@@ -139,6 +139,24 @@ public sealed class LoginMethodService : ILoginMethodService
         }, ct);
     }
 
+    public Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct)
+    {
+        return _unitOfWork.ExecuteSerializableAsync(async () =>
+        {
+            User user = await LoadCurrentUserAsync(ct);
+            EnsurePasswordMatches(user, request.CurrentPassword);
+            if (request.NewPassword == request.CurrentPassword)
+            {
+                throw ValidationErrors.For("newPassword", "Mật khẩu mới phải khác mật khẩu hiện tại.");
+            }
+
+            user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
+            user.UpdatedAt = _timeProvider.GetUtcNow();
+            await _unitOfWork.SaveChangesAsync(ct);
+            return true;
+        }, ct);
+    }
+
     public async Task RemovePasswordAsync(RemovePasswordRequest request, CancellationToken ct)
     {
         GoogleIdentity identity = await VerifyGoogleAsync(request.GoogleIdToken, request.Nonce, ct);

@@ -42,6 +42,12 @@ public interface ILoginMethodService
     Task SetPasswordAsync(SetPasswordRequest request, CancellationToken ct);
 
     /// <summary>
+    /// Đổi mật khẩu app khi đang đăng nhập. Tài khoản chưa có mật khẩu coi như sai mật khẩu hiện tại.
+    /// Lỗi: 401 REAUTHENTICATION_FAILED, 400 VALIDATION_ERROR (mật khẩu mới trùng mật khẩu hiện tại).
+    /// </summary>
+    Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct);
+
+    /// <summary>
     /// Bỏ mật khẩu app, chỉ còn Google.
     /// Lỗi: 409 LAST_LOGIN_METHOD (chưa liên kết Google), 401 REAUTHENTICATION_FAILED, 401 INVALID_GOOGLE_TOKEN.
     /// </summary>
