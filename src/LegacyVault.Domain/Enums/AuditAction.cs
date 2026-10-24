@@ -87,4 +87,6 @@ public enum AuditAction
     PaymentOrderCancelled = 39,
     /// <summary>Đơn thanh toán được thanh toán và quyền dịch vụ được cấp (job/webhook, không có người dùng).</summary>
     PaymentPaid = 40,
+    /// <summary>Admin xóa dữ liệu eKYC của một tài khoản để làm lại từ đầu (công cụ thử nghiệm, chỉ có ở Development).</summary>
+    DevEkycReset = 41,
 }

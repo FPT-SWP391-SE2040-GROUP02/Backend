@@ -26,3 +26,13 @@ Content-Type: application/json
 ### Về thời gian hiện tại (giữ nguyên trạng thái đã phát sinh)
 POST {{baseUrl}}/api/v1/admin/dev-tools/vaults/{{vaultId}}/reset-clock
 Authorization: Bearer {{token}}
+
+
+### Đặt lại eKYC của một tài khoản (xóa lượt xác minh, đồng ý, danh tính, mẫu khuôn mặt)
+POST {{baseUrl}}/api/v1/admin/dev-tools/users/ekyc-reset
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "owner@example.test"
+}
