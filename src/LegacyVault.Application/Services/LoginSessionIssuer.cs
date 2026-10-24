@@ -93,6 +93,8 @@ public sealed class LoginSessionIssuer
             Status = user.Status.ToString().ToUpperInvariant(),
             EmailVerified = user.EmailVerifiedAt != null,
             HasPassword = !string.IsNullOrEmpty(user.PasswordHash),
+            HasAvatar = user.AvatarStorageKey != null,
+            AvatarUpdatedAt = user.AvatarUpdatedAt,
             CreatedAt = user.CreatedAt,
         };
     }

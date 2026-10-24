@@ -35,4 +35,25 @@ public class User
     public DateTimeOffset? UpdatedAt { get; set; }
 
     public DateTimeOffset? LastLoginAt { get; set; }
+
+    /// <summary>
+    /// Ảnh đại diện (tùy chọn). Nội dung nằm ở kho lưu trữ private, mã hóa envelope như tài sản; các cột Avatar* chỉ giữ
+    /// tham chiếu và khóa đã bọc. Null AvatarStorageKey = chưa có ảnh.
+    /// </summary>
+    public string? AvatarStorageKey { get; set; }
+
+    /// <summary>"image/jpeg", "image/png" hoặc "image/webp", nhận theo nội dung thật của tệp.</summary>
+    public string? AvatarContentType { get; set; }
+
+    public long? AvatarSizeBytes { get; set; }
+
+    public string? AvatarSha256 { get; set; }
+
+    public string? AvatarEncryptionKeyId { get; set; }
+
+    /// <summary>DEK của ảnh, đã bọc bằng KEK (60 byte). Không trả cho FE, không log.</summary>
+    public byte[]? AvatarWrappedDataKey { get; set; }
+
+    /// <summary>Lần đổi ảnh gần nhất; FE dùng làm khóa làm mới ảnh trong bộ nhớ.</summary>
+    public DateTimeOffset? AvatarUpdatedAt { get; set; }
 }

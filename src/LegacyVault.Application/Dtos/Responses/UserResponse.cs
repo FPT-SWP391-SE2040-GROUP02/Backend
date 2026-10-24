@@ -20,5 +20,11 @@ public class UserResponse
     /// <summary>Có mật khẩu app hay không (AUTH-03) — FE chọn hiện "Đổi mật khẩu" hay "Đặt mật khẩu".</summary>
     public bool HasPassword { get; set; }
 
+    /// <summary>Đã có ảnh đại diện: FE tải ảnh bằng GET /api/v1/me/avatar (cần Bearer).</summary>
+    public bool HasAvatar { get; set; }
+
+    /// <summary>Lần đổi ảnh gần nhất; đổi giá trị này thì FE tải lại ảnh. null khi chưa có ảnh.</summary>
+    public DateTimeOffset? AvatarUpdatedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 }

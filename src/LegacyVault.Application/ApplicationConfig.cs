@@ -45,6 +45,7 @@ public static class ApplicationConfig
         services.AddScoped<IRegistrationService, RegistrationService>();
         services.AddScoped<IPasswordResetService, PasswordResetService>();
         services.AddScoped<ILoginMethodService, LoginMethodService>();
+        services.AddScoped<IAvatarService, AvatarService>();
         services.AddScoped<ITwoFactorService, TwoFactorService>();
 
         // Đăng nhập Google

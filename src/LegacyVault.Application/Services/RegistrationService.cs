@@ -178,6 +178,8 @@ public sealed class RegistrationService : IRegistrationService
             Status = user.Status.ToString().ToUpperInvariant(),
             EmailVerified = user.EmailVerifiedAt != null,
             HasPassword = !string.IsNullOrEmpty(user.PasswordHash),
+            HasAvatar = user.AvatarStorageKey != null,
+            AvatarUpdatedAt = user.AvatarUpdatedAt,
             CreatedAt = user.CreatedAt,
         };
     }
