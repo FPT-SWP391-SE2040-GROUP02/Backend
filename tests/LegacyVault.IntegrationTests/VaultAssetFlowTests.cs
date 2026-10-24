@@ -146,19 +146,17 @@ public sealed class VaultAssetFlowTests : IAsyncLifetime
         var fileAsset = await ReadJsonAsync(fileResponse);
         Assert.Equal("FILE", fileAsset.GetProperty("kind").GetString());
         Assert.Equal("Giấy tờ nhà", fileAsset.GetProperty("name").GetString());
-        var version = fileAsset.GetProperty("currentVersion");
-        Assert.Equal(1, version.GetProperty("versionNumber").GetInt32());
-        Assert.Equal("giay-to.pdf", version.GetProperty("fileName").GetString());
-        Assert.Equal("application/pdf", version.GetProperty("contentType").GetString());
-        Assert.Equal(1500, version.GetProperty("sizeBytes").GetInt64());
-        Assert.False(version.TryGetProperty("storageKey", out _));
+        Assert.Equal("giay-to.pdf", fileAsset.GetProperty("fileName").GetString());
+        Assert.Equal("application/pdf", fileAsset.GetProperty("contentType").GetString());
+        Assert.Equal(1500, fileAsset.GetProperty("sizeBytes").GetInt64());
+        Assert.False(fileAsset.TryGetProperty("storageKey", out _));
 
         var textResponse = await client.PostAsJsonAsync($"{assetsUrl}/text",
             new { name = "Tài khoản ngân hàng", content = "user: an / pass: bí mật" });
         Assert.Equal(HttpStatusCode.Created, textResponse.StatusCode);
         var textAsset = await ReadJsonAsync(textResponse);
         Assert.Equal("TEXT", textAsset.GetProperty("kind").GetString());
-        Assert.Null(textAsset.GetProperty("currentVersion").GetProperty("fileName").GetString());
+        Assert.Null(textAsset.GetProperty("fileName").GetString());
 
         var vault = await ReadJsonAsync(await client.GetAsync($"/api/v1/vaults/{vaultId}"));
         var textBytes = System.Text.Encoding.UTF8.GetByteCount("user: an / pass: bí mật");
@@ -186,10 +184,10 @@ public sealed class VaultAssetFlowTests : IAsyncLifetime
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var versions = await db.Set<AssetVersion>().Where(v => v.Asset.VaultId == vaultId).ToListAsync();
-            Assert.Equal(2, versions.Count);
-            Assert.All(versions, v => Assert.Equal("dev-local", v.EncryptionKeyId));
-            Assert.All(versions, v => Assert.Equal(60, v.WrappedDataKey.Length));
+            var assets = await db.Assets.Where(a => a.VaultId == vaultId).ToListAsync();
+            Assert.Equal(2, assets.Count);
+            Assert.All(assets, a => Assert.Equal("dev-local", a.EncryptionKeyId));
+            Assert.All(assets, a => Assert.Equal(60, a.WrappedDataKey.Length));
         }
     }
 

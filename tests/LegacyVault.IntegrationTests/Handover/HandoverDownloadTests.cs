@@ -41,10 +41,10 @@ public sealed class HandoverDownloadTests
 
         item = turn.Items[0];
         item.SizeBytes = ContentLength;
-        AssetVersion version = data.Versions[0];
-        version.SizeBytes = ContentLength;
-        repository.Versions.Add(version);
-        store.Contents[version.StorageKey] = content;
+        Asset asset = data.Assets[0];
+        asset.SizeBytes = ContentLength;
+        repository.Assets.Add(asset);
+        store.Contents[asset.StorageKey] = content;
 
         grant = new HandoverGrant
         {

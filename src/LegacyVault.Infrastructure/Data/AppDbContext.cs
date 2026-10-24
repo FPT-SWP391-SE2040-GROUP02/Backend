@@ -34,7 +34,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     // Tài sản
     public DbSet<Asset> Assets => Set<Asset>();
-    public DbSet<AssetVersion> AssetVersions => Set<AssetVersion>();
 
     // Người nhận
     public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();

@@ -35,10 +35,10 @@ public sealed class VaultRepository(AppDbContext context) : IVaultRepository
 
     public async Task<long> SumUsedBytesAsync(Guid vaultId, CancellationToken ct)
     {
-        // QUOTA-01/02: mọi phiên bản đang lưu đều chiếm dung lượng, kể cả khi tài sản không ở gói nào.
-        return await context.AssetVersions
-            .Where(v => v.Asset.VaultId == vaultId && v.ContentDeletedAt == null)
-            .SumAsync(v => (long?)v.SizeBytes, ct) ?? 0;
+        // QUOTA-01/02: mọi nội dung đang lưu đều chiếm dung lượng, kể cả khi tài sản không ở gói nào.
+        return await context.Assets
+            .Where(a => a.VaultId == vaultId && a.ContentDeletedAt == null)
+            .SumAsync(a => (long?)a.SizeBytes, ct) ?? 0;
     }
 
     private IQueryable<Vault> WithPlanAndEntitlement()

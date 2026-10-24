@@ -83,7 +83,7 @@ public sealed class AssetsController(IAssetService assetService, ILogger<AssetsC
     }
 
     /// <summary>
-    /// Owner tải nội dung tài sản của mình (phiên bản hiện tại, hoặc ?version=N). Nội dung được kiểm toàn vẹn trước khi
+    /// Owner tải nội dung tài sản của mình. Nội dung được kiểm toàn vẹn trước khi
     /// gửi byte đầu tiên; nếu hỏng trả 500 CONTENT_INTEGRITY_FAILED mà không kèm byte nội dung nào.
     /// </summary>
     [HttpGet("{assetId:guid}/content")]
@@ -91,12 +91,12 @@ public sealed class AssetsController(IAssetService assetService, ILogger<AssetsC
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DownloadContent(
-        Guid vaultId, Guid assetId, [FromQuery] int? version, CancellationToken ct)
+        Guid vaultId, Guid assetId, CancellationToken ct)
     {
         PreparedDownload download;
         try
         {
-            download = await assetService.PrepareContentAsync(vaultId, assetId, version, ct);
+            download = await assetService.PrepareContentAsync(vaultId, assetId, ct);
         }
         catch (ContentIntegrityException)
         {
@@ -128,46 +128,6 @@ public sealed class AssetsController(IAssetService assetService, ILogger<AssetsC
         Guid vaultId, Guid assetId, UpdateAssetRequest request, CancellationToken ct)
     {
         return assetService.UpdateAssetAsync(vaultId, assetId, request, ct);
-    }
-
-    /// <summary>Thay nội dung tài sản dạng tệp bằng một phiên bản mới (multipart/form-data: file, etag).</summary>
-    [HttpPost("{assetId:guid}/versions")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(MaxRequestBytes)]
-    [RequestFormLimits(MultipartBodyLengthLimit = MaxRequestBytes)]
-    [ProducesResponseType<AssetResponse>(StatusCodes.Status201Created)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
-    public async Task<ActionResult<AssetResponse>> CreateFileVersion(
-        Guid vaultId, Guid assetId, [FromForm] CreateFileAssetVersionForm form, CancellationToken ct)
-    {
-        var file = form.File!;
-        await using var content = file.OpenReadStream();
-        var asset = await assetService.CreateFileVersionAsync(vaultId, assetId, new CreateFileAssetVersionRequest
-        {
-            Etag = form.Etag ?? string.Empty,
-            FileName = file.FileName,
-            ContentType = file.ContentType,
-            Length = file.Length,
-            Content = content,
-        }, ct);
-        return StatusCode(StatusCodes.Status201Created, asset);
-    }
-
-    /// <summary>Thay nội dung tài sản dạng chữ bằng một phiên bản mới.</summary>
-    [HttpPost("{assetId:guid}/versions/text")]
-    [Consumes("application/json")]
-    [ProducesResponseType<AssetResponse>(StatusCodes.Status201Created)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<AssetResponse>> CreateTextVersion(
-        Guid vaultId, Guid assetId, CreateTextAssetVersionRequest request, CancellationToken ct)
-    {
-        var asset = await assetService.CreateTextVersionAsync(vaultId, assetId, request, ct);
-        return StatusCode(StatusCodes.Status201Created, asset);
     }
 
     /// <summary>Xóa tài sản (chỉ khi không còn ở gói nào, chưa ghim vào bàn giao và kho không bị tạm giữ).</summary>

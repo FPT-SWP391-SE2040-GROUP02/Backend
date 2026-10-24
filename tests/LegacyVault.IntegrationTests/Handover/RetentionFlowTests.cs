@@ -273,14 +273,14 @@ public sealed class RetentionFlowTests : IAsyncLifetime
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            List<AssetVersion> versions = await db.AssetVersions.Where(v => v.Asset.VaultId == s.VaultId).ToListAsync();
-            Assert.Equal(2, versions.Count);
-            foreach (AssetVersion version in versions)
+            List<Asset> assets = await db.Assets.Where(a => a.VaultId == s.VaultId).ToListAsync();
+            Assert.Equal(2, assets.Count);
+            foreach (Asset asset in assets)
             {
-                Assert.NotNull(version.ContentDeletedAt);
-                Assert.NotNull(version.StorageDeletedAt);
-                Assert.All(version.WrappedDataKey, b => Assert.Equal(0, b));
-                Assert.False(File.Exists(Path.Combine(factory.StorageRoot, version.StorageKey)));
+                Assert.NotNull(asset.ContentDeletedAt);
+                Assert.NotNull(asset.StorageDeletedAt);
+                Assert.All(asset.WrappedDataKey, b => Assert.Equal(0, b));
+                Assert.False(File.Exists(Path.Combine(factory.StorageRoot, asset.StorageKey)));
             }
             Vault vault = await db.Vaults.Include(v => v.Plan).SingleAsync(v => v.Id == s.VaultId);
             Assert.Equal(VaultStatus.Closed, vault.Status);
@@ -302,7 +302,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         RetentionRunResult first = await RunAsync(s.PlanId);
 
         Assert.Equal(1, first.TurnsDeleted);
-        Assert.Equal(0, first.VersionsShredded);
+        Assert.Equal(0, first.AssetsShredded);
         Assert.False(first.VaultClosed);
 
         // Lượt thứ hai tới hạn: giờ mới xóa nội dung và đóng kho
@@ -310,7 +310,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         RetentionRunResult second = await RunAsync(s.PlanId);
         Assert.Equal(1, second.TurnsDeleted);
         Assert.True(second.VaultClosed);
-        Assert.Equal(2, second.VersionsShredded);
+        Assert.Equal(2, second.AssetsShredded);
     }
 
     [SqlFact]
@@ -356,7 +356,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         Assert.Equal(0, result.TurnsDeleted);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            Assert.Equal(0, await db.AssetVersions.CountAsync(v => v.Asset.VaultId == s.VaultId && v.ContentDeletedAt != null));
+            Assert.Equal(0, await db.Assets.CountAsync(a => a.VaultId == s.VaultId && a.ContentDeletedAt != null));
         });
     }
 }
