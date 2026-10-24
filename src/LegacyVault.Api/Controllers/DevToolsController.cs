@@ -87,4 +87,18 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
         }
         return await devToolsService.ResetEkycAsync(request, ct);
     }
+
+    /// <summary>Đưa kho về trước bước eKYC và mua gói để làm lại từ đầu.</summary>
+    [HttpPost("vaults/{vaultId:guid}/rewind-before-ekyc")]
+    [ProducesResponseType<DevRewindBeforeEkycResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<DevRewindBeforeEkycResponse>> RewindBeforeEkyc(Guid vaultId, CancellationToken ct)
+    {
+        if (!environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+        return await devToolsService.RewindBeforeEkycAsync(vaultId, ct);
+    }
 }

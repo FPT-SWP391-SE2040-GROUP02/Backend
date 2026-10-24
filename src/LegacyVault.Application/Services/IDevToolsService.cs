@@ -35,4 +35,12 @@ public interface IDevToolsService
     /// Lỗi: 400 VALIDATION_ERROR, 404 USER_NOT_FOUND (người gọi không phải Admin hoặc không có tài khoản với email này).
     /// </summary>
     Task<DevEkycResetResponse> ResetEkycAsync(DevEkycResetRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Đưa kho về thời điểm ngay trước bước eKYC và mua gói: xóa dữ liệu eKYC của Owner, trả quyền dịch vụ về Free,
+    /// hủy đơn thanh toán đang chờ. Đơn đã trả, tài sản, người nhận, gói và Executor giữ nguyên. Kho vốn đã ở thời điểm đó thì không ghi gì.
+    /// Lỗi: 404 USER_NOT_FOUND (không phải Admin hoặc không thấy Owner), 404 VAULT_NOT_FOUND,
+    /// 409 DEV_TOOL_NOT_ALLOWED (kế hoạch không còn ở Nháp).
+    /// </summary>
+    Task<DevRewindBeforeEkycResponse> RewindBeforeEkycAsync(Guid vaultId, CancellationToken ct);
 }
