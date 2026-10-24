@@ -7,6 +7,33 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Tự động nạp cấu hình từ .env nếu có (dành cho chạy local và môi trường Docker/Render)
+var envCandidates = new[]
+{
+    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),
+    Directory.GetParent(Directory.GetCurrentDirectory()) != null ? Path.Combine(Directory.GetParent(Directory.GetCurrentDirectory())!.FullName, ".env") : ""
+};
+foreach (var envPath in envCandidates)
+{
+    if (!string.IsNullOrEmpty(envPath) && File.Exists(envPath))
+    {
+        foreach (var line in File.ReadAllLines(envPath))
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith('#')) continue;
+            var separatorIdx = trimmed.IndexOf('=');
+            if (separatorIdx <= 0) continue;
+            var key = trimmed[..separatorIdx].Trim();
+            var val = trimmed[(separatorIdx + 1)..].Trim().Trim('"').Trim('\'');
+            builder.Configuration[key.Replace("__", ":")] = val;
+            builder.Configuration[key] = val;
+        }
+        break;
+    }
+}
+
 builder.Configuration.AddJsonFile("appsettings.Development.local.json", optional: true, reloadOnChange: true);
 
 // Render injects PORT; ASP.NET Core mặc định không đọc biến này nên phải tự gắn URL.

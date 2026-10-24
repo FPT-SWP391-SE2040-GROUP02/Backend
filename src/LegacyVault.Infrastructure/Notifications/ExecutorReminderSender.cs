@@ -17,7 +17,9 @@ public sealed class ExecutorReminderSender(SmtpMailSender sender, IOptions<SmtpS
 
     public async Task<bool> SendAsync(string email, string role, DateTimeOffset expiresAt, CancellationToken ct)
     {
-        if (!config.GetValue<bool>("ExecutorInvitations:DeliveryEnabled") || !settings.Value.IsConfigured)
+        bool deliveryEnabled = config.GetValue<bool?>("ExecutorInvitations:DeliveryEnabled")
+            ?? (config.GetValue<bool?>("ExecutorInvitations__DeliveryEnabled") ?? settings.Value.IsConfigured);
+        if (!deliveryEnabled || !settings.Value.IsConfigured)
         {
             return false;
         }
@@ -38,7 +40,7 @@ public sealed class ExecutorReminderSender(SmtpMailSender sender, IOptions<SmtpS
         }
         catch (Exception exception) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning("Executor reminder delivery unconfirmed ({ExceptionType}).", exception.GetType().Name);
+            logger.LogWarning(exception, "Executor reminder delivery to {Email} failed ({ExceptionType}): {Message}.", email, exception.GetType().Name, exception.Message);
             return false;
         }
     }
