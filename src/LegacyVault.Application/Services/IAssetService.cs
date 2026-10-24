@@ -38,31 +38,20 @@ public interface IAssetService
     Task<AssetResponse> GetAssetAsync(Guid vaultId, Guid assetId, CancellationToken ct);
 
     /// <summary>
-    /// Owner tải nội dung phiên bản hiện tại (hoặc versionNumber) của tài sản mình. Kiểm toàn vẹn trước khi gửi
-    /// byte đầu tiên. Lỗi: 404 ASSET_NOT_FOUND (kể cả phiên bản không có hoặc nội dung đã dọn),
+    /// Owner tải nội dung tài sản của mình. Kiểm toàn vẹn trước khi gửi
+    /// byte đầu tiên. Lỗi: 404 ASSET_NOT_FOUND (kể cả nội dung đã dọn),
     /// ContentIntegrityException khi nội dung hỏng.
     /// </summary>
-    Task<PreparedDownload> PrepareContentAsync(Guid vaultId, Guid assetId, int? versionNumber, CancellationToken ct);
+    Task<PreparedDownload> PrepareContentAsync(Guid vaultId, Guid assetId, CancellationToken ct);
 
     /// <summary>
-    /// Đổi tên/mô tả (không đổi nội dung, không tạo phiên bản). Lỗi: 409 EDIT_CONFLICT (etag lệch),
+    /// Đổi tên/mô tả (không đổi nội dung). Lỗi: 409 EDIT_CONFLICT (etag lệch),
     /// 409 VAULT_NOT_EDITABLE (kể cả reason HOLD_ACTIVE).
     /// </summary>
     Task<AssetResponse> UpdateAssetAsync(Guid vaultId, Guid assetId, UpdateAssetRequest request, CancellationToken ct);
 
     /// <summary>
-    /// Thay nội dung tài sản dạng tệp bằng phiên bản mới. Lỗi như UpdateAssetAsync, thêm
-    /// 409 STORAGE_QUOTA_EXCEEDED, 413 FILE_TOO_LARGE, 400 khi tài sản là dạng chữ.
-    /// </summary>
-    Task<AssetResponse> CreateFileVersionAsync(
-        Guid vaultId, Guid assetId, CreateFileAssetVersionRequest request, CancellationToken ct);
-
-    /// <summary>Thay nội dung tài sản dạng chữ bằng phiên bản mới. Lỗi như CreateFileVersionAsync.</summary>
-    Task<AssetResponse> CreateTextVersionAsync(
-        Guid vaultId, Guid assetId, CreateTextAssetVersionRequest request, CancellationToken ct);
-
-    /// <summary>
-    /// Xóa tài sản cùng mọi phiên bản và nội dung. Lỗi: 409 ASSET_IN_USE (reason IN_CONTAINER | PINNED_IN_HANDOVER),
+    /// Xóa tài sản cùng nội dung. Lỗi: 409 ASSET_IN_USE (reason IN_CONTAINER | PINNED_IN_HANDOVER),
     /// 409 VAULT_NOT_EDITABLE (kể cả reason HOLD_ACTIVE).
     /// </summary>
     Task DeleteAssetAsync(Guid vaultId, Guid assetId, CancellationToken ct);

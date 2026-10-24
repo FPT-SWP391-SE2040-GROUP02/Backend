@@ -202,27 +202,20 @@ public sealed partial class AssetService : IAssetService
         asset.Kind = kind;
         asset.Name = name;
         asset.Description = TextInput.NullIfBlank(description);
-        asset.CurrentVersionNumber = 1;
+        asset.FileName = fileName;
+        asset.ContentType = contentType;
+        asset.SizeBytes = stored.SizeBytes;
+        asset.Sha256 = stored.Sha256;
+        asset.StorageKey = stored.StorageKey;
+        asset.EncryptionKeyId = stored.EncryptionKeyId;
+        asset.WrappedDataKey = stored.WrappedDataKey;
         asset.CreatedAt = now;
-
-        AssetVersion version = new AssetVersion();
-        version.AssetId = asset.Id;
-        version.VersionNumber = 1;
-        version.FileName = fileName;
-        version.ContentType = contentType;
-        version.SizeBytes = stored.SizeBytes;
-        version.Sha256 = stored.Sha256;
-        version.StorageKey = stored.StorageKey;
-        version.EncryptionKeyId = stored.EncryptionKeyId;
-        version.WrappedDataKey = stored.WrappedDataKey;
-        version.CreatedAt = now;
-        asset.Versions.Add(version);
 
         assetRepository.Add(asset);
         // SEC-13: lưu cùng tài sản; INSERT lỗi thì nhật ký cũng không ghi. Không ghi tên tài sản hay tên tệp (SEC-07).
         auditLogRepository.Add(AuditRules.OwnerAction(
             vault.Id, vault.OwnerId, AuditAction.AssetCreated, AuditTargetType.Asset, asset.Id,
-            asset.CurrentVersionNumber, now));
+            null, now));
         // Chỗ giữ chuyển sang đã dùng trong cùng lần lưu với tài sản.
         reservations.MarkCommitted(reservation, now);
         try

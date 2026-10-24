@@ -6,7 +6,7 @@ namespace LegacyVault.Domain.Entities;
 /// Một tài sản được ghim cho một lượt bàn giao (bảng HandoverSnapshotItems), SRS DATA-01.
 /// </summary>
 /// <remarks>
-/// AssetVersionId ghim ĐÚNG phiên bản nội dung lúc ghim; các trường còn lại chép từ tài sản để đổi tên sau đó không ảnh hưởng.
+/// Các trường chép từ tài sản lúc ghim để đổi tên sau đó không ảnh hưởng; nội dung tải theo AssetId.
 /// </remarks>
 public class HandoverSnapshotItem
 {
@@ -17,9 +17,6 @@ public class HandoverSnapshotItem
     public HandoverTurn Turn { get; set; } = null!;
 
     public Guid AssetId { get; set; }
-
-    /// <summary>Phiên bản nội dung được ghim; người nhận chỉ tải được đúng phiên bản này.</summary>
-    public Guid AssetVersionId { get; set; }
 
     public string Name { get; set; } = string.Empty;
 

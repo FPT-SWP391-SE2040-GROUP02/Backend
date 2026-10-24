@@ -81,7 +81,7 @@ public sealed class AuditVaultAssetFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Sec13_CreateAsset_LogsAssetCreatedWithVersion()
+    public async Task Sec13_CreateAsset_LogsAssetCreated()
     {
         // Chuẩn bị
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
@@ -90,12 +90,12 @@ public sealed class AuditVaultAssetFlowTests : IAsyncLifetime
         // Hành động
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Mật khẩu ngân hàng");
 
-        // Kiểm tra: ghi id và phiên bản tài sản, không ghi tên hay nội dung
+        // Kiểm tra: ghi id tài sản, không ghi tên hay nội dung
         List<AuditLog> logs = await AuditTestData.ListForVaultAsync(factory, vaultId, AuditAction.AssetCreated);
         AuditLog log = Assert.Single(logs);
         Assert.Equal(AuditTargetType.Asset, log.TargetType);
         Assert.Equal(assetId, log.TargetId);
-        Assert.Equal(1, log.TargetVersion);
+        Assert.Null(log.TargetVersion);
         Assert.Null(log.Reason);
     }
 

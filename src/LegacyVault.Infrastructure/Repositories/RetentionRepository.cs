@@ -41,24 +41,24 @@ public sealed class RetentionRepository : IRetentionRepository
             .ToListAsync(ct);
     }
 
-    public Task<List<AssetVersion>> FindLiveVersionsAsync(List<Guid> versionIds, CancellationToken ct)
+    public Task<List<Asset>> FindLiveAssetsAsync(List<Guid> assetIds, CancellationToken ct)
     {
-        return context.AssetVersions
-            .Where(v => versionIds.Contains(v.Id) && v.ContentDeletedAt == null)
+        return context.Assets
+            .Where(a => assetIds.Contains(a.Id) && a.ContentDeletedAt == null)
             .ToListAsync(ct);
     }
 
-    public Task<List<AssetVersion>> FindLiveVersionsOfVaultAsync(Guid vaultId, CancellationToken ct)
+    public Task<List<Asset>> FindLiveAssetsOfVaultAsync(Guid vaultId, CancellationToken ct)
     {
-        return context.AssetVersions
-            .Where(v => v.Asset.VaultId == vaultId && v.ContentDeletedAt == null)
+        return context.Assets
+            .Where(a => a.VaultId == vaultId && a.ContentDeletedAt == null)
             .ToListAsync(ct);
     }
 
-    public Task<List<AssetVersion>> FindPendingStorageDeletesAsync(Guid vaultId, CancellationToken ct)
+    public Task<List<Asset>> FindPendingStorageDeletesAsync(Guid vaultId, CancellationToken ct)
     {
-        return context.AssetVersions
-            .Where(v => v.Asset.VaultId == vaultId && v.ContentDeletedAt != null && v.StorageDeletedAt == null)
+        return context.Assets
+            .Where(a => a.VaultId == vaultId && a.ContentDeletedAt != null && a.StorageDeletedAt == null)
             .ToListAsync(ct);
     }
 }

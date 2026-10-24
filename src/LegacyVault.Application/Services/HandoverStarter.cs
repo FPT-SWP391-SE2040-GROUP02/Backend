@@ -142,7 +142,7 @@ public sealed class HandoverStarter : IHandoverStarter
         return result;
     }
 
-    /// <summary>Ghim phiên bản hiện hành của từng tài sản trong gói (snapshot: sửa tài sản sau này không đổi lượt).</summary>
+    /// <summary>Ghim từng tài sản trong gói (snapshot: sửa tài sản sau này không đổi lượt).</summary>
     private static List<HandoverSnapshotItem> BuildSnapshot(HandoverTurn turn, Container container)
     {
         List<HandoverSnapshotItem> items = new List<HandoverSnapshotItem>();
@@ -151,21 +151,14 @@ public sealed class HandoverStarter : IHandoverStarter
         foreach (ContainerAsset link in container.Assets.OrderBy(a => a.AddedAt).ThenBy(a => a.Id))
         {
             Asset asset = link.Asset;
-            AssetVersion? version = asset.Versions.FirstOrDefault(v => v.VersionNumber == asset.CurrentVersionNumber);
-            if (version == null)
-            {
-                continue;
-            }
-
             HandoverSnapshotItem item = new HandoverSnapshotItem();
             item.TurnId = turn.Id;
             item.AssetId = asset.Id;
-            item.AssetVersionId = version.Id;
             item.Name = asset.Name;
             item.Kind = asset.Kind;
-            item.FileName = version.FileName;
-            item.ContentType = version.ContentType;
-            item.SizeBytes = version.SizeBytes;
+            item.FileName = asset.FileName;
+            item.ContentType = asset.ContentType;
+            item.SizeBytes = asset.SizeBytes;
             item.Position = position;
             items.Add(item);
             position++;

@@ -217,7 +217,6 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         HandoverSnapshotItem item = new HandoverSnapshotItem();
         item.TurnId = turn.Id;
         item.AssetId = Guid.NewGuid();
-        item.AssetVersionId = Guid.NewGuid();
         item.Name = name;
         item.Kind = AssetKind.File;
         item.FileName = "tep.pdf";

@@ -71,7 +71,7 @@ public enum AuditAction
     DeathCaseApproved = 31,
     /// <summary>Owner đổi tên hoặc mô tả tài sản.</summary>
     AssetUpdated = 32,
-    /// <summary>Owner thay nội dung tài sản, tạo phiên bản mới (ASSET-04).</summary>
+    /// <summary>Không còn dùng (đã bỏ phiên bản tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     AssetVersionCreated = 33,
     /// <summary>Owner xóa tài sản không còn ở gói nào.</summary>
     AssetDeleted = 34,

@@ -7,21 +7,6 @@ namespace LegacyVault.Infrastructure.Repositories;
 
 public sealed class AssetRepository(AppDbContext context) : IAssetRepository
 {
-    public async Task<bool> TryAddVersionAsync(AssetVersion version, CancellationToken ct)
-    {
-        context.AssetVersions.Add(version);
-        try
-        {
-            await context.SaveChangesAsync(ct);
-            return true;
-        }
-        catch (DbUpdateException ex) when (DbExceptions.IsUniqueViolation(ex))
-        {
-            context.ChangeTracker.Clear();
-            return false;
-        }
-    }
-
     public Task<bool> IsPinnedInHandoverAsync(Guid assetId, CancellationToken ct)
     {
         return context.Set<HandoverSnapshotItem>().AnyAsync(i => i.AssetId == assetId, ct);
@@ -35,7 +20,6 @@ public sealed class AssetRepository(AppDbContext context) : IAssetRepository
     public Task<Asset?> FindByIdAsync(Guid vaultId, Guid assetId, CancellationToken ct)
     {
         return context.Assets
-            .Include(a => a.Versions)
             .FirstOrDefaultAsync(a => a.Id == assetId && a.VaultId == vaultId, ct);
     }
 
@@ -89,8 +73,6 @@ public sealed class AssetRepository(AppDbContext context) : IAssetRepository
         var items = await query
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
-            .Include(a => a.Versions)
-            .AsSplitQuery()
             .ToListAsync(ct);
         return (items, totalCount);
     }

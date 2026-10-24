@@ -13,7 +13,7 @@ public sealed class RetentionRunResult
 {
     public int TurnsDeleted { get; set; }
 
-    public int VersionsShredded { get; set; }
+    public int AssetsShredded { get; set; }
 
     public int NoticesSent { get; set; }
 
@@ -133,16 +133,16 @@ public sealed class RetentionJob : IRetentionJob
         if (plan.Status == PlanStatus.Closed && AllTurnsDone(turns))
         {
             // SETUP-18: mọi lượt đã dọn và kế hoạch đã đóng → dọn nốt nội dung còn lại rồi đóng kho.
-            List<AssetVersion> rest = await repository.FindLiveVersionsOfVaultAsync(vault.Id, ct);
-            foreach (AssetVersion version in rest)
+            List<Asset> rest = await repository.FindLiveAssetsOfVaultAsync(vault.Id, ct);
+            foreach (Asset asset in rest)
             {
-                // Truy vấn đọc theo DB nên có thể trả lại phiên bản vừa hủy khóa ở trên (chưa lưu): bỏ qua.
-                if (version.ContentDeletedAt != null)
+                // Truy vấn đọc theo DB nên có thể trả lại tài sản vừa hủy khóa ở trên (chưa lưu): bỏ qua.
+                if (asset.ContentDeletedAt != null)
                 {
                     continue;
                 }
-                Shred(version, now);
-                result.VersionsShredded++;
+                Shred(asset, now);
+                result.AssetsShredded++;
             }
             vault.Status = VaultStatus.Closed;
             vault.ClosedAt = now;
@@ -157,7 +157,7 @@ public sealed class RetentionJob : IRetentionJob
         return result;
     }
 
-    /// <summary>Dọn các lượt tới hạn; phiên bản còn lượt khác giữ thì để lại (RETENTION-02).</summary>
+    /// <summary>Dọn các lượt tới hạn; tài sản còn lượt khác giữ thì để lại (RETENTION-02).</summary>
     private async Task DeleteTurnsAsync(
         List<HandoverTurn> turns, List<HandoverTurn> due, DateTimeOffset now, RetentionRunResult result, CancellationToken ct)
     {
@@ -176,7 +176,7 @@ public sealed class RetentionJob : IRetentionJob
             }
             foreach (HandoverSnapshotItem item in turn.Items)
             {
-                stillReferenced.Add(item.AssetVersionId);
+                stillReferenced.Add(item.AssetId);
             }
         }
 
@@ -185,9 +185,9 @@ public sealed class RetentionJob : IRetentionJob
         {
             foreach (HandoverSnapshotItem item in turn.Items)
             {
-                if (!stillReferenced.Contains(item.AssetVersionId) && !toShred.Contains(item.AssetVersionId))
+                if (!stillReferenced.Contains(item.AssetId) && !toShred.Contains(item.AssetId))
                 {
-                    toShred.Add(item.AssetVersionId);
+                    toShred.Add(item.AssetId);
                 }
             }
 
@@ -208,20 +208,20 @@ public sealed class RetentionJob : IRetentionJob
 
         if (toShred.Count > 0)
         {
-            List<AssetVersion> versions = await repository.FindLiveVersionsAsync(toShred, ct);
-            foreach (AssetVersion version in versions)
+            List<Asset> assets = await repository.FindLiveAssetsAsync(toShred, ct);
+            foreach (Asset asset in assets)
             {
-                Shred(version, now);
-                result.VersionsShredded++;
+                Shred(asset, now);
+                result.AssetsShredded++;
             }
         }
     }
 
     /// <summary>Hủy khóa nội dung: ghi đè DEK đã bọc bằng 0, ghi dấu đã xóa. Tệp xóa sau khi lưu.</summary>
-    private static void Shred(AssetVersion version, DateTimeOffset now)
+    private static void Shred(Asset asset, DateTimeOffset now)
     {
-        version.WrappedDataKey = new byte[version.WrappedDataKey.Length];
-        version.ContentDeletedAt = now;
+        asset.WrappedDataKey = new byte[asset.WrappedDataKey.Length];
+        asset.ContentDeletedAt = now;
     }
 
     private static bool AllTurnsDone(List<HandoverTurn> turns)
@@ -238,17 +238,17 @@ public sealed class RetentionJob : IRetentionJob
 
     private async Task DeleteStoredFilesAsync(Guid vaultId, DateTimeOffset now, CancellationToken ct)
     {
-        List<AssetVersion> pending = await repository.FindPendingStorageDeletesAsync(vaultId, ct);
+        List<Asset> pending = await repository.FindPendingStorageDeletesAsync(vaultId, ct);
         if (pending.Count == 0)
         {
             return;
         }
-        foreach (AssetVersion version in pending)
+        foreach (Asset asset in pending)
         {
             try
             {
-                await contentStore.DeleteAsync(version.StorageKey, ct);
-                version.StorageDeletedAt = now;
+                await contentStore.DeleteAsync(asset.StorageKey, ct);
+                asset.StorageDeletedAt = now;
             }
             catch (Exception) when (!ct.IsCancellationRequested)
             {
