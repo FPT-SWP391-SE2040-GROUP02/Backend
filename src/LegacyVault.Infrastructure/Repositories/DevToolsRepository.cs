@@ -53,6 +53,13 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .FirstOrDefaultAsync(ct);
     }
 
+    public Task<CheckInSchedule?> FindCheckInScheduleAsync(Guid planId, CancellationToken ct)
+    {
+        return context.Set<CheckInSchedule>()
+            .Where(s => s.PlanId == planId)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public Task<DeathCase?> FindOpenDeathCaseAsync(Guid vaultId, CancellationToken ct)
     {
         return context.Set<DeathCase>()

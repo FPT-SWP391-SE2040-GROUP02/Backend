@@ -15,6 +15,9 @@ public interface IDevToolsRepository
     /// <summary>Kỳ điểm danh đang mở của kế hoạch, có theo dõi thay đổi.</summary>
     Task<CheckInPeriod?> FindOpenPeriodAsync(Guid planId, CancellationToken ct);
 
+    /// <summary>Lịch điểm danh của kế hoạch, có theo dõi thay đổi; null khi chưa có.</summary>
+    Task<CheckInSchedule?> FindCheckInScheduleAsync(Guid planId, CancellationToken ct);
+
     /// <summary>Hồ sơ chứng tử mới nhất chưa đóng của kho, có theo dõi thay đổi.</summary>
     Task<DeathCase?> FindOpenDeathCaseAsync(Guid vaultId, CancellationToken ct);
 

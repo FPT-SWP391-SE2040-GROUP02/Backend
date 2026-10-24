@@ -204,4 +204,38 @@ public sealed class DevToolsRulesTests
         Assert.True(DevToolsRules.IsKnownMilestone(DevToolsRules.SelfieDeadlinePassed));
         Assert.False(DevToolsRules.IsKnownMilestone("TOMORROW"));
     }
+
+    [Fact]
+    public void LastCheckInAfterShiftedDue_CheckedInToday_MovesBackBeforeShiftedDue()
+    {
+        // Chuẩn bị: Owner vừa điểm danh hôm nay, Admin tua hạn về quá khứ.
+        DateTimeOffset shiftedDue = Now.AddMinutes(-1);
+
+        // Hành động
+        DateTimeOffset? result = DevToolsRules.LastCheckInAfterShiftedDue(Now.AddHours(-2), shiftedDue, 30);
+
+        // Kiểm tra: lùi đúng một chu kỳ trước hạn mới, không còn cùng ngày với hiện tại.
+        Assert.Equal(shiftedDue.AddDays(-30), result);
+        Assert.False(CheckInRules.HasCheckedInToday(result, Now));
+    }
+
+    [Fact]
+    public void LastCheckInAfterShiftedDue_AlreadyOlderThanCycle_KeepsValue()
+    {
+        // Chuẩn bị
+        DateTimeOffset oldCheckIn = Now.AddDays(-90);
+
+        // Hành động
+        DateTimeOffset? result = DevToolsRules.LastCheckInAfterShiftedDue(oldCheckIn, Now.AddMinutes(-1), 30);
+
+        // Kiểm tra: chỉ lùi, không bao giờ tiến.
+        Assert.Equal(oldCheckIn, result);
+    }
+
+    [Fact]
+    public void LastCheckInAfterShiftedDue_NeverCheckedIn_StaysNull()
+    {
+        // Hành động và kiểm tra
+        Assert.Null(DevToolsRules.LastCheckInAfterShiftedDue(null, Now.AddMinutes(-1), 30));
+    }
 }

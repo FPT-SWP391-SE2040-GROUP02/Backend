@@ -89,6 +89,18 @@ public sealed class DevToolsService(
                     period.DueAt = period.GraceEndsAt - DevToolsRules.PastMargin;
                 }
             }
+            // Lùi lần điểm danh gần nhất theo hạn mới để luật "một lần mỗi ngày" không chặn Owner khi test quá hạn.
+            CheckInSchedule? schedule = await repository.FindCheckInScheduleAsync(vault.Plan.Id, ct);
+            if (schedule != null)
+            {
+                DateTimeOffset? shiftedLastCheckIn = DevToolsRules.LastCheckInAfterShiftedDue(
+                    schedule.LastCheckInAt, period.DueAt, schedule.CycleDays);
+                if (shiftedLastCheckIn != schedule.LastCheckInAt)
+                {
+                    schedule.LastCheckInAt = shiftedLastCheckIn;
+                    schedule.UpdatedAt = now;
+                }
+            }
             targetType = AuditTargetType.CheckIn;
             targetId = period.Id;
             periodToProcess = period.Id;
