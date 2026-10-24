@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Development.local.json", optional: true, reloadOnChange: true);
 
 // Render injects PORT; ASP.NET Core mặc định không đọc biến này nên phải tự gắn URL.
 if (int.TryParse(builder.Configuration["PORT"], out int renderPort) && renderPort > 0)

@@ -565,6 +565,11 @@ public sealed class EkycService : IEkycService
         }
 
         OwnerIdentity? bound = await identityRepository.FindByUserIdAsync(userId, ct);
+        if (bound == null)
+        {
+            // Lần gắn danh tính đầu tiên: CCCD của Chủ kho không được trùng người nhận đã thêm trước đó.
+            await EnsureNotAmongBeneficiariesAsync(userId, readIdentity.CitizenId, reading.DocumentToken!, ct);
+        }
         if (bound != null)
         {
             OwnerIdentityData expected = identityProtector.Unprotect(bound);
@@ -583,6 +588,27 @@ public sealed class EkycService : IEkycService
             }
         }
         return readIdentity;
+    }
+
+    /// <summary>
+    /// Chủ kho chưa gắn danh tính nên lúc thêm người nhận chưa so được CCCD. Đối chiếu ngược khi gắn: nếu CCCD trên giấy tờ
+    /// trùng một người nhận trong kho của chính Owner thì từ chối và hủy khuôn mặt vừa giữ.
+    /// </summary>
+    private async Task EnsureNotAmongBeneficiariesAsync(
+        Guid userId, string citizenId, string documentToken, CancellationToken ct)
+    {
+        string last4 = citizenId.Substring(citizenId.Length - 4);
+        List<Beneficiary> candidates = await beneficiaryRepository.ListByOwnerAndCitizenIdLast4Async(userId, last4, ct);
+        foreach (Beneficiary candidate in candidates)
+        {
+            BeneficiaryPersonalData data = beneficiaryProtector.Unprotect(candidate);
+            if (string.Equals(data.CitizenId, citizenId, StringComparison.Ordinal))
+            {
+                await TryDeleteDocumentAsync(documentToken, ct);
+                throw new AppException(AppErrorType.Conflict, ErrorCode.EkycIdentityMismatch,
+                    "Số CCCD trên giấy tờ trùng với một người nhận bạn đã thêm. Người nhận không được trùng với Chủ kho; hãy xóa hoặc sửa hồ sơ người nhận đó trước.");
+            }
+        }
     }
 
     /// <summary>

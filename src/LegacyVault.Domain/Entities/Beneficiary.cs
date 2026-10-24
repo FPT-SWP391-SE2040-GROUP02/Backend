@@ -4,7 +4,7 @@ namespace LegacyVault.Domain.Entities;
 /// Hồ sơ người nhận cấp kho (bảng Beneficiaries): danh bạ người nhận, dùng lại cho nhiều gói (QUOTA-04).
 /// </summary>
 /// <remarks>
-/// - Dữ liệu cá nhân (§11.6 dòng "Người nhận", DATA-02) được mã hóa envelope giống AssetVersion:
+/// - Dữ liệu cá nhân (§11.6 dòng "Người nhận", DATA-02) được mã hóa envelope giống Asset:
 ///   mỗi hồ sơ có DEK riêng, DB chỉ lưu DEK ĐÃ BỌC bằng KEK; KEK nằm trong cấu hình server, không nằm trong DB.
 ///   Lộ DB mà không có KEK thì không đọc được số CCCD, họ tên, ngày sinh, email, số điện thoại.
 /// - Mỗi lần lưu (tạo/sửa) sinh DEK mới và mã hóa lại toàn bộ.

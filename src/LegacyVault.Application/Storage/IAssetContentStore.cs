@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Storage;
 /// - Nội dung LUÔN được mã hóa trước khi ghi: mã hóa envelope AES-256-GCM, mỗi phiên bản một DEK riêng,
 ///   DEK được bọc bằng KEK nằm ngoài DB (xem Infrastructure/Storage/DataKeyProtector).
 /// - Service không biết nội dung nằm ở đâu (đĩa local, R2/S3...) hay mã hóa thế nào;
-///   chỉ lưu các trường của StoredContent vào AssetVersion.
+///   chỉ lưu các trường của StoredContent vào Asset.
 /// - Không log nội dung, DEK hoặc StorageKey kèm thông tin người dùng.
 /// </remarks>
 public interface IAssetContentStore
@@ -28,7 +28,7 @@ public interface IAssetContentStore
     Task DeleteAsync(string storageKey, CancellationToken ct);
 }
 
-/// <summary>Thông tin một nội dung đã lưu; service chép nguyên các trường này vào AssetVersion.</summary>
+/// <summary>Thông tin một nội dung đã lưu; service chép nguyên các trường này vào Asset.</summary>
 public class StoredContent
 {
     public string StorageKey { get; set; } = string.Empty;

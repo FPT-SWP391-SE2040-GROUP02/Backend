@@ -23,7 +23,7 @@ public sealed class BeneficiaryConfiguration : IEntityTypeConfiguration<Benefici
             .HasMaxLength(64)
             .IsUnicode(false);
 
-        // Giống AssetVersion: nonce 12 + DEK 32 + tag 16 = 60 byte (DataKeyProtector.WrappedKeySize).
+        // Giống Asset: nonce 12 + DEK 32 + tag 16 = 60 byte (DataKeyProtector.WrappedKeySize).
         builder.Property(b => b.WrappedDataKey)
             .IsRequired()
             .HasMaxLength(60)

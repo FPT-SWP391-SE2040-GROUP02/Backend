@@ -162,6 +162,12 @@ public sealed class FakeEkycBeneficiaryRepository : IBeneficiaryRepository
         return Task.FromResult(new List<Beneficiary>());
     }
 
+    public Task<List<Beneficiary>> ListByOwnerAndCitizenIdLast4Async(Guid ownerId, string last4, CancellationToken ct)
+    {
+        List<Beneficiary> found = Beneficiaries.Where(b => b.CitizenIdLast4 == last4).ToList();
+        return Task.FromResult(found);
+    }
+
     public Task<(List<Beneficiary> Items, int TotalCount)> FindPageByVaultIdAsync(
         Guid vaultId, string? last4Filter, int pageIndex, int pageSize, bool isAscending, CancellationToken ct)
     {

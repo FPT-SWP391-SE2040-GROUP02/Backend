@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using LegacyVault.Domain.Entities;
@@ -63,11 +64,43 @@ public static class SePayRules
     }
 
     /// <summary>
-    /// E6: dùng trường code của SePay nếu có (không rỗng, dài tối đa 16); không thì tìm mẫu LV + 8 ký tự thuộc bảng
-    /// BillingRules.PaymentCodeAlphabet trong nội dung chuyển khoản (không phân biệt hoa thường). Trả chữ HOA; không có → null.
+    /// E6: dùng trường code của SePay nếu có đúng độ dài chuẩn (10 ký tự: LV + 8); nếu không thì tìm mẫu
+    /// LV + 8 ký tự trong nội dung chuyển khoản (kể cả trường hợp ngân hàng/ví Momo chèn khoảng trắng ngắt quãng).
     /// </summary>
     public static string? FindPaymentCode(string? code, string? content)
     {
+        int codeLength = BillingRules.PaymentCodePrefix.Length + BillingRules.PaymentCodeRandomLength;
+
+        // Nếu trường code của SePay đã bóc được đúng 10 ký tự chuẩn: nhận ngay
+        if (!string.IsNullOrWhiteSpace(code))
+        {
+            string trimmedCode = code.Trim().ToUpperInvariant();
+            if (trimmedCode.Length == codeLength && trimmedCode.StartsWith(BillingRules.PaymentCodePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmedCode;
+            }
+        }
+
+        // Tìm trong nội dung chuyển khoản (content)
+        if (!string.IsNullOrEmpty(content))
+        {
+            string? found = MatchCodeFromContent(content, codeLength);
+            if (found != null)
+            {
+                return found;
+            }
+
+            // Nếu ngân hàng hoặc ví (Momo) chèn khoảng trắng làm ngắt mã (ví dụ: "LVLVXW6NC 5"):
+            // Loại bỏ khoảng trắng và tìm lại
+            string compactContent = string.Concat(content.Where(c => !char.IsWhiteSpace(c)));
+            found = MatchCodeFromContent(compactContent, codeLength);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+
+        // Fallback: nếu không tìm thấy trong content, dùng code SePay gửi (nếu có và <= 16 ký tự)
         if (!string.IsNullOrWhiteSpace(code))
         {
             string trimmedCode = code.Trim();
@@ -77,13 +110,12 @@ public static class SePayRules
             }
         }
 
-        if (string.IsNullOrEmpty(content))
-        {
-            return null;
-        }
+        return null;
+    }
 
-        string upperContent = content.ToUpperInvariant();
-        int codeLength = BillingRules.PaymentCodePrefix.Length + BillingRules.PaymentCodeRandomLength;
+    private static string? MatchCodeFromContent(string text, int codeLength)
+    {
+        string upperContent = text.ToUpperInvariant();
         for (int start = 0; start + codeLength <= upperContent.Length; start++)
         {
             int prefixCompare = string.CompareOrdinal(

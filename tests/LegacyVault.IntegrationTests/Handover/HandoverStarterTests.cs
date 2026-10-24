@@ -60,7 +60,7 @@ public sealed class HandoverStarterTests
             Assert.Equal(Now.AddDays(5), turn.ResponseDeadline);
             Assert.Equal("Gói A", turn.ContainerName);
             Assert.Equal(2, turn.Items.Count);
-            Assert.Equal(container.Assets[0].Asset.Versions[0].Id, turn.Items[0].AssetVersionId);
+            Assert.Equal(container.Assets[0].Asset.Id, turn.Items[0].AssetId);
             Assert.Equal(container.Assets[0].Asset.Name, turn.Items[0].Name);
             Assert.Equal(1000, turn.Items[0].SizeBytes);
 

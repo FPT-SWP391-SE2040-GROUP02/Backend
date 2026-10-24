@@ -21,6 +21,15 @@ public sealed class BeneficiaryRepository : IBeneficiaryRepository
             .FirstOrDefaultAsync(b => b.Id == beneficiaryId && b.VaultId == vaultId, ct);
     }
 
+    public Task<List<Beneficiary>> ListByOwnerAndCitizenIdLast4Async(Guid ownerId, string last4, CancellationToken ct)
+    {
+        return context.Beneficiaries
+            .Where(b => b.Vault.OwnerId == ownerId && b.CitizenIdLast4 == last4)
+            .OrderBy(b => b.CreatedAt)
+            .ThenBy(b => b.Id)
+            .ToListAsync(ct);
+    }
+
     public Task<List<Beneficiary>> ListByCitizenIdLast4Async(Guid vaultId, string last4, CancellationToken ct)
     {
         return context.Beneficiaries

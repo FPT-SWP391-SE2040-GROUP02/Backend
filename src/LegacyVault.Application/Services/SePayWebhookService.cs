@@ -94,10 +94,22 @@ public sealed class SePayWebhookService : ISePayWebhookService
             throw new InvalidOperationException("Không đọc lại được giao dịch vừa lưu.");
         }
 
-        // Đã đối chiếu xong (Matched, ReconciliationRequired, Resolved): trả success, không xử lý lại (AC-29).
-        if (stored.Status != PaymentTransactionStatus.Received)
+        // Đã đối chiếu xong (Matched, Resolved): trả success, không xử lý lại (AC-29).
+        // Nếu là ReconciliationRequired nhưng chưa từng gắn vào đơn nào (PaymentOrderId == null),
+        // cho phép thử đối chiếu lại khi SePay gửi lại webhook hoặc bóc tách mã được cải thiện.
+        bool canReconcile = stored.Status == PaymentTransactionStatus.Received
+            || (stored.Status == PaymentTransactionStatus.ReconciliationRequired && stored.PaymentOrderId == null);
+
+        if (!canReconcile)
         {
             return;
+        }
+
+        // Cập nhật lại MatchedPaymentCode nếu trước đó chưa tìm thấy hoặc bị cắt ngắn
+        string? resolvedCode = SePayRules.FindPaymentCode(request.Code, request.Content);
+        if (!string.IsNullOrWhiteSpace(resolvedCode) && resolvedCode != stored.MatchedPaymentCode)
+        {
+            stored.MatchedPaymentCode = resolvedCode;
         }
 
         // Bước 5: đối chiếu + cấp quyền. Serializable vì cùng đọc và ghi quyền dịch vụ của kho như dev-pay;

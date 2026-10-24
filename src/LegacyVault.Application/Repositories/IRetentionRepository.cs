@@ -11,12 +11,12 @@ public interface IRetentionRepository
     /// <summary>Mọi lượt của kế hoạch kèm Items và Grant.</summary>
     Task<List<HandoverTurn>> FindTurnsAsync(Guid planId, CancellationToken ct);
 
-    /// <summary>Các phiên bản tài sản theo Id (chỉ phiên bản còn nội dung).</summary>
-    Task<List<AssetVersion>> FindLiveVersionsAsync(List<Guid> versionIds, CancellationToken ct);
+    /// <summary>Các tài sản theo Id (chỉ tài sản còn nội dung).</summary>
+    Task<List<Asset>> FindLiveAssetsAsync(List<Guid> assetIds, CancellationToken ct);
 
-    /// <summary>Mọi phiên bản còn nội dung của kho (dùng khi đóng kho, SETUP-18).</summary>
-    Task<List<AssetVersion>> FindLiveVersionsOfVaultAsync(Guid vaultId, CancellationToken ct);
+    /// <summary>Mọi tài sản còn nội dung của kho (dùng khi đóng kho, SETUP-18).</summary>
+    Task<List<Asset>> FindLiveAssetsOfVaultAsync(Guid vaultId, CancellationToken ct);
 
-    /// <summary>Phiên bản đã hủy khóa nhưng tệp chưa xóa được khỏi kho lưu trữ (thử lại).</summary>
-    Task<List<AssetVersion>> FindPendingStorageDeletesAsync(Guid vaultId, CancellationToken ct);
+    /// <summary>Tài sản đã hủy khóa nhưng tệp chưa xóa được khỏi kho lưu trữ (thử lại).</summary>
+    Task<List<Asset>> FindPendingStorageDeletesAsync(Guid vaultId, CancellationToken ct);
 }

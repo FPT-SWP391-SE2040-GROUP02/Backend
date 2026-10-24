@@ -65,16 +65,16 @@ public sealed class HandoverRepository : IHandoverRepository
     {
         return context.Set<Designation>()
             .Include(d => d.Beneficiary)
-            .Include(d => d.Container).ThenInclude(c => c.Assets).ThenInclude(ca => ca.Asset).ThenInclude(a => a.Versions)
+            .Include(d => d.Container).ThenInclude(c => c.Assets).ThenInclude(ca => ca.Asset)
             .Where(d => d.Container.VaultId == vaultId && d.Container.Status == ContainerStatus.Ready)
             .OrderBy(d => d.CreatedAt)
             .ThenBy(d => d.Id)
             .ToListAsync(ct);
     }
 
-    public Task<AssetVersion?> FindAssetVersionAsync(Guid assetVersionId, CancellationToken ct)
+    public Task<Asset?> FindAssetAsync(Guid assetId, CancellationToken ct)
     {
-        return context.Set<AssetVersion>().FirstOrDefaultAsync(v => v.Id == assetVersionId, ct);
+        return context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, ct);
     }
 
     public async Task<IReadOnlyList<Guid>> FindUndeliveredInvitationTurnIdsAsync(

@@ -424,10 +424,8 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 | POST | `/v1/vaults/{vaultId}/assets/text` | Đăng nhập | `{ name, description?, content }` | **201** `AssetResponse` | 400, 404, 409 như trên |
 | GET | `/v1/vaults/{vaultId}/assets` | Đăng nhập | Query phân trang; `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<AssetResponse>` | 400, 404 |
 | GET | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 200 `AssetResponse` | 404 `VAULT_NOT_FOUND` / `ASSET_NOT_FOUND` |
-| GET | `/v1/vaults/{vaultId}/assets/{assetId}/content` | Đăng nhập (Owner) | Query `version?` (mặc định phiên bản hiện tại) | 200 nội dung gốc (`application/octet-stream`, `Content-Disposition: attachment`, `Cache-Control: no-store`) | 404 `ASSET_NOT_FOUND` (kể cả phiên bản không có/đã dọn), 500 `CONTENT_INTEGRITY_FAILED` |
+| GET | `/v1/vaults/{vaultId}/assets/{assetId}/content` | Đăng nhập (Owner) | — | 200 nội dung gốc (`application/octet-stream`, `Content-Disposition: attachment`, `Cache-Control: no-store`) | 404 `ASSET_NOT_FOUND` (kể cả nội dung đã dọn), 500 `CONTENT_INTEGRITY_FAILED` |
 | PUT | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | `{ name?, description?, etag }` | 200 `AssetResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
-| POST | `/v1/vaults/{vaultId}/assets/{assetId}/versions` | Đăng nhập | `multipart/form-data`: `file`, `etag` (tài sản dạng `FILE`) | **201** `AssetResponse` (phiên bản mới) | 400, 404, 409 `EDIT_CONFLICT` / `STORAGE_QUOTA_EXCEEDED` / `VAULT_NOT_EDITABLE`, 413 `FILE_TOO_LARGE` |
-| POST | `/v1/vaults/{vaultId}/assets/{assetId}/versions/text` | Đăng nhập | `{ content, etag }` (tài sản dạng `TEXT`) | **201** `AssetResponse` | như trên |
 | DELETE | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 204 | 404, 409 `ASSET_IN_USE` (+`reason`: `IN_CONTAINER` \| `PINNED_IN_HANDOVER`) / `VAULT_NOT_EDITABLE` |
 
 ```json
@@ -438,13 +436,9 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
   "kind": "FILE",
   "name": "Giấy tờ nhà",
   "description": null,
-  "currentVersion": {
-    "versionNumber": 1,
-    "fileName": "giay-to.pdf",
-    "contentType": "application/pdf",
-    "sizeBytes": 1500,
-    "createdAt": "2026-10-13T08:40:00+00:00"
-  },
+  "fileName": "giay-to.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 1500,
   "createdAt": "2026-10-13T08:40:00+00:00",
   "updatedAt": null,
   "etag": "\"0\""
@@ -453,12 +447,12 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 
 - `kind`: `FILE` (tệp tải lên) | `TEXT` (nội dung chữ: thông tin tài khoản, ghi chú...). `fileName` là `null` với `TEXT`.
 - `name` của tệp không gửi thì lấy theo tên tệp. Tên/mô tả **không mã hóa**: không ghi mật khẩu vào đây; bí mật để trong `content`/tệp.
-- Nội dung tệp và `content` được BE mã hóa (AES-256-GCM, khóa riêng mỗi phiên bản) trước khi lưu. FE gửi nội dung gốc qua HTTPS, **không** tự mã hóa hay Base64 nội dung. `sizeBytes` là kích thước nội dung gốc, cũng là số tính vào quota.
-- Hạng Free được lưu tài sản trong 20 MiB; mọi phiên bản đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản không ở gói nào.
-- **Tải nội dung (LV-10):** chỉ Owner của kho. Server giải mã hai lượt: lượt đầu vào `Stream.Null` để kiểm kích thước và SHA-256 trước khi gửi byte đầu tiên; nội dung hỏng trả 500 và không có byte nội dung nào. Mỗi lần tải ghi nhật ký `AssetContentDownloaded` (chỉ id và số phiên bản, không tên tài sản).
-- **Thay nội dung không ghi đè:** tạo phiên bản mới (khóa DEK riêng), phiên bản cũ vẫn tải được bằng `?version=N` và vẫn tính quota; snapshot đã ghim vẫn trỏ đúng phiên bản cũ. Tài sản `FILE` chỉ nhận `/versions` (multipart), `TEXT` chỉ nhận `/versions/text`; sai loại → `400 VALIDATION_ERROR`. Hai request tạo cùng số phiên bản chỉ một thắng, request còn lại `409 EDIT_CONFLICT`.
-- **Đổi tên/mô tả và thay nội dung** là thao tác "thêm": chặn khi kho đóng, kế hoạch bị khóa (đang chờ/bàn giao) hoặc dịch vụ chỉ đọc. Kho đang có hold: `409 VAULT_NOT_EDITABLE` với `reason = HOLD_ACTIVE`.
-- **Xóa** là thao tác "giảm" (vẫn cho khi ân hạn, chặn khi kho đóng/kế hoạch khóa). Chỉ xóa được khi tài sản không còn trong gói nào (gỡ khỏi gói trước), chưa ghim vào snapshot của lượt bàn giao nào và kho không có hold. Xóa hết mọi phiên bản và nội dung đã mã hóa, giải phóng quota. Nội dung được xóa sau khi bản ghi đã xóa; nếu kho lưu trữ lỗi, object mồ côi (đã mã hóa) có thể còn lại.
+- Nội dung tệp và `content` được BE mã hóa (AES-256-GCM, khóa riêng mỗi tài sản) trước khi lưu. FE gửi nội dung gốc qua HTTPS, **không** tự mã hóa hay Base64 nội dung. `sizeBytes` là kích thước nội dung gốc, cũng là số tính vào quota.
+- Hạng Free được lưu tài sản trong 20 MiB; mọi nội dung đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản không ở gói nào.
+- **Tải nội dung (LV-10):** chỉ Owner của kho. Server giải mã hai lượt: lượt đầu vào `Stream.Null` để kiểm kích thước và SHA-256 trước khi gửi byte đầu tiên; nội dung hỏng trả 500 và không có byte nội dung nào. Mỗi lần tải ghi nhật ký `AssetContentDownloaded` (chỉ id, không tên tài sản).
+- **Nội dung không đổi sau khi tạo:** không có phiên bản. Muốn thay nội dung, tạo tài sản mới rồi xóa tài sản cũ (các đường dẫn `/versions` và tham số `?version` đã bỏ).
+- **Đổi tên/mô tả** là thao tác "thêm": chặn khi kho đóng, kế hoạch bị khóa (đang chờ/bàn giao) hoặc dịch vụ chỉ đọc. Kho đang có hold: `409 VAULT_NOT_EDITABLE` với `reason = HOLD_ACTIVE`.
+- **Xóa** là thao tác "giảm" (vẫn cho khi ân hạn, chặn khi kho đóng/kế hoạch khóa). Chỉ xóa được khi tài sản không còn trong gói nào (gỡ khỏi gói trước), chưa ghim vào snapshot của lượt bàn giao nào và kho không có hold. Xóa nội dung đã mã hóa, giải phóng quota. Nội dung được xóa sau khi bản ghi đã xóa; nếu kho lưu trữ lỗi, object mồ côi (đã mã hóa) có thể còn lại.
 - Xuất cấu hình PDF (XS Max) và khôi phục tài sản đã xóa chưa có.
 
 ### 6.8. Người nhận (Beneficiary)
@@ -770,7 +764,7 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 
 - **Sắp xếp:** `sortBy` chỉ nhận `at` (mặc định). `isAscending` mặc định `true` như mọi danh sách khác; FE gửi `isAscending=false` để xem mới nhất trước. `searchTerm` không dùng.
 - **Lọc:** `action` là một giá trị trong bảng dưới (đúng dạng `UPPER_SNAKE_CASE`, giá trị khác → 400). `from` tính cả mốc, `to` không tính mốc, cả hai là ISO 8601; `from` phải trước `to`.
-- **`targetVersion`:** phiên bản đối tượng **sau** thao tác. Với thao tác đổi cấu hình bàn giao (gói, người nhận đang ở gói, kế hoạch về nháp) là `config_version` của kế hoạch (SETUP-04, STATE-03); với tài sản là số phiên bản tài sản; với điểm danh là số thứ tự kỳ mới; còn lại `null`.
+- **`targetVersion`:** phiên bản đối tượng **sau** thao tác. Với thao tác đổi cấu hình bàn giao (gói, người nhận đang ở gói, kế hoạch về nháp) là `config_version` của kế hoạch (SETUP-04, STATE-03); với điểm danh là số thứ tự kỳ mới; còn lại `null`.
 - **Không có dữ liệu nhạy cảm (SEC-07):** không ghi tên tài sản, tên tệp, họ tên, số CCCD, liên hệ hay nội dung. Thao tác có đối tượng thứ hai chỉ ghi id của nó trong `reason` (`"Tài sản <id>"`, `"Người nhận <id>"`); FE tự tra tên qua API tài sản hoặc người nhận nếu cần.
 - **Chỉ ghi thao tác đã lưu:** nhật ký lưu cùng giao dịch với thao tác (STATE-02), nên thao tác bị từ chối, lỗi hoặc bấm lặp không đổi gì thì không có dòng nào. Hiện mọi dòng đều có `outcome = SUCCEEDED`.
 
@@ -798,6 +792,7 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 | `PAYMENT_PAID` | `PAYMENT_ORDER` | Đơn được thanh toán và quyền dịch vụ được cấp (`actorRole = SYSTEM`, không có `actorUserId`; không ghi số tiền hay mã thanh toán) |
 | `DEV_TIME_TRAVEL` | `CHECK_IN` / `DEATH_CASE` | Admin tua thời gian kho thử bằng công cụ thử nghiệm, `reason` là mã mốc (chỉ có ở Development) |
 | `DEV_CLOCK_RESET` | `VAULT` | Admin đưa đồng hồ kho thử về thời gian thực (chỉ có ở Development) |
+| `DEV_EKYC_RESET` | `USER` | Admin xóa dữ liệu eKYC của một tài khoản để làm lại từ đầu (chỉ có ở Development; không gắn kho nên Owner không thấy) |
 
 - **Hồ sơ chứng tử:** chỉ ghi thao tác Executor/Verifier đã lưu thành công (7 loại ở bảng trên); không ghi sửa nháp, thêm/xóa trang giấy, gọi lặp, thao tác bị từ chối, và `reason` không chép lý do tự do vì Owner xem được nhật ký (SEC-13). Lý do đầy đủ nằm ở quyết định của hồ sơ.
 - **Chưa làm:** ghi nhật ký cho thiết lập/kích hoạt kế hoạch, mời Executor và bàn giao (thuộc các module khác, cần chủ module đồng ý); lịch sử người nhận xem/tải nội dung (`HandoverAccessLogs`) chưa có API đọc cho Owner; Admin tra cứu nhật ký toàn hệ thống (ADMIN-06).
@@ -1078,6 +1073,7 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 | GET | `/api/v1/admin/dev-tools/vaults/{vaultId}/clock` | — | 200 `DevClockResponse` | 401, 404 `USER_NOT_FOUND` / `VAULT_NOT_FOUND` |
 | POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/time-travel` | `{ milestone }` | 200 `DevClockResponse` (trạng thái sau khi tua) | 400 `VALIDATION_ERROR`, 401, 404, 409 `DEV_TOOL_NOT_ALLOWED` |
 | POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/reset-clock` | — | 200 `DevClockResponse` | 401, 404 |
+| POST | `/api/v1/admin/dev-tools/users/ekyc-reset` | `{ email }` | 200 `DevEkycResetResponse` `{ userId, email, verificationsRemoved, consentsRemoved, identityRemoved, faceTemplatesRemoved }` | 400 `VALIDATION_ERROR`, 401, 404 `USER_NOT_FOUND` |
 
 - `DevClockResponse`: `{ vaultId, planStatus, checkInState: ON_TIME | OVERDUE | NOT_RUNNING, clockState: REAL_TIME | SHIFTED, milestones: [{ key, state: AVAILABLE | PASSED | NOT_APPLICABLE, note }] }`. `note` là lý do không tua được.
 - `milestone` (theo thứ tự hiển thị):
@@ -1088,6 +1084,7 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 - Tua chỉ dời hạn tương ứng về quá khứ; trạng thái mới do luật và job sẵn có quyết định. Với hai mốc điểm danh, API chạy luôn vòng xử lý của job điểm danh nên kết quả có ngay trong response.
 - `reset-clock` chỉ ghi nhận đồng hồ về thời gian thực (`clockState = REAL_TIME`); trạng thái đã phát sinh khi tua (kế hoạch, sự cố) giữ nguyên, không hoàn tác.
 - Mỗi lần tua ghi nhật ký `DEV_TIME_TRAVEL`, mỗi lần về thời gian hiện tại ghi `DEV_CLOCK_RESET`; Owner của kho thấy các dòng này trong nhật ký kho.
+- **Đặt lại eKYC** (`users/ekyc-reset`): xóa mọi lượt eKYC (mọi mục đích), lần đồng ý chụp ảnh, danh tính đã gắn và mẫu khuôn mặt của tài khoản có email đã nhập (không phân biệt hoa thường). Email, vai trò, kho, vai Executor và hồ sơ giữ nguyên. Tài khoản chưa có eKYC thì trả các số `0`, không ghi nhật ký. Response không có dữ liệu định danh. Sau khi đặt lại, Owner phải eKYC lại trước khi mua gói mới hoặc kích hoạt kế hoạch, và có thể dùng CCCD khác (không còn `EKYC_IDENTITY_MISMATCH`).
 - FE chỉ hiện mục "Công cụ thử nghiệm" trong khu Admin khi chạy `npm run dev`.
 
 ## 7. Tóm tắt thay đổi FE cần làm
@@ -1126,7 +1123,7 @@ Job `Retention:Enabled`, `Retention:PollSeconds` (mặc định 300 giây). Ch�
 
 - **Đồng hồ theo từng lượt** (cột mới trên `HandoverTurns`: `RetentionStatus`, `RetentionStartedAt`, `RetentionDeadline`, `RetentionRemainingSeconds`, `RetentionNoticeStage`, `DeletedAt`): `NOT_STARTED` → `RETENTION_ACTIVE` (30 ngày) → tới hạn thì dọn → `DELETED`.
 - **Lý do giữ** (tạm dừng, lưu phần còn lại, không đặt lại 30 ngày — RETENTION-04): còn trong 5 ngày phản hồi; claim đang xử lý (`IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`); grant còn hạn; Owner báo còn sống (kế hoạch `BLOCKED`). Mở link hay đăng nhập không phải lý do giữ (RETENTION-03).
-- **Dọn** (RETENTION-06): lượt còn mở thành `LAPSED`, link mời bị vô hiệu; phiên bản tài sản chỉ bị xóa khi không còn lượt nào khác chưa dọn cùng tham chiếu (RETENTION-02). Xóa = hủy khóa trước (ghi đè DEK đã bọc bằng 0, `AssetVersions.ContentDeletedAt`) trong giao dịch, xóa tệp sau (`StorageDeletedAt`, lỗi thì thử lại). Ghi `plan.UpdatedAt` nên nhận lượt/đồng ý chạy cùng lúc thua RowVersion. Tải nội dung đã dọn: `403 GRANT_NOT_ACTIVE` (`CONTENT_DELETED`). Dung lượng đã dùng không tính phiên bản đã dọn.
+- **Dọn** (RETENTION-06): lượt còn mở thành `LAPSED`, link mời bị vô hiệu; nội dung tài sản chỉ bị xóa khi không còn lượt nào khác chưa dọn cùng tham chiếu (RETENTION-02). Xóa = hủy khóa trước (ghi đè DEK đã bọc bằng 0, `Assets.ContentDeletedAt`) trong giao dịch, xóa tệp sau (`Assets.StorageDeletedAt`, lỗi thì thử lại). Ghi `plan.UpdatedAt` nên nhận lượt/đồng ý chạy cùng lúc thua RowVersion. Tải nội dung đã dọn: `403 GRANT_NOT_ACTIVE` (`CONTENT_DELETED`). Dung lượng đã dùng không tính nội dung đã dọn.
 - **Đóng kho** (SETUP-18): kế hoạch `CLOSED` và mọi lượt đã dọn thì dọn nốt nội dung còn lại của kho (kể cả tài sản ngoài gói) và kho thành `CLOSED`.
 - **Thư mốc** cho người nhận (email trong hồ sơ người nhận): lúc bắt đầu, còn 7 ngày, còn 24 giờ; gửi lỗi thì vòng sau gửi lại.
 - **Chưa làm:** giới hạn 30 ngày cho claim đang xử lý (CLAIM-06) và giữ tối đa 7 ngày khi đang xem xét (REVIEW-04) — chờ LV-09; thư mốc gửi lỗi phải giao người xử lý có hạn (RETENTION-05, LV-07); hold chung (LV-07); không xóa trang giấy chứng tử (hồ sơ bằng chứng, chưa có chính sách).

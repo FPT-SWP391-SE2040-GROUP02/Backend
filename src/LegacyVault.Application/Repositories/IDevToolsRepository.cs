@@ -23,4 +23,21 @@ public interface IDevToolsRepository
 
     /// <summary>Thao tác đồng hồ gần nhất của kho trong nhật ký: tua hoặc về thời gian hiện tại; null khi chưa từng có.</summary>
     Task<AuditAction?> FindLatestClockActionAsync(Guid vaultId, CancellationToken ct);
+
+    /// <summary>Mọi lượt eKYC của tài khoản, có theo dõi thay đổi để xóa.</summary>
+    Task<List<EkycVerification>> ListEkycVerificationsAsync(Guid userId, CancellationToken ct);
+
+    /// <summary>Mọi lần đồng ý chụp ảnh của tài khoản, có theo dõi thay đổi để xóa.</summary>
+    Task<List<EkycConsent>> ListEkycConsentsAsync(Guid userId, CancellationToken ct);
+
+    /// <summary>Danh tính đã gắn của Owner, có theo dõi thay đổi; null khi chưa có.</summary>
+    Task<OwnerIdentity?> FindOwnerIdentityAsync(Guid userId, CancellationToken ct);
+
+    /// <summary>Mọi phiên bản mẫu khuôn mặt của Owner, có theo dõi thay đổi để xóa.</summary>
+    Task<List<OwnerFaceTemplate>> ListOwnerFaceTemplatesAsync(Guid userId, CancellationToken ct);
+
+    /// <summary>Đánh dấu xóa dữ liệu eKYC; lưu khi gọi IUnitOfWork.SaveChangesAsync.</summary>
+    void RemoveEkycData(
+        List<EkycVerification> verifications, List<EkycConsent> consents,
+        OwnerIdentity? identity, List<OwnerFaceTemplate> faceTemplates);
 }
