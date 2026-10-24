@@ -27,6 +27,23 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .FirstOrDefaultAsync(v => v.Id == vaultId, ct);
     }
 
+    public Task<Vault?> FindVaultWithEntitlementAsync(Guid vaultId, CancellationToken ct)
+    {
+        return context.Set<Vault>()
+            .Include(v => v.Plan)
+            .Include(v => v.Entitlement)
+            .FirstOrDefaultAsync(v => v.Id == vaultId, ct);
+    }
+
+    public Task<List<PaymentOrder>> ListPendingPaymentOrdersAsync(Guid vaultId, CancellationToken ct)
+    {
+        return context.Set<PaymentOrder>()
+            .Where(o => o.VaultId == vaultId && o.Status == PaymentOrderStatus.Pending)
+            .OrderBy(o => o.CreatedAt)
+            .ThenBy(o => o.Id)
+            .ToListAsync(ct);
+    }
+
     public Task<CheckInPeriod?> FindOpenPeriodAsync(Guid planId, CancellationToken ct)
     {
         return context.Set<CheckInPeriod>()

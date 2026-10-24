@@ -89,4 +89,6 @@ public enum AuditAction
     PaymentPaid = 40,
     /// <summary>Admin xóa dữ liệu eKYC của một tài khoản để làm lại từ đầu (công cụ thử nghiệm, chỉ có ở Development).</summary>
     DevEkycReset = 41,
+    /// <summary>Admin đưa kho thử về trước bước eKYC và mua gói: xóa eKYC của Owner, trả quyền dịch vụ về Free, hủy đơn đang chờ (công cụ thử nghiệm, chỉ có ở Development).</summary>
+    DevRewindBeforeEkyc = 42,
 }

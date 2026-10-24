@@ -36,6 +36,12 @@ public interface IDevToolsRepository
     /// <summary>Mọi phiên bản mẫu khuôn mặt của Owner, có theo dõi thay đổi để xóa.</summary>
     Task<List<OwnerFaceTemplate>> ListOwnerFaceTemplatesAsync(Guid userId, CancellationToken ct);
 
+    /// <summary>Một kho kèm kế hoạch và quyền dịch vụ, có theo dõi thay đổi để cập nhật.</summary>
+    Task<Vault?> FindVaultWithEntitlementAsync(Guid vaultId, CancellationToken ct);
+
+    /// <summary>Các đơn thanh toán đang chờ của kho, có theo dõi thay đổi để hủy.</summary>
+    Task<List<PaymentOrder>> ListPendingPaymentOrdersAsync(Guid vaultId, CancellationToken ct);
+
     /// <summary>Đánh dấu xóa dữ liệu eKYC; lưu khi gọi IUnitOfWork.SaveChangesAsync.</summary>
     void RemoveEkycData(
         List<EkycVerification> verifications, List<EkycConsent> consents,
