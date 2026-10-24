@@ -362,8 +362,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         string storageKey = string.Empty;
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            storageKey = await db.Set<AssetVersion>()
-                .Where(v => v.AssetId == scenario.FileAssetId).Select(v => v.StorageKey).SingleAsync();
+            storageKey = await db.Assets
+                .Where(a => a.Id == scenario.FileAssetId).Select(a => a.StorageKey).SingleAsync();
         });
         string path = Path.Combine(factory.StorageRoot, storageKey[^2..], storageKey);
         byte[] onDisk = await File.ReadAllBytesAsync(path);

@@ -165,8 +165,8 @@ public sealed class RetentionMonitor : BackgroundService
                         .ProcessPlanAsync(planId, ct);
                     if (result.TurnsDeleted > 0 || result.VaultClosed)
                     {
-                        logger.LogInformation("Đã dọn dữ liệu kế hoạch {PlanId}: {Turns} lượt, {Versions} phiên bản, đóng kho {Closed}.",
-                            planId, result.TurnsDeleted, result.VersionsShredded, result.VaultClosed);
+                        logger.LogInformation("Đã dọn dữ liệu kế hoạch {PlanId}: {Turns} lượt, {Assets} tài sản, đóng kho {Closed}.",
+                            planId, result.TurnsDeleted, result.AssetsShredded, result.VaultClosed);
                     }
                 }
             }

@@ -28,12 +28,12 @@ public interface IHandoverRepository
 
     /// <summary>
     /// Các chỉ định đủ điều kiện để mở bàn giao của một kho: gói đang READY (chưa lưu trữ), kèm
-    /// Container.Assets.Asset.Versions và Beneficiary.
+    /// Container.Assets.Asset và Beneficiary.
     /// </summary>
     Task<List<Designation>> FindStartableDesignationsAsync(Guid vaultId, CancellationToken ct);
 
-    /// <summary>Một phiên bản nội dung tài sản theo Id. Không có → null.</summary>
-    Task<AssetVersion?> FindAssetVersionAsync(Guid assetVersionId, CancellationToken ct);
+    /// <summary>Một tài sản theo Id (không lọc theo kho). Không có → null.</summary>
+    Task<Asset?> FindAssetAsync(Guid assetId, CancellationToken ct);
 
     /// <summary>Id các lượt Invited đã quá hạn phản hồi (ResponseDeadline &lt;= now), hạn sớm nhất trước.</summary>
     Task<IReadOnlyList<Guid>> FindExpiredResponseTurnIdsAsync(DateTimeOffset now, CancellationToken ct);

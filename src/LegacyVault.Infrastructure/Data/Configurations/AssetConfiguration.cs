@@ -15,10 +15,15 @@ public sealed class AssetConfiguration : IEntityTypeConfiguration<Asset>
         builder.Property(a => a.Description).HasMaxLength(1000);
         builder.Property(a => a.UpdatedAt).IsConcurrencyToken();
         builder.HasIndex(a => new { a.VaultId, a.CreatedAt });
+        builder.Property(a => a.FileName).HasMaxLength(255);
+        builder.Property(a => a.ContentType).HasMaxLength(100).IsRequired();
+        builder.Property(a => a.Sha256).HasMaxLength(64).IsFixedLength().IsUnicode(false).IsRequired();
+        builder.Property(a => a.StorageKey).HasMaxLength(200).IsUnicode(false).IsRequired();
+        builder.HasIndex(a => a.StorageKey).IsUnique();
+        builder.Property(a => a.EncryptionKeyId).HasMaxLength(64).IsUnicode(false).IsRequired();
+        builder.Property(a => a.WrappedDataKey).HasMaxLength(60).IsFixedLength().IsRequired();
 
         builder.HasOne(a => a.Vault).WithMany()
             .HasForeignKey(a => a.VaultId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasMany(a => a.Versions).WithOne(v => v.Asset)
-            .HasForeignKey(v => v.AssetId).OnDelete(DeleteBehavior.Cascade);
     }
 }

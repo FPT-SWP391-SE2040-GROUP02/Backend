@@ -18,7 +18,7 @@ public sealed class FakeHandoverRepository : IHandoverRepository
     public List<HandoverGrant> Grants { get; } = new List<HandoverGrant>();
     public List<HandoverAccessLog> Logs { get; } = new List<HandoverAccessLog>();
     public List<Designation> Designations { get; } = new List<Designation>();
-    public List<AssetVersion> Versions { get; } = new List<AssetVersion>();
+    public List<Asset> Assets { get; } = new List<Asset>();
 
     public Task<HandoverTurn?> FindTurnByTokenHashAsync(string tokenHash, CancellationToken ct)
     {
@@ -58,9 +58,9 @@ public sealed class FakeHandoverRepository : IHandoverRepository
         return Task.FromResult(found);
     }
 
-    public Task<AssetVersion?> FindAssetVersionAsync(Guid assetVersionId, CancellationToken ct)
+    public Task<Asset?> FindAssetAsync(Guid assetId, CancellationToken ct)
     {
-        return Task.FromResult(Versions.FirstOrDefault(v => v.Id == assetVersionId));
+        return Task.FromResult(Assets.FirstOrDefault(a => a.Id == assetId));
     }
 
     public Task<IReadOnlyList<Guid>> FindUndeliveredInvitationTurnIdsAsync(
@@ -223,10 +223,10 @@ public sealed class HandoverTestData
     }
 
     public List<Designation> Designations { get; } = new List<Designation>();
-    public List<AssetVersion> Versions { get; } = new List<AssetVersion>();
+    public List<Asset> Assets { get; } = new List<Asset>();
     public Dictionary<Guid, BeneficiaryPersonalData> People { get; } = new Dictionary<Guid, BeneficiaryPersonalData>();
 
-    /// <summary>Thêm một gói có sẵn số tài sản chỉ định (mỗi tài sản một phiên bản hiện hành).</summary>
+    /// <summary>Thêm một gói có sẵn số tài sản chỉ định (mỗi tài sản một nội dung).</summary>
     public Container AddContainer(string name, ContainerStatus status, int assetCount)
     {
         Container container = new Container { VaultId = Vault.Id, Vault = Vault, Name = name, Status = status, CreatedAt = Now.AddDays(-50) };
@@ -238,14 +238,6 @@ public sealed class HandoverTestData
                 Vault = Vault,
                 Kind = AssetKind.File,
                 Name = name + "-tai-san-" + (i + 1),
-                CurrentVersionNumber = 1,
-                CreatedAt = Now.AddDays(-49)
-            };
-            AssetVersion version = new AssetVersion
-            {
-                AssetId = asset.Id,
-                Asset = asset,
-                VersionNumber = 1,
                 FileName = "tep-" + (i + 1) + ".bin",
                 ContentType = "application/pdf",
                 SizeBytes = 1000 + i,
@@ -254,8 +246,7 @@ public sealed class HandoverTestData
                 EncryptionKeyId = "k1",
                 CreatedAt = Now.AddDays(-49)
             };
-            asset.Versions.Add(version);
-            Versions.Add(version);
+            Assets.Add(asset);
             container.Assets.Add(new ContainerAsset
             {
                 ContainerId = container.Id,
@@ -317,18 +308,17 @@ public sealed class HandoverTestData
         int position = 0;
         foreach (ContainerAsset link in container.Assets)
         {
-            AssetVersion version = link.Asset.Versions[0];
+            Asset asset = link.Asset;
             turn.Items.Add(new HandoverSnapshotItem
             {
                 TurnId = turn.Id,
                 Turn = turn,
                 AssetId = link.AssetId,
-                AssetVersionId = version.Id,
                 Name = link.Asset.Name,
                 Kind = link.Asset.Kind,
-                FileName = version.FileName,
-                ContentType = version.ContentType,
-                SizeBytes = version.SizeBytes,
+                FileName = asset.FileName,
+                ContentType = asset.ContentType,
+                SizeBytes = asset.SizeBytes,
                 Position = position
             });
             position++;

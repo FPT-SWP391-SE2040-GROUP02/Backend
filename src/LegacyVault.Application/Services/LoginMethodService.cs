@@ -87,6 +87,12 @@ public sealed class LoginMethodService : ILoginMethodService
         }, ct);
     }
 
+    public async Task VerifyPasswordAsync(VerifyPasswordRequest request, CancellationToken ct)
+    {
+        User user = await LoadCurrentUserAsync(ct);
+        EnsurePasswordMatches(user, request.CurrentPassword);
+    }
+
     public Task UnlinkGoogleAsync(UnlinkGoogleRequest request, CancellationToken ct)
     {
         return _unitOfWork.ExecuteSerializableAsync(async () =>

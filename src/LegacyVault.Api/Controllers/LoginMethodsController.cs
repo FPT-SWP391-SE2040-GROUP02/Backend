@@ -32,6 +32,18 @@ public sealed class LoginMethodsController : ControllerBase
         return loginMethodService.GetMyLoginMethodsAsync(ct);
     }
 
+    /// <summary>Kiểm tra mật khẩu hiện tại, không đổi dữ liệu; dùng để mở bước chọn Google khi liên kết.</summary>
+    [HttpPost("password/verify")]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> VerifyPassword(VerifyPasswordRequest request, CancellationToken ct)
+    {
+        await loginMethodService.VerifyPasswordAsync(request, ct);
+        return NoContent();
+    }
+
     /// <summary>Thêm Google vào tài khoản; xác thực lại bằng mật khẩu hiện tại.</summary>
     [HttpPost("google")]
     [Consumes("application/json")]

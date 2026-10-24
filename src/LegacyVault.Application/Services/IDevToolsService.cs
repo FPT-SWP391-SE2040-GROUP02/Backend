@@ -28,4 +28,11 @@ public interface IDevToolsService
     /// Lỗi: 404 USER_NOT_FOUND, 404 VAULT_NOT_FOUND.
     /// </summary>
     Task<DevClockResponse> ResetClockAsync(Guid vaultId, CancellationToken ct);
+
+    /// <summary>
+    /// Xóa toàn bộ dữ liệu eKYC của một tài khoản (lượt xác minh, đồng ý chụp ảnh, danh tính đã gắn, mẫu khuôn mặt)
+    /// để làm lại từ đầu; email, vai trò và quan hệ với kho giữ nguyên. Tài khoản chưa có eKYC thì không ghi gì.
+    /// Lỗi: 400 VALIDATION_ERROR, 404 USER_NOT_FOUND (người gọi không phải Admin hoặc không có tài khoản với email này).
+    /// </summary>
+    Task<DevEkycResetResponse> ResetEkycAsync(DevEkycResetRequest request, CancellationToken ct);
 }

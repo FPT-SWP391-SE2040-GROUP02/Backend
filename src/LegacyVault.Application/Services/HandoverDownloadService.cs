@@ -83,13 +83,13 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
                 "Quyền tải tài sản không còn hiệu lực.", extensions);
         }
 
-        AssetVersion? version = await handover.FindAssetVersionAsync(item.AssetVersionId, ct);
-        if (version == null)
+        Asset? asset = await handover.FindAssetAsync(item.AssetId, ct);
+        if (asset == null)
         {
             await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.IntegrityFailed, now, ct);
-            throw new ContentIntegrityException("Không tìm thấy phiên bản nội dung của tài sản.", null);
+            throw new ContentIntegrityException("Không tìm thấy nội dung của tài sản.", null);
         }
-        if (version.ContentDeletedAt != null)
+        if (asset.ContentDeletedAt != null)
         {
             // RETENTION-06: nội dung đã dọn (khóa đã hủy) thì không giải mã nữa.
             Dictionary<string, object?> deleted = new Dictionary<string, object?>();
@@ -99,11 +99,11 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         }
 
         StoredContent stored = new StoredContent();
-        stored.StorageKey = version.StorageKey;
-        stored.SizeBytes = version.SizeBytes;
-        stored.Sha256 = version.Sha256;
-        stored.EncryptionKeyId = version.EncryptionKeyId;
-        stored.WrappedDataKey = version.WrappedDataKey;
+        stored.StorageKey = asset.StorageKey;
+        stored.SizeBytes = asset.SizeBytes;
+        stored.Sha256 = asset.Sha256;
+        stored.EncryptionKeyId = asset.EncryptionKeyId;
+        stored.WrappedDataKey = asset.WrappedDataKey;
 
         // Lượt 1: giải mã vào Stream.Null. Việc kiểm kích thước + SHA-256 của kho chỉ xảy ra ở CUỐI luồng,
         // nên phải chạy hết một lượt trước khi gửi byte đầu tiên, nếu không người nhận có thể nhận tệp hỏng.

@@ -135,6 +135,37 @@ public sealed class LoginMethodServiceTests
     }
 
     [Fact]
+    public async Task VerifyPassword_Correct_ChangesNothing()
+    {
+        User user = AddUser(true);
+        string? hashBefore = user.PasswordHash;
+
+        await _service.VerifyPasswordAsync(new VerifyPasswordRequest { CurrentPassword = Password }, default);
+
+        Assert.Equal(hashBefore, user.PasswordHash);
+        Assert.Empty(_logins.Logins);
+    }
+
+    [Fact]
+    public async Task VerifyPassword_Wrong_ReauthFailed()
+    {
+        AddUser(true);
+
+        await Assert.ThrowsAsync<ReauthenticationFailedException>(
+            () => _service.VerifyPasswordAsync(new VerifyPasswordRequest { CurrentPassword = "sai" }, default));
+    }
+
+    [Fact]
+    public async Task VerifyPassword_GoogleOnlyAccount_ReauthFailed()
+    {
+        User user = AddUser(false);
+        AddGoogleLink(user, "sub-1");
+
+        await Assert.ThrowsAsync<ReauthenticationFailedException>(
+            () => _service.VerifyPasswordAsync(new VerifyPasswordRequest { CurrentPassword = Password }, default));
+    }
+
+    [Fact]
     public async Task UnlinkGoogle_NotLinked_IsIdempotent()
     {
         AddUser(true);

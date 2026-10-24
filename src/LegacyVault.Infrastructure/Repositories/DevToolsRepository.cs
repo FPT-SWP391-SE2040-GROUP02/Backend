@@ -69,4 +69,49 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         }
         return log.Action;
     }
+
+    public Task<List<EkycVerification>> ListEkycVerificationsAsync(Guid userId, CancellationToken ct)
+    {
+        return context.Set<EkycVerification>()
+            .Where(v => v.UserId == userId)
+            .OrderBy(v => v.CreatedAt)
+            .ThenBy(v => v.Id)
+            .ToListAsync(ct);
+    }
+
+    public Task<List<EkycConsent>> ListEkycConsentsAsync(Guid userId, CancellationToken ct)
+    {
+        return context.Set<EkycConsent>()
+            .Where(c => c.UserId == userId)
+            .OrderBy(c => c.ConsentedAt)
+            .ThenBy(c => c.Id)
+            .ToListAsync(ct);
+    }
+
+    public Task<OwnerIdentity?> FindOwnerIdentityAsync(Guid userId, CancellationToken ct)
+    {
+        return context.Set<OwnerIdentity>().FirstOrDefaultAsync(i => i.UserId == userId, ct);
+    }
+
+    public Task<List<OwnerFaceTemplate>> ListOwnerFaceTemplatesAsync(Guid userId, CancellationToken ct)
+    {
+        return context.Set<OwnerFaceTemplate>()
+            .Where(t => t.UserId == userId)
+            .OrderBy(t => t.Version)
+            .ThenBy(t => t.Id)
+            .ToListAsync(ct);
+    }
+
+    public void RemoveEkycData(
+        List<EkycVerification> verifications, List<EkycConsent> consents,
+        OwnerIdentity? identity, List<OwnerFaceTemplate> faceTemplates)
+    {
+        context.Set<EkycVerification>().RemoveRange(verifications);
+        context.Set<EkycConsent>().RemoveRange(consents);
+        if (identity != null)
+        {
+            context.Set<OwnerIdentity>().Remove(identity);
+        }
+        context.Set<OwnerFaceTemplate>().RemoveRange(faceTemplates);
+    }
 }
