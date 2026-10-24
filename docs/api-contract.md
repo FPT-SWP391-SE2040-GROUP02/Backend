@@ -74,6 +74,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 404 | `VAULT_NOT_FOUND` | Chưa có kho, hoặc kho của người khác | |
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
+| 404 | `AVATAR_NOT_FOUND` | Tài khoản chưa có ảnh đại diện | |
 | 409 | `ASSET_IN_USE` | Tài sản còn trong gói hoặc đã ghim vào bàn giao nên không xóa được (+`reason`) | |
 | 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
@@ -225,6 +226,8 @@ Login và Google/link-confirm dùng chung policy 5 request/phút/IP; refresh và
     "status": "ACTIVE",
     "emailVerified": true,
     "hasPassword": true,
+    "hasAvatar": false,
+    "avatarUpdatedAt": null,
     "createdAt": "2026-10-13T08:30:00+00:00"
   }
 }
@@ -318,6 +321,19 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
 - `REAUTHENTICATION_FAILED` là 401 nhưng phiên vẫn còn: interceptor **không** được coi là hết phiên.
 - Gỡ phương thức không còn lại cái nào → `409 LAST_LOGIN_METHOD`. Gỡ Google khi chưa liên kết, hoặc gỡ mật khẩu khi chưa có mật khẩu, trả `204` (idempotent). Đặt mật khẩu khi đã có → `409 LOGIN_METHOD_ALREADY_EXISTS`.
 - OTP và passkey chưa có endpoint trong Backend hiện tại; UI/scaffold hoặc type FE không chứng minh đã có API.
+
+### 6.4a. Ảnh đại diện của tôi
+
+> **Đã triển khai** (`MeAvatarController`, `AvatarService`). Mọi vai trò dùng Bearer. Ảnh lưu **mã hóa** trong cùng kho lưu trữ private với tài sản (không có link công khai) và **không tính vào quota** của kho.
+
+| Method | Path | Auth | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/v1/me/avatar` | Đăng nhập | — | 200 nội dung ảnh (`image/jpeg` \| `image/png` \| `image/webp`, `Cache-Control: private, no-store`) | 404 `AVATAR_NOT_FOUND`, 500 `CONTENT_INTEGRITY_FAILED` |
+| PUT | `/v1/me/avatar` | Đăng nhập | `multipart/form-data`: `file` | 200 `UserResponse` | 400 `VALIDATION_ERROR` (rỗng, quá 2 MiB, không phải JPEG/PNG/WebP), 413 |
+| DELETE | `/v1/me/avatar` | Đăng nhập | — | 200 `UserResponse` (chưa có ảnh vẫn 200) | 401 |
+
+- `UserResponse` có thêm `hasAvatar` (bool) và `avatarUpdatedAt` (null khi chưa có ảnh). FE tải ảnh bằng GET kèm Bearer rồi tạo object URL tạm; đổi `avatarUpdatedAt` thì tải lại.
+- Loại ảnh nhận theo **nội dung thật** (chữ ký đầu tệp), không theo đuôi tệp hay `Content-Type`. Tối đa 2 MiB. Không lưu tên tệp gốc. Đặt ảnh mới thì ảnh cũ bị xóa sau khi bản ghi đã lưu.
 
 ### 6.5. Kho
 
