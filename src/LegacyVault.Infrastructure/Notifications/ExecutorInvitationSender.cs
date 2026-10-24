@@ -12,7 +12,9 @@ public sealed class ExecutorInvitationSender(SmtpMailSender sender, IOptions<Smt
 {
     public async Task<bool> SendAsync(string email, string role, string token, DateTimeOffset expiresAt, CancellationToken ct)
     {
-        if (!config.GetValue<bool>("ExecutorInvitations:DeliveryEnabled") || !settings.Value.IsConfigured) return false;
+        bool deliveryEnabled = config.GetValue<bool?>("ExecutorInvitations:DeliveryEnabled")
+            ?? (config.GetValue<bool?>("ExecutorInvitations__DeliveryEnabled") ?? settings.Value.IsConfigured);
+        if (!deliveryEnabled || !settings.Value.IsConfigured) return false;
         var baseUrl = config["App:ClientUrl"]?.TrimEnd('/') ?? "http://localhost:5173";
         var link = baseUrl + "/executor-invitation#token=" + Uri.EscapeDataString(token);
         var text = $"Bạn được mời làm Executor {(role == "PRIMARY" ? "chính" : "dự phòng")} trên LegacyVault. Đọc phạm vi nhiệm vụ và tự quyết định tại {link}. Lời mời hết hạn {expiresAt:O}. Không chuyển tiếp liên kết này. Bỏ qua thư nếu bạn không chấp nhận nhiệm vụ.";
@@ -36,7 +38,7 @@ public sealed class ExecutorInvitationSender(SmtpMailSender sender, IOptions<Smt
         }
         catch (Exception exception) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning("Executor invitation delivery unconfirmed ({ExceptionType}).", exception.GetType().Name);
+            logger.LogWarning(exception, "Executor invitation delivery to {Email} failed ({ExceptionType}): {Message}.", email, exception.GetType().Name, exception.Message);
             return false;
         }
     }
