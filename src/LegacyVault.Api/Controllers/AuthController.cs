@@ -210,13 +210,14 @@ public sealed class AuthController : ControllerBase
 
     /// <summary>
     /// POST /api/v1/auth/forgot-password — Gửi link đặt lại mật khẩu qua email.
-    /// Luôn trả 202 Accepted, không body, để không lộ email nào đã có tài khoản.
+    /// Trả 202 Accepted khi email tồn tại, 404 EMAIL_NOT_FOUND khi chưa đăng ký.
     /// </summary>
     [HttpPost("forgot-password")]
     [EndpointSummary("Quên mật khẩu: gửi link đặt lại qua email")]
-    [EndpointDescription("Email hợp lệ ≤256 ký tự. Trả 202 không body cả khi email không tồn tại, tài khoản bị khóa hoặc chỉ dùng Google. Link hạn 30 phút, dùng một lần; yêu cầu mới vô hiệu link cũ; trong 60 giây kể từ link gần nhất thì không gửi thêm. Lỗi 400 VALIDATION_ERROR. Rate limit 5 request/phút/IP.")]
+    [EndpointDescription("Email hợp lệ ≤256 ký tự. Trả 202 không body khi email tồn tại (kể cả tài khoản bị khóa hoặc chỉ dùng Google thì không gửi thư). Email chưa đăng ký trả 404 EMAIL_NOT_FOUND. Link hạn 30 phút, dùng một lần; yêu cầu mới vô hiệu link cũ; trong 60 giây kể từ link gần nhất thì không gửi thêm. Lỗi 400 VALIDATION_ERROR. Rate limit 5 request/phút/IP.")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [EnableRateLimiting(AuthRateLimitPolicies.PasswordReset)]
     [AllowAnonymous]
@@ -227,7 +228,7 @@ public sealed class AuthController : ControllerBase
         {
             await _passwordResetService.ForgotPasswordAsync(request, ct);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException and not AppException)
         {
             // SMTP fails only for existing accounts. Keep the same public acknowledgement,
             // otherwise a delivery outage exposes which emails have a password account.

@@ -62,9 +62,11 @@ public sealed class PasswordResetServiceTests
     }
 
     [Fact]
-    public async Task Forgot_UnknownEmail_DoesNothingButSucceeds()
+    public async Task Forgot_UnknownEmail_ThrowsEmailNotFound()
     {
-        await Service.ForgotPasswordAsync(new ForgotPasswordRequest { Email = "khongco@example.test" }, default);
+        AppException ex = await Assert.ThrowsAsync<AppException>(() =>
+            Service.ForgotPasswordAsync(new ForgotPasswordRequest { Email = "khongco@example.test" }, default));
+        Assert.Equal(ErrorCode.EmailNotFound, ex.Code);
 
         Assert.Empty(mail.ResetMails);
         Assert.Empty(resetTokens.Tokens);
