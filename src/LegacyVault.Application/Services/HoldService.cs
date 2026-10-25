@@ -50,6 +50,12 @@ public interface IHoldService
     /// <summary>Nội bộ (F2C): gỡ hold OwnerAlive của kho nếu có. KHÔNG SaveChanges.</summary>
     Task ReleaseOwnerAliveAsync(Guid vaultId, Guid? byUserId, string reason, CancellationToken ct);
 
+    /// <summary>
+    /// Nội bộ (F2C, BR-76 c): dời ngày xem lại của hold OwnerAlive đang có theo hạn selfie mới khi Verifier yêu cầu Owner
+    /// chụp lại. Không có hold thì bỏ qua. KHÔNG SaveChanges.
+    /// </summary>
+    Task RescheduleOwnerAliveAsync(Guid vaultId, DateTimeOffset reviewAt, CancellationToken ct);
+
     Task<PaginatedList<HoldResponse>> ListAsync(string? status, Guid? vaultId, int pageIndex, int pageSize, CancellationToken ct);
 
     Task<HoldResponse> GetAsync(Guid holdId, CancellationToken ct);
@@ -125,6 +131,17 @@ public sealed class HoldService : IHoldService
         vault.Plan.UpdatedAt = now;
         audit.Add(AuditRules.Create(vault.Id, null, AuditActorRole.System, AuditAction.HoldPlaced,
             AuditTargetType.Hold, hold.Id, null, AuditOutcome.Succeeded, "OWNER_ALIVE", now));
+    }
+
+    public async Task RescheduleOwnerAliveAsync(Guid vaultId, DateTimeOffset reviewAt, CancellationToken ct)
+    {
+        Hold? hold = await holds.FindActiveOwnerAliveAsync(vaultId, ct);
+        if (hold == null)
+        {
+            return;
+        }
+        hold.ReviewAt = reviewAt;
+        hold.UpdatedAt = timeProvider.GetUtcNow();
     }
 
     public async Task ReleaseOwnerAliveAsync(Guid vaultId, Guid? byUserId, string reason, CancellationToken ct)
