@@ -423,27 +423,84 @@ public sealed class ObjectionFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Alive05_SelfiePassed_InsufficientEvidenceAndAliveStillAllowed()
+    public async Task Alive06_InsufficientEvidence_AsksOwnerForNewSelfie_ThenAliveAllowedAgain()
     {
         // Chuẩn bị: lời báo đã có selfie khớp
         Scenario s = await BuildAsync(approvable: true);
         Assert.Equal(HttpStatusCode.OK, (await ReportAsync(s)).StatusCode);
         face.Outcome = OwnerFaceOutcome.Matched;
-        Assert.Equal(HttpStatusCode.OK, (await SelfieAsync(s)).StatusCode);
+        JsonElement firstPass = (await ApiTestHelpers.ReadJsonAsync(await SelfieAsync(s))).GetProperty("objection");
+        DateTimeOffset firstDeadline = firstPass.GetProperty("selfieDeadlineAt").GetDateTimeOffset();
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            // Lần thử đầu đã dùng 1 lượt không khớp: yêu cầu chụp lại phải trả đủ lượt
+            await db.Set<DeathCaseObjection>().Where(o => o.CaseId == s.CaseId).ExecuteUpdateAsync(x => x
+                .SetProperty(o => o.SelfieFailedCount, 1)
+                .SetProperty(o => o.SelfieFailureWindowStartedAt, DateTimeOffset.UtcNow));
+        });
 
-        // Hành động
-        HttpResponseMessage insufficient = await ConcludeAsync(s, "INSUFFICIENT_EVIDENCE", "Cần thêm căn cứ");
-        JsonElement stillOpen = await ApiTestHelpers.ReadJsonAsync(insufficient);
-        DeathCaseStatus statusAfterInsufficient = (await ReadStatusAsync(s)).Case;
-        HttpResponseMessage alive = await ConcludeAsync(s, "ALIVE_CONFIRMED", "Selfie đã khớp");
+        // Hành động: Verifier ghi chưa đủ bằng chứng
+        HttpResponseMessage insufficient = await ConcludeAsync(s, "INSUFFICIENT_EVIDENCE", "Ảnh mờ, cần chụp lại");
 
-        // Kiểm tra: chưa đủ căn cứ vẫn chặn; còn sống vẫn kết luận được
+        // Kiểm tra: vẫn chặn, nhưng Owner được yêu cầu chụp selfie mới trong 7 ngày mới, đủ 3 lượt
         Assert.Equal(HttpStatusCode.OK, insufficient.StatusCode);
-        Assert.Equal("OPEN", stillOpen.GetProperty("status").GetString());
-        Assert.Equal(DeathCaseStatus.Suspended, statusAfterInsufficient);
+        JsonElement asked = await ApiTestHelpers.ReadJsonAsync(insufficient);
+        Assert.Equal("OPEN", asked.GetProperty("status").GetString());
+        Assert.Equal(1, asked.GetProperty("insufficientEvidenceCount").GetInt32());
+        Assert.Equal("Ảnh mờ, cần chụp lại", asked.GetProperty("conclusionReason").GetString());
+        Assert.False(asked.GetProperty("selfiePassed").GetBoolean());
+        Assert.True(asked.GetProperty("selfieWindowOpen").GetBoolean());
+        Assert.Equal(3, asked.GetProperty("selfieAttemptsRemaining").GetInt32());
+        DateTimeOffset newDeadline = asked.GetProperty("selfieDeadlineAt").GetDateTimeOffset();
+        Assert.True(newDeadline > firstDeadline);
+        Assert.True(newDeadline > DateTimeOffset.UtcNow.AddDays(6));
+        Assert.True(asked.GetProperty("verifierDueAt").GetDateTimeOffset() >= newDeadline.AddHours(48));
+        Assert.Equal(DeathCaseStatus.Suspended, (await ReadStatusAsync(s)).Case);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Hold hold = await db.Set<Hold>().SingleAsync(h => h.VaultId == s.Owner.VaultId && h.Status == HoldStatus.Active);
+            Assert.Equal(newDeadline, hold.ReviewAt);
+        });
+
+        // Owner thấy yêu cầu và lý do
+        JsonElement ownerView = (await ApiTestHelpers.ReadJsonAsync(await s.OwnerClient.GetAsync(OwnerUrl(s)))).GetProperty("objection");
+        Assert.False(ownerView.GetProperty("selfiePassed").GetBoolean());
+        Assert.Equal("Ảnh mờ, cần chụp lại", ownerView.GetProperty("conclusionReason").GetString());
+
+        // Chưa có selfie mới thì chưa xác nhận còn sống được bằng selfie cũ
+        JsonElement noEvidence = await ApiTestHelpers.AssertProblemAsync(
+            await ConcludeAsync(s, "ALIVE_CONFIRMED", "Selfie cũ"), HttpStatusCode.Conflict, "DEATH_CASE_NOT_ALLOWED");
+        Assert.Equal("ALIVE_EVIDENCE_REQUIRED", noEvidence.GetProperty("reason").GetString());
+
+        // Owner chụp selfie mới khớp thì Verifier xác nhận còn sống được
+        JsonElement secondPass = (await ApiTestHelpers.ReadJsonAsync(await SelfieAsync(s))).GetProperty("objection");
+        Assert.True(secondPass.GetProperty("selfiePassed").GetBoolean());
+        HttpResponseMessage alive = await ConcludeAsync(s, "ALIVE_CONFIRMED", "Selfie mới đã khớp");
         Assert.Equal(HttpStatusCode.OK, alive.StatusCode);
         Assert.Equal("ALIVE_CONFIRMED", (await ApiTestHelpers.ReadJsonAsync(alive)).GetProperty("conclusion").GetString());
         Assert.Equal(DeathCaseStatus.Rejected, (await ReadStatusAsync(s)).Case);
+    }
+
+    [SqlFact]
+    public async Task Alive06_InsufficientEvidence_OwnerNeverRetakes_RejectAllowedAfterNewWindow()
+    {
+        Scenario s = await BuildAsync(approvable: true);
+        Assert.Equal(HttpStatusCode.OK, (await ReportAsync(s)).StatusCode);
+        face.Outcome = OwnerFaceOutcome.Matched;
+        Assert.Equal(HttpStatusCode.OK, (await SelfieAsync(s)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ConcludeAsync(s, "INSUFFICIENT_EVIDENCE", "Cần chụp lại")).StatusCode);
+
+        // Owner không chụp lại, hết 7 ngày mới
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<DeathCaseObjection>().Where(o => o.CaseId == s.CaseId)
+                .ExecuteUpdateAsync(x => x.SetProperty(o => o.SelfieDeadlineAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
+        });
+
+        HttpResponseMessage rejected = await ConcludeAsync(s, "OBJECTION_REJECTED", "Owner không chụp lại");
+
+        Assert.Equal(HttpStatusCode.OK, rejected.StatusCode);
+        Assert.Equal(DeathCaseStatus.UnderReview, (await ReadStatusAsync(s)).Case);
     }
 
     [SqlFact]

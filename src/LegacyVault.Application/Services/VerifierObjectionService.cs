@@ -126,10 +126,13 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
 
         if (conclusion == ObjectionConclusion.InsufficientEvidence)
         {
-            // Giữ chặn; ghi lý do và hạn mới cho Verifier (không đặt lại hạn selfie của Owner).
+            // Giữ chặn và yêu cầu Owner chụp selfie mới (BR-76 c): selfie cũ không còn tính, mở 7 ngày chụp mới,
+            // hạn Verifier và ngày xem lại hold tính lại theo hạn selfie mới. Owner thấy lý do qua conclusionReason.
             objection.InsufficientEvidenceCount = objection.InsufficientEvidenceCount + 1;
             objection.ConclusionReason = reason;
-            objection.VerifierDueAt = now + ObjectionRules.VerifierWindow;
+            ObjectionRules.RequestNewSelfie(objection, now);
+            objection.VerifierDueAt = ObjectionRules.ComputeVerifierDueAt(now, objection.SelfieDeadlineAt);
+            await holdService.RescheduleOwnerAliveAsync(context.Vault.Id, objection.SelfieDeadlineAt, ct);
             objection.UpdatedAt = now;
             await unitOfWork.SaveChangesAsync(ct);
             return ObjectionMapper.ToResponse(objection, now);

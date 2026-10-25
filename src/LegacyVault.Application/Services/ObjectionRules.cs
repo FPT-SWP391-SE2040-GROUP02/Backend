@@ -6,11 +6,11 @@ namespace LegacyVault.Application.Services;
 /// <summary>Luật thuần của F2C Owner báo còn sống (SRS §6.3, ALIVE-01..09). Không đụng DB.</summary>
 public static class ObjectionRules
 {
-    /// <summary>ALIVE-03: 7 ngày từ lần báo đầu tiên; báo lại hay thử lại không đặt lại.</summary>
+    /// <summary>
+    /// ALIVE-03: 7 ngày từ lần báo đầu tiên; báo lại hay thử lại không đặt lại. Chỉ kết luận "chưa đủ bằng chứng" của
+    /// Verifier mở cửa sổ 7 ngày mới (BR-76 c, RequestNewSelfie).
+    /// </summary>
     public static readonly TimeSpan SelfieWindow = TimeSpan.FromDays(7);
-
-    /// <summary>Hạn Verifier kết luận sau khi báo / sau khi yêu cầu bổ sung căn cứ.</summary>
-    public static readonly TimeSpan VerifierWindow = TimeSpan.FromDays(7);
 
     /// <summary>SRS §6.5: Verifier có 48 giờ để kết luận (sau khi được giao, và không sớm hơn hết hạn selfie + 48 giờ).</summary>
     public static readonly TimeSpan VerifierDecisionWindow = TimeSpan.FromHours(48);
@@ -79,8 +79,22 @@ public static class ObjectionRules
     }
 
     /// <summary>
+    /// BR-76 (c) sửa 26/10/2026: Verifier kết luận "chưa đủ bằng chứng" là yêu cầu Owner chụp selfie trực tiếp MỚI.
+    /// Bỏ kết quả selfie đạt cũ, trả đủ lượt thử và mở một cửa sổ chụp 7 ngày mới tính từ lúc kết luận; nếu không,
+    /// Owner không còn cách nào thêm bằng chứng mà hồ sơ bị chặn mãi. Ảnh selfie gần nhất vẫn giữ để Verifier xem lại.
+    /// </summary>
+    public static void RequestNewSelfie(DeathCaseObjection objection, DateTimeOffset now)
+    {
+        objection.SelfiePassedAt = null;
+        objection.SelfieFailedCount = 0;
+        objection.SelfieFailureWindowStartedAt = null;
+        objection.SelfieDeadlineAt = now + SelfieWindow;
+    }
+
+    /// <summary>
     /// ALIVE-04, ALIVE-08, ASSIGN-04: hạn Verifier kết luận = mốc muộn hơn giữa (start + 48 giờ) và (hết hạn selfie + 48 giờ).
-    /// start là lúc báo, lúc giao hoặc giao lại. Hạn selfie 7 ngày của cả lời báo không bao giờ đổi (ALIVE-03).
+    /// start là lúc báo, lúc giao hoặc giao lại. Hạn selfie 7 ngày của lời báo không bao giờ gia hạn (ALIVE-03); chỉ Verifier
+    /// mở cửa sổ mới khi yêu cầu chụp lại (RequestNewSelfie).
     /// </summary>
     public static DateTimeOffset ComputeVerifierDueAt(DateTimeOffset start, DateTimeOffset selfieDeadlineAt)
     {
