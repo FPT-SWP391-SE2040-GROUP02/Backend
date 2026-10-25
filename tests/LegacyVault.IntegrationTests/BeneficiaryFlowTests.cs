@@ -127,7 +127,6 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         Assert.Equal(FullName, created.GetProperty("fullName").GetString());
         Assert.Equal("1990-05-20", created.GetProperty("dateOfBirth").GetString());
         Assert.Equal(Email, created.GetProperty("email").GetString());
-        Assert.False(created.GetProperty("isMinor").GetBoolean());
         Assert.Equal(0, created.GetProperty("containerIds").GetArrayLength());
         Assert.Equal("\"0\"", created.GetProperty("etag").GetString());
 
@@ -211,10 +210,10 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
             new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, phone = "0901 234.567" });
 
-        // Kiểm tra: lưu được ngay; isMinor chỉ để hiển thị, minorAcknowledgedAt luôn null với hồ sơ mới.
+        // Kiểm tra: lưu được ngay; không còn nhãn isMinor, minorAcknowledgedAt luôn null với hồ sơ mới.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         JsonElement created = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.True(created.GetProperty("isMinor").GetBoolean());
+        Assert.False(created.TryGetProperty("isMinor", out _));
         Assert.Equal(JsonValueKind.Null, created.GetProperty("minorAcknowledgedAt").ValueKind);
         Assert.Equal("0901234567", created.GetProperty("phone").GetString());
         Assert.Equal(JsonValueKind.Null, created.GetProperty("email").ValueKind);
@@ -234,7 +233,6 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         // Kiểm tra: trường thừa bị bỏ qua, không lỗi và không ghi dấu xác nhận.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         JsonElement created = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.True(created.GetProperty("isMinor").GetBoolean());
         Assert.Equal(JsonValueKind.Null, created.GetProperty("minorAcknowledgedAt").ValueKind);
     }
 

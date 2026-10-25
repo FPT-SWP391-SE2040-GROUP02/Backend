@@ -9,10 +9,9 @@ public static class BeneficiaryMappings
 {
     /// <summary>
     /// data là dữ liệu đã giải mã của chính hồ sơ này; containerIds là các gói đang chỉ định hồ sơ này
-    /// (không có thì danh sách rỗng); today là ngày hiện tại ở Việt Nam để tính IsMinor.
-    /// Không đưa CitizenId đầy đủ vào response (DATA-02).
+    /// (không có thì danh sách rỗng). Không đưa CitizenId đầy đủ vào response (DATA-02).
     /// </summary>
-    public static BeneficiaryResponse ToResponse(this Beneficiary beneficiary, BeneficiaryPersonalData data, List<Guid> containerIds, DateOnly today)
+    public static BeneficiaryResponse ToResponse(this Beneficiary beneficiary, BeneficiaryPersonalData data, List<Guid> containerIds)
     {
         return new BeneficiaryResponse
         {
@@ -22,7 +21,6 @@ public static class BeneficiaryMappings
             DateOfBirth = data.DateOfBirth,
             Email = data.Email,
             Phone = data.Phone,
-            IsMinor = BeneficiaryRules.IsMinor(data.DateOfBirth, today),
             MinorAcknowledgedAt = beneficiary.MinorAcknowledgedAt,
             ContainerIds = containerIds,
             CreatedAt = beneficiary.CreatedAt,

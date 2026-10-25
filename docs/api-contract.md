@@ -501,7 +501,6 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
   "dateOfBirth": "1990-05-20",
   "email": "an.nguyen@example.com",
   "phone": "0901234567",
-  "isMinor": false,
   "minorAcknowledgedAt": null,
   "containerIds": [],
   "createdAt": "2026-10-14T08:00:00+00:00",
@@ -518,7 +517,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **CCCD:** đúng 12 chữ số, được gõ khoảng trắng (BE bỏ đi), giữ số 0 đầu. **Không sửa được** sau khi tạo; muốn đổi thì xóa hồ sơ rồi tạo lại.
 - **Liên hệ:** cần ít nhất `email` hoặc `phone`. Khi tạo, `""` coi như không có. Khi sửa, `null`/không gửi = giữ nguyên, `""` = xóa. Email được đổi sang chữ thường; số điện thoại bỏ khoảng trắng, dấu chấm, dấu gạch, phải có 9–15 chữ số (cho phép `+` đầu).
 - **Trùng CCCD trong kho:** cùng CCCD, cùng họ tên (không phân biệt hoa thường, bỏ khoảng trắng thừa) và cùng ngày sinh → **200** trả hồ sơ cũ, không đổi gì (kể cả liên hệ). Khác họ tên hoặc ngày sinh → `409 BENEFICIARY_IDENTITY_CONFLICT` kèm `beneficiaryId`; FE mở hồ sơ đó cho Owner sửa cho thống nhất.
-- **Tuổi:** không kiểm tra tuổi. `isMinor` chỉ để hiển thị; `minorAcknowledgedAt` không còn dùng (hồ sơ mới luôn `null`). Trường `confirmMinor` của FE cũ nếu còn gửi sẽ bị bỏ qua, không lỗi. Ngày sinh ở tương lai → 400.
+- **Tuổi:** không kiểm tra và không trả nhãn tuổi (đã bỏ `isMinor`). `minorAcknowledgedAt` không còn dùng (hồ sơ mới luôn `null`). Trường `confirmMinor` của FE cũ nếu còn gửi sẽ bị bỏ qua, không lỗi. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
 - `containerIds`: các gói đang có người này, theo thứ tự gắn; rỗng khi chưa ở gói nào.
 - Tạo hồ sơ **không** tăng `planConfigVersion` và không chiếm suất; suất chỉ tính khi hồ sơ được gắn vào gói (mục 6.6).

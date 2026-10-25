@@ -76,7 +76,7 @@ Ký hiệu: Xong = đã chạy và có test; Một phần = có nền nhưng thi
 | Kho (tạo, xem, sửa) | SETUP-12 | Xong | `VaultsController` | `VaultService`, `VaultRules` | `Vault`, `HandoverPlan`, `VaultEntitlement` |
 | Tài sản: tải lên và **mã hóa** | ASSET, SEC-02 | Một phần: chưa có tải xuống, sửa, xóa | `AssetsController` | `AssetService` | `Asset`, `AssetVersion` |
 | Gói bàn giao | SETUP-03, 16 | Một phần: chưa có chỉ định nên gói luôn `DRAFT` | `ContainersController` | `ContainerService`, `ContainerRules`, `PlanRules` | `Container`, `ContainerAsset` |
-| Hồ sơ người nhận (mã hóa) | QUOTA-03/04 | Một phần: chưa có chỉ định theo gói | `BeneficiariesController` | `BeneficiaryService`, `BeneficiaryRules` | `Beneficiary` |
+| Hồ sơ người nhận (mã hóa) | QUOTA-03/04 | Một phần: chưa có chỉ định theo gói | `BeneficiariesController` | `BeneficiaryService` | `Beneficiary` |
 | **Điểm danh (deadman switch)** | F2A, DMS-01..06 | Xong phần lõi | `CheckInsController` | `CheckInService`, `CheckInJob`, `CheckInScheduler`, `CheckInTimeline` | `CheckInSchedule`, `CheckInPeriod`, `CheckInReminder` |
 | Gửi email thật (Gmail) | OPS-04 | Xong, cần cấu hình | không có | `SmtpMailSender` (Infrastructure) | không có |
 | Kích hoạt kế hoạch | SETUP-01 | **Chưa** | | | |

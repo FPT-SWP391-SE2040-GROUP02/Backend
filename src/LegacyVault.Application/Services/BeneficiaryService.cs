@@ -109,7 +109,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         MatchedBeneficiary? existing = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
         if (existing != null)
         {
-            return await ResultForExistingAsync(existing, data, today, ct);
+            return await ResultForExistingAsync(existing, data, ct);
         }
 
         dataProtector.Protect(beneficiary, data);
@@ -133,13 +133,13 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             {
                 throw;
             }
-            return await ResultForExistingAsync(winner, data, today, ct);
+            return await ResultForExistingAsync(winner, data, ct);
         }
 
         CreateBeneficiaryResult result = new CreateBeneficiaryResult();
         result.Created = true;
         // Hồ sơ mới chưa ở gói nào.
-        result.Beneficiary = beneficiary.ToResponse(data, new List<Guid>(), today);
+        result.Beneficiary = beneficiary.ToResponse(data, new List<Guid>());
         return result;
     }
 
@@ -148,7 +148,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     /// cập nhật); khác thì 409 BENEFICIARY_IDENTITY_CONFLICT để Owner sửa cho thống nhất (QUOTA-04, AC-92).
     /// </summary>
     private async Task<CreateBeneficiaryResult> ResultForExistingAsync(
-        MatchedBeneficiary existing, BeneficiaryPersonalData data, DateOnly today, CancellationToken ct)
+        MatchedBeneficiary existing, BeneficiaryPersonalData data, CancellationToken ct)
     {
         if (!IsSameIdentity(existing.Data, data))
         {
@@ -157,7 +157,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         List<Guid> existingContainerIds = await LoadContainerIdsAsync(existing.Beneficiary.Id, ct);
         CreateBeneficiaryResult same = new CreateBeneficiaryResult();
         same.Created = false;
-        same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, existingContainerIds, today);
+        same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, existingContainerIds);
         same.Beneficiary.IsExisting = true;
         return same;
     }
@@ -193,13 +193,12 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Dictionary<Guid, List<Guid>> containerIdsByBeneficiary =
             await containerRepository.FindContainerIdsByBeneficiaryIdsAsync(beneficiaryIds, ct);
 
-        DateOnly today = GetTodayInVietnam();
         List<BeneficiaryResponse> responses = new List<BeneficiaryResponse>();
         foreach (Beneficiary beneficiary in page.Items)
         {
             BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
             List<Guid> containerIds = GetContainerIds(containerIdsByBeneficiary, beneficiary.Id);
-            responses.Add(beneficiary.ToResponse(data, containerIds, today));
+            responses.Add(beneficiary.ToResponse(data, containerIds));
         }
         return responses.ToPaginatedList(page.TotalCount, pagination);
     }
@@ -210,7 +209,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Beneficiary beneficiary = await LoadBeneficiaryAsync(vault.Id, beneficiaryId, ct);
         BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
         List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
-        return beneficiary.ToResponse(data, containerIds, GetTodayInVietnam());
+        return beneficiary.ToResponse(data, containerIds);
     }
 
     public async Task<BeneficiaryResponse> UpdateBeneficiaryAsync(
@@ -277,7 +276,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // Không có gì đổi: không mã hóa lại, không lưu, etag giữ nguyên.
         if (!changed)
         {
-            return beneficiary.ToResponse(current, containerIds, today);
+            return beneficiary.ToResponse(current, containerIds);
         }
 
         // Mỗi lần lưu dùng DEK mới.
@@ -293,7 +292,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         }
         AddAudit(vault, AuditAction.BeneficiaryUpdated, beneficiary.Id, configVersion, now);
         await unitOfWork.SaveChangesAsync(ct);
-        return beneficiary.ToResponse(updated, containerIds, today);
+        return beneficiary.ToResponse(updated, containerIds);
     }
 
     public async Task DeleteBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
@@ -417,7 +416,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
     /// <summary>
     /// Ngày sinh không được ở tương lai (400). Không kiểm tuổi: người nhận dưới 18 tuổi vẫn lưu bình thường
-    /// (đã bỏ SETUP-19 / AC-105), isMinor chỉ để hiển thị.
+    /// (đã bỏ SETUP-19 / AC-105).
     /// </summary>
     private static void EnsureDateOfBirthNotInFuture(DateOnly dateOfBirth, DateOnly today)
     {
