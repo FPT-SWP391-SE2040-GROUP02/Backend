@@ -7,6 +7,7 @@ using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using LegacyVault.IntegrationTests.Handover;
+using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
@@ -33,7 +34,7 @@ public sealed class EkycServiceTests
         currentUser.UserId = userId;
         service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
             beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
-            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock);
+            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore());
 
         // Mặc định đã đồng ý cho mục đích OWNER_ENROLLMENT để các test cũ vẫn đi đúng luồng.
         AddConsent(EkycPurpose.OwnerEnrollment, Now);

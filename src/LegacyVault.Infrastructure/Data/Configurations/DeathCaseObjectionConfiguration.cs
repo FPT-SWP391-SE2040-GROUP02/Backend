@@ -17,6 +17,13 @@ public sealed class DeathCaseObjectionConfiguration : IEntityTypeConfiguration<D
         builder.Property(o => o.Conclusion).HasConversion<string>().HasMaxLength(32);
         builder.Property(o => o.ConclusionReason).HasMaxLength(1000);
 
+        // Ảnh selfie gần nhất (BR-50 sửa): cùng kiểu cột tham chiếu với ảnh đại diện của Users.
+        builder.Property(o => o.SelfieImageStorageKey).HasMaxLength(200).IsUnicode(false);
+        builder.Property(o => o.SelfieImageContentType).HasMaxLength(50).IsUnicode(false);
+        builder.Property(o => o.SelfieImageSha256).HasMaxLength(64).IsFixedLength().IsUnicode(false);
+        builder.Property(o => o.SelfieImageEncryptionKeyId).HasMaxLength(64).IsUnicode(false);
+        builder.Property(o => o.SelfieImageWrappedDataKey).HasMaxLength(60).IsFixedLength();
+
         builder.Property(o => o.UpdatedAt).IsConcurrencyToken();
 
         // ALIVE-09: mỗi hồ sơ tối đa một báo đang mở; hai lần báo đầu cùng lúc chỉ tạo một dòng.

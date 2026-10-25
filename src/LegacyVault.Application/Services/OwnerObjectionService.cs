@@ -4,12 +4,15 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
 /// <remarks>
+/// - BR-50 sửa 25/10/2026: ảnh selfie của lần thử gần nhất (đạt hoặc không) được lưu MÃ HÓA trên lời báo để Verifier
+///   đối chiếu với ảnh CCCD lúc eKYC; lần thử mới thay ảnh cũ. Lỗi kỹ thuật không lưu ảnh.
 /// - ALIVE-01: báo lần đầu chặn ngay trong MỘT giao dịch: hồ sơ sang Suspended, kế hoạch sang Blocked (chặn nhận lượt,
 ///   đồng ý, tải), grant đang có sang Blocked. HandoverService ghi plan.UpdatedAt khi nhận/đồng ý nên thao tác nhận
 ///   chạy cùng lúc với báo sẽ thua RowVersion của kế hoạch (AC-34).
@@ -30,6 +33,7 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
     private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IAssetContentStore contentStore;
 
     public OwnerObjectionService(
         ICurrentUser currentUser,
@@ -41,7 +45,8 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         IIncidentService incidentService,
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAssetContentStore contentStore)
     {
         this.currentUser = currentUser;
         this.vaults = vaults;
@@ -53,6 +58,7 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         this.audit = audit;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.contentStore = contentStore;
     }
 
     public async Task<OwnerDeathCaseResponse> GetAsync(Guid vaultId, CancellationToken ct)
@@ -90,16 +96,17 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
             throw ObjectionMapper.CaseNotFound();
         }
 
-        await OpenObjectionAsync(vault, deathCase, now, false, ct);
+        await OpenObjectionAsync(vault, deathCase, now, false, null, ct);
         return await BuildAsync(deathCase, ct);
     }
 
     /// <summary>
     /// Tạo lời báo mới và chặn ngay hồ sơ, kế hoạch, grant, hold, sự cố trong MỘT giao dịch (ALIVE-01, ALIVE-07).
-    /// selfiePassed = true khi mở lại sau khi bị bác: selfie mới đạt chính là bằng chứng mới (ALIVE-09).
+    /// selfiePassed = true khi mở lại sau khi bị bác: selfie mới đạt chính là bằng chứng mới (ALIVE-09); khi đó
+    /// selfieImage là ảnh của lần thử đạt đó, lưu cùng lời báo mới (BR-50 sửa).
     /// </summary>
     private async Task OpenObjectionAsync(
-        Vault vault, DeathCase deathCase, DateTimeOffset now, bool selfiePassed, CancellationToken ct)
+        Vault vault, DeathCase deathCase, DateTimeOffset now, bool selfiePassed, byte[]? selfieImage, CancellationToken ct)
     {
         DeathCaseObjection objection = new DeathCaseObjection();
         objection.CaseId = deathCase.Id;
@@ -143,6 +150,11 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
             "Owner báo còn sống, chờ Verifier kết luận.", objection.VerifierUserId, ct);
         audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.ObjectionReported,
             AuditTargetType.DeathCase, deathCase.Id, null, AuditOutcome.Succeeded, null, now));
+        SelfieImageChange? imageChange = null;
+        if (selfieImage != null)
+        {
+            imageChange = await AttachSelfieImageAsync(objection, selfieImage, true, now, ct);
+        }
         objections.Add(objection);
 
         try
@@ -151,7 +163,13 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         }
         catch (Exception ex) when (objections.IsUniqueViolation(ex))
         {
+            await DiscardNewSelfieImageAsync(imageChange);
             throw ObjectionMapper.EditConflict();
+        }
+        catch
+        {
+            await DiscardNewSelfieImageAsync(imageChange);
+            throw;
         }
     }
 
@@ -192,7 +210,8 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
                 "Chưa so khớp được khuôn mặt lúc này. Vui lòng thử lại sau.");
         }
 
-        if (outcome == OwnerFaceOutcome.Matched)
+        bool matched = outcome == OwnerFaceOutcome.Matched;
+        if (matched)
         {
             objection.SelfiePassedAt = now;
         }
@@ -200,8 +219,9 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         {
             ObjectionRules.RecordFailure(objection, now);
         }
+        SelfieImageChange? imageChange = await AttachSelfieImageAsync(objection, image, matched, now, ct);
         objection.UpdatedAt = now;
-        await unitOfWork.SaveChangesAsync(ct);
+        await SaveWithSelfieImageAsync(imageChange, ct);
         return await BuildAsync(deathCase, ct);
     }
 
@@ -253,13 +273,77 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         if (outcome != OwnerFaceOutcome.Matched)
         {
             ObjectionRules.RecordFailure(latest, now);
+            SelfieImageChange? imageChange = await AttachSelfieImageAsync(latest, image, false, now, ct);
             latest.UpdatedAt = now;
-            await unitOfWork.SaveChangesAsync(ct);
+            await SaveWithSelfieImageAsync(imageChange, ct);
             return await BuildAsync(deathCase, ct);
         }
 
-        await OpenObjectionAsync(vault, deathCase, now, true, ct);
+        await OpenObjectionAsync(vault, deathCase, now, true, image, ct);
         return await BuildAsync(deathCase, ct);
+    }
+
+    /// <summary>
+    /// Lưu MÃ HÓA ảnh selfie của lần thử vừa so khớp lên lời báo, thay ảnh cũ (BR-50 sửa). Ảnh không phải JPEG/PNG/WebP
+    /// theo nội dung thật thì giữ nguyên ảnh cũ và trả null. Trả khóa mới (để bù trừ) và khóa cũ (để xóa sau khi lưu).
+    /// </summary>
+    private async Task<SelfieImageChange?> AttachSelfieImageAsync(
+        DeathCaseObjection objection, byte[] image, bool matched, DateTimeOffset now, CancellationToken ct)
+    {
+        string? contentType = IdentityImageStorage.DetectContentType(image);
+        if (contentType == null)
+        {
+            return null;
+        }
+        StoredContent stored = await IdentityImageStorage.SaveAsync(contentStore, image, ct);
+
+        SelfieImageChange change = new SelfieImageChange();
+        change.NewStorageKey = stored.StorageKey;
+        change.OldStorageKey = objection.SelfieImageStorageKey;
+
+        objection.SelfieImageStorageKey = stored.StorageKey;
+        objection.SelfieImageContentType = contentType;
+        objection.SelfieImageSizeBytes = stored.SizeBytes;
+        objection.SelfieImageSha256 = stored.Sha256;
+        objection.SelfieImageEncryptionKeyId = stored.EncryptionKeyId;
+        objection.SelfieImageWrappedDataKey = stored.WrappedDataKey;
+        objection.SelfieImageCapturedAt = now;
+        objection.SelfieImageMatched = matched;
+        return change;
+    }
+
+    /// <summary>Lưu DB; lỗi thì xóa ảnh mới vừa ghi rồi ném lại, thành công thì xóa ảnh cũ đã bị thay.</summary>
+    private async Task SaveWithSelfieImageAsync(SelfieImageChange? imageChange, CancellationToken ct)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            await DiscardNewSelfieImageAsync(imageChange);
+            throw;
+        }
+        if (imageChange != null)
+        {
+            await IdentityImageStorage.TryDeleteAsync(contentStore, imageChange.OldStorageKey);
+        }
+    }
+
+    private async Task DiscardNewSelfieImageAsync(SelfieImageChange? imageChange)
+    {
+        if (imageChange != null)
+        {
+            await IdentityImageStorage.TryDeleteAsync(contentStore, imageChange.NewStorageKey);
+        }
+    }
+
+    /// <summary>Khóa lưu trữ của ảnh selfie vừa ghi và của ảnh cũ bị thay (null khi chưa có ảnh cũ).</summary>
+    private sealed class SelfieImageChange
+    {
+        public string NewStorageKey { get; set; } = string.Empty;
+
+        public string? OldStorageKey { get; set; }
     }
 
     private async Task<OwnerDeathCaseResponse> BuildAsync(DeathCase deathCase, CancellationToken ct)

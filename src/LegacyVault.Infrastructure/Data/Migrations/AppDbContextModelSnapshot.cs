@@ -804,6 +804,41 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("SelfieFailureWindowStartedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("SelfieImageCapturedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("SelfieImageContentType")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("SelfieImageEncryptionKeyId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<bool?>("SelfieImageMatched")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SelfieImageSha256")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<long?>("SelfieImageSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SelfieImageStorageKey")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<byte[]>("SelfieImageWrappedDataKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("binary(60)")
+                        .IsFixedLength();
+
                     b.Property<DateTimeOffset?>("SelfiePassedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1019,6 +1054,35 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .IsUnicode(false)
                         .HasColumnType("varchar(64)");
+
+                    b.Property<string>("PendingDocumentImageContentType")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("PendingDocumentImageEncryptionKeyId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("PendingDocumentImageSha256")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<long?>("PendingDocumentImageSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PendingDocumentImageStorageKey")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<byte[]>("PendingDocumentImageWrappedDataKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("binary(60)")
+                        .IsFixedLength();
 
                     b.Property<string>("Purpose")
                         .IsRequired()
@@ -1821,6 +1885,38 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("DocumentImageCapturedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DocumentImageContentType")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("DocumentImageEncryptionKeyId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("DocumentImageSha256")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<long?>("DocumentImageSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DocumentImageStorageKey")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<byte[]>("DocumentImageWrappedDataKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("binary(60)")
+                        .IsFixedLength();
 
                     b.Property<string>("EncryptionKeyId")
                         .IsRequired()

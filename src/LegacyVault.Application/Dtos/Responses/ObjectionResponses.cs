@@ -26,6 +26,18 @@ public class ObjectionResponse
     /// <summary>Số lần còn được thử trong cửa sổ 24 giờ.</summary>
     public int SelfieAttemptsRemaining { get; set; }
 
+    /// <summary>
+    /// Có ảnh selfie của lần thử gần nhất (BR-50 sửa). Verifier xem ảnh qua
+    /// GET /verifier/death-cases/{caseId}/objection/selfie-image.
+    /// </summary>
+    public bool HasSelfieImage { get; set; }
+
+    /// <summary>Lúc chụp ảnh selfie đang lưu; null khi chưa có ảnh.</summary>
+    public DateTimeOffset? SelfieImageCapturedAt { get; set; }
+
+    /// <summary>Ảnh selfie đang lưu có khớp mẫu khuôn mặt không; null khi chưa có ảnh.</summary>
+    public bool? SelfieImageMatched { get; set; }
+
     public DateTimeOffset? VerifierDueAt { get; set; }
 
     public int InsufficientEvidenceCount { get; set; }

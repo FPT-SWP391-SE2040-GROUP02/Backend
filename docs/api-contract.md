@@ -75,6 +75,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
 | 404 | `AVATAR_NOT_FOUND` | Tài khoản chưa có ảnh đại diện | |
+| 404 | `IDENTITY_IMAGE_NOT_FOUND` | Verifier xem ảnh CCCD lúc eKYC mà Owner xác minh trước khi có chức năng lưu ảnh, hoặc xem selfie báo còn sống khi chưa có lần thử nào được so khớp | |
 | 409 | `ASSET_IN_USE` | Tài sản còn trong gói hoặc đã ghim vào bàn giao nên không xóa được (+`reason`) | |
 | 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
@@ -563,7 +564,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 
 ### 6.10. Xác minh danh tính (eKYC)
 
-Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khuôn mặt. Server gọi dịch vụ eKYC riêng (chương trình Python) và **chỉ lưu kết quả**: không lưu ảnh, không lưu họ tên/ngày sinh/địa chỉ, chỉ giữ 4 số cuối CCCD. Cần đăng nhập (Bearer); người dùng lấy từ token. Ảnh JPEG/PNG, tối đa 8 MiB, gửi `multipart/form-data` với field `file`.
+Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khuôn mặt. Server gọi dịch vụ eKYC riêng (chương trình Python) và **chỉ lưu kết quả**: không lưu ảnh, không lưu họ tên/ngày sinh/địa chỉ, chỉ giữ 4 số cuối CCCD. Ngoại lệ (BR-48 sửa 25/10/2026): với `OWNER_ENROLLMENT`, ảnh mặt trước CCCD được lưu **mã hóa** (kho lưu trữ private như tài sản) cùng danh tính đã gắn khi lượt đạt, để Verifier được giao hồ sơ chứng tử của kho đối chiếu (mục 6.12); lượt thất bại hoặc bị lượt mới thay thì ảnh bị xóa. Cần đăng nhập (Bearer); người dùng lấy từ token. Ảnh JPEG/PNG, tối đa 8 MiB, gửi `multipart/form-data` với field `file`.
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
@@ -682,6 +683,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 | GET | `/v1/verifier/death-cases` | query mục 5: `pageIndex`, `pageSize`, `sortBy` = `dueAt` (mặc định) \| `assignedAt` (không phân biệt hoa thường), `isAscending`; `searchTerm` **bị bỏ qua** | 200 `PaginatedList<VerifierDeathCaseSummaryResponse>` | 400 (`sortBy` lạ), 401, 403 |
 | GET | `/v1/verifier/death-cases/{caseId}` | — | 200 `VerifierDeathCaseResponse`, `Cache-Control: no-store` | 401, 403, 404 |
 | GET | `/v1/verifier/death-cases/{caseId}/files/{fileId}/content` | — | 200 nội dung trang (byte gốc) | 401, 403, 404, 500 `CONTENT_INTEGRITY_FAILED` |
+| GET | `/v1/verifier/death-cases/{caseId}/owner-identity/document-image` | — | 200 ảnh mặt trước CCCD Owner chụp lúc eKYC (`image/jpeg` \| `image/png` \| `image/webp`, `Content-Disposition: inline`, `Cache-Control: private, no-store`) | 401, 403, 404 `DEATH_CASE_NOT_FOUND` / `IDENTITY_IMAGE_NOT_FOUND`, 500 `CONTENT_INTEGRITY_FAILED` |
 | POST | `/v1/verifier/death-cases/{caseId}/flags/{flagId}/review` | `{ etag, note }` | 200 `VerifierDeathCaseResponse` (etag mới) | 400, 403, 404, 409 `EDIT_CONFLICT` / `DEATH_CASE_NOT_ALLOWED` |
 | POST | `/v1/verifier/death-cases/{caseId}/request-supplement` | `{ etag, reason, requestedParts: [...] }` | 200 `VerifierDeathCaseResponse` | 400, 403, 404, 409 `EDIT_CONFLICT` / `DEATH_CASE_NOT_ALLOWED` |
 | POST | `/v1/verifier/death-cases/{caseId}/approve` | `{ etag, reason }` | 200 `VerifierDeathCaseResponse` (kèm `handover` ở lần duyệt đầu) | 400, 403, 404, 409 `DEATH_CASE_NOT_ALLOWED` (+ `approveBlockers`) / `EDIT_CONFLICT` / `HANDOVER_NOT_ALLOWED` |
@@ -710,9 +712,15 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
   "supplementOverdueAt": null,
   "assignment": { "assignedAt": "...", "dueAt": "..." },
   "canApprove": false, "approveBlockers": ["OBJECTION_PERIOD_NOT_OVER"],
-  "previousCase": null, "handover": null
+  "previousCase": null, "handover": null,
+  "ownerIdentity": { "verified": true, "citizenId": "012345678901", "fullName": "NGUYỄN VĂN AN",
+    "dateOfBirth": "1950-03-04", "verifiedAt": "...", "citizenIdMatches": true, "fullNameMatches": true,
+    "hasDocumentImage": true, "documentImageCapturedAt": "..." }
 }
 ```
+
+- **`ownerIdentity`** (BR-48 sửa 25/10/2026): danh tính Owner đã gắn qua eKYC (`OWNER_ENROLLMENT` đạt), giải mã để Verifier được giao đối chiếu với bản Executor khai, gồm **đủ 12 số CCCD**, họ tên, ngày sinh. Luôn có object; Owner chưa xác minh thì `verified = false` và các trường còn lại `null`/`false`. `citizenIdMatches` so đủ 12 số; `fullNameMatches` so họ tên theo cách chuẩn hóa của eKYC (NFC, bỏ khoảng trắng thừa, không phân biệt hoa thường, **giữ dấu**); `null` khi bản đang xét chưa có trường đó. Ngày sinh không có trong bản Executor khai nên không so. `hasDocumentImage` cho biết có ảnh mặt trước CCCD lúc eKYC để xem qua `GET .../owner-identity/document-image` (Owner xác minh trước khi có chức năng này thì `false`).
+- **Ảnh CCCD lúc eKYC** (`owner-identity/document-image`): cùng cách bảo vệ với trang giấy chứng tử (Bearer, chỉ Verifier đang được giao, giải mã hai lượt, hỏng thì `500 CONTENT_INTEGRITY_FAILED` không kèm byte nào), nhưng trả `inline` với kiểu ảnh thật để FE hiển thị (`X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`). Máy chủ ghi log "đã xem ảnh CCCD" (chỉ Id hồ sơ).
 
 - **Dữ liệu trả (DATA-02, cách hiểu):** `reviewVersion` (bản Executor gửi gần nhất, `reviewVersionNo`) có đủ họ tên, **CCCD 12 số**, số giấy, nơi cấp, vì Verifier được giao là "người cần" (SEC-05) và ảnh giấy chứng tử vốn có số đầy đủ. Câu "không trả CCCD đầy đủ trước khi xác minh xong" áp cho **người nhận ở F3**, không áp cho CCCD của Owner trong hồ sơ chứng tử. `versions[]` (các bản đã gửi khác) chỉ có cột không mã hóa (4 số cuối, ngày mất, `submittedAt`, metadata trang). Danh sách chỉ có 4 số cuối. Verifier **không bao giờ** thấy bản nháp. Không trả thông tin Executor, email Owner, khóa lưu trữ, SHA-256, Id người quyết định.
 - **`approveBlockers`** (cộng dồn, theo thứ tự): `NOT_UNDER_REVIEW` (hồ sơ không ở `UNDER_REVIEW`), `NEWER_VERSION_PENDING` (Executor đang có bản nháp mới hơn bản đang xét), `OWNER_NOT_NOTIFIED` (đồng hồ 72 giờ chưa chạy), `OBJECTION_PERIOD_NOT_OVER` (DEATH-09), `FLAGS_NOT_REVIEWED` (DEATH-10, chỉ cờ của bản đang xét). `VERIFIER_CONFLICT` (ROLE-03: Verifier là Owner, Executor đang hiệu lực của kho, người gửi bản đang xét hoặc người nhận của kho) được thêm vào **cuối** danh sách ở response chi tiết và response ghi, để FE không hiện nút duyệt với người sẽ bị chặn. `canApprove` = danh sách rỗng. Chưa có hold/phản đối F2C.
@@ -823,10 +831,12 @@ Owner xem hồ sơ chứng tử của kho và báo "Tôi còn sống" (SRS §6.3
 | POST | `/v1/vaults/{vaultId}/death-case/objection` | — | 200 | 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_ALREADY_REJECTED`) / `EDIT_CONFLICT` |
 | POST | `/v1/vaults/{vaultId}/death-case/objection/selfie` | `multipart`, field `file` (JPEG/PNG ≤ 8 MiB) | 200 | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_WINDOW_CLOSED` / `SELFIE_ATTEMPTS_EXCEEDED`), 413, 503 `EKYC_SERVICE_UNAVAILABLE`. Sau khi lời báo bị bác (`OBJECTION_REJECTED`), selfie khớp là bằng chứng mới và mở lại lời báo (ALIVE-09); không khớp thì tính vào giới hạn 3 lần/24 giờ |
 | GET | `/v1/verifier/death-cases/{caseId}/objection` | — | 200 `ObjectionResponse` | 404 |
+| GET | `/v1/verifier/death-cases/{caseId}/objection/selfie-image` | — | 200 ảnh selfie của lần thử gần nhất (`image/jpeg` \| `image/png` \| `image/webp`, `inline`, `Cache-Control: private, no-store`) | 404 `DEATH_CASE_NOT_FOUND` / `IDENTITY_IMAGE_NOT_FOUND`, 500 `CONTENT_INTEGRITY_FAILED` |
 | POST | `/v1/verifier/death-cases/{caseId}/objection/conclude` | `{ conclusion, reason }` | 200 `ObjectionResponse` | 400, 404, 409 `DEATH_CASE_NOT_ALLOWED` (`OBJECTION_NOT_OPEN` / `ALIVE_EVIDENCE_REQUIRED` / `OWNER_SELFIE_PASSED`) / `EDIT_CONFLICT` |
 
 - **Báo** (hồ sơ `UNDER_REVIEW` / `SUPPLEMENT_REQUIRED` / `APPROVED_FOR_HANDOVER`): trong một giao dịch, hồ sơ sang `SUSPENDED`, kế hoạch sang `BLOCKED`, mọi grant `ACTIVE` sang `BLOCKED`. Từ đó: không duyệt (`DEATH_CASE_NOT_ALLOWED` / `NOT_UNDER_REVIEW`), không nhận lượt hay đồng ý (`HANDOVER_NOT_ALLOWED` / `PLAN_NOT_IN_HANDOVER`), không tải (`GRANT_NOT_ACTIVE` / `BLOCKED`), Owner không sửa kho (`VAULT_NOT_EDITABLE` / `PLAN_LOCKED`). Thao tác nhận chạy cùng lúc với báo thua `RowVersion` của kế hoạch (nhận lượt, đồng ý, từ chối đều ghi `plan.UpdatedAt`).
 - **Báo lặp** (ALIVE-09): chỉ tăng `reportCount`; `selfieDeadlineAt` (7 ngày từ lần báo đầu) và hold không đổi. Sau khi phản đối bị bác, báo trơn vẫn bị chặn (`OBJECTION_ALREADY_REJECTED`); muốn mở lại thì Owner gửi selfie khớp qua `POST .../objection/selfie`, và lời báo mở lại đó không bị bác lần nữa (ALIVE-05).
+- **Ảnh selfie cho Verifier** (BR-50 sửa 25/10/2026): mỗi lần thử được so khớp xong (khớp hoặc không) thì ảnh selfie đó được lưu **mã hóa** trên lời báo, thay ảnh của lần thử trước; lỗi kỹ thuật (`503`) không lưu ảnh. `ObjectionResponse` có thêm `hasSelfieImage`, `selfieImageCapturedAt`, `selfieImageMatched` (kết quả so khớp của chính ảnh đang lưu). Verifier xem ảnh qua `GET .../objection/selfie-image` để tự đối chiếu với ảnh CCCD lúc eKYC (`GET /v1/verifier/death-cases/{caseId}/owner-identity/document-image`, mục 6.12).
 - **Selfie** so với mẫu khuôn mặt qua `IOwnerFaceVerifier`. Tối đa 3 lần không khớp trong 24 giờ; lỗi kỹ thuật không tính. Selfie được so với mẫu khuôn mặt Owner (xem mục 6.10): server lấy vector của selfie rồi tự tính cosine với mẫu đã lưu, ngưỡng `0.363`. **Owner chưa có mẫu** (chưa hoàn thành `OWNER_ENROLLMENT` bằng thử thách camera) hoặc dịch vụ eKYC lỗi thì trả `503`, không tính là một lần không khớp; ảnh không có đúng một khuôn mặt trả `400 EKYC_IMAGE_REJECTED` và cũng không tính. Verifier vẫn kết luận được sau 7 ngày.
 - **Kết luận** (`ALIVE_CONFIRMED` / `OBJECTION_REJECTED` / `INSUFFICIENT_EVIDENCE`, bắt buộc lý do), chỉ Verifier đang được giao hồ sơ:
   - `ALIVE_CONFIRMED`: chỉ khi selfie đã đạt hoặc đã quá 7 ngày. Hồ sơ `REJECTED`, lượt chưa xong `CANCELLED`, grant `REVOKED`, kế hoạch `ACTIVE` với kỳ điểm danh mới.

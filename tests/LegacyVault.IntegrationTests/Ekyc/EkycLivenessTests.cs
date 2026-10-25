@@ -7,6 +7,7 @@ using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using LegacyVault.IntegrationTests.Handover;
+using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
@@ -32,7 +33,7 @@ public sealed class EkycLivenessTests
         service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
             new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), templateRepository,
             FaceTemplateTestSupport.CreateProtector(), new FakeOwnerIdentityRepository(),
-            FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock);
+            FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore());
         consentRepository.Consents.Add(new EkycConsent
         {
             UserId = userId,

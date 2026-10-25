@@ -63,6 +63,42 @@ public class VerifierDeathCaseResponse
 
     /// <summary>Chỉ có ở response duyệt lần đầu; còn lại null.</summary>
     public VerifierHandoverResponse? Handover { get; set; }
+
+    /// <summary>
+    /// Danh tính Owner đã xác minh qua eKYC, để đối chiếu với bản Executor khai (BR-48 sửa 25/10/2026: Verifier được
+    /// giao xem đủ 12 số CCCD). Luôn có object; Verified = false khi Owner chưa gắn danh tính.
+    /// </summary>
+    public VerifierOwnerIdentityResponse OwnerIdentity { get; set; } = new VerifierOwnerIdentityResponse();
+}
+
+/// <summary>Danh tính đã xác minh của Owner và kết quả so với bản đang xét.</summary>
+public class VerifierOwnerIdentityResponse
+{
+    /// <summary>true khi Owner đã gắn danh tính qua eKYC (OWNER_ENROLLMENT đạt).</summary>
+    public bool Verified { get; set; }
+
+    /// <summary>12 số CCCD đã xác minh; null khi chưa xác minh.</summary>
+    public string? CitizenId { get; set; }
+
+    public string? FullName { get; set; }
+
+    public DateOnly? DateOfBirth { get; set; }
+
+    /// <summary>Lúc gắn danh tính.</summary>
+    public DateTimeOffset? VerifiedAt { get; set; }
+
+    /// <summary>CCCD bản đang xét trùng CCCD đã xác minh: true/false; null khi một bên chưa có.</summary>
+    public bool? CitizenIdMatches { get; set; }
+
+    /// <summary>Họ tên bản đang xét trùng họ tên đã xác minh (không phân biệt hoa thường, giữ dấu); null khi một bên chưa có.</summary>
+    public bool? FullNameMatches { get; set; }
+
+    /// <summary>
+    /// Có ảnh mặt trước CCCD lúc eKYC. Xem ảnh qua GET /verifier/death-cases/{caseId}/owner-identity/document-image.
+    /// </summary>
+    public bool HasDocumentImage { get; set; }
+
+    public DateTimeOffset? DocumentImageCapturedAt { get; set; }
 }
 
 public class VerifierReviewVersionResponse

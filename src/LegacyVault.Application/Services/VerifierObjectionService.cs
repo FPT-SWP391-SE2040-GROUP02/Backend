@@ -3,6 +3,7 @@ using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
@@ -28,6 +29,7 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
     private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IAssetContentStore contentStore;
 
     public VerifierObjectionService(
         ICurrentUser currentUser,
@@ -41,7 +43,8 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         IIncidentService incidentService,
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAssetContentStore contentStore)
     {
         this.currentUser = currentUser;
         this.users = users;
@@ -55,6 +58,7 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         this.audit = audit;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.contentStore = contentStore;
     }
 
     public async Task<ObjectionResponse> GetAsync(Guid caseId, CancellationToken ct)
@@ -66,6 +70,31 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
             throw ObjectionMapper.CaseNotFound();
         }
         return ObjectionMapper.ToResponse(objection, timeProvider.GetUtcNow());
+    }
+
+    public async Task<PreparedDownload> PrepareSelfieImageAsync(Guid caseId, CancellationToken ct)
+    {
+        await LoadContextAsync(caseId, ct);
+        DeathCaseObjection? objection = await objections.FindLatestByCaseAsync(caseId, ct);
+        if (objection == null)
+        {
+            throw ObjectionMapper.CaseNotFound();
+        }
+        if (objection.SelfieImageStorageKey == null || objection.SelfieImageWrappedDataKey == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.IdentityImageNotFound,
+                "Chủ kho chưa gửi ảnh selfie nào được so khớp.");
+        }
+
+        StoredContent stored = new StoredContent();
+        stored.StorageKey = objection.SelfieImageStorageKey;
+        stored.SizeBytes = objection.SelfieImageSizeBytes ?? 0;
+        stored.Sha256 = objection.SelfieImageSha256 ?? string.Empty;
+        stored.EncryptionKeyId = objection.SelfieImageEncryptionKeyId ?? string.Empty;
+        stored.WrappedDataKey = objection.SelfieImageWrappedDataKey;
+
+        string contentType = objection.SelfieImageContentType ?? "application/octet-stream";
+        return await IdentityImageStorage.PrepareAsync(contentStore, stored, contentType, "selfie", ct);
     }
 
     public async Task<ObjectionResponse> ConcludeAsync(Guid caseId, ConcludeObjectionRequest request, CancellationToken ct)

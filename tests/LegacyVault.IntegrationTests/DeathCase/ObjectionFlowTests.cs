@@ -5,9 +5,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
+using LegacyVault.Application.Security;
 using LegacyVault.Application.Services;
+using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using LegacyVault.Infrastructure.Data;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -563,5 +566,132 @@ public sealed class ObjectionFlowTests : IAsyncLifetime
         await ApiTestHelpers.AssertProblemAsync(get, HttpStatusCode.NotFound, "DEATH_CASE_NOT_FOUND");
         await ApiTestHelpers.AssertProblemAsync(conclude, HttpStatusCode.NotFound, "DEATH_CASE_NOT_FOUND");
         await ApiTestHelpers.AssertProblemAsync(invalid, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+    }
+
+    /// <summary>Byte ảnh selfie mà SelfieAsync gửi (có chữ ký JPEG nên được lưu).</summary>
+    private static readonly byte[] SelfieBytes = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4 };
+
+    [SqlFact]
+    public async Task Br50_VerifierSeesLatestSelfieImage_NewAttemptReplacesOld()
+    {
+        Scenario s = await BuildAsync(approvable: false);
+        Assert.Equal(HttpStatusCode.OK, (await ReportAsync(s)).StatusCode);
+
+        // Chưa có lần thử nào: chưa có ảnh
+        JsonElement before = await ApiTestHelpers.ReadJsonAsync(await s.VerifierClient.GetAsync(VerifierObjectionUrl(s)));
+        Assert.False(before.GetProperty("hasSelfieImage").GetBoolean());
+        await ApiTestHelpers.AssertProblemAsync(
+            await s.VerifierClient.GetAsync(VerifierObjectionUrl(s) + "/selfie-image"),
+            HttpStatusCode.NotFound, "IDENTITY_IMAGE_NOT_FOUND");
+
+        // Lỗi kỹ thuật không lưu ảnh
+        face.Outcome = OwnerFaceOutcome.Unavailable;
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await SelfieAsync(s)).StatusCode);
+        Assert.False((await ApiTestHelpers.ReadJsonAsync(await s.VerifierClient.GetAsync(VerifierObjectionUrl(s))))
+            .GetProperty("hasSelfieImage").GetBoolean());
+
+        // Lần thử không khớp vẫn được lưu để Verifier xem
+        face.Outcome = OwnerFaceOutcome.NotMatched;
+        Assert.Equal(HttpStatusCode.OK, (await SelfieAsync(s)).StatusCode);
+        JsonElement failed = await ApiTestHelpers.ReadJsonAsync(await s.VerifierClient.GetAsync(VerifierObjectionUrl(s)));
+        Assert.True(failed.GetProperty("hasSelfieImage").GetBoolean());
+        Assert.False(failed.GetProperty("selfieImageMatched").GetBoolean());
+        string? firstKey = null;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            firstKey = await db.Set<DeathCaseObjection>().Where(o => o.CaseId == s.CaseId)
+                .Select(o => o.SelfieImageStorageKey).SingleAsync();
+        });
+        Assert.NotNull(firstKey);
+
+        HttpResponseMessage image = await s.VerifierClient.GetAsync(VerifierObjectionUrl(s) + "/selfie-image");
+        Assert.Equal(HttpStatusCode.OK, image.StatusCode);
+        Assert.Equal("image/jpeg", image.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(SelfieBytes, await image.Content.ReadAsByteArrayAsync());
+        Assert.Contains("no-store", image.Headers.CacheControl?.ToString());
+
+        // Lần thử khớp thay ảnh cũ
+        face.Outcome = OwnerFaceOutcome.Matched;
+        Assert.Equal(HttpStatusCode.OK, (await SelfieAsync(s)).StatusCode);
+        JsonElement passed = await ApiTestHelpers.ReadJsonAsync(await s.VerifierClient.GetAsync(VerifierObjectionUrl(s)));
+        Assert.True(passed.GetProperty("selfieImageMatched").GetBoolean());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            string? latestKey = await db.Set<DeathCaseObjection>().Where(o => o.CaseId == s.CaseId)
+                .Select(o => o.SelfieImageStorageKey).SingleAsync();
+            Assert.NotNull(latestKey);
+            Assert.NotEqual(firstKey, latestKey);
+        });
+
+        // Verifier khác không xem được
+        User other = await DeathCaseTestData.AddVerifierAsync(factory);
+        await ApiTestHelpers.AssertProblemAsync(
+            await ClientFor(other).GetAsync(VerifierObjectionUrl(s) + "/selfie-image"),
+            HttpStatusCode.NotFound, "DEATH_CASE_NOT_FOUND");
+    }
+
+    [SqlFact]
+    public async Task Br48_VerifierSeesVerifiedOwnerIdentity_AndDocumentImage()
+    {
+        Scenario s = await BuildAsync(approvable: false);
+        string detailUrl = $"/api/v1/verifier/death-cases/{s.CaseId}";
+
+        // Owner chưa xác minh: không có danh tính, không có ảnh
+        JsonElement unverified = (await DeathCaseReviewTestData.GetDetailAsync(s.VerifierClient, s.CaseId)).GetProperty("ownerIdentity");
+        Assert.False(unverified.GetProperty("verified").GetBoolean());
+        Assert.False(unverified.GetProperty("hasDocumentImage").GetBoolean());
+        await ApiTestHelpers.AssertProblemAsync(
+            await s.VerifierClient.GetAsync(detailUrl + "/owner-identity/document-image"),
+            HttpStatusCode.NotFound, "IDENTITY_IMAGE_NOT_FOUND");
+
+        // Owner đã xác minh: cùng họ tên (khác hoa thường), khác CCCD với bản Executor khai
+        byte[] documentBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 9, 9, 9, 9 };
+        using (IServiceScope scope = app.Services.CreateScope())
+        {
+            IAssetContentStore store = scope.ServiceProvider.GetRequiredService<IAssetContentStore>();
+            IOwnerIdentityProtector protector = scope.ServiceProvider.GetRequiredService<IOwnerIdentityProtector>();
+            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            StoredContent stored = await IdentityImageStorage.SaveAsync(store, documentBytes, CancellationToken.None);
+
+            OwnerIdentity identity = new OwnerIdentity();
+            identity.UserId = s.Owner.Owner.Id;
+            identity.SourceVerificationId = Guid.NewGuid();
+            identity.CreatedAt = DateTimeOffset.UtcNow;
+            identity.DocumentImageStorageKey = stored.StorageKey;
+            identity.DocumentImageContentType = "image/png";
+            identity.DocumentImageSizeBytes = stored.SizeBytes;
+            identity.DocumentImageSha256 = stored.Sha256;
+            identity.DocumentImageEncryptionKeyId = stored.EncryptionKeyId;
+            identity.DocumentImageWrappedDataKey = stored.WrappedDataKey;
+            identity.DocumentImageCapturedAt = DateTimeOffset.UtcNow;
+            OwnerIdentityData data = new OwnerIdentityData();
+            data.CitizenId = "012345678900";
+            data.FullName = "NGUYỄN VĂN AN";
+            data.DateOfBirth = new DateOnly(1950, 3, 4);
+            protector.Protect(identity, data);
+            db.Add(identity);
+            await db.SaveChangesAsync();
+        }
+
+        JsonElement verified = (await DeathCaseReviewTestData.GetDetailAsync(s.VerifierClient, s.CaseId)).GetProperty("ownerIdentity");
+        Assert.True(verified.GetProperty("verified").GetBoolean());
+        Assert.Equal("012345678900", verified.GetProperty("citizenId").GetString());
+        Assert.Equal("NGUYỄN VĂN AN", verified.GetProperty("fullName").GetString());
+        Assert.Equal("1950-03-04", verified.GetProperty("dateOfBirth").GetString());
+        Assert.False(verified.GetProperty("citizenIdMatches").GetBoolean());
+        Assert.True(verified.GetProperty("fullNameMatches").GetBoolean());
+        Assert.True(verified.GetProperty("hasDocumentImage").GetBoolean());
+
+        HttpResponseMessage image = await s.VerifierClient.GetAsync(detailUrl + "/owner-identity/document-image");
+        Assert.Equal(HttpStatusCode.OK, image.StatusCode);
+        Assert.Equal("image/png", image.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(documentBytes, await image.Content.ReadAsByteArrayAsync());
+
+        // Verifier không được giao và Owner đều không xem được ảnh
+        User other = await DeathCaseTestData.AddVerifierAsync(factory);
+        await ApiTestHelpers.AssertProblemAsync(
+            await ClientFor(other).GetAsync(detailUrl + "/owner-identity/document-image"),
+            HttpStatusCode.NotFound, "DEATH_CASE_NOT_FOUND");
+        Assert.NotEqual(HttpStatusCode.OK, (await s.OwnerClient.GetAsync(detailUrl + "/owner-identity/document-image")).StatusCode);
     }
 }

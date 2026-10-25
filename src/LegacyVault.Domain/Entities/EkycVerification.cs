@@ -64,6 +64,23 @@ public class EkycVerification
     /// <summary>Đã mã hóa: JSON {citizenId, fullName, dateOfBirth}.</summary>
     public byte[]? EnrollmentIdentityEncrypted { get; set; }
 
+    /// <summary>
+    /// Chỉ với lượt OWNER_ENROLLMENT đang chờ selfie: ảnh mặt trước CCCD đã lưu MÃ HÓA ở kho lưu trữ private (BR-48 sửa
+    /// 25/10/2026). Lượt đạt thì chuyển tham chiếu sang OwnerIdentity; lượt thất bại hoặc bị lượt mới thay thì xóa nội dung.
+    /// </summary>
+    public string? PendingDocumentImageStorageKey { get; set; }
+
+    public string? PendingDocumentImageContentType { get; set; }
+
+    public long? PendingDocumentImageSizeBytes { get; set; }
+
+    public string? PendingDocumentImageSha256 { get; set; }
+
+    public string? PendingDocumentImageEncryptionKeyId { get; set; }
+
+    /// <summary>DEK của ảnh, đã bọc bằng KEK. Không trả cho FE, không log.</summary>
+    public byte[]? PendingDocumentImageWrappedDataKey { get; set; }
+
     /// <summary>Điểm cosine giữa selfie và ảnh giấy tờ; null khi chưa so khớp. Không phải xác suất.</summary>
     public double? FaceMatchScore { get; set; }
 

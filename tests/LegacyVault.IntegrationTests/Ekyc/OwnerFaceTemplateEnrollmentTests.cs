@@ -8,6 +8,7 @@ using LegacyVault.Infrastructure.Security;
 using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using LegacyVault.IntegrationTests.Handover;
+using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
@@ -33,7 +34,7 @@ public sealed class OwnerFaceTemplateEnrollmentTests
         service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
             new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), templates, protector,
             new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client,
-            new FakeUnitOfWork(), clock);
+            new FakeUnitOfWork(), clock, new InMemoryAssetContentStore());
     }
 
     private void AddConsent(EkycPurpose purpose, DateTimeOffset consentedAt)
