@@ -35,6 +35,12 @@ public interface IVerifierObjectionService
     Task<ObjectionResponse> GetAsync(Guid caseId, CancellationToken ct);
 
     /// <summary>
+    /// Ảnh selfie của lần thử gần nhất trên lời báo gần nhất (BR-50 sửa), kiểm toàn vẹn trước khi gửi byte đầu.
+    /// Lỗi: 404 DEATH_CASE_NOT_FOUND, 404 IDENTITY_IMAGE_NOT_FOUND (chưa có ảnh), ContentIntegrityException.
+    /// </summary>
+    Task<PreparedDownload> PrepareSelfieImageAsync(Guid caseId, CancellationToken ct);
+
+    /// <summary>
     /// Kết luận. Lỗi: 400 (kết luận lạ, thiếu lý do), 409 DEATH_CASE_NOT_ALLOWED (OBJECTION_NOT_OPEN /
     /// ALIVE_EVIDENCE_REQUIRED), 409 EDIT_CONFLICT. Gọi lặp trên báo đã kết luận trả trạng thái hiện tại.
     /// </summary>

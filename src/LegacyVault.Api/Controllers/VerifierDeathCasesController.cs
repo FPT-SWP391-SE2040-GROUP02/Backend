@@ -100,6 +100,47 @@ public sealed class VerifierDeathCasesController : ControllerBase
     }
 
     /// <summary>
+    /// Ảnh mặt trước CCCD Owner chụp lúc eKYC, để đối chiếu với giấy chứng tử và selfie báo còn sống (BR-48 sửa).
+    /// Trả nội dung ảnh (không phải JSON). 404 IDENTITY_IMAGE_NOT_FOUND khi Owner xác minh trước khi có chức năng lưu ảnh.
+    /// </summary>
+    [HttpGet("death-cases/{caseId:guid}/owner-identity/document-image")]
+    [Produces("image/jpeg", "image/png", "image/webp", "application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetOwnerDocumentImage(Guid caseId, CancellationToken ct)
+    {
+        PreparedDownload download;
+        try
+        {
+            download = await reviewService.PrepareOwnerDocumentImageAsync(caseId, ct);
+        }
+        catch (ContentIntegrityException)
+        {
+            // Chỉ log id, không log nội dung hay khóa lưu trữ (DATA-02, SEC-07).
+            logger.LogError("Ảnh CCCD của Owner không qua kiểm toàn vẹn: hồ sơ {CaseId}", caseId);
+            return IntegrityProblem("Ảnh CCCD không vượt qua kiểm tra toàn vẹn nên không thể xem.");
+        }
+
+        logger.LogInformation("Verifier đã xem ảnh CCCD của Owner: hồ sơ {CaseId}", caseId);
+        return new IdentityImageResult(download);
+    }
+
+    private ObjectResult IntegrityProblem(string detail)
+    {
+        ProblemDetails problem = GlobalExceptionHandler.Problem(
+            StatusCodes.Status500InternalServerError, ErrorCode.ContentIntegrityFailed, detail);
+        problem.Extensions["traceId"] = HttpContext.TraceIdentifier;
+
+        ObjectResult result = new ObjectResult(problem);
+        result.StatusCode = StatusCodes.Status500InternalServerError;
+        result.ContentTypes.Add("application/problem+json");
+        return result;
+    }
+
+    /// <summary>
     /// Xem xét một cờ của bản đang xét; body có etag và note. Gọi lặp giữ ghi chú đầu.
     /// Thao tác làm đổi etag hồ sơ: dùng etag mới trong response cho lần duyệt.
     /// </summary>

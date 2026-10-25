@@ -38,6 +38,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     private readonly IDeathCaseVerifierPicker verifierPicker;
     private readonly IAuditLogRepository auditLogRepository;
     private readonly IDeathCaseExecutorNoticeSender executorNoticeSender;
+    private readonly IOwnerIdentityRepository ownerIdentityRepository;
+    private readonly IOwnerIdentityProtector ownerIdentityProtector;
 
     public DeathCaseReviewService(
         ICurrentUser currentUser,
@@ -54,7 +56,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         TimeProvider timeProvider,
         IDeathCaseVerifierPicker verifierPicker,
         IAuditLogRepository auditLogRepository,
-        IDeathCaseExecutorNoticeSender executorNoticeSender)
+        IDeathCaseExecutorNoticeSender executorNoticeSender,
+        IOwnerIdentityRepository ownerIdentityRepository,
+        IOwnerIdentityProtector ownerIdentityProtector)
     {
         this.currentUser = currentUser;
         this.userRepository = userRepository;
@@ -71,6 +75,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         this.verifierPicker = verifierPicker;
         this.auditLogRepository = auditLogRepository;
         this.executorNoticeSender = executorNoticeSender;
+        this.ownerIdentityRepository = ownerIdentityRepository;
+        this.ownerIdentityProtector = ownerIdentityProtector;
     }
 
     public async Task<PaginatedList<VerifierDeathCaseSummaryResponse>> ListAsync(PaginationRequest pagination, CancellationToken ct)
@@ -160,6 +166,27 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         // Lượt 2: giải mã lần nữa, lần này ghi thẳng ra response.
         prepared.WriteToAsync = (destination, token) => contentStore.CopyToAsync(stored, destination, token);
         return prepared;
+    }
+
+    public async Task<PreparedDownload> PrepareOwnerDocumentImageAsync(Guid caseId, CancellationToken ct)
+    {
+        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
+        OwnerIdentity? identity = await FindOwnerIdentityAsync(context.DeathCase, ct);
+        if (identity == null || identity.DocumentImageStorageKey == null || identity.DocumentImageWrappedDataKey == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.IdentityImageNotFound,
+                "Chủ kho chưa có ảnh CCCD lưu lúc xác minh danh tính.");
+        }
+
+        StoredContent stored = new StoredContent();
+        stored.StorageKey = identity.DocumentImageStorageKey;
+        stored.SizeBytes = identity.DocumentImageSizeBytes ?? 0;
+        stored.Sha256 = identity.DocumentImageSha256 ?? string.Empty;
+        stored.EncryptionKeyId = identity.DocumentImageEncryptionKeyId ?? string.Empty;
+        stored.WrappedDataKey = identity.DocumentImageWrappedDataKey;
+
+        string contentType = identity.DocumentImageContentType ?? "application/octet-stream";
+        return await IdentityImageStorage.PrepareAsync(contentStore, stored, contentType, "cccd-mat-truoc", ct);
     }
 
     public async Task<VerifierDeathCaseResponse> ReviewFlagAsync(
@@ -510,7 +537,56 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         {
             blockers.Add(DeathCaseNotAllowedReason.VerifierConflict.ToApiString());
         }
-        return deathCase.ToVerifierResponse(context.Assignment, identity, previous, blockers, handover);
+        VerifierDeathCaseResponse response = deathCase.ToVerifierResponse(context.Assignment, identity, previous, blockers, handover);
+        response.OwnerIdentity = await BuildOwnerIdentityAsync(deathCase, identity, ct);
+        return response;
+    }
+
+    /// <summary>
+    /// Danh tính Owner đã gắn qua eKYC, giải mã để Verifier đối chiếu với bản Executor khai (BR-48 sửa 25/10/2026).
+    /// So CCCD đủ 12 số và họ tên theo cùng cách chuẩn hóa của eKYC (NFC, không phân biệt hoa thường, giữ dấu).
+    /// </summary>
+    private async Task<VerifierOwnerIdentityResponse> BuildOwnerIdentityAsync(
+        DeathCase deathCase, DeathCaseIdentityData? declared, CancellationToken ct)
+    {
+        VerifierOwnerIdentityResponse result = new VerifierOwnerIdentityResponse();
+        OwnerIdentity? identity = await FindOwnerIdentityAsync(deathCase, ct);
+        if (identity == null)
+        {
+            return result;
+        }
+
+        OwnerIdentityData verified = ownerIdentityProtector.Unprotect(identity);
+        result.Verified = true;
+        result.CitizenId = verified.CitizenId;
+        result.FullName = verified.FullName;
+        result.DateOfBirth = verified.DateOfBirth;
+        result.VerifiedAt = identity.CreatedAt;
+        result.HasDocumentImage = identity.DocumentImageStorageKey != null;
+        result.DocumentImageCapturedAt = identity.DocumentImageCapturedAt;
+
+        if (declared != null && !string.IsNullOrEmpty(declared.OwnerCitizenId))
+        {
+            result.CitizenIdMatches = string.Equals(declared.OwnerCitizenId, verified.CitizenId, StringComparison.Ordinal);
+        }
+        if (declared != null && !string.IsNullOrWhiteSpace(declared.OwnerFullName))
+        {
+            result.FullNameMatches = string.Equals(
+                EkycRules.NormalizeName(declared.OwnerFullName), EkycRules.NormalizeName(verified.FullName),
+                StringComparison.Ordinal);
+        }
+        return result;
+    }
+
+    /// <summary>Danh tính đã gắn của Owner kho; null khi Owner chưa xác minh hoặc không còn kho.</summary>
+    private async Task<OwnerIdentity?> FindOwnerIdentityAsync(DeathCase deathCase, CancellationToken ct)
+    {
+        Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
+        if (vault == null)
+        {
+            return null;
+        }
+        return await ownerIdentityRepository.FindByUserIdAsync(vault.OwnerId, ct);
     }
 
     /// <summary>Lỗi lưu do request khác ghi trước: xung đột phiên bản (EDIT_CONFLICT) hoặc vi phạm chỉ mục unique.</summary>

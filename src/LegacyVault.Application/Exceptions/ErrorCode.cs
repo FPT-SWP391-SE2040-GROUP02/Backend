@@ -22,6 +22,8 @@ public enum ErrorCode
     AssetNotFound,
     /// <summary>404: tài khoản chưa có ảnh đại diện.</summary>
     AvatarNotFound,
+    /// <summary>404: chưa có ảnh CCCD (Owner xác minh trước khi lưu ảnh) hoặc chưa có ảnh selfie báo còn sống.</summary>
+    IdentityImageNotFound,
     /// <summary>409: tài sản còn trong gói hoặc đã được ghim vào snapshot bàn giao nên không xóa được.</summary>
     AssetInUse,
     HandoverInvitationInvalid,

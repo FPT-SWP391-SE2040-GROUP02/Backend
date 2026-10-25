@@ -9,6 +9,7 @@ using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using LegacyVault.IntegrationTests.Handover;
+using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
@@ -37,7 +38,7 @@ public sealed class EkycConsentAndMatchTests
         currentUser.UserId = userId;
         service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
             beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
-            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, new FakeUnitOfWork(), clock);
+            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, new FakeUnitOfWork(), clock, new InMemoryAssetContentStore());
     }
 
     private static MemoryStream Image()

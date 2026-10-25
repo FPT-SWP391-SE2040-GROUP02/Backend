@@ -7,11 +7,16 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+/// <remarks>
+/// BR-48 sửa 25/10/2026: ảnh mặt trước CCCD của lượt OWNER_ENROLLMENT được lưu MÃ HÓA (kho lưu trữ private) để Verifier
+/// đối chiếu khi xét hồ sơ chứng tử. Lượt đạt thì chuyển sang danh tính đã gắn; lượt thất bại hoặc bị lượt mới thay thì xóa.
+/// </remarks>
 public sealed class EkycService : IEkycService
 {
     private readonly ICurrentUser currentUser;
@@ -27,6 +32,7 @@ public sealed class EkycService : IEkycService
     private readonly IEkycClient ekycClient;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IAssetContentStore contentStore;
 
     public EkycService(
         ICurrentUser currentUser,
@@ -41,7 +47,8 @@ public sealed class EkycService : IEkycService
         IOwnerIdentityProtector identityProtector,
         IEkycClient ekycClient,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAssetContentStore contentStore)
     {
         this.currentUser = currentUser;
         this.verificationRepository = verificationRepository;
@@ -56,6 +63,7 @@ public sealed class EkycService : IEkycService
         this.ekycClient = ekycClient;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.contentStore = contentStore;
     }
 
     public async Task<EkycConsentResponse> RecordConsentAsync(EkycConsentRequest request, CancellationToken ct)
@@ -129,9 +137,11 @@ public sealed class EkycService : IEkycService
             previous.DocumentToken = null;
             previous.DocumentTokenExpiresAt = null;
         }
+        string? discardedImageKey = null;
         if (previous != null)
         {
             ClearPendingIdentity(previous);
+            discardedImageKey = TakePendingDocumentImage(previous);
         }
 
         EkycDocumentResponse response = new EkycDocumentResponse
@@ -149,6 +159,7 @@ public sealed class EkycService : IEkycService
             // Chưa tìm được đúng một khuôn mặt: vẫn trả chữ đọc được, nhưng chưa mở bước so khớp.
             response.CanMatchFace = false;
             await unitOfWork.SaveChangesAsync(ct);
+            await IdentityImageStorage.TryDeleteAsync(contentStore, discardedImageKey);
             return response;
         }
 
@@ -162,12 +173,24 @@ public sealed class EkycService : IEkycService
         verification.DocumentToken = reading.DocumentToken;
         verification.DocumentTokenExpiresAt = now + EkycRules.DocumentTokenLifetime;
         verification.CreatedAt = now;
+        string? savedImageKey = null;
         if (enrollmentIdentity != null)
         {
             identityProtector.ProtectPending(verification, enrollmentIdentity);
+            savedImageKey = await KeepPendingDocumentImageAsync(verification, image, ct);
         }
         verificationRepository.Add(verification);
-        await unitOfWork.SaveChangesAsync(ct);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Bù trừ: không để lại ảnh không có bản ghi. Không dùng ct vì request có thể đã bị hủy.
+            await IdentityImageStorage.TryDeleteAsync(contentStore, savedImageKey);
+            throw;
+        }
+        await IdentityImageStorage.TryDeleteAsync(contentStore, discardedImageKey);
 
         response.VerificationId = verification.Id;
         response.CanMatchFace = true;
@@ -620,6 +643,11 @@ public sealed class EkycService : IEkycService
         OwnerIdentity? existing = await identityRepository.FindByUserIdAsync(verification.UserId, ct);
         if (existing != null)
         {
+            // Danh tính gắn trước khi có ảnh (BR-48 sửa): lượt đạt mới bổ sung ảnh, không thay ảnh đã có.
+            if (existing.DocumentImageStorageKey == null)
+            {
+                MovePendingDocumentImage(verification, existing);
+            }
             return;
         }
         OwnerIdentityData? pending = identityProtector.UnprotectPending(verification);
@@ -633,6 +661,7 @@ public sealed class EkycService : IEkycService
         identity.SourceVerificationId = verification.Id;
         identity.CreatedAt = now;
         identityProtector.Protect(identity, pending);
+        MovePendingDocumentImage(verification, identity);
         identityRepository.Add(identity);
     }
 
@@ -644,7 +673,66 @@ public sealed class EkycService : IEkycService
         verification.EnrollmentIdentityEncrypted = null;
     }
 
-    /// <summary>Chốt kết quả, xóa mã tham chiếu ở cả DB và dịch vụ eKYC để mỗi lượt chỉ so khớp một lần.</summary>
+    /// <summary>
+    /// Lưu MÃ HÓA ảnh mặt trước CCCD tạm trên lượt OWNER_ENROLLMENT (BR-48 sửa). Ảnh không phải JPEG/PNG/WebP theo nội
+    /// dung thật thì không lưu (eKYC vẫn chạy). Trả khóa lưu trữ để bù trừ nếu lưu DB thất bại.
+    /// </summary>
+    private async Task<string?> KeepPendingDocumentImageAsync(EkycVerification verification, byte[] image, CancellationToken ct)
+    {
+        string? contentType = IdentityImageStorage.DetectContentType(image);
+        if (contentType == null)
+        {
+            return null;
+        }
+        StoredContent stored = await IdentityImageStorage.SaveAsync(contentStore, image, ct);
+        verification.PendingDocumentImageStorageKey = stored.StorageKey;
+        verification.PendingDocumentImageContentType = contentType;
+        verification.PendingDocumentImageSizeBytes = stored.SizeBytes;
+        verification.PendingDocumentImageSha256 = stored.Sha256;
+        verification.PendingDocumentImageEncryptionKeyId = stored.EncryptionKeyId;
+        verification.PendingDocumentImageWrappedDataKey = stored.WrappedDataKey;
+        return stored.StorageKey;
+    }
+
+    /// <summary>Chuyển tham chiếu ảnh tạm của lượt sang danh tính đã gắn (không chép nội dung), rồi xóa cột tạm.</summary>
+    private static void MovePendingDocumentImage(EkycVerification verification, OwnerIdentity identity)
+    {
+        if (verification.PendingDocumentImageStorageKey == null)
+        {
+            return;
+        }
+        identity.DocumentImageStorageKey = verification.PendingDocumentImageStorageKey;
+        identity.DocumentImageContentType = verification.PendingDocumentImageContentType;
+        identity.DocumentImageSizeBytes = verification.PendingDocumentImageSizeBytes;
+        identity.DocumentImageSha256 = verification.PendingDocumentImageSha256;
+        identity.DocumentImageEncryptionKeyId = verification.PendingDocumentImageEncryptionKeyId;
+        identity.DocumentImageWrappedDataKey = verification.PendingDocumentImageWrappedDataKey;
+        identity.DocumentImageCapturedAt = verification.CreatedAt;
+        ClearPendingDocumentImage(verification);
+    }
+
+    /// <summary>Bỏ ảnh tạm khỏi lượt; trả khóa lưu trữ để xóa nội dung SAU khi lưu DB. Không có ảnh → null.</summary>
+    private static string? TakePendingDocumentImage(EkycVerification verification)
+    {
+        string? storageKey = verification.PendingDocumentImageStorageKey;
+        ClearPendingDocumentImage(verification);
+        return storageKey;
+    }
+
+    private static void ClearPendingDocumentImage(EkycVerification verification)
+    {
+        verification.PendingDocumentImageStorageKey = null;
+        verification.PendingDocumentImageContentType = null;
+        verification.PendingDocumentImageSizeBytes = null;
+        verification.PendingDocumentImageSha256 = null;
+        verification.PendingDocumentImageEncryptionKeyId = null;
+        verification.PendingDocumentImageWrappedDataKey = null;
+    }
+
+    /// <summary>
+    /// Chốt kết quả, xóa mã tham chiếu ở cả DB và dịch vụ eKYC để mỗi lượt chỉ so khớp một lần. Lượt OWNER_ENROLLMENT
+    /// đạt thì ảnh mặt trước đã chuyển sang danh tính; còn lại ảnh tạm bị xóa sau khi lưu DB.
+    /// </summary>
     private async Task FinishAsync(EkycVerification verification, EkycStatus status, DateTimeOffset now, CancellationToken ct)
     {
         if (status == EkycStatus.Passed && verification.Purpose == EkycPurpose.OwnerEnrollment)
@@ -652,6 +740,7 @@ public sealed class EkycService : IEkycService
             await BindIdentityAsync(verification, now, ct);
         }
         ClearPendingIdentity(verification);
+        string? discardedImageKey = TakePendingDocumentImage(verification);
 
         string? documentToken = verification.DocumentToken;
         verification.Status = status;
@@ -659,6 +748,7 @@ public sealed class EkycService : IEkycService
         verification.DocumentToken = null;
         verification.DocumentTokenExpiresAt = null;
         await unitOfWork.SaveChangesAsync(ct);
+        await IdentityImageStorage.TryDeleteAsync(contentStore, discardedImageKey);
 
         if (documentToken != null)
         {

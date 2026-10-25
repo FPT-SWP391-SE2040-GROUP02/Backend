@@ -36,4 +36,26 @@ public class OwnerIdentity
     public byte[] IdentityEncrypted { get; set; } = Array.Empty<byte>();
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>
+    /// Ảnh mặt trước CCCD của lượt eKYC đã gắn danh tính (BR-48 sửa 25/10/2026), để Verifier được giao hồ sơ chứng tử
+    /// của kho đối chiếu. Nội dung nằm ở kho lưu trữ private, mã hóa envelope như tài sản; các cột DocumentImage* chỉ giữ
+    /// tham chiếu và khóa đã bọc. Null DocumentImageStorageKey = chưa có ảnh (danh tính gắn trước khi có chức năng này).
+    /// </summary>
+    public string? DocumentImageStorageKey { get; set; }
+
+    /// <summary>image/jpeg | image/png | image/webp, nhận theo nội dung thật của ảnh.</summary>
+    public string? DocumentImageContentType { get; set; }
+
+    public long? DocumentImageSizeBytes { get; set; }
+
+    public string? DocumentImageSha256 { get; set; }
+
+    public string? DocumentImageEncryptionKeyId { get; set; }
+
+    /// <summary>DEK của ảnh, đã bọc bằng KEK. Không trả cho FE, không log.</summary>
+    public byte[]? DocumentImageWrappedDataKey { get; set; }
+
+    /// <summary>Lúc chụp mặt trước (lúc tạo lượt eKYC).</summary>
+    public DateTimeOffset? DocumentImageCapturedAt { get; set; }
 }

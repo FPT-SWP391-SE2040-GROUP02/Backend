@@ -10,6 +10,7 @@ using LegacyVault.Infrastructure.Security;
 using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using LegacyVault.IntegrationTests.Handover;
+using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
@@ -28,6 +29,7 @@ public sealed class OwnerIdentityBindingTests
     private readonly OwnerIdentityProtector identityProtector = FaceTemplateTestSupport.CreateIdentityProtector();
     private readonly FakeEkycClient client = new FakeEkycClient();
     private readonly FixedTimeProvider clock = new FixedTimeProvider(Now);
+    private readonly InMemoryAssetContentStore contentStore = new InMemoryAssetContentStore();
     private readonly EkycService service;
     private readonly Guid userId = Guid.NewGuid();
 
@@ -37,7 +39,7 @@ public sealed class OwnerIdentityBindingTests
         service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
             beneficiaries, beneficiaryProtector, new FakeOwnerFaceTemplateRepository(),
             FaceTemplateTestSupport.CreateProtector(), identities, identityProtector, client,
-            new FakeUnitOfWork(), clock);
+            new FakeUnitOfWork(), clock, contentStore);
         AddConsent(EkycPurpose.OwnerEnrollment);
     }
 
@@ -276,6 +278,92 @@ public sealed class OwnerIdentityBindingTests
 
         EkycVerification verification = Assert.Single(repository.Verifications);
         Assert.Null(verification.EnrollmentIdentityEncrypted);
+    }
+
+    /// <summary>Ảnh có chữ ký JPEG thật (BR-48 sửa: chỉ lưu ảnh JPEG/PNG/WebP theo nội dung).</summary>
+    private static byte[] JpegBytes()
+    {
+        return new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 7, 8, 9 };
+    }
+
+    private Task<EkycDocumentResponse> SubmitJpegDocumentAsync()
+    {
+        return service.SubmitDocumentAsync(new MemoryStream(JpegBytes()), "front.jpg", "image/jpeg", null, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task EnrollmentPassed_MovesDocumentImageToIdentity()
+    {
+        await SubmitJpegDocumentAsync();
+        EkycVerification verification = Assert.Single(repository.Verifications);
+        string? pendingKey = verification.PendingDocumentImageStorageKey;
+        Assert.NotNull(pendingKey);
+        Assert.Equal(JpegBytes(), contentStore.Contents[pendingKey!]);
+
+        await service.StartLivenessAsync(CancellationToken.None);
+        EkycStatusResponse response = await service.CompleteLivenessAsync(CancellationToken.None);
+
+        Assert.Equal("PASSED", response.Status);
+        OwnerIdentity identity = Assert.Single(identities.Identities);
+        Assert.Equal(pendingKey, identity.DocumentImageStorageKey);
+        Assert.Equal("image/jpeg", identity.DocumentImageContentType);
+        Assert.Equal(verification.CreatedAt, identity.DocumentImageCapturedAt);
+        Assert.Null(verification.PendingDocumentImageStorageKey);
+        Assert.True(contentStore.Contents.ContainsKey(pendingKey!));
+    }
+
+    [Fact]
+    public async Task EnrollmentFailed_DeletesDocumentImage()
+    {
+        await SubmitJpegDocumentAsync();
+        string pendingKey = Assert.Single(repository.Verifications).PendingDocumentImageStorageKey!;
+        await service.StartLivenessAsync(CancellationToken.None);
+        client.Comparison = new EkycFaceComparison { Score = 0.1, Matched = false };
+
+        await service.CompleteLivenessAsync(CancellationToken.None);
+
+        Assert.Empty(identities.Identities);
+        Assert.Null(Assert.Single(repository.Verifications).PendingDocumentImageStorageKey);
+        Assert.False(contentStore.Contents.ContainsKey(pendingKey));
+    }
+
+    [Fact]
+    public async Task NewDocument_DeletesPendingImageOfPreviousAttempt()
+    {
+        await SubmitJpegDocumentAsync();
+        EkycVerification first = Assert.Single(repository.Verifications);
+        string firstKey = first.PendingDocumentImageStorageKey!;
+        clock.Now = Now.AddMinutes(1);
+        client.Reading = Reading("079200012345", "NGUYEN VAN AN", "01/02/2000", "token-2");
+
+        await SubmitJpegDocumentAsync();
+
+        Assert.Null(first.PendingDocumentImageStorageKey);
+        Assert.False(contentStore.Contents.ContainsKey(firstKey));
+        Assert.NotNull(repository.Verifications[1].PendingDocumentImageStorageKey);
+        Assert.Single(contentStore.Contents);
+    }
+
+    [Fact]
+    public async Task Document_NotAnImageByContent_KeepsNoImage()
+    {
+        await SubmitDocumentAsync();
+
+        Assert.Null(Assert.Single(repository.Verifications).PendingDocumentImageStorageKey);
+        Assert.Empty(contentStore.Contents);
+    }
+
+    [Fact]
+    public async Task OtherPurpose_DoesNotKeepDocumentImage()
+    {
+        AddConsent(EkycPurpose.OwnerAlive);
+        consentRepository.Consents[1].ConsentedAt = Now.AddSeconds(1);
+        client.Reading = Reading(string.Empty, string.Empty, string.Empty, "token-5");
+
+        await SubmitJpegDocumentAsync();
+
+        Assert.Null(Assert.Single(repository.Verifications).PendingDocumentImageStorageKey);
+        Assert.Empty(contentStore.Contents);
     }
 
     [Fact]

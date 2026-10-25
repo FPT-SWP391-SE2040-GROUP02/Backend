@@ -24,6 +24,9 @@ internal static class ObjectionMapper
         response.SelfiePassed = objection.SelfiePassedAt != null;
         response.SelfiePassedAt = objection.SelfiePassedAt;
         response.SelfieAttemptsRemaining = ObjectionRules.MaxSelfieFailures - ObjectionRules.RecentFailures(objection, now);
+        response.HasSelfieImage = objection.SelfieImageStorageKey != null;
+        response.SelfieImageCapturedAt = objection.SelfieImageCapturedAt;
+        response.SelfieImageMatched = objection.SelfieImageMatched;
         response.VerifierDueAt = objection.VerifierDueAt;
         response.InsufficientEvidenceCount = objection.InsufficientEvidenceCount;
         if (objection.Conclusion != null)

@@ -32,6 +32,13 @@ public interface IDeathCaseReviewService
     Task<PreparedDeathCaseFile> PrepareFileAsync(Guid caseId, Guid fileId, CancellationToken ct);
 
     /// <summary>
+    /// Ảnh mặt trước CCCD Owner chụp lúc eKYC (BR-48 sửa), kiểm toàn vẹn trước khi gửi byte đầu.
+    /// Lỗi: 404 DEATH_CASE_NOT_FOUND (không giao cho tôi), 404 IDENTITY_IMAGE_NOT_FOUND (chưa có ảnh),
+    /// ContentIntegrityException (nội dung hỏng).
+    /// </summary>
+    Task<PreparedDownload> PrepareOwnerDocumentImageAsync(Guid caseId, CancellationToken ct);
+
+    /// <summary>
     /// DEATH-10: xem xét một cờ của bản đang xét (ghi ghi chú). Gọi lặp giữ ghi chú đầu. Thao tác làm đổi etag hồ sơ.
     /// Lỗi: 404 (không thấy cờ), 409 CASE_CLOSED / EDIT_CONFLICT / NOT_UNDER_REVIEW / VERIFIER_CONFLICT.
     /// </summary>
