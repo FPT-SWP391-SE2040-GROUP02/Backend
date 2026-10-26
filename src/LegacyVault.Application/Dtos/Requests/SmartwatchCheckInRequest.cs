@@ -12,14 +12,7 @@ public sealed class SmartwatchCheckInRequest
     [Range(40, 180, ErrorMessage = "Nhịp tim không hợp lệ hoặc cảm biến chưa đo được tín hiệu sống (yêu cầu từ 40 đến 180 bpm).")]
     public int HeartRate { get; set; }
 
-    /// <summary>Mã thiết bị của đồng hồ (VD: SM-L505F).</summary>
-    [MaxLength(128)]
-    public string? DeviceId { get; set; }
-
     /// <summary>Trạng thái đồng hồ có đang tiếp xúc với da tay người dùng hay không.</summary>
     [Required(ErrorMessage = "Thiếu trạng thái tiếp xúc da tay.")]
     public bool IsOnWrist { get; set; } = true;
-
-    /// <summary>Thời điểm đo từ thiết bị (Unix timestamp giây).</summary>
-    public long? Timestamp { get; set; }
 }

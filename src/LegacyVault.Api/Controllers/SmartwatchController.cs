@@ -13,9 +13,6 @@ public sealed class PairSmartwatchRequest
     [Required(ErrorMessage = "Thiếu mã ghép nối.")]
     [StringLength(6, MinimumLength = 6, ErrorMessage = "Mã ghép nối gồm đúng 6 chữ số.")]
     public string PairingCode { get; set; } = string.Empty;
-
-    public string? DeviceName { get; set; }
-    public string? DeviceId { get; set; }
 }
 
 public sealed class PairingCodeResponse
