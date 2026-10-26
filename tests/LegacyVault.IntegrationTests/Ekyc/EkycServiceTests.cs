@@ -231,6 +231,7 @@ public sealed class EkycServiceTests
 
         EkycVerification pending = new EkycVerification
         {
+            UserId = userId,
             Status = EkycStatus.Pending,
             Purpose = EkycPurpose.OwnerEnrollment,
             DocumentToken = "token-custom",
