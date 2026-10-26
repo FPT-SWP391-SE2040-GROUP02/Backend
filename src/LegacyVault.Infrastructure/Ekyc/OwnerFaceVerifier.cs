@@ -22,15 +22,18 @@ public sealed class OwnerFaceVerifier : IOwnerFaceVerifier
     private readonly IOwnerFaceTemplateRepository templateRepository;
     private readonly IFaceTemplateProtector templateProtector;
     private readonly IEkycClient ekycClient;
+    private readonly IEkycOptions ekycOptions;
 
     public OwnerFaceVerifier(
         IOwnerFaceTemplateRepository templateRepository,
         IFaceTemplateProtector templateProtector,
-        IEkycClient ekycClient)
+        IEkycClient ekycClient,
+        IEkycOptions ekycOptions)
     {
         this.templateRepository = templateRepository;
         this.templateProtector = templateProtector;
         this.ekycClient = ekycClient;
+        this.ekycOptions = ekycOptions;
     }
 
     public async Task<OwnerFaceOutcome> VerifyAsync(
@@ -60,7 +63,7 @@ public sealed class OwnerFaceVerifier : IOwnerFaceVerifier
 
         float[] stored = templateProtector.Unprotect(template);
         double score = EkycRules.CosineSimilarity(stored, probe.Values);
-        if (score >= EkycRules.MatchThreshold)
+        if (score >= ekycOptions.CurrentThreshold)
         {
             return OwnerFaceOutcome.Matched;
         }

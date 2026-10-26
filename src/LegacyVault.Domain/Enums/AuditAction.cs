@@ -91,4 +91,8 @@ public enum AuditAction
     DevEkycReset = 41,
     /// <summary>Admin đưa kho thử về trước bước eKYC và mua gói: xóa eKYC của Owner, trả quyền dịch vụ về Free, hủy đơn đang chờ (công cụ thử nghiệm, chỉ có ở Development).</summary>
     DevRewindBeforeEkyc = 42,
+    /// <summary>Admin đổi ngưỡng so khớp khuôn mặt eKYC bằng công cụ thử nghiệm (chỉ có ở Development/Staging).</summary>
+    DevUpdateEkycThreshold = 43,
+    /// <summary>Admin tạo tài khoản hệ thống mới (Verifier hoặc Executor).</summary>
+    AdminCreatedUser = 44,
 }

@@ -14,4 +14,6 @@ public enum AuditTargetType
     Incident = 8,
     User = 9,
     PaymentOrder = 10,
+    /// <summary>Cấu hình hệ thống (ngưỡng eKYC...); sự kiện toàn cục, không gắn kho hay đối tượng cụ thể.</summary>
+    Configuration = 11,
 }

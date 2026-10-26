@@ -9,8 +9,30 @@ public static class CorsConfig
     {
         var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         services.AddCors(options => options.AddPolicy(FrontendPolicy, policy =>
-            policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
-        // Credentials chỉ cho origin cấu hình rõ; cookie POST được bảo vệ bằng antiforgery.
+            policy.SetIsOriginAllowed(origin =>
+                {
+                    if (string.IsNullOrWhiteSpace(origin))
+                    {
+                        return false;
+                    }
+                    Uri uri;
+                    try
+                    {
+                        uri = new Uri(origin);
+                    }
+                    catch (UriFormatException)
+                    {
+                        return false;
+                    }
+                    return uri.Host == "localhost"
+                        || uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase)
+                        || origins.Contains(origin);
+                })
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials()));
+        // Credentials: chỉ cho origin "đúng" (localhost, *.vercel.app, hoặc danh sách cấu hình);
+        // cookie POST vẫn được bảo vệ bằng antiforgery.
         return services;
     }
 }

@@ -1,5 +1,6 @@
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Repositories;
@@ -17,7 +18,8 @@ public sealed class DevToolsService(
     IUnitOfWork unitOfWork,
     ICheckInJob checkInJob,
     IOperationsRecorder operationsRecorder,
-    TimeProvider timeProvider) : IDevToolsService
+    TimeProvider timeProvider,
+    IEkycOptions ekycOptions) : IDevToolsService
 {
     /// <summary>Đủ cho dữ liệu thử trên máy dev; ô chọn không cần phân trang.</summary>
     private const int MaxVaults = 200;
@@ -177,6 +179,48 @@ public sealed class DevToolsService(
             AuditTargetType.User, target.Id, null, AuditOutcome.Succeeded, null, timeProvider.GetUtcNow()));
         await unitOfWork.SaveChangesAsync(ct);
         return response;
+    }
+
+    public async Task<DevEkycThresholdResponse> GetEkycThresholdAsync(CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        return BuildThresholdResponse();
+    }
+
+    public async Task<DevEkycThresholdResponse> UpdateEkycThresholdAsync(
+        DevEkycThresholdRequest request, CancellationToken ct)
+    {
+        Guid adminId = await RequireAdminAsync(ct);
+        double threshold = request.Threshold;
+        if (!DevToolsRules.IsSafeEkycThreshold(threshold))
+        {
+            throw ValidationErrors.For(
+                "threshold",
+                $"Ngưỡng so khớp phải nằm trong dải an toàn từ {DevToolsRules.EkycThresholdMin:0.00} đến {DevToolsRules.EkycThresholdMax:0.00}.");
+        }
+
+        // Override runtime trong bộ nhớ: EkycService/OwnerFaceVerifier đọc CurrentThreshold sau thay đổi;
+        // không ghi DB nên khởi động lại là về DefaultThreshold.
+        double previous = ekycOptions.CurrentThreshold;
+        ekycOptions.SetThreshold(threshold);
+
+        // Sự kiện toàn cục (không gắn kho): đối tượng là Configuration, ghi rõ giá trị cũ → mới.
+        string reason = $"threshold {previous:0.00} -> {threshold:0.00}";
+        auditLogs.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.DevUpdateEkycThreshold,
+            AuditTargetType.Configuration, null, null, AuditOutcome.Succeeded, reason, timeProvider.GetUtcNow()));
+        await unitOfWork.SaveChangesAsync(ct);
+        return BuildThresholdResponse();
+    }
+
+    private DevEkycThresholdResponse BuildThresholdResponse()
+    {
+        return new DevEkycThresholdResponse
+        {
+            CurrentThreshold = ekycOptions.CurrentThreshold,
+            DefaultThreshold = ekycOptions.DefaultThreshold,
+            Min = DevToolsRules.EkycThresholdMin,
+            Max = DevToolsRules.EkycThresholdMax,
+        };
     }
 
     public async Task<DevRewindBeforeEkycResponse> RewindBeforeEkycAsync(Guid vaultId, CancellationToken ct)

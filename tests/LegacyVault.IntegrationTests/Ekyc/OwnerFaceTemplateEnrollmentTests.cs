@@ -34,7 +34,7 @@ public sealed class OwnerFaceTemplateEnrollmentTests
         service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
             new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), templates, protector,
             new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client,
-            new FakeUnitOfWork(), clock, new InMemoryAssetContentStore());
+            new FakeUnitOfWork(), clock, new InMemoryAssetContentStore(), new EkycOptions());
     }
 
     private void AddConsent(EkycPurpose purpose, DateTimeOffset consentedAt)

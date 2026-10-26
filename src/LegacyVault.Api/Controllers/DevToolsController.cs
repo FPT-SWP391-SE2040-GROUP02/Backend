@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Công cụ thử nghiệm của Admin: tua thời gian của kho thử, đặt lại eKYC của tài khoản thử. Chỉ chạy ở môi trường Development; môi trường khác
+/// Công cụ thử nghiệm của Admin: tua thời gian của kho thử, đặt lại eKYC của tài khoản thử. Chỉ chạy ở môi trường Development hoặc Staging; môi trường khác
 /// trả 404 như khu vực không tồn tại. Quyền Admin kiểm từ DB trong service.
 /// </summary>
 [ApiController]
@@ -23,7 +23,7 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<List<DevVaultOptionResponse>>> ListVaults(CancellationToken ct)
     {
-        if (!environment.IsDevelopment())
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
         {
             return NotFound();
         }
@@ -36,7 +36,7 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<DevClockResponse>> GetClock(Guid vaultId, CancellationToken ct)
     {
-        if (!environment.IsDevelopment())
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
         {
             return NotFound();
         }
@@ -53,7 +53,7 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
     public async Task<ActionResult<DevClockResponse>> TimeTravel(
         Guid vaultId, DevTimeTravelRequest request, CancellationToken ct)
     {
-        if (!environment.IsDevelopment())
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
         {
             return NotFound();
         }
@@ -66,7 +66,7 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<DevClockResponse>> ResetClock(Guid vaultId, CancellationToken ct)
     {
-        if (!environment.IsDevelopment())
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
         {
             return NotFound();
         }
@@ -81,7 +81,7 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<DevEkycResetResponse>> ResetEkyc(DevEkycResetRequest request, CancellationToken ct)
     {
-        if (!environment.IsDevelopment())
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
         {
             return NotFound();
         }
@@ -95,10 +95,39 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<DevRewindBeforeEkycResponse>> RewindBeforeEkyc(Guid vaultId, CancellationToken ct)
     {
-        if (!environment.IsDevelopment())
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
         {
             return NotFound();
         }
         return await devToolsService.RewindBeforeEkycAsync(vaultId, ct);
+    }
+
+    /// <summary>Đọc ngưỡng so khớp khuôn mặt eKYC đang chạy (gồm cả override runtime).</summary>
+    [HttpGet("ekyc-threshold")]
+    [ProducesResponseType<DevEkycThresholdResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DevEkycThresholdResponse>> GetEkycThreshold(CancellationToken ct)
+    {
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
+        {
+            return NotFound();
+        }
+        return await devToolsService.GetEkycThresholdAsync(ct);
+    }
+
+    /// <summary>Đặt lại ngưỡng so khớp khuôn mặt eKYC (override runtime trong bộ nhớ, không lưu DB).</summary>
+    [HttpPut("ekyc-threshold")]
+    [Consumes("application/json")]
+    [ProducesResponseType<DevEkycThresholdResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DevEkycThresholdResponse>> UpdateEkycThreshold(
+        DevEkycThresholdRequest request, CancellationToken ct)
+    {
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
+        {
+            return NotFound();
+        }
+        return await devToolsService.UpdateEkycThresholdAsync(request, ct);
     }
 }

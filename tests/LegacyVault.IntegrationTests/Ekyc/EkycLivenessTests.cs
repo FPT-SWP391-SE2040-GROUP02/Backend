@@ -33,7 +33,7 @@ public sealed class EkycLivenessTests
         service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
             new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), templateRepository,
             FaceTemplateTestSupport.CreateProtector(), new FakeOwnerIdentityRepository(),
-            FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore());
+            FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore(), new EkycOptions());
         consentRepository.Consents.Add(new EkycConsent
         {
             UserId = userId,

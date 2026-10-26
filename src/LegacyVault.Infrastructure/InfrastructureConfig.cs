@@ -252,6 +252,11 @@ public static class InfrastructureConfig
             });
         services.AddScoped<IEkycVerificationRepository, EkycVerificationRepository>();
         services.AddScoped<IEkycConsentRepository, EkycConsentRepository>();
+        // Ngưỡng so khớp cấu hình được (Ekyc:MatchThreshold, mặc định EkycRules.MatchThreshold).
+        // Application không tham chiếu IOptions nên bridge qua IEkycOptions (mẫu IHandoverPolicy).
+        services.AddOptions<EkycOptions>().Bind(configuration.GetSection(EkycOptions.SectionName));
+        services.AddSingleton<IEkycOptions>(
+            provider => provider.GetRequiredService<IOptions<EkycOptions>>().Value);
         // Mẫu khuôn mặt Owner (EKYC-22, PRIV-03): vector mã hóa envelope, dùng chung DataKeyProtector của tài sản.
         services.AddScoped<IOwnerFaceTemplateRepository, OwnerFaceTemplateRepository>();
         services.AddSingleton<IFaceTemplateProtector, FaceTemplateProtector>();

@@ -117,3 +117,29 @@ public class ReassignVerifierRequest
     [MaxLength(500)]
     public string Reason { get; set; } = string.Empty;
 }
+
+public class CreateAdminUserRequest
+{
+    [Required(ErrorMessage = "Vui lòng nhập địa chỉ email.")]
+    [EmailAddress(ErrorMessage = "Địa chỉ email không đúng định dạng.")]
+    [MaxLength(256)]
+    public string Email { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập họ và tên.")]
+    [MaxLength(200)]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
+    [MinLength(8, ErrorMessage = "Mật khẩu tối thiểu 8 ký tự.")]
+    [MaxLength(128)]
+    public string Password { get; set; } = string.Empty;
+
+    /// <summary>VERIFIER | EXECUTOR | ADMIN.</summary>
+    [Required(ErrorMessage = "Vui lòng chọn vai trò.")]
+    [MaxLength(16)]
+    public string Role { get; set; } = string.Empty;
+
+    [MaxLength(32)]
+    public string? Phone { get; set; }
+}
+

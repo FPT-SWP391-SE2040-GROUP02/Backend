@@ -38,7 +38,7 @@ public sealed class EkycConsentAndMatchTests
         currentUser.UserId = userId;
         service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
             beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
-            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, new FakeUnitOfWork(), clock, new InMemoryAssetContentStore());
+            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, new FakeUnitOfWork(), clock, new InMemoryAssetContentStore(), new EkycOptions());
     }
 
     private static MemoryStream Image()

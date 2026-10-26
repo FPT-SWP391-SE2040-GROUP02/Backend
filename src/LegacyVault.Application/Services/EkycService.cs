@@ -33,6 +33,7 @@ public sealed class EkycService : IEkycService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IAssetContentStore contentStore;
+    private readonly IEkycOptions ekycOptions;
 
     public EkycService(
         ICurrentUser currentUser,
@@ -48,7 +49,8 @@ public sealed class EkycService : IEkycService
         IEkycClient ekycClient,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        IAssetContentStore contentStore)
+        IAssetContentStore contentStore,
+        IEkycOptions ekycOptions)
     {
         this.currentUser = currentUser;
         this.verificationRepository = verificationRepository;
@@ -64,6 +66,7 @@ public sealed class EkycService : IEkycService
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
         this.contentStore = contentStore;
+        this.ekycOptions = ekycOptions;
     }
 
     public async Task<EkycConsentResponse> RecordConsentAsync(EkycConsentRequest request, CancellationToken ct)
@@ -236,7 +239,7 @@ public sealed class EkycService : IEkycService
         }
 
         // Bản tự khai chỉ được kiểm tra trong request, không lưu PII hoặc nâng kết quả từ ảnh thành MATCHED.
-        return verification.ToResponse();
+        return verification.ToResponse(ekycOptions.CurrentThreshold);
     }
 
     public async Task<EkycBackResponse> SubmitBackAsync(
@@ -267,7 +270,7 @@ public sealed class EkycService : IEkycService
         await unitOfWork.SaveChangesAsync(ct);
 
         // BR-88: nơi cư trú đọc từ mặt sau chỉ trả cho người dùng đối chiếu; không gán vào lượt eKYC nên không lưu.
-        return verification.ToBackResponse(reading.ResidenceAddress);
+        return verification.ToBackResponse(reading.ResidenceAddress, ekycOptions.CurrentThreshold);
     }
 
     public async Task<EkycStatusResponse> SubmitSelfieAsync(
@@ -297,21 +300,22 @@ public sealed class EkycService : IEkycService
         }
 
         byte[] selfie = await ReadImageAsync(content, contentType, ct);
+        double threshold = ekycOptions.CurrentThreshold;
 
         EkycSpoofCheck spoofCheck = await ekycClient.CheckSpoofAsync(selfie, fileName, contentType, ct);
         verification.SpoofCheckPassed = spoofCheck.Passed;
         if (!spoofCheck.Passed)
         {
             await FinishAsync(verification, EkycStatus.Failed, now, ct);
-            return verification.ToResponse();
+            return verification.ToResponse(threshold);
         }
 
         EkycFaceComparison comparison = await ekycClient.CompareFaceAsync(
-            documentToken, selfie, fileName, contentType, EkycRules.MatchThreshold, ct);
+            documentToken, selfie, fileName, contentType, threshold, ct);
         verification.FaceMatchScore = comparison.Score;
 
         // Tự so lại với ngưỡng của server, không tin cờ matched do dịch vụ ngoài trả về.
-        if (comparison.Score >= EkycRules.MatchThreshold)
+        if (comparison.Score >= threshold)
         {
             await FinishAsync(verification, EkycStatus.Passed, now, ct);
         }
@@ -319,7 +323,7 @@ public sealed class EkycService : IEkycService
         {
             await FinishAsync(verification, EkycStatus.Failed, now, ct);
         }
-        return verification.ToResponse();
+        return verification.ToResponse(threshold);
     }
 
     public async Task<EkycLivenessResponse> StartLivenessAsync(CancellationToken ct)
@@ -373,14 +377,15 @@ public sealed class EkycService : IEkycService
         // Dịch vụ chỉ trả selfie khi cả động tác và chống giả mạo trong phiên đều đạt (EKYC-14).
         verification.SpoofCheckPassed = true;
         verification.LivenessPassed = true;
+        double threshold = ekycOptions.CurrentThreshold;
 
         EkycFaceComparison comparison = await ekycClient.CompareFaceAsync(
-            documentToken, selfie, "liveness.jpg", "image/jpeg", EkycRules.MatchThreshold, ct);
+            documentToken, selfie, "liveness.jpg", "image/jpeg", threshold, ct);
         verification.FaceMatchScore = comparison.Score;
         verification.LivenessSessionId = null;
 
         // Tự so lại với ngưỡng của server, không tin cờ matched do dịch vụ ngoài trả về.
-        if (comparison.Score >= EkycRules.MatchThreshold)
+        if (comparison.Score >= threshold)
         {
             // EKYC-22: Owner đăng ký đạt thì tạo mẫu khuôn mặt từ chính selfie của phiên này, lưu cùng lần chốt kết quả.
             // Lấy vector trước khi chốt: dịch vụ lỗi thì lượt vẫn Pending để thử lại, không có lượt đạt mà thiếu mẫu.
@@ -395,7 +400,7 @@ public sealed class EkycService : IEkycService
             await FinishAsync(verification, EkycStatus.Failed, now, ct);
         }
         await TryDeleteLivenessAsync(sessionId, ct);
-        return verification.ToResponse();
+        return verification.ToResponse(threshold);
     }
 
     /// <summary>
@@ -506,9 +511,9 @@ public sealed class EkycService : IEkycService
         }
         if (verification == null)
         {
-            return EkycMappings.NotStarted();
+            return EkycMappings.NotStarted(ekycOptions.CurrentThreshold);
         }
-        return verification.ToResponse();
+        return verification.ToResponse(ekycOptions.CurrentThreshold);
     }
 
     /// <summary>

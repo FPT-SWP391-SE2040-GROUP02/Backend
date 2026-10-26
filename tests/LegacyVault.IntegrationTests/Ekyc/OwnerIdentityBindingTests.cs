@@ -39,7 +39,7 @@ public sealed class OwnerIdentityBindingTests
         service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
             beneficiaries, beneficiaryProtector, new FakeOwnerFaceTemplateRepository(),
             FaceTemplateTestSupport.CreateProtector(), identities, identityProtector, client,
-            new FakeUnitOfWork(), clock, contentStore);
+            new FakeUnitOfWork(), clock, contentStore, new EkycOptions());
         AddConsent(EkycPurpose.OwnerEnrollment);
     }
 
