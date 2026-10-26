@@ -34,7 +34,7 @@ public sealed class EkycServiceTests
         currentUser.UserId = userId;
         service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
             beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
-            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore());
+            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore(), new EkycOptions());
 
         // Mặc định đã đồng ý cho mục đích OWNER_ENROLLMENT để các test cũ vẫn đi đúng luồng.
         AddConsent(EkycPurpose.OwnerEnrollment, Now);
@@ -214,6 +214,41 @@ public sealed class EkycServiceTests
         EkycVerification saved = Assert.Single(repository.Verifications);
         Assert.Null(saved.DocumentToken);
         Assert.Equal(new List<string> { "token-1" }, client.DeletedTokens);
+    }
+
+    /// <summary>Cài ngưỡng từ cấu hình (Ekyc:MatchThreshold): service phải truyền đúng giá trị đó cho eKYC và trả trong response.</summary>
+    [Fact]
+    public async Task Selfie_CustomConfiguredThreshold_IsPassedToClientAndReported()
+    {
+        double customThreshold = 0.5;
+        EkycService configured = new EkycService(
+            currentUser, repository, consentRepository, handoverRepository,
+            beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
+            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client,
+            unitOfWork, clock, new InMemoryAssetContentStore(),
+            new EkycOptions { MatchThreshold = customThreshold });
+        repository.Verifications.Clear();
+
+        EkycVerification pending = new EkycVerification
+        {
+            Status = EkycStatus.Pending,
+            Purpose = EkycPurpose.OwnerEnrollment,
+            DocumentToken = "token-custom",
+            DocumentTokenExpiresAt = Now + TimeSpan.FromMinutes(30),
+            CitizenIdLast4 = "2345",
+            LivenessPassed = true,
+            SpoofCheckPassed = true,
+        };
+        repository.Verifications.Add(pending);
+
+        // 0.4 >= 0.363 mặc định nhưng < 0.5 cấu hình: phải FAILED khi dùng ngưỡng cấu hình.
+        client.Comparison = new EkycFaceComparison { Score = 0.4, Matched = false };
+        EkycStatusResponse response = await configured.SubmitSelfieAsync(
+            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
+
+        Assert.Equal("FAILED", response.Status);
+        Assert.Equal(customThreshold, client.LastThreshold);
+        Assert.Equal(customThreshold, response.MatchThreshold);
     }
 
     [Fact]

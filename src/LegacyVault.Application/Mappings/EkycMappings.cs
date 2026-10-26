@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Mappings;
 
 public static class EkycMappings
 {
-    public static EkycStatusResponse ToResponse(this EkycVerification verification)
+    public static EkycStatusResponse ToResponse(this EkycVerification verification, double matchThreshold)
     {
         return new EkycStatusResponse
         {
@@ -18,7 +18,7 @@ public static class EkycMappings
             VerificationId = verification.Id,
             CitizenIdLast4 = verification.CitizenIdLast4,
             FaceMatchScore = verification.FaceMatchScore,
-            MatchThreshold = EkycRules.MatchThreshold,
+            MatchThreshold = matchThreshold,
             SpoofCheckPassed = verification.SpoofCheckPassed,
             CreatedAt = verification.CreatedAt,
             CompletedAt = verification.CompletedAt,
@@ -26,10 +26,10 @@ public static class EkycMappings
     }
 
     /// <summary>
-    /// Phản hồi gửi mặt sau: trạng thái lượt như <see cref="ToResponse(EkycVerification)"/> kèm nơi cư trú đọc từ
+    /// Phản hồi gửi mặt sau: trạng thái lượt như <see cref="ToResponse(EkycVerification, double)"/> kèm nơi cư trú đọc từ
     /// mặt sau. Địa chỉ chỉ đi qua phản hồi, không lưu vào lượt eKYC.
     /// </summary>
-    public static EkycBackResponse ToBackResponse(this EkycVerification verification, string residenceAddress)
+    public static EkycBackResponse ToBackResponse(this EkycVerification verification, string residenceAddress, double matchThreshold)
     {
         EkycBackResponse response = new EkycBackResponse();
         response.Status = verification.Status.ToApiString();
@@ -39,7 +39,7 @@ public static class EkycMappings
         response.VerificationId = verification.Id;
         response.CitizenIdLast4 = verification.CitizenIdLast4;
         response.FaceMatchScore = verification.FaceMatchScore;
-        response.MatchThreshold = EkycRules.MatchThreshold;
+        response.MatchThreshold = matchThreshold;
         response.SpoofCheckPassed = verification.SpoofCheckPassed;
         response.CreatedAt = verification.CreatedAt;
         response.CompletedAt = verification.CompletedAt;
@@ -76,13 +76,13 @@ public static class EkycMappings
         return response;
     }
 
-    /// <summary>Người dùng chưa từng eKYC.</summary>
-    public static EkycStatusResponse NotStarted()
+    /// <summary>Người dùng chưa từng eKYC; ngưỡng trả về theo cấu hình hiện hành.</summary>
+    public static EkycStatusResponse NotStarted(double matchThreshold)
     {
         return new EkycStatusResponse
         {
             Status = "NOT_STARTED",
-            MatchThreshold = EkycRules.MatchThreshold,
+            MatchThreshold = matchThreshold,
         };
     }
 }

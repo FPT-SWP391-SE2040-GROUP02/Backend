@@ -29,6 +29,20 @@ public static class DevToolsRules
     /// <summary>Dời hạn về trước thời điểm hiện tại một khoảng nhỏ để job chắc chắn thấy đã quá hạn.</summary>
     public static readonly TimeSpan PastMargin = TimeSpan.FromMinutes(1);
 
+    /// <summary>Dải an toàn cho ngưỡng so khớp khuôn mặt eKYC khi Admin đổi bằng DevTools.</summary>
+    public const double EkycThresholdMin = 0.20;
+
+    public const double EkycThresholdMax = 0.60;
+
+    /// <summary>Ngưỡng nằm trong dải an toàn [EkycThresholdMin; EkycThresholdMax], không phải NaN/Infinity.</summary>
+    public static bool IsSafeEkycThreshold(double threshold)
+    {
+        return !double.IsNaN(threshold)
+            && !double.IsInfinity(threshold)
+            && threshold >= EkycThresholdMin
+            && threshold <= EkycThresholdMax;
+    }
+
     /// <summary>
     /// Sau khi tua hạn về quá khứ, lần điểm danh gần nhất phải lùi theo (hạn trừ đi chu kỳ), nếu không Owner
     /// vừa điểm danh hôm nay sẽ bị khóa "một lần mỗi ngày" dù kế hoạch đã quá hạn. Chỉ lùi, không bao giờ tiến.

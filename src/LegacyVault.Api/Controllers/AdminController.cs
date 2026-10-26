@@ -38,6 +38,17 @@ public sealed class AdminController : ControllerBase
 
     // ---- Tài khoản ----
 
+    [HttpPost("users")]
+    [ProducesResponseType<AdminUserResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<AdminUserResponse>> CreateUser(
+        CreateAdminUserRequest request, CancellationToken ct)
+    {
+        AdminUserResponse response = await adminService.CreateUserAsync(request, ct);
+        return Created($"/api/v1/admin/users/{response.Id}", response);
+    }
+
     [HttpGet("users")]
     [ProducesResponseType<PaginatedList<AdminUserResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]

@@ -43,4 +43,17 @@ public interface IDevToolsService
     /// 409 DEV_TOOL_NOT_ALLOWED (kế hoạch không còn ở Nháp).
     /// </summary>
     Task<DevRewindBeforeEkycResponse> RewindBeforeEkycAsync(Guid vaultId, CancellationToken ct);
+
+    /// <summary>
+    /// Đọc ngưỡng so khớp khuôn mặt eKYC đang chạy (gồm cả override runtime nếu DevTools đã đặt).
+    /// Lỗi: 404 USER_NOT_FOUND (không phải Admin).
+    /// </summary>
+    Task<DevEkycThresholdResponse> GetEkycThresholdAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Đặt lại ngưỡng so khớp khuôn mặt eKYC (override runtime, chỉ ở bộ nhớ, không lưu DB). Giá trị phải nằm trong
+    /// dải an toàn [0.20; 0.60]; vi phạm trả 400. Ghi nhật ký kiểm toán (DevUpdateEkycThreshold).
+    /// Lỗi: 400 VALIDATION_ERROR (ngoài dải an toàn), 404 USER_NOT_FOUND (không phải Admin).
+    /// </summary>
+    Task<DevEkycThresholdResponse> UpdateEkycThresholdAsync(DevEkycThresholdRequest request, CancellationToken ct);
 }

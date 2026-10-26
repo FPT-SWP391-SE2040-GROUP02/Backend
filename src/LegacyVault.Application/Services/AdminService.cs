@@ -30,6 +30,10 @@ public interface IAdminService
     Task ReassignVerifierAsync(Guid caseId, ReassignVerifierRequest request, CancellationToken ct);
 
     Task<AdminDashboardResponse> GetDashboardAsync(CancellationToken ct);
+
+    /// <summary>Admin tạo tài khoản hệ thống mới (Verifier, Executor, Admin). Kích hoạt ngay.</summary>
+    Task<AdminUserResponse> CreateUserAsync(CreateAdminUserRequest request, CancellationToken ct);
+
 }
 
 /// <remarks>
@@ -53,6 +57,7 @@ public sealed class AdminService : IAdminService
     private readonly IRefreshTokenRepository refreshTokens;
     private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
+    private readonly IPasswordHasher passwordHasher;
     private readonly TimeProvider timeProvider;
 
     public AdminService(
@@ -68,6 +73,7 @@ public sealed class AdminService : IAdminService
         IRefreshTokenRepository refreshTokens,
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
+        IPasswordHasher passwordHasher,
         TimeProvider timeProvider)
     {
         this.refreshTokens = refreshTokens;
@@ -82,6 +88,7 @@ public sealed class AdminService : IAdminService
         this.holds = holds;
         this.audit = audit;
         this.unitOfWork = unitOfWork;
+        this.passwordHasher = passwordHasher;
         this.timeProvider = timeProvider;
     }
 
@@ -301,6 +308,68 @@ public sealed class AdminService : IAdminService
         return userId;
     }
 
+
+    public async Task<AdminUserResponse> CreateUserAsync(CreateAdminUserRequest request, CancellationToken ct)
+    {
+        Guid adminId = await RequireAdminAsync(ct);
+        string email = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            throw ValidationErrors.For("email", "Vui lòng nhập địa chỉ email.");
+        }
+        string fullName = (request.FullName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            throw ValidationErrors.For("fullName", "Vui lòng nhập họ và tên.");
+        }
+        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+        {
+            throw ValidationErrors.For("password", "Mật khẩu tối thiểu 8 ký tự.");
+        }
+
+        UserRole targetRole = ParseRole(request.Role, "role");
+        if (targetRole != UserRole.Verifier && targetRole != UserRole.Executor && targetRole != UserRole.Admin)
+        {
+            throw ValidationErrors.For("role", "Chỉ được tạo tài khoản VERIFIER, EXECUTOR hoặc ADMIN.");
+        }
+
+        User? existing = await users.FindByEmailAsync(email, ct);
+        if (existing != null)
+        {
+            throw new AppException(
+                AppErrorType.Conflict,
+                ErrorCode.EmailAlreadyExists,
+                "Địa chỉ email này đã được sử dụng.");
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        User newUser = new User
+        {
+            Email = email,
+            FullName = fullName,
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            PasswordHash = passwordHasher.Hash(request.Password),
+            Role = targetRole,
+            Status = UserStatus.Active,
+            EmailVerifiedAt = now,
+            CreatedAt = now,
+        };
+
+        if (!await users.TryAddAsync(newUser, ct))
+        {
+            throw new AppException(
+                AppErrorType.Conflict,
+                ErrorCode.EmailAlreadyExists,
+                "Địa chỉ email này đã được sử dụng.");
+        }
+
+        audit.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.AdminCreatedUser,
+            AuditTargetType.User, newUser.Id, null, AuditOutcome.Succeeded, $"Tạo tài khoản {targetRole.ToApiString()}: {email}", now));
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return OperationsMapper.ToAdminUser(newUser);
+    }
+
     private static string RequireReason(string? reason)
     {
         string? text = AuditRules.NormalizeReason(reason);
@@ -320,7 +389,7 @@ public sealed class AdminService : IAdminService
                 return candidate;
             }
         }
-        throw ValidationErrors.For(field, "Vai trò chỉ nhận USER, VERIFIER hoặc ADMIN.");
+        throw ValidationErrors.For(field, "Vai trò chỉ nhận USER, VERIFIER, ADMIN hoặc EXECUTOR.");
     }
 
     private static UserStatus ParseStatus(string? value, string field)

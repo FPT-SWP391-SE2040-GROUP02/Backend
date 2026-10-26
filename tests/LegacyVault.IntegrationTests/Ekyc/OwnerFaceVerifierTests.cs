@@ -20,7 +20,7 @@ public sealed class OwnerFaceVerifierTests
 
     public OwnerFaceVerifierTests()
     {
-        verifier = new OwnerFaceVerifier(templates, protector, client);
+        verifier = new OwnerFaceVerifier(templates, protector, client, new EkycOptions());
     }
 
     private void StoreTemplate(float[] vector, string modelName, int version)

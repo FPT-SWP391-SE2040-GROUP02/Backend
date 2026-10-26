@@ -13,4 +13,6 @@ public enum UserRole
     User = 0,
     Verifier = 1,
     Admin = 2,
+    /// <summary>Người thừa hành hệ thống; được Admin cấp quyền đăng nhập cổng Executor.</summary>
+    Executor = 3,
 }
