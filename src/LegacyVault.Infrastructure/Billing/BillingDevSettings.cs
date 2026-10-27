@@ -22,10 +22,6 @@ public sealed class BillingDevSettings : IBillingDevSettings
     {
         get
         {
-            if (!environment.IsDevelopment())
-            {
-                return false;
-            }
             return options.Value.DevPaymentEnabled;
         }
     }
