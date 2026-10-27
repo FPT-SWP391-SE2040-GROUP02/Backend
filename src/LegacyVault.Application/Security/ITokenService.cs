@@ -10,8 +10,8 @@ namespace LegacyVault.Application.Security;
 /// </remarks>
 public interface ITokenService
 {
-    /// <summary>Access token ngắn hạn có chữ ký, chứa userId và role.</summary>
-    AccessToken CreateAccessToken(User user);
+    /// <summary>Access token ngắn hạn có chữ ký, chứa userId, role và tùy chọn familyId để quản lý thu hồi phiên.</summary>
+    AccessToken CreateAccessToken(User user, Guid? familyId = null);
 
     /// <summary>
     /// R2 (audit 2026-10-27): Access token thiết bị cho smartwatch — KHÔNG mang role của owner.

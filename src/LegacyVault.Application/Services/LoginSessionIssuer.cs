@@ -52,18 +52,19 @@ public sealed class LoginSessionIssuer
 
         // Chỉ lưu HASH của refresh token; token gốc chỉ nằm trong cookie của trình duyệt (SEC-07).
         var refreshToken = _tokenService.CreateOpaqueToken();
+        var familyId = Guid.CreateVersion7(); // một family = một lần đăng nhập trên một thiết bị
         _refreshTokenRepository.Add(new RefreshToken
         {
             UserId = user.Id,
             TokenHash = refreshToken.Hash,
-            FamilyId = Guid.CreateVersion7(), // một family = một lần đăng nhập trên một thiết bị
+            FamilyId = familyId,
             SessionStartedAt = now,
             CreatedAt = now,
             ExpiresAt = idleExpiresAt,
             IsPersistent = rememberMe,
         });
 
-        var accessToken = _tokenService.CreateAccessToken(user);
+        var accessToken = _tokenService.CreateAccessToken(user, familyId);
         await _unitOfWork.SaveChangesAsync(ct);
 
         return new AuthResult

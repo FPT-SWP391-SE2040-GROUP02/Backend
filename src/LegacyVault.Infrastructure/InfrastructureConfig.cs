@@ -147,8 +147,10 @@ public static class InfrastructureConfig
         services.AddSingleton<IBeneficiaryDataProtector, BeneficiaryDataProtector>();
 
         // Security & Notifications
+        services.AddMemoryCache();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddScoped<ISessionRevocationValidator, SessionRevocationValidator>();
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddSingleton<IEmailSender, DevEmailSender>();
@@ -216,6 +218,40 @@ public static class InfrastructureConfig
                     ClockSkew = TimeSpan.FromSeconds(30),
                     NameClaimType = JwtRegisteredClaimNames.Sub,
                     RoleClaimType = "role",
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var principal = context.Principal;
+                        if (principal == null)
+                        {
+                            return;
+                        }
+
+                        var roleClaim = principal.FindFirst("role")?.Value;
+                        if (string.Equals(roleClaim, JwtTokenService.SmartwatchRoleClaim, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return;
+                        }
+
+                        var familyIdClaim = principal.FindFirst(JwtTokenService.FamilyIdClaim)?.Value;
+                        if (string.IsNullOrWhiteSpace(familyIdClaim) || !Guid.TryParse(familyIdClaim, out var familyId))
+                        {
+                            return;
+                        }
+
+                        var sessionValidator = context.HttpContext.RequestServices.GetService<ISessionRevocationValidator>();
+                        if (sessionValidator != null)
+                        {
+                            var isActive = await sessionValidator.IsSessionActiveAsync(familyId, context.HttpContext.RequestAborted);
+                            if (!isActive)
+                            {
+                                context.Fail("Session has been revoked.");
+                            }
+                        }
+                    }
                 };
             });
 
