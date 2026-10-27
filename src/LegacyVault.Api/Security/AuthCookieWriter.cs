@@ -26,7 +26,10 @@ public sealed class AuthCookieWriter
         var options = new CookieOptions
         {
             HttpOnly = true,
-            SameSite = _cookieSettings.CrossSiteCookies ? SameSiteMode.None : SameSiteMode.Lax,
+            // R4 (audit 2026-10-27): chính sách cookie đồng bộ hai chiều —
+            // cùng domain: Strict (siết nhất, chặn hoàn toàn gửi cookie cross-site);
+            // cross-site (Vercel/Render dev split): None + Secure.
+            SameSite = _cookieSettings.CrossSiteCookies ? SameSiteMode.None : SameSiteMode.Strict,
             Path = CookiePath,
             // SameSite=None bắt buộc Secure; local (http) không dùng chế độ cross-site nên vẫn cho phép http.
             Secure = !_environment.IsDevelopment() || _cookieSettings.CrossSiteCookies,
@@ -45,7 +48,7 @@ public sealed class AuthCookieWriter
         response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
         {
             Path = CookiePath,
-            SameSite = _cookieSettings.CrossSiteCookies ? SameSiteMode.None : SameSiteMode.Lax,
+            SameSite = _cookieSettings.CrossSiteCookies ? SameSiteMode.None : SameSiteMode.Strict,
             Secure = !_environment.IsDevelopment() || _cookieSettings.CrossSiteCookies,
         });
     }
