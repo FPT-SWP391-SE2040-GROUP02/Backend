@@ -13,6 +13,10 @@ public sealed class PairSmartwatchRequest
     [Required(ErrorMessage = "Thiếu mã ghép nối.")]
     [StringLength(6, MinimumLength = 6, ErrorMessage = "Mã ghép nối gồm đúng 6 chữ số.")]
     public string PairingCode { get; set; } = string.Empty;
+
+    /// <summary>Mã định danh thiết bị mà đồng hồ tự khai (vd Build.MODEL); dùng để bám claim token, không bắt buộc.</summary>
+    [StringLength(64)]
+    public string? DeviceId { get; set; }
 }
 
 public sealed class PairingCodeResponse
@@ -117,7 +121,9 @@ public sealed class SmartwatchController : ControllerBase
             });
         }
 
-        AccessToken token = tokenService.CreateAccessToken(user);
+        // R2 (audit 2026-10-27): cấp token thiết bị hạn chế phạm vi, KHÔNG phải JWT chủ kho đầy đủ quyền.
+        // Thiết bị chỉ gọi được /check-ins/smartwatch (role claim "SmartwatchDevice" + scope check-in:write).
+        AccessToken token = tokenService.CreateSmartwatchToken(user, session.VaultId, request.DeviceId ?? "unknown-device");
 
         return Ok(new SmartwatchPairResultResponse
         {

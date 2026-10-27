@@ -14,6 +14,13 @@ public interface ITokenService
     AccessToken CreateAccessToken(User user);
 
     /// <summary>
+    /// R2 (audit 2026-10-27): Access token thiết bị cho smartwatch — KHÔNG mang role của owner.
+    /// Role claim là "SmartwatchDevice" kèm scope "check-in:write", vaultId và deviceId để
+    /// endpoint điểm danh đối chiếu thiết bị; token này không dùng được cho các luồng chủ kho.
+    /// </summary>
+    AccessToken CreateSmartwatchToken(User user, Guid vaultId, string deviceId);
+
+    /// <summary>
     /// Chuỗi ngẫu nhiên an toàn (refresh token, link xác minh email, vé liên kết Google) kèm hash để lưu DB.
     /// </summary>
     OpaqueToken CreateOpaqueToken();
