@@ -17,12 +17,24 @@ public sealed class PairSmartwatchRequest
     /// <summary>Mã định danh thiết bị mà đồng hồ tự khai (vd Build.MODEL); dùng để bám claim token, không bắt buộc.</summary>
     [StringLength(64)]
     public string? DeviceId { get; set; }
+
+    /// <summary>Tên hiển thị của thiết bị (vd "Samsung Galaxy Watch").</summary>
+    [StringLength(128)]
+    public string? DeviceName { get; set; }
 }
 
 public sealed class PairingCodeResponse
 {
     public string Code { get; set; } = string.Empty;
     public int ExpiresInSeconds { get; set; }
+}
+
+public sealed class SmartwatchPairingStatusResponse
+{
+    public bool Paired { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? DeviceName { get; set; }
+    public DateTimeOffset? PairedAt { get; set; }
 }
 
 public sealed class SmartwatchPairResultResponse
@@ -92,6 +104,57 @@ public sealed class SmartwatchController : ControllerBase
     }
 
     /// <summary>
+    /// Web định kỳ kiểm tra xem mã PIN đã được đồng hồ nào ghép nối thành công chưa.
+    /// </summary>
+    [HttpGet("pairing-status")]
+    [Authorize]
+    [ProducesResponseType<SmartwatchPairingStatusResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public ActionResult<SmartwatchPairingStatusResponse> GetPairingStatus([FromQuery] string code)
+    {
+        if (currentUser.UserId == null)
+        {
+            return Unauthorized();
+        }
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Mã ghép nối không được để trống.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        if (!pairingStore.TryGetStatus(code.Trim(), currentUser.UserId.Value, out var session))
+        {
+            return Ok(new SmartwatchPairingStatusResponse
+            {
+                Paired = false,
+                Status = "expired"
+            });
+        }
+
+        if (session.IsPaired)
+        {
+            return Ok(new SmartwatchPairingStatusResponse
+            {
+                Paired = true,
+                Status = "paired",
+                DeviceName = session.DeviceName,
+                PairedAt = session.PairedAt
+            });
+        }
+
+        return Ok(new SmartwatchPairingStatusResponse
+        {
+            Paired = false,
+            Status = "pending"
+        });
+    }
+
+    /// <summary>
     /// Đồng hồ bất kỳ gọi API này kèm mã 6 số để liên kết với tài khoản tương ứng.
     /// </summary>
     [HttpPost("pair")]
@@ -102,7 +165,11 @@ public sealed class SmartwatchController : ControllerBase
     public async Task<ActionResult<SmartwatchPairResultResponse>> PairDevice(
         [FromBody] PairSmartwatchRequest request, CancellationToken ct)
     {
-        if (!pairingStore.TryGetAndRemove(request.PairingCode.Trim(), out var session))
+        string? deviceLabel = !string.IsNullOrWhiteSpace(request.DeviceName)
+            ? request.DeviceName
+            : request.DeviceId;
+
+        if (!pairingStore.TryPair(request.PairingCode.Trim(), deviceLabel, out var session))
         {
             return BadRequest(new ProblemDetails
             {

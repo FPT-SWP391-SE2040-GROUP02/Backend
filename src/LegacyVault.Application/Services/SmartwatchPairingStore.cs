@@ -3,12 +3,36 @@ using System.Security.Cryptography;
 
 namespace LegacyVault.Application.Services;
 
-public record SmartwatchPairingSession(Guid UserId, Guid VaultId, DateTimeOffset ExpiresAt);
+public sealed class SmartwatchPairingSession
+{
+    public Guid UserId { get; }
+    public Guid VaultId { get; }
+    public DateTimeOffset ExpiresAt { get; }
+    public bool IsPaired { get; private set; }
+    public string? DeviceName { get; private set; }
+    public DateTimeOffset? PairedAt { get; private set; }
+
+    public SmartwatchPairingSession(Guid userId, Guid vaultId, DateTimeOffset expiresAt)
+    {
+        UserId = userId;
+        VaultId = vaultId;
+        ExpiresAt = expiresAt;
+    }
+
+    public void MarkPaired(string? deviceName)
+    {
+        IsPaired = true;
+        DeviceName = deviceName;
+        PairedAt = DateTimeOffset.UtcNow;
+    }
+}
 
 public interface ISmartwatchPairingStore
 {
     string CreateCode(Guid userId, Guid vaultId, TimeSpan lifetime);
     bool TryGetAndRemove(string code, out SmartwatchPairingSession session);
+    bool TryPair(string code, string? deviceName, out SmartwatchPairingSession session);
+    bool TryGetStatus(string code, Guid userId, out SmartwatchPairingSession session);
 }
 
 public sealed class SmartwatchPairingStore : ISmartwatchPairingStore
@@ -17,6 +41,7 @@ public sealed class SmartwatchPairingStore : ISmartwatchPairingStore
 
     public string CreateCode(Guid userId, Guid vaultId, TimeSpan lifetime)
     {
+        CleanupExpired();
         // Sinh ngẫu nhiên 6 chữ số
         string code = RandomNumberGenerator.GetInt32(100000, 999999).ToString("D6");
         DateTimeOffset expiresAt = DateTimeOffset.UtcNow.Add(lifetime);
@@ -26,9 +51,30 @@ public sealed class SmartwatchPairingStore : ISmartwatchPairingStore
 
     public bool TryGetAndRemove(string code, out SmartwatchPairingSession session)
     {
-        if (store.TryRemove(code, out var existing))
+        return TryPair(code, null, out session);
+    }
+
+    public bool TryPair(string code, string? deviceName, out SmartwatchPairingSession session)
+    {
+        if (store.TryGetValue(code, out var existing))
         {
-            if (existing.ExpiresAt >= DateTimeOffset.UtcNow)
+            if (existing.ExpiresAt >= DateTimeOffset.UtcNow && !existing.IsPaired)
+            {
+                existing.MarkPaired(deviceName);
+                session = existing;
+                return true;
+            }
+        }
+
+        session = default!;
+        return false;
+    }
+
+    public bool TryGetStatus(string code, Guid userId, out SmartwatchPairingSession session)
+    {
+        if (store.TryGetValue(code, out var existing))
+        {
+            if (existing.UserId == userId && existing.ExpiresAt >= DateTimeOffset.UtcNow)
             {
                 session = existing;
                 return true;
@@ -37,5 +83,17 @@ public sealed class SmartwatchPairingStore : ISmartwatchPairingStore
 
         session = default!;
         return false;
+    }
+
+    private void CleanupExpired()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var kvp in store)
+        {
+            if (kvp.Value.ExpiresAt < now)
+            {
+                store.TryRemove(kvp.Key, out _);
+            }
+        }
     }
 }
