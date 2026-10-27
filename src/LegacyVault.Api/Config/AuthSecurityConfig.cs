@@ -57,6 +57,8 @@ public static class AuthSecurityConfig
                 ("login-methods", 10),
                 ("two-factor", 5),
                 (AuthRateLimitPolicies.PasswordReset, AuthRateLimitPolicies.PasswordResetPermitLimit),
+                // R5 (audit 2026-10-27): giới hạn kênh điểm danh DMS (web + smartwatch), chống flood.
+                ("check-ins", 10),
             };
             foreach (var (name, limit) in policies)
             {

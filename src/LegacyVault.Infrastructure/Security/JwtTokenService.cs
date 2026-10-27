@@ -54,6 +54,46 @@ public sealed class JwtTokenService : ITokenService
         return new AccessToken { Value = token, ExpiresAt = expiresAt };
     }
 
+    public AccessToken CreateSmartwatchToken(User user, Guid vaultId, string deviceId)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        var now = _timeProvider.GetUtcNow();
+        var expiresAt = now.AddMinutes(_settings.AccessTokenMinutes);
+
+        // R2 (audit 2026-10-27): token thiết bị cố tình KHÔNG dùng role của owner.
+        // Endpoint /check-ins/smartwatch chấp nhận role "SmartwatchDevice" này và
+        // xác minh vault_id claim khớp vault của owner; mọi endpoint khác (vẫn
+        // [Authorize] theo role owner/admin) từ chối token thiết bị.
+        var claims = new List<Claim>
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim("role", SmartwatchRoleClaim),
+            new Claim("scope", "check-in:write"),
+            new Claim("vault_id", vaultId.ToString("D")),
+            new Claim("device_id", deviceId ?? string.Empty),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        };
+
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = _settings.Issuer,
+            Audience = _settings.Audience,
+            Subject = new ClaimsIdentity(claims),
+            IssuedAt = now.UtcDateTime,
+            NotBefore = now.UtcDateTime,
+            Expires = expiresAt.UtcDateTime,
+            SigningCredentials = new SigningCredentials(
+                CreateSigningKey(_settings.SigningKey), SecurityAlgorithms.HmacSha256),
+        };
+
+        var token = new JsonWebTokenHandler().CreateToken(descriptor);
+        return new AccessToken { Value = token, ExpiresAt = expiresAt };
+    }
+
+    /// <summary>Giá trị role claim dành riêng cho token smartwatch (không phải UserRole).</summary>
+    public const string SmartwatchRoleClaim = "SmartwatchDevice";
+
     public OpaqueToken CreateOpaqueToken()
     {
         var bytes = RandomNumberGenerator.GetBytes(32);

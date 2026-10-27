@@ -55,6 +55,15 @@ public sealed class FakeTokenService : ITokenService
         return new AccessToken { Value = "access-" + user.Id, ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15) };
     }
 
+    public AccessToken CreateSmartwatchToken(User user, Guid vaultId, string deviceId)
+    {
+        return new AccessToken
+        {
+            Value = "smartwatch-" + user.Id + "-" + vaultId + "-" + deviceId,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
+        };
+    }
+
     public OpaqueToken CreateOpaqueToken()
     {
         var value = Guid.NewGuid().ToString("N");

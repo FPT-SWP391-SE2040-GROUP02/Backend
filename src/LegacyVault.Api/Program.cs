@@ -98,7 +98,10 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapBillingDevEndpoints();
 
-// Thử gửi email (chỉ Admin đang hoạt động): endpoint mở sẽ cho người lạ dùng server gửi thư tới địa chỉ bất kỳ.
+// R6 (audit 2026-10-27): endpoint thử email CHỈ đăng ký ở Development (pattern như BillingDevEndpoints).
+// Ở môi trường thật route là 404, không thể bị người ngoài dùng server làm máy gửi thư.
+if (app.Environment.IsDevelopment())
+{
 app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastructure.Notifications.SmtpMailSender mailSender, Microsoft.Extensions.Options.IOptions<LegacyVault.Infrastructure.Notifications.SmtpSettings> smtpOpts, LegacyVault.Application.Security.ICurrentUser currentUser, LegacyVault.Application.Repositories.IUserRepository users, CancellationToken ct) =>
 {
     LegacyVault.Domain.Entities.User? caller = null;
@@ -145,6 +148,7 @@ app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastruct
         }, statusCode: 500);
     }
 }).RequireAuthorization();
+}
 
 // Liveness không phụ thuộc SQL; readiness chỉ đạt khi kết nối được database.
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "LegacyVault API", version = "v1" }));
