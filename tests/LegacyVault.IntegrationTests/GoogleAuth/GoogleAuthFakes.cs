@@ -50,7 +50,7 @@ public sealed class FakeUnitOfWork : IUnitOfWork
 /// <summary>Token giả: hash = "hash-" + giá trị gốc, đủ để kiểm tra service có hash trước khi tìm hay không.</summary>
 public sealed class FakeTokenService : ITokenService
 {
-    public AccessToken CreateAccessToken(User user)
+    public AccessToken CreateAccessToken(User user, Guid? familyId = null)
     {
         return new AccessToken { Value = "access-" + user.Id, ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15) };
     }
