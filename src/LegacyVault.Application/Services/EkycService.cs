@@ -603,6 +603,8 @@ public sealed class EkycService : IEkycService
         {
             // Lần gắn danh tính đầu tiên: CCCD của Chủ kho không được trùng người nhận đã thêm trước đó.
             await EnsureNotAmongBeneficiariesAsync(userId, readIdentity.CitizenId, reading.DocumentToken!, ct);
+            // CCCD của Chủ kho là duy nhất trên toàn hệ thống, không được trùng với tài khoản khác đã gắn danh tính.
+            await EnsureCitizenIdNotUsedByAnotherUserAsync(userId, readIdentity.CitizenId, reading.DocumentToken!, ct);
         }
         if (bound != null)
         {
@@ -612,7 +614,8 @@ public sealed class EkycService : IEkycService
             {
                 await TryDeleteDocumentAsync(reading.DocumentToken!, ct);
                 throw new AppException(AppErrorType.Conflict, ErrorCode.EkycIdentityMismatch,
-                    "Giấy tờ không khớp với danh tính đã gắn cho tài khoản này.");
+                    "Giấy tờ không khớp với danh tính đã gắn cho tài khoản này.",
+                    new Dictionary<string, object?> { ["reason"] = "WRONG_PERSON" });
             }
             if (match == EkycIdentityMatch.NeedsReview)
             {
@@ -622,6 +625,30 @@ public sealed class EkycService : IEkycService
             }
         }
         return readIdentity;
+    }
+
+    /// <summary>
+    /// Số CCCD của Chủ kho phải là duy nhất trên toàn hệ thống (mỗi công dân chỉ gắn với một tài khoản).
+    /// </summary>
+    private async Task EnsureCitizenIdNotUsedByAnotherUserAsync(
+        Guid userId, string citizenId, string? documentToken, CancellationToken ct)
+    {
+        string last4 = citizenId.Substring(citizenId.Length - 4);
+        List<OwnerIdentity> candidates = await identityRepository.ListByCitizenIdLast4ExceptUserAsync(last4, userId, ct);
+        foreach (OwnerIdentity candidate in candidates)
+        {
+            OwnerIdentityData data = identityProtector.Unprotect(candidate);
+            if (string.Equals(data.CitizenId, citizenId, StringComparison.Ordinal))
+            {
+                if (documentToken != null)
+                {
+                    await TryDeleteDocumentAsync(documentToken, ct);
+                }
+                throw new AppException(AppErrorType.Conflict, ErrorCode.EkycIdentityMismatch,
+                    "Số CCCD này đã được sử dụng để xác minh cho một tài khoản khác trong hệ thống.",
+                    new Dictionary<string, object?> { ["reason"] = "CITIZEN_ID_ALREADY_USED" });
+            }
+        }
     }
 
     /// <summary>
@@ -640,7 +667,8 @@ public sealed class EkycService : IEkycService
             {
                 await TryDeleteDocumentAsync(documentToken, ct);
                 throw new AppException(AppErrorType.Conflict, ErrorCode.EkycIdentityMismatch,
-                    "Số CCCD trên giấy tờ trùng với một người nhận bạn đã thêm. Người nhận không được trùng với Chủ kho; hãy xóa hoặc sửa hồ sơ người nhận đó trước.");
+                    "Số CCCD trên giấy tờ trùng với một người nhận bạn đã thêm. Người nhận không được trùng với Chủ kho; hãy xóa hoặc sửa hồ sơ người nhận đó trước.",
+                    new Dictionary<string, object?> { ["reason"] = "BENEFICIARY_CONFLICT" });
             }
         }
     }
@@ -666,6 +694,8 @@ public sealed class EkycService : IEkycService
         {
             return;
         }
+
+        await EnsureCitizenIdNotUsedByAnotherUserAsync(verification.UserId, pending.CitizenId, null, ct);
 
         OwnerIdentity identity = new OwnerIdentity();
         identity.UserId = verification.UserId;
