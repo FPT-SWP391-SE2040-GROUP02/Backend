@@ -27,6 +27,9 @@ public interface IBeneficiaryRepository
     Task<(List<Beneficiary> Items, int TotalCount)> FindPageByVaultIdAsync(
         Guid vaultId, string? last4Filter, int pageIndex, int pageSize, bool isAscending, CancellationToken ct);
 
+    /// <summary>Số hồ sơ người nhận của kho, tính cả hồ sơ chưa ở gói nào.</summary>
+    Task<int> CountByVaultIdAsync(Guid vaultId, CancellationToken ct);
+
     /// <summary>Đánh dấu "sẽ INSERT" hồ sơ mới.</summary>
     void Add(Beneficiary beneficiary);
 

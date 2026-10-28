@@ -183,6 +183,19 @@ public sealed class FakeEkycBeneficiaryRepository : IBeneficiaryRepository
         return Task.FromResult((new List<Beneficiary>(), 0));
     }
 
+    public Task<int> CountByVaultIdAsync(Guid vaultId, CancellationToken ct)
+    {
+        int count = 0;
+        foreach (Beneficiary beneficiary in Beneficiaries)
+        {
+            if (beneficiary.VaultId == vaultId)
+            {
+                count++;
+            }
+        }
+        return Task.FromResult(count);
+    }
+
     public void Add(Beneficiary beneficiary)
     {
         Beneficiaries.Add(beneficiary);
