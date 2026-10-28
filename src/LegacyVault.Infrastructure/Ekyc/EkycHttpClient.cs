@@ -139,6 +139,14 @@ public sealed class EkycHttpClient : IEkycClient
             EkycFaceComparison result = new EkycFaceComparison();
             result.Score = ReadDouble(root, "score");
             result.Matched = ReadBoolean(root, "matched");
+            if (root.TryGetProperty("reference_crop", out JsonElement refCrop) && refCrop.ValueKind == JsonValueKind.String)
+            {
+                result.ReferenceCrop = refCrop.GetString();
+            }
+            if (root.TryGetProperty("selfie_crop", out JsonElement selfCrop) && selfCrop.ValueKind == JsonValueKind.String)
+            {
+                result.SelfieCrop = selfCrop.GetString();
+            }
             return result;
         }
     }
@@ -241,7 +249,7 @@ public sealed class EkycHttpClient : IEkycClient
         try
         {
             using (HttpResponseMessage response = await httpClient.GetAsync(
-                "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie", ct))
+                "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie?allow_captured=true", ct))
             {
                 if (response.IsSuccessStatusCode)
                 {

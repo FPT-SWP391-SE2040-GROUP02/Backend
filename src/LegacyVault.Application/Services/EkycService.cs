@@ -323,7 +323,10 @@ public sealed class EkycService : IEkycService
         {
             await FinishAsync(verification, EkycStatus.Failed, now, ct);
         }
-        return verification.ToResponse(threshold);
+        EkycStatusResponse response = verification.ToResponse(threshold);
+        response.ReferenceCrop = comparison.ReferenceCrop;
+        response.SelfieCrop = comparison.SelfieCrop;
+        return response;
     }
 
     public async Task<EkycLivenessResponse> StartLivenessAsync(CancellationToken ct)
@@ -400,7 +403,10 @@ public sealed class EkycService : IEkycService
             await FinishAsync(verification, EkycStatus.Failed, now, ct);
         }
         await TryDeleteLivenessAsync(sessionId, ct);
-        return verification.ToResponse(threshold);
+        EkycStatusResponse response = verification.ToResponse(threshold);
+        response.ReferenceCrop = comparison.ReferenceCrop;
+        response.SelfieCrop = comparison.SelfieCrop;
+        return response;
     }
 
     /// <summary>

@@ -31,4 +31,10 @@ public class EkycStatusResponse
     public DateTimeOffset? CreatedAt { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>Ảnh cắt khuôn mặt tham chiếu từ CCCD (data URL); chỉ trả sau lần so khớp.</summary>
+    public string? ReferenceCrop { get; set; }
+
+    /// <summary>Ảnh cắt khuôn mặt từ selfie (data URL); chỉ trả sau lần so khớp.</summary>
+    public string? SelfieCrop { get; set; }
 }
