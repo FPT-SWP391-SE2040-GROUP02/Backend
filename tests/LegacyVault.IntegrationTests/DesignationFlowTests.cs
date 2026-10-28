@@ -159,10 +159,13 @@ public sealed class DesignationFlowTests : IAsyncLifetime
     public async Task Ac92_Quota03_SlotsAreCountedPerPersonNotPerDesignation()
     {
         // Chuẩn bị: XS có 2 suất; A ở 3 gói, B ở 1 gói; gói thứ 4 còn trống.
+        // Hồ sơ C tạo khi kho tạm có 3 suất rồi giảm về 2 (như kho bị giảm suất), vì tạo hồ sơ cũng bị giới hạn theo suất.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 1);
         Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
         Guid c = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");
+        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 0);
         List<Guid> containers = new List<Guid>();
         for (int i = 1; i <= 4; i++)
         {
@@ -194,10 +197,13 @@ public sealed class DesignationFlowTests : IAsyncLifetime
     public async Task Ac103_RemovingFromOneContainerKeepsSlotUntilRemovedEverywhere()
     {
         // Chuẩn bị: A ở 2 gói, B ở 1 gói → dùng hết 2 suất.
+        // Hồ sơ C tạo khi kho tạm có 3 suất rồi giảm về 2 (như kho bị giảm suất), vì tạo hồ sơ cũng bị giới hạn theo suất.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 1);
         Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
         Guid c = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");
+        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 0);
         Guid first = await CreateContainerIdAsync(client, vaultId, "Gói 1");
         Guid second = await CreateContainerIdAsync(client, vaultId, "Gói 2");
         Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(client, vaultId, first, a)).StatusCode);

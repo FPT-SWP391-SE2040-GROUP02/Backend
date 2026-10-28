@@ -479,7 +479,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `.../beneficiaries` | Đăng nhập | Query phân trang; `sortBy`: chỉ `createdAt` (mặc định); `searchTerm`: 1–4 chữ số | 200 `PaginatedList<BeneficiaryResponse>` | 400, 404 |
-| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `VAULT_NOT_EDITABLE` |
+| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `BENEFICIARY_SLOTS_EXCEEDED` / `VAULT_NOT_EDITABLE` |
 | GET | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | 200 `BeneficiaryResponse` | 404 `VAULT_NOT_FOUND` / `BENEFICIARY_NOT_FOUND` |
 | PUT | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | `{ etag, fullName?, dateOfBirth?, email?, phone? }` | 200 `BeneficiaryResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
 | DELETE | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | **204** | 404, 409 `BENEFICIARY_IN_USE` / `VAULT_NOT_EDITABLE` |
@@ -521,7 +521,8 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **Tuổi:** không kiểm tra và không trả nhãn tuổi (đã bỏ `isMinor`). `minorAcknowledgedAt` không còn dùng (hồ sơ mới luôn `null`). Trường `confirmMinor` của FE cũ nếu còn gửi sẽ bị bỏ qua, không lỗi. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
 - `containerIds`: các gói đang có người này, theo thứ tự gắn; rỗng khi chưa ở gói nào.
-- Tạo hồ sơ **không** tăng `planConfigVersion` và không chiếm suất; suất chỉ tính khi hồ sơ được gắn vào gói (mục 6.6).
+- **Giới hạn số hồ sơ:** số hồ sơ của kho (tính cả hồ sơ chưa ở gói nào) không vượt tổng suất `beneficiarySlots`. Tạo hồ sơ mới khi đã đủ → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots` (số hồ sơ hiện có) và `maxSlots`; FE gợi ý mua thêm suất hoặc xóa hồ sơ chưa dùng. Gửi lại đúng người đã có (trùng CCCD, cùng họ tên và ngày sinh) vẫn **200** dù đã đủ. FE lấy số hồ sơ từ `totalCount` của danh sách.
+- Tạo hồ sơ **không** tăng `planConfigVersion`. `usedBeneficiarySlots` của kho vẫn chỉ đếm người đang ở gói (mục 6.6).
 - Sửa hồ sơ **đang ở gói** (có thay đổi thật) → `planConfigVersion` tăng 1; hồ sơ chưa ở gói nào thì không tăng.
 - Xóa hồ sơ đang ở gói → `409 BENEFICIARY_IN_USE` kèm `containerIds`; FE hướng dẫn gỡ khỏi các gói đó trước.
 - BE không gửi thông báo, không tạo tài khoản cho người nhận.

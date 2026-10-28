@@ -67,6 +67,11 @@ public sealed class BeneficiaryRepository : IBeneficiaryRepository
         return (items, totalCount);
     }
 
+    public Task<int> CountByVaultIdAsync(Guid vaultId, CancellationToken ct)
+    {
+        return context.Beneficiaries.CountAsync(b => b.VaultId == vaultId, ct);
+    }
+
     public void Add(Beneficiary beneficiary)
     {
         context.Beneficiaries.Add(beneficiary);
