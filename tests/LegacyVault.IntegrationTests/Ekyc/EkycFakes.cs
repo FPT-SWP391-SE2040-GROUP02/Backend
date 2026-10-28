@@ -109,6 +109,15 @@ public sealed class FakeOwnerIdentityRepository : IOwnerIdentityRepository
         return Task.FromResult(Identities.FirstOrDefault(i => i.UserId == userId));
     }
 
+    public Task<List<OwnerIdentity>> ListByCitizenIdLast4ExceptUserAsync(string last4, Guid excludeUserId, CancellationToken ct)
+    {
+        return Task.FromResult(Identities
+            .Where(i => i.CitizenIdLast4 == last4 && i.UserId != excludeUserId)
+            .OrderBy(i => i.CreatedAt)
+            .ThenBy(i => i.Id)
+            .ToList());
+    }
+
     public void Add(OwnerIdentity identity)
     {
         Identities.Add(identity);

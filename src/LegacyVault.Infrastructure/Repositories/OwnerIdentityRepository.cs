@@ -23,6 +23,16 @@ public sealed class OwnerIdentityRepository : IOwnerIdentityRepository
             .FirstOrDefaultAsync(ct);
     }
 
+    public Task<List<OwnerIdentity>> ListByCitizenIdLast4ExceptUserAsync(string last4, Guid excludeUserId, CancellationToken ct)
+    {
+        return context.OwnerIdentities
+            .AsNoTracking()
+            .Where(i => i.CitizenIdLast4 == last4 && i.UserId != excludeUserId)
+            .OrderBy(i => i.CreatedAt)
+            .ThenBy(i => i.Id)
+            .ToListAsync(ct);
+    }
+
     public void Add(OwnerIdentity identity)
     {
         context.OwnerIdentities.Add(identity);
