@@ -10,7 +10,8 @@ namespace LegacyVault.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/vaults/{vaultId:guid}/beneficiaries")]
-[Produces("application/json")]
+// Cố ý KHÔNG đặt [Produces("application/json")]: giống CheckInsController, để lỗi validate 400 (email bắt buộc...)
+// giữ content-type problem+json.
 // Response chứa họ tên, ngày sinh, liên hệ của người nhận nên cấm trình duyệt và proxy lưu đệm.
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class BeneficiariesController : ControllerBase

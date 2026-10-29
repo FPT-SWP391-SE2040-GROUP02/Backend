@@ -211,7 +211,7 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
         for (int i = 0; i < citizenIds.Length; i++)
         {
             JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
-                client, vaultId, citizenIds[i], "Người nhận " + i);
+                client, vaultId, citizenIds[i], ApiTestHelpers.BeneficiaryName(i));
             HttpResponseMessage added = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
                 client, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
             Assert.Equal(HttpStatusCode.OK, added.StatusCode);

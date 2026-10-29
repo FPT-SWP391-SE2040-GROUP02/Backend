@@ -59,7 +59,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         var asset = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "E2E fixture asset");
         var container = await ApiTestHelpers.ReadJsonAsync(await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers", new { name = "E2E fixture container" }));
         var containerId = container.GetProperty("id").GetGuid();
-        var beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "000000001015", "E2E synthetic recipient");
+        var beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "000000001015", "Người nhận thử nghiệm");
         Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers/{containerId}/assets", new { assetId = asset })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers/{containerId}/beneficiaries", new { beneficiaryId = beneficiary.GetProperty("id").GetGuid() })).StatusCode);
         return (owner, recipient, vaultId);
