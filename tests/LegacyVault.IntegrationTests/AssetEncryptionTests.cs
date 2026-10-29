@@ -48,7 +48,6 @@ public sealed class AssetEncryptionTests : IDisposable
         StoredContent stored = await SaveAsync(original);
 
         Assert.Equal(length, stored.SizeBytes);
-        Assert.Equal(string.Empty, stored.Sha256);
         Assert.Equal(KeyId, stored.EncryptionKeyId);
         Assert.Equal(DataKeyProtector.WrappedKeySize, stored.WrappedDataKey.Length);
 

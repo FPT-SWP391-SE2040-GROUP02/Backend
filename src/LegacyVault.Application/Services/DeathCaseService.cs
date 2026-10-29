@@ -266,7 +266,6 @@ public sealed class DeathCaseService : IDeathCaseService
         file.FileName = DeathCaseFileRules.SanitizeFileName(request.FileName);
         file.ContentType = contentType;
         file.SizeBytes = stored.SizeBytes;
-        file.Sha256 = stored.Sha256;
         file.StorageKey = stored.StorageKey;
         file.EncryptionKeyId = stored.EncryptionKeyId;
         file.WrappedDataKey = stored.WrappedDataKey;
@@ -571,7 +570,6 @@ public sealed class DeathCaseService : IDeathCaseService
             copy.FileName = source.FileName;
             copy.ContentType = source.ContentType;
             copy.SizeBytes = source.SizeBytes;
-            copy.Sha256 = source.Sha256;
             copy.StorageKey = source.StorageKey;
             copy.EncryptionKeyId = source.EncryptionKeyId;
             copy.WrappedDataKey = source.WrappedDataKey;

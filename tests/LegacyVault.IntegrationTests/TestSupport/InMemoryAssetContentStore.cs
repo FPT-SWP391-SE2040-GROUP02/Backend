@@ -18,7 +18,6 @@ public sealed class InMemoryAssetContentStore : IAssetContentStore
             StoredContent stored = new StoredContent();
             stored.StorageKey = storageKey;
             stored.SizeBytes = buffer.Length;
-            stored.Sha256 = new string('0', 64);
             stored.EncryptionKeyId = "test-kek";
             stored.WrappedDataKey = new byte[60];
             return stored;

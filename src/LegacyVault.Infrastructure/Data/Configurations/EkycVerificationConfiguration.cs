@@ -50,7 +50,6 @@ public sealed class EkycVerificationConfiguration : IEntityTypeConfiguration<Eky
         // Ảnh mặt trước CCCD tạm của lượt OWNER_ENROLLMENT (BR-48 sửa); cùng kiểu cột với ảnh đại diện của Users.
         builder.Property(v => v.PendingDocumentImageStorageKey).HasMaxLength(200).IsUnicode(false);
         builder.Property(v => v.PendingDocumentImageContentType).HasMaxLength(50).IsUnicode(false);
-        builder.Property(v => v.PendingDocumentImageSha256).HasMaxLength(64).IsFixedLength().IsUnicode(false);
         builder.Property(v => v.PendingDocumentImageEncryptionKeyId).HasMaxLength(64).IsUnicode(false);
         builder.Property(v => v.PendingDocumentImageWrappedDataKey).HasMaxLength(60).IsFixedLength();
 

@@ -6,7 +6,7 @@ namespace LegacyVault.Application.Mappings;
 
 public static class AssetMappings
 {
-    /// <summary>Không trả StorageKey/Sha256 (chi tiết lưu trữ nội bộ).</summary>
+    /// <summary>Không trả StorageKey (chi tiết lưu trữ nội bộ).</summary>
     public static AssetResponse ToResponse(this Asset asset)
     {
         return new AssetResponse

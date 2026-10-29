@@ -89,7 +89,6 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         StoredContent stored = new StoredContent();
         stored.StorageKey = objection.SelfieImageStorageKey;
         stored.SizeBytes = objection.SelfieImageSizeBytes ?? 0;
-        stored.Sha256 = objection.SelfieImageSha256 ?? string.Empty;
         stored.EncryptionKeyId = objection.SelfieImageEncryptionKeyId ?? string.Empty;
         stored.WrappedDataKey = objection.SelfieImageWrappedDataKey;
 

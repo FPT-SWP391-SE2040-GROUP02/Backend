@@ -34,7 +34,6 @@ public sealed class OwnerIdentityConfiguration : IEntityTypeConfiguration<OwnerI
         // Ảnh mặt trước CCCD (BR-48 sửa): cùng kiểu cột tham chiếu với ảnh đại diện của Users.
         builder.Property(i => i.DocumentImageStorageKey).HasMaxLength(200).IsUnicode(false);
         builder.Property(i => i.DocumentImageContentType).HasMaxLength(50).IsUnicode(false);
-        builder.Property(i => i.DocumentImageSha256).HasMaxLength(64).IsFixedLength().IsUnicode(false);
         builder.Property(i => i.DocumentImageEncryptionKeyId).HasMaxLength(64).IsUnicode(false);
         builder.Property(i => i.DocumentImageWrappedDataKey).HasMaxLength(60).IsFixedLength();
 

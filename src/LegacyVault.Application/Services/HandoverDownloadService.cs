@@ -101,7 +101,6 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         StoredContent stored = new StoredContent();
         stored.StorageKey = asset.StorageKey;
         stored.SizeBytes = asset.SizeBytes;
-        stored.Sha256 = asset.Sha256;
         stored.EncryptionKeyId = asset.EncryptionKeyId;
         stored.WrappedDataKey = asset.WrappedDataKey;
 

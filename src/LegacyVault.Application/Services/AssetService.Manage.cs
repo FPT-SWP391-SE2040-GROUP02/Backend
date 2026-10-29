@@ -36,11 +36,10 @@ public sealed partial class AssetService
         StoredContent stored = new StoredContent();
         stored.StorageKey = asset.StorageKey;
         stored.SizeBytes = asset.SizeBytes;
-        stored.Sha256 = asset.Sha256;
         stored.EncryptionKeyId = asset.EncryptionKeyId;
         stored.WrappedDataKey = asset.WrappedDataKey;
 
-        // Lượt 1: giải mã vào Stream.Null. Kiểm kích thước và SHA-256 chỉ xảy ra ở cuối luồng nên phải chạy hết
+        // Lượt 1: giải mã vào Stream.Null. Kiểm kích thước chỉ xảy ra ở cuối luồng nên phải chạy hết
         // một lượt trước khi gửi byte đầu tiên, nếu không Owner có thể nhận tệp hỏng.
         try
         {

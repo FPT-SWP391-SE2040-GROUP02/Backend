@@ -36,9 +36,6 @@ public class StoredContent
     /// <summary>Kích thước nội dung gốc (trước khi mã hóa), tính vào quota.</summary>
     public long SizeBytes { get; set; }
 
-    /// <summary>Không còn tính SHA-256 khi mã hóa; giữ trường để tương thích cột cũ (rỗng với nội dung mới).</summary>
-    public string Sha256 { get; set; } = string.Empty;
-
     /// <summary>Id của KEK đã dùng để bọc DEK.</summary>
     public string EncryptionKeyId { get; set; } = string.Empty;
 

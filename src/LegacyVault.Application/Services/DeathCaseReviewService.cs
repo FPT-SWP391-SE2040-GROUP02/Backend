@@ -135,7 +135,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         StoredContent stored = new StoredContent();
         stored.StorageKey = file.StorageKey;
         stored.SizeBytes = file.SizeBytes;
-        stored.Sha256 = file.Sha256;
         stored.EncryptionKeyId = file.EncryptionKeyId;
         stored.WrappedDataKey = file.WrappedDataKey;
 
@@ -181,7 +180,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         StoredContent stored = new StoredContent();
         stored.StorageKey = identity.DocumentImageStorageKey;
         stored.SizeBytes = identity.DocumentImageSizeBytes ?? 0;
-        stored.Sha256 = identity.DocumentImageSha256 ?? string.Empty;
         stored.EncryptionKeyId = identity.DocumentImageEncryptionKeyId ?? string.Empty;
         stored.WrappedDataKey = identity.DocumentImageWrappedDataKey;
 

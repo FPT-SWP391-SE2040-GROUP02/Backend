@@ -241,7 +241,6 @@ public sealed class HandoverTestData
                 FileName = "tep-" + (i + 1) + ".bin",
                 ContentType = "application/pdf",
                 SizeBytes = 1000 + i,
-                Sha256 = new string('a', 64),
                 StorageKey = "key-" + Guid.NewGuid().ToString("N"),
                 EncryptionKeyId = "k1",
                 CreatedAt = Now.AddDays(-49)

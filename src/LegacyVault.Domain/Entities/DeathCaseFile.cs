@@ -27,9 +27,6 @@ public class DeathCaseFile
     /// <summary>Kích thước nội dung gốc, tính bằng byte.</summary>
     public long SizeBytes { get; set; }
 
-    /// <summary>SHA-256 của nội dung gốc, dạng hex chữ thường.</summary>
-    public string Sha256 { get; set; } = string.Empty;
-
     /// <summary>Khóa object trong kho lưu trữ; có thể dùng chung giữa các phiên bản (D8). Không trả cho FE.</summary>
     public string StorageKey { get; set; } = string.Empty;
 

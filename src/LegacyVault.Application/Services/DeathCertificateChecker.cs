@@ -79,7 +79,6 @@ public sealed class DeathCertificateChecker
         StoredContent stored = new StoredContent();
         stored.StorageKey = file.StorageKey;
         stored.SizeBytes = file.SizeBytes;
-        stored.Sha256 = file.Sha256;
         stored.EncryptionKeyId = file.EncryptionKeyId;
         stored.WrappedDataKey = file.WrappedDataKey;
 

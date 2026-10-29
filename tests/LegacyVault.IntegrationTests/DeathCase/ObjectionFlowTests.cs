@@ -717,7 +717,6 @@ public sealed class ObjectionFlowTests : IAsyncLifetime
             identity.DocumentImageStorageKey = stored.StorageKey;
             identity.DocumentImageContentType = "image/png";
             identity.DocumentImageSizeBytes = stored.SizeBytes;
-            identity.DocumentImageSha256 = stored.Sha256;
             identity.DocumentImageEncryptionKeyId = stored.EncryptionKeyId;
             identity.DocumentImageWrappedDataKey = stored.WrappedDataKey;
             identity.DocumentImageCapturedAt = DateTimeOffset.UtcNow;

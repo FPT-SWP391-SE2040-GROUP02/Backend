@@ -205,7 +205,6 @@ public sealed partial class AssetService : IAssetService
         asset.FileName = fileName;
         asset.ContentType = contentType;
         asset.SizeBytes = stored.SizeBytes;
-        asset.Sha256 = stored.Sha256;
         asset.StorageKey = stored.StorageKey;
         asset.EncryptionKeyId = stored.EncryptionKeyId;
         asset.WrappedDataKey = stored.WrappedDataKey;
