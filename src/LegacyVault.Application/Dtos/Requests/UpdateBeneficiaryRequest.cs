@@ -16,7 +16,8 @@ public class UpdateBeneficiaryRequest
     [MaxLength(64)]
     public string Etag { get; set; } = string.Empty;
 
-    [MaxLength(200, ErrorMessage = "Họ tên tối đa 200 ký tự.")]
+    [StringLength(200, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 200 ký tự.")]
+    [RegularExpression(@"^[\p{L}\s]+$", ErrorMessage = "Họ và tên chỉ được chứa chữ cái và khoảng trắng.")]
     public string? FullName { get; set; }
 
     public DateOnly? DateOfBirth { get; set; }

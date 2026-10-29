@@ -24,6 +24,8 @@ public static class VerifierDeathCaseMappings
         response.SupplementOverdueAt = row.SupplementOverdueAt;
         response.UnreviewedFlagCount = row.UnreviewedFlagCount;
         response.ClosedAt = row.ClosedAt;
+        response.ExecutorFullName = row.ExecutorFullName;
+        response.ExecutorEmail = row.ExecutorEmail;
         return response;
     }
 
