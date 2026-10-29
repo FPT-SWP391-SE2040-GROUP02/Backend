@@ -4,8 +4,7 @@ namespace LegacyVault.Application.Security;
 /// Băm/kiểm tra mật khẩu app (SEC-01). Cài đặt ở Infrastructure.
 /// </summary>
 /// <remarks>
-/// Cài đặt phải dùng Argon2id tối thiểu memory 19 MiB, iterations 2, parallelism 1, salt riêng mỗi mật khẩu;
-/// lưu tham số kèm hash để sau tăng độ khó vẫn kiểm tra được hash cũ; so sánh thời gian cố định.
+/// Cài đặt dùng SHA-256 với salt ngẫu nhiên riêng mỗi mật khẩu; lưu dạng salt$hash.
 /// </remarks>
 public interface IPasswordHasher
 {

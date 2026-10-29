@@ -32,12 +32,11 @@ public static class ChunkedAesGcm
     private static readonly byte[] Magic = Encoding.ASCII.GetBytes("LVA1");
 
     /// <summary>
-    /// Đọc hết input, mã hóa bằng dataKey và ghi ra output. Đồng thời cập nhật plainHash bằng nội dung gốc.
+    /// Đọc hết input, mã hóa bằng dataKey và ghi ra output.
     /// Trả số byte nội dung gốc. Nội dung gốc vượt maxPlainBytes → AppException FILE_TOO_LARGE.
     /// </summary>
     public static async Task<long> EncryptAsync(
-        Stream input, Stream output, byte[] dataKey, long maxPlainBytes,
-        IncrementalHash plainHash, CancellationToken ct)
+        Stream input, Stream output, byte[] dataKey, long maxPlainBytes, CancellationToken ct)
     {
         byte[] header = CreateHeader(ChunkSize);
         await output.WriteAsync(header, ct);
@@ -60,8 +59,6 @@ public static class ChunkedAesGcm
                     throw new AppException(AppErrorType.PayloadTooLarge, ErrorCode.FileTooLarge,
                         "Tệp vượt quá dung lượng cho phép.");
                 }
-                plainHash.AppendData(plainChunk, 0, length);
-
                 // Đọc không đầy khối nghĩa là đã hết input: đây là khối cuối.
                 isFinal = length < ChunkSize;
                 aes.Encrypt(
@@ -81,7 +78,7 @@ public static class ChunkedAesGcm
     }
 
     /// <summary>
-    /// Giải mã input (định dạng ở trên) bằng dataKey, ghi nội dung gốc ra output và cập nhật plainHash.
+    /// Giải mã input (định dạng ở trên) bằng dataKey, ghi nội dung gốc ra output.
     /// Trả số byte nội dung gốc. Tệp bị sửa/cắt bớt/sai khóa → CryptographicException.
     /// </summary>
     /// <remarks>
@@ -89,7 +86,7 @@ public static class ChunkedAesGcm
     /// các khối trước đó. Người gọi (ví dụ endpoint tải xuống) phải coi cả lần đọc là thất bại khi có exception.
     /// </remarks>
     public static async Task<long> DecryptAsync(
-        Stream input, Stream output, byte[] dataKey, IncrementalHash plainHash, CancellationToken ct)
+        Stream input, Stream output, byte[] dataKey, CancellationToken ct)
     {
         byte[] header = new byte[HeaderSize];
         int headerLength = await ReadFullAsync(input, header, ct);
@@ -127,7 +124,6 @@ public static class ChunkedAesGcm
                     sealedChunk.AsSpan(length, TagSize),
                     plainChunk.AsSpan(0, length));
 
-                plainHash.AppendData(plainChunk, 0, length);
                 await output.WriteAsync(plainChunk.AsMemory(0, length), ct);
                 totalBytes += length;
                 chunkIndex++;

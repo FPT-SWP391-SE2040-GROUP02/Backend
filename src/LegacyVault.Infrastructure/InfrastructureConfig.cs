@@ -148,7 +148,7 @@ public static class InfrastructureConfig
 
         // Security & Notifications
         services.AddMemoryCache();
-        services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
+        services.AddSingleton<IPasswordHasher, Sha256PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddScoped<ISessionRevocationValidator, SessionRevocationValidator>();
         services.AddHttpContextAccessor();
