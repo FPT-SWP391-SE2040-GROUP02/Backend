@@ -91,7 +91,7 @@ Ký hiệu: Xong = đã chạy và có test; Một phần = có nền nhưng thi
 
 - URL: `POST /api/v1/auth/register`, `verify-email`, `resend-verification`, `login`, `refresh`, `logout`, `GET session`; `POST /api/v1/auth/google`, `google/link-confirm`.
 - Access token (JWT, sống 15 phút) nằm trong JSON; refresh token nằm trong cookie HttpOnly.
-- Mật khẩu băm Argon2id: `Infrastructure/Security/Argon2PasswordHasher.cs`.
+- Mật khẩu băm SHA-256 + salt: `Infrastructure/Security/Sha256PasswordHasher.cs`.
 - JWT: `JwtTokenService.cs`; người đang gọi API: `CurrentUser.cs`.
 
 ### 3.2. Kho và gói (đã có)

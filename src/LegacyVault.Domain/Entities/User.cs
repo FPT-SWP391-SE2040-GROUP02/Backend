@@ -19,7 +19,7 @@ public class User
     /// <summary>Thời điểm xác minh email (AUTH-04); null = chưa xác minh → chưa tạo được kho (AC-01).</summary>
     public DateTimeOffset? EmailVerifiedAt { get; set; }
 
-    /// <summary>Mật khẩu đã băm Argon2id (SEC-01). null = tài khoản không có mật khẩu app.</summary>
+    /// <summary>Mật khẩu đã băm SHA-256 kèm salt (SEC-01). null = tài khoản không có mật khẩu app.</summary>
     public string? PasswordHash { get; set; }
 
     public string FullName { get; set; } = string.Empty;

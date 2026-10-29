@@ -38,31 +38,25 @@ public sealed class LocalAssetContentStore : IAssetContentStore
         try
         {
             long size;
-            string sha256Hex;
-            using (IncrementalHash sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+            try
             {
-                try
+                await using (FileStream output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.None, BufferSize, useAsync: true))
                 {
-                    await using (FileStream output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write,
-                        FileShare.None, BufferSize, useAsync: true))
-                    {
-                        size = await ChunkedAesGcm.EncryptAsync(content, output, dataKey, maxBytes, sha256, ct);
-                    }
-                    File.Move(tempPath, finalPath);
+                    size = await ChunkedAesGcm.EncryptAsync(content, output, dataKey, maxBytes, ct);
                 }
-                catch
-                {
-                    File.Delete(tempPath);
-                    throw;
-                }
-                sha256Hex = Convert.ToHexStringLower(sha256.GetHashAndReset());
+                File.Move(tempPath, finalPath);
+            }
+            catch
+            {
+                File.Delete(tempPath);
+                throw;
             }
 
             WrappedDataKey wrapped = keyProtector.Wrap(dataKey);
             StoredContent stored = new StoredContent();
             stored.StorageKey = storageKey;
             stored.SizeBytes = size;
-            stored.Sha256 = sha256Hex;
             stored.EncryptionKeyId = wrapped.KeyId;
             stored.WrappedDataKey = wrapped.Value;
             return stored;
@@ -79,20 +73,15 @@ public sealed class LocalAssetContentStore : IAssetContentStore
         try
         {
             long size;
-            string sha256Hex;
-            using (IncrementalHash sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+            await using (FileStream input = new FileStream(PathFor(content.StorageKey), FileMode.Open,
+                FileAccess.Read, FileShare.Read, BufferSize, useAsync: true))
             {
-                await using (FileStream input = new FileStream(PathFor(content.StorageKey), FileMode.Open,
-                    FileAccess.Read, FileShare.Read, BufferSize, useAsync: true))
-                {
-                    size = await ChunkedAesGcm.DecryptAsync(input, destination, dataKey, sha256, ct);
-                }
-                sha256Hex = Convert.ToHexStringLower(sha256.GetHashAndReset());
+                size = await ChunkedAesGcm.DecryptAsync(input, destination, dataKey, ct);
             }
 
-            if (size != content.SizeBytes || sha256Hex != content.Sha256)
+            if (size != content.SizeBytes)
             {
-                throw new CryptographicException("Nội dung giải mã không khớp kích thước/SHA-256 đã lưu.");
+                throw new CryptographicException("Nội dung giải mã không khớp kích thước đã lưu.");
             }
         }
         finally

@@ -147,7 +147,7 @@ public static class InfrastructureConfig
         services.AddSingleton<IBeneficiaryDataProtector, BeneficiaryDataProtector>();
 
         // Security & Notifications
-        services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
+        services.AddSingleton<IPasswordHasher, Sha256PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
