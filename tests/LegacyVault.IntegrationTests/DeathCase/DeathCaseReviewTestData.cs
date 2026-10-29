@@ -75,7 +75,7 @@ public static class DeathCaseReviewTestData
             .GetProperty("id").GetGuid();
         HttpResponseMessage addAsset = await ApiTestHelpers.AddAssetToContainerAsync(ownerClient, vaultId, containerId, assetId);
         Assert.Equal(HttpStatusCode.OK, addAsset.StatusCode);
-        JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(ownerClient, vaultId, "001090000001", "Người nhận 1");
+        JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(ownerClient, vaultId, "001090000001", "Người nhận A");
         HttpResponseMessage designate = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
             ownerClient, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.OK, designate.StatusCode);

@@ -15,14 +15,17 @@ public class CreateBeneficiaryRequest
     public string CitizenId { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Họ tên là bắt buộc.")]
-    [MaxLength(200, ErrorMessage = "Họ tên tối đa 200 ký tự.")]
+    [StringLength(200, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 200 ký tự.")]
+    [RegularExpression(@"^[\p{L}\s]+$", ErrorMessage = "Họ và tên chỉ được chứa chữ cái và khoảng trắng.")]
     public string FullName { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Ngày sinh là bắt buộc.")]
     public DateOnly? DateOfBirth { get; set; }
 
+    [Required(ErrorMessage = "Email là bắt buộc.")]
+    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
     [MaxLength(254, ErrorMessage = "Email tối đa 254 ký tự.")]
-    public string? Email { get; set; }
+    public string Email { get; set; } = string.Empty;
 
     [MaxLength(20, ErrorMessage = "Số điện thoại tối đa 20 ký tự.")]
     public string? Phone { get; set; }
