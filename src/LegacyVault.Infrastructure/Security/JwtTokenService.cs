@@ -20,7 +20,10 @@ public sealed class JwtTokenService : ITokenService
         _timeProvider = timeProvider;
     }
 
-    public AccessToken CreateAccessToken(User user)
+    /// <summary>Claim định danh phiên đăng nhập (family) của Access Token.</summary>
+    public const string FamilyIdClaim = "family_id";
+
+    public AccessToken CreateAccessToken(User user, Guid? familyId = null)
     {
         ArgumentNullException.ThrowIfNull(user);
         if (user.Id == Guid.Empty || !Enum.IsDefined(user.Role))
@@ -37,6 +40,11 @@ public sealed class JwtTokenService : ITokenService
             new Claim("role", user.Role.ToString().ToUpperInvariant()),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
+
+        if (familyId.HasValue && familyId.Value != Guid.Empty)
+        {
+            claims.Add(new Claim(FamilyIdClaim, familyId.Value.ToString("D")));
+        }
 
         var descriptor = new SecurityTokenDescriptor
         {

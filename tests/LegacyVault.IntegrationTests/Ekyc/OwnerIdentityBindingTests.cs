@@ -90,6 +90,49 @@ public sealed class OwnerIdentityBindingTests
         beneficiaryProtector.Data[beneficiary.Id] = new BeneficiaryPersonalData { CitizenId = citizenId };
     }
 
+    private void AddBoundIdentity(Guid ownerUserId, string citizenId, string fullName = "NGUYEN VAN B", DateOnly? dob = null)
+    {
+        OwnerIdentity identity = new OwnerIdentity
+        {
+            UserId = ownerUserId,
+            CreatedAt = Now,
+            CitizenIdLast4 = citizenId.Substring(citizenId.Length - 4),
+        };
+        identityProtector.Protect(identity, new OwnerIdentityData
+        {
+            CitizenId = citizenId,
+            FullName = fullName,
+            DateOfBirth = dob ?? new DateOnly(1995, 5, 20),
+        });
+        identities.Identities.Add(identity);
+    }
+
+    [Fact]
+    public async Task FirstEnrollment_IsRejected_WhenCitizenIdAlreadyBoundToAnotherUser()
+    {
+        Guid otherUserId = Guid.NewGuid();
+        AddBoundIdentity(otherUserId, "079200012345");
+
+        AppException error = await Assert.ThrowsAsync<AppException>(SubmitDocumentAsync);
+
+        Assert.Equal(ErrorCode.EkycIdentityMismatch, error.Code);
+        Assert.Equal("CITIZEN_ID_ALREADY_USED", error.Extensions["reason"]);
+        Assert.Contains("tài khoản khác", error.Message);
+        Assert.Single(identities.Identities);
+    }
+
+    [Fact]
+    public async Task FirstEnrollment_Passes_WhenAnotherUserHasSameLast4ButDifferentFullCitizenId()
+    {
+        Guid otherUserId = Guid.NewGuid();
+        AddBoundIdentity(otherUserId, "001200012345");
+
+        EkycStatusResponse response = await EnrollAsync();
+
+        Assert.Equal("PASSED", response.Status);
+        Assert.Equal(2, identities.Identities.Count);
+    }
+
     [Fact]
     public async Task FirstEnrollment_IsRejected_WhenCitizenIdMatchesAnExistingBeneficiary()
     {

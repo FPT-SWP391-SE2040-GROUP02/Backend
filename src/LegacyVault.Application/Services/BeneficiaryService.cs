@@ -112,6 +112,15 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             return await ResultForExistingAsync(existing, data, ct);
         }
 
+        // Giới hạn số hồ sơ người nhận theo tổng suất của kho (suất kèm hạng + suất mua thêm), tính cả hồ sơ chưa ở gói nào.
+        // Kiểm sau bước tìm trùng CCCD: gửi lại đúng người đã có vẫn trả hồ sơ cũ dù kho đã đủ suất.
+        int profileCount = await beneficiaryRepository.CountByVaultIdAsync(vault.Id, ct);
+        int maxSlots = vault.Entitlement.IncludedBeneficiarySlots + vault.Entitlement.ExtraBeneficiarySlots;
+        if (profileCount + 1 > maxSlots)
+        {
+            throw SlotsExceeded(profileCount, maxSlots);
+        }
+
         dataProtector.Protect(beneficiary, data);
         // Hồ sơ mới chưa sửa lần nào: UpdatedAt = null → etag "0".
         beneficiary.CreatedAt = now;
@@ -503,6 +512,16 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         extensions["containerIds"] = containerIds;
         return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiaryInUse,
             "Người nhận đang ở trong gói. Vui lòng gỡ khỏi các gói trước khi xóa.", extensions);
+    }
+
+    /// <summary>Đã đủ số hồ sơ theo suất của kho; kèm số hồ sơ hiện có và số suất tối đa để FE gợi ý mua thêm.</summary>
+    private static AppException SlotsExceeded(int usedSlots, int maxSlots)
+    {
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["usedSlots"] = usedSlots;
+        extensions["maxSlots"] = maxSlots;
+        return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiarySlotsExceeded,
+            "Kho đã đủ số người nhận theo suất hiện có. Vui lòng mua thêm suất hoặc xóa hồ sơ chưa dùng.", extensions);
     }
 
     /// <summary>QUOTA-04 / AC-92: beneficiaryId để FE mở hồ sơ đang có cùng CCCD cho Owner sửa.</summary>

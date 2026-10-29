@@ -51,17 +51,19 @@ public sealed class DesignationConcurrencyTests : IAsyncLifetime
     public async Task QUOTA05_TwoNewBeneficiariesAtOnce_DifferentContainers_OnlyOneSucceeds()
     {
         // Chuẩn bị: kho tối đa 2 suất; A đã ở gói 1 (còn 1 suất); B và C chưa ở gói nào.
+        // Ba hồ sơ tạo khi kho tạm có 3 suất rồi giảm về 2 (như kho bị giảm suất), vì tạo hồ sơ cũng bị giới hạn theo suất.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             await db.VaultEntitlements.Where(e => e.VaultId == vaultId)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(e => e.IncludedBeneficiarySlots, 2)
-                    .SetProperty(e => e.ExtraBeneficiarySlots, 0));
+                    .SetProperty(e => e.ExtraBeneficiarySlots, 1));
         });
         Guid beneficiaryA = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid beneficiaryB = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
         Guid beneficiaryC = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");
+        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 0);
         Guid firstContainerId = await CreateContainerIdAsync(client, vaultId, "Gói 1");
         Guid secondContainerId = await CreateContainerIdAsync(client, vaultId, "Gói 2");
         HttpResponseMessage addA = await ApiTestHelpers.AddBeneficiaryToContainerAsync(

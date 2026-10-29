@@ -90,6 +90,58 @@ public sealed class AuthSessionInvariantTests
     }
 
     [Fact]
+    public async Task RevokeAllDevicesInvalidatesSessionValidatorForEveryFamily()
+    {
+        var validator = new SpySessionValidator();
+        var serviceWithValidator = new AuthService(_users, _throttles, _tokens, _unit, new FakePasswordHasher(), new FakeTokenService(), _principal, _clock, sessionValidator: validator);
+
+        _principal.UserId = _user.Id;
+        var device1 = Token("device1");
+        var device2 = Token("device2");
+        device2.FamilyId = Guid.NewGuid();
+
+        await serviceWithValidator.LogoutAsync(null, true, default);
+
+        Assert.NotNull(device1.RevokedAt);
+        Assert.NotNull(device2.RevokedAt);
+        Assert.Contains(device1.FamilyId, validator.InvalidatedFamilies);
+        Assert.Contains(device2.FamilyId, validator.InvalidatedFamilies);
+    }
+
+    [Fact]
+    public async Task SingleDeviceLogoutInvalidatesOnlyItsFamilyInValidator()
+    {
+        var validator = new SpySessionValidator();
+        var serviceWithValidator = new AuthService(_users, _throttles, _tokens, _unit, new FakePasswordHasher(), new FakeTokenService(), _principal, _clock, sessionValidator: validator);
+
+        var own = Token("own");
+        var other = Token("other");
+        other.FamilyId = Guid.NewGuid();
+
+        await serviceWithValidator.LogoutAsync("own", false, default);
+
+        Assert.NotNull(own.RevokedAt);
+        Assert.Null(other.RevokedAt);
+        Assert.Contains(own.FamilyId, validator.InvalidatedFamilies);
+        Assert.DoesNotContain(other.FamilyId, validator.InvalidatedFamilies);
+    }
+
+    private sealed class SpySessionValidator : ISessionRevocationValidator
+    {
+        public List<Guid> InvalidatedFamilies { get; } = new();
+
+        public Task<bool> IsSessionActiveAsync(Guid familyId, CancellationToken ct = default)
+        {
+            return Task.FromResult(!InvalidatedFamilies.Contains(familyId));
+        }
+
+        public void InvalidateFamily(Guid familyId)
+        {
+            InvalidatedFamilies.Add(familyId);
+        }
+    }
+
+    [Fact]
     public async Task DisabledAccountCannotReadSession()
     {
         _principal.UserId = _user.Id;

@@ -21,6 +21,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
 {
     private const string LeadingZeroCitizenId = "012345678901";
     private const string SameLast4CitizenId = "999999998901";
+    private const string ThirdCitizenId = "123456789012";
     private const string FullName = "Nguyễn Văn An";
     private const string Email = ApiTestHelpers.BeneficiaryEmail;
 
@@ -437,6 +438,68 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         // Kiểm tra
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
         await ApiTestHelpers.AssertProblemAsync(get, HttpStatusCode.NotFound, "BENEFICIARY_NOT_FOUND");
+    }
+
+    [SqlFact]
+    public async Task ProfileLimit_CreatingBeyondSlotsIsRejected_ExtraSlotAllowsIt()
+    {
+        // Chuẩn bị: XS có 2 suất, kho đã có 2 hồ sơ chưa ở gói nào.
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
+        await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, SameLast4CitizenId, FullName);
+
+        // Hành động: tạo hồ sơ thứ 3 khi đã đủ suất.
+        HttpResponseMessage overLimit = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(ThirdCitizenId, FullName));
+
+        // Kiểm tra: bị chặn, không thêm dòng nào.
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(overLimit, HttpStatusCode.Conflict, "BENEFICIARY_SLOTS_EXCEEDED");
+        Assert.Equal(2, problem.GetProperty("usedSlots").GetInt32());
+        Assert.Equal(2, problem.GetProperty("maxSlots").GetInt32());
+        Assert.Equal(2, await CountBeneficiariesAsync(vaultId));
+
+        // Hành động: mua thêm 1 suất rồi tạo lại.
+        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 1);
+        HttpResponseMessage withExtraSlot = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(ThirdCitizenId, FullName));
+
+        // Kiểm tra
+        Assert.Equal(HttpStatusCode.Created, withExtraSlot.StatusCode);
+        Assert.Equal(3, await CountBeneficiariesAsync(vaultId));
+    }
+
+    [SqlFact]
+    public async Task ProfileLimit_ResendingExistingPersonAtLimitReturnsExisting()
+    {
+        // Chuẩn bị: kho đã đủ 2 hồ sơ.
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        JsonElement first = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
+        await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, SameLast4CitizenId, FullName);
+
+        // Hành động: gửi lại đúng người đã có (cùng CCCD, họ tên, ngày sinh).
+        HttpResponseMessage resend = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(LeadingZeroCitizenId, FullName));
+
+        // Kiểm tra: vẫn trả hồ sơ cũ, không bị chặn vì suất.
+        Assert.Equal(HttpStatusCode.OK, resend.StatusCode);
+        JsonElement existing = await ApiTestHelpers.ReadJsonAsync(resend);
+        Assert.Equal(first.GetProperty("id").GetGuid(), existing.GetProperty("id").GetGuid());
+        Assert.Equal(2, await CountBeneficiariesAsync(vaultId));
+    }
+
+    [SqlFact]
+    public async Task ProfileLimit_DeletingUnusedProfileFreesRoom()
+    {
+        // Chuẩn bị: kho đã đủ 2 hồ sơ.
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        JsonElement first = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
+        await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, SameLast4CitizenId, FullName);
+
+        // Hành động: xóa một hồ sơ chưa ở gói nào rồi tạo người mới.
+        HttpResponseMessage delete = await client.DeleteAsync($"{BeneficiariesUrl(vaultId)}/{first.GetProperty("id").GetGuid()}");
+        HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(ThirdCitizenId, FullName));
+
+        // Kiểm tra
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        Assert.Equal(2, await CountBeneficiariesAsync(vaultId));
     }
 
     private static string BeneficiariesUrl(Guid vaultId)

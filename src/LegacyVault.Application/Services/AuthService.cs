@@ -27,6 +27,7 @@ public sealed class AuthService : IAuthService
     private readonly ICurrentUser _currentUser;
     private readonly TimeProvider _timeProvider;
     private readonly ITwoFactorService? _twoFactorService;
+    private readonly ISessionRevocationValidator? _sessionValidator;
 
     public AuthService(
         IUserRepository userRepository,
@@ -37,9 +38,11 @@ public sealed class AuthService : IAuthService
         ITokenService tokenService,
         ICurrentUser currentUser,
         TimeProvider timeProvider,
-        ITwoFactorService? twoFactorService = null)
+        ITwoFactorService? twoFactorService = null,
+        ISessionRevocationValidator? sessionValidator = null)
     {
         _twoFactorService = twoFactorService;
+        _sessionValidator = sessionValidator;
         _userRepository = userRepository;
         _loginThrottleRepository = loginThrottleRepository;
         _refreshTokenRepository = refreshTokenRepository;
@@ -155,7 +158,7 @@ public sealed class AuthService : IAuthService
 
         _refreshTokenRepository.Add(refreshTokenEntity);
 
-        var accessToken = _tokenService.CreateAccessToken(user);
+        var accessToken = _tokenService.CreateAccessToken(user, familyId);
         await _unitOfWork.SaveChangesAsync(ct);
 
         return new AuthResult
@@ -258,7 +261,7 @@ public sealed class AuthService : IAuthService
         tokenEntity.ReplacedByTokenId = newTokenEntity.Id;
         _refreshTokenRepository.Add(newTokenEntity);
 
-        var newAccessToken = _tokenService.CreateAccessToken(tokenEntity.User);
+        var newAccessToken = _tokenService.CreateAccessToken(tokenEntity.User, tokenEntity.FamilyId);
         await _unitOfWork.SaveChangesAsync(ct);
 
         return new AuthResult
@@ -336,6 +339,7 @@ public sealed class AuthService : IAuthService
             foreach (var token in allTokens)
             {
                 token.RevokedAt = now;
+                _sessionValidator?.InvalidateFamily(token.FamilyId);
             }
         }
         else
@@ -349,6 +353,7 @@ public sealed class AuthService : IAuthService
             foreach (var token in familyTokens)
             {
                 token.RevokedAt = now;
+                _sessionValidator?.InvalidateFamily(token.FamilyId);
             }
         }
         await _unitOfWork.SaveChangesAsync(ct);

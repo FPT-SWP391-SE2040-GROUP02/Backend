@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
@@ -36,7 +37,11 @@ public sealed class EkycHttpClient : IEkycClient
     {
         using (MultipartFormDataContent form = new MultipartFormDataContent())
         {
-            form.Add(CreateImageContent(image, contentType), "file", fileName);
+            string safeFileName = string.IsNullOrWhiteSpace(fileName) ? "front.jpg" : Path.GetFileName(fileName);
+            safeFileName = Encoding.ASCII.GetString(Encoding.ASCII.GetBytes(safeFileName)).Replace("?", "x");
+            if (string.IsNullOrWhiteSpace(safeFileName) || safeFileName == ".jpg") safeFileName = "front.jpg";
+
+            form.Add(CreateImageContent(image, contentType), "file", safeFileName);
             form.Add(new StringContent("front"), "side");
 
             JsonElement root = await PostAsync("api/ocr", form, ct);
@@ -78,7 +83,11 @@ public sealed class EkycHttpClient : IEkycClient
     {
         using (MultipartFormDataContent form = new MultipartFormDataContent())
         {
-            form.Add(CreateImageContent(image, contentType), "file", fileName);
+            string safeFileName = string.IsNullOrWhiteSpace(fileName) ? "back.jpg" : Path.GetFileName(fileName);
+            safeFileName = Encoding.ASCII.GetString(Encoding.ASCII.GetBytes(safeFileName)).Replace("?", "x");
+            if (string.IsNullOrWhiteSpace(safeFileName) || safeFileName == ".jpg") safeFileName = "back.jpg";
+
+            form.Add(CreateImageContent(image, contentType), "file", safeFileName);
             form.Add(new StringContent("back"), "side");
 
             JsonElement root = await PostAsync("api/ocr", form, ct);
@@ -139,6 +148,14 @@ public sealed class EkycHttpClient : IEkycClient
             EkycFaceComparison result = new EkycFaceComparison();
             result.Score = ReadDouble(root, "score");
             result.Matched = ReadBoolean(root, "matched");
+            if (root.TryGetProperty("reference_crop", out JsonElement refCrop) && refCrop.ValueKind == JsonValueKind.String)
+            {
+                result.ReferenceCrop = refCrop.GetString();
+            }
+            if (root.TryGetProperty("selfie_crop", out JsonElement selfCrop) && selfCrop.ValueKind == JsonValueKind.String)
+            {
+                result.SelfieCrop = selfCrop.GetString();
+            }
             return result;
         }
     }
@@ -241,7 +258,7 @@ public sealed class EkycHttpClient : IEkycClient
         try
         {
             using (HttpResponseMessage response = await httpClient.GetAsync(
-                "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie", ct))
+                "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie?allow_captured=true", ct))
             {
                 if (response.IsSuccessStatusCode)
                 {
@@ -378,7 +395,7 @@ public sealed class EkycHttpClient : IEkycClient
                     }
                 }
                 logger?.LogWarning("eKYC: Dịch vụ trả HTTP {StatusCode} cho {Path}: {Body}", response.StatusCode, path, body);
-                if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
+                if (response.StatusCode == HttpStatusCode.UnprocessableEntity || response.StatusCode == HttpStatusCode.BadRequest)
                 {
                     throw new AppException(AppErrorType.Validation, ErrorCode.EkycImageRejected,
                         ReadDetail(body, "Ảnh không dùng được. Vui lòng chụp lại rõ hơn."));

@@ -7,4 +7,8 @@ public sealed class EkycFaceComparison
     public double Score { get; set; }
 
     public bool Matched { get; set; }
+
+    public string? ReferenceCrop { get; set; }
+
+    public string? SelfieCrop { get; set; }
 }

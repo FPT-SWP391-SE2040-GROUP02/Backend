@@ -109,6 +109,15 @@ public sealed class FakeOwnerIdentityRepository : IOwnerIdentityRepository
         return Task.FromResult(Identities.FirstOrDefault(i => i.UserId == userId));
     }
 
+    public Task<List<OwnerIdentity>> ListByCitizenIdLast4ExceptUserAsync(string last4, Guid excludeUserId, CancellationToken ct)
+    {
+        return Task.FromResult(Identities
+            .Where(i => i.CitizenIdLast4 == last4 && i.UserId != excludeUserId)
+            .OrderBy(i => i.CreatedAt)
+            .ThenBy(i => i.Id)
+            .ToList());
+    }
+
     public void Add(OwnerIdentity identity)
     {
         Identities.Add(identity);
@@ -172,6 +181,19 @@ public sealed class FakeEkycBeneficiaryRepository : IBeneficiaryRepository
         Guid vaultId, string? last4Filter, int pageIndex, int pageSize, bool isAscending, CancellationToken ct)
     {
         return Task.FromResult((new List<Beneficiary>(), 0));
+    }
+
+    public Task<int> CountByVaultIdAsync(Guid vaultId, CancellationToken ct)
+    {
+        int count = 0;
+        foreach (Beneficiary beneficiary in Beneficiaries)
+        {
+            if (beneficiary.VaultId == vaultId)
+            {
+                count++;
+            }
+        }
+        return Task.FromResult(count);
     }
 
     public void Add(Beneficiary beneficiary)
