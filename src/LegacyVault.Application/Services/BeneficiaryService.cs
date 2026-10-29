@@ -365,29 +365,41 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         }
 
         string normalized = builder.ToString();
-        if (normalized.Length == 0)
+        if (normalized.Length < 2)
         {
-            throw ValidationErrors.For("fullName", "Họ tên không được để trống.");
+            throw ValidationErrors.For("fullName", "Họ và tên phải có ít nhất 2 ký tự.");
+        }
+        if (normalized.Length > 200)
+        {
+            throw ValidationErrors.For("fullName", "Họ tên tối đa 200 ký tự.");
+        }
+        foreach (char c in normalized)
+        {
+            if (!char.IsLetter(c) && !char.IsWhiteSpace(c))
+            {
+                throw ValidationErrors.For("fullName", "Họ và tên chỉ được chứa chữ cái và khoảng trắng.");
+            }
         }
         return normalized;
     }
 
     /// <summary>
-    /// Chuẩn hóa email/số điện thoại ngay trên data. "" hoặc chỉ khoảng trắng = không có.
-    /// Email: trim, chữ thường. Phone: bỏ khoảng trắng, dấu chấm, dấu gạch rồi phải khớp ^\+?[0-9]{9,15}$.
-    /// §5.2 bước 7: phải còn ít nhất email hoặc số điện thoại.
+    /// Chuẩn hóa email/số điện thoại ngay trên data. Email là bắt buộc. "" hoặc chỉ khoảng trắng = không có.
+    /// Email: trim, chữ thường, phải đúng định dạng email. Phone: nếu có thì bỏ khoảng trắng, dấu chấm, dấu gạch rồi khớp ^\+?[0-9]{9,15}$.
     /// </summary>
     private static void NormalizeContact(BeneficiaryPersonalData data)
     {
         string? email = TextInput.NullIfBlank(data.Email);
-        if (email != null)
+        if (email == null)
         {
-            email = email.ToLowerInvariant();
-            EmailAddressAttribute emailAttribute = new EmailAddressAttribute();
-            if (!emailAttribute.IsValid(email))
-            {
-                throw ValidationErrors.For("email", "Email không hợp lệ.");
-            }
+            throw ValidationErrors.For("email", "Email là bắt buộc.");
+        }
+
+        email = email.ToLowerInvariant();
+        EmailAddressAttribute emailAttribute = new EmailAddressAttribute();
+        if (!emailAttribute.IsValid(email) || !email.Contains('@') || !email.Contains('.'))
+        {
+            throw ValidationErrors.For("email", "Email không hợp lệ.");
         }
 
         string? phone = TextInput.NullIfBlank(data.Phone);
@@ -404,14 +416,10 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             phone = builder.ToString();
             if (!PhonePattern().IsMatch(phone))
             {
-                throw ValidationErrors.For("phone", "Số điện thoại không hợp lệ.");
+                throw ValidationErrors.For("phone", "Số điện thoại không hợp lệ (9 đến 15 chữ số).");
             }
         }
 
-        if (email == null && phone == null)
-        {
-            throw ValidationErrors.For("contact", "Cần ít nhất email hoặc số điện thoại của người nhận.");
-        }
         data.Email = email;
         data.Phone = phone;
     }

@@ -209,7 +209,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
-            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, phone = "0901 234.567" });
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, email = Email, phone = "0901 234.567" });
 
         // Kiểm tra: lưu được ngay; không còn nhãn isMinor, minorAcknowledgedAt luôn null với hồ sơ mới.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -217,7 +217,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         Assert.False(created.TryGetProperty("isMinor", out _));
         Assert.Equal(JsonValueKind.Null, created.GetProperty("minorAcknowledgedAt").ValueKind);
         Assert.Equal("0901234567", created.GetProperty("phone").GetString());
-        Assert.Equal(JsonValueKind.Null, created.GetProperty("email").ValueKind);
+        Assert.Equal(Email, created.GetProperty("email").GetString());
     }
 
     [SqlFact]
@@ -229,7 +229,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
-            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, phone = "0901 234.567", confirmMinor = true });
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, email = Email, phone = "0901 234.567", confirmMinor = true });
 
         // Kiểm tra: trường thừa bị bỏ qua, không lỗi và không ghi dấu xác nhận.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
