@@ -346,7 +346,7 @@ public sealed class DesignationFlowTests : IAsyncLifetime
         string tenYearsAgo = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime)
             .AddYears(-10).ToString("yyyy-MM-dd");
         HttpResponseMessage createMinor = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
-            new { citizenId = CitizenA, fullName = "Bé A", dateOfBirth = tenYearsAgo, phone = "0901234567" });
+            new { citizenId = CitizenA, fullName = "Bé A", dateOfBirth = tenYearsAgo, email = ApiTestHelpers.BeneficiaryEmail });
         Assert.Equal(HttpStatusCode.Created, createMinor.StatusCode);
         Guid minorId = (await ApiTestHelpers.ReadJsonAsync(createMinor)).GetProperty("id").GetGuid();
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");

@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using LegacyVault.Infrastructure.Data;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.DeathCases;
@@ -150,22 +153,13 @@ public sealed class VerifierBeneficiaryConflictTests : IAsyncLifetime
         HttpResponseMessage addAsset = await ApiTestHelpers.AddAssetToContainerAsync(ownerClient, vaultId, containerId, assetId);
         Assert.Equal(HttpStatusCode.OK, addAsset.StatusCode);
 
-        Guid beneficiaryId;
-        if (beneficiaryHasEmail)
+        JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
+            ownerClient, vaultId, "001090000001", "Người nhận A");
+        Guid beneficiaryId = beneficiary.GetProperty("id").GetGuid();
+        if (!beneficiaryHasEmail)
         {
-            JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
-                ownerClient, vaultId, "001090000001", "Người nhận 1");
-            beneficiaryId = beneficiary.GetProperty("id").GetGuid();
-        }
-        else
-        {
-            // Phải có ít nhất email hoặc số điện thoại (§5.2 bước 7), nên chỉ khai số điện thoại.
-            HttpResponseMessage created = await ownerClient.PostAsJsonAsync(
-                $"/api/v1/vaults/{vaultId}/beneficiaries",
-                new { citizenId = "001090000001", fullName = "Người nhận 1", dateOfBirth = "1990-05-20", phone = "0901234567" });
-            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-            JsonElement beneficiary = await ApiTestHelpers.ReadJsonAsync(created);
-            beneficiaryId = beneficiary.GetProperty("id").GetGuid();
+            // API giờ bắt buộc email, nên xóa email trong DB để giả lập hồ sơ cũ tạo trước quy tắc này.
+            await RemoveBeneficiaryEmailAsync(beneficiaryId);
         }
         HttpResponseMessage designate = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
             ownerClient, vaultId, containerId, beneficiaryId);
@@ -182,6 +176,21 @@ public sealed class VerifierBeneficiaryConflictTests : IAsyncLifetime
             vault.Owner = await db.Users.AsNoTracking().SingleAsync(u => u.Id == ownerId);
         });
         return vault;
+    }
+
+    /// <summary>Giải mã dữ liệu người nhận, bỏ email rồi mã hóa và lưu lại.</summary>
+    private async Task RemoveBeneficiaryEmailAsync(Guid beneficiaryId)
+    {
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            IBeneficiaryDataProtector protector = scope.ServiceProvider.GetRequiredService<IBeneficiaryDataProtector>();
+            Beneficiary beneficiary = await db.Beneficiaries.SingleAsync(b => b.Id == beneficiaryId);
+            BeneficiaryPersonalData data = protector.Unprotect(beneficiary);
+            data.Email = null;
+            protector.Protect(beneficiary, data);
+            await db.SaveChangesAsync();
+        }
     }
 
     /// <summary>Executor điền đủ hồ sơ rồi gửi; trả Id hồ sơ.</summary>

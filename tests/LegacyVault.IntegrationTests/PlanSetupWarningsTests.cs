@@ -258,7 +258,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         JsonElement container = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói thử nghiệm SETUP-01");
         Guid containerId = container.GetProperty("id").GetGuid();
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
-            owner, vaultId, "000000001017", "Người nhận thử nghiệm SETUP-01");
+            owner, vaultId, "000000001017", "Người nhận thử nghiệm");
         Guid beneficiaryId = beneficiary.GetProperty("id").GetGuid();
 
         HttpResponseMessage addAsset = await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId);

@@ -21,11 +21,10 @@ public sealed class DeathCaseReviewRepository : IDeathCaseReviewRepository
     public async Task<(List<VerifierCaseRow> Items, int TotalCount)> FindAssignedPageAsync(
         Guid verifierUserId, string sortBy, bool isAscending, int pageIndex, int pageSize, CancellationToken ct)
     {
-        // V1 + pool: hồ sơ có phân công đang hiệu lực của Verifier này, HOẶC hồ sơ đang chờ xét duyệt chưa có phân công hiệu lực.
+        // V1: chỉ tính phân công đang hiệu lực (EndedAt null) của chính Verifier này.
         IQueryable<VerifierCaseRow> query = context.Set<DeathCase>()
             .AsNoTracking()
-            .Where(c => c.Assignments.Any(a => a.VerifierUserId == verifierUserId && a.EndedAt == null)
-                || (!c.Assignments.Any(a => a.EndedAt == null) && (c.Status == DeathCaseStatus.UnderReview || c.Status == DeathCaseStatus.SupplementRequired || c.Status == DeathCaseStatus.Suspended)))
+            .Where(c => c.Assignments.Any(a => a.VerifierUserId == verifierUserId && a.EndedAt == null))
             .Select(c => new VerifierCaseRow
             {
                 Id = c.Id,
@@ -45,37 +44,17 @@ public sealed class DeathCaseReviewRepository : IDeathCaseReviewRepository
                     .FirstOrDefault(),
                 AssignedAt = c.Assignments
                     .Where(a => a.VerifierUserId == verifierUserId && a.EndedAt == null)
-                    .Select(a => (DateTimeOffset?)a.AssignedAt)
-                    .FirstOrDefault()
-                    ?? c.Assignments.Where(a => a.EndedAt == null).Select(a => (DateTimeOffset?)a.AssignedAt).FirstOrDefault()
-                    ?? c.Versions.Where(v => v.VersionNo == c.ReviewVersionNo).Select(v => (DateTimeOffset?)v.SubmittedAt).FirstOrDefault()
-                    ?? c.CreatedAt,
+                    .Select(a => a.AssignedAt)
+                    .First(),
                 DueAt = c.Assignments
                     .Where(a => a.VerifierUserId == verifierUserId && a.EndedAt == null)
-                    .Select(a => (DateTimeOffset?)a.DueAt)
-                    .FirstOrDefault()
-                    ?? c.Assignments.Where(a => a.EndedAt == null).Select(a => (DateTimeOffset?)a.DueAt).FirstOrDefault()
-                    ?? c.ObjectionEndsAt
-                    ?? c.CreatedAt.AddDays(7),
+                    .Select(a => a.DueAt)
+                    .First(),
                 ObjectionEndsAt = c.ObjectionEndsAt,
                 SupplementOverdueAt = c.SupplementOverdueAt,
                 UnreviewedFlagCount = c.Flags.Count(f => f.ReviewedAt == null
                     && c.Versions.Any(v => v.Id == f.VersionId && v.VersionNo == c.ReviewVersionNo)),
                 ClosedAt = c.ClosedAt,
-                ExecutorFullName = context.Set<User>()
-                    .Where(u => u.Id == c.Versions
-                        .Where(v => v.VersionNo == c.ReviewVersionNo)
-                        .Select(v => v.SubmittedByUserId)
-                        .FirstOrDefault())
-                    .Select(u => u.FullName)
-                    .FirstOrDefault(),
-                ExecutorEmail = context.Set<User>()
-                    .Where(u => u.Id == c.Versions
-                        .Where(v => v.VersionNo == c.ReviewVersionNo)
-                        .Select(v => v.SubmittedByUserId)
-                        .FirstOrDefault())
-                    .Select(u => u.Email)
-                    .FirstOrDefault(),
             });
 
         int totalCount = await query.CountAsync(ct);

@@ -115,6 +115,16 @@ public static class ApiTestHelpers
         return await ReadJsonAsync(response);
     }
 
+    /// <summary>
+    /// Tên người nhận theo thứ tự (0 → "Người nhận A", 1 → "Người nhận B"...).
+    /// Họ tên chỉ được chứa chữ cái và khoảng trắng nên không ghép số vào tên.
+    /// </summary>
+    public static string BeneficiaryName(int index)
+    {
+        char letter = (char)('A' + index);
+        return "Người nhận " + letter;
+    }
+
     /// <summary>Tạo gói qua API (POST .../containers, 201), trả JSON gói.</summary>
     public static async Task<JsonElement> CreateContainerAsync(HttpClient client, Guid vaultId, string name)
     {

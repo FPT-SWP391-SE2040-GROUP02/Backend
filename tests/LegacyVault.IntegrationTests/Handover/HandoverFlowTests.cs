@@ -96,7 +96,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         for (int i = 0; i < beneficiaryCount; i++)
         {
             string citizenId = "00109000000" + (i + 1);
-            JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, citizenId, "Người nhận " + (i + 1));
+            JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, citizenId, ApiTestHelpers.BeneficiaryName(i));
             HttpResponseMessage designate = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
                 owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
             Assert.Equal(HttpStatusCode.OK, designate.StatusCode);

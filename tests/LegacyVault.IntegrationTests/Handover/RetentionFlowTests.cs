@@ -114,7 +114,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         string[] ids = { "001090000001", "001090000002" };
         for (int i = 0; i < beneficiaryCount; i++)
         {
-            JsonElement b = await ApiTestHelpers.CreateBeneficiaryAsync(ownerClient, vaultId, ids[i], "Người nhận " + i);
+            JsonElement b = await ApiTestHelpers.CreateBeneficiaryAsync(ownerClient, vaultId, ids[i], ApiTestHelpers.BeneficiaryName(i));
             Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(
                 ownerClient, vaultId, containerId, b.GetProperty("id").GetGuid())).StatusCode);
         }
