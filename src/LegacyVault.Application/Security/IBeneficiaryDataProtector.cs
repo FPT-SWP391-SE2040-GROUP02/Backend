@@ -10,7 +10,6 @@ public interface IBeneficiaryDataProtector
     /// <summary>
     /// Tạo DEK MỚI, mã hóa phần định danh và phần liên hệ rồi gán vào entity
     /// (EncryptionKeyId, WrappedDataKey, IdentityEncrypted, ContactEncrypted, CitizenIdLast4).
-    /// Cần beneficiary.Id đã có giá trị (dùng trong AAD).
     /// </summary>
     void Protect(Beneficiary beneficiary, BeneficiaryPersonalData data);
 

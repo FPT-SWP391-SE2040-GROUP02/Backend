@@ -555,7 +555,7 @@ public sealed class DeathCaseService : IDeathCaseService
         next.CreatedByUserId = context.UserId;
         next.CreatedAt = now;
 
-        // DATA-02: chép dữ liệu nhạy cảm sang bản mới và mã hóa lại bằng DEK mới (AAD gắn Id của bản mới).
+        // DATA-02: chép dữ liệu nhạy cảm sang bản mới và mã hóa lại bằng DEK mới.
         DeathCaseIdentityData? identity = dataProtector.Unprotect(current);
         if (identity != null)
         {

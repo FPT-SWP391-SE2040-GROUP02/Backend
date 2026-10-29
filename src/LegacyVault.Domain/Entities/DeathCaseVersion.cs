@@ -6,7 +6,7 @@ namespace LegacyVault.Domain.Entities;
 /// <remarks>
 /// - DEATH-04: bản có SubmittedAt (Executor đã xác nhận đúng) không bao giờ sửa; muốn đổi thì tạo bản mới (D5).
 /// - DATA-02 (D6): họ tên Owner, CCCD Owner, số giấy, nơi cấp mã hóa chung một gói AES-256-GCM,
-///   DEK mới mỗi lần lưu, AAD gắn Id phiên bản. Ngày mất, ngày cấp để rõ vì cần so sánh và kiểm điểm danh.
+///   DEK mới mỗi lần lưu. Ngày mất, ngày cấp để rõ vì cần so sánh và kiểm điểm danh.
 /// - Các trường mã hóa null khi Executor chưa nhập gì.
 /// </remarks>
 public class DeathCaseVersion

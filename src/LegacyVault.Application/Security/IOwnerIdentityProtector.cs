@@ -13,7 +13,7 @@ public interface IOwnerIdentityProtector
 {
     /// <summary>
     /// Tạo DEK MỚI, mã hóa danh tính rồi gán vào entity (EncryptionKeyId, WrappedDataKey, IdentityEncrypted,
-    /// CitizenIdLast4). Cần identity.Id đã có giá trị (dùng trong AAD).
+    /// CitizenIdLast4).
     /// </summary>
     void Protect(OwnerIdentity identity, OwnerIdentityData data);
 
