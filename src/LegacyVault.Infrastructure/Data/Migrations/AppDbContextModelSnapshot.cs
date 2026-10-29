@@ -63,13 +63,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("Sha256")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .IsUnicode(false)
-                        .HasColumnType("char(64)")
-                        .IsFixedLength();
-
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
 
@@ -610,13 +603,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<int>("Position")
                         .HasColumnType("int");
 
-                    b.Property<string>("Sha256")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .IsUnicode(false)
-                        .HasColumnType("char(64)")
-                        .IsFixedLength();
-
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
 
@@ -819,12 +805,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<bool?>("SelfieImageMatched")
                         .HasColumnType("bit");
-
-                    b.Property<string>("SelfieImageSha256")
-                        .HasMaxLength(64)
-                        .IsUnicode(false)
-                        .HasColumnType("char(64)")
-                        .IsFixedLength();
 
                     b.Property<long?>("SelfieImageSizeBytes")
                         .HasColumnType("bigint");
@@ -1064,12 +1044,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .IsUnicode(false)
                         .HasColumnType("varchar(64)");
-
-                    b.Property<string>("PendingDocumentImageSha256")
-                        .HasMaxLength(64)
-                        .IsUnicode(false)
-                        .HasColumnType("char(64)")
-                        .IsFixedLength();
 
                     b.Property<long?>("PendingDocumentImageSizeBytes")
                         .HasColumnType("bigint");
@@ -1899,12 +1873,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(64)");
 
-                    b.Property<string>("DocumentImageSha256")
-                        .HasMaxLength(64)
-                        .IsUnicode(false)
-                        .HasColumnType("char(64)")
-                        .IsFixedLength();
-
                     b.Property<long?>("DocumentImageSizeBytes")
                         .HasColumnType("bigint");
 
@@ -2338,12 +2306,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .IsUnicode(false)
                         .HasColumnType("varchar(64)");
-
-                    b.Property<string>("AvatarSha256")
-                        .HasMaxLength(64)
-                        .IsUnicode(false)
-                        .HasColumnType("char(64)")
-                        .IsFixedLength();
 
                     b.Property<long?>("AvatarSizeBytes")
                         .HasColumnType("bigint");

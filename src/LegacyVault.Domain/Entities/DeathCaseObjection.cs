@@ -56,8 +56,6 @@ public class DeathCaseObjection
 
     public long? SelfieImageSizeBytes { get; set; }
 
-    public string? SelfieImageSha256 { get; set; }
-
     public string? SelfieImageEncryptionKeyId { get; set; }
 
     /// <summary>DEK của ảnh, đã bọc bằng KEK. Không trả cho FE, không log.</summary>

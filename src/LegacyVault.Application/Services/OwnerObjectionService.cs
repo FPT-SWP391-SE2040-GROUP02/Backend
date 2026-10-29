@@ -304,7 +304,6 @@ public sealed class OwnerObjectionService : IOwnerObjectionService
         objection.SelfieImageStorageKey = stored.StorageKey;
         objection.SelfieImageContentType = contentType;
         objection.SelfieImageSizeBytes = stored.SizeBytes;
-        objection.SelfieImageSha256 = stored.Sha256;
         objection.SelfieImageEncryptionKeyId = stored.EncryptionKeyId;
         objection.SelfieImageWrappedDataKey = stored.WrappedDataKey;
         objection.SelfieImageCapturedAt = now;

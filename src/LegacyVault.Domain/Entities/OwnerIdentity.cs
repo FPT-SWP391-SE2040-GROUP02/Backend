@@ -49,8 +49,6 @@ public class OwnerIdentity
 
     public long? DocumentImageSizeBytes { get; set; }
 
-    public string? DocumentImageSha256 { get; set; }
-
     public string? DocumentImageEncryptionKeyId { get; set; }
 
     /// <summary>DEK của ảnh, đã bọc bằng KEK. Không trả cho FE, không log.</summary>

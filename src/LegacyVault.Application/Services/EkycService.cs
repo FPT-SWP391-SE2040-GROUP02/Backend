@@ -729,7 +729,6 @@ public sealed class EkycService : IEkycService
         verification.PendingDocumentImageStorageKey = stored.StorageKey;
         verification.PendingDocumentImageContentType = contentType;
         verification.PendingDocumentImageSizeBytes = stored.SizeBytes;
-        verification.PendingDocumentImageSha256 = stored.Sha256;
         verification.PendingDocumentImageEncryptionKeyId = stored.EncryptionKeyId;
         verification.PendingDocumentImageWrappedDataKey = stored.WrappedDataKey;
         return stored.StorageKey;
@@ -745,7 +744,6 @@ public sealed class EkycService : IEkycService
         identity.DocumentImageStorageKey = verification.PendingDocumentImageStorageKey;
         identity.DocumentImageContentType = verification.PendingDocumentImageContentType;
         identity.DocumentImageSizeBytes = verification.PendingDocumentImageSizeBytes;
-        identity.DocumentImageSha256 = verification.PendingDocumentImageSha256;
         identity.DocumentImageEncryptionKeyId = verification.PendingDocumentImageEncryptionKeyId;
         identity.DocumentImageWrappedDataKey = verification.PendingDocumentImageWrappedDataKey;
         identity.DocumentImageCapturedAt = verification.CreatedAt;
@@ -765,7 +763,6 @@ public sealed class EkycService : IEkycService
         verification.PendingDocumentImageStorageKey = null;
         verification.PendingDocumentImageContentType = null;
         verification.PendingDocumentImageSizeBytes = null;
-        verification.PendingDocumentImageSha256 = null;
         verification.PendingDocumentImageEncryptionKeyId = null;
         verification.PendingDocumentImageWrappedDataKey = null;
     }

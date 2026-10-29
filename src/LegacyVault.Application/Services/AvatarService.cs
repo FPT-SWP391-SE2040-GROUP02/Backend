@@ -70,7 +70,6 @@ public sealed class AvatarService : IAvatarService
         user.AvatarStorageKey = stored.StorageKey;
         user.AvatarContentType = contentType;
         user.AvatarSizeBytes = stored.SizeBytes;
-        user.AvatarSha256 = stored.Sha256;
         user.AvatarEncryptionKeyId = stored.EncryptionKeyId;
         user.AvatarWrappedDataKey = stored.WrappedDataKey;
         user.AvatarUpdatedAt = now;
@@ -102,7 +101,6 @@ public sealed class AvatarService : IAvatarService
         StoredContent stored = new StoredContent();
         stored.StorageKey = user.AvatarStorageKey;
         stored.SizeBytes = user.AvatarSizeBytes ?? 0;
-        stored.Sha256 = user.AvatarSha256 ?? string.Empty;
         stored.EncryptionKeyId = user.AvatarEncryptionKeyId ?? string.Empty;
         stored.WrappedDataKey = user.AvatarWrappedDataKey;
 
@@ -137,7 +135,6 @@ public sealed class AvatarService : IAvatarService
         user.AvatarStorageKey = null;
         user.AvatarContentType = null;
         user.AvatarSizeBytes = null;
-        user.AvatarSha256 = null;
         user.AvatarEncryptionKeyId = null;
         user.AvatarWrappedDataKey = null;
         user.AvatarUpdatedAt = null;

@@ -37,9 +37,6 @@ public class Asset
     /// <summary>Kích thước nội dung gốc, tính bằng byte.</summary>
     public long SizeBytes { get; set; }
 
-    /// <summary>SHA-256 của nội dung gốc, dạng hex chữ thường; dùng kiểm tra toàn vẹn khi đọc lại.</summary>
-    public string Sha256 { get; set; } = string.Empty;
-
     /// <summary>Khóa object trong kho lưu trữ; chỉ backend dùng, không trả cho FE.</summary>
     public string StorageKey { get; set; } = string.Empty;
 

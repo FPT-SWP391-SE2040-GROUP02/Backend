@@ -15,7 +15,6 @@ public sealed class DeathCaseFileConfiguration : IEntityTypeConfiguration<DeathC
         // Độ dài cột giống AssetConfiguration.
         builder.Property(f => f.FileName).HasMaxLength(255).IsRequired();
         builder.Property(f => f.ContentType).HasMaxLength(100).IsRequired();
-        builder.Property(f => f.Sha256).HasMaxLength(64).IsFixedLength().IsUnicode(false).IsRequired();
         builder.Property(f => f.StorageKey).HasMaxLength(200).IsUnicode(false).IsRequired();
         builder.Property(f => f.EncryptionKeyId).HasMaxLength(64).IsUnicode(false).IsRequired();
         builder.Property(f => f.WrappedDataKey).HasMaxLength(60).IsFixedLength().IsRequired();

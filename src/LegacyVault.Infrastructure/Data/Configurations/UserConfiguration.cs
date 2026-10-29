@@ -31,7 +31,6 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.AvatarStorageKey).HasMaxLength(200).IsUnicode(false);
         builder.Property(u => u.AvatarContentType).HasMaxLength(50).IsUnicode(false);
-        builder.Property(u => u.AvatarSha256).HasMaxLength(64).IsFixedLength().IsUnicode(false);
         builder.Property(u => u.AvatarEncryptionKeyId).HasMaxLength(64).IsUnicode(false);
         builder.Property(u => u.AvatarWrappedDataKey).HasMaxLength(60).IsFixedLength();
 

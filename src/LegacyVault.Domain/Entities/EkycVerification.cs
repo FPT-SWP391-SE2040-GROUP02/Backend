@@ -74,8 +74,6 @@ public class EkycVerification
 
     public long? PendingDocumentImageSizeBytes { get; set; }
 
-    public string? PendingDocumentImageSha256 { get; set; }
-
     public string? PendingDocumentImageEncryptionKeyId { get; set; }
 
     /// <summary>DEK của ảnh, đã bọc bằng KEK. Không trả cho FE, không log.</summary>

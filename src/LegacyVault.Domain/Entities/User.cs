@@ -47,8 +47,6 @@ public class User
 
     public long? AvatarSizeBytes { get; set; }
 
-    public string? AvatarSha256 { get; set; }
-
     public string? AvatarEncryptionKeyId { get; set; }
 
     /// <summary>DEK của ảnh, đã bọc bằng KEK (60 byte). Không trả cho FE, không log.</summary>

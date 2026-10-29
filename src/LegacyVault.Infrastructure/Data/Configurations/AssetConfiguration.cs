@@ -17,7 +17,6 @@ public sealed class AssetConfiguration : IEntityTypeConfiguration<Asset>
         builder.HasIndex(a => new { a.VaultId, a.CreatedAt });
         builder.Property(a => a.FileName).HasMaxLength(255);
         builder.Property(a => a.ContentType).HasMaxLength(100).IsRequired();
-        builder.Property(a => a.Sha256).HasMaxLength(64).IsFixedLength().IsUnicode(false).IsRequired();
         builder.Property(a => a.StorageKey).HasMaxLength(200).IsUnicode(false).IsRequired();
         builder.HasIndex(a => a.StorageKey).IsUnique();
         builder.Property(a => a.EncryptionKeyId).HasMaxLength(64).IsUnicode(false).IsRequired();
