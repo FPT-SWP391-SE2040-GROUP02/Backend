@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
@@ -14,13 +13,10 @@ namespace LegacyVault.Infrastructure.Security;
 /// - Mỗi lần Protect sinh một DEK mới (32 byte); DB chỉ lưu DEK đã bọc bằng KEK.
 /// - Họ tên Owner, CCCD Owner, số giấy, nơi cấp mã hóa chung một gói AES-256-GCM;
 ///   kết quả = nonce (12 byte) + ciphertext + tag (16 byte).
-/// - AAD = "death-case-version:{Id}": chép gói sang phiên bản khác thì giải mã thất bại.
 /// - DEK và bản rõ tạm được xóa khỏi RAM ngay sau khi dùng. Dữ liệu bị sửa → CryptographicException, không nuốt lỗi.
 /// </remarks>
 public sealed class DeathCaseDataProtector : IDeathCaseDataProtector
 {
-    private const int NonceSize = 12;
-    private const int TagSize = 16;
 
     private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 
@@ -64,7 +60,7 @@ public sealed class DeathCaseDataProtector : IDeathCaseDataProtector
             WrappedDataKey wrapped = dataKeyProtector.Wrap(dataKey);
             version.EncryptionKeyId = wrapped.KeyId;
             version.WrappedDataKey = wrapped.Value;
-            version.IdentityEncrypted = Encrypt(dataKey, plainText, BuildAad(version.Id));
+            version.IdentityEncrypted = AesGcmCipher.Encrypt(dataKey, plainText);
             if (data.OwnerCitizenId != null)
             {
                 version.OwnerCitizenIdLast4 = data.OwnerCitizenId.Substring(data.OwnerCitizenId.Length - 4);
@@ -96,7 +92,7 @@ public sealed class DeathCaseDataProtector : IDeathCaseDataProtector
         byte[] plainText = Array.Empty<byte>();
         try
         {
-            plainText = Decrypt(dataKey, version.IdentityEncrypted, BuildAad(version.Id));
+            plainText = AesGcmCipher.Decrypt(dataKey, version.IdentityEncrypted);
             IdentityPayload? payload = JsonSerializer.Deserialize<IdentityPayload>(plainText, JsonOptions);
             if (payload == null)
             {
@@ -117,48 +113,6 @@ public sealed class DeathCaseDataProtector : IDeathCaseDataProtector
         }
     }
 
-    private static byte[] BuildAad(Guid versionId)
-    {
-        return Encoding.UTF8.GetBytes($"death-case-version:{versionId}");
-    }
-
-    /// <summary>Kết quả = nonce (12) + ciphertext (cùng độ dài bản rõ) + tag (16).</summary>
-    private static byte[] Encrypt(byte[] dataKey, byte[] plainText, byte[] aad)
-    {
-        byte[] result = new byte[NonceSize + plainText.Length + TagSize];
-        Span<byte> nonce = result.AsSpan(0, NonceSize);
-        Span<byte> cipherText = result.AsSpan(NonceSize, plainText.Length);
-        Span<byte> tag = result.AsSpan(NonceSize + plainText.Length, TagSize);
-        RandomNumberGenerator.Fill(nonce);
-
-        using (AesGcm aes = new AesGcm(dataKey, TagSize))
-        {
-            aes.Encrypt(nonce, plainText, cipherText, tag, aad);
-        }
-        return result;
-    }
-
-    /// <summary>Sai tag (dữ liệu/AAD bị sửa) → AuthenticationTagMismatchException (là CryptographicException).</summary>
-    private static byte[] Decrypt(byte[] dataKey, byte[] encrypted, byte[] aad)
-    {
-        if (encrypted.Length < NonceSize + TagSize)
-        {
-            throw new CryptographicException("Dữ liệu hồ sơ chứng tử đã mã hóa có độ dài không hợp lệ.");
-        }
-
-        int cipherLength = encrypted.Length - NonceSize - TagSize;
-        byte[] plainText = new byte[cipherLength];
-        using (AesGcm aes = new AesGcm(dataKey, TagSize))
-        {
-            aes.Decrypt(
-                encrypted.AsSpan(0, NonceSize),
-                encrypted.AsSpan(NonceSize, cipherLength),
-                encrypted.AsSpan(NonceSize + cipherLength, TagSize),
-                plainText,
-                aad);
-        }
-        return plainText;
-    }
 
     /// <summary>Gói dữ liệu trong IdentityEncrypted.</summary>
     private sealed class IdentityPayload

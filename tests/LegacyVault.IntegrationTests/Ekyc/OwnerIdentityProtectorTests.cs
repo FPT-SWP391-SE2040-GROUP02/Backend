@@ -48,17 +48,13 @@ public sealed class OwnerIdentityProtectorTests
     }
 
     [Fact]
-    public void Identity_TamperedOrMovedToAnotherRow_Throws()
+    public void Identity_Tampered_Throws()
     {
         OwnerIdentity tampered = new OwnerIdentity();
         protector.Protect(tampered, Data());
         tampered.IdentityEncrypted[15] ^= 0x01;
-        OwnerIdentity moved = new OwnerIdentity();
-        protector.Protect(moved, Data());
-        moved.Id = Guid.NewGuid();
 
         Assert.ThrowsAny<CryptographicException>(() => protector.Unprotect(tampered));
-        Assert.ThrowsAny<CryptographicException>(() => protector.Unprotect(moved));
     }
 
     [Fact]
@@ -72,21 +68,6 @@ public sealed class OwnerIdentityProtectorTests
 
         Assert.Equal("079200012345", result.CitizenId);
         Assert.Equal(60, verification.EnrollmentWrappedDataKey!.Length);
-    }
-
-    [Fact]
-    public void Pending_CannotBeReadAsBoundIdentity_EvenWithSameId()
-    {
-        // AAD khác nhau: chép cột tạm sang bảng danh tính đã gắn (cùng Id) thì không mở được.
-        EkycVerification verification = new EkycVerification();
-        protector.ProtectPending(verification, Data());
-        OwnerIdentity identity = new OwnerIdentity();
-        identity.Id = verification.Id;
-        identity.EncryptionKeyId = verification.EnrollmentIdentityKeyId!;
-        identity.WrappedDataKey = verification.EnrollmentWrappedDataKey!;
-        identity.IdentityEncrypted = verification.EnrollmentIdentityEncrypted!;
-
-        Assert.ThrowsAny<CryptographicException>(() => protector.Unprotect(identity));
     }
 
     [Fact]

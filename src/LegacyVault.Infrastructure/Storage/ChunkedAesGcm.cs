@@ -17,8 +17,8 @@ namespace LegacyVault.Infrastructure.Storage;
 /// mỗi khối         = ciphertext (bằng độ dài nội dung của khối) + tag GCM 16 byte
 /// </code>
 /// - Khối thường chứa đúng ChunkSize byte nội dung. Khối cuối chứa ít hơn ChunkSize byte (có thể 0 byte).
-/// - AAD của mỗi khối = header + số thứ tự khối + cờ "khối cuối". Vì vậy cắt bớt tệp, đổi thứ tự hay
-///   ghép khối của tệp khác đều làm sai tag và bị phát hiện khi giải mã.
+/// - Nonce gắn số thứ tự khối nên đổi thứ tự khối làm sai tag. Tệp phải kết thúc bằng một khối ngắn hơn
+///   ChunkSize (có thể chỉ có tag), nên cắt bớt tệp đúng ranh giới khối cũng bị phát hiện.
 /// - Nonce 12 byte = 4 byte 0 + số thứ tự khối (8 byte big-endian). Dùng nonce đếm tăng là an toàn
 ///   vì mỗi phiên bản nội dung có DEK riêng, một DEK không bao giờ mã hóa hai tệp.
 /// </remarks>
@@ -68,8 +68,7 @@ public static class ChunkedAesGcm
                     CreateNonce(chunkIndex),
                     plainChunk.AsSpan(0, length),
                     cipherChunk.AsSpan(0, length),
-                    tag,
-                    CreateAssociatedData(header, chunkIndex, isFinal));
+                    tag);
 
                 await output.WriteAsync(cipherChunk.AsMemory(0, length), ct);
                 await output.WriteAsync(tag, ct);
@@ -126,8 +125,7 @@ public static class ChunkedAesGcm
                     CreateNonce(chunkIndex),
                     sealedChunk.AsSpan(0, length),
                     sealedChunk.AsSpan(length, TagSize),
-                    plainChunk.AsSpan(0, length),
-                    CreateAssociatedData(header, chunkIndex, isFinal));
+                    plainChunk.AsSpan(0, length));
 
                 plainHash.AppendData(plainChunk, 0, length);
                 await output.WriteAsync(plainChunk.AsMemory(0, length), ct);
@@ -160,18 +158,6 @@ public static class ChunkedAesGcm
         byte[] nonce = new byte[NonceSize];
         BinaryPrimitives.WriteInt64BigEndian(nonce.AsSpan(4), chunkIndex);
         return nonce;
-    }
-
-    private static byte[] CreateAssociatedData(byte[] header, long chunkIndex, bool isFinal)
-    {
-        byte[] data = new byte[HeaderSize + 8 + 1];
-        header.CopyTo(data, 0);
-        BinaryPrimitives.WriteInt64BigEndian(data.AsSpan(HeaderSize), chunkIndex);
-        if (isFinal)
-        {
-            data[HeaderSize + 8] = 1;
-        }
-        return data;
     }
 
     /// <summary>Đọc tới khi đầy buffer hoặc hết stream. Trả số byte đã đọc.</summary>

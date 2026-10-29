@@ -68,10 +68,6 @@ public sealed class DeathCaseDataProtectorTests
         DeathCaseDataProtector protector = CreateProtector();
         DeathCaseVersion version = new DeathCaseVersion();
         protector.Protect(version, CreateData());
-        DeathCaseVersion copiedToOther = new DeathCaseVersion();
-        copiedToOther.EncryptionKeyId = version.EncryptionKeyId;
-        copiedToOther.WrappedDataKey = version.WrappedDataKey;
-        copiedToOther.IdentityEncrypted = version.IdentityEncrypted;
         DeathCaseVersion flipped = new DeathCaseVersion();
         flipped.Id = version.Id;
         flipped.EncryptionKeyId = version.EncryptionKeyId;
@@ -81,11 +77,9 @@ public sealed class DeathCaseDataProtectorTests
         flipped.IdentityEncrypted = tampered;
 
         // Hành động
-        Exception? copiedError = Record.Exception(() => protector.Unprotect(copiedToOther));
         Exception? flippedError = Record.Exception(() => protector.Unprotect(flipped));
 
-        // Kiểm tra: chép gói sang phiên bản khác (sai AAD) hoặc sửa một bit đều không giải mã được
-        Assert.IsAssignableFrom<CryptographicException>(copiedError);
+        // Kiểm tra: sửa một bit thì không giải mã được
         Assert.IsAssignableFrom<CryptographicException>(flippedError);
     }
 

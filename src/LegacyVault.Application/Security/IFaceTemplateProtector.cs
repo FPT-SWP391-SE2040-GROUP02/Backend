@@ -9,7 +9,6 @@ public interface IFaceTemplateProtector
 {
     /// <summary>
     /// Tạo DEK MỚI, mã hóa vector rồi gán vào entity (EncryptionKeyId, WrappedDataKey, EmbeddingEncrypted, Dimension).
-    /// Cần template.Id đã có giá trị (dùng trong AAD).
     /// </summary>
     void Protect(OwnerFaceTemplate template, float[] embedding);
 

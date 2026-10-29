@@ -10,7 +10,7 @@ public interface IDeathCaseDataProtector
     /// <summary>
     /// Tạo DEK MỚI, mã hóa họ tên Owner, CCCD Owner, số giấy, nơi cấp thành một gói rồi gán vào phiên bản
     /// (EncryptionKeyId, WrappedDataKey, IdentityEncrypted, OwnerCitizenIdLast4).
-    /// Mọi trường đều null thì xóa các cột mã hóa (bản nháp chưa nhập gì). Cần version.Id đã có giá trị (dùng trong AAD).
+    /// Mọi trường đều null thì xóa các cột mã hóa (bản nháp chưa nhập gì).
     /// </summary>
     void Protect(DeathCaseVersion version, DeathCaseIdentityData data);
 

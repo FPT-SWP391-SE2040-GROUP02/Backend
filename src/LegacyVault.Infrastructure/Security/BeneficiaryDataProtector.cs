@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
@@ -13,14 +12,10 @@ namespace LegacyVault.Infrastructure.Security;
 /// <remarks>
 /// - Mỗi lần Protect sinh một DEK mới (32 byte); DB chỉ lưu DEK đã bọc bằng KEK.
 /// - Mỗi cột mã hóa bằng AES-256-GCM với DEK; kết quả = nonce (12 byte) + ciphertext + tag (16 byte).
-/// - AAD = "beneficiary:{Id}:identity" hoặc "beneficiary:{Id}:contact": chép cột sang hồ sơ khác
-///   hoặc đổi chỗ hai cột thì giải mã thất bại.
 /// - DEK và bản rõ tạm được xóa khỏi RAM ngay sau khi dùng. Dữ liệu bị sửa → CryptographicException, không nuốt lỗi.
 /// </remarks>
 public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
 {
-    private const int NonceSize = 12;
-    private const int TagSize = 16;
     private const string IdentityPart = "identity";
     private const string ContactPart = "contact";
 
@@ -60,8 +55,8 @@ public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
             WrappedDataKey wrapped = dataKeyProtector.Wrap(dataKey);
             beneficiary.EncryptionKeyId = wrapped.KeyId;
             beneficiary.WrappedDataKey = wrapped.Value;
-            beneficiary.IdentityEncrypted = Encrypt(dataKey, identityPlain, BuildAad(beneficiary.Id, IdentityPart));
-            beneficiary.ContactEncrypted = Encrypt(dataKey, contactPlain, BuildAad(beneficiary.Id, ContactPart));
+            beneficiary.IdentityEncrypted = AesGcmCipher.Encrypt(dataKey, identityPlain);
+            beneficiary.ContactEncrypted = AesGcmCipher.Encrypt(dataKey, contactPlain);
             beneficiary.CitizenIdLast4 = data.CitizenId.Substring(data.CitizenId.Length - 4);
             beneficiary.CitizenIdHash = dataKeyProtector.ComputeBlindIndex("beneficiary-citizen-id", data.CitizenId);
         }
@@ -80,8 +75,8 @@ public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
         byte[] contactPlain = Array.Empty<byte>();
         try
         {
-            identityPlain = Decrypt(dataKey, beneficiary.IdentityEncrypted, BuildAad(beneficiary.Id, IdentityPart));
-            contactPlain = Decrypt(dataKey, beneficiary.ContactEncrypted, BuildAad(beneficiary.Id, ContactPart));
+            identityPlain = AesGcmCipher.Decrypt(dataKey, beneficiary.IdentityEncrypted);
+            contactPlain = AesGcmCipher.Decrypt(dataKey, beneficiary.ContactEncrypted);
 
             IdentityPayload? identity = JsonSerializer.Deserialize<IdentityPayload>(identityPlain, JsonOptions);
             ContactPayload? contact = JsonSerializer.Deserialize<ContactPayload>(contactPlain, JsonOptions);
@@ -106,48 +101,6 @@ public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
         }
     }
 
-    private static byte[] BuildAad(Guid beneficiaryId, string part)
-    {
-        return Encoding.UTF8.GetBytes($"beneficiary:{beneficiaryId}:{part}");
-    }
-
-    /// <summary>Kết quả = nonce (12) + ciphertext (cùng độ dài bản rõ) + tag (16).</summary>
-    private static byte[] Encrypt(byte[] dataKey, byte[] plainText, byte[] aad)
-    {
-        byte[] result = new byte[NonceSize + plainText.Length + TagSize];
-        Span<byte> nonce = result.AsSpan(0, NonceSize);
-        Span<byte> cipherText = result.AsSpan(NonceSize, plainText.Length);
-        Span<byte> tag = result.AsSpan(NonceSize + plainText.Length, TagSize);
-        RandomNumberGenerator.Fill(nonce);
-
-        using (AesGcm aes = new AesGcm(dataKey, TagSize))
-        {
-            aes.Encrypt(nonce, plainText, cipherText, tag, aad);
-        }
-        return result;
-    }
-
-    /// <summary>Sai tag (dữ liệu/AAD bị sửa) → AuthenticationTagMismatchException (là CryptographicException).</summary>
-    private static byte[] Decrypt(byte[] dataKey, byte[] encrypted, byte[] aad)
-    {
-        if (encrypted.Length < NonceSize + TagSize)
-        {
-            throw new CryptographicException("Dữ liệu người nhận đã mã hóa có độ dài không hợp lệ.");
-        }
-
-        int cipherLength = encrypted.Length - NonceSize - TagSize;
-        byte[] plainText = new byte[cipherLength];
-        using (AesGcm aes = new AesGcm(dataKey, TagSize))
-        {
-            aes.Decrypt(
-                encrypted.AsSpan(0, NonceSize),
-                encrypted.AsSpan(NonceSize, cipherLength),
-                encrypted.AsSpan(NonceSize + cipherLength, TagSize),
-                plainText,
-                aad);
-        }
-        return plainText;
-    }
 
     /// <summary>Phần định danh trong IdentityEncrypted.</summary>
     private sealed class IdentityPayload

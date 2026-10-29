@@ -66,15 +66,6 @@ public sealed class FaceTemplateProtectorTests
     }
 
     [Fact]
-    public void CopiedToAnotherTemplateId_Throws()
-    {
-        OwnerFaceTemplate template = Protected(FaceTemplateTestSupport.Vector(7));
-        template.Id = Guid.NewGuid();
-
-        Assert.ThrowsAny<CryptographicException>(() => protector.Unprotect(template));
-    }
-
-    [Fact]
     public void ChangedDimension_Throws()
     {
         OwnerFaceTemplate template = Protected(FaceTemplateTestSupport.Vector(7));

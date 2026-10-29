@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 
@@ -11,16 +10,13 @@ namespace LegacyVault.Infrastructure.Storage;
 /// <remarks>
 /// - Mỗi phiên bản nội dung có một DEK ngẫu nhiên 32 byte riêng (AES-256).
 /// - DEK được bọc bằng AES-256-GCM với KEK; kết quả = nonce (12 byte) + DEK đã mã hóa (32 byte) + tag (16 byte).
-///   Id của KEK được đưa vào AAD, nên DEK bọc bằng khóa này không mở được bằng khóa khác.
 /// - Chỉ DEK đã bọc được lưu vào DB; DEK gốc chỉ tồn tại trong RAM lúc mã hóa/giải mã và được xóa sau khi dùng.
 /// - Sau này chuyển sang KMS (AWS KMS, Azure Key Vault...) thì chỉ thay lớp này.
 /// </remarks>
 public sealed partial class DataKeyProtector
 {
     public const int KeySize = 32;
-    public const int WrappedKeySize = NonceSize + KeySize + TagSize;
-    private const int NonceSize = 12;
-    private const int TagSize = 16;
+    public const int WrappedKeySize = AesGcmCipher.NonceSize + KeySize + AesGcmCipher.TagSize;
 
     private readonly string activeKeyId;
     private readonly Dictionary<string, byte[]> keys;
@@ -106,20 +102,9 @@ public sealed partial class DataKeyProtector
             throw new ArgumentException("DEK phải dài 32 byte.", nameof(dataKey));
         }
 
-        byte[] result = new byte[WrappedKeySize];
-        Span<byte> nonce = result.AsSpan(0, NonceSize);
-        Span<byte> cipherText = result.AsSpan(NonceSize, KeySize);
-        Span<byte> tag = result.AsSpan(NonceSize + KeySize, TagSize);
-        RandomNumberGenerator.Fill(nonce);
-
-        using (AesGcm aes = new AesGcm(keys[activeKeyId], TagSize))
-        {
-            aes.Encrypt(nonce, dataKey, cipherText, tag, Encoding.ASCII.GetBytes(activeKeyId));
-        }
-
         WrappedDataKey wrapped = new WrappedDataKey();
         wrapped.KeyId = activeKeyId;
-        wrapped.Value = result;
+        wrapped.Value = AesGcmCipher.Encrypt(keys[activeKeyId], dataKey);
         return wrapped;
     }
 
@@ -139,17 +124,7 @@ public sealed partial class DataKeyProtector
             throw new CryptographicException("DEK đã bọc có độ dài không hợp lệ.");
         }
 
-        byte[] dataKey = new byte[KeySize];
-        using (AesGcm aes = new AesGcm(keyEncryptionKey, TagSize))
-        {
-            aes.Decrypt(
-                wrappedKey.AsSpan(0, NonceSize),
-                wrappedKey.AsSpan(NonceSize, KeySize),
-                wrappedKey.AsSpan(NonceSize + KeySize, TagSize),
-                dataKey,
-                Encoding.ASCII.GetBytes(keyId));
-        }
-        return dataKey;
+        return AesGcmCipher.Decrypt(keyEncryptionKey, wrappedKey);
     }
 
     private static bool IsBase64KeyOfCorrectSize(string? value)
