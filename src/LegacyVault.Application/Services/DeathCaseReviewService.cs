@@ -505,31 +505,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         }
         if (mine == null)
         {
-            // Hồ sơ chưa có phân công hiệu lực và đang ở trạng thái xem xét được: tự động gán cho Verifier đang mở.
-            if (!deathCase.Assignments.Any(a => a.EndedAt == null) && DeathCaseReviewRules.CanDecide(deathCase.Status))
-            {
-                bool conflict = await HasConflictOfInterestAsync(deathCase, userId, ct);
-                if (conflict)
-                {
-                    throw CaseNotFound();
-                }
-
-                DateTimeOffset now = timeProvider.GetUtcNow();
-                mine = new DeathCaseAssignment
-                {
-                    CaseId = deathCase.Id,
-                    VerifierUserId = userId,
-                    AssignedAt = now,
-                    DueAt = DeathCaseAssignmentRules.ComputeDueAt(now, deathCase.ObjectionEndsAt),
-                };
-                deathCase.Assignments.Add(mine);
-                deathCaseRepository.AddAssignment(mine);
-                await unitOfWork.SaveChangesAsync(ct);
-            }
-            else
-            {
-                throw CaseNotFound();
-            }
+            throw CaseNotFound();
         }
 
         ReviewContext context = new ReviewContext();
@@ -563,55 +539,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         }
         VerifierDeathCaseResponse response = deathCase.ToVerifierResponse(context.Assignment, identity, previous, blockers, handover);
         response.OwnerIdentity = await BuildOwnerIdentityAsync(deathCase, identity, ct);
-        response.Executor = await BuildExecutorInfoAsync(deathCase, reviewVersion, ct);
         return response;
-    }
-
-    /// <summary>Nạp thông tin Người thực hiện (Executor) đã nộp bản yêu cầu.</summary>
-    private async Task<VerifierExecutorResponse?> BuildExecutorInfoAsync(
-        DeathCase deathCase, DeathCaseVersion reviewVersion, CancellationToken ct)
-    {
-        if (reviewVersion.SubmittedByUserId == null || reviewVersion.SubmittedByUserId == Guid.Empty)
-        {
-            return null;
-        }
-
-        User? user = await userRepository.FindByIdAsync(reviewVersion.SubmittedByUserId.Value, ct);
-        if (user == null)
-        {
-            return null;
-        }
-
-        string roleDesc = "Người thừa hành";
-        List<Executor> executors = await executorReader.GetActiveAsync(deathCase.VaultId, ct);
-        Executor? matchedExecutor = executors.FirstOrDefault(e => e.UserId == user.Id);
-        if (matchedExecutor != null)
-        {
-            if (matchedExecutor.Role == ExecutorRole.Primary)
-            {
-                roleDesc = matchedExecutor.IsBeneficiary
-                    ? "Người thừa hành chính (đồng thời là Người nhận)"
-                    : "Người thừa hành chính";
-            }
-            else if (matchedExecutor.Role == ExecutorRole.Backup)
-            {
-                roleDesc = matchedExecutor.IsBeneficiary
-                    ? "Người thừa hành dự phòng (đồng thời là Người nhận)"
-                    : "Người thừa hành dự phòng";
-            }
-            else if (matchedExecutor.IsBeneficiary)
-            {
-                roleDesc = "Người thừa hành (đồng thời là Người nhận)";
-            }
-        }
-
-        VerifierExecutorResponse executorResponse = new VerifierExecutorResponse();
-        executorResponse.Id = user.Id;
-        executorResponse.FullName = user.FullName;
-        executorResponse.Email = user.Email;
-        executorResponse.Phone = user.Phone;
-        executorResponse.Role = roleDesc;
-        return executorResponse;
     }
 
     /// <summary>

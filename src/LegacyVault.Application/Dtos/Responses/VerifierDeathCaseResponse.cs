@@ -69,23 +69,6 @@ public class VerifierDeathCaseResponse
     /// giao xem đủ 12 số CCCD). Luôn có object; Verified = false khi Owner chưa gắn danh tính.
     /// </summary>
     public VerifierOwnerIdentityResponse OwnerIdentity { get; set; } = new VerifierOwnerIdentityResponse();
-
-    /// <summary>Thông tin Người thực hiện (Executor) gửi yêu cầu hồ sơ này.</summary>
-    public VerifierExecutorResponse? Executor { get; set; }
-}
-
-/// <summary>Thông tin Người thực hiện yêu cầu cho Verifier xem xét.</summary>
-public class VerifierExecutorResponse
-{
-    public Guid Id { get; set; }
-
-    public string FullName { get; set; } = string.Empty;
-
-    public string Email { get; set; } = string.Empty;
-
-    public string? Phone { get; set; }
-
-    public string? Role { get; set; }
 }
 
 /// <summary>Danh tính đã xác minh của Owner và kết quả so với bản đang xét.</summary>

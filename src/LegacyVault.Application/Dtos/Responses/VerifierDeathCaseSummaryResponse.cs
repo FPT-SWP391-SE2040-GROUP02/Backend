@@ -37,10 +37,4 @@ public class VerifierDeathCaseSummaryResponse
     public int UnreviewedFlagCount { get; set; }
 
     public DateTimeOffset? ClosedAt { get; set; }
-
-    /// <summary>Họ tên người thực hiện (Executor) gửi yêu cầu.</summary>
-    public string? ExecutorFullName { get; set; }
-
-    /// <summary>Email người thực hiện (Executor) gửi yêu cầu.</summary>
-    public string? ExecutorEmail { get; set; }
 }
