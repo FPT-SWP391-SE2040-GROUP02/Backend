@@ -41,6 +41,12 @@ public class EkycVerification
     /// </summary>
     public bool BackSideChecked { get; set; }
 
+    /// <summary>
+    /// Lúc đã gửi và đọc được mặt sau. Mặt sau bắt buộc trước thử thách camera và so khớp selfie,
+    /// kể cả thẻ cũ không có MRZ (khi đó BackSideChecked vẫn false). Null khi chưa gửi mặt sau.
+    /// </summary>
+    public DateTimeOffset? BackSubmittedAt { get; set; }
+
     /// <summary>4 số cuối CCCD đọc được từ mặt trước, dạng rõ. Rỗng khi OCR không đọc được số.</summary>
     public string CitizenIdLast4 { get; set; } = string.Empty;
 

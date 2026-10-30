@@ -73,6 +73,7 @@ public enum ErrorCode
     EkycConsentRequired,
     EkycDocumentMismatch,
     EkycLivenessRequired,
+    EkycBackRequired,
     EkycLivenessNotPassed,
     InvalidResetToken,
     EkycIdentityMismatch,

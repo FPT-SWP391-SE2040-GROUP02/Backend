@@ -79,6 +79,7 @@ public sealed class OwnerIdentityBindingTests
     private async Task<EkycStatusResponse> EnrollAsync()
     {
         await SubmitDocumentAsync();
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
         await service.StartLivenessAsync(CancellationToken.None);
         return await service.CompleteLivenessAsync(CancellationToken.None);
     }
@@ -197,6 +198,7 @@ public sealed class OwnerIdentityBindingTests
     public async Task EnrollmentFailed_BindsNothing_AndClearsPending()
     {
         await SubmitDocumentAsync();
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
         await service.StartLivenessAsync(CancellationToken.None);
         client.Comparison = new EkycFaceComparison { Score = 0.1, Matched = false };
 
@@ -211,6 +213,7 @@ public sealed class OwnerIdentityBindingTests
     public async Task StaticSelfiePath_AlsoBindsIdentity_WhenPassed()
     {
         await SubmitDocumentAsync();
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
         await service.StartLivenessAsync(CancellationToken.None);
         client.LivenessFrame = new EkycLivenessState { Passed = true };
         await service.SubmitLivenessFrameAsync(Image(), "f.jpg", "image/jpeg", CancellationToken.None);
@@ -343,6 +346,7 @@ public sealed class OwnerIdentityBindingTests
         Assert.NotNull(pendingKey);
         Assert.Equal(JpegBytes(), contentStore.Contents[pendingKey!]);
 
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
         await service.StartLivenessAsync(CancellationToken.None);
         EkycStatusResponse response = await service.CompleteLivenessAsync(CancellationToken.None);
 
@@ -360,6 +364,7 @@ public sealed class OwnerIdentityBindingTests
     {
         await SubmitJpegDocumentAsync();
         string pendingKey = Assert.Single(repository.Verifications).PendingDocumentImageStorageKey!;
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
         await service.StartLivenessAsync(CancellationToken.None);
         client.Comparison = new EkycFaceComparison { Score = 0.1, Matched = false };
 

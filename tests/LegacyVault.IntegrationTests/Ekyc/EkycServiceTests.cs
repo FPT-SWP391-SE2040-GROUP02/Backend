@@ -55,6 +55,7 @@ public sealed class EkycServiceTests
     private async Task SubmitDocumentAndPassChallengeAsync()
     {
         await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
         await service.StartLivenessAsync(CancellationToken.None);
         client.LivenessFrame = new EkycLivenessState { Passed = true, ChallengeCompleted = true, PadPassed = true };
         await service.SubmitLivenessFrameAsync(Image(), "frame.jpg", "image/jpeg", CancellationToken.None);
@@ -237,6 +238,7 @@ public sealed class EkycServiceTests
             DocumentToken = "token-custom",
             DocumentTokenExpiresAt = Now + TimeSpan.FromMinutes(30),
             CitizenIdLast4 = "2345",
+            BackSubmittedAt = Now,
             LivenessPassed = true,
             SpoofCheckPassed = true,
         };
