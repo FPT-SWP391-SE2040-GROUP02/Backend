@@ -300,6 +300,14 @@ public sealed class VaultAssetFlowTests : IAsyncLifetime
                     ["Email:Smtp:UserName"] = "",
                     ["Email:Smtp:Password"] = "",
                 }));
+            // Test luồng tài sản không biết gì về mã PIN kho: dùng bộ kiểm cho qua hết (xem ApiFactory.EnforceVaultPin).
+            builder.ConfigureServices(services =>
+            {
+                Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions
+                    .RemoveAll<LegacyVault.Application.Services.IVaultPinService>(services);
+                services.AddScoped<LegacyVault.Application.Services.IVaultPinService,
+                    LegacyVault.IntegrationTests.TestSupport.PassthroughVaultPinService>();
+            });
         }
     }
 }
