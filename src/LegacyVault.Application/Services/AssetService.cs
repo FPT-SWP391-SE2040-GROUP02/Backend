@@ -44,6 +44,7 @@ public sealed partial class AssetService : IAssetService
     private readonly IStorageReservationRepository reservations;
     private readonly IContainerRepository containerRepository;
     private readonly IHoldReader holdReader;
+    private readonly IVaultPinService vaultPinService;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -56,6 +57,7 @@ public sealed partial class AssetService : IAssetService
         IStorageReservationRepository reservations,
         IContainerRepository containerRepository,
         IHoldReader holdReader,
+        IVaultPinService vaultPinService,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -67,6 +69,7 @@ public sealed partial class AssetService : IAssetService
         this.reservations = reservations;
         this.containerRepository = containerRepository;
         this.holdReader = holdReader;
+        this.vaultPinService = vaultPinService;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -166,6 +169,8 @@ public sealed partial class AssetService : IAssetService
 
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
         VaultRules.EnsureEditable(vault);
+        // Kho đã có tài sản đầu tiên thì phải đặt mã PIN trước khi thêm tài sản tiếp theo.
+        await vaultPinService.EnsurePinSetBeforeNewAssetAsync(vault.Id, ct);
 
         long quotaBytes = vault.Entitlement.StorageQuotaBytes;
         DateTimeOffset now = timeProvider.GetUtcNow();

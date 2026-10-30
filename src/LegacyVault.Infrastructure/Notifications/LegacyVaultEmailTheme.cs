@@ -53,6 +53,23 @@ public static class LegacyVaultEmailTheme
                 + WebUtility.HtmlEncode(kicker) + "</p>";
         }
 
+        // Email thông báo thuần (không có hành động) truyền actionUrl rỗng: bỏ nút và khung liên kết.
+        string actionHtml = string.Empty;
+        if (!string.IsNullOrWhiteSpace(actionUrl))
+        {
+            actionHtml = $@"<table role=""presentation"" border=""0"" cellspacing=""0"" cellpadding=""0"" style=""margin:6px 0 22px 0;"">
+<tr><td align=""center"" bgcolor=""#E0C486"" style=""background-color:#E0C486;border-radius:12px;"">
+<a href=""{encodedUrl}"" target=""_blank"" style=""display:inline-block;padding:14px 26px;font-family:{FontStack};font-size:16px;font-weight:700;color:#0A281E;text-decoration:none;border-radius:12px;"">{encodedBtn}</a>
+</td></tr>
+</table>
+<table role=""presentation"" width=""100%"" border=""0"" cellspacing=""0"" cellpadding=""0"" style=""margin:0 0 20px 0;"">
+<tr><td style=""background-color:#FAFAF6;border:1px solid #E4E0D2;border-radius:12px;padding:14px 16px;font-family:{FontStack};"">
+<p style=""margin:0 0 6px 0;font-size:13px;line-height:1.5;color:#4D4D4B;"">Nếu nút không bấm được, hãy sao chép liên kết này vào trình duyệt:</p>
+<p style=""margin:0;font-size:13px;line-height:1.5;word-break:break-all;""><a href=""{encodedUrl}"" style=""color:#1A4B3B;text-decoration:underline;"">{encodedUrl}</a></p>
+</td></tr>
+</table>";
+        }
+
         string noticeHtml;
         if (securityCallout)
         {
@@ -88,17 +105,7 @@ public static class LegacyVaultEmailTheme
 <h1 style=""margin:0 0 18px 0;font-size:28px;line-height:1.2;font-weight:600;color:#0A281E;"">{encodedTitle}</h1>
 <p style=""margin:0 0 14px 0;font-size:16px;line-height:1.7;color:#2B332F;"">Chào {encodedName},</p>
 {lead}
-<table role=""presentation"" border=""0"" cellspacing=""0"" cellpadding=""0"" style=""margin:6px 0 22px 0;"">
-<tr><td align=""center"" bgcolor=""#E0C486"" style=""background-color:#E0C486;border-radius:12px;"">
-<a href=""{encodedUrl}"" target=""_blank"" style=""display:inline-block;padding:14px 26px;font-family:{FontStack};font-size:16px;font-weight:700;color:#0A281E;text-decoration:none;border-radius:12px;"">{encodedBtn}</a>
-</td></tr>
-</table>
-<table role=""presentation"" width=""100%"" border=""0"" cellspacing=""0"" cellpadding=""0"" style=""margin:0 0 20px 0;"">
-<tr><td style=""background-color:#FAFAF6;border:1px solid #E4E0D2;border-radius:12px;padding:14px 16px;font-family:{FontStack};"">
-<p style=""margin:0 0 6px 0;font-size:13px;line-height:1.5;color:#4D4D4B;"">Nếu nút không bấm được, hãy sao chép liên kết này vào trình duyệt:</p>
-<p style=""margin:0;font-size:13px;line-height:1.5;word-break:break-all;""><a href=""{encodedUrl}"" style=""color:#1A4B3B;text-decoration:underline;"">{encodedUrl}</a></p>
-</td></tr>
-</table>
+{actionHtml}
 {noticeHtml}
 </td></tr>
 </table>

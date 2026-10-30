@@ -23,6 +23,9 @@ public interface IAssetRepository
         Guid vaultId, int pageIndex, int pageSize, string? searchTerm,
         string sortBy, bool isAscending, CancellationToken ct);
 
+    /// <summary>Số tài sản của kho (dùng để biết kho đã có tài sản nào chưa khi áp mã PIN).</summary>
+    Task<int> CountByVaultIdAsync(Guid vaultId, CancellationToken ct);
+
     /// <summary>Đánh dấu "sẽ INSERT" tài sản mới.</summary>
     void Add(Asset asset);
 

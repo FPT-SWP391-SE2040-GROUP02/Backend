@@ -38,6 +38,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public Action<IServiceCollection>? ConfigureAdditionalServices { get; set; }
 
     /// <summary>
+    /// true thì kiểm mã PIN kho thật (test của chính tính năng PIN). Mặc định false: các test cũ không biết gì về PIN
+    /// nên chạy với bộ kiểm cho qua hết, để không phải đặt PIN và gắn header X-Vault-Pin ở từng test.
+    /// </summary>
+    public bool EnforceVaultPin { get; set; }
+
+    /// <summary>
     /// Tạo factory trỏ tới database tên ngẫu nhiên trên server của LEGACYVAULT_TEST_CONNECTION.
     /// Chưa đặt biến → null (khi đó [SqlFact] cũng đã Skip test).
     /// </summary>
@@ -132,6 +138,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             // Mặc định AI nhận ra mọi trang là giấy chứng tử; test cần kết quả khác thì thay trong ConfigureAdditionalServices.
             services.RemoveAll<IDeathCertificateClassifier>();
             services.AddSingleton<IDeathCertificateClassifier>(new FakeDeathCertificateClassifier());
+            if (!EnforceVaultPin)
+            {
+                services.RemoveAll<IVaultPinService>();
+                services.AddScoped<IVaultPinService, PassthroughVaultPinService>();
+            }
             ConfigureAdditionalServices?.Invoke(services);
         });
     }

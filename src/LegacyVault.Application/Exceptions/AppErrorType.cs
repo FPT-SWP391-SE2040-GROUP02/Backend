@@ -19,4 +19,6 @@ public enum AppErrorType
     PayloadTooLarge,
     /// <summary>503: dịch vụ ngoài (ví dụ eKYC) không gọi được.</summary>
     ServiceUnavailable,
+    /// <summary>423: bị khóa tạm (ví dụ nhập sai PIN kho nhiều lần).</summary>
+    Locked,
 }
