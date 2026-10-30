@@ -64,7 +64,7 @@ public sealed class ContainerService : IContainerService
             throw ValidationErrors.For("name", "Tên gói không được để trống.");
         }
 
-        // NFR-14: tối đa 50 gói chưa lưu trữ.
+        // NFR-14: tối đa 50 gói chưa bị xóa.
         // Hạn chế đã biết: hai request tạo đồng thời có thể cùng qua bước đếm này và vượt 50
         // (chờ chốt concurrency token cho HandoverPlan.ConfigVersion).
         int activeCount = await containerRepository.CountActiveByVaultIdAsync(vault.Id, ct);
@@ -91,7 +91,7 @@ public sealed class ContainerService : IContainerService
     }
 
     public async Task<PaginatedList<ContainerResponse>> GetContainersAsync(
-        Guid vaultId, bool includeArchived, PaginationRequest pagination, CancellationToken ct)
+        Guid vaultId, bool includeRemoved, PaginationRequest pagination, CancellationToken ct)
     {
         // Xem không cần kho đang cho sửa, chỉ cần kho thuộc người dùng.
         await LoadOwnedVaultAsync(vaultId, ct);
@@ -108,7 +108,7 @@ public sealed class ContainerService : IContainerService
         }
 
         (List<Container> Items, int TotalCount) page = await containerRepository.FindPageByVaultIdAsync(
-            vaultId, includeArchived, pagination.PageIndex, pagination.PageSize,
+            vaultId, includeRemoved, pagination.PageIndex, pagination.PageSize,
             TextInput.NullIfBlank(pagination.SearchTerm), sortBy, pagination.IsAscending, ct);
 
         List<ContainerResponse> responses = new List<ContainerResponse>();
@@ -134,9 +134,9 @@ public sealed class ContainerService : IContainerService
         VaultRules.EnsureEditable(vault);
         Container container = await LoadContainerAsync(vault.Id, containerId, ct);
 
-        if (container.Status == ContainerStatus.Archived)
+        if (container.Status == ContainerStatus.Removed)
         {
-            throw Archived();
+            throw Removed();
         }
         if (!Etag.Matches(request.Etag, container.UpdatedAt))
         {
@@ -184,16 +184,16 @@ public sealed class ContainerService : IContainerService
         return container.ToResponse();
     }
 
-    public async Task<ContainerResponse> ArchiveContainerAsync(
+    public async Task<ContainerResponse> RemoveContainerAsync(
         Guid vaultId, Guid containerId, ConfirmPlanImpactRequest? request, CancellationToken ct)
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
-        // OPLAN-01: lưu trữ là thao tác "giảm", vẫn cho khi dịch vụ đang ân hạn.
+        // OPLAN-01: xóa gói là thao tác "giảm", vẫn cho khi dịch vụ đang ân hạn.
         VaultRules.EnsureCanReduce(vault);
         Container container = await LoadContainerAsync(vault.Id, containerId, ct);
 
-        // Đã lưu trữ: trả nguyên trạng, không lưu, không tăng ConfigVersion.
-        if (container.Status == ContainerStatus.Archived)
+        // Đã xóa: trả nguyên trạng, không lưu, không tăng ConfigVersion.
+        if (container.Status == ContainerStatus.Removed)
         {
             return container.ToResponse();
         }
@@ -205,18 +205,18 @@ public sealed class ContainerService : IContainerService
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
-        // SETUP-16: lưu trữ gói READY có thể làm kế hoạch mất gói READY cuối cùng.
+        // SETUP-16: xóa gói READY có thể làm kế hoạch mất gói READY cuối cùng.
         bool willLoseReady = container.Status == ContainerStatus.Ready;
         await EnsurePlanImpactConfirmedAsync(vault, willLoseReady, confirmed, now, ct);
 
-        // SETUP-16: gói lưu trữ không còn tài sản (tài sản không bị xóa, QUOTA-02).
+        // SETUP-16: gói đã xóa không còn tài sản (tài sản không bị xóa, QUOTA-02).
         // Chép ra danh sách riêng vì RemoveAssetLink có thể làm đổi container.Assets.
         List<ContainerAsset> links = new List<ContainerAsset>(container.Assets);
         foreach (ContainerAsset link in links)
         {
             containerRepository.RemoveAssetLink(link);
         }
-        // SETUP-16: gói lưu trữ cũng không còn người nhận (hồ sơ không bị xóa). Người không còn ở gói nào
+        // SETUP-16: gói đã xóa cũng không còn người nhận (hồ sơ không bị xóa). Người không còn ở gói nào
         // thì tự hết chiếm suất vì suất luôn đếm lại từ chỉ định (QUOTA-03).
         List<Designation> designations = new List<Designation>(container.Designations);
         foreach (Designation designation in designations)
@@ -224,11 +224,11 @@ public sealed class ContainerService : IContainerService
             containerRepository.RemoveDesignation(designation);
         }
 
-        container.Status = ContainerStatus.Archived;
-        container.ArchivedAt = now;
+        container.Status = ContainerStatus.Removed;
+        container.RemovedAt = now;
         container.UpdatedAt = now;
         BumpConfigVersion(vault, now);
-        AddAudit(vault, AuditAction.ContainerArchived, container.Id, null, now);
+        AddAudit(vault, AuditAction.ContainerRemoved, container.Id, null, now);
         await unitOfWork.SaveChangesAsync(ct);
         return container.ToResponse();
     }
@@ -241,9 +241,9 @@ public sealed class ContainerService : IContainerService
         VaultRules.EnsureEditable(vault);
         Container container = await LoadContainerAsync(vault.Id, containerId, ct);
 
-        if (container.Status == ContainerStatus.Archived)
+        if (container.Status == ContainerStatus.Removed)
         {
-            throw Archived();
+            throw Removed();
         }
         // SETUP-17 / AC-04: hạng Free không được đưa tài sản vào gói; chặn ở API, không chỉ ẩn nút.
         if (vault.Entitlement.Tier == ServiceTier.Free)
@@ -259,7 +259,7 @@ public sealed class ContainerService : IContainerService
             throw new AppException(AppErrorType.NotFound, ErrorCode.AssetNotFound, "Không tìm thấy tài sản.");
         }
 
-        // SETUP-03: một tài sản thuộc tối đa một gói chưa lưu trữ (gói lưu trữ không còn liên kết nào).
+        // SETUP-03: một tài sản thuộc tối đa một gói chưa bị xóa (gói đã xóa không còn liên kết nào).
         ContainerAsset? existing = await containerRepository.FindLinkByAssetIdAsync(assetId, ct);
         if (existing != null)
         {
@@ -299,7 +299,7 @@ public sealed class ContainerService : IContainerService
         ContainerAsset? winner = await containerRepository.FindLinkByAssetIdAsync(assetId, ct);
         if (winner == null)
         {
-            // Liên kết của request kia đã bị gỡ ngay sau đó: không đoán được trạng thái đúng,
+            // Liên kết của request kia đã bị xóa ngay sau đó: không đoán được trạng thái đúng,
             // báo dữ liệu vừa thay đổi để FE tải lại.
             throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
                 "Dữ liệu vừa thay đổi. Vui lòng tải lại.");
@@ -322,9 +322,9 @@ public sealed class ContainerService : IContainerService
         VaultRules.EnsureCanReduce(vault);
         Container container = await LoadContainerAsync(vault.Id, containerId, ct);
 
-        if (container.Status == ContainerStatus.Archived)
+        if (container.Status == ContainerStatus.Removed)
         {
-            throw Archived();
+            throw Removed();
         }
 
         ContainerAsset? link = FindLinkInContainer(container, assetId);
@@ -365,9 +365,9 @@ public sealed class ContainerService : IContainerService
         VaultRules.EnsureEditable(vault);
         Container container = await LoadContainerAsync(vault.Id, containerId, ct);
 
-        if (container.Status == ContainerStatus.Archived)
+        if (container.Status == ContainerStatus.Removed)
         {
-            throw Archived();
+            throw Removed();
         }
         // SETUP-17 / AC-04: hạng Free không được thêm người nhận; chặn ở API, không chỉ ẩn nút.
         if (vault.Entitlement.Tier == ServiceTier.Free)
@@ -441,9 +441,9 @@ public sealed class ContainerService : IContainerService
         VaultRules.EnsureCanReduce(vault);
         Container container = await LoadContainerAsync(vault.Id, containerId, ct);
 
-        if (container.Status == ContainerStatus.Archived)
+        if (container.Status == ContainerStatus.Removed)
         {
-            throw Archived();
+            throw Removed();
         }
 
         Designation? designation = FindDesignationInContainer(container, beneficiaryId);
@@ -479,7 +479,7 @@ public sealed class ContainerService : IContainerService
     /// <summary>
     /// SETUP-16: kế hoạch đang chạy mà thao tác làm mất gói READY cuối cùng thì phải được Owner xác nhận.
     /// Chưa xác nhận → 409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED; đã xác nhận → kế hoạch về DRAFT.
-    /// Dùng chung cho lưu trữ gói, gỡ tài sản, gỡ người nhận.
+    /// Dùng chung cho xóa gói, gỡ tài sản, gỡ người nhận.
     /// </summary>
     private async Task EnsurePlanImpactConfirmedAsync(
         Vault vault, bool willLoseReady, bool confirmed, DateTimeOffset now, CancellationToken ct)
@@ -586,10 +586,10 @@ public sealed class ContainerService : IContainerService
         return null;
     }
 
-    private static AppException Archived()
+    private static AppException Removed()
     {
-        return new AppException(AppErrorType.Conflict, ErrorCode.ContainerArchived,
-            "Gói đã lưu trữ, không sửa được.");
+        return new AppException(AppErrorType.Conflict, ErrorCode.ContainerRemoved,
+            "Gói đã bị xóa, không sửa được.");
     }
 
     /// <summary>SETUP-03: tài sản đang ở gói khác; containerId để FE chỉ ra gói đó.</summary>
@@ -616,6 +616,6 @@ public sealed class ContainerService : IContainerService
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["maxContainers"] = ContainerRules.MaxActiveContainers;
         return new AppException(AppErrorType.Conflict, ErrorCode.ContainerLimitExceeded,
-            "Kho đã có đủ 50 gói chưa lưu trữ.", extensions);
+            "Kho đã có đủ 50 gói chưa bị xóa.", extensions);
     }
 }

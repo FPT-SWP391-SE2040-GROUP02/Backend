@@ -20,12 +20,12 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
             .FirstOrDefaultAsync(c => c.Id == containerId && c.VaultId == vaultId, ct);
     }
 
-    // SETUP-01: chỉ các gói chưa lưu trữ xuất hiện trên màn kích hoạt.
+    // SETUP-01: chỉ các gói chưa bị xóa xuất hiện trên màn kích hoạt.
     public Task<List<Container>> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
         return context.Containers
             .AsNoTracking()
-            .Where(c => c.VaultId == vaultId && c.Status != ContainerStatus.Archived)
+            .Where(c => c.VaultId == vaultId && c.Status != ContainerStatus.Removed)
             .Include(c => c.Assets)
             .Include(c => c.Designations)
             .AsSplitQuery()
@@ -35,13 +35,13 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
     }
 
     public async Task<(List<Container> Items, int TotalCount)> FindPageByVaultIdAsync(
-        Guid vaultId, bool includeArchived, int pageIndex, int pageSize, string? searchTerm,
+        Guid vaultId, bool includeRemoved, int pageIndex, int pageSize, string? searchTerm,
         string sortBy, bool isAscending, CancellationToken ct)
     {
         var query = context.Containers.AsNoTracking().Where(c => c.VaultId == vaultId);
-        if (!includeArchived)
+        if (!includeRemoved)
         {
-            query = query.Where(c => c.Status != ContainerStatus.Archived);
+            query = query.Where(c => c.Status != ContainerStatus.Removed);
         }
         if (!string.IsNullOrEmpty(searchTerm))
         {
@@ -88,7 +88,7 @@ public sealed class ContainerRepository(AppDbContext context) : IContainerReposi
     public Task<int> CountActiveByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
         return context.Containers.CountAsync(
-            c => c.VaultId == vaultId && c.Status != ContainerStatus.Archived, ct);
+            c => c.VaultId == vaultId && c.Status != ContainerStatus.Removed, ct);
     }
 
     public Task<int> CountReadyByVaultIdAsync(Guid vaultId, CancellationToken ct)

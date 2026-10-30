@@ -38,7 +38,7 @@ public enum ErrorCode
     InternalError,
     ContainerNotFound,
     ContainerLimitExceeded,
-    ContainerArchived,
+    ContainerRemoved,
     PlanDeactivationConfirmationRequired,
     PaidTierRequired,
     AssetAlreadyInContainer,

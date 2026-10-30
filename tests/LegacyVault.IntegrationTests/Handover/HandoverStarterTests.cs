@@ -71,14 +71,14 @@ public sealed class HandoverStarterTests
     }
 
     [Fact]
-    public async Task Start_IgnoresArchivedAndDraftContainers()
+    public async Task Start_IgnoresRemovedAndDraftContainers()
     {
         Container ready = data.AddContainer("Sẵn sàng", ContainerStatus.Ready, 1);
         Container draft = data.AddContainer("Nháp", ContainerStatus.Draft, 1);
-        Container archived = data.AddContainer("Lưu trữ", ContainerStatus.Archived, 1);
+        Container removedContainer = data.AddContainer("Đã xóa", ContainerStatus.Removed, 1);
         data.Designate(ready, "Người A", "a@example.com");
         data.Designate(draft, "Người B", "b@example.com");
-        data.Designate(archived, "Người C", "c@example.com");
+        data.Designate(removedContainer, "Người C", "c@example.com");
         Publish();
 
         HandoverStartResult result = await starter.StartAsync(data.Vault.Id, CancellationToken.None);

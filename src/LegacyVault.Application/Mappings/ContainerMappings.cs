@@ -33,7 +33,7 @@ public static class ContainerMappings
             MissingRequirements = ContainerRules.GetMissingRequirements(container),
             CreatedAt = container.CreatedAt,
             UpdatedAt = container.UpdatedAt,
-            ArchivedAt = container.ArchivedAt,
+            RemovedAt = container.RemovedAt,
             Etag = Etag.From(container.UpdatedAt),
         };
     }

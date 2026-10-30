@@ -8,8 +8,8 @@ namespace LegacyVault.Domain.Entities;
 /// <remarks>
 /// - SETUP-03: liên kết gắn với TÀI SẢN, không với phiên bản; nội dung gói là phiên bản hiện hành của tài sản.
 /// - SETUP-04: Container không có phiên bản riêng; mọi thay đổi tăng HandoverPlan.ConfigVersion.
-/// - SETUP-17: hạng Free chỉ được tạo/đổi tên/lưu trữ Container rỗng.
-/// - NFR-14: tối đa 50 Container chưa lưu trữ mỗi kho.
+/// - SETUP-17: hạng Free chỉ được tạo/đổi tên/xóa Container rỗng.
+/// - NFR-14: tối đa 50 Container chưa bị xóa mỗi kho.
 /// - SETUP-16: READY khi có ≥1 tài sản VÀ ≥1 chỉ định người nhận (Designation); backend tự tính lại sau mỗi thay đổi.
 /// </remarks>
 public class Container
@@ -31,8 +31,8 @@ public class Container
 
     public DateTimeOffset? UpdatedAt { get; set; }
 
-    /// <summary>Thời điểm lưu trữ; null khi chưa lưu trữ.</summary>
-    public DateTimeOffset? ArchivedAt { get; set; }
+    /// <summary>Thời điểm xóa gói; null khi gói chưa bị xóa.</summary>
+    public DateTimeOffset? RemovedAt { get; set; }
 
     public List<ContainerAsset> Assets { get; set; } = new List<ContainerAsset>();
 
