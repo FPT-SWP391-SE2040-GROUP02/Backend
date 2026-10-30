@@ -356,9 +356,17 @@ public static class DeathCaseReviewTestData
             VerifierCaseUrl(caseId) + "/request-supplement", new { etag, reason, requestedParts });
     }
 
+    /// <summary>Từ chối kèm mật khẩu thử đúng (DEATH-14).</summary>
     public static Task<HttpResponseMessage> RejectAsync(HttpClient verifier, Guid caseId, string? etag, string? reason)
     {
-        return verifier.PostAsJsonAsync(VerifierCaseUrl(caseId) + "/reject", new { etag, reason });
+        return RejectAsync(verifier, caseId, etag, reason, DeathCaseTestData.TestPassword);
+    }
+
+    /// <summary>DEATH-14: từ chối với mật khẩu cho trước (null = không gửi trường password).</summary>
+    public static Task<HttpResponseMessage> RejectAsync(
+        HttpClient verifier, Guid caseId, string? etag, string? reason, string? password)
+    {
+        return verifier.PostAsJsonAsync(VerifierCaseUrl(caseId) + "/reject", new { etag, reason, password });
     }
 
     /// <summary>Verifier đọc lấy etag hiện tại rồi từ chối với lý do cho trước; trả response của lệnh từ chối.</summary>
@@ -368,9 +376,17 @@ public static class DeathCaseReviewTestData
         return await RejectAsync(submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(), reason);
     }
 
+    /// <summary>Duyệt kèm mật khẩu thử đúng (DEATH-14).</summary>
     public static Task<HttpResponseMessage> ApproveAsync(HttpClient verifier, Guid caseId, string? etag, string? reason)
     {
-        return verifier.PostAsJsonAsync(VerifierCaseUrl(caseId) + "/approve", new { etag, reason });
+        return ApproveAsync(verifier, caseId, etag, reason, DeathCaseTestData.TestPassword);
+    }
+
+    /// <summary>DEATH-14: duyệt với mật khẩu cho trước (null = không gửi trường password).</summary>
+    public static Task<HttpResponseMessage> ApproveAsync(
+        HttpClient verifier, Guid caseId, string? etag, string? reason, string? password)
+    {
+        return verifier.PostAsJsonAsync(VerifierCaseUrl(caseId) + "/approve", new { etag, reason, password });
     }
 
     /// <summary>Verifier đọc lấy etag hiện tại rồi duyệt với lý do cho trước; trả response của lệnh duyệt.</summary>

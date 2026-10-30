@@ -20,4 +20,7 @@ public interface IVerifierSigningKeyRepository
     Task<VerifierSigningGuard?> FindGuardAsync(Guid userId, CancellationToken ct);
 
     void AddGuard(VerifierSigningGuard guard);
+
+    /// <summary>Lỗi lưu do trùng khóa chính / chỉ mục unique (hai request cùng tạo dòng đầu tiên).</summary>
+    bool IsUniqueViolation(Exception exception);
 }

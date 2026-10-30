@@ -186,6 +186,7 @@ public sealed class VerifierDeathCasesController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status423Locked)]
     public async Task<VerifierDeathCaseResponse> Reject(
         Guid caseId, RejectDeathCaseRequest request, CancellationToken ct)
     {
@@ -204,11 +205,27 @@ public sealed class VerifierDeathCasesController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status423Locked)]
     public async Task<VerifierDeathCaseResponse> Approve(
         Guid caseId, ApproveDeathCaseRequest request, CancellationToken ct)
     {
         Response.Headers["Cache-Control"] = "no-store";
         return await reviewService.ApproveAsync(caseId, request, ct);
+    }
+
+    /// <summary>
+    /// DEATH-14: phiếu chữ ký số của quyết định cuối và kết quả kiểm lại (VALID / INVALID / NOT_SIGNED /
+    /// NO_FINAL_DECISION). Chỉ Verifier đang được giao hồ sơ. Chữ ký số nội bộ, không phải CA công cộng.
+    /// </summary>
+    [HttpGet("death-cases/{caseId:guid}/decision-signature")]
+    [ProducesResponseType<DecisionSignatureResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<DecisionSignatureResponse> GetDecisionSignature(Guid caseId, CancellationToken ct)
+    {
+        Response.Headers["Cache-Control"] = "no-store";
+        return await reviewService.GetDecisionSignatureAsync(caseId, ct);
     }
 
     /// <summary>

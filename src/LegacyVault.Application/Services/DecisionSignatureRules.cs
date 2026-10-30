@@ -23,6 +23,18 @@ public static class DecisionSignatureRules
     /// <summary>Phiên bản định dạng chuỗi; đổi cách dựng chuỗi thì tăng số này.</summary>
     public const string PayloadVersion = "v1";
 
+    /// <summary>DEATH-14, D12: chữ ký khớp dữ liệu hiện tại và khóa đúng cặp.</summary>
+    public const string StatusValid = "VALID";
+
+    /// <summary>DEATH-14, D12: dữ liệu đã bị sửa sau khi ký, hoặc khóa/chữ ký không khớp.</summary>
+    public const string StatusInvalid = "INVALID";
+
+    /// <summary>DEATH-14, D12: quyết định cuối không có chữ ký (quyết định cũ trước khi có chữ ký số).</summary>
+    public const string StatusNotSigned = "NOT_SIGNED";
+
+    /// <summary>DEATH-14, D12: hồ sơ chưa có quyết định duyệt hay từ chối.</summary>
+    public const string StatusNoFinalDecision = "NO_FINAL_DECISION";
+
     private const char Separator = '|';
 
     private const int FingerprintHexLength = 16;

@@ -48,4 +48,14 @@ public sealed class VerifierSigningKeyRepository : IVerifierSigningKeyRepository
     {
         context.Set<VerifierSigningGuard>().Add(guard);
     }
+
+    public bool IsUniqueViolation(Exception exception)
+    {
+        DbUpdateException? dbException = exception as DbUpdateException;
+        if (dbException == null)
+        {
+            return false;
+        }
+        return DbExceptions.IsUniqueViolation(dbException);
+    }
 }
