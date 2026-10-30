@@ -14,16 +14,16 @@ namespace LegacyVault.Api.Controllers;
 [Produces("application/json")]
 public sealed class ContainersController(IContainerService containerService) : ControllerBase
 {
-    /// <summary>Danh sách gói. sortBy: createdAt (mặc định) | name. includeArchived mặc định false.</summary>
+    /// <summary>Danh sách gói. sortBy: createdAt (mặc định) | name. includeRemoved mặc định false.</summary>
     [HttpGet]
     [ProducesResponseType<PaginatedList<ContainerResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public Task<PaginatedList<ContainerResponse>> GetContainers(
         Guid vaultId, [FromQuery] PaginationRequest pagination, CancellationToken ct,
-        [FromQuery] bool includeArchived = false)
+        [FromQuery] bool includeRemoved = false)
     {
-        return containerService.GetContainersAsync(vaultId, includeArchived, pagination, ct);
+        return containerService.GetContainersAsync(vaultId, includeRemoved, pagination, ct);
     }
 
     /// <summary>Tạo gói rỗng ở DRAFT (hạng Free cũng được tạo, SETUP-17).</summary>
@@ -61,16 +61,16 @@ public sealed class ContainersController(IContainerService containerService) : C
         return containerService.UpdateContainerAsync(vaultId, containerId, request, ct);
     }
 
-    /// <summary>Lưu trữ gói (không xóa hẳn): gỡ hết tài sản, chuyển ARCHIVED.</summary>
+    /// <summary>Xóa gói (không xóa hẳn dòng): gỡ hết tài sản, chuyển REMOVED.</summary>
     [RequireVaultPin]
     [HttpDelete("{containerId:guid}")]
     [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<ContainerResponse> ArchiveContainer(
+    public Task<ContainerResponse> RemoveContainer(
         Guid vaultId, Guid containerId, [FromQuery] ConfirmPlanImpactRequest request, CancellationToken ct)
     {
-        return containerService.ArchiveContainerAsync(vaultId, containerId, request, ct);
+        return containerService.RemoveContainerAsync(vaultId, containerId, request, ct);
     }
 
     /// <summary>Đưa một tài sản của kho vào gói (hạng Free bị chặn, SETUP-17).</summary>

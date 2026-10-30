@@ -15,7 +15,10 @@ public enum AuditAction
     ContainerCreated = 3,
     /// <summary>Owner đổi tên hoặc mô tả gói (SETUP-04).</summary>
     ContainerUpdated = 4,
-    /// <summary>Owner lưu trữ gói (SETUP-16).</summary>
+    /// <summary>
+    /// Owner xóa gói (SETUP-16), tên cũ trước khi đổi Archived thành Removed. Chỉ còn trong nhật ký cũ; thao tác mới
+    /// ghi ContainerRemoved. Giữ nguyên để không sửa nhật ký đã ghi.
+    /// </summary>
     ContainerArchived = 5,
     /// <summary>Owner thêm tài sản vào gói (SETUP-04).</summary>
     ContainerAssetAdded = 6,
@@ -105,4 +108,6 @@ public enum AuditAction
     VaultPinWrong = 48,
     /// <summary>Mã PIN của kho bị khóa tạm vì nhập sai nhiều lần (kết quả Denied).</summary>
     VaultPinLocked = 49,
+    /// <summary>Owner xóa gói (SETUP-16): gói không còn thuộc kế hoạch, không khôi phục được. Thay cho ContainerArchived.</summary>
+    ContainerRemoved = 50,
 }

@@ -129,7 +129,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task SETUP01_PlanSetupListsReadyAndDraftContainersButNotArchived()
+    public async Task SETUP01_PlanSetupListsReadyAndDraftContainersButNotRemoved()
     {
         // Chuẩn bị
         (HttpClient owner, Guid vaultId, _) = await PrepareAsync();
@@ -270,7 +270,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         return (owner, vaultId, ownerId);
     }
 
-    // SETUP-01, AC-68: bổ sung gói DRAFT có tài sản và gói đã lưu trữ qua HTTP.
+    // SETUP-01, AC-68: bổ sung gói DRAFT có tài sản và gói đã xóa qua HTTP.
     private async Task<(Guid ReadyContainerId, Guid DraftContainerId, Guid DraftAssetId)> PrepareContainersAsync(
         HttpClient owner, Guid vaultId)
     {
@@ -288,10 +288,10 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
             owner, vaultId, draftContainerId, draftAssetId);
         Assert.Equal(HttpStatusCode.OK, addAsset.StatusCode);
 
-        JsonElement archived = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói lưu trữ thử nghiệm SETUP-01");
-        Guid archivedContainerId = archived.GetProperty("id").GetGuid();
-        HttpResponseMessage archive = await owner.DeleteAsync($"/api/v1/vaults/{vaultId}/containers/{archivedContainerId}");
-        Assert.Equal(HttpStatusCode.OK, archive.StatusCode);
+        JsonElement removedContainer = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói đã xóa thử nghiệm SETUP-01");
+        Guid removedContainerId = removedContainer.GetProperty("id").GetGuid();
+        HttpResponseMessage removeResponse = await owner.DeleteAsync($"/api/v1/vaults/{vaultId}/containers/{removedContainerId}");
+        Assert.Equal(HttpStatusCode.OK, removeResponse.StatusCode);
 
         return (readyContainerId, draftContainerId, draftAssetId);
     }

@@ -75,7 +75,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Nfr14_FiftyFirstActiveContainerIsRejected()
     {
-        // Chuẩn bị: thêm thẳng 50 gói chưa lưu trữ vào DB.
+        // Chuẩn bị: thêm thẳng 50 gói chưa bị xóa vào DB.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -116,7 +116,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         string viaOwnVault = $"{ContainersUrl(strangerVaultId)}/{containerId}";
         string viaOwnerVault = $"{ContainersUrl(ownerVaultId)}/{containerId}";
 
-        // Hành động: người lạ xem / sửa / lưu trữ gói qua kho của mình và qua kho của chủ.
+        // Hành động: người lạ xem / sửa / xóa gói qua kho của mình và qua kho của chủ.
         HttpResponseMessage getOwn = await stranger.GetAsync(viaOwnVault);
         HttpResponseMessage putOwn = await stranger.PutAsJsonAsync(viaOwnVault, new { etag, name = "Chiếm" });
         HttpResponseMessage deleteOwn = await stranger.DeleteAsync(viaOwnVault);
@@ -165,48 +165,48 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Setup16_ArchivedContainerIsReadOnlyAndArchiveIsIdempotent()
+    public async Task Setup16_RemovedContainerIsReadOnlyAndRemoveIsIdempotent()
     {
         // Chuẩn bị
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
-        JsonElement container = await ApiTestHelpers.CreateContainerAsync(client, vaultId, "Gói sẽ lưu trữ");
+        JsonElement container = await ApiTestHelpers.CreateContainerAsync(client, vaultId, "Gói sẽ xóa");
         string url = $"{ContainersUrl(vaultId)}/{container.GetProperty("id").GetGuid()}";
 
-        // Hành động: lưu trữ 2 lần rồi thử sửa.
+        // Hành động: xóa 2 lần rồi thử sửa.
         HttpResponseMessage first = await client.DeleteAsync(url);
         JsonElement firstBody = await ApiTestHelpers.ReadJsonAsync(first);
         int versionAfterFirst = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
         HttpResponseMessage second = await client.DeleteAsync(url);
         JsonElement secondBody = await ApiTestHelpers.ReadJsonAsync(second);
         HttpResponseMessage update = await client.PutAsJsonAsync(url,
-            new { etag = secondBody.GetProperty("etag").GetString(), name = "Sửa gói đã lưu trữ" });
+            new { etag = secondBody.GetProperty("etag").GetString(), name = "Sửa gói đã xóa" });
 
-        // Kiểm tra: cả 2 lần 200, cùng kết quả, lần 2 không tăng ConfigVersion; sửa → CONTAINER_ARCHIVED.
+        // Kiểm tra: cả 2 lần 200, cùng kết quả, lần 2 không tăng ConfigVersion; sửa → CONTAINER_REMOVED.
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
-        Assert.Equal("ARCHIVED", firstBody.GetProperty("status").GetString());
+        Assert.Equal("REMOVED", firstBody.GetProperty("status").GetString());
         Assert.Equal(0, firstBody.GetProperty("missingRequirements").GetArrayLength());
-        Assert.NotEqual(JsonValueKind.Null, firstBody.GetProperty("archivedAt").ValueKind);
+        Assert.NotEqual(JsonValueKind.Null, firstBody.GetProperty("removedAt").ValueKind);
         Assert.Equal(firstBody.GetRawText(), secondBody.GetRawText());
         Assert.Equal(versionAfterFirst, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
-        await ApiTestHelpers.AssertProblemAsync(update, HttpStatusCode.Conflict, "CONTAINER_ARCHIVED");
+        await ApiTestHelpers.AssertProblemAsync(update, HttpStatusCode.Conflict, "CONTAINER_REMOVED");
     }
 
     [SqlFact]
-    public async Task Setup16_ListHidesArchivedByDefaultAndRejectsUnknownSort()
+    public async Task Setup16_ListHidesRemovedByDefaultAndRejectsUnknownSort()
     {
-        // Chuẩn bị: hai gói, lưu trữ một gói.
+        // Chuẩn bị: hai gói, xóa một gói.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.CreateContainerAsync(client, vaultId, "B - còn dùng");
-        JsonElement archived = await ApiTestHelpers.CreateContainerAsync(client, vaultId, "A - đã lưu trữ");
-        Guid archivedId = archived.GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"{ContainersUrl(vaultId)}/{archivedId}")).StatusCode);
+        JsonElement removedContainer = await ApiTestHelpers.CreateContainerAsync(client, vaultId, "A - đã xóa");
+        Guid removedId = removedContainer.GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"{ContainersUrl(vaultId)}/{removedId}")).StatusCode);
 
         // Hành động
         HttpResponseMessage defaultList = await client.GetAsync(ContainersUrl(vaultId));
-        HttpResponseMessage withArchived = await client.GetAsync($"{ContainersUrl(vaultId)}?includeArchived=true&sortBy=name");
+        HttpResponseMessage withRemoved = await client.GetAsync($"{ContainersUrl(vaultId)}?includeRemoved=true&sortBy=name");
         HttpResponseMessage badSort = await client.GetAsync($"{ContainersUrl(vaultId)}?sortBy=status");
 
         // Kiểm tra
@@ -214,15 +214,15 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         Assert.Equal(1, defaultPage.GetProperty("totalCount").GetInt32());
         Assert.Equal("B - còn dùng", defaultPage.GetProperty("items")[0].GetProperty("name").GetString());
 
-        JsonElement fullPage = await ApiTestHelpers.ReadJsonAsync(withArchived);
+        JsonElement fullPage = await ApiTestHelpers.ReadJsonAsync(withRemoved);
         Assert.Equal(2, fullPage.GetProperty("totalCount").GetInt32());
-        Assert.Equal(archivedId, fullPage.GetProperty("items")[0].GetProperty("id").GetGuid());
+        Assert.Equal(removedId, fullPage.GetProperty("items")[0].GetProperty("id").GetGuid());
 
         await ApiTestHelpers.AssertProblemAsync(badSort, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
     }
 
     [SqlFact]
-    public async Task Setup04_CreateRenameArchiveEachBumpConfigVersionByOne()
+    public async Task Setup04_CreateRenameRemoveEachBumpConfigVersionByOne()
     {
         // Chuẩn bị
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
@@ -239,13 +239,13 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
         Assert.Equal(start + 2, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
 
-        HttpResponseMessage archived = await client.DeleteAsync(url);
-        Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
+        HttpResponseMessage removedContainer = await client.DeleteAsync(url);
+        Assert.Equal(HttpStatusCode.OK, removedContainer.StatusCode);
         Assert.Equal(start + 3, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
     }
 
     [SqlFact]
-    public async Task Oplan01_GraceReadOnlyBlocksCreateButAllowsArchive()
+    public async Task Oplan01_GraceReadOnlyBlocksCreateButAllowsRemove()
     {
         // Chuẩn bị: có sẵn một gói, rồi chuyển dịch vụ sang ân hạn chỉ đọc.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
@@ -259,19 +259,19 @@ public sealed class ContainerFlowTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage create = await client.PostAsJsonAsync(ContainersUrl(vaultId), new { name = "Gói mới" });
-        HttpResponseMessage archive = await client.DeleteAsync(
+        HttpResponseMessage removeResponse = await client.DeleteAsync(
             $"{ContainersUrl(vaultId)}/{container.GetProperty("id").GetGuid()}");
 
-        // Kiểm tra: tạo là thao tác "thêm" → chặn; lưu trữ là thao tác "giảm" → cho.
+        // Kiểm tra: tạo là thao tác "thêm" → chặn; xóa gói là thao tác "giảm" → cho.
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
             create, HttpStatusCode.Conflict, "VAULT_NOT_EDITABLE");
         Assert.Equal("SERVICE_READ_ONLY", problem.GetProperty("reason").GetString());
-        Assert.Equal(HttpStatusCode.OK, archive.StatusCode);
-        Assert.Equal("ARCHIVED", (await ApiTestHelpers.ReadJsonAsync(archive)).GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.OK, removeResponse.StatusCode);
+        Assert.Equal("REMOVED", (await ApiTestHelpers.ReadJsonAsync(removeResponse)).GetProperty("status").GetString());
     }
 
     [SqlFact]
-    public async Task Setup16_ArchivingLastReadyContainerOfRunningPlanNeedsConfirmation()
+    public async Task Setup16_RemovingLastReadyContainerOfRunningPlanNeedsConfirmation()
     {
         // Chuẩn bị: gói READY và kế hoạch ACTIVE được dựng thẳng trong DB cho gọn;
         // gói có một tài sản để kiểm tài sản được gỡ ra nhưng không bị xóa.
@@ -298,7 +298,7 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         });
         string url = $"{ContainersUrl(vaultId)}/{containerId}";
 
-        // Hành động: lưu trữ khi chưa xác nhận, rồi xác nhận.
+        // Hành động: xóa gói khi chưa xác nhận, rồi xác nhận.
         HttpResponseMessage unconfirmed = await client.DeleteAsync(url);
         HttpResponseMessage confirmed = await client.DeleteAsync($"{url}?confirmPlanDeactivation=true");
 
@@ -306,9 +306,9 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         await ApiTestHelpers.AssertProblemAsync(
             unconfirmed, HttpStatusCode.Conflict, "PLAN_DEACTIVATION_CONFIRMATION_REQUIRED");
         Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
-        JsonElement archived = await ApiTestHelpers.ReadJsonAsync(confirmed);
-        Assert.Equal("ARCHIVED", archived.GetProperty("status").GetString());
-        Assert.Equal(0, archived.GetProperty("assetIds").GetArrayLength());
+        JsonElement removedContainer = await ApiTestHelpers.ReadJsonAsync(confirmed);
+        Assert.Equal("REMOVED", removedContainer.GetProperty("status").GetString());
+        Assert.Equal(0, removedContainer.GetProperty("assetIds").GetArrayLength());
 
         JsonElement vault = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
         Assert.Equal("DRAFT", vault.GetProperty("planStatus").GetString());
@@ -426,9 +426,9 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Setup16_ArchivedContainerRejectsAddAndRemove()
+    public async Task Setup16_RemovedContainerRejectsAddAndRemove()
     {
-        // Chuẩn bị: một gói đã lưu trữ.
+        // Chuẩn bị: một gói đã xóa.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
@@ -441,8 +441,8 @@ public sealed class ContainerFlowTests : IAsyncLifetime
         HttpResponseMessage remove = await client.DeleteAsync(ContainerAssetUrl(vaultId, containerId, assetId));
 
         // Kiểm tra
-        await ApiTestHelpers.AssertProblemAsync(add, HttpStatusCode.Conflict, "CONTAINER_ARCHIVED");
-        await ApiTestHelpers.AssertProblemAsync(remove, HttpStatusCode.Conflict, "CONTAINER_ARCHIVED");
+        await ApiTestHelpers.AssertProblemAsync(add, HttpStatusCode.Conflict, "CONTAINER_REMOVED");
+        await ApiTestHelpers.AssertProblemAsync(remove, HttpStatusCode.Conflict, "CONTAINER_REMOVED");
     }
 
     [SqlFact]
@@ -480,9 +480,9 @@ public sealed class ContainerFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Setup16_ArchivedContainerReleasesAssetForAnotherContainer()
+    public async Task Setup16_RemovedContainerReleasesAssetForAnotherContainer()
     {
-        // Chuẩn bị: tài sản ở gói 1, rồi lưu trữ gói 1.
+        // Chuẩn bị: tài sản ở gói 1, rồi xóa gói 1.
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);

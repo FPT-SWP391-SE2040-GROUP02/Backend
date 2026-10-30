@@ -21,7 +21,7 @@ public class HandoverPlan
     public PlanStatus Status { get; set; }
 
     /// <summary>
-    /// SETUP-04: tăng mỗi khi cấu hình kế hoạch đổi (tạo/đổi tên/lưu trữ Container, thêm/gỡ tài sản/chỉ định...).
+    /// SETUP-04: tăng mỗi khi cấu hình kế hoạch đổi (tạo/đổi tên/xóa Container, thêm/gỡ tài sản/chỉ định...).
     /// Snapshot khi nộp chứng tử ghi lại số này. Bắt đầu từ 1.
     /// </summary>
     public int ConfigVersion { get; set; }

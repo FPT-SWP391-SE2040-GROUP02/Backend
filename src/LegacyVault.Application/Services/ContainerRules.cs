@@ -11,7 +11,7 @@ namespace LegacyVault.Application.Services;
 /// </remarks>
 public static class ContainerRules
 {
-    /// <summary>NFR-14: tối đa 50 gói chưa lưu trữ mỗi kho.</summary>
+    /// <summary>NFR-14: tối đa 50 gói chưa bị xóa mỗi kho.</summary>
     public const int MaxActiveContainers = 50;
 
     public const string NoAsset = "NO_ASSET";
@@ -19,11 +19,11 @@ public static class ContainerRules
 
     /// <summary>
     /// SETUP-16: backend tự tính DRAFT/READY. READY cần ≥1 tài sản VÀ ≥1 chỉ định người nhận hợp lệ.
-    /// Gói ARCHIVED do Owner chọn nên giữ nguyên.
+    /// Gói REMOVED do Owner chọn nên giữ nguyên.
     /// </summary>
     public static void RecalculateStatus(Container container)
     {
-        if (container.Status == ContainerStatus.Archived)
+        if (container.Status == ContainerStatus.Removed)
         {
             return;
         }
@@ -38,11 +38,11 @@ public static class ContainerRules
         }
     }
 
-    /// <summary>Lý do gói còn DRAFT để FE hướng dẫn. Gói READY/ARCHIVED → danh sách rỗng.</summary>
+    /// <summary>Lý do gói còn DRAFT để FE hướng dẫn. Gói READY/REMOVED → danh sách rỗng.</summary>
     public static List<string> GetMissingRequirements(Container container)
     {
         List<string> missing = new List<string>();
-        if (container.Status == ContainerStatus.Ready || container.Status == ContainerStatus.Archived)
+        if (container.Status == ContainerStatus.Ready || container.Status == ContainerStatus.Removed)
         {
             return missing;
         }

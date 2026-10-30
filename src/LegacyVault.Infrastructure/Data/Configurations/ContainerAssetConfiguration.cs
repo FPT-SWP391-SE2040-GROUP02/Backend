@@ -12,7 +12,7 @@ public sealed class ContainerAssetConfiguration : IEntityTypeConfiguration<Conta
 
         builder.HasKey(a => a.Id);
 
-        // DATA-04: Mỗi tài sản chỉ thuộc tối đa một Container chưa lưu trữ
+        // DATA-04: Mỗi tài sản chỉ thuộc tối đa một Container chưa bị xóa
         builder.HasIndex(a => a.AssetId)
             .IsUnique();
 

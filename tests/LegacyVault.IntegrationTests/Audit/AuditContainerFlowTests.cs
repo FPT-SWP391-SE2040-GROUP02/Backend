@@ -45,7 +45,7 @@ public sealed class AuditContainerFlowTests : IAsyncLifetime
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, "001090000001", "Nguyễn Văn A");
         Guid beneficiaryId = beneficiary.GetProperty("id").GetGuid();
 
-        // Hành động: tạo, đổi tên, thêm/gỡ tài sản, thêm/gỡ người nhận, lưu trữ
+        // Hành động: tạo, đổi tên, thêm/gỡ tài sản, thêm/gỡ người nhận, xóa gói
         JsonElement container = await ApiTestHelpers.CreateContainerAsync(client, vaultId, "Gói gia đình");
         Guid containerId = container.GetProperty("id").GetGuid();
         string url = $"/api/v1/vaults/{vaultId}/containers/{containerId}";
@@ -76,7 +76,7 @@ public sealed class AuditContainerFlowTests : IAsyncLifetime
             AuditAction.ContainerBeneficiaryAdded,
             AuditAction.ContainerAssetRemoved,
             AuditAction.ContainerBeneficiaryRemoved,
-            AuditAction.ContainerArchived,
+            AuditAction.ContainerRemoved,
         };
         Assert.Equal(expected, actions);
         for (int i = 1; i < logs.Count; i++)
@@ -151,11 +151,11 @@ public sealed class AuditContainerFlowTests : IAsyncLifetime
         HttpResponseMessage confirmed = await client.DeleteAsync($"{url}?confirmPlanDeactivation=true");
         Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
 
-        // Kiểm tra: một dòng PlanDeactivated trỏ tới kế hoạch, cùng dòng lưu trữ gói
+        // Kiểm tra: một dòng PlanDeactivated trỏ tới kế hoạch, cùng dòng xóa gói
         AuditLog deactivated = Assert.Single(
             await AuditTestData.ListForVaultAsync(factory, vaultId, AuditAction.PlanDeactivated));
         Assert.Equal(AuditTargetType.Plan, deactivated.TargetType);
-        Assert.Single(await AuditTestData.ListForVaultAsync(factory, vaultId, AuditAction.ContainerArchived));
+        Assert.Single(await AuditTestData.ListForVaultAsync(factory, vaultId, AuditAction.ContainerRemoved));
     }
 
     private static List<AuditLog> ContainerLogs(List<AuditLog> logs)

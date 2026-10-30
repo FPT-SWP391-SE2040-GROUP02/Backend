@@ -19,7 +19,7 @@ public sealed class DesignationConfiguration : IEntityTypeConfiguration<Designat
         // Tìm các gói của một hồ sơ (containerIds, chặn xóa hồ sơ đang dùng, đếm suất QUOTA-03).
         builder.HasIndex(d => d.BeneficiaryId);
 
-        // Restrict cả hai phía: gói chỉ lưu trữ (không xóa hẳn); hồ sơ đang có chỉ định thì không xóa được.
+        // Restrict cả hai phía: gói chỉ bị xóa mềm (không xóa hẳn dòng); hồ sơ đang có chỉ định thì không xóa được.
         builder.HasOne(d => d.Container)
             .WithMany(c => c.Designations)
             .HasForeignKey(d => d.ContainerId)

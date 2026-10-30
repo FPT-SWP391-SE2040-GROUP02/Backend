@@ -281,7 +281,7 @@ public sealed class CheckInFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task ArchivingLastReadyContainer_StopsTheCheckInSchedule()
+    public async Task RemovingLastReadyContainer_StopsTheCheckInSchedule()
     {
         // Chuẩn bị: kế hoạch ACTIVE có kỳ điểm danh đang mở và một gói READY (dựng thẳng trong DB, chưa có chỉ định người nhận).
         (HttpClient client, Guid vaultId, Guid planId) = await CreateVaultWithPlanAsync(PlanStatus.Active);
@@ -295,12 +295,12 @@ public sealed class CheckInFlowTests : IAsyncLifetime
                 .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, ContainerStatus.Ready));
         });
 
-        // Hành động: lưu trữ gói READY cuối cùng và xác nhận kế hoạch về nháp (SETUP-16).
-        HttpResponseMessage archived = await client.DeleteAsync(
+        // Hành động: xóa gói READY cuối cùng và xác nhận kế hoạch về nháp (SETUP-16).
+        HttpResponseMessage removedContainer = await client.DeleteAsync(
             $"/api/v1/vaults/{vaultId}/containers/{containerId}?confirmPlanDeactivation=true");
 
         // Kiểm tra: kế hoạch về DRAFT, kỳ điểm danh đóng nhưng không bị coi là đã điểm danh (SETUP-16: dừng lịch).
-        Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, removedContainer.StatusCode);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             HandoverPlan plan = await db.HandoverPlans.AsNoTracking().SingleAsync(p => p.Id == planId);
