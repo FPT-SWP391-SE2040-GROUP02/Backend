@@ -1,3 +1,4 @@
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -19,6 +20,7 @@ public sealed class PlanSetupController(IPlanSetupService service) : ControllerB
     public Task<PlanSetupResponse> Get(Guid vaultId, CancellationToken ct) => service.GetAsync(vaultId, ct);
 
     /// <summary>Create invitation. Null invitationSentAt means delivery is not confirmed; token is never returned.</summary>
+    [RequireVaultPin]
     [HttpPost("executors"), EnableRateLimiting("plan-setup")]
     public async Task<ActionResult<ExecutorInvitationResponse>> Invite(Guid vaultId, InviteExecutorRequest request, CancellationToken ct) =>
         StatusCode(StatusCodes.Status201Created, await service.InviteAsync(vaultId, request, ct));

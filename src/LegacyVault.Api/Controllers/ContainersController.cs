@@ -1,3 +1,4 @@
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
@@ -61,6 +62,7 @@ public sealed class ContainersController(IContainerService containerService) : C
     }
 
     /// <summary>Lưu trữ gói (không xóa hẳn): gỡ hết tài sản, chuyển ARCHIVED.</summary>
+    [RequireVaultPin]
     [HttpDelete("{containerId:guid}")]
     [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -86,6 +88,7 @@ public sealed class ContainersController(IContainerService containerService) : C
     }
 
     /// <summary>Gỡ tài sản khỏi gói (không xóa tài sản, không giải phóng dung lượng — QUOTA-02).</summary>
+    [RequireVaultPin]
     [HttpDelete("{containerId:guid}/assets/{assetId:guid}")]
     [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -98,6 +101,7 @@ public sealed class ContainersController(IContainerService containerService) : C
     }
 
     /// <summary>Chỉ định một hồ sơ người nhận của kho cho gói (hạng Free bị chặn, SETUP-17; kiểm suất, QUOTA-05).</summary>
+    [RequireVaultPin]
     [HttpPost("{containerId:guid}/beneficiaries")]
     [Consumes("application/json")]
     [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
@@ -112,6 +116,7 @@ public sealed class ContainersController(IContainerService containerService) : C
     }
 
     /// <summary>Gỡ người nhận khỏi gói (không xóa hồ sơ; người còn ở gói khác vẫn chiếm suất).</summary>
+    [RequireVaultPin]
     [HttpDelete("{containerId:guid}/beneficiaries/{beneficiaryId:guid}")]
     [ProducesResponseType<ContainerResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

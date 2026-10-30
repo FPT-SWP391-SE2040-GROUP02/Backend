@@ -59,6 +59,8 @@ public static class AuthSecurityConfig
                 (AuthRateLimitPolicies.PasswordReset, AuthRateLimitPolicies.PasswordResetPermitLimit),
                 // R5 (audit 2026-10-27): giới hạn kênh điểm danh DMS (web + smartwatch), chống flood.
                 ("check-ins", 10),
+                // Mã PIN kho: đặt/đổi/quên PIN. Quên PIN kiểm mật khẩu tài khoản nên cần giới hạn dò.
+                ("vault-pin", 10),
             };
             foreach (var (name, limit) in policies)
             {
