@@ -1,0 +1,88 @@
+# Thử mã PIN kho — chỉ Development (docs/api-contract.md mục 6.20).
+#
+# Chuẩn bị giống http/containers.http: chạy migration (AddVaultPins), chạy API (profile http), tạo tài khoản bằng
+# http/auth.http, đăng nhập bên dưới để lấy token, tạo kho rồi điền vaultId và assetId.
+# PIN gồm đúng 6 chữ số, không dùng số giống nhau hay dãy liên tiếp (123456, 654321...).
+# Dữ liệu dưới đây là dữ liệu giả.
+
+@baseUrl = http://localhost:5000/api/v1
+@vaultId = 00000000-0000-0000-0000-000000000000
+@assetId = 00000000-0000-0000-0000-000000000000
+
+### Đăng nhập — lấy access token (hết hạn sau 15 phút thì gửi lại request này)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Trạng thái PIN: đã đặt chưa, có bắt buộc không, khóa đến khi nào, còn mấy lần thử
+GET {{baseUrl}}/vaults/{{vaultId}}/pin
+Authorization: Bearer {{token}}
+
+### Tạo tài sản đầu tiên (chưa cần PIN)
+POST {{baseUrl}}/vaults/{{vaultId}}/assets/text
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Ghi chú thử", "content": "Nội dung thử" }
+
+### Tạo tài sản thứ hai khi chưa có PIN → 409 VAULT_PIN_NOT_SET
+POST {{baseUrl}}/vaults/{{vaultId}}/assets/text
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Ghi chú hai", "content": "Nội dung hai" }
+
+### Đặt PIN lần đầu → 200 (đặt lần hai → 409 VAULT_PIN_ALREADY_SET; 123456 → 400 VAULT_PIN_TOO_WEAK)
+POST {{baseUrl}}/vaults/{{vaultId}}/pin
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "pin": "482913", "confirmPin": "482913" }
+
+### Tải nội dung tài sản — thiếu header → 403 VAULT_PIN_REQUIRED
+GET {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/content
+Authorization: Bearer {{token}}
+
+### Tải nội dung tài sản — sai PIN → 403 INVALID_VAULT_PIN kèm attemptsRemaining (sai 5 lần → 423 VAULT_PIN_LOCKED)
+GET {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/content
+Authorization: Bearer {{token}}
+X-Vault-Pin: 999000
+
+### Tải nội dung tài sản — đúng PIN → 200
+GET {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/content
+Authorization: Bearer {{token}}
+X-Vault-Pin: 482913
+
+### Xóa tài sản — cần PIN
+DELETE {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}
+Authorization: Bearer {{token}}
+X-Vault-Pin: 482913
+
+### Đổi PIN khi còn nhớ PIN cũ
+POST {{baseUrl}}/vaults/{{vaultId}}/pin/change
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "currentPin": "482913", "newPin": "715284", "confirmPin": "715284" }
+
+### Quên PIN — nhập mật khẩu tài khoản, đặt PIN mới ngay và gỡ khóa (sai mật khẩu → 401 REAUTHENTICATION_FAILED)
+POST {{baseUrl}}/vaults/{{vaultId}}/pin/reset
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "password": "Password123!", "newPin": "482913", "confirmPin": "482913" }
+
+### Xóa hồ sơ người nhận — cần PIN (điền beneficiaryId)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/beneficiaries/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{token}}
+X-Vault-Pin: 482913
+
+### Xóa gói — cần PIN (điền containerId)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{token}}
+X-Vault-Pin: 482913

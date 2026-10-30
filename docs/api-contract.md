@@ -115,6 +115,13 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `PAYMENT_ORDER_NOT_PAYABLE` | Hủy hoặc ghi nhận thanh toán một đơn không còn ở trạng thái cho phép | `reason`: `PAID` / `EXPIRED` / `CANCELLED` / `VAULT_CLOSED` / `ENTITLEMENT_CHANGED` |
 | 404 | `PAYMENT_ORDER_NOT_FOUND` | Không có đơn thanh toán, hoặc đơn của kho khác; cũng là kết quả của `dev-pay` khi công tắc dev tắt | |
 | 409 | `DEV_TOOL_NOT_ALLOWED` | Công cụ thử nghiệm (chỉ Development): kho không có mốc này ở trạng thái hiện tại hoặc đã qua mốc | `milestone`, `state` |
+| 409 | `VAULT_PIN_NOT_SET` | Kho đã có tài sản nhưng chưa đặt mã PIN (mục 6.20): chặn tạo thêm tài sản và các thao tác cần PIN | |
+| 409 | `VAULT_PIN_ALREADY_SET` | Kho đã có PIN, không đặt lần đầu nữa; dùng đổi PIN | |
+| 403 | `VAULT_PIN_REQUIRED` | Thao tác cần PIN nhưng thiếu header `X-Vault-Pin`; không tính là một lần đoán | |
+| 403 | `INVALID_VAULT_PIN` | Sai mã PIN | `attemptsRemaining` |
+| 423 | `VAULT_PIN_LOCKED` | PIN bị khóa tạm vì sai 5 lần liên tiếp; đang khóa thì PIN đúng cũng bị từ chối | `lockedUntil` |
+| 400 | `VAULT_PIN_TOO_WEAK` | PIN quá dễ đoán (6 số giống nhau, dãy tăng hoặc giảm liên tiếp) | |
+| 409 | `VAULT_PIN_RESET_NEEDS_PASSWORD` | Quên PIN nhưng tài khoản không có mật khẩu (chỉ đăng nhập bằng Google) | |
 
 ---
 
@@ -1115,6 +1122,50 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 - **Đặt lại eKYC** (`users/ekyc-reset`): xóa mọi lượt eKYC (mọi mục đích), lần đồng ý chụp ảnh, danh tính đã gắn và mẫu khuôn mặt của tài khoản có email đã nhập (không phân biệt hoa thường). Email, vai trò, kho, vai Executor và hồ sơ giữ nguyên. Tài khoản chưa có eKYC thì trả các số `0`, không ghi nhật ký. Response không có dữ liệu định danh. Sau khi đặt lại, Owner phải eKYC lại trước khi mua gói mới hoặc kích hoạt kế hoạch, và có thể dùng CCCD khác (không còn `EKYC_IDENTITY_MISMATCH`).
 - **Về trước eKYC và mua gói** (`vaults/{vaultId}/rewind-before-ekyc`): đưa kho về thời điểm ngay trước bước eKYC của Owner để làm lại eKYC rồi mua gói. Trong một giao dịch: xóa dữ liệu eKYC của Owner (như `ekyc-reset`), trả quyền dịch vụ về Free (hạng `FREE`, dung lượng Free, 0 chỗ người nhận, bỏ hạn dịch vụ) và hủy các đơn thanh toán đang chờ. Đơn đã trả, tài sản, người nhận, gói và Executor giữ nguyên. Chỉ chạy khi kế hoạch còn `DRAFT` (khác → `409 DEV_TOOL_NOT_ALLOWED`, `reason = PLAN_NOT_DRAFT`). Kho vốn đã ở thời điểm đó thì trả các số `0`, `entitlementReset = false`, không ghi nhật ký; ngược lại ghi `DEV_REWIND_BEFORE_EKYC` gắn kho.
 - FE chỉ hiện mục "Công cụ thử nghiệm" trong khu Admin khi chạy `npm run dev`.
+
+### 6.20. Mã PIN của kho
+
+Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Owner thật) khỏi các thao tác nhạy cảm. Chỉ Owner của kho gọi được; kho của người khác → `404 VAULT_NOT_FOUND`.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/api/v1/vaults/{vaultId}/pin` | — | 200 `VaultPinStatus` | 401, 404 |
+| POST | `/api/v1/vaults/{vaultId}/pin` | `{ pin, confirmPin }` | 200 `VaultPinStatus` | 400 `VALIDATION_ERROR` / `VAULT_PIN_TOO_WEAK`, 404, 409 `VAULT_PIN_ALREADY_SET`, 429 |
+| POST | `/api/v1/vaults/{vaultId}/pin/change` | `{ currentPin, newPin, confirmPin }` | 200 `VaultPinStatus` | 400, 403 `INVALID_VAULT_PIN`, 404, 409 `VAULT_PIN_NOT_SET`, 423 `VAULT_PIN_LOCKED`, 429 |
+| POST | `/api/v1/vaults/{vaultId}/pin/reset` | `{ password, newPin, confirmPin }` | 200 `VaultPinStatus` | 400, 401 `REAUTHENTICATION_FAILED` (sai mật khẩu), 404, 409 `VAULT_PIN_NOT_SET` / `VAULT_PIN_RESET_NEEDS_PASSWORD`, 429 |
+
+`VaultPinStatus`: `{ isSet, isRequired, lockedUntil, attemptsRemaining }`. `isRequired = true` khi kho đã có tài sản; FE hiện hộp thoại bắt buộc đặt PIN khi `isRequired && !isSet`. `lockedUntil` là `null` khi không bị khóa. `attemptsRemaining` là `null` khi chưa đặt PIN. Không bao giờ trả PIN hay hash.
+
+**Thao tác cần PIN.** Gửi PIN trong header `X-Vault-Pin: 482913` (6 chữ số). Áp dụng cho:
+
+- `GET /vaults/{vaultId}/assets/{assetId}/content` (tải nội dung tài sản) và `DELETE /vaults/{vaultId}/assets/{assetId}`.
+- `POST`, `PUT`, `DELETE /vaults/{vaultId}/beneficiaries...` (tạo, sửa, xóa hồ sơ người nhận).
+- `DELETE /vaults/{vaultId}/containers/{containerId}` (xóa gói), `DELETE .../containers/{containerId}/assets/{assetId}` (gỡ tài sản khỏi gói), `POST` và `DELETE .../containers/{containerId}/beneficiaries...` (gán, gỡ người nhận của gói).
+- `POST /vaults/{vaultId}/executors` (mời Executor) và `POST /vaults/{vaultId}/executors/{executorId}/revoke` (thu hồi).
+- Token của đồng hồ thông minh (có claim `device_id`) bị từ chối `403 ROLE_NOT_ALLOWED`, không cho nhập PIN.
+
+Không cần PIN: tạo tài sản, liệt kê, xem thông tin, sửa tên/mô tả tài sản, đưa tài sản vào gói.
+
+**Luật kiểm tra** (theo thứ tự):
+
+1. Kho không thuộc người gọi → `404 VAULT_NOT_FOUND`.
+2. Kho chưa có PIN: chưa có tài sản nào → cho qua; đã có tài sản → `409 VAULT_PIN_NOT_SET`.
+3. Đang bị khóa → `423 VAULT_PIN_LOCKED` kèm `lockedUntil`.
+4. Thiếu header → `403 VAULT_PIN_REQUIRED` (không tính lần đoán).
+5. Sai PIN (kể cả không đủ 6 chữ số) → `403 INVALID_VAULT_PIN` kèm `attemptsRemaining` (dùng 403, không dùng 401, để FE không chạy luồng làm mới token).
+6. Đúng → bộ đếm sai và bậc khóa về 0.
+
+**Khóa lũy tiến.** Sai 5 lần liên tiếp thì khóa: lần khóa thứ nhất 15 phút, thứ hai 1 giờ, từ lần thứ ba 24 giờ. Lần sai thứ 5 trả luôn `423`. Mỗi lần khóa gửi email cảnh báo cho Owner. Đúng PIN thì bậc khóa về 0. Đặt PIN hoặc đổi PIN từ chối PIN quá dễ đoán (`VAULT_PIN_TOO_WEAK`).
+
+**Ép đặt PIN.** Kho đã có ít nhất 1 tài sản mà chưa có PIN thì `POST .../assets` và `POST .../assets/text` trả `409 VAULT_PIN_NOT_SET`. Tài sản đầu tiên được tạo bình thường.
+
+**Quên PIN** (`pin/reset`): nhập đúng mật khẩu tài khoản thì đặt PIN mới ngay, không có độ trễ hay link xác nhận; gỡ luôn khóa. Sai mật khẩu → `401 REAUTHENTICATION_FAILED` (phiên đăng nhập vẫn còn, FE không coi là hết phiên). Tài khoản chỉ đăng nhập bằng Google không có mật khẩu → `409 VAULT_PIN_RESET_NEEDS_PASSWORD`. Gọi được cả khi đang bị khóa. Rate limit 10 request/phút/IP cho ba API ghi.
+
+**Email báo Owner** (không chứa PIN): PIN vừa đặt, vừa đổi, vừa đặt lại, hoặc bị khóa. Gửi lỗi không làm hỏng thao tác PIN đã lưu.
+
+**Nhật ký** (mục 6.13, `GET /vaults/{vaultId}/audit-logs`): `VAULT_PIN_SET`, `VAULT_PIN_CHANGED`, `VAULT_PIN_RESET`, `VAULT_PIN_WRONG` (kết quả `FAILED`), `VAULT_PIN_LOCKED` (kết quả `DENIED`). Không ghi PIN hay hash.
+
+**Giới hạn.** Người biết mật khẩu tài khoản đặt lại được PIN ngay, và PIN không bảo vệ nội dung mã hóa của tài sản, chỉ chặn người dùng tài khoản Owner.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 

@@ -1,3 +1,4 @@
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
@@ -35,6 +36,7 @@ public sealed class BeneficiariesController : ControllerBase
     }
 
     /// <summary>Tạo hồ sơ: 201 khi vừa tạo, 200 khi đã có hồ sơ cùng CCCD và cùng danh tính (trả hồ sơ cũ).</summary>
+    [RequireVaultPin]
     [HttpPost]
     [Consumes("application/json")]
     [ProducesResponseType<BeneficiaryResponse>(StatusCodes.Status201Created)]
@@ -64,6 +66,7 @@ public sealed class BeneficiariesController : ControllerBase
     }
 
     /// <summary>Sửa họ tên/ngày sinh/liên hệ (không đổi được CCCD); etag bắt buộc trong body.</summary>
+    [RequireVaultPin]
     [HttpPut("{beneficiaryId:guid}")]
     [Consumes("application/json")]
     [ProducesResponseType<BeneficiaryResponse>(StatusCodes.Status200OK)]
@@ -77,6 +80,7 @@ public sealed class BeneficiariesController : ControllerBase
     }
 
     /// <summary>Xóa hồ sơ (vẫn cho khi dịch vụ đang ân hạn).</summary>
+    [RequireVaultPin]
     [HttpDelete("{beneficiaryId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

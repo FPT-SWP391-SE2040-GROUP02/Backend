@@ -84,6 +84,20 @@ public enum ErrorCode
     WebhookUnauthorized,
     /// <summary>Công cụ thử nghiệm: mốc thời gian không áp dụng được cho trạng thái hiện tại của kho.</summary>
     DevToolNotAllowed,
+    /// <summary>409: kho đã có tài sản nhưng chưa đặt mã PIN.</summary>
+    VaultPinNotSet,
+    /// <summary>409: kho đã có mã PIN, không đặt lần đầu nữa.</summary>
+    VaultPinAlreadySet,
+    /// <summary>403: thiếu header X-Vault-Pin.</summary>
+    VaultPinRequired,
+    /// <summary>403: sai mã PIN, kèm attemptsRemaining.</summary>
+    InvalidVaultPin,
+    /// <summary>423: PIN đang bị khóa tạm, kèm lockedUntil.</summary>
+    VaultPinLocked,
+    /// <summary>400: PIN quá dễ đoán (số giống nhau, dãy tăng/giảm).</summary>
+    VaultPinTooWeak,
+    /// <summary>409: tài khoản không có mật khẩu (đăng nhập bằng Google) nên chưa đặt lại PIN được.</summary>
+    VaultPinResetNeedsPassword,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

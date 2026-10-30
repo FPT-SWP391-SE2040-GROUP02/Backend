@@ -2493,6 +2493,42 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("VaultEntitlements", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.VaultPin", b =>
+                {
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LockLevel")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PinHash")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset>("SetAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("VaultId");
+
+                    b.ToTable("VaultPins", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.Asset", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.Vault", "Vault")
@@ -2974,6 +3010,15 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Vault");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.VaultPin", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Vault", null)
+                        .WithOne()
+                        .HasForeignKey("LegacyVault.Domain.Entities.VaultPin", "VaultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInPeriod", b =>

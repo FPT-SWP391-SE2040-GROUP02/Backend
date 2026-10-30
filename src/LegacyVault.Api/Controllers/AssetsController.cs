@@ -1,6 +1,7 @@
 using LegacyVault.Api.Exceptions;
 using LegacyVault.Api.Handover;
 using LegacyVault.Api.Models;
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
@@ -86,6 +87,7 @@ public sealed class AssetsController(IAssetService assetService, ILogger<AssetsC
     /// Owner tải nội dung tài sản của mình. Nội dung được kiểm toàn vẹn trước khi
     /// gửi byte đầu tiên; nếu hỏng trả 500 CONTENT_INTEGRITY_FAILED mà không kèm byte nội dung nào.
     /// </summary>
+    [RequireVaultPin]
     [HttpGet("{assetId:guid}/content")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -131,6 +133,7 @@ public sealed class AssetsController(IAssetService assetService, ILogger<AssetsC
     }
 
     /// <summary>Xóa tài sản (chỉ khi không còn ở gói nào, chưa ghim vào bàn giao và kho không bị tạm giữ).</summary>
+    [RequireVaultPin]
     [HttpDelete("{assetId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

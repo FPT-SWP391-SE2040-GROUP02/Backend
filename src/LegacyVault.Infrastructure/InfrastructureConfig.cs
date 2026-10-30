@@ -77,6 +77,7 @@ public static class InfrastructureConfig
         services.AddScoped<IContainerRepository, ContainerRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
+        services.AddScoped<IVaultPinRepository, VaultPinRepository>();
         services.AddScoped<ICheckInRepository, CheckInRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IHoldRepository, HoldRepository>();
@@ -149,6 +150,7 @@ public static class InfrastructureConfig
         // Security & Notifications
         services.AddMemoryCache();
         services.AddSingleton<IPasswordHasher, Sha256PasswordHasher>();
+        services.AddSingleton<IVaultPinHasher, VaultPinHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddScoped<ISessionRevocationValidator, SessionRevocationValidator>();
         services.AddHttpContextAccessor();

@@ -117,6 +117,10 @@ public sealed class GlobalExceptionHandler(
         {
             status = StatusCodes.Status503ServiceUnavailable;
         }
+        else if (exception.Type == AppErrorType.Locked)
+        {
+            status = StatusCodes.Status423Locked;
+        }
         else
         {
             status = StatusCodes.Status500InternalServerError;

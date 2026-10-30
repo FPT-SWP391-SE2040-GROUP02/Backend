@@ -1,3 +1,4 @@
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -13,6 +14,7 @@ namespace LegacyVault.Api.Controllers;
 public sealed class ExecutorManagementController(IExecutorManagementService service) : ControllerBase
 {
     /// <summary>Thu hồi. Gọi lặp trên dòng đã kết thúc trả trạng thái hiện tại.</summary>
+    [RequireVaultPin]
     [HttpPost("{executorId:guid}/revoke")]
     [ProducesResponseType<ExecutorInvitationResponse>(StatusCodes.Status200OK)]
     public Task<ExecutorInvitationResponse> Revoke(

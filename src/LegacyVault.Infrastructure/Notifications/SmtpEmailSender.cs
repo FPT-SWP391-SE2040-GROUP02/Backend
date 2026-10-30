@@ -49,4 +49,48 @@ public sealed class SmtpEmailSender : IEmailSender
 
         return mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
     }
+
+    public Task SendVaultPinNoticeAsync(
+        string toEmail, string fullName, VaultPinNoticeKind kind, DateTimeOffset? lockedUntil, CancellationToken ct)
+    {
+        string subject;
+        string kicker;
+        string lead;
+        switch (kind)
+        {
+            case VaultPinNoticeKind.Set:
+                subject = "Mã PIN kho LegacyVault vừa được đặt";
+                kicker = "Mã PIN của kho";
+                lead = "Mã PIN của kho LegacyVault vừa được đặt.\nTừ giờ, các thao tác nhạy cảm như tải nội dung tài sản, xóa tài sản hoặc đổi người nhận đều cần nhập mã PIN này.";
+                break;
+            case VaultPinNoticeKind.Changed:
+                subject = "Mã PIN kho LegacyVault vừa được đổi";
+                kicker = "Mã PIN của kho";
+                lead = "Mã PIN của kho LegacyVault vừa được đổi bằng mã PIN cũ.";
+                break;
+            case VaultPinNoticeKind.Reset:
+                subject = "Mã PIN kho LegacyVault vừa được đặt lại";
+                kicker = "Mã PIN của kho";
+                lead = "Mã PIN của kho LegacyVault vừa được đặt lại bằng mật khẩu tài khoản của bạn.";
+                break;
+            default:
+                subject = "Mã PIN kho LegacyVault đang bị khóa tạm";
+                kicker = "Cảnh báo bảo mật";
+                lead = "Mã PIN của kho LegacyVault vừa bị nhập sai nhiều lần liên tiếp nên đã bị khóa tạm.";
+                if (lockedUntil.HasValue)
+                {
+                    // Giờ Việt Nam (UTC+07:00) để người đọc không phải tự quy đổi.
+                    DateTimeOffset local = lockedUntil.Value.ToOffset(TimeSpan.FromHours(7));
+                    lead += $"\nPIN sẽ được mở khóa lúc {local:HH:mm 'ngày' dd/MM/yyyy} (giờ Việt Nam).";
+                }
+                break;
+        }
+
+        const string note = "Nếu đây không phải bạn, hãy đổi mật khẩu tài khoản ngay và đặt lại mã PIN của kho. Email này không chứa mã PIN.";
+        string text = $"Xin chào {fullName},\n\n{lead}\n\n{note}\n";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            subject, fullName, lead, string.Empty, string.Empty, note, kicker, true);
+
+        return mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
+    }
 }

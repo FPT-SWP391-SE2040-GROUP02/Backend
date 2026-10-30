@@ -95,4 +95,14 @@ public enum AuditAction
     DevUpdateEkycThreshold = 43,
     /// <summary>Admin tạo tài khoản hệ thống mới (Verifier hoặc Executor).</summary>
     AdminCreatedUser = 44,
+    /// <summary>Owner đặt mã PIN của kho lần đầu.</summary>
+    VaultPinSet = 45,
+    /// <summary>Owner đổi mã PIN của kho bằng PIN cũ.</summary>
+    VaultPinChanged = 46,
+    /// <summary>Owner đặt lại mã PIN đã quên bằng mật khẩu tài khoản.</summary>
+    VaultPinReset = 47,
+    /// <summary>Nhập sai mã PIN của kho (kết quả Failed).</summary>
+    VaultPinWrong = 48,
+    /// <summary>Mã PIN của kho bị khóa tạm vì nhập sai nhiều lần (kết quả Denied).</summary>
+    VaultPinLocked = 49,
 }

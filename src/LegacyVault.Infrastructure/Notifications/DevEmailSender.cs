@@ -37,4 +37,12 @@ public sealed class DevEmailSender : IEmailSender
         _logger.LogInformation("Password reset email not delivered: SMTP is not configured.");
         return Task.CompletedTask;
     }
+
+    public Task SendVaultPinNoticeAsync(
+        string toEmail, string fullName, VaultPinNoticeKind kind, DateTimeOffset? lockedUntil, CancellationToken ct)
+    {
+        // Không ghi email người nhận hay PIN vào log.
+        _logger.LogInformation("Vault PIN notice ({Kind}) not delivered: SMTP is not configured.", kind);
+        return Task.CompletedTask;
+    }
 }

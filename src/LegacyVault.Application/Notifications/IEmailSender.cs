@@ -14,4 +14,11 @@ public interface IEmailSender
 
     /// <summary>Gửi link đặt lại mật khẩu khi người dùng quên mật khẩu. resetUrl đã chứa token gốc.</summary>
     Task SendPasswordResetAsync(string toEmail, string fullName, string resetUrl, CancellationToken ct);
+
+    /// <summary>
+    /// Báo cho Owner khi mã PIN của kho được đặt, đổi, đặt lại hoặc bị khóa. Không chứa PIN.
+    /// lockedUntil chỉ có ý nghĩa với kind = Locked.
+    /// </summary>
+    Task SendVaultPinNoticeAsync(
+        string toEmail, string fullName, VaultPinNoticeKind kind, DateTimeOffset? lockedUntil, CancellationToken ct);
 }

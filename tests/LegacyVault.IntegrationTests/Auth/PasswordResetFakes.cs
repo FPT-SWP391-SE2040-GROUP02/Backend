@@ -48,6 +48,7 @@ public sealed class CapturingPasswordResetEmailSender : IEmailSender
 {
     private readonly object sync = new object();
     private readonly List<CapturedResetMail> resetMails = new List<CapturedResetMail>();
+    private readonly List<(string ToEmail, VaultPinNoticeKind Kind)> pinNotices = new List<(string, VaultPinNoticeKind)>();
 
     public List<CapturedResetMail> ResetMails
     {
@@ -70,6 +71,28 @@ public sealed class CapturingPasswordResetEmailSender : IEmailSender
         lock (sync)
         {
             resetMails.Add(new CapturedResetMail(toEmail, resetUrl));
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Các email báo về mã PIN kho (loại thư, người nhận).</summary>
+    public List<(string ToEmail, VaultPinNoticeKind Kind)> PinNotices
+    {
+        get
+        {
+            lock (sync)
+            {
+                return new List<(string, VaultPinNoticeKind)>(pinNotices);
+            }
+        }
+    }
+
+    public Task SendVaultPinNoticeAsync(
+        string toEmail, string fullName, VaultPinNoticeKind kind, DateTimeOffset? lockedUntil, CancellationToken ct)
+    {
+        lock (sync)
+        {
+            pinNotices.Add((toEmail, kind));
         }
         return Task.CompletedTask;
     }
