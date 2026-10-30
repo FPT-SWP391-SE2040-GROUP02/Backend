@@ -31,9 +31,13 @@ public static class DeathCaseConfig
         services.AddScoped<IAiNotaryAssistantService, GeminiNotaryAssistantService>();
         // AI nhận diện trang giấy có phải giấy chứng tử khi Executor gửi hồ sơ.
         services.AddScoped<IDeathCertificateClassifier, GeminiDeathCertificateClassifier>();
+        // DEATH-14: khóa ký của Verifier và bộ đếm nhập sai mật khẩu ký.
+        services.AddScoped<IVerifierSigningKeyRepository, VerifierSigningKeyRepository>();
 
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.
         services.AddSingleton<IDeathCaseDataProtector, DeathCaseDataProtector>();
+        // DEATH-14: ký số quyết định của Verifier, khóa riêng bọc bằng cùng DataKeyProtector.
+        services.AddSingleton<IDecisionSigner, DecisionSigner>();
 
         // D3: job gửi thông báo Owner theo outbox.
         services.Configure<DeathCaseJobSettings>(configuration.GetSection(DeathCaseJobSettings.SectionName));
