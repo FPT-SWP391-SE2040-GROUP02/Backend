@@ -26,11 +26,11 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
     TimeProvider time, IAssetRepository assets) : IPlanSetupService
 {
-    public const string PolicyVersion = "setup-2026-10-15";
+    public const string PolicyVersion = "setup-2026-10-30";
     public const string ScopeVersion = "executor-2026-10-15";
     public const string ScopeText = "Executor theo dõi khi Owner quá hạn điểm danh và thực hiện nhiệm vụ kiểm tra/chứng tử theo phân công. Chấp nhận nhiệm vụ không cấp quyền đọc tài sản, duyệt thay danh tính hoặc tự nhận di sản.";
     // The immutable version identifies this text. Change the version whenever changing these warnings.
-    public static readonly string PolicyText = $"Kích hoạt bắt đầu lịch điểm danh đã chọn. Quá hạn chỉ tạo bước kiểm tra, không tự bàn giao. Lời mời người nhận có hạn phản hồi {HandoverRules.ResponseWindow.TotalDays:0} ngày; khi đủ điều kiện, hạn quyết định {HandoverRules.DecisionWindow.TotalDays:0} ngày và quyền xem/tải {HandoverRules.GrantWindow.TotalDays:0} ngày từ lúc đồng ý. Không thao tác đúng hạn có thể mất quyền tiếp nhận/tải. Dữ liệu chỉ được xóa sau khi kiểm tra các điều kiện lưu giữ, tham chiếu và chặn liên quan; không mặc nhiên xóa ngay khi hết một lời mời. Chưa có Executor dự phòng độc lập có thể làm chậm xử lý khi người chính không thực hiện được nhiệm vụ.";
+    public static readonly string PolicyText = $"Kích hoạt bắt đầu lịch điểm danh đã chọn. Quá hạn chỉ tạo bước kiểm tra, không tự bàn giao. Lời mời người nhận có hạn phản hồi {HandoverRules.ResponseWindow.TotalDays:0} ngày; khi đủ điều kiện, hạn quyết định {HandoverRules.DecisionWindow.TotalDays:0} ngày và quyền xem/tải {HandoverRules.GrantWindow.TotalDays:0} ngày từ lúc đồng ý. Không thao tác đúng hạn có thể mất quyền tiếp nhận/tải. Dữ liệu chỉ được xóa sau khi kiểm tra các điều kiện lưu giữ, tham chiếu và chặn liên quan; không mặc nhiên xóa ngay khi hết một lời mời. Nếu Executor không thực hiện được nhiệm vụ, Chủ kho cần mời người thay để kế hoạch không bị chậm.";
 
     public async Task<PlanSetupResponse> GetAsync(Guid vaultId, CancellationToken ct) =>
         await BuildAsync(await OwnedAsync(vaultId, ct), ct);
@@ -42,26 +42,23 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         {
             var vault = await OwnedAsync(vaultId, ct);
             await EnsureInvitationEditableAsync(vault, ct);
-            var role = request.Role == "PRIMARY" ? ExecutorRole.Primary : ExecutorRole.Backup;
-            if (request.Role is not ("PRIMARY" or "BACKUP")) throw ValidationErrors.For("role", "Vai trò Executor không hợp lệ.");
             var email = request.Email.Trim().ToLowerInvariant();
             var owner = await users.FindByIdAsync(vault.OwnerId, ct);
             if (email == owner!.Email.Trim().ToLowerInvariant()) throw NotAllowed("OWNER_CANNOT_ACCEPT");
             var now = time.GetUtcNow();
-            foreach (var previous in vault.Executors.Where(e => e.Role == role && e.Status == ExecutorStatus.Invited && e.ExpiresAt <= now))
+            foreach (var previous in vault.Executors.Where(e => e.Status == ExecutorStatus.Invited && e.ExpiresAt <= now))
             {
                 previous.Status = ExecutorStatus.Expired;
                 previous.EndedAt = now;
                 previous.UpdatedAt = now;
             }
             Guid? replaces = null;
-            var occupying = vault.Executors.Where(e => e.Role == role
-                && e.Status is ExecutorStatus.Invited or ExecutorStatus.Accepted or ExecutorStatus.Suspended).ToList();
+            var occupying = vault.Executors.Where(e => e.Status is ExecutorStatus.Invited or ExecutorStatus.Accepted or ExecutorStatus.Suspended).ToList();
             if (occupying.Count > 0)
             {
-                // SETUP-06: kế hoạch đang chạy mà đã có Executor chính đã chấp nhận → mời người thay; người cũ giữ vai trò
+                // SETUP-06: kế hoạch đang chạy mà đã có Executor đã chấp nhận → mời người thay; người cũ giữ vai trò
                 // cho tới khi người mới chấp nhận. Mọi trường hợp khác vẫn là trùng lời mời.
-                bool replacement = PlanRules.IsRunning(vault.Plan.Status) && role == ExecutorRole.Primary
+                bool replacement = PlanRules.IsRunning(vault.Plan.Status)
                     && occupying.Count == 1 && occupying[0].Status == ExecutorStatus.Accepted;
                 if (!replacement) throw Conflict();
                 replaces = occupying[0].Id;
@@ -70,7 +67,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 throw new AppException(AppErrorType.NotFound, ErrorCode.BeneficiaryNotFound, "Không tìm thấy hồ sơ người nhận.");
             var item = new Executor
             {
-                VaultId = vault.Id, Role = role, Status = ExecutorStatus.Invited,
+                VaultId = vault.Id, Status = ExecutorStatus.Invited,
                 InviteeEmail = email, InvitationTokenHash = token.Hash,
                 IsBeneficiary = request.BeneficiaryId.HasValue, BeneficiaryId = request.BeneficiaryId,
                 InvitedAt = now, ExpiresAt = now.AddDays(7),
@@ -116,7 +113,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     {
         var item = await FindTokenAsync(token, ct);
         if (item.Status != ExecutorStatus.Accepted && (item.Status != ExecutorStatus.Invited || item.ExpiresAt <= time.GetUtcNow())) throw InvalidInvitation();
-        return new(item.Role.ToApiString(), item.ExpiresAt, item.Status.ToApiString(), ScopeVersion, ScopeText);
+        return new(item.ExpiresAt, item.Status.ToApiString(), ScopeVersion, ScopeText);
     }
 
     public Task<ExecutorInvitationResponse> RespondAsync(RespondExecutorInvitationRequest request, CancellationToken ct) =>
@@ -231,18 +228,16 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             var executorUser = await users.FindByIdAsync(item.UserId!.Value, ct);
             if (executorUser?.Status == UserStatus.Active && executorUser.EmailVerifiedAt.HasValue && executorUser.Id != vault.OwnerId) accepted.Add(item);
         }
-        var primaries = accepted.Where(e => e.Role == ExecutorRole.Primary).ToList();
-        var primary = primaries.Count == 1 ? primaries[0] : null;
-        if (primary is null) missing.Add("PRIMARY_EXECUTOR_REQUIRED");
-        if (primary?.IsBeneficiary == true && !accepted.Any(e => e.Role == ExecutorRole.Backup && !e.IsBeneficiary && e.UserId != primary.UserId)) missing.Add("BACKUP_EXECUTOR_REQUIRED");
+        // Mỗi kho đúng một Executor đã chấp nhận (không còn Executor dự phòng).
+        if (accepted.Count != 1) missing.Add("PRIMARY_EXECUTOR_REQUIRED");
         if (vault.Plan.Status != PlanStatus.Draft) missing.Add("PLAN_NOT_DRAFT");
         var openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
         var outsideAssets = await assets.FindOutsideContainerByVaultIdAsync(vault.Id, ct);
-        var warnings = PlanSetupWarningRules.GetWarnings(accepted);
+        // Cảnh báo duy nhất trước đây là NO_BACKUP_EXECUTOR; đã bỏ Executor dự phòng nên giữ mảng rỗng cho đúng hợp đồng API.
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
             vault.Executors.OrderByDescending(e => e.InvitedAt).Select(Map).ToList(),
-            PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), warnings.ToArray());
+            PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>());
     }
 
     private async Task<Executor> FindTokenAsync(string token, CancellationToken ct)
@@ -254,7 +249,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     private async Task<ExecutorInvitationResponse> DeliverAsync(Executor executor, string token, CancellationToken ct)
     {
         // External delivery follows the committed invitation. Failed delivery never grants access.
-        if (await sender.SendAsync(executor.InviteeEmail, executor.Role.ToApiString(), token, executor.ExpiresAt, ct))
+        if (await sender.SendAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct))
         {
             executor.InvitationSentAt = time.GetUtcNow();
             executor.UpdatedAt = time.GetUtcNow();
@@ -262,7 +257,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         }
         return Map(executor);
     }
-    private ExecutorInvitationResponse Map(Executor item) => new(item.Id, item.Role.ToApiString(),
+    private ExecutorInvitationResponse Map(Executor item) => new(item.Id,
         item.Status == ExecutorStatus.Invited && item.ExpiresAt <= time.GetUtcNow() ? "EXPIRED" : item.Status.ToApiString(), item.InviteeEmail,
         item.IsBeneficiary, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt));
     private static AppException InvalidInvitation() => new(AppErrorType.NotFound, ErrorCode.ExecutorInvitationInvalid, "Lời mời Executor không hợp lệ hoặc đã hết hạn.");

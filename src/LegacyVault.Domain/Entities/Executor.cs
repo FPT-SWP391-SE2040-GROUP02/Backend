@@ -29,8 +29,6 @@ public class Executor
     /// <summary>Email Owner nhập khi mời, đã chuẩn hóa (bỏ khoảng trắng, chữ thường). Chỉ dùng để gửi lời mời.</summary>
     public string InviteeEmail { get; set; } = string.Empty;
 
-    public ExecutorRole Role { get; set; }
-
     public ExecutorStatus Status { get; set; }
 
     /// <summary>Mã băm SHA-256 của token trong link mời, dạng hex. Không trùng nhau.</summary>

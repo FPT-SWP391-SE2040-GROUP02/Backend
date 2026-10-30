@@ -17,11 +17,6 @@ public sealed class ExecutorConfiguration : IEntityTypeConfiguration<Executor>
             .IsRequired()
             .HasMaxLength(256);
 
-        builder.Property(e => e.Role)
-            .IsRequired()
-            .HasConversion<string>()
-            .HasMaxLength(32);
-
         builder.Property(e => e.Status)
             .IsRequired()
             .HasConversion<string>()

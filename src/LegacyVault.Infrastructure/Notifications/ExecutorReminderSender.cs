@@ -15,7 +15,7 @@ public sealed class ExecutorReminderSender(SmtpMailSender sender, IOptions<SmtpS
 {
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
-    public async Task<bool> SendAsync(string email, string role, DateTimeOffset expiresAt, CancellationToken ct)
+    public async Task<bool> SendAsync(string email, DateTimeOffset expiresAt, CancellationToken ct)
     {
         bool deliveryEnabled = config.GetValue<bool?>("ExecutorInvitations:DeliveryEnabled")
             ?? (config.GetValue<bool?>("ExecutorInvitations__DeliveryEnabled") ?? settings.Value.IsConfigured);
@@ -24,12 +24,7 @@ public sealed class ExecutorReminderSender(SmtpMailSender sender, IOptions<SmtpS
             return false;
         }
         string deadline = expiresAt.ToOffset(VietnamOffset).ToString("HH:mm 'ngày' dd/MM/yyyy");
-        string roleText = "dự phòng";
-        if (role == "PRIMARY")
-        {
-            roleText = "chính";
-        }
-        string text = $"Bạn có lời mời làm Executor {roleText} trên LegacyVault chưa trả lời, hết hạn lúc {deadline}. "
+        string text = $"Bạn có lời mời làm Executor trên LegacyVault chưa trả lời, hết hạn lúc {deadline}. "
             + "Hãy mở liên kết trong thư mời trước đó để chấp nhận hoặc từ chối; nếu không còn thư đó, nhờ người mời gửi lại lời mời. "
             + "Bỏ qua thư này nếu bạn không biết người mời.";
         try

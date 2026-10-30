@@ -40,7 +40,6 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
             {
                 VaultId = e.VaultId,
                 OwnerFullName = e.Vault.Owner.FullName,
-                Role = e.Role,
                 PlanStatus = e.Vault.Plan.Status,
                 OpenDeathCaseId = context.Set<DeathCase>()
                     .Where(c => c.VaultId == e.VaultId && c.Status != DeathCaseStatus.Rejected)

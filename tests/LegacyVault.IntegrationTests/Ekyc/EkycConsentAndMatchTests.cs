@@ -459,6 +459,8 @@ public sealed class EkycConsentAndMatchTests
 
         Assert.False(response.BackSideChecked);
         Assert.Equal("PENDING", response.Status);
+        // Thẻ cũ không có MRZ vẫn tính là đã gửi mặt sau, để bước camera không bị chặn.
+        Assert.Equal(Now, Assert.Single(repository.Verifications).BackSubmittedAt);
     }
 
     [Fact]

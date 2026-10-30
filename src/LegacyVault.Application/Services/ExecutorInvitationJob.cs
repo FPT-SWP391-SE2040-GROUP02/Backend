@@ -8,7 +8,7 @@ namespace LegacyVault.Application.Services;
 /// <summary>Gửi thư nhắc lời mời Executor ở giờ thứ 48 (SETUP-20). Trả true chỉ khi thư đã được nhận để gửi.</summary>
 public interface IExecutorReminderSender
 {
-    Task<bool> SendAsync(string email, string role, DateTimeOffset expiresAt, CancellationToken ct);
+    Task<bool> SendAsync(string email, DateTimeOffset expiresAt, CancellationToken ct);
 }
 
 public interface IExecutorInvitationJob
@@ -62,7 +62,7 @@ public sealed class ExecutorInvitationJob(IExecutorInvitationRepository invitati
         {
             return null;
         }
-        bool sent = await sender.SendAsync(item.InviteeEmail, item.Role.ToString().ToUpperInvariant(), item.ExpiresAt, ct);
+        bool sent = await sender.SendAsync(item.InviteeEmail, item.ExpiresAt, ct);
         if (!sent)
         {
             return null;
