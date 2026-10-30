@@ -42,7 +42,6 @@ public sealed class HandoverInvitationServiceTests
         Executor executor = new Executor();
         executor.VaultId = data.Vault.Id;
         executor.UserId = executorUserId;
-        executor.Role = ExecutorRole.Primary;
         executor.Status = ExecutorStatus.Accepted;
         executors.Executors.Add(executor);
 

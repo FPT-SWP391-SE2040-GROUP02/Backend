@@ -11,8 +11,6 @@ public sealed class ExecutorVaultRow
     /// <summary>Họ tên tài khoản Owner (dùng để Executor nhận ra kho; không phải dữ liệu trong hồ sơ chứng tử).</summary>
     public string OwnerFullName { get; set; } = string.Empty;
 
-    public ExecutorRole Role { get; set; }
-
     public PlanStatus PlanStatus { get; set; }
 
     /// <summary>Hồ sơ đang mở của kho (kể cả Draft); null khi chưa có.</summary>

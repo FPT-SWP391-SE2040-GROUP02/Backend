@@ -129,7 +129,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task SETUP01_PlanSetupListsReadyAndDraftContainersButNotArchived()
+    public async Task SETUP01_PlanSetupListsReadyAndDraftContainersButNotRemoved()
     {
         // Chuẩn bị
         (HttpClient owner, Guid vaultId, _) = await PrepareAsync();
@@ -181,14 +181,14 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task SETUP10_NoBackupExecutor_WarnsButActivationStillSucceeds()
+    public async Task SETUP10_SingleExecutor_NoWarningsAndActivationSucceeds()
     {
         // Chuẩn bị
         (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
         DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
         await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Passed, createdAt);
         HttpClient primary = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "primary@example.test");
-        await InviteAsync(owner, vaultId, "primary@example.test", "PRIMARY");
+        await InviteAsync(owner, vaultId, "primary@example.test");
         await AcceptAsync(primary);
 
         // Hành động
@@ -202,40 +202,14 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         HttpResponseMessage activation = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request);
 
         // Kiểm tra
-        AssertOnlyNoBackupExecutorWarning(setup);
+        AssertNoWarnings(setup);
         Assert.True(setup.GetProperty("canActivate").GetBoolean());
         Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
         JsonElement activated = await ApiTestHelpers.ReadJsonAsync(activation);
         Assert.Equal("ACTIVE", activated.GetProperty("planStatus").GetString());
-        AssertOnlyNoBackupExecutorWarning(activated);
+        AssertNoWarnings(activated);
         Assert.Equal(1, activated.GetProperty("containers").GetArrayLength());
         Assert.Equal(0, activated.GetProperty("assetsOutsideContainer").GetArrayLength());
-    }
-
-    [SqlFact]
-    public async Task SETUP10_InvitedBackupStillWarns_AcceptedBackupClearsWarning()
-    {
-        // Chuẩn bị
-        (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
-        DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
-        await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Passed, createdAt);
-        HttpClient primary = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "primary@example.test");
-        await InviteAsync(owner, vaultId, "primary@example.test", "PRIMARY");
-        await AcceptAsync(primary);
-        HttpClient backup = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "backup@example.test");
-        ExecutorInvitationResponse invitation = await InviteAsync(owner, vaultId, "backup@example.test", "BACKUP");
-
-        // Hành động
-        JsonElement beforeAcceptance = await GetSetupAsync(owner, vaultId);
-        await AcceptAsync(backup);
-        JsonElement afterAcceptance = await GetSetupAsync(owner, vaultId);
-
-        // Kiểm tra
-        Assert.Equal("INVITED", invitation.Status);
-        AssertOnlyNoBackupExecutorWarning(beforeAcceptance);
-        Assert.True(beforeAcceptance.GetProperty("canActivate").GetBoolean());
-        Assert.Equal(0, afterAcceptance.GetProperty("warnings").GetArrayLength());
-        Assert.True(afterAcceptance.GetProperty("canActivate").GetBoolean());
     }
 
     // SETUP-01: chuẩn bị kho trả phí và gói READY; từng test tự quyết định dữ liệu eKYC.
@@ -270,7 +244,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         return (owner, vaultId, ownerId);
     }
 
-    // SETUP-01, AC-68: bổ sung gói DRAFT có tài sản và gói đã lưu trữ qua HTTP.
+    // SETUP-01, AC-68: bổ sung gói DRAFT có tài sản và gói đã xóa qua HTTP.
     private async Task<(Guid ReadyContainerId, Guid DraftContainerId, Guid DraftAssetId)> PrepareContainersAsync(
         HttpClient owner, Guid vaultId)
     {
@@ -288,18 +262,18 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
             owner, vaultId, draftContainerId, draftAssetId);
         Assert.Equal(HttpStatusCode.OK, addAsset.StatusCode);
 
-        JsonElement archived = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói lưu trữ thử nghiệm SETUP-01");
-        Guid archivedContainerId = archived.GetProperty("id").GetGuid();
-        HttpResponseMessage archive = await owner.DeleteAsync($"/api/v1/vaults/{vaultId}/containers/{archivedContainerId}");
-        Assert.Equal(HttpStatusCode.OK, archive.StatusCode);
+        JsonElement removedContainer = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói đã xóa thử nghiệm SETUP-01");
+        Guid removedContainerId = removedContainer.GetProperty("id").GetGuid();
+        HttpResponseMessage removeResponse = await owner.DeleteAsync($"/api/v1/vaults/{vaultId}/containers/{removedContainerId}");
+        Assert.Equal(HttpStatusCode.OK, removeResponse.StatusCode);
 
         return (readyContainerId, draftContainerId, draftAssetId);
     }
 
     // SETUP-10: mời và chấp nhận qua HTTP; token chỉ giữ trong RAM của test.
-    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email, string role)
+    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email)
     {
-        HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email, role });
+        HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         ExecutorInvitationResponse? invitation = await response.Content.ReadFromJsonAsync<ExecutorInvitationResponse>();
         Assert.NotNull(invitation);
@@ -325,11 +299,10 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
-    private static void AssertOnlyNoBackupExecutorWarning(JsonElement setup)
+    // Cảnh báo duy nhất trước đây là NO_BACKUP_EXECUTOR; đã bỏ Executor dự phòng nên mảng luôn rỗng.
+    private static void AssertNoWarnings(JsonElement setup)
     {
-        JsonElement warnings = setup.GetProperty("warnings");
-        Assert.Equal(1, warnings.GetArrayLength());
-        Assert.Equal("NO_BACKUP_EXECUTOR", warnings[0].GetString());
+        Assert.Equal(0, setup.GetProperty("warnings").GetArrayLength());
     }
 
     // EKYC-01, AC-46: ghi rõ mục đích và kết quả của từng lượt bằng dữ liệu thử nghiệm.
@@ -364,7 +337,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     {
         public string Token { get; private set; } = "";
 
-        public Task<bool> SendAsync(string email, string role, string token, DateTimeOffset expiresAt, CancellationToken ct)
+        public Task<bool> SendAsync(string email, string token, DateTimeOffset expiresAt, CancellationToken ct)
         {
             Token = token;
             return Task.FromResult(true);

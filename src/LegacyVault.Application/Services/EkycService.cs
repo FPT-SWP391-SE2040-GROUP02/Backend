@@ -267,6 +267,7 @@ public sealed class EkycService : IEkycService
 
         // Thẻ không có MRZ chứa số căn cước thì không kết luận được: giữ false, không coi là lỗi.
         verification.BackSideChecked = reading.IdNumber.Length > 0;
+        verification.BackSubmittedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
 
         // BR-88: nơi cư trú đọc từ mặt sau chỉ trả cho người dùng đối chiếu; không gán vào lượt eKYC nên không lưu.
@@ -286,6 +287,7 @@ public sealed class EkycService : IEkycService
                 "Vui lòng đọc lại mặt trước giấy tờ trước khi gửi ảnh chân dung.");
         }
         string documentToken = verification.DocumentToken!;
+        RequireBackSide(verification);
 
         // Đường ảnh selfie tĩnh cũng phải qua thử thách camera trước (EKYC-14): chưa qua thì chưa so khớp.
         if (!verification.LivenessPassed)
@@ -333,6 +335,7 @@ public sealed class EkycService : IEkycService
     {
         Guid userId = currentUser.RequireUserId();
         EkycVerification verification = await RequirePendingVerificationAsync(userId, ct);
+        RequireBackSide(verification);
 
         // Gọi lại thì hủy phiên cũ, lỗi hủy bỏ qua vì dịch vụ tự dọn phiên hết hạn.
         string? previousSession = verification.LivenessSessionId;
@@ -371,6 +374,7 @@ public sealed class EkycService : IEkycService
         Guid userId = currentUser.RequireUserId();
         DateTimeOffset now = timeProvider.GetUtcNow();
         EkycVerification verification = await RequirePendingVerificationAsync(userId, ct);
+        RequireBackSide(verification);
         string sessionId = RequireLivenessSession(verification);
         string documentToken = verification.DocumentToken!;
 
@@ -463,6 +467,16 @@ public sealed class EkycService : IEkycService
                 "Vui lòng đọc lại mặt trước giấy tờ trước khi làm thử thách camera.");
         }
         return verification;
+    }
+
+    /// <summary>Mặt sau là bắt buộc trước thử thách camera và so khớp selfie; chưa gửi thì 409 EKYC_BACK_REQUIRED.</summary>
+    private static void RequireBackSide(EkycVerification verification)
+    {
+        if (verification.BackSubmittedAt == null)
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycBackRequired,
+                "Vui lòng chụp và gửi mặt sau giấy tờ trước khi tiếp tục.");
+        }
     }
 
     private static string RequireLivenessSession(EkycVerification verification)

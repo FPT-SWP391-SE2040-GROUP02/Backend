@@ -77,7 +77,6 @@ public static class DeathCaseMappings
         ExecutorVaultResponse response = new ExecutorVaultResponse();
         response.VaultId = row.VaultId;
         response.OwnerFullName = row.OwnerFullName;
-        response.Role = row.Role.ToApiString();
         response.PlanStatus = row.PlanStatus.ToApiString();
         // DMS-05: quá hạn điểm danh = đang trong thời gian chờ hoặc đã hết thời gian chờ.
         response.CheckInOverdue = row.PlanStatus == PlanStatus.CheckinOverdue || row.PlanStatus == PlanStatus.AwaitingCheck;

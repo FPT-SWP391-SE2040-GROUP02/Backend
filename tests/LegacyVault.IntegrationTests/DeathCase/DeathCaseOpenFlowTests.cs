@@ -113,7 +113,7 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient first = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         DeathCaseTestData.ExecutorClient second = await DeathCaseTestData.CreateExecutorClientAsync(
-            factory, vault.VaultId, ExecutorRole.Backup);
+            factory, vault.VaultId);
 
         // Hành động: mở cùng lúc
         Task<HttpResponseMessage> firstTask = first.Client.PostAsync(OpenUrl(vault.VaultId), null);
@@ -194,8 +194,8 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         User invited = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         User revoked = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, invited.Id, ExecutorStatus.Invited, ExecutorRole.Primary);
-        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, revoked.Id, ExecutorStatus.Revoked, ExecutorRole.Backup);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, invited.Id, ExecutorStatus.Invited);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, revoked.Id, ExecutorStatus.Revoked);
         HttpClient invitedClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(invitedClient, factory.Services, invited);
         HttpClient revokedClient = factory.CreateClient();
@@ -218,7 +218,7 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient first = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         DeathCaseTestData.ExecutorClient second = await DeathCaseTestData.CreateExecutorClientAsync(
-            factory, vault.VaultId, ExecutorRole.Backup);
+            factory, vault.VaultId);
         JsonElement opened = await ApiTestHelpers.ReadJsonAsync(await first.Client.PostAsync(OpenUrl(vault.VaultId), null));
         Guid caseId = opened.GetProperty("id").GetGuid();
         string staleEtag = opened.GetProperty("etag").GetString()!;
@@ -313,7 +313,7 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         DeathCaseTestData.OwnerVault vault2 = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         await ApiTestHelpers.SetPlanStatusAsync(factory, vault2.VaultId, PlanStatus.CheckinOverdue);
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault1.VaultId);
-        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault2.VaultId, executor.User.Id, ExecutorRole.Backup);
+        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault2.VaultId, executor.User.Id);
         Guid caseId = await OpenCaseAsync(executor.Client, vault1.VaultId);
 
         // Hành động
@@ -328,11 +328,10 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         Assert.NotNull(row1);
         Assert.NotNull(row2);
         Assert.False(row1.Value.GetProperty("checkInOverdue").GetBoolean());
-        Assert.Equal("PRIMARY", row1.Value.GetProperty("role").GetString());
+        Assert.False(row1.Value.TryGetProperty("role", out _));
         Assert.Equal("ACTIVE", row1.Value.GetProperty("planStatus").GetString());
         Assert.Equal(caseId, row1.Value.GetProperty("openDeathCaseId").GetGuid());
         Assert.True(row2.Value.GetProperty("checkInOverdue").GetBoolean());
-        Assert.Equal("BACKUP", row2.Value.GetProperty("role").GetString());
         Assert.Equal(JsonValueKind.Null, row2.Value.GetProperty("openDeathCaseId").ValueKind);
         Assert.Equal("Người thử", row2.Value.GetProperty("ownerFullName").GetString());
     }

@@ -11,7 +11,7 @@ public interface IContainerRepository
     /// </summary>
     Task<Container?> FindByIdAsync(Guid vaultId, Guid containerId, CancellationToken ct);
 
-    /// <summary>SETUP-01: gói chưa lưu trữ kèm Assets và Designations, sắp theo CreatedAt rồi Id, chỉ đọc.</summary>
+    /// <summary>SETUP-01: gói chưa bị xóa kèm Assets và Designations, sắp theo CreatedAt rồi Id, chỉ đọc.</summary>
     Task<List<Container>> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>
@@ -20,10 +20,10 @@ public interface IContainerRepository
     /// pageIndex bắt đầu từ 1.
     /// </summary>
     Task<(List<Container> Items, int TotalCount)> FindPageByVaultIdAsync(
-        Guid vaultId, bool includeArchived, int pageIndex, int pageSize, string? searchTerm,
+        Guid vaultId, bool includeRemoved, int pageIndex, int pageSize, string? searchTerm,
         string sortBy, bool isAscending, CancellationToken ct);
 
-    /// <summary>Số Container chưa lưu trữ (NFR-14: tối đa 50).</summary>
+    /// <summary>Số Container chưa bị xóa (NFR-14: tối đa 50).</summary>
     Task<int> CountActiveByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>Số Container READY (SETUP-16: kế hoạch đang chạy mà về 0 thì phải cảnh báo Owner).</summary>
@@ -55,7 +55,7 @@ public interface IContainerRepository
 
     /// <summary>
     /// QUOTA-03: số người nhận KHÁC NHAU (theo BeneficiaryId) có ít nhất một chỉ định trong các gói của kho.
-    /// Một người ở nhiều gói tính một suất. Gói lưu trữ không còn chỉ định nên không cần lọc theo trạng thái.
+    /// Một người ở nhiều gói tính một suất. Gói đã xóa không còn chỉ định nên không cần lọc theo trạng thái.
     /// </summary>
     Task<int> CountUsedBeneficiarySlotsAsync(Guid vaultId, CancellationToken ct);
 

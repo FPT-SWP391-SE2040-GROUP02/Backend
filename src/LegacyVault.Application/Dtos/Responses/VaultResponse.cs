@@ -44,7 +44,7 @@ public class VaultResponse
     /// <summary>Số người nhận khác nhau đang có chỉ định trong kho (QUOTA-03, QUOTA-06).</summary>
     public int UsedBeneficiarySlots { get; set; }
 
-    /// <summary>Số gói chưa lưu trữ (NFR-14: tối đa 50).</summary>
+    /// <summary>Số gói chưa bị xóa (NFR-14: tối đa 50).</summary>
     public int ActiveContainerCount { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

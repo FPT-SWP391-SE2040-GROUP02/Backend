@@ -500,13 +500,13 @@ public sealed class VerifierApproveTests : IAsyncLifetime
     [SqlFact]
     public async Task Ac67_DetailShowsVerifierConflictBlocker()
     {
-        // Chuẩn bị: hồ sơ duyệt được về mọi mặt, nhưng Verifier được giao lại là Executor dự phòng của kho
+        // Chuẩn bị: hồ sơ duyệt được về mọi mặt, nhưng Verifier được giao lại là Executor của kho
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateReadyToApproveCaseAsync(factory);
         JsonElement clean = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
         Assert.True(clean.GetProperty("canApprove").GetBoolean());
         Assert.Empty(DeathCaseApi.ReadStrings(clean.GetProperty("approveBlockers")));
         await DeathCaseTestData.AddAcceptedExecutorAsync(
-            factory, submitted.Vault.VaultId, submitted.Verifier.User.Id, ExecutorRole.Backup);
+            factory, submitted.Vault.VaultId, submitted.Verifier.User.Id);
 
         // Hành động
         JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
@@ -522,7 +522,7 @@ public sealed class VerifierApproveTests : IAsyncLifetime
         // Khi còn lý do khác (Owner chưa nhận thư) thì VERIFIER_CONFLICT đứng sau chúng
         DeathCaseReviewTestData.SubmittedCase other = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
         await DeathCaseTestData.AddAcceptedExecutorAsync(
-            factory, other.Vault.VaultId, other.Verifier.User.Id, ExecutorRole.Backup);
+            factory, other.Vault.VaultId, other.Verifier.User.Id);
         JsonElement otherDetail = await DeathCaseReviewTestData.GetDetailAsync(other.Verifier.Client, other.CaseId);
         Assert.Equal(new List<string> { "OWNER_NOT_NOTIFIED", "VERIFIER_CONFLICT" },
             DeathCaseApi.ReadStrings(otherDetail.GetProperty("approveBlockers")));

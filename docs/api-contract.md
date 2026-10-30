@@ -97,8 +97,8 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `DEATH_CASE_FILE_LIMIT_EXCEEDED` | Bản hồ sơ đã đủ 10 trang giấy | `maxFiles` |
 | 503 | `STORAGE_UNAVAILABLE` | Không ghi/đọc được kho lưu nội dung tài sản (R2 lỗi mạng, sai khóa). Object không còn trên R2 thì báo lỗi toàn vẹn như khi lưu trên đĩa, không dùng mã này | |
 | 409 | `VAULT_NOT_EDITABLE` | Kho không cho sửa lúc này | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `SERVICE_READ_ONLY` |
-| 409 | `CONTAINER_LIMIT_EXCEEDED` | Đủ 50 gói chưa lưu trữ | `maxContainers` |
-| 409 | `CONTAINER_ARCHIVED` | Sửa gói đã lưu trữ | |
+| 409 | `CONTAINER_LIMIT_EXCEEDED` | Đủ 50 gói chưa bị xóa | `maxContainers` |
+| 409 | `CONTAINER_REMOVED` | Sửa gói đã bị xóa | |
 | 409 | `ASSET_ALREADY_IN_CONTAINER` | Tài sản đang ở gói khác | `containerId` |
 | 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kế hoạch không còn gói sẵn sàng; cần Owner xác nhận | |
 | 409 | `BENEFICIARY_IDENTITY_CONFLICT` | Kho đã có hồ sơ cùng số CCCD nhưng khác họ tên hoặc ngày sinh | `beneficiaryId` |
@@ -403,15 +403,15 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo s
 
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| GET | `.../containers` | Đăng nhập | Query phân trang + `includeArchived` (mặc định `false`); `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<ContainerResponse>` | 400, 404 |
+| GET | `.../containers` | Đăng nhập | Query phân trang + `includeRemoved` (mặc định `false`); `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<ContainerResponse>` | 400, 404 |
 | POST | `.../containers` | Đăng nhập | `{ name, description? }` | **201** `ContainerResponse` | 400, 404, 409 `CONTAINER_LIMIT_EXCEEDED`, 409 `VAULT_NOT_EDITABLE` |
 | GET | `.../containers/{containerId}` | Đăng nhập | — | 200 `ContainerResponse` | 404 |
-| PUT | `.../containers/{containerId}` | Đăng nhập | `{ etag, name?, description? }` | 200 `ContainerResponse` | 400, 404, 409 `EDIT_CONFLICT` / `CONTAINER_ARCHIVED` / `VAULT_NOT_EDITABLE` |
-| DELETE | `.../containers/{containerId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` (đã `ARCHIVED`) | 404, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
-| POST | `.../containers/{containerId}/assets` | Đăng nhập | `{ assetId }` | 200 `ContainerResponse` | 403 `PAID_TIER_REQUIRED`, 404, 409 `ASSET_ALREADY_IN_CONTAINER` / `CONTAINER_ARCHIVED` |
-| DELETE | `.../containers/{containerId}/assets/{assetId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` | 404, 409 `CONTAINER_ARCHIVED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
-| POST | `.../containers/{containerId}/beneficiaries` | Đăng nhập | `{ beneficiaryId }` | 200 `ContainerResponse` | 400, 403 `PAID_TIER_REQUIRED`, 404 `CONTAINER_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `BENEFICIARY_SLOTS_EXCEEDED` / `CONTAINER_ARCHIVED` / `VAULT_NOT_EDITABLE` |
-| DELETE | `.../containers/{containerId}/beneficiaries/{beneficiaryId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` | 404, 409 `CONTAINER_ARCHIVED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
+| PUT | `.../containers/{containerId}` | Đăng nhập | `{ etag, name?, description? }` | 200 `ContainerResponse` | 400, 404, 409 `EDIT_CONFLICT` / `CONTAINER_REMOVED` / `VAULT_NOT_EDITABLE` |
+| DELETE | `.../containers/{containerId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` (đã `REMOVED`) | 404, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
+| POST | `.../containers/{containerId}/assets` | Đăng nhập | `{ assetId }` | 200 `ContainerResponse` | 403 `PAID_TIER_REQUIRED`, 404, 409 `ASSET_ALREADY_IN_CONTAINER` / `CONTAINER_REMOVED` |
+| DELETE | `.../containers/{containerId}/assets/{assetId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` | 404, 409 `CONTAINER_REMOVED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
+| POST | `.../containers/{containerId}/beneficiaries` | Đăng nhập | `{ beneficiaryId }` | 200 `ContainerResponse` | 400, 403 `PAID_TIER_REQUIRED`, 404 `CONTAINER_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `BENEFICIARY_SLOTS_EXCEEDED` / `CONTAINER_REMOVED` / `VAULT_NOT_EDITABLE` |
+| DELETE | `.../containers/{containerId}/beneficiaries/{beneficiaryId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` | 404, 409 `CONTAINER_REMOVED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
 
 ```json
 // ContainerResponse
@@ -426,15 +426,15 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo s
   "missingRequirements": ["NO_ASSET", "NO_DESIGNATION"],
   "createdAt": "2026-10-13T08:35:00+00:00",
   "updatedAt": null,
-  "archivedAt": null,
+  "removedAt": null,
   "etag": "\"0\""
 }
 ```
 
-- `DELETE` gói = **lưu trữ**, không xóa hẳn: gói chuyển `ARCHIVED`, tài sản và người nhận được gỡ ra nhưng **không bị xóa**. Người nhận không còn ở gói nào khác thì hết chiếm suất.
+- `DELETE` gói = **xóa gói**, không xóa hẳn dòng và **không khôi phục được**: gói chuyển `REMOVED`, tài sản và người nhận được gỡ ra nhưng **không bị xóa**. Người nhận không còn ở gói nào khác thì hết chiếm suất.
 - Gặp `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED`: FE hiện cảnh báo "kế hoạch sẽ trở về bản nháp"; Owner đồng ý thì gọi lại với `?confirmPlanDeactivation=true`.
-- Hạng Free: được tạo/đổi tên/lưu trữ gói rỗng; đưa tài sản hoặc người nhận vào gói → `403 PAID_TIER_REQUIRED` (FE hiện gợi ý nâng cấp).
-- `status`: `DRAFT` (thiếu tài sản hoặc người nhận), `READY` (có ≥1 tài sản **và** ≥1 người nhận), `ARCHIVED`. BE tự tính, FE không gửi trạng thái. `missingRequirements` cho biết còn thiếu gì: `NO_ASSET`, `NO_DESIGNATION`. Người nhận chưa đủ 18 tuổi (đã xác nhận) vẫn tính.
+- Hạng Free: được tạo/đổi tên/xóa gói rỗng; đưa tài sản hoặc người nhận vào gói → `403 PAID_TIER_REQUIRED` (FE hiện gợi ý nâng cấp).
+- `status`: `DRAFT` (thiếu tài sản hoặc người nhận), `READY` (có ≥1 tài sản **và** ≥1 người nhận), `REMOVED` (Owner đã xóa, không khôi phục được). BE tự tính, FE không gửi trạng thái. `missingRequirements` cho biết còn thiếu gì: `NO_ASSET`, `NO_DESIGNATION`. Người nhận chưa đủ 18 tuổi (đã xác nhận) vẫn tính.
 - `beneficiaryIds`: id hồ sơ người nhận trong gói, theo thứ tự gắn; FE lấy họ tên từ danh sách người nhận của kho (mục 6.8).
 - **Gắn người nhận** (`POST .../beneficiaries`): hồ sơ phải thuộc kho này (tạo trước ở mục 6.8). Gắn lại người đã có trong gói → 200, không đổi gì. Người **chưa ở gói nào** chiếm thêm một suất; vượt suất → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots`, `maxSlots` (FE gợi ý mua thêm suất). Người đã ở gói khác thì không tốn thêm suất.
 - **Gỡ người nhận** không xóa hồ sơ. Người còn ở gói khác vẫn chiếm suất; gỡ khỏi mọi gói thì trả suất. Gỡ người cuối cùng của gói READY cuối cùng khi kế hoạch đang chạy → `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` như gỡ tài sản.
@@ -821,7 +821,7 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 | `VAULT_CREATED` | `VAULT` | Tạo kho lần đầu (mở lại kho cũ không ghi) |
 | `VAULT_UPDATED` | `VAULT` | Sửa tên hoặc mô tả kho |
 | `ASSET_CREATED` | `ASSET` | Tải tài sản lên |
-| `CONTAINER_CREATED` / `CONTAINER_UPDATED` / `CONTAINER_ARCHIVED` | `CONTAINER` | Tạo, đổi tên/mô tả, lưu trữ gói |
+| `CONTAINER_CREATED` / `CONTAINER_UPDATED` / `CONTAINER_REMOVED` | `CONTAINER` | Tạo, đổi tên/mô tả, xóa gói. Nhật ký trước khi đổi tên còn `CONTAINER_ARCHIVED` (cùng nghĩa xóa gói) |
 | `CONTAINER_ASSET_ADDED` / `CONTAINER_ASSET_REMOVED` | `CONTAINER` | Thêm, gỡ tài sản khỏi gói (`reason` có id tài sản) |
 | `CONTAINER_BENEFICIARY_ADDED` / `CONTAINER_BENEFICIARY_REMOVED` | `CONTAINER` | Thêm, gỡ người nhận khỏi gói (`reason` có id hồ sơ) |
 | `PLAN_DEACTIVATED` | `PLAN` | Owner xác nhận cảnh báo, kế hoạch về `DRAFT` vì mất gói `READY` cuối cùng (SETUP-16) |
@@ -1124,7 +1124,7 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 | GET | `/api/v1/admin/dev-tools/vaults/{vaultId}/clock` | — | 200 `DevClockResponse` | 401, 404 `USER_NOT_FOUND` / `VAULT_NOT_FOUND` |
 | POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/time-travel` | `{ milestone }` | 200 `DevClockResponse` (trạng thái sau khi tua) | 400 `VALIDATION_ERROR`, 401, 404, 409 `DEV_TOOL_NOT_ALLOWED` |
 | POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/reset-clock` | — | 200 `DevClockResponse` | 401, 404 |
-| POST | `/api/v1/admin/dev-tools/users/ekyc-reset` | `{ email }` | 200 `DevEkycResetResponse` `{ userId, email, verificationsRemoved, consentsRemoved, identityRemoved, faceTemplatesRemoved }` | 400 `VALIDATION_ERROR`, 401, 404 `USER_NOT_FOUND` |
+| POST | `/api/v1/admin/dev-tools/users/ekyc-reset` | `{ email }` | 200 `DevEkycResetResponse` `{ userId, email, verificationsRemoved, consentsRemoved, identityRemoved, faceTemplatesRemoved, vaultRemoved, filesRemoved }` | 400 `VALIDATION_ERROR`, 401, 404 `USER_NOT_FOUND` |
 | POST | `/api/v1/admin/dev-tools/vaults/{vaultId}/rewind-before-ekyc` | — | 200 `DevRewindBeforeEkycResponse` `{ vaultId, ownerEmail, verificationsRemoved, consentsRemoved, identityRemoved, faceTemplatesRemoved, previousTier, entitlementReset, pendingOrdersCancelled }` | 401, 404 `USER_NOT_FOUND` / `VAULT_NOT_FOUND`, 409 `DEV_TOOL_NOT_ALLOWED` |
 
 - `DevClockResponse`: `{ vaultId, planStatus, checkInState: ON_TIME | OVERDUE | NOT_RUNNING, clockState: REAL_TIME | SHIFTED, milestones: [{ key, state: AVAILABLE | PASSED | NOT_APPLICABLE, note }] }`. `note` là lý do không tua được.
@@ -1136,7 +1136,7 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 - Tua chỉ dời hạn tương ứng về quá khứ; trạng thái mới do luật và job sẵn có quyết định. Với hai mốc điểm danh, API chạy luôn vòng xử lý của job điểm danh nên kết quả có ngay trong response.
 - `reset-clock` chỉ ghi nhận đồng hồ về thời gian thực (`clockState = REAL_TIME`); trạng thái đã phát sinh khi tua (kế hoạch, sự cố) giữ nguyên, không hoàn tác.
 - Mỗi lần tua ghi nhật ký `DEV_TIME_TRAVEL`, mỗi lần về thời gian hiện tại ghi `DEV_CLOCK_RESET`; Owner của kho thấy các dòng này trong nhật ký kho.
-- **Đặt lại eKYC** (`users/ekyc-reset`): xóa mọi lượt eKYC (mọi mục đích), lần đồng ý chụp ảnh, danh tính đã gắn và mẫu khuôn mặt của tài khoản có email đã nhập (không phân biệt hoa thường). Email, vai trò, kho, vai Executor và hồ sơ giữ nguyên. Tài khoản chưa có eKYC thì trả các số `0`, không ghi nhật ký. Response không có dữ liệu định danh. Sau khi đặt lại, Owner phải eKYC lại trước khi mua gói mới hoặc kích hoạt kế hoạch, và có thể dùng CCCD khác (không còn `EKYC_IDENTITY_MISMATCH`).
+- **Đặt lại tài khoản về ban đầu** (`users/ekyc-reset`): đưa tài khoản có email đã nhập (không phân biệt hoa thường) về lúc vừa đăng ký và đăng nhập được. Trong một giao dịch: xóa mọi lượt eKYC (mọi mục đích), lần đồng ý chụp ảnh, danh tính đã gắn và mẫu khuôn mặt; xóa hẳn kho của tài khoản cùng mọi dữ liệu trong kho (tài sản, gói, người nhận, Executor, kế hoạch, điểm danh, hồ sơ chứng tử, báo còn sống, lượt bàn giao, quyền tải, lượt eKYC của người nhận trong các lượt đó, thanh toán, tạm giữ, sự cố, PIN, nhật ký của kho). Sau khi lưu, xóa các tệp mã hóa liên quan (tài sản, giấy chứng tử, ảnh selfie, ảnh CCCD); `filesRemoved` là số tệp đã xóa. Email, mật khẩu, vai trò và vai Executor ở kho người khác giữ nguyên. Không có eKYC và chưa có kho thì trả các số `0`, `vaultRemoved = false`, không ghi nhật ký; ngược lại ghi `DEV_EKYC_RESET` không gắn kho. Response không có dữ liệu định danh. Sau khi đặt lại, tài khoản tạo kho mới, làm eKYC và mua gói lại từ đầu.
 - **Về trước eKYC và mua gói** (`vaults/{vaultId}/rewind-before-ekyc`): đưa kho về thời điểm ngay trước bước eKYC của Owner để làm lại eKYC rồi mua gói. Trong một giao dịch: xóa dữ liệu eKYC của Owner (như `ekyc-reset`), trả quyền dịch vụ về Free (hạng `FREE`, dung lượng Free, 0 chỗ người nhận, bỏ hạn dịch vụ) và hủy các đơn thanh toán đang chờ. Đơn đã trả, tài sản, người nhận, gói và Executor giữ nguyên. Chỉ chạy khi kế hoạch còn `DRAFT` (khác → `409 DEV_TOOL_NOT_ALLOWED`, `reason = PLAN_NOT_DRAFT`). Kho vốn đã ở thời điểm đó thì trả các số `0`, `entitlementReset = false`, không ghi nhật ký; ngược lại ghi `DEV_REWIND_BEFORE_EKYC` gắn kho.
 - FE chỉ hiện mục "Công cụ thử nghiệm" trong khu Admin khi chạy `npm run dev`.
 
@@ -1192,7 +1192,7 @@ Không cần PIN: tạo tài sản, liệt kê, xem thông tin, sửa tên/mô t
 | 2 | Thêm luồng 401 → refresh một lần → thử lại; refresh lỗi → về đăng nhập (bỏ qua `REAUTHENTICATION_FAILED`) | `shared/api/axiosClient.ts` |
 | 3 | Đọc lỗi theo `code` của ProblemDetails; lỗi validate là `errors` dạng object theo field | `shared/types`, chỗ hiển thị lỗi form |
 | 4 | Không dùng `ApiResponse<T>` cho API này (BE không bọc envelope) | `shared/types` |
-| 5 | Bổ sung hằng trạng thái: `LOCKED`, `DISABLED`, `OPEN`, `CLOSED`, `READY`, `ARCHIVED`, `PAID_ACTIVE`... (hiện `STATUS` chưa có) | `shared/constants` |
+| 5 | Bổ sung hằng trạng thái: `LOCKED`, `DISABLED`, `OPEN`, `CLOSED`, `READY`, `REMOVED`, `PAID_ACTIVE`... (hiện `STATUS` chưa có) | `shared/constants` |
 | 6 | Gọi route có tiền tố `/v1` (base URL đã có `/api`) | các `features/*/api` |
 | 7 | Màn thanh toán đang mock contract cũ: đổi sang DTO và endpoint `/billing/*` ở mục 6.18 (hạng `XS` / `XS_MAX`, năm 1/3/5, suất thêm; không còn `RECIPIENT_PLUS`, voucher, monthly/lifetime); không gửi số tiền, chỉ hiển thị `totalAmount` từ response | `features/billing/*` |
 # Executor setup and activation (15/10/2026)

@@ -5,6 +5,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
@@ -19,7 +20,8 @@ public sealed class DevToolsService(
     ICheckInJob checkInJob,
     IOperationsRecorder operationsRecorder,
     TimeProvider timeProvider,
-    IEkycOptions ekycOptions) : IDevToolsService
+    IEkycOptions ekycOptions,
+    IAssetContentStore contentStore) : IDevToolsService
 {
     /// <summary>Đủ cho dữ liệu thử trên máy dev; ô chọn không cần phân trang.</summary>
     private const int MaxVaults = 200;
@@ -168,17 +170,67 @@ public sealed class DevToolsService(
                 "Không tìm thấy tài khoản với email này.");
         }
 
-        DevEkycResetResponse response = await RemoveEkycDataAsync(target, ct);
-        if (!HasRemovedEkycData(response))
+        // Xóa eKYC và cả kho trong một transaction: lỗi giữa chừng thì không để lại kho nửa còn nửa mất.
+        List<string> storageKeys = new List<string>();
+        DevEkycResetResponse response = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
-            return response;
-        }
+            DevEkycResetResponse result = await RemoveEkycDataAsync(target, storageKeys, ct);
+            Guid? vaultId = await repository.FindVaultIdByOwnerAsync(target.Id, ct);
+            if (vaultId != null)
+            {
+                List<string> vaultKeys = await repository.ListVaultStorageKeysAsync(vaultId.Value, target.Id, ct);
+                AddStorageKeys(storageKeys, vaultKeys);
+                await repository.DeleteVaultAsync(vaultId.Value, target.Id, ct);
+                result.VaultRemoved = true;
+            }
+            if (!HasRemovedEkycData(result) && !result.VaultRemoved)
+            {
+                return result;
+            }
 
-        // Nhật ký không gắn kho và không ghi số CCCD; chỉ ghi tài khoản bị đặt lại.
-        auditLogs.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.DevEkycReset,
-            AuditTargetType.User, target.Id, null, AuditOutcome.Succeeded, null, timeProvider.GetUtcNow()));
-        await unitOfWork.SaveChangesAsync(ct);
+            // Nhật ký không gắn kho (kho vừa bị xóa) và không ghi số CCCD; chỉ ghi tài khoản bị đặt lại.
+            auditLogs.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.DevEkycReset,
+                AuditTargetType.User, target.Id, null, AuditOutcome.Succeeded, null, timeProvider.GetUtcNow()));
+            await unitOfWork.SaveChangesAsync(ct);
+            return result;
+        }, ct);
+
+        // Chỉ xóa tệp sau khi DB đã lưu xong, để lỗi DB không làm mất tệp của dữ liệu còn giữ.
+        response.FilesRemoved = await DeleteStoredFilesAsync(storageKeys);
         return response;
+    }
+
+    /// <summary>
+    /// Xóa từng tệp mã hóa khỏi kho lưu trữ. Một tệp lỗi không chặn các tệp còn lại: bản ghi DB đã xóa nên tệp sót
+    /// chỉ chiếm chỗ, không ai đọc được nữa. Trả số tệp đã xóa (kể cả tệp vốn không còn trên đĩa).
+    /// </summary>
+    private async Task<int> DeleteStoredFilesAsync(List<string> storageKeys)
+    {
+        int removed = 0;
+        foreach (string storageKey in storageKeys)
+        {
+            try
+            {
+                await contentStore.DeleteAsync(storageKey, CancellationToken.None);
+                removed++;
+            }
+            catch (Exception)
+            {
+                // Bỏ qua tệp lỗi; DB đã nhất quán.
+            }
+        }
+        return removed;
+    }
+
+    private static void AddStorageKeys(List<string> storageKeys, List<string> candidates)
+    {
+        foreach (string candidate in candidates)
+        {
+            if (!storageKeys.Contains(candidate))
+            {
+                storageKeys.Add(candidate);
+            }
+        }
     }
 
     public async Task<DevEkycThresholdResponse> GetEkycThresholdAsync(CancellationToken ct)
@@ -246,7 +298,7 @@ public sealed class DevToolsService(
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
-        DevEkycResetResponse ekyc = await RemoveEkycDataAsync(owner, ct);
+        DevEkycResetResponse ekyc = await RemoveEkycDataAsync(owner, new List<string>(), ct);
 
         DevRewindBeforeEkycResponse response = new DevRewindBeforeEkycResponse();
         response.VaultId = vault.Id;
@@ -300,12 +352,27 @@ public sealed class DevToolsService(
     }
 
     /// <summary>Đánh dấu xóa mọi dữ liệu eKYC của tài khoản (chưa lưu) và trả số lượng đã đánh dấu.</summary>
-    private async Task<DevEkycResetResponse> RemoveEkycDataAsync(User target, CancellationToken ct)
+    /// <summary>Đánh dấu xóa eKYC của tài khoản; thêm khóa ảnh CCCD đã mã hóa vào storageKeys để xóa tệp sau khi lưu.</summary>
+    private async Task<DevEkycResetResponse> RemoveEkycDataAsync(User target, List<string> storageKeys, CancellationToken ct)
     {
         List<EkycVerification> verifications = await repository.ListEkycVerificationsAsync(target.Id, ct);
         List<EkycConsent> consents = await repository.ListEkycConsentsAsync(target.Id, ct);
         OwnerIdentity? identity = await repository.FindOwnerIdentityAsync(target.Id, ct);
         List<OwnerFaceTemplate> faceTemplates = await repository.ListOwnerFaceTemplatesAsync(target.Id, ct);
+
+        List<string> imageKeys = new List<string>();
+        foreach (EkycVerification verification in verifications)
+        {
+            if (!string.IsNullOrWhiteSpace(verification.PendingDocumentImageStorageKey))
+            {
+                imageKeys.Add(verification.PendingDocumentImageStorageKey);
+            }
+        }
+        if (identity != null && !string.IsNullOrWhiteSpace(identity.DocumentImageStorageKey))
+        {
+            imageKeys.Add(identity.DocumentImageStorageKey);
+        }
+        AddStorageKeys(storageKeys, imageKeys);
 
         DevEkycResetResponse response = new DevEkycResetResponse();
         response.UserId = target.Id;

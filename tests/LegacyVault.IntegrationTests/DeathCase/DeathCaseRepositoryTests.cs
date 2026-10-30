@@ -192,7 +192,7 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
         User verifierB = await DeathCaseTestData.AddVerifierAsync(factory);
         User verifierC = await DeathCaseTestData.AddVerifierAsync(factory);
         await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault.VaultId, verifierA.Id);
-        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, verifierB.Id, ExecutorStatus.Invited, ExecutorRole.Backup);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, verifierB.Id, ExecutorStatus.Invited);
         DateTimeOffset now = DateTimeOffset.UtcNow;
         await DeathCaseTestData.AddEndedAssignmentAsync(factory, deathCase.Id, verifierB.Id, now.AddDays(-3));
         await DeathCaseTestData.AddEndedAssignmentAsync(factory, deathCase.Id, verifierC.Id, now.AddDays(-1));
@@ -229,9 +229,9 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
         DeathCaseTestData.OwnerVault vault2 = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.OwnerVault vault3 = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         User executorUser = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault1.VaultId, executorUser.Id, ExecutorRole.Backup);
-        await DeathCaseTestData.AddExecutorAsync(factory, vault2.VaultId, executorUser.Id, ExecutorStatus.Invited, ExecutorRole.Primary);
-        await DeathCaseTestData.AddExecutorAsync(factory, vault3.VaultId, executorUser.Id, ExecutorStatus.Revoked, ExecutorRole.Primary);
+        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault1.VaultId, executorUser.Id);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault2.VaultId, executorUser.Id, ExecutorStatus.Invited);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault3.VaultId, executorUser.Id, ExecutorStatus.Revoked);
         DeathCase deathCase = DeathCaseTestData.NewDraftCase(vault1, executorUser.Id);
         await TryAddAsync(deathCase);
 
@@ -246,7 +246,6 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
         // Kiểm tra
         ExecutorVaultRow row = Assert.Single(rows);
         Assert.Equal(vault1.VaultId, row.VaultId);
-        Assert.Equal(ExecutorRole.Backup, row.Role);
         Assert.Equal(PlanStatus.Active, row.PlanStatus);
         Assert.Equal(deathCase.Id, row.OpenDeathCaseId);
         Assert.Equal(vault1.Owner.FullName, row.OwnerFullName);

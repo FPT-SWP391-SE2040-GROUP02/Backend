@@ -357,11 +357,11 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Ac67_VerifierWhoIsExecutorOfVaultIsNotAssigned()
     {
-        // Chuẩn bị: Executor dự phòng cũng là Verifier (chưa từng được giao) — phải bị loại dù xoay vòng sẽ chọn trước
+        // Chuẩn bị: Executor thứ hai cũng là Verifier (chưa từng được giao) — phải bị loại dù xoay vòng sẽ chọn trước
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         User backupVerifier = await DeathCaseTestData.AddVerifierAsync(factory);
-        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault.VaultId, backupVerifier.Id, ExecutorRole.Backup);
+        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault.VaultId, backupVerifier.Id);
         User outsider = await DeathCaseTestData.AddVerifierAsync(factory);
         JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
             executor.Client, vault.VaultId, DeathCaseApi.Today().AddDays(-3));
@@ -399,7 +399,7 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient first = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         DeathCaseTestData.ExecutorClient second = await DeathCaseTestData.CreateExecutorClientAsync(
-            factory, vault.VaultId, ExecutorRole.Backup);
+            factory, vault.VaultId);
         await DeathCaseTestData.AddVerifierAsync(factory);
         JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
             first.Client, vault.VaultId, DeathCaseApi.Today().AddDays(-3));

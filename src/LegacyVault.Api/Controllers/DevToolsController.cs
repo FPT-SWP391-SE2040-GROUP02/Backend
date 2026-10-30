@@ -73,7 +73,7 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
         return await devToolsService.ResetClockAsync(vaultId, ct);
     }
 
-    /// <summary>Xóa dữ liệu eKYC của một tài khoản để làm lại eKYC từ đầu.</summary>
+    /// <summary>Đưa một tài khoản về lúc vừa đăng ký: xóa eKYC và xóa hẳn kho cùng mọi dữ liệu trong kho.</summary>
     [HttpPost("users/ekyc-reset")]
     [Consumes("application/json")]
     [ProducesResponseType<DevEkycResetResponse>(StatusCodes.Status200OK)]

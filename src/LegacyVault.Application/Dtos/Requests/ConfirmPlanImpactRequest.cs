@@ -1,7 +1,7 @@
 namespace LegacyVault.Application.Dtos.Requests;
 
 /// <summary>
-/// Xác nhận khi lưu trữ gói / gỡ tài sản khỏi gói. Đọc từ QUERY STRING
+/// Xác nhận khi xóa gói / gỡ tài sản khỏi gói. Đọc từ QUERY STRING
 /// (?confirmPlanDeactivation=true) vì baseService.remove của FE gọi DELETE không có body.
 /// </summary>
 /// <remarks>

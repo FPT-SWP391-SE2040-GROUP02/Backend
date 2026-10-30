@@ -48,9 +48,11 @@ public sealed class EkycLivenessTests
         return new MemoryStream(new byte[] { 1, 2, 3 });
     }
 
+    /// <summary>Đọc đủ hai mặt giấy tờ: điều kiện để bắt đầu thử thách camera.</summary>
     private async Task ReadFrontAsync()
     {
         await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
     }
 
     private async Task<EkycVerification> StartedAsync()
@@ -80,6 +82,18 @@ public sealed class EkycLivenessTests
             () => service.StartLivenessAsync(CancellationToken.None));
 
         Assert.Equal(ErrorCode.EkycDocumentExpired, error.Code);
+        Assert.Equal(0, client.LivenessStartCount);
+    }
+
+    [Fact]
+    public async Task Start_WithoutBackSide_BackRequired()
+    {
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => service.StartLivenessAsync(CancellationToken.None));
+
+        Assert.Equal(ErrorCode.EkycBackRequired, error.Code);
         Assert.Equal(0, client.LivenessStartCount);
     }
 

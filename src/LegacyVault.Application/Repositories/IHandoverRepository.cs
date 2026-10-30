@@ -27,7 +27,7 @@ public interface IHandoverRepository
     Task<HandoverGrant?> FindGrantByIdAsync(Guid grantId, CancellationToken ct);
 
     /// <summary>
-    /// Các chỉ định đủ điều kiện để mở bàn giao của một kho: gói đang READY (chưa lưu trữ), kèm
+    /// Các chỉ định đủ điều kiện để mở bàn giao của một kho: gói đang READY (chưa bị xóa), kèm
     /// Container.Assets.Asset và Beneficiary.
     /// </summary>
     Task<List<Designation>> FindStartableDesignationsAsync(Guid vaultId, CancellationToken ct);

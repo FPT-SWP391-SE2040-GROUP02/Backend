@@ -8,7 +8,7 @@ public class ContainerResponse
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
 
-    /// <summary>"DRAFT", "READY" hoặc "ARCHIVED" (SETUP-16).</summary>
+    /// <summary>"DRAFT", "READY" hoặc "REMOVED" (SETUP-16).</summary>
     public string Status { get; set; } = string.Empty;
 
     /// <summary>Id các tài sản trong gói. FE lấy tên/kích thước từ danh sách tài sản của kho.</summary>
@@ -17,12 +17,12 @@ public class ContainerResponse
     /// <summary>Id các hồ sơ người nhận được chỉ định trong gói, theo thứ tự gắn. FE lấy thông tin từ danh sách người nhận của kho.</summary>
     public List<Guid> BeneficiaryIds { get; set; } = new List<Guid>();
 
-    /// <summary>Lý do còn DRAFT để FE hướng dẫn: "NO_ASSET", "NO_DESIGNATION". Rỗng khi READY/ARCHIVED.</summary>
+    /// <summary>Lý do còn DRAFT để FE hướng dẫn: "NO_ASSET", "NO_DESIGNATION". Rỗng khi READY/REMOVED.</summary>
     public List<string> MissingRequirements { get; set; } = new List<string>();
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
-    public DateTimeOffset? ArchivedAt { get; set; }
+    public DateTimeOffset? RemovedAt { get; set; }
 
     /// <summary>Gửi lại trong body (trường etag) khi đổi tên/mô tả.</summary>
     public string Etag { get; set; } = string.Empty;

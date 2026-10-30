@@ -5,7 +5,7 @@ namespace LegacyVault.Domain.Enums;
 /// </summary>
 /// <remarks>
 /// Draft/Ready do backend TỰ TÍNH lại sau mỗi thay đổi; FE không gửi trạng thái đích (STATE-01).
-/// Chỉ Archived là do Owner chủ động chọn.
+/// Chỉ Removed là do Owner chủ động chọn (nút Xóa gói bàn giao); không có cách khôi phục.
 /// </remarks>
 public enum ContainerStatus
 {
@@ -13,6 +13,6 @@ public enum ContainerStatus
     Draft = 0,
     /// <summary>Có ít nhất một tài sản VÀ một chỉ định hợp lệ.</summary>
     Ready = 1,
-    /// <summary>Owner lưu trữ: không thuộc kế hoạch, không chứa tài sản, chỉ định đã gỡ.</summary>
-    Archived = 2,
+    /// <summary>Owner xóa gói: không thuộc kế hoạch, không chứa tài sản, chỉ định đã gỡ. Dòng vẫn giữ để làm lịch sử, không khôi phục được.</summary>
+    Removed = 2,
 }

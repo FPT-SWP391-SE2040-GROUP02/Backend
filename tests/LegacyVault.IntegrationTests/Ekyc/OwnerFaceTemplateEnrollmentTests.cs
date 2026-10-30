@@ -57,6 +57,7 @@ public sealed class OwnerFaceTemplateEnrollmentTests
     {
         AddConsent(purpose, Now);
         await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
         await service.StartLivenessAsync(CancellationToken.None);
         return Assert.Single(repository.Verifications);
     }

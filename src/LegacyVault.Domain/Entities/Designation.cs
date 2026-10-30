@@ -8,7 +8,7 @@ namespace LegacyVault.Domain.Entities;
 ///   được xác minh đúng người qua video; không gắn theo email hay tên.
 /// - Mỗi hồ sơ có tối đa một chỉ định trong một gói (unique ContainerId + BeneficiaryId).
 /// - QUOTA-03: suất tính theo số NGƯỜI (BeneficiaryId) khác nhau có chỉ định trong kho, không theo số dòng.
-/// - Gói lưu trữ không còn chỉ định nào (SETUP-16).
+/// - Gói đã xóa không còn chỉ định nào (SETUP-16).
 /// - Snapshot (M10) sẽ chép chỉ định lúc ghim; thay đổi về sau không làm đổi snapshot (SETUP-05).
 /// </remarks>
 public class Designation

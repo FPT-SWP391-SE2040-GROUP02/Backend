@@ -49,4 +49,20 @@ public interface IDevToolsRepository
     void RemoveEkycData(
         List<EkycVerification> verifications, List<EkycConsent> consents,
         OwnerIdentity? identity, List<OwnerFaceTemplate> faceTemplates);
+
+    /// <summary>Id kho của Owner; null khi tài khoản chưa tạo kho.</summary>
+    Task<Guid?> FindVaultIdByOwnerAsync(Guid ownerId, CancellationToken ct);
+
+    /// <summary>
+    /// Khóa lưu trữ của mọi tệp mã hóa gắn với kho: tài sản, trang giấy chứng tử, ảnh selfie báo còn sống,
+    /// ảnh CCCD tạm của người nhận trong các lượt bàn giao. Không trùng lặp.
+    /// </summary>
+    Task<List<string>> ListVaultStorageKeysAsync(Guid vaultId, Guid ownerId, CancellationToken ct);
+
+    /// <summary>
+    /// Xóa ngay kho và mọi dữ liệu gắn với kho, theo thứ tự khóa ngoại (bảng con trước).
+    /// Chạy lệnh DELETE trực tiếp, không qua theo dõi thay đổi; cần gọi trong transaction của service.
+    /// Không xóa tệp trong kho lưu trữ.
+    /// </summary>
+    Task DeleteVaultAsync(Guid vaultId, Guid ownerId, CancellationToken ct);
 }
