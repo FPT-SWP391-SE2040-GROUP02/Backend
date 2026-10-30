@@ -302,11 +302,11 @@ public sealed class VerifierFlagAndSupplementTests : IAsyncLifetime
     [SqlFact]
     public async Task Ac67_Role03_VerifierWhoBecameExecutorGetsConflict()
     {
-        // Chuẩn bị: sau khi được giao, Verifier trở thành Executor dự phòng của chính kho này
+        // Chuẩn bị: sau khi được giao, Verifier trở thành Executor của chính kho này
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
         Guid flagId = await DeathCaseReviewTestData.AddFlagAsync(factory, submitted.CaseId);
         await DeathCaseTestData.AddAcceptedExecutorAsync(
-            factory, submitted.Vault.VaultId, submitted.Verifier.User.Id, ExecutorRole.Backup);
+            factory, submitted.Vault.VaultId, submitted.Verifier.User.Id);
         JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
         string etag = detail.GetProperty("etag").GetString()!;
 

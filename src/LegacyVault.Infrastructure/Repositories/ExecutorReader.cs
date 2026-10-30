@@ -23,24 +23,7 @@ public sealed class ExecutorReader : IExecutorReader
             .Where(e => e.VaultId == vaultId && e.Status == ExecutorStatus.Accepted)
             .OrderBy(e => e.Id)
             .ToListAsync(ct);
-
-        // Đưa Executor chính lên trước, giữ nguyên thứ tự còn lại.
-        List<Executor> result = new List<Executor>();
-        foreach (Executor executor in accepted)
-        {
-            if (executor.Role == ExecutorRole.Primary)
-            {
-                result.Add(executor);
-            }
-        }
-        foreach (Executor executor in accepted)
-        {
-            if (executor.Role != ExecutorRole.Primary)
-            {
-                result.Add(executor);
-            }
-        }
-        return result;
+        return accepted;
     }
 
     public async Task<List<Executor>> GetAvailableAsync(Guid vaultId, CancellationToken ct)
@@ -54,23 +37,6 @@ public sealed class ExecutorReader : IExecutorReader
                 && e.User.Status == UserStatus.Active)
             .OrderBy(e => e.Id)
             .ToListAsync(ct);
-
-        // Đưa Executor chính lên trước, giữ nguyên thứ tự còn lại.
-        List<Executor> result = new List<Executor>();
-        foreach (Executor executor in accepted)
-        {
-            if (executor.Role == ExecutorRole.Primary)
-            {
-                result.Add(executor);
-            }
-        }
-        foreach (Executor executor in accepted)
-        {
-            if (executor.Role != ExecutorRole.Primary)
-            {
-                result.Add(executor);
-            }
-        }
-        return result;
+        return accepted;
     }
 }

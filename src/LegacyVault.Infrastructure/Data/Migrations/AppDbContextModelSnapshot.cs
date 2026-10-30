@@ -983,6 +983,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<bool>("BackSideChecked")
                         .HasColumnType("bit");
 
+                    b.Property<DateTimeOffset?>("BackSubmittedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("CitizenIdLast4")
                         .IsRequired()
                         .HasMaxLength(4)
@@ -1162,11 +1165,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<Guid?>("ReplacesExecutorId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("Status")
                         .IsRequired()

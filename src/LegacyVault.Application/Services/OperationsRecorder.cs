@@ -44,8 +44,8 @@ public interface IOperationsRecorder
     Task RecordAssignmentOutcomeAsync(Guid caseId, DeathCaseAssignmentOutcome outcome, CancellationToken ct);
 
     /// <summary>
-    /// Sau mỗi lần job điểm danh xử lý kỳ: kế hoạch sang AWAITING_CHECK → mở sự cố CHECK_IN_OVERDUE giao cho Executor chính
-    /// đang hiệu lực (rồi dự phòng); không có ai → sự cố NO_EXECUTOR "bị kẹt" có người phụ trách là Admin và ngày xem lại (DMS-05).
+    /// Sau mỗi lần job điểm danh xử lý kỳ: kế hoạch sang AWAITING_CHECK → mở sự cố CHECK_IN_OVERDUE giao cho Executor
+    /// đang hiệu lực; không có ai → sự cố NO_EXECUTOR "bị kẹt" có người phụ trách là Admin và ngày xem lại (DMS-05).
     /// Kỳ đã đóng (Owner điểm danh) → đóng sự cố. Lưu ngay.
     /// </summary>
     Task RecordCheckInPeriodAsync(Guid periodId, CancellationToken ct);
@@ -119,7 +119,7 @@ public sealed class OperationsRecorder : IOperationsRecorder
             return;
         }
 
-        // ASSIGN-02: Executor chính bị khóa thì sự cố giao cho Executor dự phòng còn hoạt động.
+        // ASSIGN-02: chỉ giao cho Executor đang hoạt động; bị khóa thì sự cố sang nhánh không có người nhận việc.
         List<Executor> active = await executorReader.GetAvailableAsync(plan.VaultId, ct);
         Guid? assignee = null;
         if (active.Count > 0)

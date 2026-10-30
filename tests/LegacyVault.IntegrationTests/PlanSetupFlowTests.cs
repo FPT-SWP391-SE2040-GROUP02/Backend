@@ -65,9 +65,9 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         return (owner, recipient, vaultId);
     }
 
-    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string role = "PRIMARY", Guid? beneficiaryId = null, string email = "executor@example.test")
+    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, Guid? beneficiaryId = null, string email = "executor@example.test")
     {
-        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email, role, beneficiaryId });
+        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email, beneficiaryId });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain(mail.Token, raw);
@@ -189,21 +189,15 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task PrimaryWhoIsBeneficiaryRequiresAnIndependentAcceptedBackup()
+    public async Task ExecutorWhoIsBeneficiary_CanActivateWithoutAnyOtherExecutor()
     {
+        // Đã bỏ Executor dự phòng (30/10/2026): Executor kiêm người nhận không còn đòi người dự phòng độc lập.
         var (owner, primary, vaultId) = await PrepareAsync();
         Guid beneficiaryId = Guid.Empty;
         await ApiTestHelpers.WithDbAsync(factory, async db => beneficiaryId = await db.Beneficiaries.Where(b => b.VaultId == vaultId).Select(b => b.Id).SingleAsync());
         await InviteAsync(owner, vaultId, beneficiaryId: beneficiaryId);
         Assert.Equal(HttpStatusCode.OK, (await RespondAsync(primary, mail.Token)).StatusCode);
         var request = await ActivationAsync(owner, vaultId);
-        var denied = await ApiTestHelpers.AssertProblemAsync(await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request), HttpStatusCode.Conflict, "PLAN_ACTIVATION_REQUIREMENTS_NOT_MET");
-        Assert.Contains("BACKUP_EXECUTOR_REQUIRED", denied.GetProperty("missingRequirements").EnumerateArray().Select(e => e.GetString()));
-        await InviteAsync(owner, vaultId, "BACKUP", email: "backup@example.test");
-        await ApiTestHelpers.AssertProblemAsync(await RespondAsync(primary, mail.Token), HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
-        var backup = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "backup@example.test");
-        Assert.Equal(HttpStatusCode.OK, (await RespondAsync(backup, mail.Token)).StatusCode);
-        request = await ActivationAsync(owner, vaultId);
         Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request)).StatusCode);
     }
 
@@ -302,7 +296,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         // Only test RAM; never expose token through response, assertion output or a real SMTP server.
         public string Token { get; private set; } = "";
         public bool Delivered { get; set; } = true;
-        public Task<bool> SendAsync(string email, string role, string token, DateTimeOffset expiresAt, CancellationToken ct)
+        public Task<bool> SendAsync(string email, string token, DateTimeOffset expiresAt, CancellationToken ct)
         { Token = token; return Task.FromResult(Delivered); }
     }
 }

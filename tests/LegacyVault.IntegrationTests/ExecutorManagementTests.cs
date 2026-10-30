@@ -56,7 +56,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     {
         public string Token { get; private set; } = string.Empty;
 
-        public Task<bool> SendAsync(string email, string role, string token, DateTimeOffset expiresAt, CancellationToken ct)
+        public Task<bool> SendAsync(string email, string token, DateTimeOffset expiresAt, CancellationToken ct)
         {
             Token = token;
             return Task.FromResult(true);
@@ -69,7 +69,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
 
         public bool Succeed { get; set; } = true;
 
-        public Task<bool> SendAsync(string email, string role, DateTimeOffset expiresAt, CancellationToken ct)
+        public Task<bool> SendAsync(string email, DateTimeOffset expiresAt, CancellationToken ct)
         {
             if (Succeed)
             {
@@ -104,9 +104,9 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
         return (owner, vaultId);
     }
 
-    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email, string role)
+    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email)
     {
-        HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email, role });
+        HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<ExecutorInvitationResponse>())!;
     }
@@ -136,7 +136,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     {
         (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
         HttpClient executor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "mot@example.test");
-        ExecutorInvitationResponse invited = await InviteAsync(owner, vaultId, "mot@example.test", "PRIMARY");
+        ExecutorInvitationResponse invited = await InviteAsync(owner, vaultId, "mot@example.test");
         string token = mail.Token;
 
         HttpResponseMessage stale = await RevokeAsync(owner, vaultId, invited.Id, "\"1\"");
@@ -152,7 +152,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
         Assert.False(accept.IsSuccessStatusCode);
 
         // Chỗ trống: mời người khác được ngay
-        await InviteAsync(owner, vaultId, "hai@example.test", "PRIMARY");
+        await InviteAsync(owner, vaultId, "hai@example.test");
     }
 
     [SqlFact]
@@ -160,7 +160,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     {
         (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
         (HttpClient other, Guid otherVaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        ExecutorInvitationResponse invited = await InviteAsync(owner, vaultId, "mot@example.test", "PRIMARY");
+        ExecutorInvitationResponse invited = await InviteAsync(owner, vaultId, "mot@example.test");
 
         await ApiTestHelpers.AssertProblemAsync(
             await RevokeAsync(other, vaultId, invited.Id, invited.Etag), HttpStatusCode.NotFound, "VAULT_NOT_FOUND");
@@ -174,7 +174,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
         (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
         HttpClient oldExecutor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "cu@example.test");
         HttpClient newExecutor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "moi@example.test");
-        ExecutorInvitationResponse first = await InviteAsync(owner, vaultId, "cu@example.test", "PRIMARY");
+        ExecutorInvitationResponse first = await InviteAsync(owner, vaultId, "cu@example.test");
         await AcceptAsync(oldExecutor, mail.Token);
         await ActivateAsync(owner, vaultId);
 
@@ -186,7 +186,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
         Assert.Equal("REPLACEMENT_REQUIRED", blocked.GetProperty("reason").GetString());
 
         // Mời người thay: người cũ vẫn là Executor chính
-        ExecutorInvitationResponse replacement = await InviteAsync(owner, vaultId, "moi@example.test", "PRIMARY");
+        ExecutorInvitationResponse replacement = await InviteAsync(owner, vaultId, "moi@example.test");
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Executor old = await db.Set<Executor>().SingleAsync(e => e.Id == first.Id);
@@ -206,13 +206,13 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task SecondInviteForSameRole_StillConflicts_WhenNoReplacementCase()
+    public async Task SecondInvite_StillConflicts_WhenNoReplacementCase()
     {
         (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
-        await InviteAsync(owner, vaultId, "mot@example.test", "PRIMARY");
+        await InviteAsync(owner, vaultId, "mot@example.test");
 
         HttpResponseMessage second = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors",
-            new { email = "hai@example.test", role = "PRIMARY" });
+            new { email = "hai@example.test" });
 
         await ApiTestHelpers.AssertProblemAsync(second, HttpStatusCode.Conflict, "EXECUTOR_INVITATION_CONFLICT");
     }
@@ -221,7 +221,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     public async Task Setup20_Job_RemindsOnceAt48Hours_ExpiresAfterSevenDays()
     {
         (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
-        ExecutorInvitationResponse invited = await InviteAsync(owner, vaultId, "cho@example.test", "BACKUP");
+        ExecutorInvitationResponse invited = await InviteAsync(owner, vaultId, "cho@example.test");
 
         // Mới 47 giờ: chưa nhắc
         await MoveBackAsync(invited.Id, TimeSpan.FromHours(47));

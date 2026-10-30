@@ -64,12 +64,12 @@ DELETE FROM DeathCases WHERE VaultId = @vaultId;
 -- 2) Đặt kế hoạch sang ACTIVE (DEATH-05: chỉ mở hồ sơ khi kế hoạch đang chạy)
 UPDATE HandoverPlans SET Status = 'Active', UpdatedAt = SYSDATETIMEOFFSET() WHERE VaultId = @vaultId;
 
--- 3) Executor đã chấp nhận (Primary). Hash token là giá trị ngẫu nhiên, không dùng để mời thật.
+-- 3) Executor đã chấp nhận. Hash token là giá trị ngẫu nhiên, không dùng để mời thật.
 DELETE FROM Executors WHERE VaultId = @vaultId AND UserId = @executorId;
 INSERT INTO Executors
-    (Id, VaultId, UserId, InviteeEmail, Role, Status, InvitationTokenHash, IsBeneficiary, InvitedAt, ExpiresAt, AcceptedAt)
+    (Id, VaultId, UserId, InviteeEmail, Status, InvitationTokenHash, IsBeneficiary, InvitedAt, ExpiresAt, AcceptedAt)
 VALUES
-    (NEWID(), @vaultId, @executorId, LOWER(@executorEmail), 'Primary', 'Accepted',
+    (NEWID(), @vaultId, @executorId, LOWER(@executorEmail), 'Accepted',
      LOWER(CONVERT(varchar(64), HASHBYTES('SHA2_256', CONVERT(varchar(36), NEWID())), 2)),
      0, DATEADD(DAY, -1, SYSDATETIMEOFFSET()), DATEADD(DAY, 6, SYSDATETIMEOFFSET()), SYSDATETIMEOFFSET());
 

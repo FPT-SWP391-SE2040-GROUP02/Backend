@@ -105,7 +105,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, user.Id, ExecutorStatus.Suspended, ExecutorRole.Primary);
+        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, user.Id, ExecutorStatus.Suspended);
         Guid caseId = await AddApprovedCaseAsync(vault, user.Id);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);

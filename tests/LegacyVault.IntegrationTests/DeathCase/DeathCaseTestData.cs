@@ -130,14 +130,13 @@ public static class DeathCaseTestData
     /// status Accepted = Executor đang hiệu lực.
     /// </summary>
     public static async Task<Executor> AddExecutorAsync(
-        ApiFactory factory, Guid vaultId, Guid userId, ExecutorStatus status, ExecutorRole role)
+        ApiFactory factory, Guid vaultId, Guid userId, ExecutorStatus status)
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         Executor executor = new Executor();
         executor.VaultId = vaultId;
         executor.UserId = userId;
         executor.InviteeEmail = $"{Guid.NewGuid():N}@test.local";
-        executor.Role = role;
         executor.Status = status;
         executor.InvitationTokenHash = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         executor.InvitedAt = now.AddDays(-1);
@@ -157,17 +156,17 @@ public static class DeathCaseTestData
 
     /// <summary>Executor đã chấp nhận (đang hiệu lực) của kho.</summary>
     public static Task<Executor> AddAcceptedExecutorAsync(
-        ApiFactory factory, Guid vaultId, Guid userId, ExecutorRole role = ExecutorRole.Primary)
+        ApiFactory factory, Guid vaultId, Guid userId)
     {
-        return AddExecutorAsync(factory, vaultId, userId, ExecutorStatus.Accepted, role);
+        return AddExecutorAsync(factory, vaultId, userId, ExecutorStatus.Accepted);
     }
 
     /// <summary>Tài khoản mới là Executor đang hiệu lực của kho, kèm client đã gắn token của tài khoản đó.</summary>
     public static async Task<ExecutorClient> CreateExecutorClientAsync(
-        ApiFactory factory, Guid vaultId, ExecutorRole role = ExecutorRole.Primary)
+        ApiFactory factory, Guid vaultId)
     {
         User user = await AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        await AddAcceptedExecutorAsync(factory, vaultId, user.Id, role);
+        await AddAcceptedExecutorAsync(factory, vaultId, user.Id);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
 

@@ -8,9 +8,6 @@ public class ExecutorVaultResponse
     /// <summary>Họ tên Owner theo tài khoản, để Executor nhận ra kho.</summary>
     public string OwnerFullName { get; set; } = string.Empty;
 
-    /// <summary>PRIMARY | BACKUP.</summary>
-    public string Role { get; set; } = string.Empty;
-
     public string PlanStatus { get; set; } = string.Empty;
 
     /// <summary>DMS-05: Owner đã quá hạn điểm danh (kế hoạch CHECKIN_OVERDUE hoặc AWAITING_CHECK).</summary>
