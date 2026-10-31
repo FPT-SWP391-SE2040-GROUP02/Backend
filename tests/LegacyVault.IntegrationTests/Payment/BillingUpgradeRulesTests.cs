@@ -11,6 +11,8 @@ namespace LegacyVault.IntegrationTests.Payment;
 /// </summary>
 public sealed class BillingUpgradeRulesTests
 {
+    private static readonly IBillingPriceSettings Prices = new FakeBillingPriceSettings();
+
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
 
     private const long SecondsPerDay = 86400;
@@ -45,7 +47,7 @@ public sealed class BillingUpgradeRulesTests
         VaultEntitlement entitlement = NewXsEntitlement(Now.AddSeconds(remainingSeconds), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteUpgrade(entitlement, paidYears, 0, Now);
+        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, paidYears, 0, Now);
 
         // Kiểm tra
         Assert.Equal(expectedPrice, quote.TotalAmount);
@@ -60,7 +62,7 @@ public sealed class BillingUpgradeRulesTests
         VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(365), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteUpgrade(entitlement, null, 0, Now);
+        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, null, 0, Now);
 
         // Kiểm tra: chênh giá 1 năm = 399.000 − 199.000
         Assert.Equal(200000, quote.TotalAmount);
@@ -73,7 +75,7 @@ public sealed class BillingUpgradeRulesTests
         VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(730), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteUpgrade(entitlement, 1, 0, Now);
+        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, 1, 0, Now);
 
         // Kiểm tra
         Assert.Equal(200000, quote.TotalAmount);
@@ -87,7 +89,7 @@ public sealed class BillingUpgradeRulesTests
         VaultEntitlement entitlement = NewXsEntitlement(expiresAt, 1);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteUpgrade(entitlement, 1, 0, Now);
+        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, 1, 0, Now);
 
         // Kiểm tra: XS_MAX 500 MiB, 5 suất kèm + 1 suất thêm, hạn giữ nguyên, không có số năm hay số ngày kỳ mới
         Assert.Equal(PaymentOrderKind.Upgrade, quote.Kind);
@@ -108,7 +110,7 @@ public sealed class BillingUpgradeRulesTests
         VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(100), 0);
 
         // Hành động + kiểm tra: nâng hạng không kèm mua thêm suất
-        Assert.Throws<AppException>(() => BillingRules.QuoteUpgrade(entitlement, 1, 1, Now));
+        Assert.Throws<AppException>(() => BillingRules.QuoteUpgrade(Prices, entitlement, 1, 1, Now));
     }
 
     [Fact]
@@ -118,7 +120,7 @@ public sealed class BillingUpgradeRulesTests
         VaultEntitlement entitlement = NewXsEntitlement(Now.AddSeconds(-1), 0);
 
         // Hành động + kiểm tra
-        Assert.Throws<AppException>(() => BillingRules.QuoteUpgrade(entitlement, 1, 0, Now));
+        Assert.Throws<AppException>(() => BillingRules.QuoteUpgrade(Prices, entitlement, 1, 0, Now));
     }
 
     [Theory]

@@ -9,6 +9,8 @@ namespace LegacyVault.IntegrationTests.Payment;
 /// <summary>Luật báo giá và điều kiện tạo đơn (SRS §8.1–8.3), thuần logic, không cần database.</summary>
 public sealed class BillingRulesTests
 {
+    private static readonly IBillingPriceSettings Prices = new FakeBillingPriceSettings();
+
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
 
     private static VaultEntitlement NewEntitlement(
@@ -45,7 +47,7 @@ public sealed class BillingRulesTests
     public void Ac94_Addon01_PurchaseXsThreeYearsOneSlot_Is646000()
     {
         // Chuẩn bị / Hành động
-        BillingQuote quote = BillingRules.QuotePurchase("XS", 3, 1);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 3, 1);
 
         // Kiểm tra
         Assert.Equal(PaymentOrderKind.Purchase, quote.Kind);
@@ -61,7 +63,7 @@ public sealed class BillingRulesTests
     public void Ac94_PurchaseXsMaxFiveYears_Is1599000()
     {
         // Chuẩn bị / Hành động
-        BillingQuote quote = BillingRules.QuotePurchase("XS_MAX", 5, 0);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS_MAX", 5, 0);
 
         // Kiểm tra
         Assert.Equal(1599000, quote.TotalAmount);
@@ -79,7 +81,7 @@ public sealed class BillingRulesTests
     public void Sec81_PurchaseTierPrice_MatchesPriceTable(string tier, int years, long expected)
     {
         // Chuẩn bị / Hành động
-        BillingQuote quote = BillingRules.QuotePurchase(tier, years, 0);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, tier, years, 0);
 
         // Kiểm tra
         Assert.Equal(expected, quote.TotalAmount);
@@ -89,7 +91,7 @@ public sealed class BillingRulesTests
     public void Addon01_Purchase_ExtraSlotsTwentyOne_Rejected()
     {
         // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase("XS", 1, 21));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", 1, 21));
 
         // Kiểm tra
         AssertValidationOnField(exception, "extraSlots");
@@ -99,7 +101,7 @@ public sealed class BillingRulesTests
     public void Addon01_Purchase_ExtraSlotsTwenty_Allowed()
     {
         // Chuẩn bị / Hành động
-        BillingQuote quote = BillingRules.QuotePurchase("XS", 1, 20);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 20);
 
         // Kiểm tra: 199.000 + 49.000 × 20
         Assert.Equal(1179000, quote.TotalAmount);
@@ -109,7 +111,7 @@ public sealed class BillingRulesTests
     public void Sec81_Purchase_YearsTwo_Rejected()
     {
         // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase("XS", 2, 0));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", 2, 0));
 
         // Kiểm tra
         AssertValidationOnField(exception, "years");
@@ -119,7 +121,7 @@ public sealed class BillingRulesTests
     public void Sec81_Purchase_MissingYears_Rejected()
     {
         // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase("XS", null, 0));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", null, 0));
 
         // Kiểm tra
         AssertValidationOnField(exception, "years");
@@ -133,7 +135,7 @@ public sealed class BillingRulesTests
     public void Sec81_Purchase_TierNotSellable_Rejected(string? tier)
     {
         // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(tier, 1, 0));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, tier, 1, 0));
 
         // Kiểm tra: Free không có đơn 0 đồng
         AssertValidationOnField(exception, "tier");
@@ -143,7 +145,7 @@ public sealed class BillingRulesTests
     public void Addon01_Purchase_NegativeExtraSlots_Rejected()
     {
         // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase("XS", 1, -1));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", 1, -1));
 
         // Kiểm tra
         AssertValidationOnField(exception, "extraSlots");
@@ -156,7 +158,7 @@ public sealed class BillingRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(180), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(entitlement, 1, Now);
+        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
 
         // Kiểm tra: ceil(49.000 × 180 / 365) = 24.165, không đổi hạn
         Assert.Equal(PaymentOrderKind.Addon, quote.Kind);
@@ -174,7 +176,7 @@ public sealed class BillingRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(365), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(entitlement, 3, Now);
+        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 3, Now);
 
         // Kiểm tra: không dư nên không làm tròn lên
         Assert.Equal(147000, quote.TotalAmount);
@@ -187,7 +189,7 @@ public sealed class BillingRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddSeconds(1), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(entitlement, 1, Now);
+        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
 
         // Kiểm tra: ceil(49.000 / 31.536.000) = 1
         Assert.Equal(1, quote.TotalAmount);
@@ -201,7 +203,7 @@ public sealed class BillingRulesTests
             ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(180).AddMilliseconds(900), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(entitlement, 1, Now);
+        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
 
         // Kiểm tra
         Assert.Equal(24165, quote.TotalAmount);
@@ -214,7 +216,7 @@ public sealed class BillingRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 1);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(entitlement, 2, Now);
+        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 2, Now);
 
         // Kiểm tra
         Assert.Equal(5, quote.TotalBeneficiarySlots);
@@ -230,7 +232,7 @@ public sealed class BillingRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 0);
 
         // Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteAddon(entitlement, extraSlots, Now));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteAddon(Prices, entitlement, extraSlots, Now));
 
         // Kiểm tra
         AssertValidationOnField(exception, "extraSlots");
@@ -377,12 +379,12 @@ public sealed class BillingRulesTests
     {
         // Chuẩn bị
         PaymentOrder order = NewOrder(PaymentOrderStatus.Pending, Now.AddMinutes(15));
-        BillingQuote same = BillingRules.QuotePurchase("XS", 3, 1);
-        BillingQuote otherTier = BillingRules.QuotePurchase("XS_MAX", 3, 1);
-        BillingQuote otherYears = BillingRules.QuotePurchase("XS", 1, 1);
-        BillingQuote otherSlots = BillingRules.QuotePurchase("XS", 3, 2);
+        BillingQuote same = BillingRules.QuotePurchase(Prices, "XS", 3, 1);
+        BillingQuote otherTier = BillingRules.QuotePurchase(Prices, "XS_MAX", 3, 1);
+        BillingQuote otherYears = BillingRules.QuotePurchase(Prices, "XS", 1, 1);
+        BillingQuote otherSlots = BillingRules.QuotePurchase(Prices, "XS", 3, 2);
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 0);
-        BillingQuote addon = BillingRules.QuoteAddon(entitlement, 1, Now);
+        BillingQuote addon = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
 
         // Hành động / Kiểm tra
         Assert.True(BillingRules.IsSameSelection(order, same));
@@ -394,7 +396,7 @@ public sealed class BillingRulesTests
 
     private static PaymentOrder NewPurchaseOrder(string tierText, int years, int extraSlots)
     {
-        BillingQuote quote = BillingRules.QuotePurchase(tierText, years, extraSlots);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, tierText, years, extraSlots);
         PaymentOrder order = new PaymentOrder();
         order.Kind = quote.Kind;
         order.Tier = quote.Tier;
@@ -408,7 +410,7 @@ public sealed class BillingRulesTests
 
     private static PaymentOrder NewAddonOrder(VaultEntitlement entitlement, int extraSlots)
     {
-        BillingQuote quote = BillingRules.QuoteAddon(entitlement, extraSlots, Now);
+        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, extraSlots, Now);
         PaymentOrder order = new PaymentOrder();
         order.Kind = quote.Kind;
         order.Tier = quote.Tier;
