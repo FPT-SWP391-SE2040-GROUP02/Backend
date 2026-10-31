@@ -365,6 +365,7 @@ public sealed class HandoverService : IHandoverService
         response.ResponseDeadline = turn.ResponseDeadline;
         response.DecisionDeadline = turn.DecisionDeadline;
         response.IdentityBypassed = turn.IdentityBypassed;
+        response.IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null;
 
         bool showContent = turn.Status == HandoverTurnStatus.ReadyToAccept
             || turn.Status == HandoverTurnStatus.HandoverCommitted;
