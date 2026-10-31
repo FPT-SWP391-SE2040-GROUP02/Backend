@@ -1,0 +1,37 @@
+# Thử Executor điểm danh thay chủ kho — chỉ Development.
+#
+# Chuẩn bị: kho có kế hoạch đang chạy, Executor đã chấp nhận, chủ kho đã quá hạn điểm danh
+# (kéo lùi hạn bằng http/checkin-dev.sql khối 2 hoặc 3, chờ job khoảng 60 giây).
+# Thay <vaultId> bằng id kho (GET /executor/vaults → vaultId, checkInOverdue = true).
+
+@baseUrl = http://localhost:5000/api/v1
+@vaultId = <vaultId>
+
+### Lấy CSRF trước khi đăng nhập
+# @name csrf
+GET {{baseUrl}}/auth/csrf
+
+### Đăng nhập tài khoản Executor — lấy access token
+# @name login
+POST {{baseUrl}}/auth/login
+X-CSRF-Token: {{csrf.response.body.requestToken}}
+Content-Type: application/json
+
+{ "email": "executor@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Các kho tôi là Executor: chỉ hiện nút điểm danh thay khi checkInOverdue = true và openDeathCaseId = null
+GET {{baseUrl}}/executor/vaults
+Authorization: Bearer {{token}}
+
+### Điểm danh thay chủ kho → 200: planStatus ACTIVE, kỳ mới và hạn mới
+# Gọi lại ngay sau đó → 409 CHECKIN_NOT_ALLOWED, reason PLAN_NOT_OVERDUE (kế hoạch đã về ACTIVE).
+# Kho đã có hồ sơ chứng tử đang mở → 409 CHECKIN_NOT_ALLOWED, reason DEATH_CASE_OPEN.
+POST {{baseUrl}}/executor/vaults/{{vaultId}}/check-in
+Authorization: Bearer {{token}}
+
+### 404 VAULT_NOT_FOUND: kho không tồn tại, hoặc người gọi không phải Executor đang hiệu lực của kho
+POST {{baseUrl}}/executor/vaults/00000000-0000-0000-0000-000000000000/check-in
+Authorization: Bearer {{token}}
