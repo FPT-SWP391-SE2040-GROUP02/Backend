@@ -1,3 +1,4 @@
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
@@ -35,6 +36,21 @@ public sealed class VaultPinController(IVaultPinService service) : ControllerBas
     public Task<VaultPinStatusResponse> Set(Guid vaultId, SetVaultPinRequest request, CancellationToken ct)
     {
         return service.SetPinAsync(vaultId, request, ct);
+    }
+
+    /// <summary>
+    /// Chỉ kiểm PIN trong header X-Vault-Pin, không làm gì thêm. FE gọi trước khi mở chế độ sửa tài sản.
+    /// Lỗi và khóa giống mọi thao tác cần PIN (do [RequireVaultPin] xử lý).
+    /// </summary>
+    [RequireVaultPin]
+    [HttpPost("verify")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status423Locked)]
+    public IActionResult Verify(Guid vaultId)
+    {
+        return NoContent();
     }
 
     /// <summary>Đổi PIN bằng PIN cũ. Sai PIN cũ → 403 INVALID_VAULT_PIN, bị khóa → 423 VAULT_PIN_LOCKED.</summary>
