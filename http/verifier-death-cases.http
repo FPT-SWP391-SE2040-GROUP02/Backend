@@ -18,9 +18,9 @@
 # Mọi thao tác ghi cần etag MỚI NHẤT và làm đổi etag; luôn lấy lại từ response của thao tác trước (hoặc GET chi tiết).
 
 @baseUrl = http://localhost:5000/api/v1
-# DEATH-14: mật khẩu xác nhận ký khi Duyệt/Từ chối = mật khẩu đăng nhập của tài khoản Verifier dev (cùng giá trị thử với
+# DEATH-03: mật khẩu xác nhận khi Duyệt/Từ chối = mật khẩu đăng nhập của tài khoản Verifier dev (cùng giá trị thử với
 # dòng đăng nhập bên dưới). Chỉ dùng tài khoản thử, không ghi mật khẩu thật vào file này.
-@signingPassword = Password123!
+@confirmPassword = Password123!
 
 ### Đăng nhập tài khoản Verifier được giao
 # @name login
@@ -91,13 +91,13 @@ Content-Type: application/json
 ### 6a) TỪ CHỐI hồ sơ (lý do bắt buộc, Executor thấy rejectReason). Hồ sơ đóng, kế hoạch về trạng thái trước khi gửi
 # (job điểm danh có thể tính lại trong vòng 60 giây), thông báo Owner đang chờ bị hủy (CANCELLED). Gọi lặp: 200.
 # Sau đó Executor mở hồ sơ mới (POST /executor/vaults/{vaultId}/death-case) và Verifier thấy previousCase của hồ sơ mới.
-# DEATH-14: bắt buộc password. Sai → 403 SIGNING_PASSWORD_INVALID + attemptsRemaining; sai 5 lần → 423 SIGNING_LOCKED
-# + lockedUntil (khóa ký 15 phút → 1 giờ → 24 giờ, vẫn xem hồ sơ được). Quyết định được ký số, xem bước 7.
+# DEATH-03: bắt buộc password. Sai → 403 SIGNING_PASSWORD_INVALID + attemptsRemaining; sai 5 lần → 423 SIGNING_LOCKED
+# + lockedUntil (khóa Duyệt/Từ chối 15 phút → 1 giờ → 24 giờ, vẫn xem hồ sơ được).
 POST {{baseUrl}}/verifier/death-cases/{{caseId}}/reject
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "etag": "{{etag}}", "reason": "Giấy chứng tử không khớp thông tin Owner.", "password": "{{signingPassword}}" }
+{ "etag": "{{etag}}", "reason": "Giấy chứng tử không khớp thông tin Owner.", "password": "{{confirmPassword}}" }
 
 ### 6b) DUYỆT hồ sơ và mở bàn giao F3 (DEATH-06). Cần: Owner đã nhận thư và hết 72 giờ (lệnh "Cho phép duyệt" trong
 # http/death-case-dev.sql), hết cờ chưa xem xét, Executor không có bản nháp mới hơn, có gói READY. Dùng etag MỚI NHẤT.
@@ -105,14 +105,14 @@ Content-Type: application/json
 # Response lần đầu có handover { turnCount, invitationsSent, invitationsFailed }; kế hoạch sang HANDOVER_IN_PROGRESS,
 # KHÔNG cấp quyền tải (người nhận phải nhận lời mời ở F3). Gọi lặp trên hồ sơ đã duyệt: 200, handover = null.
 # Duyệt và từ chối cùng lúc: bên thua nhận 200 (cùng quyết định) hoặc 409 CASE_CLOSED (quyết định khác).
-# DEATH-14: bắt buộc password như 6a; response có decisionSignatureStatus = VALID.
+# DEATH-03: bắt buộc password như 6a.
 POST {{baseUrl}}/verifier/death-cases/{{caseId}}/approve
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "etag": "{{etag}}", "reason": "Giấy chứng tử hợp lệ, thông tin khớp.", "password": "{{signingPassword}}" }
+{ "etag": "{{etag}}", "reason": "Giấy chứng tử hợp lệ, thông tin khớp.", "password": "{{confirmPassword}}" }
 
-### 6c) Thử nhập SAI mật khẩu ký (DEATH-14, D11): 403 SIGNING_PASSWORD_INVALID kèm attemptsRemaining (4 → 1),
+### 6c) Thử nhập SAI mật khẩu xác nhận (DEATH-03): 403 SIGNING_PASSWORD_INVALID kèm attemptsRemaining (4 → 1),
 # lần thứ 5 → 423 SIGNING_LOCKED kèm lockedUntil. Không ghi quyết định, hồ sơ vẫn đang xét. Đừng dùng 401 để đăng xuất.
 POST {{baseUrl}}/verifier/death-cases/{{caseId}}/approve
 Authorization: Bearer {{token}}
@@ -120,9 +120,3 @@ Content-Type: application/json
 
 { "etag": "{{etag}}", "reason": "Giấy chứng tử hợp lệ, thông tin khớp.", "password": "sai-mat-khau" }
 
-### 7) Phiếu chữ ký số của quyết định cuối và kết quả kiểm lại (DEATH-14). status: VALID | INVALID | NOT_SIGNED |
-# NO_FINAL_DECISION. Chi tiết hồ sơ (bước 2) cũng có decisionSignatureStatus cùng giá trị.
-# Thử phát hiện sửa dữ liệu: chạy http/decision-signature-demo.sql (sửa lý do) → gọi lại → INVALID → chạy đoạn trả lại → VALID.
-# Chữ ký số nội bộ hệ thống, không phải chữ ký số có giá trị pháp lý của CA công cộng.
-GET {{baseUrl}}/verifier/death-cases/{{caseId}}/decision-signature
-Authorization: Bearer {{token}}
