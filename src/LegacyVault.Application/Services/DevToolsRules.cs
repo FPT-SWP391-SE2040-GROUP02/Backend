@@ -14,6 +14,7 @@ public static class DevToolsRules
     public const string GraceEnded = "GRACE_ENDED";
     public const string ObjectionWindowEnded = "OBJECTION_WINDOW_ENDED";
     public const string SelfieDeadlinePassed = "SELFIE_DEADLINE_PASSED";
+    public const string ServiceExpired = "SERVICE_EXPIRED";
 
     public const string Available = "AVAILABLE";
     public const string Passed = "PASSED";
@@ -69,6 +70,7 @@ public static class DevToolsRules
         keys.Add(GraceEnded);
         keys.Add(ObjectionWindowEnded);
         keys.Add(SelfieDeadlinePassed);
+        keys.Add(ServiceExpired);
         return keys;
     }
 
@@ -195,6 +197,27 @@ public static class DevToolsRules
             return Build(SelfieDeadlinePassed, Passed, string.Empty);
         }
         return Build(SelfieDeadlinePassed, Available, string.Empty);
+    }
+
+    /// <summary>
+    /// Mốc hết hạn dịch vụ (OPLAN-01): kho đang trả phí thì tua được; đã ở ân hạn hoặc rà soát là đã qua;
+    /// gói Free không có hạn dịch vụ.
+    /// </summary>
+    public static DevMilestoneResponse EvaluateServiceExpired(VaultEntitlement? entitlement)
+    {
+        if (entitlement == null || entitlement.Status == EntitlementStatus.Free)
+        {
+            return Build(ServiceExpired, NotApplicable, "Kho đang ở gói Free nên không có hạn dịch vụ.");
+        }
+        if (entitlement.Status == EntitlementStatus.GraceReadOnly || entitlement.Status == EntitlementStatus.ExpiredReview)
+        {
+            return Build(ServiceExpired, Passed, string.Empty);
+        }
+        if (entitlement.ServiceExpiresAt == null)
+        {
+            return Build(ServiceExpired, NotApplicable, "Kho chưa có hạn dịch vụ.");
+        }
+        return Build(ServiceExpired, Available, string.Empty);
     }
 
     private static DevMilestoneResponse Build(string key, string state, string note)

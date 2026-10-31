@@ -79,6 +79,7 @@ public static class InfrastructureConfig
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
         services.AddScoped<IVaultPinRepository, VaultPinRepository>();
         services.AddScoped<ICheckInRepository, CheckInRepository>();
+        services.AddScoped<IEntitlementExpiryRepository, EntitlementExpiryRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IHoldRepository, HoldRepository>();
         services.AddScoped<IIncidentRepository, IncidentRepository>();
@@ -166,6 +167,9 @@ public static class InfrastructureConfig
         LegacyVault.Infrastructure.Handover.HandoverConfig.AddHandover(services, configuration);
         LegacyVault.Infrastructure.DeathCases.DeathCaseConfig.AddDeathCases(services, configuration);
         services.AddHostedService<CheckInMonitor>();
+        // Job nền hết hạn dịch vụ (OPLAN-01): kho trả phí hết kỳ thì sang ân hạn chỉ đọc.
+        services.Configure<EntitlementExpiryJobSettings>(configuration.GetSection(EntitlementExpiryJobSettings.SectionName));
+        services.AddHostedService<EntitlementExpiryMonitor>();
 
         // JWT Bearer Authentication
         services.AddOptions<JwtSettings>()
