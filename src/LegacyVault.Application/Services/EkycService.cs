@@ -152,7 +152,6 @@ public sealed class EkycService : IEkycService
             IdNumber = reading.IdNumber,
             FullName = reading.FullName,
             DateOfBirth = reading.DateOfBirth,
-            DateOfExpiry = reading.DateOfExpiry,
             ResidenceAddress = reading.ResidenceAddress,
             IdentityMatch = identityMatch.ToApiString(),
             Warnings = reading.Warnings,
