@@ -451,7 +451,7 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 | GET | `/v1/vaults/{vaultId}/assets` | Đăng nhập | Query phân trang; `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<AssetResponse>` | 400, 404 |
 | GET | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 200 `AssetResponse` | 404 `VAULT_NOT_FOUND` / `ASSET_NOT_FOUND` |
 | GET | `/v1/vaults/{vaultId}/assets/{assetId}/content` | Đăng nhập (Owner) | — | 200 nội dung gốc (`application/octet-stream`, `Content-Disposition: attachment`, `Cache-Control: no-store`) | 404 `ASSET_NOT_FOUND` (kể cả nội dung đã dọn), 500 `CONTENT_INTEGRITY_FAILED` |
-| PUT | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | `{ name?, description?, etag }` | 200 `AssetResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
+| PUT | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập + `X-Vault-Pin` (mục 6.20) | `{ name?, description?, etag }` | 200 `AssetResponse` | 400, 403/409/423 lỗi PIN, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
 | DELETE | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 204 | 404, 409 `ASSET_IN_USE` (+`reason`: `IN_CONTAINER` \| `PINNED_IN_HANDOVER`) / `VAULT_NOT_EDITABLE` |
 
 ```json
@@ -1150,18 +1150,20 @@ Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Own
 | POST | `/api/v1/vaults/{vaultId}/pin` | `{ pin, confirmPin }` | 200 `VaultPinStatus` | 400 `VALIDATION_ERROR` / `VAULT_PIN_TOO_WEAK`, 404, 409 `VAULT_PIN_ALREADY_SET`, 429 |
 | POST | `/api/v1/vaults/{vaultId}/pin/change` | `{ currentPin, newPin, confirmPin }` | 200 `VaultPinStatus` | 400, 403 `INVALID_VAULT_PIN`, 404, 409 `VAULT_PIN_NOT_SET`, 423 `VAULT_PIN_LOCKED`, 429 |
 | POST | `/api/v1/vaults/{vaultId}/pin/reset` | `{ password, newPin, confirmPin }` | 200 `VaultPinStatus` | 400, 401 `REAUTHENTICATION_FAILED` (sai mật khẩu), 404, 409 `VAULT_PIN_NOT_SET` / `VAULT_PIN_RESET_NEEDS_PASSWORD`, 429 |
+| POST | `/api/v1/vaults/{vaultId}/pin/verify` | — (PIN trong header `X-Vault-Pin`) | 204 | 403 `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN`, 404, 409 `VAULT_PIN_NOT_SET`, 423 `VAULT_PIN_LOCKED` |
 
 `VaultPinStatus`: `{ isSet, isRequired, lockedUntil, attemptsRemaining }`. `isRequired = true` khi kho đã có tài sản; FE hiện hộp thoại bắt buộc đặt PIN khi `isRequired && !isSet`. `lockedUntil` là `null` khi không bị khóa. `attemptsRemaining` là `null` khi chưa đặt PIN. Không bao giờ trả PIN hay hash.
 
 **Thao tác cần PIN.** Gửi PIN trong header `X-Vault-Pin: 482913` (6 chữ số). Áp dụng cho:
 
-- `GET /vaults/{vaultId}/assets/{assetId}/content` (tải nội dung tài sản) và `DELETE /vaults/{vaultId}/assets/{assetId}`.
+- `GET /vaults/{vaultId}/assets/{assetId}/content` (tải nội dung tài sản), `PUT /vaults/{vaultId}/assets/{assetId}` (sửa tên/mô tả) và `DELETE /vaults/{vaultId}/assets/{assetId}`.
+- `POST /vaults/{vaultId}/pin/verify`: chỉ kiểm PIN, không làm gì thêm. FE gọi khi bấm "Sửa" tài sản, đúng PIN mới mở form sửa; PIN đã đúng được gửi lại kèm `PUT` khi lưu. Sai PIN vẫn tính một lần đoán và khóa như các thao tác khác.
 - `POST`, `PUT`, `DELETE /vaults/{vaultId}/beneficiaries...` (tạo, sửa, xóa hồ sơ người nhận).
 - `DELETE /vaults/{vaultId}/containers/{containerId}` (xóa gói), `DELETE .../containers/{containerId}/assets/{assetId}` (gỡ tài sản khỏi gói), `POST` và `DELETE .../containers/{containerId}/beneficiaries...` (gán, gỡ người nhận của gói).
 - `POST /vaults/{vaultId}/executors` (mời Executor) và `POST /vaults/{vaultId}/executors/{executorId}/revoke` (thu hồi).
 - Token của đồng hồ thông minh (có claim `device_id`) bị từ chối `403 ROLE_NOT_ALLOWED`, không cho nhập PIN.
 
-Không cần PIN: tạo tài sản, liệt kê, xem thông tin, sửa tên/mô tả tài sản, đưa tài sản vào gói.
+Không cần PIN: tạo tài sản, liệt kê, xem thông tin, đưa tài sản vào gói.
 
 **Luật kiểm tra** (theo thứ tự):
 
