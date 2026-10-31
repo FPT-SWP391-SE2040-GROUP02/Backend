@@ -66,4 +66,10 @@ public interface IDeathCaseReviewService
     /// Gọi lặp trên hồ sơ đã duyệt trả 200 (handover = null); hồ sơ đã bị từ chối thì 409 CASE_CLOSED.
     /// </summary>
     Task<VerifierDeathCaseResponse> ApproveAsync(Guid caseId, ApproveDeathCaseRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// DEATH-14: phiếu chữ ký số của quyết định cuối và kết quả kiểm lại (VALID / INVALID / NOT_SIGNED / NO_FINAL_DECISION).
+    /// Chỉ Verifier đang được giao hồ sơ xem được (D8); không ghi gì.
+    /// </summary>
+    Task<DecisionSignatureResponse> GetDecisionSignatureAsync(Guid caseId, CancellationToken ct);
 }

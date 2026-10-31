@@ -27,6 +27,7 @@ public static class ApplicationConfig
         services.AddScoped<IDeathCaseService, DeathCaseService>();
         services.AddScoped<DeathCertificateChecker>();
         services.AddScoped<IDeathCaseReviewService, DeathCaseReviewService>();
+        services.AddScoped<ISigningPasswordChecker, SigningPasswordChecker>();
         services.AddScoped<IRetentionJob, RetentionJob>();
         services.AddScoped<IExecutorManagementService, ExecutorManagementService>();
         services.AddScoped<IExecutorInvitationJob, ExecutorInvitationJob>();

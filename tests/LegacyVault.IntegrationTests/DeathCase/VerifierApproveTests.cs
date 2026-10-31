@@ -1,9 +1,11 @@
 using System.Net;
 using System.Text.Json;
+using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.DeathCases;
@@ -466,9 +468,13 @@ public sealed class VerifierApproveTests : IAsyncLifetime
         // Chuẩn bị: hồ sơ được giao lại cho chính Owner của kho (giả lập nhánh C), Owner mang vai trò Verifier
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateReadyToApproveCaseAsync(factory);
         Guid ownerId = submitted.Vault.Owner.Id;
+        // DEATH-14: Owner tạo qua ApiTestHelpers chưa có mật khẩu; đặt mật khẩu thử để qua bước nhập lại mật khẩu ký.
+        string passwordHash = factory.Services.GetRequiredService<IPasswordHasher>().Hash(DeathCaseTestData.TestPassword);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            await db.Users.Where(u => u.Id == ownerId).ExecuteUpdateAsync(s => s.SetProperty(u => u.Role, UserRole.Verifier));
+            await db.Users.Where(u => u.Id == ownerId).ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.Role, UserRole.Verifier)
+                .SetProperty(u => u.PasswordHash, passwordHash));
         });
         await DeathCaseReviewTestData.EndAssignmentAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow);
         await DeathCaseReviewTestData.AddAssignmentAsync(

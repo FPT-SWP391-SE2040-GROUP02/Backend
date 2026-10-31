@@ -69,6 +69,12 @@ public class VerifierDeathCaseResponse
     /// giao xem đủ 12 số CCCD). Luôn có object; Verified = false khi Owner chưa gắn danh tính.
     /// </summary>
     public VerifierOwnerIdentityResponse OwnerIdentity { get; set; } = new VerifierOwnerIdentityResponse();
+
+    /// <summary>
+    /// DEATH-14, D12: kết quả tự kiểm chữ ký số của quyết định cuối mỗi lần mở chi tiết:
+    /// VALID | INVALID | NOT_SIGNED | NO_FINAL_DECISION.
+    /// </summary>
+    public string DecisionSignatureStatus { get; set; } = string.Empty;
 }
 
 /// <summary>Danh tính đã xác minh của Owner và kết quả so với bản đang xét.</summary>

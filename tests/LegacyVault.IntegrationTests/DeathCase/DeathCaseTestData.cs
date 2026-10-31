@@ -1,7 +1,9 @@
+using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LegacyVault.IntegrationTests.DeathCases;
 
@@ -11,9 +13,14 @@ namespace LegacyVault.IntegrationTests.DeathCases;
 /// </summary>
 public static class DeathCaseTestData
 {
-    /// <summary>Thêm một tài khoản đã xác minh email với vai trò và trạng thái cho trước.</summary>
+    /// <summary>DEATH-14: mật khẩu thử cố định của mọi tài khoản tạo bằng AddUserAsync (chỉ dùng trong test).</summary>
+    public const string TestPassword = "Mat-khau-thu-1!";
+
+    /// <summary>Thêm một tài khoản đã xác minh email với vai trò và trạng thái cho trước, mật khẩu = TestPassword.</summary>
     public static async Task<User> AddUserAsync(ApiFactory factory, UserRole role, UserStatus status)
     {
+        IPasswordHasher passwordHasher = factory.Services.GetRequiredService<IPasswordHasher>();
+
         User user = new User();
         user.Email = $"{Guid.NewGuid():N}@test.local";
         user.FullName = "Người thử";
@@ -21,6 +28,7 @@ public static class DeathCaseTestData
         user.Status = status;
         user.CreatedAt = DateTimeOffset.UtcNow;
         user.EmailVerifiedAt = DateTimeOffset.UtcNow;
+        user.PasswordHash = passwordHasher.Hash(TestPassword);
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
