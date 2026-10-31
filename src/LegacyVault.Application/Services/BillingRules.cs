@@ -135,7 +135,8 @@ public static class BillingRules
     }
 
     /// <summary>Báo giá mua mới (ADDON-01): tổng = giá hạng + 49.000 × q × số năm.</summary>
-    public static BillingQuote QuotePurchase(string? tierText, int? years, int extraSlots)
+    public static BillingQuote QuotePurchase(
+        IBillingPriceSettings prices, string? tierText, int? years, int extraSlots)
     {
         ServiceTier tier = ParseSellableTier(tierText);
         if (years == null)
@@ -157,14 +158,15 @@ public static class BillingRules
         quote.Tier = tier;
         quote.Years = years.Value;
         quote.ExtraSlots = extraSlots;
-        quote.TierAmount = BillingPrices.GetTierPrice(tier, years.Value);
-        quote.SlotAmount = BillingPrices.SlotPricePerYear * extraSlots * years.Value;
+        quote.TierAmount = prices.GetTierPrice(tier, years.Value);
+        quote.SlotAmount = prices.SlotPricePerYear * extraSlots * years.Value;
         quote.TotalAmount = quote.TierAmount + quote.SlotAmount;
         quote.StorageQuotaBytes = BillingPrices.GetStorageQuotaBytes(tier);
         quote.IncludedBeneficiarySlots = BillingPrices.GetIncludedSlots(tier);
         quote.TotalBeneficiarySlots = quote.IncludedBeneficiarySlots + extraSlots;
         quote.ServiceDays = years.Value * BillingPrices.DaysPerYear;
         quote.BaseServiceExpiresAt = null;
+        quote.PolicyVersion = prices.PolicyVersion;
         return quote;
     }
 
@@ -172,7 +174,8 @@ public static class BillingRules
     /// Báo giá mua thêm suất giữa kỳ (ADDON-02): giá = ceil(49.000 × q × số giây còn lại / 31.536.000).
     /// Tính hoàn toàn bằng số nguyên long để không sai số làm tròn.
     /// </summary>
-    public static BillingQuote QuoteAddon(VaultEntitlement entitlement, int extraSlots, DateTimeOffset now)
+    public static BillingQuote QuoteAddon(
+        IBillingPriceSettings prices, VaultEntitlement entitlement, int extraSlots, DateTimeOffset now)
     {
         if (extraSlots < 1 || extraSlots > BillingPrices.MaxExtraSlotsPerOrder)
         {
@@ -192,7 +195,7 @@ public static class BillingRules
             throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported, "Kỳ dịch vụ đã hết hạn.");
         }
 
-        long numerator = BillingPrices.SlotPricePerYear * extraSlots * remainingSeconds;
+        long numerator = prices.SlotPricePerYear * extraSlots * remainingSeconds;
         long price = (numerator + BillingPrices.SecondsPerYear - 1) / BillingPrices.SecondsPerYear;
 
         BillingQuote quote = new BillingQuote();
@@ -208,6 +211,7 @@ public static class BillingRules
         quote.TotalBeneficiarySlots = entitlement.IncludedBeneficiarySlots + entitlement.ExtraBeneficiarySlots + extraSlots;
         quote.ServiceDays = null;
         quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
+        quote.PolicyVersion = prices.PolicyVersion;
         return quote;
     }
 
@@ -219,9 +223,10 @@ public static class BillingRules
     /// tự do; việc dữ liệu hiện có có vừa hạng mới hay không do <see cref="EnsureUsageFitsRenewal"/> kiểm tra.
     /// </summary>
     public static BillingQuote QuoteRenewal(
-        VaultEntitlement entitlement, string? tierText, int? years, int extraSlots, DateTimeOffset now)
+        IBillingPriceSettings prices, VaultEntitlement entitlement, string? tierText, int? years, int extraSlots,
+        DateTimeOffset now)
     {
-        BillingQuote quote = QuotePurchase(tierText, years, extraSlots);
+        BillingQuote quote = QuotePurchase(prices, tierText, years, extraSlots);
         quote.Kind = PaymentOrderKind.Renewal;
         quote.BaseServiceExpiresAt = null;
         if (entitlement.Status == EntitlementStatus.PaidActive
@@ -317,7 +322,8 @@ public static class BillingRules
     /// không vượt tổng số giây của kỳ. Tính hoàn toàn bằng số nguyên long. Hạn dịch vụ giữ nguyên; dung lượng và suất
     /// kèm theo lên theo XS_MAX; suất mua thêm đang có được giữ.
     /// </summary>
-    public static BillingQuote QuoteUpgrade(VaultEntitlement entitlement, int? paidYears, int extraSlots, DateTimeOffset now)
+    public static BillingQuote QuoteUpgrade(
+        IBillingPriceSettings prices, VaultEntitlement entitlement, int? paidYears, int extraSlots, DateTimeOffset now)
     {
         if (extraSlots != 0)
         {
@@ -339,8 +345,8 @@ public static class BillingRules
         {
             years = paidYears.Value;
         }
-        long priceDifference = BillingPrices.GetTierPrice(ServiceTier.XsMax, years)
-            - BillingPrices.GetTierPrice(ServiceTier.Xs, years);
+        long priceDifference = prices.GetTierPrice(ServiceTier.XsMax, years)
+            - prices.GetTierPrice(ServiceTier.Xs, years);
         long periodSeconds = BillingPrices.SecondsPerYear * years;
         if (remainingSeconds > periodSeconds)
         {
@@ -362,6 +368,7 @@ public static class BillingRules
         quote.TotalBeneficiarySlots = quote.IncludedBeneficiarySlots + entitlement.ExtraBeneficiarySlots;
         quote.ServiceDays = null;
         quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
+        quote.PolicyVersion = prices.PolicyVersion;
         return quote;
     }
 

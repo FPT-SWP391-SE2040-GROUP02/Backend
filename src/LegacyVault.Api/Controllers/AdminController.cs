@@ -135,7 +135,7 @@ public sealed class AdminController : ControllerBase
         return incidentService.ResolveAsync(incidentId, request.Note, request.Etag, ct);
     }
 
-    // ---- Hold ----
+    // ---- Hold (chỉ xem; hold do hệ thống đặt và gỡ) ----
 
     [HttpGet("holds")]
     [ProducesResponseType<PaginatedList<HoldResponse>>(StatusCodes.Status200OK)]
@@ -151,28 +151,6 @@ public sealed class AdminController : ControllerBase
     public Task<HoldResponse> GetHold(Guid holdId, CancellationToken ct)
     {
         return holdService.GetAsync(holdId, ct);
-    }
-
-    [HttpPost("holds")]
-    [ProducesResponseType<HoldResponse>(StatusCodes.Status201Created)]
-    public async Task<IActionResult> PlaceHold(PlaceHoldRequest request, CancellationToken ct)
-    {
-        HoldResponse hold = await holdService.PlaceAsync(request, ct);
-        return StatusCode(StatusCodes.Status201Created, hold);
-    }
-
-    [HttpPost("holds/{holdId:guid}/review")]
-    [ProducesResponseType<HoldResponse>(StatusCodes.Status200OK)]
-    public Task<HoldResponse> ReviewHold(Guid holdId, ReviewHoldRequest request, CancellationToken ct)
-    {
-        return holdService.ReviewAsync(holdId, request, ct);
-    }
-
-    [HttpPost("holds/{holdId:guid}/release")]
-    [ProducesResponseType<HoldResponse>(StatusCodes.Status200OK)]
-    public Task<HoldResponse> ReleaseHold(Guid holdId, ReleaseHoldRequest request, CancellationToken ct)
-    {
-        return holdService.ReleaseAsync(holdId, request, ct);
     }
 
     private static int Clamp(int value, int min, int max)

@@ -12,6 +12,9 @@ public class BillingSettings
 
     public BillingSePaySection SePay { get; set; } = new BillingSePaySection();
 
+    /// <summary>Bảng giá bán (SRS §8.1, ADDON-01). Không phải secret nên đặt trong appsettings.json.</summary>
+    public BillingPricingSection Pricing { get; set; } = new BillingPricingSection();
+
     /// <summary>
     /// Công tắc endpoint giả lập trả tiền (dev-pay). Mặc định tắt; chỉ có tác dụng khi môi trường là Development
     /// (xem BillingDevSettings). Không đặt true trong appsettings.json hay môi trường thật.
@@ -36,4 +39,27 @@ public class BillingSePaySection
 
     /// <summary>"Test" hoặc "Live" (PAY-01). Mặc định Test.</summary>
     public string Environment { get; set; } = "Test";
+}
+
+public class BillingPricingSection
+{
+    /// <summary>Phiên bản chính sách giá, ghi vào đơn lúc tạo (PAY-11). Đổi giá thì đổi giá trị này.</summary>
+    public string PolicyVersion { get; set; } = string.Empty;
+
+    /// <summary>Giá một suất người nhận thêm cho một năm, đơn vị đồng (ADDON-01).</summary>
+    public long SlotPricePerYear { get; set; }
+
+    public BillingTierPricesSection Xs { get; set; } = new BillingTierPricesSection();
+
+    public BillingTierPricesSection XsMax { get; set; } = new BillingTierPricesSection();
+}
+
+/// <summary>Giá một hạng cho cả kỳ 1, 3 và 5 năm, đơn vị đồng.</summary>
+public class BillingTierPricesSection
+{
+    public long OneYear { get; set; }
+
+    public long ThreeYears { get; set; }
+
+    public long FiveYears { get; set; }
 }

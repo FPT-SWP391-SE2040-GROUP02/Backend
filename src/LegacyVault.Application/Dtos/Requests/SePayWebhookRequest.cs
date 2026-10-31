@@ -2,7 +2,7 @@ namespace LegacyVault.Application.Dtos.Requests;
 
 /// <summary>
 /// Nội dung webhook SePay (tiền vào/ra tài khoản), đúng tên trường của SePay. Chỉ khai báo các trường backend dùng;
-/// trường khác SePay gửi (subAccount, description, accumulated...) bị bỏ qua khi bind.
+/// trường khác SePay gửi (description, accumulated...) bị bỏ qua khi bind.
 /// </summary>
 /// <remarks>Không ghi log nội dung này: có số tài khoản và nội dung chuyển khoản.</remarks>
 public sealed class SePayWebhookRequest
@@ -15,7 +15,11 @@ public sealed class SePayWebhookRequest
     /// <summary>Giờ giao dịch theo giờ Việt Nam, định dạng "yyyy-MM-dd HH:mm:ss".</summary>
     public string? TransactionDate { get; set; }
 
+    /// <summary>Số tài khoản ngân hàng gắn với SePay. Với tài khoản ảo (VA), đây là tài khoản chính, không phải số VA.</summary>
     public string? AccountNumber { get; set; }
+
+    /// <summary>Số tài khoản ảo (VA) nhận tiền, có khi chuyển khoản vào VA; null hoặc rỗng khi tiền vào tài khoản chính.</summary>
+    public string? SubAccount { get; set; }
 
     /// <summary>Mã thanh toán SePay nhận diện được từ nội dung (có thể null).</summary>
     public string? Code { get; set; }

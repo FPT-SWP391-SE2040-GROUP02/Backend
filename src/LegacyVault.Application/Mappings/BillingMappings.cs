@@ -46,7 +46,7 @@ public static class BillingMappings
             response.ServiceStartsAt = null;
         }
         response.ServiceExpiresAt = quote.BaseServiceExpiresAt;
-        response.PolicyVersion = BillingPrices.PolicyVersion;
+        response.PolicyVersion = quote.PolicyVersion;
         response.Notice = NoAutoHandoverNotice;
         response.ServerTime = serverTime;
         return response;
@@ -131,14 +131,14 @@ public static class BillingMappings
             + "&des=" + Uri.EscapeDataString(order.PaymentCode);
     }
 
-    /// <summary>Bảng giá hiện hành từ BillingPrices, không đọc DB.</summary>
-    public static BillingPlansResponse ToPlansResponse()
+    /// <summary>Bảng giá hiện hành từ cấu hình Billing:Pricing, không đọc DB.</summary>
+    public static BillingPlansResponse ToPlansResponse(IBillingPriceSettings prices)
     {
         BillingPlansResponse response = new BillingPlansResponse();
-        response.PolicyVersion = BillingPrices.PolicyVersion;
+        response.PolicyVersion = prices.PolicyVersion;
         response.Currency = BillingPrices.Currency;
         response.Notice = NoAutoHandoverNotice;
-        response.ExtraSlot.PricePerYear = BillingPrices.SlotPricePerYear;
+        response.ExtraSlot.PricePerYear = prices.SlotPricePerYear;
         response.ExtraSlot.MaxPerOrder = BillingPrices.MaxExtraSlotsPerOrder;
 
         foreach (ServiceTier tier in BillingPrices.SellableTiers)
@@ -151,7 +151,7 @@ public static class BillingMappings
             {
                 BillingPriceResponse price = new BillingPriceResponse();
                 price.Years = years;
-                price.Amount = BillingPrices.GetTierPrice(tier, years);
+                price.Amount = prices.GetTierPrice(tier, years);
                 price.ServiceDays = years * BillingPrices.DaysPerYear;
                 tierResponse.Prices.Add(price);
             }

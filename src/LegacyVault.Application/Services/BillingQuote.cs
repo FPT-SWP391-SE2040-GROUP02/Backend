@@ -37,4 +37,7 @@ public class BillingQuote
 
     /// <summary>ADDON: hạn kỳ hiện tại tại lúc báo giá; PURCHASE: null.</summary>
     public DateTimeOffset? BaseServiceExpiresAt { get; set; }
+
+    /// <summary>Phiên bản bảng giá đã dùng để tính; ghi vào đơn lúc tạo (PAY-11).</summary>
+    public string PolicyVersion { get; set; } = string.Empty;
 }
