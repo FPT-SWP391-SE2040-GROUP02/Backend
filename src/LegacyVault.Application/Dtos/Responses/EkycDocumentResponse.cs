@@ -2,7 +2,7 @@ namespace LegacyVault.Application.Dtos.Responses;
 
 /// <summary>
 /// Thông tin đọc được từ mặt trước giấy tờ (POST /api/v1/ekyc/document).
-/// Họ tên, ngày sinh, địa chỉ chỉ trả lần này, server không lưu.
+/// Họ tên, ngày sinh, thời hạn, địa chỉ chỉ trả lần này, server không lưu.
 /// </summary>
 public class EkycDocumentResponse
 {
@@ -14,6 +14,9 @@ public class EkycDocumentResponse
     public string FullName { get; set; } = string.Empty;
 
     public string DateOfBirth { get; set; } = string.Empty;
+
+    /// <summary>Thời hạn CCCD / Ngày hết hạn ("Có giá trị đến / Date of expiry"); rỗng khi không đọc được hoặc không có hạn.</summary>
+    public string DateOfExpiry { get; set; } = string.Empty;
 
     public string ResidenceAddress { get; set; } = string.Empty;
 

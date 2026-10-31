@@ -9,6 +9,9 @@ public sealed class EkycDocumentReading
 
     public string DateOfBirth { get; set; } = string.Empty;
 
+    /// <summary>Thời hạn CCCD / Ngày hết hạn ("Có giá trị đến / Date of expiry"); rỗng khi không đọc được hoặc không có hạn.</summary>
+    public string DateOfExpiry { get; set; } = string.Empty;
+
     public string ResidenceAddress { get; set; } = string.Empty;
 
     /// <summary>Mã tham chiếu khuôn mặt trên giấy tờ; null khi dịch vụ chưa tìm được đúng một khuôn mặt.</summary>

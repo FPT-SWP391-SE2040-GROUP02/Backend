@@ -57,6 +57,7 @@ public sealed class EkycHttpClient : IEkycClient
             reading.IdNumber = ReadString(fields, "id_number");
             reading.FullName = ReadString(fields, "full_name");
             reading.DateOfBirth = ReadString(fields, "date_of_birth");
+            reading.DateOfExpiry = ReadString(fields, "date_of_expiry");
             reading.ResidenceAddress = ReadString(fields, "residence_address");
             if (root.TryGetProperty("document_token", out JsonElement token)
                 && token.ValueKind == JsonValueKind.String)

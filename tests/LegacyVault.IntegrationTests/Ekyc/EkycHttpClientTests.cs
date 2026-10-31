@@ -56,6 +56,19 @@ public sealed class EkycHttpClientTests
     }
 
     [Fact]
+    public async Task ReadFront_ReadsDateOfExpiry_WhenPresent()
+    {
+        string body = "{\"fields\":{\"id_number\":\"079200012345\",\"full_name\":\"NGUYEN VAN AN\","
+            + "\"date_of_birth\":\"01/02/2000\",\"date_of_expiry\":\"2035-10-15\",\"residence_address\":\"\"},"
+            + "\"document_token\":\"abc\"}";
+        EkycHttpClient client = CreateClient(HttpStatusCode.OK, body);
+
+        EkycDocumentReading reading = await client.ReadFrontAsync(Image, "front.jpg", "image/jpeg", CancellationToken.None);
+
+        Assert.Equal("2035-10-15", reading.DateOfExpiry);
+    }
+
+    [Fact]
     public async Task ReadFront_NullToken_MeansNoFace()
     {
         EkycHttpClient client = CreateClient(HttpStatusCode.OK, "{\"fields\":{},\"warnings\":[],\"document_token\":null}");
