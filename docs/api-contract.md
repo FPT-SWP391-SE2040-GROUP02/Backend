@@ -1093,7 +1093,7 @@ dotnet user-secrets set "Billing:SePay:WebhookApiKey" "<key>" --project src/Lega
 ```
 
   Test và Live là hai cấu hình và hai key riêng (PAY-01): đặt `Billing:SePay:Environment`, mỗi giao dịch được lưu kèm môi trường.
-- **Body** (JSON của SePay; trường khác bị bỏ qua): `id` (ID giao dịch phía SePay, > 0), `gateway`, `transactionDate` (giờ Việt Nam `yyyy-MM-dd HH:mm:ss`, đổi sang UTC; sai định dạng thì không có giờ tiền vào), `accountNumber`, `code`, `content`, `transferType` (`in` hoặc `out`), `transferAmount` (đồng, ≥ 0), `referenceCode`. Thiếu `id`, `transferAmount`, `accountNumber`, `transferType` hoặc giá trị sai → `400 VALIDATION_ERROR`. Kiểm key trước kiểm dữ liệu.
+- **Body** (JSON của SePay; trường khác bị bỏ qua): `id` (ID giao dịch phía SePay, > 0), `gateway`, `transactionDate` (giờ Việt Nam `yyyy-MM-dd HH:mm:ss`, đổi sang UTC; sai định dạng thì không có giờ tiền vào), `accountNumber`, `subAccount` (số tài khoản ảo/VA, tùy chọn), `code`, `content`, `transferType` (`in` hoặc `out`), `transferAmount` (đồng, ≥ 0), `referenceCode`. Thiếu `id`, `transferAmount`, `accountNumber`, `transferType` hoặc giá trị sai → `400 VALIDATION_ERROR`. Kiểm key trước kiểm dữ liệu.
 - **Phản hồi:** chỉ trả `200` với body đúng `{"success":true}` **sau khi** giao dịch đã được lưu (PAY-05). Lưu lỗi hoặc xung đột đồng thời (`409 EDIT_CONFLICT`, hoặc `500`) thì không trả success để SePay gửi lại (tối đa 7 lần trong khoảng 33 phút); giao dịch chưa đối chiếu xong được xử lý tiếp ở lần gửi lại. Webhook gửi lặp cùng `id` luôn trả success, không tạo dòng hay cấp quyền thêm (AC-29).
 - **Mã thanh toán** (nội dung chuyển khoản): lấy từ `code` của SePay nếu có (tối đa 16 ký tự), không thì tìm `LV` + 8 ký tự hợp lệ trong `content`, không phân biệt hoa thường.
 - **Đối chiếu** theo thứ tự, gặp điều nào dừng ở đó. Khớp hết → cấp quyền đúng như `dev-pay` (đơn `PAID`, giờ trả = giờ tiền vào, nhật ký `PAYMENT_PAID`). Lệch → giao dịch `RECONCILIATION_REQUIRED` kèm `reconciliationReason`, **không cấp quyền**, Admin không có thao tác ghi `PAID` (PAY-07):
@@ -1101,7 +1101,7 @@ dotnet user-secrets set "Billing:SePay:WebhookApiKey" "<key>" --project src/Lega
 | `reconciliationReason` | Khi nào |
 |---|---|
 | `NOT_INCOMING` | `transferType` không phải `in` (không mở sự cố) |
-| `WRONG_ACCOUNT` | Số tài khoản khác `Billing:Bank:AccountNumber` (PAY-03) |
+| `WRONG_ACCOUNT` | Tài khoản nhận khác `Billing:Bank:AccountNumber` (PAY-03). Tài khoản nhận là `subAccount` (VA) nếu SePay gửi, không thì `accountNumber`; với BIDV cá nhân chỉ đồng bộ qua VA, đặt số VA vào `AccountNumber` |
 | `CODE_MISSING` | Không tìm thấy mã thanh toán |
 | `ORDER_NOT_FOUND` | Có mã nhưng không đơn nào mang mã đó |
 | `AMOUNT_MISMATCH` | Số tiền khác `totalAmount` của đơn, thiếu hay thừa đều lệch, không cộng dồn (AC-28) |

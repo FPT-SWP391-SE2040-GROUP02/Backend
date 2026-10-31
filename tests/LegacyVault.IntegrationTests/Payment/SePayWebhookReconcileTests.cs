@@ -345,6 +345,45 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Pay03_Webhook_MoneyIntoConfiguredVirtualAccount_IsMatchedEvenWhenMainAccountDiffers()
+    {
+        // Chuẩn bị: SePay gửi tài khoản chính ở accountNumber và số VA đã cấu hình ở subAccount
+        (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
+        CreatedOrder order = await CreatePurchaseOrderAsync(client);
+        Dictionary<string, object?> payload = PayloadFor(order, NewTransactionId());
+        payload["accountNumber"] = "9999999999";
+        payload["subAccount"] = BankAccountNumber();
+
+        // Hành động
+        PaymentTransaction transaction = await SendAndLoadAsync(payload);
+
+        // Kiểm tra: khớp đơn, cấp quyền, và không lưu số tài khoản chính
+        Assert.Equal(PaymentTransactionStatus.Matched, transaction.Status);
+        Assert.Equal(order.OrderId, transaction.PaymentOrderId);
+        Assert.Equal(BankAccountNumber(), transaction.AccountNumber);
+        Assert.Equal(PaymentOrderStatus.Paid, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
+        Assert.Equal(EntitlementStatus.PaidActive, (await LoadEntitlementAsync(vaultId)).Status);
+    }
+
+    [SqlFact]
+    public async Task Pay03_Webhook_WrongVirtualAccount_IsWrongAccountEvenWhenMainAccountMatches()
+    {
+        // Chuẩn bị: accountNumber trùng cấu hình nhưng tiền vào một VA khác thì vẫn là sai tài khoản
+        (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
+        CreatedOrder order = await CreatePurchaseOrderAsync(client);
+        Dictionary<string, object?> payload = PayloadFor(order, NewTransactionId());
+        payload["subAccount"] = "96247OTHER1";
+
+        // Hành động
+        PaymentTransaction transaction = await SendAndLoadAsync(payload);
+
+        // Kiểm tra
+        await AssertReconciliationRequiredAsync(transaction, "WRONG_ACCOUNT", true);
+        Assert.Null(transaction.PaymentOrderId);
+        Assert.Equal(EntitlementStatus.Free, (await LoadEntitlementAsync(vaultId)).Status);
+    }
+
+    [SqlFact]
     public async Task Pay03_Webhook_WrongAccount_IsReconciliationRequiredAndGrantsNothing()
     {
         // Chuẩn bị
