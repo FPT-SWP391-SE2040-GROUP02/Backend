@@ -10,4 +10,7 @@ public interface IAppUrlProvider
 
     /// <summary>Link tới trang đặt mật khẩu mới của web, kèm token gốc.</summary>
     string GetPasswordResetUrl(string token);
+
+    /// <summary>Link tới trang phản hồi lời mời Executor của web, kèm token gốc.</summary>
+    string GetExecutorInvitationUrl(string token);
 }

@@ -7,17 +7,21 @@ using Microsoft.Extensions.Options;
 namespace LegacyVault.Infrastructure.Notifications;
 
 /// <summary>Explicitly enabled SMTP only. Missing/failed delivery is not reported as sent; token is never logged.</summary>
-public sealed class ExecutorInvitationSender(SmtpMailSender sender, IOptions<SmtpSettings> settings,
-    IConfiguration config, ILogger<ExecutorInvitationSender> logger) : IExecutorInvitationSender
+public sealed class ExecutorInvitationSender(
+    SmtpMailSender sender,
+    IOptions<SmtpSettings> settings,
+    IConfiguration config,
+    IAppUrlProvider urlProvider,
+    ILogger<ExecutorInvitationSender> logger) : IExecutorInvitationSender
 {
     public async Task<bool> SendAsync(string email, string token, DateTimeOffset expiresAt, CancellationToken ct)
     {
         bool deliveryEnabled = config.GetValue<bool?>("ExecutorInvitations:DeliveryEnabled")
             ?? (config.GetValue<bool?>("ExecutorInvitations__DeliveryEnabled") ?? settings.Value.IsConfigured);
         if (!deliveryEnabled || !settings.Value.IsConfigured) return false;
-        var baseUrl = config["App:ClientUrl"]?.TrimEnd('/') ?? "http://localhost:5173";
-        var link = baseUrl + "/executor-invitation#token=" + Uri.EscapeDataString(token);
-        var text = $"Bạn được mời làm Executor trên LegacyVault. Đọc phạm vi nhiệm vụ và tự quyết định tại {link}. Lời mời hết hạn {expiresAt:O}. Không chuyển tiếp liên kết này. Bỏ qua thư nếu bạn không chấp nhận nhiệm vụ.";
+
+        var link = urlProvider.GetExecutorInvitationUrl(token);
+        var text = $"Bạn được mời làm Executor trên LegacyVault. Đọc phạm vi nhiệm vụ và tự quyết định tại {link} . Lời mời hết hạn {expiresAt:O}. Không chuyển tiếp liên kết này. Bỏ qua thư nếu bạn không chấp nhận nhiệm vụ.";
         string lead = $"Bạn vừa được một Chủ kho trên LegacyVault tin tưởng chỉ định đảm nhiệm vai trò Người thi hành (Executor). "
             + "Trong vai trò này, bạn sẽ hỗ trợ kích hoạt và thực thi kế hoạch bàn giao di sản số khi có sự kiện diễn ra. Vui lòng nhấn vào nút bên dưới để xem phạm vi nhiệm vụ và quyết định chấp nhận hoặc từ chối.";
         string notice = $"Lời mời này có hiệu lực đến {expiresAt.ToOffset(TimeSpan.FromHours(7)):HH:mm 'ngày' dd/MM/yyyy}. Vì lý do bảo mật, không chuyển tiếp liên kết này cho người khác. Nếu bạn không muốn đảm nhiệm vai trò này, bạn có thể từ chối hoặc bỏ qua email.";
