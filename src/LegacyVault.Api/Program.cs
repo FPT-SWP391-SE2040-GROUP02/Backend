@@ -122,16 +122,14 @@ app.MapPost("/api/v1/auth/test-email", async (string to, LegacyVault.Infrastruct
             return Results.Json(new
             {
                 success = false,
-                error = "Email chưa được cấu hình. Cần Email__WebhookUrl, Email__BrevoApiKey hoặc (Email__Smtp__UserName và Email__Smtp__Password).",
+                error = "Email chưa được cấu hình. Cần Email__WebhookUrl hoặc (Email__Smtp__UserName và Email__Smtp__Password).",
                 provider = "None",
                 userNameSet = !string.IsNullOrWhiteSpace(settings.ResolveUserName()),
                 passwordSet = !string.IsNullOrWhiteSpace(settings.ResolvePassword())
             }, statusCode: 400);
         }
 
-        string provider = !string.IsNullOrWhiteSpace(settings.ResolveWebhookUrl()) ? "Webhook (Google Apps Script HTTPS)" :
-                          !string.IsNullOrWhiteSpace(settings.ResolveBrevoApiKey()) ? "Brevo HTTPS API" :
-                          $"SMTP ({settings.ResolveHost()}:{settings.Port})";
+        string provider = !string.IsNullOrWhiteSpace(settings.ResolveWebhookUrl()) ? "Webhook (Google Apps Script HTTPS)" :                          $"SMTP ({settings.ResolveHost()}:{settings.Port})";
 
         await mailSender.SendAsync(to, "Người dùng thử nghiệm", "Thử nghiệm gửi email từ LegacyVault",
             "Chào bạn, đây là email kiểm tra kết nối email từ LegacyVault.",
