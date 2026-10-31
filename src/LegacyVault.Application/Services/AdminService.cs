@@ -125,6 +125,11 @@ public sealed class AdminService : IAdminService
     {
         Guid adminId = await RequireAdminAsync(ct);
         UserRole newRole = ParseRole(request.Role, "role");
+        // Executor là người ngoài do Owner mời theo từng kho (quan hệ với kho, ROLE-02), không phải vai trò Admin cấp.
+        if (newRole == UserRole.Executor)
+        {
+            throw ValidationErrors.For("role", "Không cấp vai trò EXECUTOR. Người thực hiện do Owner mời theo từng kho.");
+        }
         string reason = RequireReason(request.Reason);
         User user = await LoadUserAsync(userId, ct);
         if (user.Id == adminId)
@@ -328,9 +333,10 @@ public sealed class AdminService : IAdminService
         }
 
         UserRole targetRole = ParseRole(request.Role, "role");
-        if (targetRole != UserRole.Verifier && targetRole != UserRole.Executor && targetRole != UserRole.Admin)
+        // Executor là người ngoài do Owner mời theo từng kho (ROLE-02), Admin không tạo tài khoản Executor.
+        if (targetRole != UserRole.Verifier && targetRole != UserRole.Admin)
         {
-            throw ValidationErrors.For("role", "Chỉ được tạo tài khoản VERIFIER, EXECUTOR hoặc ADMIN.");
+            throw ValidationErrors.For("role", "Chỉ được tạo tài khoản VERIFIER hoặc ADMIN. Người thực hiện do Owner mời theo từng kho.");
         }
 
         User? existing = await users.FindByEmailAsync(email, ct);

@@ -139,6 +139,50 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Role02_AdminCannotCreateOrGrantExecutorAccount()
+    {
+        // Chuẩn bị
+        (User _, HttpClient client) = await AddAdminAsync();
+        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        string email = "executor-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
+
+        // Hành động
+        HttpResponseMessage create = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Người Thực Hiện", email = email, password = "MatKhauThu123!", role = "EXECUTOR" });
+        HttpResponseMessage grant = await client.PutAsJsonAsync($"/api/v1/admin/users/{plain.Id}/role",
+            new { role = "EXECUTOR", reason = "Thử cấp vai trò" });
+
+        // Kiểm tra: cả hai đều 400 theo trường role, không tạo tài khoản, không đổi vai trò, không ghi nhật ký
+        JsonElement createProblem = await ApiTestHelpers.AssertProblemAsync(create, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(createProblem.GetProperty("errors").TryGetProperty("role", out JsonElement _));
+        JsonElement grantProblem = await ApiTestHelpers.AssertProblemAsync(grant, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(grantProblem.GetProperty("errors").TryGetProperty("role", out JsonElement _));
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.False(await db.Users.AnyAsync(u => u.Email == email));
+            User stored = await db.Users.AsNoTracking().SingleAsync(u => u.Id == plain.Id);
+            Assert.Equal(UserRole.User, stored.Role);
+            Assert.False(await db.Set<AuditLog>().AnyAsync(a => a.Action == AuditAction.UserRoleChanged || a.Action == AuditAction.AdminCreatedUser));
+        });
+    }
+
+    [SqlFact]
+    public async Task Role02_AdminCanStillCreateVerifierAccount()
+    {
+        // Chuẩn bị
+        (User _, HttpClient client) = await AddAdminAsync();
+        string email = "verifier-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
+
+        // Hành động
+        HttpResponseMessage create = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Người Xét Duyệt", email = email, password = "MatKhauThu123!", role = "VERIFIER" });
+
+        // Kiểm tra
+        Assert.True(create.IsSuccessStatusCode, "Tạo Verifier phải thành công, nhận " + (int)create.StatusCode);
+        Assert.Equal("VERIFIER", (await ApiTestHelpers.ReadJsonAsync(create)).GetProperty("role").GetString());
+    }
+
+    [SqlFact]
     public async Task Users_ChangeRole_Rules_AndAuditTrail()
     {
         (User admin, HttpClient client) = await AddAdminAsync();
