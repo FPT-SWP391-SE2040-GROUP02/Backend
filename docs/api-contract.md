@@ -81,7 +81,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
 | 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
 | 409 | `EDIT_CONFLICT` | `etag` đã cũ: dữ liệu bị sửa ở tab/máy khác. FE tải lại rồi cho sửa tiếp | |
-| 409 | `CHECKIN_NOT_ALLOWED` | Điểm danh khi kế hoạch chưa kích hoạt (`DRAFT`) hoặc đã sang chứng tử/bàn giao/đóng | `planStatus` |
+| 409 | `CHECKIN_NOT_ALLOWED` | Điểm danh khi kế hoạch chưa kích hoạt (`DRAFT`) hoặc đã sang chứng tử/bàn giao/đóng; Executor điểm danh thay khi chủ kho chưa quá hạn hoặc kho đã có hồ sơ chứng tử đang mở (mục 6.21) | `planStatus`; `reason` (`PLAN_NOT_OVERDUE`, `DEATH_CASE_OPEN`) khi Executor điểm danh thay |
 | 400 | `EKYC_IMAGE_REJECTED` | Ảnh không phải JPEG/PNG, rỗng, hoặc dịch vụ eKYC từ chối (không thấy mặt, nhầm mặt thẻ...); `title` là câu hướng dẫn cho người dùng | |
 | 409 | `EKYC_DOCUMENT_EXPIRED` | Gửi selfie khi chưa đọc mặt trước, đã so khớp rồi, hoặc quá 30 phút | |
 | 503 | `EKYC_SERVICE_UNAVAILABLE` | Không gọi được dịch vụ eKYC (chưa cấu hình, tắt, quá thời gian chờ) | |
@@ -1183,6 +1183,30 @@ Không cần PIN: tạo tài sản, liệt kê, xem thông tin, sửa tên/mô t
 **Nhật ký** (mục 6.13, `GET /vaults/{vaultId}/audit-logs`): `VAULT_PIN_SET`, `VAULT_PIN_CHANGED`, `VAULT_PIN_RESET`, `VAULT_PIN_WRONG` (kết quả `FAILED`), `VAULT_PIN_LOCKED` (kết quả `DENIED`). Không ghi PIN hay hash.
 
 **Giới hạn.** Người biết mật khẩu tài khoản đặt lại được PIN ngay, và PIN không bảo vệ nội dung mã hóa của tài sản, chỉ chặn người dùng tài khoản Owner.
+
+### 6.21. Executor điểm danh thay chủ kho
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| POST | `/v1/executor/vaults/{vaultId}/check-in` | Executor đang hiệu lực của kho (không phải chủ kho) | Không có body | 200 `ExecutorCheckInResponse` | 401, 404 `VAULT_NOT_FOUND`, 409 `CHECKIN_NOT_ALLOWED` / `EDIT_CONFLICT`, 429 |
+
+```json
+// ExecutorCheckInResponse
+{
+  "vaultId": "0199e7a4-...",
+  "planStatus": "ACTIVE",
+  "checkedInAt": "2026-10-31T01:00:00+00:00",
+  "nextCheckInDueAt": "2026-11-30T01:00:00+00:00",
+  "graceEndsAt": "2026-12-07T01:00:00+00:00"
+}
+```
+
+- Dùng khi chủ kho đã quá hạn điểm danh và Executor cần giữ kho chờ đến khi có giấy chứng tử. Chỉ cho phép khi kế hoạch `CHECKIN_OVERDUE` hoặc `AWAITING_CHECK` **và** kho chưa có hồ sơ chứng tử đang mở (kể cả bản nháp).
+- Một lần lưu: đóng kỳ đang quá hạn, mở kỳ mới theo chu kỳ hiện hành (áp dụng cả lựa chọn chờ của chủ kho), đưa kế hoạch về `ACTIVE`. Sự cố quá hạn của kỳ cũ được job sự cố tự đóng.
+- **Không tính là chủ kho đã điểm danh:** kỳ cũ đóng mà không ghi giờ điểm danh, `lastCheckInAt` của chủ kho giữ nguyên. Vì vậy lượt điểm danh thay không làm bật cờ "có điểm danh sau ngày mất" khi Executor gửi hồ sơ chứng tử.
+- Nhật ký kho (mục 6.13) ghi `CHECKED_IN` với `actorRole = EXECUTOR`.
+- `409 CHECKIN_NOT_ALLOWED` kèm `planStatus` và `reason`: `PLAN_NOT_OVERDUE` (chủ kho không quá hạn, ví dụ vừa điểm danh) hoặc `DEATH_CASE_OPEN`. Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`. Dùng chung rate limit với điểm danh của chủ kho.
+- FE: `GET /v1/executor/vaults` chỉ hiện nút "Điểm danh thay chủ kho" khi `checkInOverdue = true` và `openDeathCaseId = null`; thành công thì tải lại danh sách kho.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 
