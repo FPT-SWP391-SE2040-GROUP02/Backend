@@ -6,27 +6,27 @@ using LegacyVault.Domain.Entities;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// DEATH-14, D11: Verifier nhập lại mật khẩu khi Duyệt/Từ chối. Sai 5 lần liên tiếp thì khóa chức năng ký
+/// DEATH-03: Verifier nhập lại mật khẩu khi Duyệt/Từ chối. Sai 5 lần liên tiếp thì khóa chức năng duyệt/từ chối
 /// 15 phút → 1 giờ → 24 giờ; dùng lại hằng của VaultPinRules (cách viết theo VaultPinService.CheckPinAsync).
 /// </summary>
 /// <remarks>
-/// - Chỉ khóa chức năng ký, không khóa đăng nhập hay xem hồ sơ.
+/// - Chỉ khóa chức năng duyệt/từ chối, không khóa đăng nhập hay xem hồ sơ.
 /// - SEC-07: không log, không ghi nhật ký mật khẩu.
 /// - Ngoại lệ có chủ đích của "một lần lưu mỗi use case": nhập sai thì lưu bộ đếm ngay trước khi ném lỗi,
 ///   lúc này chưa có thay đổi nào khác đang chờ lưu.
 /// </remarks>
 public sealed class SigningPasswordChecker : ISigningPasswordChecker
 {
-    private readonly IVerifierSigningKeyRepository signingKeyRepository;
+    private readonly IVerifierSigningGuardRepository signingGuardRepository;
     private readonly IPasswordHasher passwordHasher;
     private readonly IUnitOfWork unitOfWork;
 
     public SigningPasswordChecker(
-        IVerifierSigningKeyRepository signingKeyRepository,
+        IVerifierSigningGuardRepository signingGuardRepository,
         IPasswordHasher passwordHasher,
         IUnitOfWork unitOfWork)
     {
-        this.signingKeyRepository = signingKeyRepository;
+        this.signingGuardRepository = signingGuardRepository;
         this.passwordHasher = passwordHasher;
         this.unitOfWork = unitOfWork;
     }
@@ -34,17 +34,17 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
     public async Task CheckAsync(User user, string password, DateTimeOffset now, CancellationToken ct)
     {
         // 1) Đang khóa thì chặn, kể cả nhập đúng.
-        VerifierSigningGuard? guard = await signingKeyRepository.FindGuardAsync(user.Id, ct);
+        VerifierSigningGuard? guard = await signingGuardRepository.FindGuardAsync(user.Id, ct);
         if (guard != null && guard.LockedUntil != null && guard.LockedUntil.Value > now)
         {
             throw Locked(guard.LockedUntil.Value);
         }
 
-        // 2) D5: tài khoản chỉ đăng nhập Google thì chưa ký được; không tính là một lần đoán.
+        // 2) Tài khoản chỉ đăng nhập Google thì chưa xác nhận được; không tính là một lần đoán.
         if (string.IsNullOrEmpty(user.PasswordHash))
         {
             throw new AppException(AppErrorType.Forbidden, ErrorCode.SigningPasswordInvalid,
-                "Tài khoản chưa có mật khẩu nên chưa ký số được. Vui lòng đặt mật khẩu trước.");
+                "Tài khoản chưa có mật khẩu nên chưa xác nhận được. Vui lòng đặt mật khẩu trước.");
         }
 
         // 3) Đúng: bộ đếm và bậc khóa về 0, lưu cùng lần lưu của quyết định.
@@ -70,7 +70,7 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
         {
             guard = new VerifierSigningGuard();
             guard.UserId = user.Id;
-            signingKeyRepository.AddGuard(guard);
+            signingGuardRepository.AddGuard(guard);
         }
         guard.FailedCount = guard.FailedCount + 1;
         guard.UpdatedAt = now;
@@ -93,7 +93,7 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
         {
             // Request khác cùng lúc vừa sửa hoặc vừa tạo dòng đầu tiên: báo thử lại, không trả 500.
             throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
-                "Đang có thao tác ký khác cùng lúc. Vui lòng thử lại.");
+                "Đang có thao tác xác nhận khác cùng lúc. Vui lòng thử lại.");
         }
 
         if (locks)
@@ -103,7 +103,7 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["attemptsRemaining"] = VaultPinRules.MaxFailedAttempts - guard.FailedCount;
         throw new AppException(AppErrorType.Forbidden, ErrorCode.SigningPasswordInvalid,
-            "Mật khẩu xác nhận ký chưa đúng.", extensions);
+            "Mật khẩu xác nhận chưa đúng.", extensions);
     }
 
     private bool IsGuardRace(Exception exception)
@@ -113,7 +113,7 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
         {
             return true;
         }
-        return signingKeyRepository.IsUniqueViolation(exception);
+        return signingGuardRepository.IsUniqueViolation(exception);
     }
 
     private static AppException Locked(DateTimeOffset lockedUntil)
@@ -121,6 +121,6 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["lockedUntil"] = lockedUntil;
         return new AppException(AppErrorType.Locked, ErrorCode.SigningLocked,
-            "Chức năng ký số đang tạm khóa vì nhập sai mật khẩu nhiều lần. Vui lòng thử lại sau.", extensions);
+            "Chức năng duyệt/từ chối đang tạm khóa vì nhập sai mật khẩu nhiều lần. Vui lòng thử lại sau.", extensions);
     }
 }
