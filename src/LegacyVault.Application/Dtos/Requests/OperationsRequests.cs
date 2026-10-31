@@ -45,45 +45,6 @@ public class ResolveIncidentRequest
     public string Etag { get; set; } = string.Empty;
 }
 
-public class PlaceHoldRequest
-{
-    [Required]
-    public Guid? VaultId { get; set; }
-
-    /// <summary>VAULT hoặc CONTAINER; bỏ trống = VAULT.</summary>
-    [MaxLength(32)]
-    public string? Scope { get; set; }
-
-    /// <summary>Bắt buộc khi Scope là CONTAINER.</summary>
-    public Guid? TargetId { get; set; }
-
-    [Required(ErrorMessage = "Vui lòng ghi lý do.")]
-    [MaxLength(500)]
-    public string Reason { get; set; } = string.Empty;
-
-    /// <summary>Ngày xem lại đầu tiên, tối đa 7 ngày kể từ bây giờ; bỏ trống = 7 ngày.</summary>
-    public DateTimeOffset? ReviewAt { get; set; }
-}
-
-public class ReleaseHoldRequest
-{
-    [Required(ErrorMessage = "Vui lòng ghi lý do gỡ.")]
-    [MaxLength(500)]
-    public string Reason { get; set; } = string.Empty;
-
-    [Required]
-    public string Etag { get; set; } = string.Empty;
-}
-
-public class ReviewHoldRequest
-{
-    [Required]
-    public DateTimeOffset? NextReviewAt { get; set; }
-
-    [Required]
-    public string Etag { get; set; } = string.Empty;
-}
-
 public class ChangeUserRoleRequest
 {
     /// <summary>USER | VERIFIER | ADMIN.</summary>
