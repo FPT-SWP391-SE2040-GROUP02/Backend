@@ -66,22 +66,12 @@ public sealed class SmtpSettings
         return (WebhookUrl ?? string.Empty).Trim().Trim('"').Trim('\'');
     }
 
-    /// <summary>
-    /// API Key của Brevo (Sendinblue) để gửi email qua HTTPS port 443 không bị firewall chặn.
-    /// </summary>
-    public string BrevoApiKey { get; set; } = string.Empty;
-
-    public string ResolveBrevoApiKey()
-    {
-        return (BrevoApiKey ?? string.Empty).Trim().Trim('"').Trim('\'');
-    }
-
-    /// <summary>Đủ WebhookUrl, BrevoApiKey, hoặc Host/UserName/Password thì mới gửi email thật.</summary>
+    /// <summary>Đủ WebhookUrl, hoặc Host/UserName/Password thì mới gửi email thật.</summary>
     public bool IsConfigured
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(ResolveWebhookUrl()) || !string.IsNullOrWhiteSpace(ResolveBrevoApiKey()))
+            if (!string.IsNullOrWhiteSpace(ResolveWebhookUrl()))
             {
                 return true;
             }
