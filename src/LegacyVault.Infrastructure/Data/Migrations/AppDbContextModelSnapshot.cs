@@ -1501,6 +1501,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<bool>("IdentityBypassed")
                         .HasColumnType("bit");
 
+                    b.Property<DateTimeOffset?>("IdentityConfirmedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("IdentityConfirmedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("InvitationAttempts")
                         .HasColumnType("int");
 

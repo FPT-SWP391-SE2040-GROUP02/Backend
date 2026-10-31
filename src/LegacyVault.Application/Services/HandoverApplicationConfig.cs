@@ -14,6 +14,7 @@ public static class HandoverApplicationConfig
         services.AddScoped<IHandoverInvitationRetryJob, HandoverInvitationRetryJob>();
         services.AddScoped<IHandoverIdentityService, HandoverIdentityService>();
         services.AddScoped<IHandoverInvitationService, HandoverInvitationService>();
+        services.AddScoped<IExecutorIdentityConfirmationService, ExecutorIdentityConfirmationService>();
         return services;
     }
 }
