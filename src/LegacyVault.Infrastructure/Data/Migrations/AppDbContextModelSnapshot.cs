@@ -554,13 +554,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<byte[]>("Signature")
-                        .HasMaxLength(512)
-                        .HasColumnType("varbinary(512)");
-
-                    b.Property<Guid?>("SigningKeyId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid>("VerifierUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -570,8 +563,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssignmentId");
-
-                    b.HasIndex("SigningKeyId");
 
                     b.HasIndex("VerifierUserId");
 
@@ -2570,57 +2561,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("VerifierSigningGuards", (string)null);
                 });
 
-            modelBuilder.Entity("LegacyVault.Domain.Entities.VerifierSigningKey", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Algorithm")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("EncryptionKeyId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
-
-                    b.Property<byte[]>("PrivateKeyEncrypted")
-                        .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("varbinary(4000)");
-
-                    b.Property<byte[]>("PublicKey")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("varbinary(512)");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("WrappedDataKey")
-                        .IsRequired()
-                        .HasMaxLength(60)
-                        .HasColumnType("binary(60)")
-                        .IsFixedLength();
-
-                    b.HasKey("Id");
-
-                    b.HasIndex(new[] { "UserId" }, "UX_VerifierSigningKeys_ActivePerUser")
-                        .IsUnique()
-                        .HasFilter("[RevokedAt] IS NULL");
-
-                    b.ToTable("VerifierSigningKeys", (string)null);
-                });
-
             modelBuilder.Entity("LegacyVault.Domain.Entities.Asset", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.Vault", "Vault")
@@ -2773,11 +2713,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasForeignKey("CaseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("LegacyVault.Domain.Entities.VerifierSigningKey", null)
-                        .WithMany()
-                        .HasForeignKey("SigningKeyId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("LegacyVault.Domain.Entities.User", null)
                         .WithMany()
@@ -3123,15 +3058,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasOne("LegacyVault.Domain.Entities.User", null)
                         .WithOne()
                         .HasForeignKey("LegacyVault.Domain.Entities.VerifierSigningGuard", "UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.VerifierSigningKey", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

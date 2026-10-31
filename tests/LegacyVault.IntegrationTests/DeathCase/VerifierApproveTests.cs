@@ -468,7 +468,7 @@ public sealed class VerifierApproveTests : IAsyncLifetime
         // Chuẩn bị: hồ sơ được giao lại cho chính Owner của kho (giả lập nhánh C), Owner mang vai trò Verifier
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateReadyToApproveCaseAsync(factory);
         Guid ownerId = submitted.Vault.Owner.Id;
-        // DEATH-14: Owner tạo qua ApiTestHelpers chưa có mật khẩu; đặt mật khẩu thử để qua bước nhập lại mật khẩu ký.
+        // DEATH-03: Owner tạo qua ApiTestHelpers chưa có mật khẩu; đặt mật khẩu thử để qua bước nhập lại mật khẩu xác nhận.
         string passwordHash = factory.Services.GetRequiredService<IPasswordHasher>().Hash(DeathCaseTestData.TestPassword);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
