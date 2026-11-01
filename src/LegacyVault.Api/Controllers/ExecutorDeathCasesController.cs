@@ -21,10 +21,12 @@ public sealed class ExecutorDeathCasesController : ControllerBase
     private const long MaxRequestBytes = 21L * 1024 * 1024;
 
     private readonly IDeathCaseService deathCaseService;
+    private readonly IExecutorCheckInService executorCheckInService;
 
-    public ExecutorDeathCasesController(IDeathCaseService deathCaseService)
+    public ExecutorDeathCasesController(IDeathCaseService deathCaseService, IExecutorCheckInService executorCheckInService)
     {
         this.deathCaseService = deathCaseService;
+        this.executorCheckInService = executorCheckInService;
     }
 
     /// <summary>DMS-05: các kho mà tôi là Executor đang hiệu lực, kèm cờ quá hạn điểm danh.</summary>
@@ -34,6 +36,16 @@ public sealed class ExecutorDeathCasesController : ControllerBase
     public Task<List<ExecutorVaultResponse>> GetMyVaults(CancellationToken ct)
     {
         return deathCaseService.GetMyVaultsAsync(ct);
+    }
+
+    /// <summary>DMS-05: điểm danh thay Owner khi Owner quá hạn và kho chưa có hồ sơ chứng tử đang mở.</summary>
+    [HttpPost("vaults/{vaultId:guid}/check-in")]
+    [ProducesResponseType<ExecutorCheckInResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ExecutorCheckInResponse> CheckInForOwner(Guid vaultId, CancellationToken ct)
+    {
+        return executorCheckInService.CheckInForOwnerAsync(vaultId, ct);
     }
 
     /// <summary>Mở hồ sơ chứng tử cho kho: 201 khi vừa tạo, 200 khi kho đã có hồ sơ đang mở.</summary>
