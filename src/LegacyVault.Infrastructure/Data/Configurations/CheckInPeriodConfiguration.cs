@@ -16,6 +16,9 @@ public sealed class CheckInPeriodConfiguration : IEntityTypeConfiguration<CheckI
         builder.Property(p => p.RowVersion)
             .IsRowVersion();
 
+        builder.Property(p => p.StartedByExecutor)
+            .HasDefaultValue(false);
+
         builder.HasIndex(p => new { p.PlanId, p.Sequence })
             .IsUnique();
 

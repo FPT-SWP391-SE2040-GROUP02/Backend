@@ -27,6 +27,21 @@ public static class CheckInRules
         return lastDate >= today;
     }
 
+    /// <summary>
+    /// Kỳ đang mở do Executor điểm danh thay và bắt đầu trong ngày Việt Nam hôm nay. Chủ kho coi như đã được điểm danh
+    /// hôm nay: không bấm lại được và màn hình báo "Executor đã điểm danh hộ".
+    /// </summary>
+    public static bool StartedByExecutorToday(CheckInPeriod? openPeriod, DateTimeOffset now)
+    {
+        if (openPeriod == null || !openPeriod.StartedByExecutor)
+        {
+            return false;
+        }
+        DateTime startedDate = openPeriod.StartedAt.ToOffset(VietnamOffset).Date;
+        DateTime today = now.ToOffset(VietnamOffset).Date;
+        return startedDate >= today;
+    }
+
     private static readonly int[] AllowedCycleDays = { 30, 60, 90 };
     private static readonly int[] AllowedGraceDays = { 7, 14, 30 };
 

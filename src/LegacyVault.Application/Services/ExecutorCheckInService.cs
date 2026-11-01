@@ -91,6 +91,7 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         next.PlanId = plan.Id;
         next.Sequence = lastSequence + 1;
         next.StartedAt = now;
+        next.StartedByExecutor = true;
         next.DueAt = CheckInTimeline.ComputeDueAt(now, schedule.CycleDays);
         next.GraceEndsAt = CheckInTimeline.ComputeGraceEndsAt(next.DueAt, schedule.GraceDays);
         checkInRepository.AddPeriod(next);

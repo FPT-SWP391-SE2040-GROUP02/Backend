@@ -82,6 +82,9 @@ public sealed class ExecutorCheckInFlowTests : IAsyncLifetime
             Assert.Null(periods[0].CheckedInAt);
             Assert.Null(periods[1].ClosedAt);
             Assert.Equal(2, periods[1].Sequence);
+            // Kỳ mới đánh dấu do Executor mở để khóa nút điểm danh của chủ kho trong ngày.
+            Assert.False(periods[0].StartedByExecutor);
+            Assert.True(periods[1].StartedByExecutor);
 
             CheckInSchedule? schedule = await db.CheckInSchedules.SingleOrDefaultAsync(s => s.PlanId == vault.PlanId);
             Assert.NotNull(schedule);

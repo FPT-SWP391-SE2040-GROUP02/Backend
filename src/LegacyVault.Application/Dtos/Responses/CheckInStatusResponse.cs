@@ -14,6 +14,13 @@ public class CheckInStatusResponse
 
     public DateTimeOffset? LastCheckInAt { get; set; }
 
+    /// <summary>
+    /// true khi Executor đã điểm danh thay chủ kho trong ngày Việt Nam hôm nay (kỳ đang mở do Executor mở).
+    /// FE khóa nút điểm danh của chủ kho và hiện "Executor đã điểm danh hộ"; không kèm giờ vì nhật ký kho đã ghi.
+    /// LastCheckInAt không đổi vì đó chỉ là lần chủ kho tự điểm danh.
+    /// </summary>
+    public bool CheckedInByExecutorToday { get; set; }
+
     /// <summary>Hạn điểm danh của kỳ đang mở; null khi chưa bắt đầu.</summary>
     public DateTimeOffset? NextCheckInDueAt { get; set; }
 

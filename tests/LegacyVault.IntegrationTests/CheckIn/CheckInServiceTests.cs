@@ -257,6 +257,63 @@ public sealed class CheckInServiceTests
         Assert.Equal(2, unitOfWork.SaveCount);
     }
 
+    /// <summary>Kho đang chạy có kỳ mở do Executor điểm danh hộ lúc startedAt (chủ kho chưa tự điểm danh lần nào).</summary>
+    private void SeedExecutorStartedPeriod(DateTimeOffset startedAt)
+    {
+        Vault vault = SeedVault(PlanStatus.Active, withOpenPeriod: false);
+        CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, 2, startedAt, 30, 7);
+        period.StartedByExecutor = true;
+        repository.Periods.Add(period);
+    }
+
+    [Fact]
+    public async Task Get_ExecutorCheckedInToday_ReportsFlagWithoutChangingLastCheckIn()
+    {
+        SeedExecutorStartedPeriod(Now.AddHours(-1));
+
+        CheckInStatusResponse response = await service.GetMyCheckInAsync(new PaginationRequest(), CancellationToken.None);
+
+        Assert.True(response.CheckedInByExecutorToday);
+        Assert.Null(response.LastCheckInAt);
+    }
+
+    [Fact]
+    public async Task Get_OwnerCheckedInPeriod_DoesNotReportExecutorFlag()
+    {
+        SeedVault(PlanStatus.Active, withOpenPeriod: true);
+
+        CheckInStatusResponse response = await service.GetMyCheckInAsync(new PaginationRequest(), CancellationToken.None);
+
+        Assert.False(response.CheckedInByExecutorToday);
+    }
+
+    [Fact]
+    public async Task CheckIn_ExecutorAlreadyCheckedInToday_ReturnsStateWithoutNewPeriod()
+    {
+        SeedExecutorStartedPeriod(Now.AddHours(-1));
+
+        CheckInStatusResponse response = await service.CheckInAsync(CancellationToken.None);
+
+        Assert.True(response.CheckedInByExecutorToday);
+        Assert.Single(repository.Periods);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task CheckIn_AfterVietnamMidnightOfExecutorCheckIn_OwnerCanCheckInAgain()
+    {
+        // 16:59 UTC = 23:59 giờ Việt Nam; một phút sau đã sang ngày mới theo giờ Việt Nam.
+        SeedExecutorStartedPeriod(new DateTimeOffset(2026, 10, 14, 16, 59, 0, TimeSpan.Zero));
+        clock.Now = new DateTimeOffset(2026, 10, 14, 17, 0, 0, TimeSpan.Zero);
+
+        CheckInStatusResponse response = await service.CheckInAsync(CancellationToken.None);
+
+        Assert.False(response.CheckedInByExecutorToday);
+        Assert.Equal(2, repository.Periods.Count);
+        Assert.Equal(1, unitOfWork.SaveCount);
+        Assert.Equal(clock.Now, response.LastCheckInAt);
+    }
+
     [Fact]
     public async Task CheckIn_RunningPlanWithoutOpenPeriod_OpensFirstPeriod()
     {
