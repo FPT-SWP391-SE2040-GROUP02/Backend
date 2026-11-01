@@ -13,6 +13,11 @@ public sealed class ExecutorVaultRow
 
     public PlanStatus PlanStatus { get; set; }
 
+    /// <summary>Hướng dẫn Owner để lại cho Executor (Vault.ExecutorNote); null khi chưa viết.</summary>
+    public string? ExecutorNote { get; set; }
+
+    public DateTimeOffset? ExecutorNoteUpdatedAt { get; set; }
+
     /// <summary>Hồ sơ đang mở của kho (kể cả Draft); null khi chưa có.</summary>
     public Guid? OpenDeathCaseId { get; set; }
 
