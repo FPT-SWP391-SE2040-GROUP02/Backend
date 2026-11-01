@@ -6,7 +6,8 @@ namespace LegacyVault.Domain.Entities;
 /// <remarks>
 /// - Tạo một lần khi lượt OWNER_ENROLLMENT đầu tiên của tài khoản đạt; các lượt OWNER_ENROLLMENT sau phải ra đúng
 ///   số CCCD, họ tên, ngày sinh này (EKYC-24) nên dòng không bị ghi đè.
-/// - CCCD đủ 12 số, họ tên, ngày sinh nằm trong IdentityEncrypted (JSON, mã hóa envelope). Chỉ 4 số cuối để dạng rõ.
+/// - CCCD đủ 12 số, họ tên, ngày sinh, nơi cư trú nằm trong IdentityEncrypted (JSON, mã hóa envelope). Chỉ 4 số cuối để dạng rõ.
+///   Nơi cư trú là bản người dùng đã xác nhận (rỗng nếu chưa xác nhận hoặc danh tính gắn trước khi có trường này); chưa có API nào trả ra.
 /// - Hồ sơ chứng tử phải đối chiếu với danh tính này (DEATH-13).
 /// - Tách riêng khỏi mẫu khuôn mặt (EKYC-29): danh tính được giữ cùng kho, không xóa.
 /// - Mỗi tài khoản một dòng (unique theo UserId).
@@ -32,7 +33,7 @@ public class OwnerIdentity
     /// <summary>DEK của danh tính, đã bọc bằng KEK (60 byte). Không trả cho FE, không log.</summary>
     public byte[] WrappedDataKey { get; set; } = Array.Empty<byte>();
 
-    /// <summary>Đã mã hóa: JSON {citizenId, fullName, dateOfBirth} (nonce 12 + dữ liệu + tag 16).</summary>
+    /// <summary>Đã mã hóa: JSON {citizenId, fullName, dateOfBirth, residenceAddress} (nonce 12 + dữ liệu + tag 16).</summary>
     public byte[] IdentityEncrypted { get; set; } = Array.Empty<byte>();
 
     public DateTimeOffset CreatedAt { get; set; }

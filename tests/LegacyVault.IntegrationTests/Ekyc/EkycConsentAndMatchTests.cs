@@ -29,6 +29,7 @@ public sealed class EkycConsentAndMatchTests
     private readonly FakeEkycBeneficiaryRepository beneficiaryRepository = new FakeEkycBeneficiaryRepository();
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly FakeEkycClient client = new FakeEkycClient();
+    private readonly IOwnerIdentityProtector identityProtector = FaceTemplateTestSupport.CreateIdentityProtector();
     private readonly FixedTimeProvider clock = new FixedTimeProvider(Now);
     private readonly EkycService service;
     private readonly Guid userId = Guid.NewGuid();
@@ -38,7 +39,7 @@ public sealed class EkycConsentAndMatchTests
         currentUser.UserId = userId;
         service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
             beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
-            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, new FakeUnitOfWork(), clock, new InMemoryAssetContentStore(), new EkycOptions());
+            new FakeOwnerIdentityRepository(), identityProtector, client, new FakeUnitOfWork(), clock, new InMemoryAssetContentStore(), new EkycOptions());
     }
 
     private static MemoryStream Image()
@@ -366,6 +367,23 @@ public sealed class EkycConsentAndMatchTests
         Assert.Equal("PENDING", result.Status);
         Assert.Equal("NOT_CHECKED", result.IdentityMatch);
         Assert.False(result.BackSideChecked);
+    }
+
+    [Fact]
+    public async Task Confirm_OwnerEnrollment_StoresConfirmedAddressEncryptedOnPendingIdentity()
+    {
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, default);
+        EkycVerification stored = Assert.Single(repository.Verifications);
+        Assert.Equal(string.Empty, identityProtector.UnprotectPending(stored)!.ResidenceAddress);
+
+        await service.ConfirmDocumentAsync(Confirmation(front.VerificationId!.Value), default);
+
+        OwnerIdentityData pending = identityProtector.UnprotectPending(stored)!;
+        Assert.Equal("Địa chỉ thử nghiệm", pending.ResidenceAddress);
+        // Các trường còn lại vẫn lấy từ OCR, bản khai không ghi đè.
+        Assert.Equal("079200012345", pending.CitizenId);
+        Assert.False(stored.EnrollmentIdentityEncrypted!.AsSpan().IndexOf(System.Text.Encoding.UTF8.GetBytes("thử nghiệm")) >= 0);
     }
 
     [Fact]

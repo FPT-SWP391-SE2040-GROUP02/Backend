@@ -18,7 +18,29 @@ public sealed class OwnerIdentityProtectorTests
         data.CitizenId = "079200012345";
         data.FullName = "NGUYỄN VĂN AN";
         data.DateOfBirth = new DateOnly(2000, 2, 1);
+        data.ResidenceAddress = "12 Đường Thử, Quận 1, TP. Hồ Chí Minh";
         return data;
+    }
+
+    [Fact]
+    public void Identity_ResidenceAddress_RoundTripsAndIsNotInCiphertext()
+    {
+        OwnerIdentity identity = new OwnerIdentity();
+        protector.Protect(identity, Data());
+
+        Assert.Equal("12 Đường Thử, Quận 1, TP. Hồ Chí Minh", protector.Unprotect(identity).ResidenceAddress);
+        Assert.False(identity.IdentityEncrypted.AsSpan().IndexOf(Encoding.UTF8.GetBytes("Đường Thử")) >= 0);
+    }
+
+    [Fact]
+    public void Identity_WithoutAddress_ReadsAsEmpty()
+    {
+        OwnerIdentityData data = Data();
+        data.ResidenceAddress = string.Empty;
+        OwnerIdentity identity = new OwnerIdentity();
+        protector.Protect(identity, data);
+
+        Assert.Equal(string.Empty, protector.Unprotect(identity).ResidenceAddress);
     }
 
     [Fact]
