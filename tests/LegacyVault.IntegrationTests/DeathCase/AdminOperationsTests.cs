@@ -79,6 +79,41 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         return (admin, ClientFor(admin));
     }
 
+    /// <summary>
+    /// Tạo một hold đang hiệu lực trực tiếp trong DB. Không còn API Admin đặt hold bằng tay; hold thật do hệ thống đặt
+    /// (Owner báo còn sống). Dùng để kiểm các bước chặn khi có hold mà không phải đi hết luồng báo còn sống.
+    /// </summary>
+    private async Task<Guid> SeedActiveHoldAsync(Guid vaultId)
+    {
+        Hold hold = new Hold();
+        hold.VaultId = vaultId;
+        hold.Scope = HoldScope.Vault;
+        hold.Type = HoldType.Dispute;
+        hold.Status = HoldStatus.Active;
+        hold.Reason = "Nghi vấn giấy tờ";
+        hold.ReviewAt = DateTimeOffset.UtcNow.AddDays(7);
+        hold.CreatedAt = DateTimeOffset.UtcNow;
+        hold.UpdatedAt = DateTimeOffset.UtcNow;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            db.Set<Hold>().Add(hold);
+            await db.SaveChangesAsync();
+        });
+        return hold.Id;
+    }
+
+    private async Task ReleaseHoldInDbAsync(Guid holdId)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Hold stored = await db.Set<Hold>().SingleAsync(h => h.Id == holdId);
+            stored.Status = HoldStatus.Released;
+            stored.ReleasedAt = DateTimeOffset.UtcNow;
+            stored.ReleaseReason = "Đã kiểm tra";
+            await db.SaveChangesAsync();
+        });
+    }
+
     private async Task<JsonElement> ListAsync(HttpClient client, string path)
     {
         HttpResponseMessage response = await client.GetAsync("/api/v1/admin/" + path);
@@ -101,6 +136,50 @@ public sealed class AdminOperationsTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/admin/users")).StatusCode);
         }
         Assert.Equal(HttpStatusCode.Unauthorized, (await app.CreateClient().GetAsync("/api/v1/admin/dashboard")).StatusCode);
+    }
+
+    [SqlFact]
+    public async Task Role02_AdminCannotCreateOrGrantExecutorAccount()
+    {
+        // Chuẩn bị
+        (User _, HttpClient client) = await AddAdminAsync();
+        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        string email = "executor-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
+
+        // Hành động
+        HttpResponseMessage create = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Người Thực Hiện", email = email, password = "MatKhauThu123!", role = "EXECUTOR" });
+        HttpResponseMessage grant = await client.PutAsJsonAsync($"/api/v1/admin/users/{plain.Id}/role",
+            new { role = "EXECUTOR", reason = "Thử cấp vai trò" });
+
+        // Kiểm tra: cả hai đều 400 theo trường role, không tạo tài khoản, không đổi vai trò, không ghi nhật ký
+        JsonElement createProblem = await ApiTestHelpers.AssertProblemAsync(create, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(createProblem.GetProperty("errors").TryGetProperty("role", out JsonElement _));
+        JsonElement grantProblem = await ApiTestHelpers.AssertProblemAsync(grant, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(grantProblem.GetProperty("errors").TryGetProperty("role", out JsonElement _));
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.False(await db.Users.AnyAsync(u => u.Email == email));
+            User stored = await db.Users.AsNoTracking().SingleAsync(u => u.Id == plain.Id);
+            Assert.Equal(UserRole.User, stored.Role);
+            Assert.False(await db.Set<AuditLog>().AnyAsync(a => a.Action == AuditAction.UserRoleChanged || a.Action == AuditAction.AdminCreatedUser));
+        });
+    }
+
+    [SqlFact]
+    public async Task Role02_AdminCanStillCreateVerifierAccount()
+    {
+        // Chuẩn bị
+        (User _, HttpClient client) = await AddAdminAsync();
+        string email = "verifier-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
+
+        // Hành động
+        HttpResponseMessage create = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Người Xét Duyệt", email = email, password = "MatKhauThu123!", role = "VERIFIER" });
+
+        // Kiểm tra
+        Assert.True(create.IsSuccessStatusCode, "Tạo Verifier phải thành công, nhận " + (int)create.StatusCode);
+        Assert.Equal("VERIFIER", (await ApiTestHelpers.ReadJsonAsync(create)).GetProperty("role").GetString());
     }
 
     [SqlFact]
@@ -161,50 +240,51 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Hold_Placed_BlocksApprove_And_Activation_UntilReleased()
+    public async Task Hold_Active_BlocksApprove_UntilReleased()
     {
-        (User admin, HttpClient adminClient) = await AddAdminAsync();
+        // Chuẩn bị: hồ sơ đủ điều kiện duyệt, kho đang có hold
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateReadyToApproveCaseAsync(factory);
+        Guid holdId = await SeedActiveHoldAsync(submitted.Vault.VaultId);
 
-        HttpResponseMessage placed = await adminClient.PostAsJsonAsync("/api/v1/admin/holds",
-            new { vaultId = submitted.Vault.VaultId, reason = "Nghi vấn giấy tờ" });
-        Assert.Equal(HttpStatusCode.Created, placed.StatusCode);
-        JsonElement hold = await ApiTestHelpers.ReadJsonAsync(placed);
-        Guid holdId = hold.GetProperty("id").GetGuid();
-        Assert.Equal("ADMIN", hold.GetProperty("type").GetString());
-        Assert.Equal(admin.Id, hold.GetProperty("responsibleUserId").GetGuid());
-        Assert.True(hold.GetProperty("reviewAt").GetDateTimeOffset() <= DateTimeOffset.UtcNow.AddDays(7).AddMinutes(1));
-
-        // Duyệt bị chặn dù đủ điều kiện
+        // Hành động + Kiểm tra: duyệt bị chặn dù đủ điều kiện (DEATH-09)
         HttpResponseMessage approve = await DeathCaseReviewTestData.ApproveNowAsync(submitted, "Đã đối chiếu.");
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(approve, HttpStatusCode.Conflict, "DEATH_CASE_NOT_ALLOWED");
         Assert.Equal("HOLD_ACTIVE", problem.GetProperty("reason").GetString());
 
-        // Gỡ cần lý do và etag; gỡ lặp trả trạng thái hiện tại
-        HttpResponseMessage noEtag = await adminClient.PostAsJsonAsync($"/api/v1/admin/holds/{holdId}/release", new { reason = "Đã kiểm tra", etag = "\"1\"" });
-        await ApiTestHelpers.AssertProblemAsync(noEtag, HttpStatusCode.Conflict, "EDIT_CONFLICT");
-        HttpResponseMessage released = await adminClient.PostAsJsonAsync($"/api/v1/admin/holds/{holdId}/release",
-            new { reason = "Đã kiểm tra", etag = hold.GetProperty("etag").GetString() });
-        Assert.Equal(HttpStatusCode.OK, released.StatusCode);
-        Assert.Equal("RELEASED", (await ApiTestHelpers.ReadJsonAsync(released)).GetProperty("status").GetString());
-        Assert.Equal(HttpStatusCode.OK, (await adminClient.PostAsJsonAsync($"/api/v1/admin/holds/{holdId}/release",
-            new { reason = "Lặp", etag = hold.GetProperty("etag").GetString() })).StatusCode);
-
+        // Hold được gỡ thì duyệt được
+        await ReleaseHoldInDbAsync(holdId);
         Assert.Equal(HttpStatusCode.OK, (await DeathCaseReviewTestData.ApproveNowAsync(submitted, "Đã đối chiếu.")).StatusCode);
     }
 
     [SqlFact]
-    public async Task Hold_ReviewDateLimitedToSevenDays_AndUnknownVaultIs404()
+    public async Task Hold_AdminCanOnlyView_ManualPlaceReviewReleaseApisAreRemoved()
     {
+        // Chuẩn bị
         (User admin, HttpClient adminClient) = await AddAdminAsync();
         DeathCaseTestData.OwnerVault owner = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        Guid holdId = await SeedActiveHoldAsync(owner.VaultId);
 
-        HttpResponseMessage tooLate = await adminClient.PostAsJsonAsync("/api/v1/admin/holds",
-            new { vaultId = owner.VaultId, reason = "x", reviewAt = DateTimeOffset.UtcNow.AddDays(30) });
-        await ApiTestHelpers.AssertProblemAsync(tooLate, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        HttpResponseMessage unknown = await adminClient.PostAsJsonAsync("/api/v1/admin/holds",
-            new { vaultId = Guid.NewGuid(), reason = "x" });
-        await ApiTestHelpers.AssertProblemAsync(unknown, HttpStatusCode.NotFound, "VAULT_NOT_FOUND");
+        // Hành động
+        HttpResponseMessage place = await adminClient.PostAsJsonAsync("/api/v1/admin/holds",
+            new { vaultId = owner.VaultId, reason = "x" });
+        HttpResponseMessage review = await adminClient.PostAsJsonAsync($"/api/v1/admin/holds/{holdId}/review",
+            new { nextReviewAt = DateTimeOffset.UtcNow.AddDays(1), etag = "\"1\"" });
+        HttpResponseMessage release = await adminClient.PostAsJsonAsync($"/api/v1/admin/holds/{holdId}/release",
+            new { reason = "x", etag = "\"1\"" });
+
+        // Kiểm tra: không còn API thao tác tay; xem danh sách và chi tiết vẫn được
+        Assert.False(place.IsSuccessStatusCode);
+        Assert.False(review.IsSuccessStatusCode);
+        Assert.False(release.IsSuccessStatusCode);
+        JsonElement list = await ListAsync(adminClient, "holds?status=ACTIVE");
+        Assert.Single(list.GetProperty("items").EnumerateArray());
+        Assert.Equal(HttpStatusCode.OK, (await adminClient.GetAsync($"/api/v1/admin/holds/{holdId}")).StatusCode);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Hold stored = await db.Set<Hold>().SingleAsync(h => h.Id == holdId);
+            Assert.Equal(HoldStatus.Active, stored.Status);
+            Assert.Equal(1, await db.Set<Hold>().CountAsync());
+        });
         Assert.NotEqual(Guid.Empty, admin.Id);
     }
 
@@ -225,11 +305,11 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         JsonElement incident = Assert.Single(incidents.GetProperty("items").EnumerateArray());
         Assert.Equal(submitted.Verifier.User.Id, incident.GetProperty("assigneeUserId").GetGuid());
 
-        // Admin không tự gỡ hold báo còn sống
+        // Admin không tự gỡ được hold báo còn sống: không còn API gỡ hold bằng tay
         HttpResponseMessage release = await adminClient.PostAsJsonAsync($"/api/v1/admin/holds/{hold.GetProperty("id").GetGuid()}/release",
             new { reason = "Thử gỡ", etag = hold.GetProperty("etag").GetString() });
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(release, HttpStatusCode.Conflict, "ADMIN_ACTION_NOT_ALLOWED");
-        Assert.Equal("HOLD_OWNER_ALIVE", problem.GetProperty("reason").GetString());
+        Assert.False(release.IsSuccessStatusCode);
+        Assert.Single((await ListAsync(adminClient, "holds?status=ACTIVE")).GetProperty("items").EnumerateArray());
 
         // Verifier bác phản đối: hold gỡ, sự cố đóng
         HttpResponseMessage conclude = await submitted.Verifier.Client.PostAsJsonAsync(
@@ -446,8 +526,7 @@ public sealed class AdminOperationsTests : IAsyncLifetime
             await scope.ServiceProvider.GetRequiredService<IOperationsRecorder>()
                 .RecordAssignmentOutcomeAsync(submitted.CaseId, DeathCaseAssignmentOutcome.NoCandidate, CancellationToken.None);
         }
-        Assert.Equal(HttpStatusCode.Created, (await adminClient.PostAsJsonAsync("/api/v1/admin/holds",
-            new { vaultId = submitted.Vault.VaultId, reason = "Kiểm tra" })).StatusCode);
+        await SeedActiveHoldAsync(submitted.Vault.VaultId);
 
         JsonElement dashboard = await ApiTestHelpers.ReadJsonAsync(await adminClient.GetAsync("/api/v1/admin/dashboard"));
 

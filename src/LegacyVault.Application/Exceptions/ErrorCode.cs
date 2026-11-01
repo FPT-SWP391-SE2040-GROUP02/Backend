@@ -99,9 +99,9 @@ public enum ErrorCode
     VaultPinTooWeak,
     /// <summary>409: tài khoản không có mật khẩu (đăng nhập bằng Google) nên chưa đặt lại PIN được.</summary>
     VaultPinResetNeedsPassword,
-    /// <summary>403 (DEATH-14): mật khẩu xác nhận ký sai (kèm attemptsRemaining) hoặc tài khoản chưa có mật khẩu.</summary>
+    /// <summary>403 (DEATH-03): mật khẩu xác nhận duyệt/từ chối sai (kèm attemptsRemaining) hoặc tài khoản chưa có mật khẩu.</summary>
     SigningPasswordInvalid,
-    /// <summary>423 (DEATH-14): chức năng ký số đang khóa tạm vì nhập sai mật khẩu nhiều lần, kèm lockedUntil.</summary>
+    /// <summary>423 (DEATH-03): chức năng duyệt/từ chối đang khóa tạm vì nhập sai mật khẩu nhiều lần, kèm lockedUntil.</summary>
     SigningLocked,
 }
 

@@ -17,6 +17,7 @@ public static class HandoverProgressMappings
         response.InvitedAt = turn.InvitedAt;
         response.ResponseDeadline = turn.ResponseDeadline;
         response.ClaimedAt = turn.ClaimedAt;
+        response.IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null;
         response.DecisionDeadline = turn.DecisionDeadline;
         response.DecidedAt = turn.DecidedAt;
         if (turn.Grant != null)

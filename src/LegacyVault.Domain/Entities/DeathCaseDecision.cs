@@ -40,10 +40,4 @@ public class DeathCaseDecision
 
     /// <summary>Hạn Executor bổ sung (yêu cầu bổ sung: DecidedAt + 7 ngày); null với từ chối và duyệt.</summary>
     public DateTimeOffset? DueAt { get; set; }
-
-    /// <summary>DEATH-14: khóa ký của Verifier đã ký quyết định; null với yêu cầu bổ sung và quyết định cũ chưa ký.</summary>
-    public Guid? SigningKeyId { get; set; }
-
-    /// <summary>DEATH-14: chữ ký RSA-PSS (256 byte) trên chuỗi dựng bởi DecisionSignatureRules.BuildPayload.</summary>
-    public byte[]? Signature { get; set; }
 }

@@ -59,6 +59,14 @@ public class HandoverTurn
     /// </summary>
     public bool IdentityBypassed { get; set; }
 
+    /// <summary>
+    /// Executor đã xác nhận đúng người bằng tay thay cho eKYC (BR-122); null khi không có xác nhận này.
+    /// Cùng với IdentityConfirmedAt để truy lại ai đã bảo lãnh người nhận khi có tranh chấp.
+    /// </summary>
+    public Guid? IdentityConfirmedByUserId { get; set; }
+
+    public DateTimeOffset? IdentityConfirmedAt { get; set; }
+
     /// <summary>Lúc lượt sẵn sàng để đồng ý/từ chối.</summary>
     public DateTimeOffset? ReadyAt { get; set; }
 

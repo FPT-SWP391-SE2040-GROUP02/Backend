@@ -8,33 +8,13 @@ namespace LegacyVault.Infrastructure.Repositories;
 /// <remarks>
 /// Dùng context.Set&lt;T&gt;() thay vì DbSet trên AppDbContext để không sửa AppDbContext (giống DeathCaseRepository).
 /// </remarks>
-public sealed class VerifierSigningKeyRepository : IVerifierSigningKeyRepository
+public sealed class VerifierSigningGuardRepository : IVerifierSigningGuardRepository
 {
     private readonly AppDbContext context;
 
-    public VerifierSigningKeyRepository(AppDbContext context)
+    public VerifierSigningGuardRepository(AppDbContext context)
     {
         this.context = context;
-    }
-
-    public async Task<VerifierSigningKey?> FindActiveByUserIdAsync(Guid userId, CancellationToken ct)
-    {
-        return await context.Set<VerifierSigningKey>()
-            .Where(k => k.UserId == userId && k.RevokedAt == null)
-            .FirstOrDefaultAsync(ct);
-    }
-
-    public async Task<VerifierSigningKey?> FindByIdAsync(Guid id, CancellationToken ct)
-    {
-        return await context.Set<VerifierSigningKey>()
-            .AsNoTracking()
-            .Where(k => k.Id == id)
-            .FirstOrDefaultAsync(ct);
-    }
-
-    public void Add(VerifierSigningKey key)
-    {
-        context.Set<VerifierSigningKey>().Add(key);
     }
 
     public async Task<VerifierSigningGuard?> FindGuardAsync(Guid userId, CancellationToken ct)

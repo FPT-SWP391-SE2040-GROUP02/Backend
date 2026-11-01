@@ -311,6 +311,10 @@ public sealed class CheckInFlowTests : IAsyncLifetime
         });
         JsonElement body = await GetCheckInAsync(client);
         Assert.Equal("NOT_STARTED", body.GetProperty("status").GetString());
+        // Lịch sử trả closedAt để FE hiện kỳ này là "Đã dừng", không phải "Đang chạy".
+        JsonElement stopped = body.GetProperty("history").GetProperty("items")[0];
+        Assert.Equal(JsonValueKind.String, stopped.GetProperty("closedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, stopped.GetProperty("checkedInAt").ValueKind);
     }
 
     [SqlFact]

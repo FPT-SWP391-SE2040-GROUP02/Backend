@@ -124,4 +124,9 @@ public sealed class FakeAppUrlProvider : IAppUrlProvider
     {
         return "http://fe.test/reset-password?token=" + Uri.EscapeDataString(token);
     }
+
+    public string GetExecutorInvitationUrl(string token)
+    {
+        return "http://fe.test/executor-invitation?token=" + Uri.EscapeDataString(token);
+    }
 }

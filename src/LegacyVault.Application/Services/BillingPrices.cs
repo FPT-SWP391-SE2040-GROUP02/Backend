@@ -3,19 +3,15 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Bảng giá và hạn mức dịch vụ (SRS §8.1, §8.2). Là hằng số trong code, không có bảng giá trong DB:
-/// đơn thanh toán lưu giá đã chốt và PolicyVersion nên đổi bảng giá không ảnh hưởng đơn cũ (PAY-11).
+/// Hạn mức và luật của bảng giá (SRS §8.1, §8.2). Các con số tiền (giá hạng, giá suất thêm) và PolicyVersion
+/// nằm trong cấu hình "Billing:Pricing", đọc qua <see cref="IBillingPriceSettings"/>. Đơn thanh toán lưu giá đã chốt
+/// và PolicyVersion nên đổi bảng giá không ảnh hưởng đơn cũ (PAY-11).
 /// </summary>
 /// <remarks>Mỗi lần đổi giá hoặc hạn mức phải đổi PolicyVersion.</remarks>
 public static class BillingPrices
 {
-    public const string PolicyVersion = "2026-10";
-
     /// <summary>Tiền tệ duy nhất của hệ thống.</summary>
     public const string Currency = "VND";
-
-    /// <summary>Giá một suất người nhận thêm cho một năm (ADDON-01).</summary>
-    public const long SlotPricePerYear = 49000;
 
     /// <summary>Số suất thêm tối đa trong một đơn (§8.2).</summary>
     public const int MaxExtraSlotsPerOrder = 20;
@@ -56,42 +52,6 @@ public static class BillingPrices
             }
         }
         return false;
-    }
-
-    /// <summary>Giá hạng cho cả kỳ (không nhân thêm theo năm). Hạng hoặc số năm không bán → ArgumentOutOfRangeException.</summary>
-    public static long GetTierPrice(ServiceTier tier, int years)
-    {
-        if (tier == ServiceTier.Xs)
-        {
-            if (years == 1)
-            {
-                return 199000;
-            }
-            if (years == 3)
-            {
-                return 499000;
-            }
-            if (years == 5)
-            {
-                return 799000;
-            }
-        }
-        if (tier == ServiceTier.XsMax)
-        {
-            if (years == 1)
-            {
-                return 399000;
-            }
-            if (years == 3)
-            {
-                return 999000;
-            }
-            if (years == 5)
-            {
-                return 1599000;
-            }
-        }
-        throw new ArgumentOutOfRangeException(nameof(tier), "Hạng hoặc số năm không có trong bảng giá.");
     }
 
     /// <summary>Dung lượng theo hạng. Free hoặc hạng lạ → ArgumentOutOfRangeException.</summary>

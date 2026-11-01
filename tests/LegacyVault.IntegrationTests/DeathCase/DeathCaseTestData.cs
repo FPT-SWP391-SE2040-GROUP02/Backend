@@ -13,7 +13,7 @@ namespace LegacyVault.IntegrationTests.DeathCases;
 /// </summary>
 public static class DeathCaseTestData
 {
-    /// <summary>DEATH-14: mật khẩu thử cố định của mọi tài khoản tạo bằng AddUserAsync (chỉ dùng trong test).</summary>
+    /// <summary>DEATH-03: mật khẩu thử cố định của mọi tài khoản tạo bằng AddUserAsync (chỉ dùng trong test).</summary>
     public const string TestPassword = "Mat-khau-thu-1!";
 
     /// <summary>Thêm một tài khoản đã xác minh email với vai trò và trạng thái cho trước, mật khẩu = TestPassword.</summary>

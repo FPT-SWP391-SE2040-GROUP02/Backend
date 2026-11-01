@@ -12,6 +12,8 @@ namespace LegacyVault.IntegrationTests.Payment;
 /// </summary>
 public sealed class BillingRenewalRulesTests
 {
+    private static readonly IBillingPriceSettings Prices = new FakeBillingPriceSettings();
+
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
 
     private const long MiB = 1048576L;
@@ -74,7 +76,7 @@ public sealed class BillingRenewalRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, expiresAt, 1);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteRenewal(entitlement, "XS", 3, 1, Now);
+        BillingQuote quote = BillingRules.QuoteRenewal(Prices, entitlement, "XS", 3, 1, Now);
 
         // Kiểm tra: 499.000 + 49.000 × 1 × 3 năm; nối tiếp hạn cũ
         Assert.Equal(PaymentOrderKind.Renewal, quote.Kind);
@@ -102,7 +104,7 @@ public sealed class BillingRenewalRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, status, Now.AddDays(daysUntilExpiry), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteRenewal(entitlement, "XS", 1, 0, Now);
+        BillingQuote quote = BillingRules.QuoteRenewal(Prices, entitlement, "XS", 1, 0, Now);
 
         // Kiểm tra: không có hạn cũ để nối tiếp
         Assert.Null(quote.BaseServiceExpiresAt);
@@ -116,7 +118,7 @@ public sealed class BillingRenewalRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.GraceReadOnly, Now.AddDays(-10), 0);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteRenewal(entitlement, "XS_MAX", 1, 0, Now);
+        BillingQuote quote = BillingRules.QuoteRenewal(Prices, entitlement, "XS_MAX", 1, 0, Now);
 
         // Kiểm tra: giá niêm yết XS Max 1 năm, 500 MiB, 5 suất kèm
         Assert.Equal(399000, quote.TotalAmount);
@@ -133,7 +135,7 @@ public sealed class BillingRenewalRulesTests
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(10), 0);
 
         // Hành động / Kiểm tra
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(entitlement, tier, 1, 0, Now));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(Prices, entitlement, tier, 1, 0, Now));
         AssertValidationOnField(exception, "tier");
     }
 
@@ -141,7 +143,7 @@ public sealed class BillingRenewalRulesTests
     public void QuoteRenewal_MissingTier_Returns400OnTier()
     {
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.GraceReadOnly, Now.AddDays(-5), 0);
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(entitlement, null, 1, 0, Now));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(Prices, entitlement, null, 1, 0, Now));
         AssertValidationOnField(exception, "tier");
     }
 
@@ -150,9 +152,9 @@ public sealed class BillingRenewalRulesTests
     {
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.GraceReadOnly, Now.AddDays(-5), 0);
         AssertValidationOnField(
-            Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(entitlement, "XS", null, 0, Now)), "years");
+            Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(Prices, entitlement, "XS", null, 0, Now)), "years");
         AssertValidationOnField(
-            Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(entitlement, "XS", 2, 0, Now)), "years");
+            Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(Prices, entitlement, "XS", 2, 0, Now)), "years");
     }
 
     [Fact]
@@ -160,14 +162,14 @@ public sealed class BillingRenewalRulesTests
     {
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.GraceReadOnly, Now.AddDays(-5), 0);
         AssertValidationOnField(
-            Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(entitlement, "XS", 1, 21, Now)), "extraSlots");
+            Assert.Throws<AppException>(() => BillingRules.QuoteRenewal(Prices, entitlement, "XS", 1, 21, Now)), "extraSlots");
     }
 
     [Fact]
     public void EnsureUsageFits_UsageWithinPlan_IsAllowed()
     {
         // Chuẩn bị: XS (200 MiB, 2 suất) đúng bằng mức đang dùng
-        BillingQuote quote = BillingRules.QuotePurchase("XS", 1, 0);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 0);
 
         // Hành động / Kiểm tra: dùng đúng bằng hạn mức vẫn được
         BillingRules.EnsureUsageFitsRenewal(quote, 200 * MiB, 2);
@@ -176,7 +178,7 @@ public sealed class BillingRenewalRulesTests
     [Fact]
     public void EnsureUsageFits_StorageOverQuota_IsRejected()
     {
-        BillingQuote quote = BillingRules.QuotePurchase("XS", 1, 0);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 0);
         AppException exception = Assert.Throws<AppException>(
             () => BillingRules.EnsureUsageFitsRenewal(quote, 200 * MiB + 1, 0));
         AssertPaymentNotAllowed(exception, "USAGE_EXCEEDS_PLAN");
@@ -186,7 +188,7 @@ public sealed class BillingRenewalRulesTests
     public void EnsureUsageFits_MoreBeneficiariesThanSlots_IsRejected()
     {
         // Chuẩn bị: XS có 2 suất, đang dùng 3
-        BillingQuote quote = BillingRules.QuotePurchase("XS", 1, 0);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 0);
         AppException exception = Assert.Throws<AppException>(() => BillingRules.EnsureUsageFitsRenewal(quote, 0, 3));
         AssertPaymentNotAllowed(exception, "USAGE_EXCEEDS_PLAN");
     }

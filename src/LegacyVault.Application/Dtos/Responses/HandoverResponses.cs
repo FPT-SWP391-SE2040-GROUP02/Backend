@@ -58,6 +58,9 @@ public class HandoverTurnResponse
     /// <summary>true: xác minh danh tính đã được bỏ qua bằng công tắc cấu hình (chỉ Development).</summary>
     public bool IdentityBypassed { get; set; }
 
+    /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC (BR-122).</summary>
+    public bool IdentityConfirmedByExecutor { get; set; }
+
     /// <summary>Chỉ có khi lượt ở READY_TO_ACCEPT hoặc HANDOVER_COMMITTED.</summary>
     public HandoverContainerResponse? Container { get; set; }
 

@@ -8,15 +8,11 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <remarks>
-/// Cùng hiệu ứng với Owner điểm danh (đóng kỳ cũ, mở kỳ mới, kế hoạch về ACTIVE), nhưng chỉ cho phép khi
-/// Owner đang quá hạn và kho chưa có hồ sơ chứng tử đang mở. Dòng nhật ký ghi vai trò Executor.
-/// </remarks>
 public sealed class ExecutorCheckInService : IExecutorCheckInService
 {
     private const string ReasonPlanNotOverdue = "PLAN_NOT_OVERDUE";
     private const string ReasonDeathCaseOpen = "DEATH_CASE_OPEN";
-    private const string AuditReasonProxy = "proxyByExecutor";
+    private const string AuditReason = "Executor điểm danh thay chủ kho khi chủ kho quá hạn điểm danh.";
 
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
@@ -57,14 +53,16 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         }
 
         HandoverPlan plan = vault.Plan;
+        if (!IsOverdue(plan.Status))
+        {
+            throw NotAllowed(plan.Status, ReasonPlanNotOverdue);
+        }
+
+        // Đã có hồ sơ chứng tử đang mở (kể cả bản nháp) nghĩa là đã có giấy chứng tử: không điểm danh hộ nữa.
         DeathCase? openCase = await deathCaseRepository.FindOpenByVaultIdAsync(vault.Id, ct);
         if (openCase != null)
         {
-            throw NotAllowed(ReasonDeathCaseOpen, plan.Status);
-        }
-        if (plan.Status != PlanStatus.CheckinOverdue && plan.Status != PlanStatus.AwaitingCheck)
-        {
-            throw NotAllowed(ReasonPlanNotOverdue, plan.Status);
+            throw NotAllowed(plan.Status, ReasonDeathCaseOpen);
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -77,15 +75,16 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
             checkInRepository.AddSchedule(schedule);
         }
 
+        // Kỳ quá hạn đóng lại nhưng không ghi CheckedInAt, vì chủ kho không tự điểm danh.
+        // Sự cố quá hạn của kỳ này được job sự cố tự đóng khi thấy kỳ đã đóng.
         CheckInPeriod? openPeriod = await checkInRepository.FindOpenPeriodByPlanIdAsync(plan.Id, ct);
         if (openPeriod != null)
         {
-            openPeriod.CheckedInAt = now;
             openPeriod.ClosedAt = now;
         }
 
+        // Không cập nhật LastCheckInAt: giờ điểm danh gần nhất chỉ dành cho lượt chủ kho tự điểm danh.
         CheckInRules.ApplyPendingSettings(schedule, now);
-        schedule.LastCheckInAt = now;
 
         int lastSequence = await checkInRepository.GetMaxSequenceAsync(plan.Id, ct);
         CheckInPeriod next = new CheckInPeriod();
@@ -99,12 +98,12 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         plan.Status = PlanStatus.Active;
         plan.UpdatedAt = now;
 
-        // SEC-13: TargetId là kỳ mới, TargetVersion là số thứ tự kỳ; reason chỉ là mã, Owner xem được nhật ký.
         auditLogRepository.Add(AuditRules.Create(
             vault.Id, userId, AuditActorRole.Executor, AuditAction.CheckedIn, AuditTargetType.CheckIn,
-            next.Id, next.Sequence, AuditOutcome.Succeeded, AuditReasonProxy, now));
+            next.Id, next.Sequence, AuditOutcome.Succeeded, AuditReason, now));
 
-        // Một lần lưu (STATE-02). Hai yêu cầu song song: RowVersion của kỳ cũ lệch nên bên thua nhận 409 EDIT_CONFLICT.
+        // Một lần lưu cho kỳ cũ, kỳ mới, lịch và kế hoạch. Hai người cùng điểm danh: RowVersion của kỳ cũ lệch
+        // nên bên thua nhận 409 EDIT_CONFLICT.
         await unitOfWork.SaveChangesAsync(ct);
 
         ExecutorCheckInResponse response = new ExecutorCheckInResponse();
@@ -116,7 +115,16 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         return response;
     }
 
-    /// <summary>ROLE-03: Owner không bao giờ là Executor của chính kho; chỉ Executor Accepted mới tính.</summary>
+    /// <summary>Chủ kho đã quá hạn: đang trong thời gian chờ hoặc đã hết thời gian chờ.</summary>
+    private static bool IsOverdue(PlanStatus status)
+    {
+        if (status == PlanStatus.CheckinOverdue || status == PlanStatus.AwaitingCheck)
+        {
+            return true;
+        }
+        return false;
+    }
+
     private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
     {
         if (vault.OwnerId == userId)
@@ -134,12 +142,12 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         return false;
     }
 
-    private static AppException NotAllowed(string reason, PlanStatus planStatus)
+    private static AppException NotAllowed(PlanStatus planStatus, string reason)
     {
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["reason"] = reason;
         extensions["planStatus"] = planStatus.ToApiString();
+        extensions["reason"] = reason;
         return new AppException(AppErrorType.Conflict, ErrorCode.CheckinNotAllowed,
-            "Hiện chưa thể điểm danh thay chủ kho.", extensions);
+            "Hiện không thể điểm danh thay chủ kho.", extensions);
     }
 }

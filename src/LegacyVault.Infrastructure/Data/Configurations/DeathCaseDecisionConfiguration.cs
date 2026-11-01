@@ -48,17 +48,5 @@ public sealed class DeathCaseDecisionConfiguration : IEntityTypeConfiguration<De
             .WithMany()
             .HasForeignKey(d => d.AssignmentId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        // DEATH-14: chữ ký RSA-2048 dài 256 byte; chừa dư cho khóa dài hơn.
-        builder.Property(d => d.Signature)
-            .HasMaxLength(512);
-
-        // DEATH-14: khóa đã ký quyết định; giữ khóa để còn kiểm lại chữ ký.
-        builder.HasIndex(d => d.SigningKeyId);
-
-        builder.HasOne<VerifierSigningKey>()
-            .WithMany()
-            .HasForeignKey(d => d.SigningKeyId)
-            .OnDelete(DeleteBehavior.Restrict);
     }
 }
