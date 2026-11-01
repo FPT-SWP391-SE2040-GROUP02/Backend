@@ -3,7 +3,7 @@ using LegacyVault.Domain.Entities;
 
 namespace LegacyVault.Application.Mappings;
 
-/// <summary>Đổi lượt bàn giao sang dữ liệu tiến độ cho Executor. Không chép nội dung hay thông tin liên hệ.</summary>
+/// <summary>Đổi lượt bàn giao sang dữ liệu tiến độ cho Executor. Không chép nội dung hay thông tin liên hệ (tên, số điện thoại do HandoverProgressService điền riêng khi đã bàn giao).</summary>
 public static class HandoverProgressMappings
 {
     public static HandoverProgressTurnResponse ToProgressResponse(

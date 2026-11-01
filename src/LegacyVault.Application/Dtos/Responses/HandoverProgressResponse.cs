@@ -5,8 +5,8 @@ namespace LegacyVault.Application.Dtos.Responses;
 /// (GET /api/v1/executor/death-cases/{caseId}/handover-progress).
 /// </summary>
 /// <remarks>
-/// Chỉ có trạng thái, hạn và việc đã tải hay chưa. Không có nội dung tài sản,
-/// số CCCD đầy đủ hay thông tin liên hệ của người nhận.
+/// Chỉ có trạng thái, hạn và việc đã tải hay chưa. Không có nội dung tài sản hay số CCCD đầy đủ.
+/// Họ tên và số điện thoại người nhận chỉ có ở lượt đã bàn giao (đã đồng ý và có quyền tải).
 /// </remarks>
 public class HandoverProgressResponse
 {

@@ -17,6 +17,8 @@ public static class VaultMappings
             Id = vault.Id,
             Name = vault.Name,
             Description = vault.Description,
+            ExecutorNote = vault.ExecutorNote,
+            ExecutorNoteUpdatedAt = vault.ExecutorNoteUpdatedAt,
             Status = vault.Status.ToApiString(),
             ClosedAt = vault.ClosedAt,
             PlanStatus = vault.Plan.Status.ToApiString(),

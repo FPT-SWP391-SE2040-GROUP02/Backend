@@ -28,6 +28,7 @@ public sealed class AuthService : IAuthService
     private readonly TimeProvider _timeProvider;
     private readonly ITwoFactorService? _twoFactorService;
     private readonly ISessionRevocationValidator? _sessionValidator;
+    private readonly IIncidentService? _incidentService;
 
     public AuthService(
         IUserRepository userRepository,
@@ -39,10 +40,12 @@ public sealed class AuthService : IAuthService
         ICurrentUser currentUser,
         TimeProvider timeProvider,
         ITwoFactorService? twoFactorService = null,
-        ISessionRevocationValidator? sessionValidator = null)
+        ISessionRevocationValidator? sessionValidator = null,
+        IIncidentService? incidentService = null)
     {
         _twoFactorService = twoFactorService;
         _sessionValidator = sessionValidator;
+        _incidentService = incidentService;
         _userRepository = userRepository;
         _loginThrottleRepository = loginThrottleRepository;
         _refreshTokenRepository = refreshTokenRepository;
@@ -101,13 +104,13 @@ public sealed class AuthService : IAuthService
             _dummyHash ??= _passwordHasher.Hash(Guid.NewGuid().ToString());
             _passwordHasher.Verify(request.Password, _dummyHash);
 
-            throw await RecordFailedLoginAsync(throttle, email, ipRange, now, ct);
+            throw await RecordFailedLoginAsync(throttle, user, email, ipRange, now, ct);
         }
 
         // 4. Kiểm tra mật khẩu
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
-            throw await RecordFailedLoginAsync(throttle, email, ipRange, now, ct);
+            throw await RecordFailedLoginAsync(throttle, user, email, ipRange, now, ct);
         }
 
         // 5. Kiểm tra trạng thái tài khoản SAU khi mật khẩu đúng (để người lạ không dò được trạng thái)
@@ -376,8 +379,9 @@ public sealed class AuthService : IAuthService
         return MapUser(user);
     }
 
+    /// <param name="user">Tài khoản của email; null khi email chưa đăng ký (khi đó không mở sự cố).</param>
     private async Task<ApiException> RecordFailedLoginAsync(
-        LoginThrottle? throttle, string email, string ipRange, DateTimeOffset now, CancellationToken ct)
+        LoginThrottle? throttle, User? user, string email, string ipRange, DateTimeOffset now, CancellationToken ct)
     {
         if (throttle == null)
         {
@@ -408,12 +412,30 @@ public sealed class AuthService : IAuthService
         if (throttle.FailedCount >= MaxFailedAttempts)
         {
             throttle.LockedUntil = now.Add(LockoutDuration);
+            await RaiseSuspiciousLoginAsync(user, ipRange, ct);
             await _unitOfWork.SaveChangesAsync(ct);
             return new AccountLockedException((int)LockoutDuration.TotalSeconds);
         }
 
         await _unitOfWork.SaveChangesAsync(ct);
         return new InvalidCredentialsException(MaxFailedAttempts - throttle.FailedCount);
+    }
+
+    /// <summary>
+    /// Cảnh báo đăng nhập bất thường (SEC-10): vừa khóa một tài khoản có thật thì mở sự cố cho Admin ít việc nhất.
+    /// Tài khoản đang có sự cố mở thì RaiseAsync không tạo thêm. Lưu cùng lần khóa, trong cùng giao dịch đăng nhập.
+    /// </summary>
+    private async Task RaiseSuspiciousLoginAsync(User? user, string ipRange, CancellationToken ct)
+    {
+        if (user == null || _incidentService == null)
+        {
+            return;
+        }
+        string summary = "Nhập sai mật khẩu " + MaxFailedAttempts + " lần trong "
+            + (int)FailureWindow.TotalMinutes + " phút từ dải IP " + ipRange
+            + "; tài khoản bị tạm khóa " + (int)LockoutDuration.TotalMinutes + " phút.";
+        await _incidentService.RaiseAsync(
+            IncidentType.SuspiciousLogin, null, IncidentRules.TargetUser, user.Id, summary, null, ct);
     }
 
     private static UserResponse MapUser(User user)

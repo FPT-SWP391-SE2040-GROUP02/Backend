@@ -10,6 +10,10 @@ public class VaultResponse
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
 
+    /// <summary>Hướng dẫn Owner để lại cho Executor; null khi chưa viết.</summary>
+    public string? ExecutorNote { get; set; }
+    public DateTimeOffset? ExecutorNoteUpdatedAt { get; set; }
+
     /// <summary>"OPEN" hoặc "CLOSED".</summary>
     public string Status { get; set; } = string.Empty;
     public DateTimeOffset? ClosedAt { get; set; }

@@ -378,6 +378,61 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task OwnerAlive_AdminReassignsVerifier_MovesCaseObjectionAndIncident_JobKeepsNewVerifier()
+    {
+        // Chuẩn bị: hồ sơ của Verifier A bị Owner báo còn sống, A để quá hạn kết luận
+        (User admin, HttpClient adminClient) = await AddAdminAsync();
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        HttpClient owner = ClientFor(submitted.Vault.Owner);
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsync($"/api/v1/vaults/{submitted.Vault.VaultId}/death-case/objection", null)).StatusCode);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<DeathCaseObjection>().Where(o => o.CaseId == submitted.CaseId).ExecuteUpdateAsync(s => s
+                .SetProperty(o => o.VerifierDueAt, DateTimeOffset.UtcNow.AddHours(-1)));
+        });
+        User verifierB = await DeathCaseTestData.AddVerifierAsync(factory);
+        JsonElement incident = Assert.Single((await ListAsync(adminClient, "incidents?type=OWNER_ALIVE")).GetProperty("items").EnumerateArray());
+        Guid incidentId = incident.GetProperty("id").GetGuid();
+        string? etag = incident.GetProperty("etag").GetString();
+
+        // Giao hay đóng tay sự cố OWNER_ALIVE bị chặn: sự cố đi theo hồ sơ
+        HttpResponseMessage manualAssign = await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{incidentId}/assign",
+            new { assigneeUserId = verifierB.Id, reason = "thử", etag });
+        Assert.Equal(HttpStatusCode.Conflict, manualAssign.StatusCode);
+        Assert.Equal("INCIDENT_FOLLOWS_CASE", (await ApiTestHelpers.ReadJsonAsync(manualAssign)).GetProperty("reason").GetString());
+        HttpResponseMessage manualResolve = await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{incidentId}/resolve",
+            new { note = "thử", etag });
+        Assert.Equal(HttpStatusCode.Conflict, manualResolve.StatusCode);
+
+        // Hành động: Admin giao lại người xét duyệt của hồ sơ cho B
+        HttpResponseMessage reassign = await adminClient.PostAsJsonAsync(
+            $"/api/v1/admin/death-cases/{submitted.CaseId}/reassign-verifier", new { verifierUserId = verifierB.Id, reason = "A nghỉ phép" });
+        Assert.Equal(HttpStatusCode.NoContent, reassign.StatusCode);
+
+        // Kiểm tra: hồ sơ, lời báo và sự cố cùng sang B; A mất quyền; hạn kết luận được tính lại
+        Assert.Equal(HttpStatusCode.OK, (await ClientFor(verifierB).GetAsync($"/api/v1/verifier/death-cases/{submitted.CaseId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await submitted.Verifier.Client.GetAsync($"/api/v1/verifier/death-cases/{submitted.CaseId}")).StatusCode);
+        Assert.Equal(verifierB.Id, Assert.Single((await ListAsync(adminClient, "incidents?type=OWNER_ALIVE")).GetProperty("items").EnumerateArray())
+            .GetProperty("assigneeUserId").GetGuid());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            DeathCaseObjection objection = await db.Set<DeathCaseObjection>().SingleAsync(o => o.CaseId == submitted.CaseId);
+            Assert.Equal(verifierB.Id, objection.VerifierUserId);
+            Assert.True(objection.VerifierDueAt > DateTimeOffset.UtcNow);
+        });
+
+        // Job phân công chạy lại không chuyển hồ sơ khỏi B vì hạn cũ đã qua
+        using (IServiceScope scope = app.Services.CreateScope())
+        {
+            DeathCaseAssignmentOutcome outcome = await scope.ServiceProvider.GetRequiredService<IDeathCaseAssignmentJob>()
+                .ProcessCaseAsync(submitted.CaseId, CancellationToken.None);
+            Assert.Equal(DeathCaseAssignmentOutcome.None, outcome);
+        }
+        Assert.Equal(HttpStatusCode.OK, (await ClientFor(verifierB).GetAsync($"/api/v1/verifier/death-cases/{submitted.CaseId}")).StatusCode);
+        Assert.NotEqual(Guid.Empty, admin.Id);
+    }
+
+    [SqlFact]
     public async Task Assign04_NoVerifier_RaisesIncidentWithOwnerAndDue_ResolvedWhenAssigned()
     {
         (User admin, HttpClient adminClient) = await AddAdminAsync();
