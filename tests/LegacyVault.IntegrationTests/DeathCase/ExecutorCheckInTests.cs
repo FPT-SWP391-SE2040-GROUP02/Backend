@@ -60,7 +60,8 @@ public sealed class ExecutorCheckInTests : IAsyncLifetime
             Assert.Equal(PlanStatus.Active, (await db.Vaults.Include(v => v.Plan).SingleAsync(v => v.Id == vault.VaultId)).Plan.Status);
             List<CheckInPeriod> periods = await db.CheckInPeriods.Where(p => p.PlanId == vault.PlanId).OrderBy(p => p.Sequence).ToListAsync();
             Assert.Equal(2, periods.Count);
-            Assert.NotNull(periods[0].CheckedInAt);
+            // Chủ kho không tự điểm danh nên kỳ cũ chỉ có ClosedAt (kỳ bị dừng), không có CheckedInAt.
+            Assert.Null(periods[0].CheckedInAt);
             Assert.NotNull(periods[0].ClosedAt);
             Assert.Null(periods[1].ClosedAt);
             AuditLog log = await db.AuditLogs.SingleAsync(a => a.VaultId == vault.VaultId && a.Action == AuditAction.CheckedIn);
