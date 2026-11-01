@@ -20,6 +20,13 @@ public interface IAdminService
     /// </summary>
     Task<AdminUserResponse> ChangeRoleAsync(Guid userId, ChangeUserRoleRequest request, CancellationToken ct);
 
+    /// <summary>
+    /// Một trang nhật ký toàn hệ thống (ADMIN-06). sortBy chỉ nhận "at"; isAscending=false để xem mới nhất trước.
+    /// Lọc theo loại thao tác và khoảng thời gian [from, to). Lỗi: 400 VALIDATION_ERROR, 404 (không phải Admin).
+    /// </summary>
+    Task<PaginatedList<AdminAuditLogResponse>> ListAuditLogsAsync(
+        PaginationRequest pagination, AuditLogFilterRequest filter, CancellationToken ct);
+
     /// <summary>Khóa, mở khóa, vô hiệu hóa. Cùng ràng buộc với đổi vai trò.</summary>
     Task<AdminUserResponse> ChangeStatusAsync(Guid userId, ChangeUserStatusRequest request, CancellationToken ct);
 
@@ -119,6 +126,49 @@ public sealed class AdminService : IAdminService
         page.HasPreviousPage = pageIndex > 1;
         page.HasNextPage = pageIndex < page.TotalPages;
         return page;
+    }
+
+    public async Task<PaginatedList<AdminAuditLogResponse>> ListAuditLogsAsync(
+        PaginationRequest pagination, AuditLogFilterRequest filter, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        if (!string.IsNullOrWhiteSpace(pagination.SortBy)
+            && !string.Equals(pagination.SortBy, "at", StringComparison.OrdinalIgnoreCase))
+        {
+            throw ValidationErrors.For("sortBy", "Chỉ sắp xếp theo at.");
+        }
+        AuditAction? action = AuditRules.ParseAction(filter.Action);
+        if (filter.From != null && filter.To != null && filter.From.Value >= filter.To.Value)
+        {
+            throw ValidationErrors.For("from", "Thời điểm bắt đầu phải trước thời điểm kết thúc.");
+        }
+
+        (List<AuditLog> items, int total) = await audit.FindPageAsync(
+            action, filter.From, filter.To, pagination.PageIndex, pagination.PageSize, pagination.IsAscending, ct);
+
+        List<Guid> actorIds = new List<Guid>();
+        foreach (AuditLog log in items)
+        {
+            if (log.ActorUserId != null && !actorIds.Contains(log.ActorUserId.Value))
+            {
+                actorIds.Add(log.ActorUserId.Value);
+            }
+        }
+        Dictionary<Guid, User> actors = new Dictionary<Guid, User>();
+        if (actorIds.Count > 0)
+        {
+            foreach (User actor in await adminUsers.FindByIdsAsync(actorIds, ct))
+            {
+                actors[actor.Id] = actor;
+            }
+        }
+
+        List<AdminAuditLogResponse> responses = new List<AdminAuditLogResponse>();
+        foreach (AuditLog log in items)
+        {
+            responses.Add(AuditLogMappings.ToAdminResponse(log, actors));
+        }
+        return responses.ToPaginatedList(total, pagination);
     }
 
     public async Task<AdminUserResponse> ChangeRoleAsync(Guid userId, ChangeUserRoleRequest request, CancellationToken ct)

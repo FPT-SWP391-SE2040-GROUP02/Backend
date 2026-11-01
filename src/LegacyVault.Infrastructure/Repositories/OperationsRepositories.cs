@@ -246,6 +246,11 @@ public sealed class AdminUserRepository : IAdminUserRepository
         return (items, total);
     }
 
+    public Task<List<User>> FindByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        return context.Set<User>().AsNoTracking().Where(u => ids.Contains(u.Id)).ToListAsync(ct);
+    }
+
     public Task<int> CountActiveAdminsAsync(CancellationToken ct)
     {
         return context.Set<User>().CountAsync(u => u.Role == UserRole.Admin && u.Status == UserStatus.Active, ct);

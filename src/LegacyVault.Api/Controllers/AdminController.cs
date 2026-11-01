@@ -75,6 +75,22 @@ public sealed class AdminController : ControllerBase
         return adminService.ChangeStatusAsync(userId, request, ct);
     }
 
+    // ---- Nhật ký ----
+
+    /// <summary>
+    /// Nhật ký toàn hệ thống, chỉ đọc (ADMIN-06). sortBy: at (mặc định); isAscending=false để xem mới nhất trước.
+    /// Lọc theo action (UPPER_SNAKE_CASE) và khoảng thời gian [from, to).
+    /// </summary>
+    [HttpGet("audit-logs")]
+    [ProducesResponseType<PaginatedList<AdminAuditLogResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<PaginatedList<AdminAuditLogResponse>> ListAuditLogs(
+        [FromQuery] PaginationRequest pagination, [FromQuery] AuditLogFilterRequest filter, CancellationToken ct)
+    {
+        return adminService.ListAuditLogsAsync(pagination, filter, ct);
+    }
+
     // ---- Phân công Verifier ----
 
     [HttpPost("death-cases/{caseId:guid}/reassign-verifier")]

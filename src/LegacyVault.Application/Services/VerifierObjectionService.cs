@@ -17,6 +17,9 @@ namespace LegacyVault.Application.Services;
 /// </remarks>
 public sealed class VerifierObjectionService : IVerifierObjectionService
 {
+    /// <summary>Mã lý do ghi vào nhật ký khi hồ sơ bị đóng vì Verifier xác nhận Owner còn sống (ALIVE-06).</summary>
+    private const string AliveConfirmedReasonCode = "ALIVE_CONFIRMED";
+
     private readonly ICurrentUser currentUser;
     private readonly IUserRepository users;
     private readonly IVaultRepository vaults;
@@ -183,6 +186,10 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         deathCase.Status = DeathCaseStatus.Rejected;
         deathCase.ClosedAt = now;
         deathCase.UpdatedAt = now;
+        // Hồ sơ bị đóng vì Owner còn sống: ghi dòng từ chối riêng (ngoài dòng ObjectionConcluded) để nhật ký thấy hồ sơ đã đóng.
+        audit.Add(AuditRules.Create(context.Vault.Id, context.UserId, AuditActorRole.Verifier,
+            AuditAction.DeathCaseRejected, AuditTargetType.DeathCase, deathCase.Id, null,
+            AuditOutcome.Succeeded, AliveConfirmedReasonCode, now));
         foreach (DeathCaseAssignment assignment in deathCase.Assignments)
         {
             if (assignment.EndedAt == null)

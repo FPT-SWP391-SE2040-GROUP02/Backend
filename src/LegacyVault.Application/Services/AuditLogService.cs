@@ -28,7 +28,7 @@ public sealed class AuditLogService(
         {
             throw ValidationErrors.For("sortBy", "Chỉ sắp xếp theo at.");
         }
-        AuditAction? action = ParseAction(filter.Action);
+        AuditAction? action = AuditRules.ParseAction(filter.Action);
         if (filter.From != null && filter.To != null && filter.From.Value >= filter.To.Value)
         {
             throw ValidationErrors.For("from", "Thời điểm bắt đầu phải trước thời điểm kết thúc.");
@@ -44,26 +44,5 @@ public sealed class AuditLogService(
             responses.Add(log.ToResponse());
         }
         return responses.ToPaginatedList(page.TotalCount, pagination);
-    }
-
-    /// <summary>
-    /// Đổi chuỗi UPPER_SNAKE_CASE FE gửi (ví dụ CONTAINER_CREATED) sang enum; trống → null (mọi loại).
-    /// Không dùng Enum.Parse thẳng để FE không gửi được số hay tên C# (đúng contract chuỗi).
-    /// </summary>
-    private static AuditAction? ParseAction(string? action)
-    {
-        string? text = TextInput.NullIfBlank(action);
-        if (text == null)
-        {
-            return null;
-        }
-        foreach (AuditAction value in Enum.GetValues<AuditAction>())
-        {
-            if (string.Equals(value.ToApiString(), text, StringComparison.Ordinal))
-            {
-                return value;
-            }
-        }
-        throw ValidationErrors.For("action", "Loại thao tác không hợp lệ.");
     }
 }

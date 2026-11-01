@@ -21,4 +21,11 @@ public sealed class FakeAuditLogRepository : IAuditLogRepository
     {
         throw new NotSupportedException();
     }
+
+    public Task<(List<AuditLog> Items, int TotalCount)> FindPageAsync(
+        AuditAction? action, DateTimeOffset? from, DateTimeOffset? to,
+        int pageIndex, int pageSize, bool isAscending, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
 }
