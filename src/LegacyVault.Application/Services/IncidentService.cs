@@ -224,6 +224,7 @@ public sealed class IncidentService : IIncidentService
         Guid adminId = await RequireAdminAsync(ct);
         string note = RequireNote(reason, "reason");
         Incident incident = await LoadOpenAsync(incidentId, etag, ct);
+        EnsureNotFollowingCase(incident);
 
         User? assignee = await users.FindByIdAsync(assigneeUserId, ct);
         if (!IncidentRules.IsStaff(assignee))
@@ -292,6 +293,7 @@ public sealed class IncidentService : IIncidentService
         {
             throw Conflict();
         }
+        EnsureNotFollowingCase(incident);
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         incident.Status = IncidentStatus.Resolved;
@@ -399,6 +401,22 @@ public sealed class IncidentService : IIncidentService
             }
         }
         throw ValidationErrors.For(field, "Giá trị lọc không hợp lệ.");
+    }
+
+    /// <summary>
+    /// ALIVE-08: sự cố OWNER_ALIVE đi theo hồ sơ. Người phụ trách luôn là Verifier giữ hồ sơ và sự cố tự đóng khi Verifier
+    /// kết luận. Giao hay đóng tay sẽ lệch với hồ sơ (người được giao mở hồ sơ nhận 404, kho vẫn bị chặn), nên Admin
+    /// đổi người bằng POST /admin/death-cases/{caseId}/reassign-verifier.
+    /// </summary>
+    private static void EnsureNotFollowingCase(Incident incident)
+    {
+        if (incident.Type == IncidentType.OwnerAlive)
+        {
+            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+            extensions["reason"] = "INCIDENT_FOLLOWS_CASE";
+            throw new AppException(AppErrorType.Conflict, ErrorCode.AdminActionNotAllowed,
+                "Sự cố này đi theo hồ sơ chứng tử. Hãy giao lại người xét duyệt của hồ sơ.", extensions);
+        }
     }
 
     private static AppException Conflict()

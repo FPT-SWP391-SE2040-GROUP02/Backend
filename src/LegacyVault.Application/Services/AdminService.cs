@@ -60,6 +60,7 @@ public sealed class AdminService : IAdminService
     private readonly IExecutorReader executorReader;
     private readonly IIncidentService incidentService;
     private readonly IIncidentRepository incidents;
+    private readonly IObjectionRepository objections;
     private readonly IHoldRepository holds;
     private readonly IRefreshTokenRepository refreshTokens;
     private readonly IAuditLogRepository audit;
@@ -76,6 +77,7 @@ public sealed class AdminService : IAdminService
         IExecutorReader executorReader,
         IIncidentService incidentService,
         IIncidentRepository incidents,
+        IObjectionRepository objections,
         IHoldRepository holds,
         IRefreshTokenRepository refreshTokens,
         IAuditLogRepository audit,
@@ -92,6 +94,7 @@ public sealed class AdminService : IAdminService
         this.executorReader = executorReader;
         this.incidentService = incidentService;
         this.incidents = incidents;
+        this.objections = objections;
         this.holds = holds;
         this.audit = audit;
         this.unitOfWork = unitOfWork;
@@ -253,7 +256,17 @@ public sealed class AdminService : IAdminService
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
         }
-        if (!DeathCaseReviewRules.CanDecide(deathCase.Status))
+        // Hồ sơ đang chờ quyết định, hoặc đang tạm dừng vì Owner báo còn sống mà lời báo chưa được kết luận (ALIVE-08).
+        DeathCaseObjection? openObjection = null;
+        if (deathCase.Status == DeathCaseStatus.Suspended)
+        {
+            openObjection = await objections.FindOpenByCaseAsync(deathCase.Id, ct);
+            if (openObjection == null)
+            {
+                throw NotAllowed("CASE_NOT_PENDING");
+            }
+        }
+        else if (!DeathCaseReviewRules.CanDecide(deathCase.Status))
         {
             throw NotAllowed("CASE_NOT_PENDING");
         }
@@ -309,6 +322,16 @@ public sealed class AdminService : IAdminService
         deathCase.UpdatedAt = now;
         await incidentService.ResolveByTargetAsync(
             IncidentType.NoVerifier, IncidentRules.TargetDeathCase, deathCase.Id, "Admin đã giao Verifier.", ct);
+        if (openObjection != null)
+        {
+            // Lời báo còn sống đi theo Verifier mới: tính lại hạn kết luận như job giao lại (D2a), nếu không job thấy hạn cũ
+            // đã qua sẽ chuyển hồ sơ khỏi người Admin vừa chọn. Hạn selfie của Owner giữ nguyên (ALIVE-03).
+            openObjection.VerifierUserId = verifierId;
+            openObjection.VerifierDueAt = ObjectionRules.ComputeVerifierDueAt(now, openObjection.SelfieDeadlineAt);
+            openObjection.UpdatedAt = now;
+            await incidentService.ReassignByTargetAsync(IncidentType.OwnerAlive, IncidentRules.TargetDeathCase,
+                deathCase.Id, verifierId, "Admin giao lại Verifier: " + reason, ct);
+        }
         audit.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.VerifierReassigned,
             AuditTargetType.DeathCase, deathCase.Id, null, AuditOutcome.Succeeded, reason, now));
         try
