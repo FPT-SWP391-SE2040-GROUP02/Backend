@@ -103,8 +103,15 @@ public sealed class VaultService(
             vault.Description = TextInput.NullIfBlank(request.Description);
         }
 
-        // Không tăng Plan.ConfigVersion: tên/mô tả kho không thuộc cấu hình bàn giao.
-        vault.UpdatedAt = timeProvider.GetUtcNow();
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        if (request.ExecutorNote is not null)
+        {
+            vault.ExecutorNote = TextInput.NullIfBlank(request.ExecutorNote);
+            vault.ExecutorNoteUpdatedAt = now;
+        }
+
+        // Không tăng Plan.ConfigVersion: tên/mô tả kho và hướng dẫn cho Executor không thuộc cấu hình bàn giao.
+        vault.UpdatedAt = now;
         auditLogRepository.Add(AuditRules.OwnerAction(
             vault.Id, userId, AuditAction.VaultUpdated, AuditTargetType.Vault, vault.Id, null, vault.UpdatedAt.Value));
         await unitOfWork.SaveChangesAsync(ct);

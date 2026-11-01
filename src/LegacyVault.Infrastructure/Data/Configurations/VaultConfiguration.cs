@@ -20,6 +20,10 @@ public sealed class VaultConfiguration : IEntityTypeConfiguration<Vault>
         builder.Property(v => v.Description)
             .HasMaxLength(1000);
 
+        // Khớp UpdateVaultRequest.ExecutorNote (tối đa 2000 ký tự).
+        builder.Property(v => v.ExecutorNote)
+            .HasMaxLength(2000);
+
         builder.Property(v => v.Status)
             .IsRequired()
             .HasConversion<string>()

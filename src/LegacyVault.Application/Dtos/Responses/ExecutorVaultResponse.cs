@@ -10,6 +10,11 @@ public class ExecutorVaultResponse
 
     public string PlanStatus { get; set; } = string.Empty;
 
+    /// <summary>Hướng dẫn Owner để lại cho Executor, xem được trước khi hồ sơ chứng tử được duyệt; null khi Owner chưa viết.</summary>
+    public string? ExecutorNote { get; set; }
+
+    public DateTimeOffset? ExecutorNoteUpdatedAt { get; set; }
+
     /// <summary>DMS-05: Owner đã quá hạn điểm danh (kế hoạch CHECKIN_OVERDUE hoặc AWAITING_CHECK).</summary>
     public bool CheckInOverdue { get; set; }
 
