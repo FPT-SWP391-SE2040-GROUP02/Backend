@@ -80,7 +80,9 @@ public sealed class HandoverProgressService : IHandoverProgressService
             {
                 last4 = citizenIdLast4[turn.BeneficiaryId];
             }
-            response.Turns.Add(turn.ToProgressResponse(last4, firstDownloads));
+            HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(last4, firstDownloads);
+            turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
+            response.Turns.Add(turnResponse);
             CountTurn(response.Summary, turn.Status);
         }
         return response;

@@ -111,6 +111,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Jwt:AccessTokenMinutes"] = "15";
             // Tắt job nền điểm danh: test tự gọi ICheckInJob khi cần, tránh job chạy xen vào dữ liệu test.
             settings["CheckIn:Enabled"] = "false";
+            settings["EntitlementExpiry:Enabled"] = "false";
             settings["Handover:Job:Enabled"] = "false";
             settings["Handover:RequireIdentityVerification"] = "false";
             settings["ExecutorInvitations:DeliveryEnabled"] = "false";
@@ -128,7 +129,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Email:Smtp:UserName"] = "";
             settings["Email:Smtp:Password"] = "";
             settings["Email:Smtp:WebhookUrl"] = "";
-            settings["Email:Smtp:BrevoApiKey"] = "";
             // Không gọi Gemini thật từ test dù user-secrets có key.
             settings["Gemini:ApiKey"] = "";
             configuration.AddInMemoryCollection(settings);

@@ -18,6 +18,7 @@ public sealed class DevToolsService(
     IAuditLogRepository auditLogs,
     IUnitOfWork unitOfWork,
     ICheckInJob checkInJob,
+    IEntitlementExpiryJob entitlementExpiryJob,
     IOperationsRecorder operationsRecorder,
     TimeProvider timeProvider,
     IEkycOptions ekycOptions,
@@ -65,6 +66,7 @@ public sealed class DevToolsService(
         AuditTargetType targetType;
         Guid targetId;
         Guid? periodToProcess = null;
+        bool runEntitlementExpiry = false;
 
         if (key == DevToolsRules.CheckInOverdue || key == DevToolsRules.GraceEnded)
         {
@@ -109,6 +111,20 @@ public sealed class DevToolsService(
             targetId = period.Id;
             periodToProcess = period.Id;
         }
+        else if (key == DevToolsRules.ServiceExpired)
+        {
+            // OPLAN-01: dời hạn dịch vụ về quá khứ; job hết hạn quyết định chuyển sang ân hạn như khi chạy nền.
+            VaultEntitlement entitlement = vault.Entitlement;
+            EnsureAvailable(DevToolsRules.EvaluateServiceExpired(entitlement));
+            if (entitlement.ServiceExpiresAt!.Value > past)
+            {
+                entitlement.ServiceExpiresAt = past;
+            }
+            entitlement.UpdatedAt = now;
+            targetType = AuditTargetType.Vault;
+            targetId = vault.Id;
+            runEntitlementExpiry = true;
+        }
         else if (key == DevToolsRules.ObjectionWindowEnded)
         {
             DeathCase? openCase = await repository.FindOpenDeathCaseAsync(vault.Id, ct);
@@ -138,6 +154,11 @@ public sealed class DevToolsService(
             // Chạy ngay vòng xử lý của job điểm danh cho kỳ này, giống job nền, để màn hình thấy trạng thái mới liền.
             await checkInJob.ProcessPeriodAsync(periodToProcess.Value, ct);
             await operationsRecorder.RecordCheckInPeriodAsync(periodToProcess.Value, ct);
+        }
+        if (runEntitlementExpiry)
+        {
+            // Chạy ngay job hết hạn cho kho này, giống job nền, để màn hình thấy kho đã sang ân hạn.
+            await entitlementExpiryJob.ProcessVaultAsync(vault.Id, ct);
         }
 
         Vault refreshed = await LoadVaultAsync(vault.Id, ct);
@@ -417,6 +438,7 @@ public sealed class DevToolsService(
         response.Milestones.Add(DevToolsRules.EvaluateGraceEnded(status, period, now));
         response.Milestones.Add(DevToolsRules.EvaluateObjectionWindow(openCase, now));
         response.Milestones.Add(DevToolsRules.EvaluateSelfieDeadline(objection, now));
+        response.Milestones.Add(DevToolsRules.EvaluateServiceExpired(vault.Entitlement));
         return response;
     }
 
@@ -439,7 +461,8 @@ public sealed class DevToolsService(
 
     private async Task<Vault> LoadVaultAsync(Guid vaultId, CancellationToken ct)
     {
-        Vault? vault = await repository.FindVaultAsync(vaultId, ct);
+        // Kèm quyền dịch vụ để đánh giá và tua mốc hết hạn dịch vụ.
+        Vault? vault = await repository.FindVaultWithEntitlementAsync(vaultId, ct);
         if (vault == null)
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");

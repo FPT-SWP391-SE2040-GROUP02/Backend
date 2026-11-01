@@ -57,4 +57,10 @@ public class CheckInPeriodResponse
     public DateTimeOffset? OverdueAt { get; set; }
 
     public DateTimeOffset? AwaitingCheckAt { get; set; }
+
+    /// <summary>
+    /// Lúc kỳ đóng; null khi kỳ còn mở. Có ClosedAt mà không có CheckedInAt nghĩa là kỳ bị dừng vì kế hoạch không còn
+    /// chạy (ví dụ về Nháp theo SETUP-16), không phải Owner đã điểm danh.
+    /// </summary>
+    public DateTimeOffset? ClosedAt { get; set; }
 }

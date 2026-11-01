@@ -14,6 +14,12 @@ public class HandoverProgressTurnResponse
     /// <summary>Trạng thái lượt dạng UPPER_SNAKE_CASE, ví dụ INVITED, HANDOVER_COMMITTED.</summary>
     public string Status { get; set; } = string.Empty;
 
+    /// <summary>true: lượt do chính tài khoản đang xem nhận. Executor không tự xác nhận được lượt này (BR-122).</summary>
+    public bool ClaimedByYou { get; set; }
+
+    /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC (BR-122).</summary>
+    public bool IdentityConfirmedByExecutor { get; set; }
+
     public DateTimeOffset InvitedAt { get; set; }
 
     public DateTimeOffset ResponseDeadline { get; set; }

@@ -41,8 +41,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     private readonly IOwnerIdentityRepository ownerIdentityRepository;
     private readonly IOwnerIdentityProtector ownerIdentityProtector;
     private readonly ISigningPasswordChecker signingPasswordChecker;
-    private readonly IDecisionSigner decisionSigner;
-    private readonly IVerifierSigningKeyRepository signingKeyRepository;
 
     public DeathCaseReviewService(
         ICurrentUser currentUser,
@@ -62,9 +60,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         IDeathCaseExecutorNoticeSender executorNoticeSender,
         IOwnerIdentityRepository ownerIdentityRepository,
         IOwnerIdentityProtector ownerIdentityProtector,
-        ISigningPasswordChecker signingPasswordChecker,
-        IDecisionSigner decisionSigner,
-        IVerifierSigningKeyRepository signingKeyRepository)
+        ISigningPasswordChecker signingPasswordChecker)
     {
         this.currentUser = currentUser;
         this.userRepository = userRepository;
@@ -84,8 +80,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         this.ownerIdentityRepository = ownerIdentityRepository;
         this.ownerIdentityProtector = ownerIdentityProtector;
         this.signingPasswordChecker = signingPasswordChecker;
-        this.decisionSigner = decisionSigner;
-        this.signingKeyRepository = signingKeyRepository;
     }
 
     public async Task<PaginatedList<VerifierDeathCaseSummaryResponse>> ListAsync(PaginationRequest pagination, CancellationToken ct)
@@ -295,7 +289,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
         DeathCase deathCase = context.DeathCase;
 
-        // DEATH-14, D11: nhập lại mật khẩu để ký; đặt trước nhánh gọi lặp nên gọi lặp cũng phải đúng mật khẩu.
+        // DEATH-03: nhập lại mật khẩu để xác nhận; đặt trước nhánh gọi lặp nên gọi lặp cũng phải đúng mật khẩu.
         await CheckSigningPasswordAsync(context, request.Password, ct);
 
         // 3) Hồ sơ đã đóng (kiểm TRƯỚC etag): đã từ chối rồi thì gọi lặp trả trạng thái hiện tại (không thêm dòng);
@@ -332,8 +326,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         DeathCaseDecision decision = NewDecision(context, DeathCaseDecisionKind.Rejected, reason, now);
         deathCase.Decisions.Add(decision);
         reviewRepository.AddDecision(decision);
-        // DEATH-14: ký trước lần lưu duy nhất; khóa mới (nếu có) lưu cùng quyết định.
-        await SignDecisionAsync(context, decision, ct);
         deathCase.Status = DeathCaseStatus.Rejected;
         deathCase.ClosedAt = now;
         deathCase.UpdatedAt = now;
@@ -384,7 +376,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
         DeathCase deathCase = context.DeathCase;
 
-        // DEATH-14, D11: nhập lại mật khẩu để ký; đặt trước nhánh gọi lặp nên gọi lặp cũng phải đúng mật khẩu.
+        // DEATH-03: nhập lại mật khẩu để xác nhận; đặt trước nhánh gọi lặp nên gọi lặp cũng phải đúng mật khẩu.
         await CheckSigningPasswordAsync(context, request.Password, ct);
 
         // 2) AC-71: hồ sơ đã đóng (kiểm TRƯỚC etag). Đã duyệt rồi thì gọi lặp trả trạng thái hiện tại
@@ -431,9 +423,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         DeathCaseDecision decision = NewDecision(context, DeathCaseDecisionKind.Approved, reason, now);
         deathCase.Decisions.Add(decision);
         reviewRepository.AddDecision(decision);
-        // DEATH-14: ký trước StartAsync để lần lưu duy nhất lưu luôn chữ ký và khóa mới (nếu có);
-        // các nhánh DiscardPendingChanges bên dưới tự bỏ khóa mới chưa lưu.
-        await SignDecisionAsync(context, decision, ct);
         deathCase.Status = DeathCaseStatus.ApprovedForHandover;
         deathCase.ClosedAt = now;
         deathCase.UpdatedAt = now;
@@ -472,25 +461,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         handover.InvitationsSent = result.InvitationsSent;
         handover.InvitationsFailed = result.InvitationsFailed;
         return await BuildResponseAsync(context, handover, ct);
-    }
-
-    public async Task<DecisionSignatureResponse> GetDecisionSignatureAsync(Guid caseId, CancellationToken ct)
-    {
-        // 1) D8: chỉ Verifier có phân công đang hiệu lực; còn lại 404 như chi tiết hồ sơ.
-        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
-
-        // 2) DEATH-14: kiểm lại chữ ký bằng cùng một chỗ luật với chi tiết hồ sơ (D12). Không ghi gì.
-        SignatureCheck check = await CheckDecisionSignatureAsync(context.DeathCase, ct);
-        string? signedByFullName = null;
-        if (check.Decision != null)
-        {
-            User? signer = await userRepository.FindByIdAsync(check.Decision.VerifierUserId, ct);
-            if (signer != null)
-            {
-                signedByFullName = signer.FullName;
-            }
-        }
-        return DecisionSignatureMappings.ToSignatureResponse(check.Status, check.Decision, check.Key, signedByFullName);
     }
 
     /// <summary>
@@ -576,9 +546,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         }
         VerifierDeathCaseResponse response = deathCase.ToVerifierResponse(context.Assignment, identity, previous, blockers, handover);
         response.OwnerIdentity = await BuildOwnerIdentityAsync(deathCase, identity, ct);
-        // DEATH-14, D12: tự kiểm chữ ký mỗi lần mở chi tiết để FE hiện nhãn ngay.
-        SignatureCheck signatureCheck = await CheckDecisionSignatureAsync(deathCase, ct);
-        response.DecisionSignatureStatus = signatureCheck.Status;
         return response;
     }
 
@@ -707,7 +674,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     }
 
     /// <summary>
-    /// DEATH-14, D11: đọc tài khoản Verifier rồi kiểm mật khẩu xác nhận ký (khóa lũy tiến). Gọi SAU khi đã chắc là
+    /// DEATH-03: đọc tài khoản Verifier rồi kiểm mật khẩu xác nhận duyệt/từ chối (khóa lũy tiến). Gọi SAU khi đã chắc là
     /// Verifier được giao hồ sơ, để người không được giao (hoặc đã bị giao lại) không tốn lần đoán.
     /// </summary>
     private async Task CheckSigningPasswordAsync(ReviewContext context, string password, CancellationToken ct)
@@ -719,77 +686,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
                 "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
         }
         await signingPasswordChecker.CheckAsync(user, password, timeProvider.GetUtcNow(), ct);
-    }
-
-    /// <summary>
-    /// DEATH-14: ký quyết định cuối bằng khóa đang dùng của Verifier; chưa có khóa thì tạo ở lần ký đầu (D3).
-    /// Chuỗi ký dựng bằng DecisionSignatureRules.BuildPayload (D6), tệp của bản được xét theo Position. Không lưu.
-    /// </summary>
-    private async Task SignDecisionAsync(ReviewContext context, DeathCaseDecision decision, CancellationToken ct)
-    {
-        VerifierSigningKey? key = await signingKeyRepository.FindActiveByUserIdAsync(context.UserId, ct);
-        if (key == null)
-        {
-            key = decisionSigner.CreateKey(context.UserId, decision.DecidedAt);
-            signingKeyRepository.Add(key);
-        }
-
-        DeathCaseVersion version = DeathCaseMappings.FindVersion(context.DeathCase, decision.VersionNo);
-        List<Guid> fileIds = DecisionSignatureRules.FileIdsInPosition(version);
-        byte[] payload = DecisionSignatureRules.BuildPayload(decision, fileIds);
-        decision.Signature = decisionSigner.Sign(key, payload);
-        decision.SigningKeyId = key.Id;
-    }
-
-    /// <summary>
-    /// DEATH-14: MỘT chỗ luật kiểm chữ ký quyết định cuối, dùng cho cả chi tiết hồ sơ (D12) và phiếu chữ ký.
-    /// Không có quyết định cuối → NO_FINAL_DECISION; thiếu chữ ký hoặc khóa → NOT_SIGNED; không còn khóa → INVALID;
-    /// còn lại dựng lại chuỗi ký từ dữ liệu hiện tại (D6) rồi kiểm (D7).
-    /// </summary>
-    private async Task<SignatureCheck> CheckDecisionSignatureAsync(DeathCase deathCase, CancellationToken ct)
-    {
-        SignatureCheck check = new SignatureCheck();
-
-        // AC-71: mỗi hồ sơ tối đa một quyết định cuối.
-        foreach (DeathCaseDecision candidate in deathCase.Decisions)
-        {
-            if (DecisionSignatureRules.IsSignedKind(candidate.Kind))
-            {
-                check.Decision = candidate;
-            }
-        }
-        if (check.Decision == null)
-        {
-            check.Status = DecisionSignatureRules.StatusNoFinalDecision;
-            return check;
-        }
-
-        DeathCaseDecision decision = check.Decision;
-        if (decision.Signature == null || decision.SigningKeyId == null)
-        {
-            check.Status = DecisionSignatureRules.StatusNotSigned;
-            return check;
-        }
-
-        check.Key = await signingKeyRepository.FindByIdAsync(decision.SigningKeyId.Value, ct);
-        if (check.Key == null)
-        {
-            check.Status = DecisionSignatureRules.StatusInvalid;
-            return check;
-        }
-
-        DeathCaseVersion version = DeathCaseMappings.FindVersion(deathCase, decision.VersionNo);
-        List<Guid> fileIds = DecisionSignatureRules.FileIdsInPosition(version);
-        byte[] payload = DecisionSignatureRules.BuildPayload(decision, fileIds);
-        if (decisionSigner.Verify(check.Key, payload, decision.Signature))
-        {
-            check.Status = DecisionSignatureRules.StatusValid;
-        }
-        else
-        {
-            check.Status = DecisionSignatureRules.StatusInvalid;
-        }
-        return check;
     }
 
     /// <summary>DEATH-03, STATE-03: dòng quyết định gắn bản đang xét và phân công đang hiệu lực đã tải.</summary>
@@ -952,15 +848,5 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         public DeathCaseAssignment Assignment { get; set; } = null!;
 
         public Guid UserId { get; set; }
-    }
-
-    /// <summary>DEATH-14: kết quả kiểm chữ ký, quyết định cuối (nếu có) và khóa đã ký (nếu tìm thấy).</summary>
-    private sealed class SignatureCheck
-    {
-        public string Status { get; set; } = string.Empty;
-
-        public DeathCaseDecision? Decision { get; set; }
-
-        public VerifierSigningKey? Key { get; set; }
     }
 }

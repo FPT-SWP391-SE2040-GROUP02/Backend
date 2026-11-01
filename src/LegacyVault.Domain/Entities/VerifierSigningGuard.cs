@@ -1,12 +1,12 @@
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// DEATH-14: bộ đếm nhập sai mật khẩu xác nhận ký của một Verifier (bảng VerifierSigningGuards), cấu trúc theo VaultPin.
+/// DEATH-03: bộ đếm nhập sai mật khẩu xác nhận duyệt/từ chối của một Verifier (bảng VerifierSigningGuards), cấu trúc theo VaultPin.
 /// </summary>
 /// <remarks>
 /// - Khóa chính là UserId: mỗi Verifier một dòng, chỉ tạo khi nhập sai lần đầu.
-/// - Sai 5 lần liên tiếp thì khóa chức năng ký 15 phút, 1 giờ, rồi 24 giờ (dùng VaultPinRules).
-///   Chỉ khóa ký, không khóa đăng nhập hay xem hồ sơ.
+/// - Sai 5 lần liên tiếp thì khóa chức năng duyệt/từ chối 15 phút, 1 giờ, rồi 24 giờ (dùng VaultPinRules).
+///   Chỉ khóa duyệt/từ chối, không khóa đăng nhập hay xem hồ sơ.
 /// - RowVersion là concurrency token: nhiều request đoán mật khẩu song song không đếm sót lần sai.
 /// </remarks>
 public class VerifierSigningGuard
