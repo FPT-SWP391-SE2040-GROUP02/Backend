@@ -8,8 +8,16 @@ public class HandoverProgressTurnResponse
     /// <summary>Tên gói lúc mở bàn giao.</summary>
     public string ContainerName { get; set; } = string.Empty;
 
-    /// <summary>Chỉ 4 số cuối CCCD để Executor phân biệt người nhận; không trả họ tên hay liên hệ.</summary>
+    /// <summary>Chỉ 4 số cuối CCCD để Executor phân biệt người nhận; họ tên và số điện thoại chỉ trả riêng khi đã bàn giao (xem BeneficiaryFullName).</summary>
     public string BeneficiaryCitizenIdLast4 { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Họ tên người nhận. Chỉ có khi lượt đã được đồng ý và người nhận đã có quyền tải; các bước trước đó luôn null.
+    /// </summary>
+    public string? BeneficiaryFullName { get; set; }
+
+    /// <summary>Số điện thoại liên hệ của người nhận. Cùng điều kiện với BeneficiaryFullName; null khi người nhận không có số.</summary>
+    public string? BeneficiaryPhone { get; set; }
 
     /// <summary>Trạng thái lượt dạng UPPER_SNAKE_CASE, ví dụ INVITED, HANDOVER_COMMITTED.</summary>
     public string Status { get; set; } = string.Empty;

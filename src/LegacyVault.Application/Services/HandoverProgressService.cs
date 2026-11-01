@@ -5,6 +5,7 @@ using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using System.Security.Cryptography;
 
 namespace LegacyVault.Application.Services;
 
@@ -14,6 +15,8 @@ public sealed class HandoverProgressService : IHandoverProgressService
     private readonly IVaultRepository vaultRepository;
     private readonly IExecutorReader executorReader;
     private readonly IHandoverProgressReader progressReader;
+    private readonly IBeneficiaryRepository beneficiaries;
+    private readonly IBeneficiaryDataProtector beneficiaryProtector;
     private readonly TimeProvider timeProvider;
 
     public HandoverProgressService(
@@ -21,12 +24,16 @@ public sealed class HandoverProgressService : IHandoverProgressService
         IVaultRepository vaultRepository,
         IExecutorReader executorReader,
         IHandoverProgressReader progressReader,
+        IBeneficiaryRepository beneficiaries,
+        IBeneficiaryDataProtector beneficiaryProtector,
         TimeProvider timeProvider)
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.executorReader = executorReader;
         this.progressReader = progressReader;
+        this.beneficiaries = beneficiaries;
+        this.beneficiaryProtector = beneficiaryProtector;
         this.timeProvider = timeProvider;
     }
 
@@ -82,10 +89,44 @@ public sealed class HandoverProgressService : IHandoverProgressService
             }
             HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(last4, firstDownloads);
             turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
+            if (HasHandedOver(turn))
+            {
+                await FillBeneficiaryContactAsync(turnResponse, vault.Id, turn.BeneficiaryId, ct);
+            }
             response.Turns.Add(turnResponse);
             CountTurn(response.Summary, turn.Status);
         }
         return response;
+    }
+
+    /// <summary>Lượt đã bàn giao: người nhận đã đồng ý và có quyền tải. Chỉ từ bước này Executor mới thấy tên và số điện thoại.</summary>
+    private static bool HasHandedOver(HandoverTurn turn)
+    {
+        return turn.Status == HandoverTurnStatus.HandoverCommitted && turn.Grant != null;
+    }
+
+    /// <summary>
+    /// Giải mã họ tên và số điện thoại người nhận cho Executor. Không giải mã được (thiếu KEK, dữ liệu hỏng)
+    /// thì để trống thay vì làm hỏng cả màn hình tiến độ.
+    /// </summary>
+    private async Task FillBeneficiaryContactAsync(
+        HandoverProgressTurnResponse turnResponse, Guid vaultId, Guid beneficiaryId, CancellationToken ct)
+    {
+        Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vaultId, beneficiaryId, ct);
+        if (beneficiary == null)
+        {
+            return;
+        }
+        try
+        {
+            BeneficiaryPersonalData personal = beneficiaryProtector.Unprotect(beneficiary);
+            turnResponse.BeneficiaryFullName = personal.FullName;
+            turnResponse.BeneficiaryPhone = personal.Phone;
+        }
+        catch (CryptographicException)
+        {
+            // Giữ nguyên null: màn hình hiện "chưa có".
+        }
     }
 
     /// <summary>Executor đang hiệu lực của kho và không phải Owner, giống luật của phần nộp hồ sơ chứng tử.</summary>
