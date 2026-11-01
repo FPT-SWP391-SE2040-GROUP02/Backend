@@ -38,7 +38,7 @@ public class Beneficiary
     public byte[] WrappedDataKey { get; set; } = Array.Empty<byte>();
 
     /// <summary>
-    /// Đã mã hóa: JSON {citizenId, fullName, dateOfBirth}. CCCD là dữ liệu định danh phải mã hóa (DATA-02, §11.6).
+    /// Đã mã hóa: JSON {citizenId, fullName,  }. CCCD là dữ liệu định danh phải mã hóa (DATA-02, §11.6).
     /// </summary>
     public byte[] IdentityEncrypted { get; set; } = Array.Empty<byte>();
 
