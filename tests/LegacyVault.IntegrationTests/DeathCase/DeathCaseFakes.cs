@@ -23,6 +23,11 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         return Task.FromResult(Cases.FirstOrDefault(c => c.Id == caseId));
     }
 
+    public Task<DeathCaseAssignment?> FindAliveConfirmedAssignmentAsync(Guid caseId, Guid verifierUserId, CancellationToken ct)
+    {
+        return Task.FromResult<DeathCaseAssignment?>(null);
+    }
+
     public Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
         return Task.FromResult(Cases.FirstOrDefault(c => c.VaultId == vaultId && c.Status != DeathCaseStatus.Rejected));

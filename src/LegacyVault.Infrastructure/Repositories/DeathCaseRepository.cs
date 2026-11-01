@@ -1,4 +1,5 @@
 using LegacyVault.Application.Repositories;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
@@ -21,6 +22,16 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
     public Task<DeathCase?> FindByIdAsync(Guid caseId, CancellationToken ct)
     {
         return QueryWithDetails().FirstOrDefaultAsync(c => c.Id == caseId, ct);
+    }
+
+    public Task<DeathCaseAssignment?> FindAliveConfirmedAssignmentAsync(Guid caseId, Guid verifierUserId, CancellationToken ct)
+    {
+        string aliveConfirmed = DeathCaseAssignmentRules.EndReasonAliveConfirmed;
+        return context.Set<DeathCaseAssignment>()
+            .AsNoTracking()
+            .Where(a => a.CaseId == caseId && a.VerifierUserId == verifierUserId && a.EndReason == aliveConfirmed)
+            .OrderByDescending(a => a.EndedAt)
+            .FirstOrDefaultAsync(ct);
     }
 
     public Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct)

@@ -66,7 +66,7 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
 
     public async Task<ObjectionResponse> GetAsync(Guid caseId, CancellationToken ct)
     {
-        Context context = await LoadContextAsync(caseId, ct);
+        Context context = await LoadContextAsync(caseId, ct, true);
         DeathCaseObjection? objection = await objections.FindLatestByCaseAsync(caseId, ct);
         if (objection == null)
         {
@@ -77,7 +77,7 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
 
     public async Task<PreparedDownload> PrepareSelfieImageAsync(Guid caseId, CancellationToken ct)
     {
-        await LoadContextAsync(caseId, ct);
+        await LoadContextAsync(caseId, ct, true);
         DeathCaseObjection? objection = await objections.FindLatestByCaseAsync(caseId, ct);
         if (objection == null)
         {
@@ -195,7 +195,7 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
             if (assignment.EndedAt == null)
             {
                 assignment.EndedAt = now;
-                assignment.EndReason = "ALIVE_CONFIRMED";
+                assignment.EndReason = DeathCaseAssignmentRules.EndReasonAliveConfirmed;
             }
         }
 
@@ -283,7 +283,7 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
     }
 
     /// <summary>Verifier đang hoạt động, được giao hồ sơ và không phải Owner/Executor của kho (ROLE-03).</summary>
-    private async Task<Context> LoadContextAsync(Guid caseId, CancellationToken ct)
+    private async Task<Context> LoadContextAsync(Guid caseId, CancellationToken ct, bool forRead = false)
     {
         Guid userId = currentUser.RequireUserId();
         User? user = await users.FindByIdAsync(userId, ct);
@@ -293,7 +293,18 @@ public sealed class VerifierObjectionService : IVerifierObjectionService
         }
 
         DeathCase? deathCase = await deathCases.FindByIdAsync(caseId, ct);
-        if (deathCase == null || !IsAssignedTo(deathCase, userId))
+        if (deathCase == null)
+        {
+            throw ObjectionMapper.CaseNotFound();
+        }
+        bool assigned = IsAssignedTo(deathCase, userId);
+        if (!assigned && forRead && deathCase.Status == DeathCaseStatus.Rejected)
+        {
+            // FindByIdAsync chỉ nạp phân công còn hiệu lực: xem lại hồ sơ mà chính tôi đã kết luận "còn sống".
+            DeathCaseAssignment? concluded = await deathCases.FindAliveConfirmedAssignmentAsync(caseId, userId, ct);
+            assigned = concluded != null && DeathCaseAssignmentRules.CanRead(concluded, userId, deathCase.Status);
+        }
+        if (!assigned)
         {
             throw ObjectionMapper.CaseNotFound();
         }
