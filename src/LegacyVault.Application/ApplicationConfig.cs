@@ -18,11 +18,11 @@ public static class ApplicationConfig
 
         // Điểm danh (deadman switch)
         services.AddScoped<ICheckInService, CheckInService>();
+        services.AddScoped<IExecutorCheckInService, ExecutorCheckInService>();
         services.AddSingleton<ISmartwatchPairingStore, SmartwatchPairingStore>();
         services.AddScoped<ICheckInScheduler, CheckInScheduler>();
         services.AddScoped<ICheckInJob, CheckInJob>();
         services.AddScoped<IEntitlementExpiryJob, EntitlementExpiryJob>();
-        services.AddScoped<IExecutorCheckInService, ExecutorCheckInService>();
 
         // Hồ sơ chứng tử (F2B)
         services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
