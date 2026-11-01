@@ -112,4 +112,6 @@ public enum AuditAction
     ContainerRemoved = 50,
     /// <summary>Kho trả phí hết hạn dịch vụ, chưa có kỳ nối tiếp nên sang ân hạn chỉ đọc (OPLAN-01; job, không có người dùng).</summary>
     ServiceGraceStarted = 51,
+    /// <summary>Executor hủy hồ sơ chứng tử còn nháp (chưa gửi lần nào); hồ sơ và các trang đã tải bị xóa.</summary>
+    DeathCaseDraftCancelled = 52,
 }

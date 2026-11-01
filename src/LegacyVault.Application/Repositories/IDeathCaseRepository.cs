@@ -61,6 +61,11 @@ public interface IDeathCaseRepository
 
     void RemoveFile(DeathCaseFile file);
 
+    void RemoveVersion(DeathCaseVersion version);
+
+    /// <summary>Xóa hẳn hồ sơ (chỉ dùng khi hủy bản nháp chưa gửi); người gọi gỡ phiên bản và file trước.</summary>
+    void RemoveCase(DeathCase deathCase);
+
     void AddFlag(DeathCaseFlag flag);
 
     void AddNotice(DeathCaseNotice notice);

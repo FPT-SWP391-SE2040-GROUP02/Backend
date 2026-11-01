@@ -101,6 +101,16 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
         context.Set<DeathCaseFile>().Remove(file);
     }
 
+    public void RemoveVersion(DeathCaseVersion version)
+    {
+        context.Set<DeathCaseVersion>().Remove(version);
+    }
+
+    public void RemoveCase(DeathCase deathCase)
+    {
+        context.Set<DeathCase>().Remove(deathCase);
+    }
+
     public void AddFlag(DeathCaseFlag flag)
     {
         context.Set<DeathCaseFlag>().Add(flag);
