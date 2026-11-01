@@ -89,7 +89,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
             }
             HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(last4, firstDownloads);
             turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
-            if (HasHandedOver(turn))
+            if (ShowsBeneficiaryContact(turn.Status))
             {
                 await FillBeneficiaryContactAsync(turnResponse, vault.Id, turn.BeneficiaryId, ct);
             }
@@ -99,10 +99,17 @@ public sealed class HandoverProgressService : IHandoverProgressService
         return response;
     }
 
-    /// <summary>Lượt đã bàn giao: người nhận đã đồng ý và có quyền tải. Chỉ từ bước này Executor mới thấy tên và số điện thoại.</summary>
-    private static bool HasHandedOver(HandoverTurn turn)
+    /// <summary>
+    /// Lượt còn hiệu lực (đang mời, đang xác minh, chờ quyết định) hoặc đã bàn giao: Executor cần tên và số điện thoại
+    /// để liên hệ nhắc người nhận. Lượt đã kết thúc (từ chối, hết hạn, hủy, chấm dứt) thì không trả nữa.
+    /// </summary>
+    private static bool ShowsBeneficiaryContact(HandoverTurnStatus status)
     {
-        return turn.Status == HandoverTurnStatus.HandoverCommitted && turn.Grant != null;
+        return status == HandoverTurnStatus.Invited
+            || status == HandoverTurnStatus.InitialResponseExpired
+            || status == HandoverTurnStatus.IdentityInProgress
+            || status == HandoverTurnStatus.ReadyToAccept
+            || status == HandoverTurnStatus.HandoverCommitted;
     }
 
     /// <summary>

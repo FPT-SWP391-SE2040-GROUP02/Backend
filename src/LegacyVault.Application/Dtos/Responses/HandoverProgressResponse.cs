@@ -6,7 +6,7 @@ namespace LegacyVault.Application.Dtos.Responses;
 /// </summary>
 /// <remarks>
 /// Chỉ có trạng thái, hạn và việc đã tải hay chưa. Không có nội dung tài sản hay số CCCD đầy đủ.
-/// Họ tên và số điện thoại người nhận chỉ có ở lượt đã bàn giao (đã đồng ý và có quyền tải).
+/// Họ tên và số điện thoại người nhận có ở lượt còn hiệu lực hoặc đã bàn giao để Executor liên hệ; lượt đã kết thúc thì không.
 /// </remarks>
 public class HandoverProgressResponse
 {
