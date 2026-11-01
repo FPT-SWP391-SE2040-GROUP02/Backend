@@ -8,7 +8,6 @@ using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
 using LegacyVault.Infrastructure.Security;
-using LegacyVault.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -28,7 +27,6 @@ public static class DeathCaseConfig
         services.AddScoped<IObjectionRepository, ObjectionRepository>();
         services.AddScoped<IOwnerFaceVerifier, OwnerFaceVerifier>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
-        services.AddScoped<IAiNotaryAssistantService, GeminiNotaryAssistantService>();
         // AI nhận diện trang giấy có phải giấy chứng tử khi Executor gửi hồ sơ.
         services.AddScoped<IDeathCertificateClassifier, GeminiDeathCertificateClassifier>();
         // DEATH-03: bộ đếm nhập sai mật khẩu xác nhận duyệt/từ chối của Verifier.

@@ -8,7 +8,7 @@ namespace LegacyVault.Infrastructure.DeathCases;
 
 /// <summary>
 /// Gửi một trang giấy (ảnh hoặc PDF) cho Gemini để hỏi có phải giấy chứng tử / trích lục khai tử không.
-/// Dùng chung khóa Gemini:ApiKey với trợ lý Verifier. Mọi lỗi đều trả Unavailable, không ném ra ngoài.
+/// Dùng khóa Gemini:ApiKey. Mọi lỗi đều trả Unavailable, không ném ra ngoài.
 /// </summary>
 /// <remarks>
 /// Không log nội dung tệp hay câu trả lời của AI (có thể chứa họ tên, CCCD in trên giấy), chỉ log mã lỗi HTTP.
