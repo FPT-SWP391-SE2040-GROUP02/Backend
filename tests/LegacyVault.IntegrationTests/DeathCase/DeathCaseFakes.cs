@@ -71,6 +71,16 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         Files.Remove(file);
     }
 
+    public void RemoveVersion(DeathCaseVersion version)
+    {
+        Versions.Remove(version);
+    }
+
+    public void RemoveCase(DeathCase deathCase)
+    {
+        Cases.Remove(deathCase);
+    }
+
     public void AddFlag(DeathCaseFlag flag)
     {
         Flags.Add(flag);

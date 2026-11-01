@@ -39,4 +39,9 @@ public sealed class AppUrlProvider : IAppUrlProvider
     {
         return $"{_clientBaseUrl}/reset-password?token={Uri.EscapeDataString(token)}";
     }
+
+    public string GetExecutorInvitationUrl(string token)
+    {
+        return $"{_clientBaseUrl}/executor-invitation?token={Uri.EscapeDataString(token)}";
+    }
 }

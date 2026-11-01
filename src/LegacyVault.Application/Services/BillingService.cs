@@ -27,6 +27,7 @@ public sealed class BillingService : IBillingService
     private readonly IAuditLogRepository auditLogRepository;
     private readonly IUnitOfWork unitOfWork;
     private readonly IBillingBankSettings bankSettings;
+    private readonly IBillingPriceSettings priceSettings;
     private readonly IBillingDevSettings devSettings;
     private readonly PaymentGranter paymentGranter;
     private readonly TimeProvider timeProvider;
@@ -40,6 +41,7 @@ public sealed class BillingService : IBillingService
         IAuditLogRepository auditLogRepository,
         IUnitOfWork unitOfWork,
         IBillingBankSettings bankSettings,
+        IBillingPriceSettings priceSettings,
         IBillingDevSettings devSettings,
         PaymentGranter paymentGranter,
         TimeProvider timeProvider)
@@ -52,6 +54,7 @@ public sealed class BillingService : IBillingService
         this.auditLogRepository = auditLogRepository;
         this.unitOfWork = unitOfWork;
         this.bankSettings = bankSettings;
+        this.priceSettings = priceSettings;
         this.devSettings = devSettings;
         this.paymentGranter = paymentGranter;
         this.timeProvider = timeProvider;
@@ -59,7 +62,7 @@ public sealed class BillingService : IBillingService
 
     public Task<BillingPlansResponse> GetPlansAsync(CancellationToken ct)
     {
-        BillingPlansResponse response = BillingMappings.ToPlansResponse();
+        BillingPlansResponse response = BillingMappings.ToPlansResponse(priceSettings);
         return Task.FromResult(response);
     }
 
@@ -364,23 +367,23 @@ public sealed class BillingService : IBillingService
     }
 
     /// <summary>Tính giá theo loại đơn đã xác định; báo giá và tạo đơn dùng chung (D2).</summary>
-    private static BillingQuote BuildQuote(BillingSelectionRequest request, BillingEligibility eligibility, DateTimeOffset now)
+    private BillingQuote BuildQuote(BillingSelectionRequest request, BillingEligibility eligibility, DateTimeOffset now)
     {
         if (eligibility.Kind == PaymentOrderKind.Purchase)
         {
-            return BillingRules.QuotePurchase(request.Tier, request.Years, request.ExtraSlots);
+            return BillingRules.QuotePurchase(priceSettings, request.Tier, request.Years, request.ExtraSlots);
         }
         if (eligibility.Kind == PaymentOrderKind.Renewal)
         {
             return BillingRules.QuoteRenewal(
-                eligibility.Vault.Entitlement, request.Tier, request.Years, request.ExtraSlots, now);
+                priceSettings, eligibility.Vault.Entitlement, request.Tier, request.Years, request.ExtraSlots, now);
         }
         if (eligibility.Kind == PaymentOrderKind.Upgrade)
         {
             return BillingRules.QuoteUpgrade(
-                eligibility.Vault.Entitlement, eligibility.PaidYears, request.ExtraSlots, now);
+                priceSettings, eligibility.Vault.Entitlement, eligibility.PaidYears, request.ExtraSlots, now);
         }
-        return BillingRules.QuoteAddon(eligibility.Vault.Entitlement, request.ExtraSlots, now);
+        return BillingRules.QuoteAddon(priceSettings, eligibility.Vault.Entitlement, request.ExtraSlots, now);
     }
 
     /// <summary>Dựng đơn Pending từ báo giá: giá, dung lượng, số suất, phiên bản chính sách đều được chốt tại đây (PAY-11).</summary>
@@ -399,7 +402,7 @@ public sealed class BillingService : IBillingService
         order.StorageQuotaBytes = quote.StorageQuotaBytes;
         order.IncludedBeneficiarySlots = quote.IncludedBeneficiarySlots;
         order.BaseServiceExpiresAt = quote.BaseServiceExpiresAt;
-        order.PolicyVersion = BillingPrices.PolicyVersion;
+        order.PolicyVersion = quote.PolicyVersion;
         order.PaymentCode = BillingRules.NewPaymentCode();
         order.Status = PaymentOrderStatus.Pending;
         // ADDON-03: đơn mua thêm hết hạn ở mốc sớm hơn giữa 15 phút và hết kỳ hiện tại.

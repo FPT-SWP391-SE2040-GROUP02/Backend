@@ -86,4 +86,14 @@ public sealed class AuditRulesTests
         Assert.NotNull(normalized);
         Assert.Equal(AuditRules.MaxReasonLength, normalized.Length);
     }
+
+    [Fact]
+    public void ParseAction_BlankIsNull_KnownCodeMaps_UnknownThrows()
+    {
+        Assert.Null(AuditRules.ParseAction(null));
+        Assert.Null(AuditRules.ParseAction("  "));
+        Assert.Equal(AuditAction.DeathCaseRejected, AuditRules.ParseAction("DEATH_CASE_REJECTED"));
+        Assert.ThrowsAny<Exception>(() => AuditRules.ParseAction("30"));
+        Assert.ThrowsAny<Exception>(() => AuditRules.ParseAction("DeathCaseRejected"));
+    }
 }

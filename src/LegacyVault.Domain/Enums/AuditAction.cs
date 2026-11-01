@@ -110,4 +110,8 @@ public enum AuditAction
     VaultPinLocked = 49,
     /// <summary>Owner xóa gói (SETUP-16): gói không còn thuộc kế hoạch, không khôi phục được. Thay cho ContainerArchived.</summary>
     ContainerRemoved = 50,
+    /// <summary>Kho trả phí hết hạn dịch vụ, chưa có kỳ nối tiếp nên sang ân hạn chỉ đọc (OPLAN-01; job, không có người dùng).</summary>
+    ServiceGraceStarted = 51,
+    /// <summary>Executor hủy hồ sơ chứng tử còn nháp (chưa gửi lần nào); hồ sơ và các trang đã tải bị xóa.</summary>
+    DeathCaseDraftCancelled = 52,
 }

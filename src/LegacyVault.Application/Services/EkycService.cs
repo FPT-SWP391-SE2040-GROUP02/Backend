@@ -238,7 +238,19 @@ public sealed class EkycService : IEkycService
             }
         }
 
-        // Bản tự khai chỉ được kiểm tra trong request, không lưu PII hoặc nâng kết quả từ ảnh thành MATCHED.
+        // Bản tự khai không nâng kết quả từ ảnh thành MATCHED. Riêng nơi cư trú của Owner đăng ký: lưu MÃ HÓA cùng bản tạm
+        // danh tính để gắn vào OwnerIdentity khi lượt đạt. CCCD, họ tên, ngày sinh vẫn lấy từ OCR, không ghi đè bằng bản khai.
+        if (purpose == EkycPurpose.OwnerEnrollment)
+        {
+            OwnerIdentityData? pending = identityProtector.UnprotectPending(verification);
+            if (pending != null)
+            {
+                pending.ResidenceAddress = request.ResidenceAddress.Trim();
+                identityProtector.ProtectPending(verification, pending);
+                await unitOfWork.SaveChangesAsync(ct);
+            }
+        }
+
         return verification.ToResponse(ekycOptions.CurrentThreshold);
     }
 
@@ -270,7 +282,7 @@ public sealed class EkycService : IEkycService
         verification.BackSubmittedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
 
-        // BR-88: nơi cư trú đọc từ mặt sau chỉ trả cho người dùng đối chiếu; không gán vào lượt eKYC nên không lưu.
+        // BR-88: nơi cư trú đọc từ mặt sau chỉ trả cho người dùng đối chiếu; chỉ bản người dùng xác nhận ở ConfirmDocumentAsync mới được lưu.
         return verification.ToBackResponse(reading.ResidenceAddress, ekycOptions.CurrentThreshold);
     }
 

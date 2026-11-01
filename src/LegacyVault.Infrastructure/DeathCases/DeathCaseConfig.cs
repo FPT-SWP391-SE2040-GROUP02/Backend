@@ -8,7 +8,6 @@ using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
 using LegacyVault.Infrastructure.Security;
-using LegacyVault.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -28,16 +27,13 @@ public static class DeathCaseConfig
         services.AddScoped<IObjectionRepository, ObjectionRepository>();
         services.AddScoped<IOwnerFaceVerifier, OwnerFaceVerifier>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
-        services.AddScoped<IAiNotaryAssistantService, GeminiNotaryAssistantService>();
         // AI nhận diện trang giấy có phải giấy chứng tử khi Executor gửi hồ sơ.
         services.AddScoped<IDeathCertificateClassifier, GeminiDeathCertificateClassifier>();
-        // DEATH-14: khóa ký của Verifier và bộ đếm nhập sai mật khẩu ký.
-        services.AddScoped<IVerifierSigningKeyRepository, VerifierSigningKeyRepository>();
+        // DEATH-03: bộ đếm nhập sai mật khẩu xác nhận duyệt/từ chối của Verifier.
+        services.AddScoped<IVerifierSigningGuardRepository, VerifierSigningGuardRepository>();
 
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.
         services.AddSingleton<IDeathCaseDataProtector, DeathCaseDataProtector>();
-        // DEATH-14: ký số quyết định của Verifier, khóa riêng bọc bằng cùng DataKeyProtector.
-        services.AddSingleton<IDecisionSigner, DecisionSigner>();
 
         // D3: job gửi thông báo Owner theo outbox.
         services.Configure<DeathCaseJobSettings>(configuration.GetSection(DeathCaseJobSettings.SectionName));

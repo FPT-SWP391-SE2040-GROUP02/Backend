@@ -332,6 +332,7 @@ public sealed class CheckInService : ICheckInService
         response.CheckedInAt = period.CheckedInAt;
         response.OverdueAt = period.OverdueAt;
         response.AwaitingCheckAt = period.AwaitingCheckAt;
+        response.ClosedAt = period.ClosedAt;
         return response;
     }
 

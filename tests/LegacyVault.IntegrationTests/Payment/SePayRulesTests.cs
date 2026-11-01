@@ -262,4 +262,41 @@ public sealed class SePayRulesTests
         Assert.Null(blank);
         Assert.Null(nothing);
     }
+
+    [Fact]
+    public void Pay03_ResolveReceivingAccount_WithSubAccount_UsesVirtualAccount()
+    {
+        // Chuẩn bị: SePay gửi tài khoản chính ở accountNumber và số VA ở subAccount
+        string mainAccount = "1234567890";
+        string virtualAccount = " 96247TEST01 ";
+
+        // Hành động
+        string receiving = SePayRules.ResolveReceivingAccount(mainAccount, virtualAccount);
+
+        // Kiểm tra
+        Assert.Equal("96247TEST01", receiving);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Pay03_ResolveReceivingAccount_WithoutSubAccount_UsesAccountNumber(string? subAccount)
+    {
+        // Hành động
+        string receiving = SePayRules.ResolveReceivingAccount(" 1234567890 ", subAccount);
+
+        // Kiểm tra
+        Assert.Equal("1234567890", receiving);
+    }
+
+    [Fact]
+    public void Pay03_ResolveReceivingAccount_BothMissing_ReturnsEmpty()
+    {
+        // Hành động
+        string receiving = SePayRules.ResolveReceivingAccount(null, null);
+
+        // Kiểm tra
+        Assert.Equal(string.Empty, receiving);
+    }
 }

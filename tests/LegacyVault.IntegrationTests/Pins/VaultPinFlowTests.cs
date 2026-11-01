@@ -103,6 +103,45 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task VerifyPin_ChecksOnlyTheHeader()
+    {
+        (HttpClient client, Guid vaultId) = await NewVaultAsync();
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
+        await SetPinAsync(client, vaultId);
+        string verifyUrl = PinUrl(vaultId) + "/verify";
+
+        await ApiTestHelpers.AssertProblemAsync(
+            await client.PostAsync(verifyUrl, null), HttpStatusCode.Forbidden, "VAULT_PIN_REQUIRED");
+
+        JsonElement wrong = await ApiTestHelpers.AssertProblemAsync(
+            await SendWithPinAsync(client, HttpMethod.Post, verifyUrl, WrongPin), HttpStatusCode.Forbidden, "INVALID_VAULT_PIN");
+        Assert.Equal(4, wrong.GetProperty("attemptsRemaining").GetInt32());
+
+        HttpResponseMessage ok = await SendWithPinAsync(client, HttpMethod.Post, verifyUrl, GoodPin);
+        Assert.Equal(HttpStatusCode.NoContent, ok.StatusCode);
+    }
+
+    [SqlFact]
+    public async Task RenameAsset_NeedsTheRightPinInTheHeader()
+    {
+        (HttpClient client, Guid vaultId) = await NewVaultAsync();
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tên cũ");
+        await SetPinAsync(client, vaultId);
+        string assetUrl = $"/api/v1/vaults/{vaultId}/assets/{assetId}";
+        JsonElement asset = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync(assetUrl));
+        string etag = asset.GetProperty("etag").GetString()!;
+
+        HttpResponseMessage missing = await client.PutAsJsonAsync(assetUrl, new { name = "Tên mới", etag });
+        await ApiTestHelpers.AssertProblemAsync(missing, HttpStatusCode.Forbidden, "VAULT_PIN_REQUIRED");
+
+        HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Put, assetUrl);
+        request.Headers.Add("X-Vault-Pin", GoodPin);
+        request.Content = JsonContent.Create(new { name = "Tên mới", etag });
+        HttpResponseMessage renamed = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+    }
+
+    [SqlFact]
     public async Task FiveWrongPins_LockWithHttp423()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();

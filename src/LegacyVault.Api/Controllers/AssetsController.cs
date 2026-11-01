@@ -119,7 +119,8 @@ public sealed class AssetsController(IAssetService assetService, ILogger<AssetsC
         return new HandoverFileResult(download);
     }
 
-    /// <summary>Đổi tên và/hoặc mô tả tài sản (không đổi nội dung).</summary>
+    /// <summary>Đổi tên và/hoặc mô tả tài sản (không đổi nội dung). Cần mã PIN của kho.</summary>
+    [RequireVaultPin]
     [HttpPut("{assetId:guid}")]
     [Consumes("application/json")]
     [ProducesResponseType<AssetResponse>(StatusCodes.Status200OK)]

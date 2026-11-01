@@ -10,10 +10,10 @@ public sealed class VerifierSigningGuardConfiguration : IEntityTypeConfiguration
     {
         builder.ToTable("VerifierSigningGuards");
 
-        // DEATH-14: mỗi Verifier một bộ đếm: khóa chính chính là UserId.
+        // DEATH-03: mỗi Verifier một bộ đếm: khóa chính chính là UserId.
         builder.HasKey(g => g.UserId);
 
-        // Nhiều request đoán mật khẩu ký song song không được đếm sót lần sai.
+        // Nhiều request đoán mật khẩu xác nhận song song không được đếm sót lần sai.
         builder.Property(g => g.RowVersion)
             .IsRowVersion();
 

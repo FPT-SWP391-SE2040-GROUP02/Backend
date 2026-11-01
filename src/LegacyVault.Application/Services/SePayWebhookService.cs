@@ -105,6 +105,9 @@ public sealed class SePayWebhookService : ISePayWebhookService
             return;
         }
 
+        // Cập nhật lại tài khoản nhận (VA hoặc tài khoản chính) từ lần gửi này, giống như với mã thanh toán bên dưới
+        stored.AccountNumber = SePayRules.ResolveReceivingAccount(request.AccountNumber, request.SubAccount);
+
         // Cập nhật lại MatchedPaymentCode nếu trước đó chưa tìm thấy hoặc bị cắt ngắn
         string? resolvedCode = SePayRules.FindPaymentCode(request.Code, request.Content);
         if (!string.IsNullOrWhiteSpace(resolvedCode) && resolvedCode != stored.MatchedPaymentCode)
@@ -235,6 +238,10 @@ public sealed class SePayWebhookService : ISePayWebhookService
         {
             throw ValidationErrors.For("accountNumber", "Số tài khoản không hợp lệ.");
         }
+        if (!string.IsNullOrWhiteSpace(request.SubAccount) && request.SubAccount.Trim().Length > MaxAccountNumberLength)
+        {
+            throw ValidationErrors.For("subAccount", "Số tài khoản ảo không hợp lệ.");
+        }
         if (string.IsNullOrWhiteSpace(request.TransferType))
         {
             throw ValidationErrors.For("transferType", "Thiếu loại giao dịch.");
@@ -263,7 +270,8 @@ public sealed class SePayWebhookService : ISePayWebhookService
         transaction.Environment = sePaySettings.Environment;
         transaction.ProviderTransactionId = providerTransactionId;
         transaction.Gateway = SePayRules.Truncate(request.Gateway, MaxGatewayLength);
-        transaction.AccountNumber = request.AccountNumber!.Trim();
+        // PAY-03: lưu số tài khoản mà tiền thực sự đã vào (VA nếu có), không lưu số tài khoản chính khi đã qua VA.
+        transaction.AccountNumber = SePayRules.ResolveReceivingAccount(request.AccountNumber, request.SubAccount);
         transaction.Code = SePayRules.Truncate(request.Code, MaxCodeLength);
         transaction.MatchedPaymentCode = SePayRules.FindPaymentCode(request.Code, request.Content);
         transaction.Content = SePayRules.Truncate(request.Content, MaxContentLength);

@@ -163,7 +163,9 @@ public sealed class AuditDeathCaseFlowTests : IAsyncLifetime
         AuditLog row = Assert.Single(rows);
         Assert.Equal(AuditActorRole.Verifier, row.ActorRole);
         Assert.Equal(submitted.CaseId, row.TargetId);
-        Assert.Null(row.Reason);
+        // Chỉ ghi mã, không ghi lý do tự do (Owner xem được nhật ký)
+        Assert.Equal("VERIFIER_REJECTED", row.Reason);
+        Assert.DoesNotContain(FreeTextReason, row.Reason);
     }
 
     [SqlFact]

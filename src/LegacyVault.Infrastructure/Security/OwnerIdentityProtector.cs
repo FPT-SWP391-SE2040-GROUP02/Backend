@@ -80,6 +80,7 @@ public sealed class OwnerIdentityProtector : IOwnerIdentityProtector
         payload.CitizenId = data.CitizenId;
         payload.FullName = data.FullName;
         payload.DateOfBirth = data.DateOfBirth;
+        payload.ResidenceAddress = data.ResidenceAddress;
 
         byte[] dataKey = dataKeyProtector.CreateDataKey();
         byte[] plain = Array.Empty<byte>();
@@ -113,6 +114,7 @@ public sealed class OwnerIdentityProtector : IOwnerIdentityProtector
             data.CitizenId = payload.CitizenId;
             data.FullName = payload.FullName;
             data.DateOfBirth = payload.DateOfBirth;
+            data.ResidenceAddress = payload.ResidenceAddress;
             return data;
         }
         finally
@@ -130,5 +132,8 @@ public sealed class OwnerIdentityProtector : IOwnerIdentityProtector
         public string FullName { get; set; } = string.Empty;
 
         public DateOnly DateOfBirth { get; set; }
+
+        // Bản mã hóa cũ không có khóa này nên đọc ra chuỗi rỗng, không cần migration.
+        public string ResidenceAddress { get; set; } = string.Empty;
     }
 }

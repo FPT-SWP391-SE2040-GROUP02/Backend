@@ -3,7 +3,7 @@ using LegacyVault.Domain.Entities;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// DEATH-14, D11: kiểm mật khẩu xác nhận ký số của Verifier kèm khóa lũy tiến (giống PIN kho).
+/// DEATH-03: kiểm mật khẩu xác nhận duyệt/từ chối của Verifier kèm khóa lũy tiến (giống PIN kho).
 /// </summary>
 public interface ISigningPasswordChecker
 {

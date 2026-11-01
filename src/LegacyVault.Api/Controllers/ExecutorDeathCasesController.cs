@@ -73,6 +73,20 @@ public sealed class ExecutorDeathCasesController : ControllerBase
     }
 
     /// <summary>
+    /// Hủy hồ sơ còn nháp (chưa gửi lần nào): xóa hồ sơ và các trang đã tải, kho trở lại như chưa báo tin.
+    /// Hồ sơ đã gửi → 409 DEATH_CASE_NOT_ALLOWED (VERSION_LOCKED).
+    /// </summary>
+    [HttpDelete("death-cases/{caseId:guid}/draft")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelDraft(Guid caseId, CancellationToken ct)
+    {
+        await deathCaseService.CancelDraftAsync(caseId, ct);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Tải lên một trang giấy chứng tử vào bản nháp (multipart/form-data, field <c>file</c>).
     /// PDF/JPEG/PNG/WEBP theo nội dung thật, ≤ 20 MiB, tối đa 10 tệp.
     /// </summary>

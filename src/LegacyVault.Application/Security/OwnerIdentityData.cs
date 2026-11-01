@@ -9,4 +9,7 @@ public class OwnerIdentityData
     public string FullName { get; set; } = string.Empty;
 
     public DateOnly DateOfBirth { get; set; }
+
+    /// <summary>Nơi cư trú người dùng đã đối chiếu ở bước xác nhận bản khai. Rỗng khi chưa xác nhận hoặc danh tính gắn trước khi có trường này.</summary>
+    public string ResidenceAddress { get; set; } = string.Empty;
 }

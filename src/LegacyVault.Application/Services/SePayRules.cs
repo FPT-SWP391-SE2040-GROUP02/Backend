@@ -64,6 +64,23 @@ public static class SePayRules
     }
 
     /// <summary>
+    /// Số tài khoản mà tiền thực sự đã vào (PAY-03): có subAccount (tài khoản ảo/VA) thì dùng subAccount, vì tài khoản chính
+    /// lúc này chỉ là tài khoản đứng sau VA; không có thì dùng accountNumber. Kết quả đã cắt khoảng trắng đầu cuối.
+    /// </summary>
+    public static string ResolveReceivingAccount(string? accountNumber, string? subAccount)
+    {
+        if (!string.IsNullOrWhiteSpace(subAccount))
+        {
+            return subAccount.Trim();
+        }
+        if (string.IsNullOrWhiteSpace(accountNumber))
+        {
+            return string.Empty;
+        }
+        return accountNumber.Trim();
+    }
+
+    /// <summary>
     /// E6: dùng trường code của SePay nếu có đúng độ dài chuẩn (10 ký tự: LV + 8); nếu không thì tìm mẫu
     /// LV + 8 ký tự trong nội dung chuyển khoản (kể cả trường hợp ngân hàng/ví Momo chèn khoảng trắng ngắt quãng).
     /// </summary>
