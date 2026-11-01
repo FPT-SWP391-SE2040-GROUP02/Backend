@@ -555,6 +555,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
   "planStatus": "ACTIVE",
   "serverTime": "2026-10-14T08:00:00+00:00",
   "lastCheckInAt": "2026-10-01T08:00:00+00:00",
+  "checkedInByExecutorToday": false,
   "nextCheckInDueAt": "2026-10-31T08:00:00+00:00",
   "graceEndsAt": "2026-11-07T08:00:00+00:00",
   "settings": { "cycleDays": 30, "graceDays": 7, "pendingCycleDays": null, "pendingGraceDays": null, "etag": "\"0\"" },
@@ -566,6 +567,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 ```
 
 - `status` tính theo giờ server nên luôn đúng dù job nền chạy chậm: `NOT_STARTED` (kế hoạch chưa kích hoạt) | `ACTIVE` | `CHECKIN_OVERDUE` (quá hạn, đang trong thời gian chờ) | `AWAITING_CHECK` (hết thời gian chờ, cần Executor kiểm tra) | `PAUSED` (kế hoạch đã sang giai đoạn chứng tử/bàn giao hoặc bị chặn). `planStatus` là trạng thái kế hoạch đang lưu trong DB (có thể chậm vài chục giây so với `status`).
+- `checkedInByExecutorToday`: `true` khi kỳ đang mở do Executor điểm danh thay chủ kho (mục 6.21) và kỳ đó bắt đầu trong ngày Việt Nam hôm nay. FE khóa nút điểm danh của chủ kho và hiện "Executor đã điểm danh hộ" (không hiện giờ, vì nhật ký kho đã ghi). `lastCheckInAt` không đổi. `POST /check-ins` lúc này cũng như bấm lặp: trả trạng thái hiện tại, không mở kỳ mới. Từ 00:00 ngày Việt Nam tiếp theo cờ về `false` và chủ kho điểm danh lại được.
 - FE đếm ngược theo `serverTime`, **không** dùng giờ trình duyệt (TIME-01). `history` xếp kỳ mới nhất trước.
 - `closedAt` của một kỳ: lúc kỳ đóng, `null` khi kỳ còn mở. Có `closedAt` mà `checkedInAt = null` nghĩa là kỳ bị **dừng** vì kế hoạch không còn chạy (ví dụ về Nháp theo SETUP-16), không phải Owner đã điểm danh.
 - **POST /check-ins** đóng kỳ hiện tại, mở kỳ mới và đưa kế hoạch về `ACTIVE`; cho phép khi kế hoạch `ACTIVE`/`CHECKIN_OVERDUE`/`AWAITING_CHECK`, kể cả khi dịch vụ đang ân hạn. Mỗi ngày lịch theo giờ Việt Nam (UTC+07:00) chỉ ghi nhận một lần, dùng giờ server. Gọi lại trong cùng ngày (kể cả từ web và smartwatch) trả trạng thái hiện tại, không đổi hạn, không mở kỳ mới và không ghi thêm nhật ký. Từ 00:00 ngày Việt Nam tiếp theo mới được ghi nhận lần mới, không phải chờ đủ 24 giờ. FE và đồng hồ dùng `lastCheckInAt` cùng `serverTime` để khóa nút và đọc lại trạng thái khi quay lại màn hình/qua ngày mới. Hai yêu cầu chạy song song: bên thua nhận `409 EDIT_CONFLICT` (gọi lại `GET`). Kế hoạch `DRAFT` hoặc đã sang chứng tử/bàn giao → `409 CHECKIN_NOT_ALLOWED` kèm trường phụ `planStatus`.
@@ -1207,6 +1209,7 @@ Không cần PIN: tạo tài sản, liệt kê, xem thông tin, đưa tài sản
 - Dùng khi chủ kho đã quá hạn điểm danh và Executor cần giữ kho chờ đến khi có giấy chứng tử. Chỉ cho phép khi kế hoạch `CHECKIN_OVERDUE` hoặc `AWAITING_CHECK` **và** kho chưa có hồ sơ chứng tử đang mở (kể cả bản nháp).
 - Một lần lưu: đóng kỳ đang quá hạn, mở kỳ mới theo chu kỳ hiện hành (áp dụng cả lựa chọn chờ của chủ kho), đưa kế hoạch về `ACTIVE`. Sự cố quá hạn của kỳ cũ được job sự cố tự đóng.
 - **Không tính là chủ kho đã điểm danh:** kỳ cũ đóng mà không ghi giờ điểm danh, `lastCheckInAt` của chủ kho giữ nguyên. Vì vậy lượt điểm danh thay không làm bật cờ "có điểm danh sau ngày mất" khi Executor gửi hồ sơ chứng tử.
+- Kỳ mới được đánh dấu `StartedByExecutor` (cột `CheckInPeriods.StartedByExecutor`); chỉ dùng để khóa nút điểm danh của chủ kho trong ngày Executor bấm (`checkedInByExecutorToday`, mục 6.8). Không ghi `CheckedInAt` nên không ảnh hưởng cờ "điểm danh sau ngày mất".
 - Nhật ký kho (mục 6.13) ghi `CHECKED_IN` với `actorRole = EXECUTOR`.
 - `409 CHECKIN_NOT_ALLOWED` kèm `planStatus` và `reason`: `PLAN_NOT_OVERDUE` (chủ kho không quá hạn, ví dụ vừa điểm danh) hoặc `DEATH_CASE_OPEN`. Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`. Dùng chung rate limit với điểm danh của chủ kho.
 - FE: `GET /v1/executor/vaults` chỉ hiện nút "Điểm danh thay chủ kho" khi `checkInOverdue = true` và `openDeathCaseId = null`; thành công thì tải lại danh sách kho.

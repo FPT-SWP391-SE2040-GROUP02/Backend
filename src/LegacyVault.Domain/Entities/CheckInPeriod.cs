@@ -37,6 +37,12 @@ public class CheckInPeriod
 
     public DateTimeOffset? AwaitingCheckAt { get; set; }
 
+    /// <summary>
+    /// true khi kỳ này được mở do Executor điểm danh thay chủ kho (StartedAt là lúc Executor bấm). Chủ kho tự điểm danh
+    /// thì false. Chỉ dùng để khóa nút điểm danh của chủ kho trong ngày Executor bấm; không ảnh hưởng CheckedInAt.
+    /// </summary>
+    public bool StartedByExecutor { get; set; }
+
     /// <summary>Kỳ đóng vì điểm danh hoặc vì dừng lịch; null khi kỳ còn mở.</summary>
     public DateTimeOffset? ClosedAt { get; set; }
 

@@ -58,9 +58,11 @@ public sealed class CheckInService : ICheckInService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         CheckInSchedule? schedule = await checkInRepository.FindScheduleByPlanIdAsync(plan.Id, ct);
-        if (schedule != null && CheckInRules.HasCheckedInToday(schedule.LastCheckInAt, now))
+        CheckInPeriod? openPeriod = await checkInRepository.FindOpenPeriodByPlanIdAsync(plan.Id, ct);
+        bool checkedInToday = schedule != null && CheckInRules.HasCheckedInToday(schedule.LastCheckInAt, now);
+        if (checkedInToday || CheckInRules.StartedByExecutorToday(openPeriod, now))
         {
-            // Bấm lặp: không mở kỳ mới, chỉ trả trạng thái hiện tại.
+            // Bấm lặp (hoặc Executor đã điểm danh hộ hôm nay): không mở kỳ mới, chỉ trả trạng thái hiện tại.
             return await BuildResponseAsync(plan, new PaginationRequest(), ct);
         }
         if (schedule == null)
@@ -71,7 +73,6 @@ public sealed class CheckInService : ICheckInService
             checkInRepository.AddSchedule(schedule);
         }
 
-        CheckInPeriod? openPeriod = await checkInRepository.FindOpenPeriodByPlanIdAsync(plan.Id, ct);
         if (openPeriod != null)
         {
             openPeriod.CheckedInAt = now;
@@ -286,6 +287,7 @@ public sealed class CheckInService : ICheckInService
         {
             response.LastCheckInAt = schedule.LastCheckInAt;
         }
+        response.CheckedInByExecutorToday = CheckInRules.StartedByExecutorToday(openPeriod, now);
 
         if (CheckInRules.IsPaused(plan.Status))
         {
