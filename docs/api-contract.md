@@ -928,6 +928,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
     {
       "turnId": "0199...",
       "containerName": "Tài liệu gia đình",
+      "beneficiaryId": "0199...",
       "beneficiaryCitizenIdLast4": "8901",
       "beneficiaryFullName": "Nguyễn Văn An",
       "beneficiaryPhone": "0901234567",
