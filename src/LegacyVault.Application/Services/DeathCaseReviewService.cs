@@ -20,6 +20,11 @@ namespace LegacyVault.Application.Services;
 /// </remarks>
 public sealed class DeathCaseReviewService : IDeathCaseReviewService
 {
+    /// <summary>
+    /// Mã ghi vào nhật ký khi Verifier từ chối hồ sơ. Lý do tự do Verifier nhập nằm ở quyết định của hồ sơ, không ghi vào
+    /// nhật ký vì Owner xem được nhật ký (SEC-07, SEC-13).
+    /// </summary>
+    private const string RejectedReasonCode = "VERIFIER_REJECTED";
     private const string SortByDueAt = "dueAt";
     private const string SortByAssignedAt = "assignedAt";
 
@@ -348,7 +353,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         }
 
         // SEC-07: nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
-        AddAudit(context, AuditAction.DeathCaseRejected, null, now);
+        AddAudit(context, AuditAction.DeathCaseRejected, RejectedReasonCode, now);
         try
         {
             await unitOfWork.SaveChangesAsync(ct);

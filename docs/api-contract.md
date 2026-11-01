@@ -873,6 +873,7 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 | Method | URL | Body | Thành công | Lỗi |
 |---|---|---|---|---|
 | GET | `/v1/admin/dashboard` | — | 200 `AdminDashboardResponse` (sự cố mở/quá hạn/chưa có người, hold, hồ sơ chưa có Verifier) | 404 |
+| GET | `/v1/admin/audit-logs?pageIndex=&pageSize=&sortBy=at&isAscending=&action=&from=&to=` | — | 200 `PaginatedList<AdminAuditLogResponse>` (`AuditLogResponse` kèm `vaultId`, `actorFullName`, `actorEmail`; `isAscending=false` = mới nhất trước; `action` UPPER_SNAKE_CASE; `from` tính cả mốc, `to` không tính mốc) | 400 `VALIDATION_ERROR`, 404 |
 | GET | `/v1/admin/users?search=&role=&status=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminUserResponse>` (không có mật khẩu) | 400, 404 |
 | POST | `/v1/admin/users` | `{ fullName, email, password, role: VERIFIER/ADMIN, phone? }` | 201 `AdminUserResponse` | 400 (`role` = `EXECUTOR` hoặc `USER` bị từ chối), 404, 409 `EMAIL_ALREADY_EXISTS` |
 | PUT | `/v1/admin/users/{userId}/role` | `{ role: USER/VERIFIER/ADMIN, reason }` | 200 | 400 (`role` = `EXECUTOR` bị từ chối), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CANNOT_CHANGE_SELF`, `LAST_ADMIN`) |
@@ -893,7 +894,7 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 - **Sự cố** (`Incidents`, `IncidentEvents`): loại `NO_VERIFIER`, `NO_EXECUTOR`, `CHECK_IN_OVERDUE`, `NOTIFICATION_FAILED`, `OWNER_ALIVE`, `INTEGRATION`, `MANUAL`, `PAYMENT` (giao dịch thanh toán lệch cần đối chiếu, mục 6.18). Mỗi (loại, đối tượng) chỉ một sự cố đang mở (chỉ mục unique có lọc). **Luôn có người phụ trách (hoặc Admin ít việc nhất), hạn và ngày xem lại**; chưa ai nhận được thì `assigneeUserId = null` kèm `nextReviewAt` sau 1 ngày và job giao cho Admin khi có.
 - **Tự động tạo:** job phân công Verifier không có người (`NO_VERIFIER`, tự đóng khi giao được); kỳ điểm danh sang `AWAITING_CHECK` (`CHECK_IN_OVERDUE` giao Executor chính, không có Executor thì `NO_EXECUTOR` giao Admin; tự đóng khi Owner điểm danh, DMS-05); Owner báo còn sống (`OWNER_ALIVE` giao Verifier phụ trách, đóng khi kết luận).
 - **Job sự cố** (`Incident:JobEnabled`, `Incident:PollSeconds` mặc định 300): nhắc người phụ trách sau 48 giờ (một lần), báo mọi Admin sau 72 giờ (một lần), giao sự cố mồ côi. Quá hạn không tự đóng. Thư chỉ có loại sự cố, mã rút gọn và hạn.
-- **Nhật ký:** mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier, giao/đóng sự cố) và F2C (gồm đặt/gỡ hold báo còn sống) ghi `AuditLogs` trong cùng giao dịch.
+- **Nhật ký:** Admin xem toàn bộ nhật ký qua `GET /v1/admin/audit-logs` (chỉ đọc, không sửa/xóa). Hồ sơ chứng tử bị từ chối ghi `DEATH_CASE_REJECTED` (Verifier từ chối: `reason = VERIFIER_REJECTED`; đóng vì Verifier xác nhận Owner còn sống: `reason = ALIVE_CONFIRMED`, kèm dòng `OBJECTION_CONCLUDED`); lý do tự do không vào nhật ký vì Owner xem được (SEC-07). Mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier, giao/đóng sự cố) và F2C (gồm đặt/gỡ hold báo còn sống) ghi `AuditLogs` trong cùng giao dịch.
 - **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); sự cố từ lỗi eKYC/thanh toán (chờ LV-02/LV-04); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; khóa tài khoản hiện thu hồi mọi refresh token (access token đã cấp còn sống tối đa `Jwt:AccessTokenMinutes`).
 
 ### 6.16. Executor theo dõi tiến độ bàn giao

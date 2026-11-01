@@ -222,6 +222,60 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task AuditLogs_AdminOnly_ListsVerifierRejection_NewestFirst_WithFilters()
+    {
+        // Chuẩn bị: Verifier từ chối một hồ sơ (ghi DeathCaseRejected) rồi Admin đổi vai trò một tài khoản (ghi UserRoleChanged)
+        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
+        Assert.Equal(HttpStatusCode.OK, (await DeathCaseReviewTestData.RejectNowAsync(submitted, "Giấy tờ không hợp lệ")).StatusCode);
+        (User admin, HttpClient client) = await AddAdminAsync();
+        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(
+            $"/api/v1/admin/users/{plain.Id}/role", new { role = "VERIFIER", reason = "Nhân viên mới" })).StatusCode);
+
+        // Không phải Admin → 404; chưa đăng nhập → 401
+        Assert.Equal(HttpStatusCode.NotFound, (await ClientFor(submitted.Verifier.User).GetAsync("/api/v1/admin/audit-logs")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await app.CreateClient().GetAsync("/api/v1/admin/audit-logs")).StatusCode);
+
+        // Mới nhất trước: dòng đổi vai trò (sau) đứng trước dòng từ chối hồ sơ
+        JsonElement all = await ListAsync(client, "audit-logs?isAscending=false&pageSize=50");
+        List<JsonElement> items = all.GetProperty("items").EnumerateArray().ToList();
+        int roleIndex = items.FindIndex(i => i.GetProperty("action").GetString() == "USER_ROLE_CHANGED");
+        int rejectIndex = items.FindIndex(i => i.GetProperty("action").GetString() == "DEATH_CASE_REJECTED");
+        Assert.True(roleIndex >= 0 && rejectIndex >= 0 && roleIndex < rejectIndex);
+        Assert.Equal(all.GetProperty("totalCount").GetInt32(), items.Count);
+
+        // Dòng từ chối: người thực hiện, đối tượng, kho, mã lý do (không có lý do tự do)
+        JsonElement reject = items[rejectIndex];
+        Assert.Equal(submitted.Verifier.User.Id, reject.GetProperty("actorUserId").GetGuid());
+        Assert.Equal(submitted.Verifier.User.Email, reject.GetProperty("actorEmail").GetString());
+        Assert.Equal("VERIFIER", reject.GetProperty("actorRole").GetString());
+        Assert.Equal("DEATH_CASE", reject.GetProperty("targetType").GetString());
+        Assert.Equal(submitted.CaseId, reject.GetProperty("targetId").GetGuid());
+        Assert.Equal(submitted.Vault.VaultId, reject.GetProperty("vaultId").GetGuid());
+        Assert.Equal("SUCCEEDED", reject.GetProperty("outcome").GetString());
+        Assert.Equal("VERIFIER_REJECTED", reject.GetProperty("reason").GetString());
+
+        // Lọc theo loại thao tác và phân trang
+        JsonElement onlyReject = await ListAsync(client, "audit-logs?action=DEATH_CASE_REJECTED");
+        Assert.All(onlyReject.GetProperty("items").EnumerateArray(), i => Assert.Equal("DEATH_CASE_REJECTED", i.GetProperty("action").GetString()));
+        Assert.Contains(onlyReject.GetProperty("items").EnumerateArray(), i => i.GetProperty("targetId").GetGuid() == submitted.CaseId);
+        JsonElement paged = await ListAsync(client, "audit-logs?pageIndex=1&pageSize=1&isAscending=false");
+        Assert.Single(paged.GetProperty("items").EnumerateArray());
+        Assert.True(paged.GetProperty("hasNextPage").GetBoolean());
+
+        // Lọc theo thời gian: khoảng tương lai không có dòng nào
+        string future = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(1).ToString("o"));
+        JsonElement none = await ListAsync(client, "audit-logs?from=" + future);
+        Assert.Equal(0, none.GetProperty("totalCount").GetInt32());
+
+        // Tham số sai → 400
+        await ApiTestHelpers.AssertProblemAsync(
+            await client.GetAsync("/api/v1/admin/audit-logs?action=NOT_AN_ACTION"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        await ApiTestHelpers.AssertProblemAsync(
+            await client.GetAsync("/api/v1/admin/audit-logs?sortBy=reason"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+    }
+
+    [SqlFact]
     public async Task LastAdmin_CannotBeDemotedOrLocked()
     {
         (User admin, HttpClient client) = await AddAdminAsync();

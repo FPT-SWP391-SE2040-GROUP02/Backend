@@ -20,4 +20,12 @@ public interface IAuditLogRepository
     Task<(List<AuditLog> Items, int TotalCount)> FindPageByVaultIdAsync(
         Guid vaultId, AuditAction? action, DateTimeOffset? from, DateTimeOffset? to,
         int pageIndex, int pageSize, bool isAscending, CancellationToken ct);
+
+    /// <summary>
+    /// Một trang nhật ký toàn hệ thống cho Admin (mọi kho, kể cả dòng không gắn kho). Cùng quy ước lọc và sắp xếp với
+    /// FindPageByVaultIdAsync. pageIndex bắt đầu từ 1.
+    /// </summary>
+    Task<(List<AuditLog> Items, int TotalCount)> FindPageAsync(
+        AuditAction? action, DateTimeOffset? from, DateTimeOffset? to,
+        int pageIndex, int pageSize, bool isAscending, CancellationToken ct);
 }

@@ -49,4 +49,41 @@ public sealed class AuditLogRepository(AppDbContext context) : IAuditLogReposito
             .ToListAsync(ct);
         return (items, totalCount);
     }
+
+    public async Task<(List<AuditLog> Items, int TotalCount)> FindPageAsync(
+        AuditAction? action, DateTimeOffset? from, DateTimeOffset? to,
+        int pageIndex, int pageSize, bool isAscending, CancellationToken ct)
+    {
+        IQueryable<AuditLog> query = context.AuditLogs.AsNoTracking();
+        if (action != null)
+        {
+            query = query.Where(l => l.Action == action.Value);
+        }
+        if (from != null)
+        {
+            query = query.Where(l => l.At >= from.Value);
+        }
+        if (to != null)
+        {
+            query = query.Where(l => l.At < to.Value);
+        }
+
+        int totalCount = await query.CountAsync(ct);
+
+        // ThenBy(Id) giữ thứ tự ổn định khi nhiều dòng cùng thời điểm.
+        if (isAscending)
+        {
+            query = query.OrderBy(l => l.At).ThenBy(l => l.Id);
+        }
+        else
+        {
+            query = query.OrderByDescending(l => l.At).ThenByDescending(l => l.Id);
+        }
+
+        List<AuditLog> items = await query
+            .Skip((pageIndex - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+        return (items, totalCount);
+    }
 }

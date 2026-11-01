@@ -14,4 +14,7 @@ public interface IAdminUserRepository
 
     /// <summary>Hồ sơ chứng tử đang chờ Verifier (đang xét hoặc cần bổ sung) mà chưa có phân công còn hiệu lực.</summary>
     Task<int> CountCasesWithoutVerifierAsync(CancellationToken ct);
+
+    /// <summary>Các tài khoản theo danh sách Id (không theo dõi thay đổi); Id không có thì bỏ qua.</summary>
+    Task<List<User>> FindByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
 }

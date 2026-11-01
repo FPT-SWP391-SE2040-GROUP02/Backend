@@ -1,3 +1,5 @@
+using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Mappings;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
@@ -72,5 +74,26 @@ public static class AuditRules
             return text.Substring(0, MaxReasonLength);
         }
         return text;
+    }
+
+    /// <summary>
+    /// Đổi chuỗi UPPER_SNAKE_CASE FE gửi (ví dụ CONTAINER_CREATED) sang enum; trống → null (mọi loại).
+    /// Không dùng Enum.Parse thẳng để FE không gửi được số hay tên C# (đúng contract chuỗi). Lạ → 400 VALIDATION_ERROR.
+    /// </summary>
+    public static AuditAction? ParseAction(string? action)
+    {
+        string? text = TextInput.NullIfBlank(action);
+        if (text == null)
+        {
+            return null;
+        }
+        foreach (AuditAction value in Enum.GetValues<AuditAction>())
+        {
+            if (string.Equals(value.ToApiString(), text, StringComparison.Ordinal))
+            {
+                return value;
+            }
+        }
+        throw ValidationErrors.For("action", "Loại thao tác không hợp lệ.");
     }
 }

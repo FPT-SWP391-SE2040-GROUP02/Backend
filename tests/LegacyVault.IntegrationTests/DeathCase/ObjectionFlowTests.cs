@@ -359,6 +359,17 @@ public sealed class ObjectionFlowTests : IAsyncLifetime
             Assert.Equal(1, await db.CheckInPeriods.CountAsync(p => p.Plan.VaultId == s.Owner.VaultId && p.ClosedAt == null));
 
         });
+        // Hồ sơ đóng vì còn sống: nhật ký có cả dòng kết luận lẫn dòng từ chối hồ sơ của Verifier
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            AuditLog rejected = await db.AuditLogs.AsNoTracking().SingleAsync(
+                l => l.VaultId == s.Owner.VaultId && l.Action == AuditAction.DeathCaseRejected);
+            Assert.Equal(AuditActorRole.Verifier, rejected.ActorRole);
+            Assert.Equal(AuditOutcome.Succeeded, rejected.Outcome);
+            Assert.Equal("ALIVE_CONFIRMED", rejected.Reason);
+            Assert.Equal(1, await db.AuditLogs.CountAsync(
+                l => l.VaultId == s.Owner.VaultId && l.Action == AuditAction.ObjectionConcluded));
+        });
         // Phân công kết thúc cùng hồ sơ: Verifier không còn truy cập được hồ sơ đã đóng
         Assert.Equal(HttpStatusCode.NotFound, (await ConcludeAsync(s, "ALIVE_CONFIRMED")).StatusCode);
 
