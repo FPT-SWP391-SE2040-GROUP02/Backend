@@ -19,6 +19,8 @@ public enum IncidentType
     Manual = 6,
     /// <summary>Giao dịch thanh toán không khớp đơn, cần Admin đối chiếu thủ công (PAY-07).</summary>
     Payment = 7,
+    /// <summary>Tài khoản bị tạm khóa vì nhập sai mật khẩu quá nhiều lần, có thể đang bị dò mật khẩu (SEC-10).</summary>
+    SuspiciousLogin = 8,
 }
 
 public enum IncidentStatus
