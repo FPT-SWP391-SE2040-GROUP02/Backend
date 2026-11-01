@@ -8,6 +8,12 @@ public class HandoverProgressTurnResponse
     /// <summary>Tên gói lúc mở bàn giao.</summary>
     public string ContainerName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Mã hồ sơ người nhận trong kho (không phải tài khoản). Một người nhận nhiều gói thì các lượt cùng mã,
+    /// để màn hình gom lượt theo người; không dùng 4 số cuối CCCD vì hai người có thể trùng.
+    /// </summary>
+    public Guid BeneficiaryId { get; set; }
+
     /// <summary>Chỉ 4 số cuối CCCD để Executor phân biệt người nhận; họ tên và số điện thoại trả riêng cho lượt còn hiệu lực hoặc đã bàn giao (xem BeneficiaryFullName).</summary>
     public string BeneficiaryCitizenIdLast4 { get; set; } = string.Empty;
 
