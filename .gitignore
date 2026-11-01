@@ -18,6 +18,3 @@ artifacts/
 
 # Nội dung tài sản lưu local khi dev
 **/App_Data/
-src/LegacyVault.Api/appsettings.Development.json
-src/LegacyVault.Api/appsettings.Development.json
-src/LegacyVault.Api/appsettings.Development.json
