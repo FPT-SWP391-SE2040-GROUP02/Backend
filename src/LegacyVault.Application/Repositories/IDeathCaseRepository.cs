@@ -40,6 +40,12 @@ public interface IDeathCaseRepository
     Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>
+    /// Phân công của chính Verifier này đã kết thúc vì họ kết luận Owner còn sống (ALIVE_CONFIRMED). FindByIdAsync chỉ nạp
+    /// phân công còn hiệu lực nên cần truy vấn riêng. Dùng để Verifier xem lại hồ sơ đã đóng; không có → null. Không theo dõi.
+    /// </summary>
+    Task<DeathCaseAssignment?> FindAliveConfirmedAssignmentAsync(Guid caseId, Guid verifierUserId, CancellationToken ct);
+
+    /// <summary>
     /// D12, DMS-05: các kho mà tài khoản là Executor đang hiệu lực (Status Accepted), chấp nhận sớm nhất trước.
     /// Chỉ đọc bảng Executors, không đổi IExecutorReader.
     /// </summary>

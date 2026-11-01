@@ -56,7 +56,8 @@ public sealed class PreviousCaseRow
 public interface IDeathCaseReviewRepository
 {
     /// <summary>
-    /// SEC-05, ASSIGN-01: các hồ sơ có phân công ĐANG HIỆU LỰC (EndedAt null) của Verifier, một trang.
+    /// SEC-05, ASSIGN-01: các hồ sơ có phân công ĐANG HIỆU LỰC (EndedAt null) của Verifier, cộng hồ sơ họ đã tự kết luận
+    /// Owner còn sống (ALIVE_CONFIRMED, hồ sơ Rejected) để xem lại ở lịch sử, một trang.
     /// Hồ sơ còn mở (ClosedAt null) trước, rồi theo hạn xét (sortBy "dueAt") hoặc lúc được giao ("assignedAt"),
     /// rồi theo Id. sortBy đã được service kiểm tra. pageIndex bắt đầu từ 1.
     /// </summary>

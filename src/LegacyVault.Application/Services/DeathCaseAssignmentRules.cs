@@ -18,6 +18,26 @@ public static class DeathCaseAssignmentRules
     /// <summary>D5, ASSIGN-02, ADMIN-05: giao lại vì Verifier không còn Active hoặc không còn vai trò Verifier.</summary>
     public const string EndReasonVerifierUnavailable = "VERIFIER_UNAVAILABLE";
 
+    /// <summary>ALIVE-06: phân công kết thúc vì chính Verifier này kết luận Owner còn sống (hồ sơ bị từ chối).</summary>
+    public const string EndReasonAliveConfirmed = "ALIVE_CONFIRMED";
+
+    /// <summary>
+    /// Verifier được ĐỌC hồ sơ khi phân công còn hiệu lực, hoặc khi chính họ đã kết luận Owner còn sống và hồ sơ đã đóng
+    /// (để xem lại ở lịch sử). Mọi thao tác ghi vẫn chỉ nhận phân công còn hiệu lực (V1).
+    /// </summary>
+    public static bool CanRead(DeathCaseAssignment assignment, Guid verifierUserId, DeathCaseStatus caseStatus)
+    {
+        if (assignment.VerifierUserId != verifierUserId)
+        {
+            return false;
+        }
+        if (assignment.EndedAt == null)
+        {
+            return true;
+        }
+        return assignment.EndReason == EndReasonAliveConfirmed && caseStatus == DeathCaseStatus.Rejected;
+    }
+
     /// <summary>
     /// D1, ASSIGN-04, TIME-07: hạn Verifier phải ra quyết định = mốc muộn hơn giữa (start + 48 giờ)
     /// và (hết phản đối + 48 giờ). start là lúc giao hoặc lúc Executor gửi bản mới gần nhất.

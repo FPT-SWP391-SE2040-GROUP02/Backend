@@ -359,8 +359,21 @@ public sealed class ObjectionFlowTests : IAsyncLifetime
             Assert.Equal(1, await db.CheckInPeriods.CountAsync(p => p.Plan.VaultId == s.Owner.VaultId && p.ClosedAt == null));
 
         });
-        // Phân công kết thúc cùng hồ sơ: Verifier không còn truy cập được hồ sơ đã đóng
+        // Phân công kết thúc cùng hồ sơ: Verifier không còn GHI được vào hồ sơ đã đóng
         Assert.Equal(HttpStatusCode.NotFound, (await ConcludeAsync(s, "ALIVE_CONFIRMED")).StatusCode);
+
+        // ...nhưng vẫn ĐỌC lại được hồ sơ chính mình đã kết luận: có trong lịch sử, mở được chi tiết và phần phản đối
+        JsonElement history = await ApiTestHelpers.ReadJsonAsync(await s.VerifierClient.GetAsync("/api/v1/verifier/death-cases"));
+        JsonElement listed = history.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == s.CaseId);
+        Assert.Equal("REJECTED", listed.GetProperty("status").GetString());
+        HttpResponseMessage readBack = await s.VerifierClient.GetAsync($"/api/v1/verifier/death-cases/{s.CaseId}");
+        Assert.Equal(HttpStatusCode.OK, readBack.StatusCode);
+        Assert.Equal("REJECTED", (await ApiTestHelpers.ReadJsonAsync(readBack)).GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await s.VerifierClient.GetAsync(VerifierObjectionUrl(s))).StatusCode);
+        // Đọc lại không mở thêm quyền ghi
+        HttpResponseMessage reject = await s.VerifierClient.PostAsJsonAsync(
+            $"/api/v1/verifier/death-cases/{s.CaseId}/reject", new { reason = "Thử ghi sau khi đã đóng", etag = "x", password = "x" });
+        Assert.Equal(HttpStatusCode.NotFound, reject.StatusCode);
 
         // Owner điểm danh lại bình thường và Executor mở được hồ sơ mới
         Assert.Equal(HttpStatusCode.OK, (await s.OwnerClient.GetAsync("/api/v1/check-ins/me")).StatusCode);
