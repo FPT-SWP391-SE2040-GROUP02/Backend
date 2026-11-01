@@ -929,6 +929,8 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
       "turnId": "0199...",
       "containerName": "Tài liệu gia đình",
       "beneficiaryCitizenIdLast4": "8901",
+      "beneficiaryFullName": "Nguyễn Văn An",
+      "beneficiaryPhone": "0901234567",
       "status": "HANDOVER_COMMITTED",
       "invitedAt": "...", "responseDeadline": "...", "claimedAt": "...", "decisionDeadline": "...", "decidedAt": "...",
       "grantStatus": "ACTIVE", "grantExpiresAt": "2026-11-19T08:00:00+00:00",
@@ -945,7 +947,8 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 - **Chưa duyệt:** hồ sơ chưa ở `APPROVED_FOR_HANDOVER` thì `handoverStarted = false`, `turns` rỗng, `summary` toàn 0.
 - **Nhóm trạng thái trong `summary`:** `waitingResponse` = `INVITED`, `INITIAL_RESPONSE_EXPIRED`; `inVerification` = `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`; `accepted` = `HANDOVER_COMMITTED`; `declined` = `DECLINED`; `ended` = `DECISION_EXPIRED`, `CANCELLED`, `LAPSED`.
 - **Đã tải:** tài sản có ít nhất một lần tải thành công. Lần tải bị từ chối hoặc lỗi toàn vẹn không tính. `firstDownloadedAt` là lần tải thành công đầu tiên.
-- **Không có dữ liệu nhạy cảm:** chỉ có tên và loại tài sản; không có nội dung tài sản, họ tên, số CCCD đầy đủ hay liên hệ của người nhận. Người nhận được phân biệt bằng 4 số cuối CCCD.
+- **Dữ liệu nhạy cảm:** tài sản chỉ có tên và loại; không có nội dung tài sản hay số CCCD đầy đủ. Người nhận được phân biệt bằng 4 số cuối CCCD.
+- **Liên hệ người nhận:** `beneficiaryFullName` và `beneficiaryPhone` để Executor liên hệ, chỉ có ở lượt `INVITED`, `INITIAL_RESPONSE_EXPIRED`, `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`, `HANDOVER_COMMITTED`. Lượt `DECLINED`, `DECISION_EXPIRED`, `CANCELLED`, `LAPSED` trả `null`. Không giải mã được hoặc người nhận không có số thì trường tương ứng cũng `null` (không lỗi cả màn). Không có email hay ngày sinh.
 - **Thứ tự:** lượt xếp theo tên gói rồi theo lúc mời; tài sản xếp theo thứ tự đã ghim.
 - FE đếm thời gian còn lại theo `serverTime`.
 

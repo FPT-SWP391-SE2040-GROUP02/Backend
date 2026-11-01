@@ -105,46 +105,59 @@ public sealed class HandoverProgressServiceTests
         protector.Data[designation.BeneficiaryId] = personal;
     }
 
-    [Fact]
-    public async Task Progress_ShowsNameAndPhoneOnlyForHandedOverTurn()
+    [Theory]
+    [InlineData(HandoverTurnStatus.Invited)]
+    [InlineData(HandoverTurnStatus.InitialResponseExpired)]
+    [InlineData(HandoverTurnStatus.IdentityInProgress)]
+    [InlineData(HandoverTurnStatus.ReadyToAccept)]
+    [InlineData(HandoverTurnStatus.HandoverCommitted)]
+    public async Task Progress_ShowsNameAndPhoneForActiveOrHandedOverTurn(HandoverTurnStatus status)
     {
-        // Chuẩn bị: một lượt đã bàn giao (có quyền tải) và một lượt đang xác minh danh tính
+        // Executor cần liên hệ người nhận ngay từ lúc mời, không phải chờ tới khi đã bàn giao
         Container container = data.AddContainer("Gói D", ContainerStatus.Ready, 1);
-        Designation done = data.Designate(container, "Nguyễn Văn Một", "mot@example.com");
-        Designation pending = data.Designate(container, "Trần Thị Hai", "hai@example.com");
-        RegisterBeneficiary(done, "0901234567");
-        RegisterBeneficiary(pending, "0907654321");
-        HandoverTurn handedOver = data.BuildTurn(container, done, HandoverTurnStatus.HandoverCommitted, "d1", Guid.NewGuid());
-        HandoverGrant grant = new HandoverGrant();
-        grant.TurnId = handedOver.Id;
-        grant.Status = HandoverGrantStatus.Active;
-        grant.GrantedAt = Now;
-        grant.ExpiresAt = Now.AddDays(30);
-        handedOver.Grant = grant;
-        HandoverTurn verifying = data.BuildTurn(container, pending, HandoverTurnStatus.IdentityInProgress, "d2", Guid.NewGuid());
-        reader.Turns.Add(handedOver);
-        reader.Turns.Add(verifying);
+        Designation designation = data.Designate(container, "Nguyễn Văn Một", "mot@example.com");
+        RegisterBeneficiary(designation, "0901234567");
+        reader.Turns.Add(data.BuildTurn(container, designation, status, "d1", null));
 
         HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
 
         Assert.Equal("Nguyễn Văn Một", result.Turns[0].BeneficiaryFullName);
         Assert.Equal("0901234567", result.Turns[0].BeneficiaryPhone);
-        Assert.Null(result.Turns[1].BeneficiaryFullName);
-        Assert.Null(result.Turns[1].BeneficiaryPhone);
     }
 
-    [Fact]
-    public async Task Progress_CommittedTurnWithoutGrantHidesNameAndPhone()
+    [Theory]
+    [InlineData(HandoverTurnStatus.Declined)]
+    [InlineData(HandoverTurnStatus.DecisionExpired)]
+    [InlineData(HandoverTurnStatus.Cancelled)]
+    [InlineData(HandoverTurnStatus.Lapsed)]
+    public async Task Progress_HidesNameAndPhoneForEndedTurn(HandoverTurnStatus status)
     {
         Container container = data.AddContainer("Gói E", ContainerStatus.Ready, 1);
         Designation designation = data.Designate(container, "Lê Văn Ba", null);
         RegisterBeneficiary(designation, "0911111111");
-        reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.HandoverCommitted, "e1", Guid.NewGuid()));
+        reader.Turns.Add(data.BuildTurn(container, designation, status, "e1", null));
 
         HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
 
         Assert.Null(result.Turns[0].BeneficiaryFullName);
         Assert.Null(result.Turns[0].BeneficiaryPhone);
+    }
+
+    [Fact]
+    public async Task Progress_UndecryptableBeneficiaryLeavesContactEmptyInsteadOfFailing()
+    {
+        // Không giải mã được (thiếu KEK, dữ liệu hỏng) thì để trống, không làm hỏng cả màn tiến độ
+        Container container = data.AddContainer("Gói F", ContainerStatus.Ready, 1);
+        Designation designation = data.Designate(container, "Người Bốn", null);
+        beneficiaries.Beneficiaries.Add(designation.Beneficiary);
+        protector.Failing = true;
+        reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "f1", null));
+
+        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+
+        Assert.Null(result.Turns[0].BeneficiaryFullName);
+        Assert.Null(result.Turns[0].BeneficiaryPhone);
+        Assert.Equal("INVITED", result.Turns[0].Status);
     }
 
     [Fact]

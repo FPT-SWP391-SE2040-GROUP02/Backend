@@ -177,12 +177,19 @@ public sealed class FakeBeneficiaryDataProtector : IBeneficiaryDataProtector
 {
     public Dictionary<Guid, BeneficiaryPersonalData> Data { get; } = new Dictionary<Guid, BeneficiaryPersonalData>();
 
+    /// <summary>Đặt true để mô phỏng không giải mã được (thiếu KEK, dữ liệu hỏng).</summary>
+    public bool Failing { get; set; }
+
     public void Protect(Beneficiary beneficiary, BeneficiaryPersonalData data)
     {
     }
 
     public BeneficiaryPersonalData Unprotect(Beneficiary beneficiary)
     {
+        if (Failing)
+        {
+            throw new System.Security.Cryptography.CryptographicException("Không giải mã được.");
+        }
         return Data[beneficiary.Id];
     }
 }
