@@ -47,12 +47,23 @@ public sealed class HandoverStarter : IHandoverStarter
         DateTimeOffset now = timeProvider.GetUtcNow();
 
         // Gọi lặp (F2B retry) không tạo lượt mới và không gửi lại lời mời.
+        // Lượt đã hủy (Owner còn sống, ALIVE-06) chỉ còn là lịch sử, không tính là đã bắt đầu: nếu tính thì hồ sơ chứng tử
+        // mới của cùng kho không bao giờ mở được bàn giao. Chỉ mục UX_HandoverTurns_ActivePerDesignation không tính lượt
+        // Cancelled nên lượt mới cho cùng chỉ định không bị chặn ở database.
         List<HandoverTurn> existing = await handover.FindTurnsByPlanAsync(plan.Id, ct);
-        if (existing.Count > 0)
+        int startedTurnCount = 0;
+        foreach (HandoverTurn existingTurn in existing)
+        {
+            if (existingTurn.Status != HandoverTurnStatus.Cancelled)
+            {
+                startedTurnCount++;
+            }
+        }
+        if (startedTurnCount > 0)
         {
             HandoverStartResult already = new HandoverStartResult();
             already.PlanId = plan.Id;
-            already.TurnCount = existing.Count;
+            already.TurnCount = startedTurnCount;
             already.AlreadyStarted = true;
             return already;
         }

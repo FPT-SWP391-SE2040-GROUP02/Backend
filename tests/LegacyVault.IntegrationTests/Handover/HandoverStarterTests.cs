@@ -187,4 +187,80 @@ public sealed class HandoverStarterTests
         Assert.Equal(ErrorCode.HandoverNotAllowed, error.Code);
         Assert.Equal("NOTHING_TO_HAND_OVER", error.Extensions["reason"]);
     }
+
+    private HandoverTurn AddOldTurn(Designation designation, HandoverTurnStatus status)
+    {
+        HandoverTurn turn = new HandoverTurn();
+        turn.VaultId = data.Vault.Id;
+        turn.PlanId = data.Plan.Id;
+        turn.ContainerId = designation.ContainerId;
+        turn.ContainerName = "Gói cũ";
+        turn.DesignationId = designation.Id;
+        turn.BeneficiaryId = designation.BeneficiaryId;
+        turn.Status = status;
+        turn.CreatedAt = Now.AddDays(-3);
+        repository.Turns.Add(turn);
+        return turn;
+    }
+
+    [Fact]
+    public async Task Start_OnlyCancelledTurnsExist_CreatesNewTurnsAndKeepsOldOnes()
+    {
+        // Hồ sơ trước đã được duyệt rồi Owner báo còn sống (ALIVE-06): lượt cũ Cancelled, kế hoạch quay lại mở hồ sơ.
+        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
+        Designation designation = data.Designate(container, "Người A", "a@example.com");
+        Publish();
+        HandoverTurn oldTurn = AddOldTurn(designation, HandoverTurnStatus.Cancelled);
+
+        HandoverStartResult result = await starter.StartAsync(data.Vault.Id, CancellationToken.None);
+
+        Assert.False(result.AlreadyStarted);
+        Assert.Equal(1, result.TurnCount);
+        Assert.Equal(PlanStatus.HandoverInProgress, data.Plan.Status);
+        Assert.Equal(2, repository.Turns.Count);
+        Assert.Equal(HandoverTurnStatus.Cancelled, oldTurn.Status);
+        HandoverTurn newTurn = repository.Turns[1];
+        Assert.Equal(HandoverTurnStatus.Invited, newTurn.Status);
+        Assert.Equal(designation.Id, newTurn.DesignationId);
+        Assert.NotEqual(oldTurn.InvitationTokenHash, newTurn.InvitationTokenHash);
+        Assert.Single(sender.Sent);
+    }
+
+    [Fact]
+    public async Task Start_CancelledAndActiveTurnsExist_IsAlreadyStartedAndCreatesNothing()
+    {
+        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
+        Designation designation = data.Designate(container, "Người A", "a@example.com");
+        Publish();
+        AddOldTurn(designation, HandoverTurnStatus.Cancelled);
+        AddOldTurn(designation, HandoverTurnStatus.Invited);
+
+        HandoverStartResult result = await starter.StartAsync(data.Vault.Id, CancellationToken.None);
+
+        Assert.True(result.AlreadyStarted);
+        Assert.Equal(1, result.TurnCount);
+        Assert.Equal(2, repository.Turns.Count);
+        Assert.Empty(sender.Sent);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Theory]
+    [InlineData(HandoverTurnStatus.Declined)]
+    [InlineData(HandoverTurnStatus.DecisionExpired)]
+    [InlineData(HandoverTurnStatus.HandoverCommitted)]
+    [InlineData(HandoverTurnStatus.Lapsed)]
+    public async Task Start_OtherFinishedTurnsStillCountAsStarted(HandoverTurnStatus status)
+    {
+        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
+        Designation designation = data.Designate(container, "Người A", "a@example.com");
+        Publish();
+        AddOldTurn(designation, status);
+
+        HandoverStartResult result = await starter.StartAsync(data.Vault.Id, CancellationToken.None);
+
+        Assert.True(result.AlreadyStarted);
+        Assert.Equal(1, result.TurnCount);
+        Assert.Single(repository.Turns);
+        Assert.Empty(sender.Sent);
+    }
 }
