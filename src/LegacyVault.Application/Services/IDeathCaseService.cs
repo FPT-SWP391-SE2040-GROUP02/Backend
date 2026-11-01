@@ -36,6 +36,13 @@ public interface IDeathCaseService
     Task<DeathCaseResponse> RemoveFileAsync(Guid caseId, Guid fileId, CancellationToken ct);
 
     /// <summary>
+    /// Executor hủy hồ sơ còn nháp (chưa gửi lần nào): xóa hồ sơ, các phiên bản và trang đã tải, kho trở lại như
+    /// chưa báo tin (mở lại hồ sơ, điểm danh thay chủ kho được). Đã gửi → 409 DEATH_CASE_NOT_ALLOWED (VERSION_LOCKED),
+    /// hồ sơ đã đóng → CASE_CLOSED.
+    /// </summary>
+    Task CancelDraftAsync(Guid caseId, CancellationToken ct);
+
+    /// <summary>
     /// DEATH-01, DEATH-04, DEATH-05, DEATH-08, DEATH-10, DEATH-11, ASSIGN-01: Executor xác nhận và gửi bản hiện tại.
     /// Trong MỘT lần lưu: khóa bản, khóa kế hoạch (lần gửi đầu), đặt cờ, xếp thông báo Owner, phân công Verifier.
     /// Bản hiện tại đã gửi rồi thì trả trạng thái hiện tại (AC-71).

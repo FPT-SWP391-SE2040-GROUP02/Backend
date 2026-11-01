@@ -326,6 +326,55 @@ public sealed class DeathCaseService : IDeathCaseService
         return BuildResponse(deathCase);
     }
 
+    public async Task CancelDraftAsync(Guid caseId, CancellationToken ct)
+    {
+        CaseContext context = await LoadCaseForExecutorAsync(caseId, ct);
+        DeathCase deathCase = context.DeathCase;
+
+        // Chỉ hồ sơ còn Draft mới hủy được: chưa gửi lần nào nên Owner chưa được báo, kế hoạch chưa bị khóa.
+        // Đã gửi thì hồ sơ thuộc phần xét của Verifier; Executor chỉ còn cách nộp bản bổ sung.
+        if (deathCase.Status != DeathCaseStatus.Draft)
+        {
+            if (deathCase.Status == DeathCaseStatus.ApprovedForHandover
+                || deathCase.Status == DeathCaseStatus.Rejected
+                || deathCase.Status == DeathCaseStatus.Suspended)
+            {
+                throw NotAllowed(DeathCaseNotAllowedReason.CaseClosed);
+            }
+            throw NotAllowed(DeathCaseNotAllowedReason.VersionLocked);
+        }
+
+        List<string> storageKeys = new List<string>();
+        List<DeathCaseVersion> versions = new List<DeathCaseVersion>(deathCase.Versions);
+        foreach (DeathCaseVersion version in versions)
+        {
+            List<DeathCaseFile> files = new List<DeathCaseFile>(version.Files);
+            foreach (DeathCaseFile file in files)
+            {
+                storageKeys.Add(file.StorageKey);
+                deathCaseRepository.RemoveFile(file);
+            }
+            deathCaseRepository.RemoveVersion(version);
+        }
+        deathCaseRepository.RemoveCase(deathCase);
+
+        // SEC-07: dòng nhật ký giữ lại dấu vết dù hồ sơ đã bị xóa; không ghi dữ liệu trong hồ sơ.
+        // Hai Executor cùng thao tác: UpdatedAt là ETag nên bên lưu sau (ví dụ vừa gửi hồ sơ) nhận 409 EDIT_CONFLICT.
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        AddAudit(deathCase, context.UserId, AuditAction.DeathCaseDraftCancelled, deathCase.CurrentVersionNo, now);
+        await unitOfWork.SaveChangesAsync(ct);
+
+        // D8: chỉ xóa nội dung khi không còn dòng file nào dùng StorageKey. Không dùng ct vì DB đã lưu xong.
+        foreach (string storageKey in storageKeys)
+        {
+            int remaining = await deathCaseRepository.CountFilesUsingStorageKeyAsync(storageKey, CancellationToken.None);
+            if (remaining == 0)
+            {
+                await contentStore.DeleteAsync(storageKey, CancellationToken.None);
+            }
+        }
+    }
+
     public async Task<DeathCaseResponse> SubmitAsync(Guid caseId, SubmitDeathCaseRequest request, CancellationToken ct)
     {
         CaseContext context = await LoadCaseForExecutorAsync(caseId, ct);
