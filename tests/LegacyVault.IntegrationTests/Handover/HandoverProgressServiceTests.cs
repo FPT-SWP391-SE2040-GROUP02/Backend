@@ -1,10 +1,12 @@
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
+using LegacyVault.Application.Security;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -20,6 +22,8 @@ public sealed class HandoverProgressServiceTests
     private readonly FakeVaultRepository vaults = new FakeVaultRepository();
     private readonly FakeProgressExecutorReader executors = new FakeProgressExecutorReader();
     private readonly FakeHandoverProgressReader reader = new FakeHandoverProgressReader();
+    private readonly FakeEkycBeneficiaryRepository beneficiaries = new FakeEkycBeneficiaryRepository();
+    private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly HandoverProgressService service;
     private readonly Guid executorUserId = Guid.NewGuid();
     private readonly DeathCase deathCase;
@@ -41,7 +45,8 @@ public sealed class HandoverProgressServiceTests
         deathCase.Status = DeathCaseStatus.ApprovedForHandover;
         reader.Cases.Add(deathCase);
 
-        service = new HandoverProgressService(currentUser, vaults, executors, reader, new FixedTimeProvider(Now));
+        service = new HandoverProgressService(
+            currentUser, vaults, executors, reader, beneficiaries, protector, new FixedTimeProvider(Now));
     }
 
     [Fact]
@@ -89,6 +94,57 @@ public sealed class HandoverProgressServiceTests
         Assert.Equal("INVITED", waitingTurn.Status);
         Assert.Null(waitingTurn.GrantStatus);
         Assert.Equal(0, waitingTurn.DownloadedItems);
+    }
+
+    /// <summary>Đưa hồ sơ người nhận của chỉ định vào kho giả kèm họ tên và số điện thoại rõ.</summary>
+    private void RegisterBeneficiary(Designation designation, string phone)
+    {
+        beneficiaries.Beneficiaries.Add(designation.Beneficiary);
+        BeneficiaryPersonalData personal = data.People[designation.BeneficiaryId];
+        personal.Phone = phone;
+        protector.Data[designation.BeneficiaryId] = personal;
+    }
+
+    [Fact]
+    public async Task Progress_ShowsNameAndPhoneOnlyForHandedOverTurn()
+    {
+        // Chuẩn bị: một lượt đã bàn giao (có quyền tải) và một lượt đang xác minh danh tính
+        Container container = data.AddContainer("Gói D", ContainerStatus.Ready, 1);
+        Designation done = data.Designate(container, "Nguyễn Văn Một", "mot@example.com");
+        Designation pending = data.Designate(container, "Trần Thị Hai", "hai@example.com");
+        RegisterBeneficiary(done, "0901234567");
+        RegisterBeneficiary(pending, "0907654321");
+        HandoverTurn handedOver = data.BuildTurn(container, done, HandoverTurnStatus.HandoverCommitted, "d1", Guid.NewGuid());
+        HandoverGrant grant = new HandoverGrant();
+        grant.TurnId = handedOver.Id;
+        grant.Status = HandoverGrantStatus.Active;
+        grant.GrantedAt = Now;
+        grant.ExpiresAt = Now.AddDays(30);
+        handedOver.Grant = grant;
+        HandoverTurn verifying = data.BuildTurn(container, pending, HandoverTurnStatus.IdentityInProgress, "d2", Guid.NewGuid());
+        reader.Turns.Add(handedOver);
+        reader.Turns.Add(verifying);
+
+        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+
+        Assert.Equal("Nguyễn Văn Một", result.Turns[0].BeneficiaryFullName);
+        Assert.Equal("0901234567", result.Turns[0].BeneficiaryPhone);
+        Assert.Null(result.Turns[1].BeneficiaryFullName);
+        Assert.Null(result.Turns[1].BeneficiaryPhone);
+    }
+
+    [Fact]
+    public async Task Progress_CommittedTurnWithoutGrantHidesNameAndPhone()
+    {
+        Container container = data.AddContainer("Gói E", ContainerStatus.Ready, 1);
+        Designation designation = data.Designate(container, "Lê Văn Ba", null);
+        RegisterBeneficiary(designation, "0911111111");
+        reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.HandoverCommitted, "e1", Guid.NewGuid()));
+
+        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+
+        Assert.Null(result.Turns[0].BeneficiaryFullName);
+        Assert.Null(result.Turns[0].BeneficiaryPhone);
     }
 
     [Fact]

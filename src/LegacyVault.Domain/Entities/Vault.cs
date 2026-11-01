@@ -24,6 +24,16 @@ public class Vault
     /// <summary>Không mã hóa: không ghi mật khẩu, seed phrase vào đây (ASSET-02).</summary>
     public string? Description { get; set; }
 
+    /// <summary>
+    /// Hướng dẫn Owner để lại cho Executor (liên hệ ai, giấy tờ để đâu). Executor đã chấp nhận đọc được ngay,
+    /// trước khi hồ sơ chứng tử được duyệt, nên không mã hóa và không được ghi mật khẩu, số tài khoản hay nội dung tài sản.
+    /// Để trên kho chứ không trên Executor để còn giữ khi đổi Executor (SETUP-06).
+    /// </summary>
+    public string? ExecutorNote { get; set; }
+
+    /// <summary>Lần sửa ghi chú cho Executor gần nhất; null khi chưa viết.</summary>
+    public DateTimeOffset? ExecutorNoteUpdatedAt { get; set; }
+
     public VaultStatus Status { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
