@@ -564,6 +564,24 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         Assert.Equal(admin.Id, stuck.GetProperty("assigneeUserId").GetGuid());
         Assert.True(stuck.GetProperty("nextReviewAt").GetDateTimeOffset() <= DateTimeOffset.UtcNow.AddDays(7).AddMinutes(1));
 
+        // DMS-05: Executor được báo ngay khi kế hoạch sang AWAITING_CHECK, đúng một lần dù job ghi nhận lại kỳ nhiều lần;
+        // thư dẫn về trang Executor của kho. Kho không có Executor thì không có thư Executor nào.
+        await RecordPeriodAsync(periodA);
+        IncidentNotice executorNotice = Assert.Single(incidentMail.Sent, n => n.Area == IncidentRecipientArea.Executor);
+        Assert.Equal(IncidentNoticeKind.Assigned, executorNotice.Kind);
+        Assert.Equal(executor.User.Email, executorNotice.ToEmail);
+        Assert.Equal(withExecutor.VaultId, executorNotice.VaultId);
+        Assert.Equal("CHECK_IN_OVERDUE", executorNotice.IncidentType);
+        Assert.DoesNotContain(incidentMail.Sent, n => n.VaultId == noExecutor.VaultId);
+
+        // Thư nhắc sau 48 giờ cho Executor cũng dẫn về trang Executor, không phải /admin.
+        Guid overdueId = first.GetProperty("id").GetGuid();
+        await MoveIncidentBackAsync(overdueId, TimeSpan.FromHours(49));
+        Assert.Equal("REMINDED", await ProcessIncidentAsync(overdueId));
+        IncidentNotice reminder = Assert.Single(incidentMail.Sent, n => n.Kind == IncidentNoticeKind.Reminder);
+        Assert.Equal(IncidentRecipientArea.Executor, reminder.Area);
+        Assert.Equal(withExecutor.VaultId, reminder.VaultId);
+
         // Owner điểm danh → kỳ đóng → job sự cố đóng sự cố
         HttpResponseMessage checkIn = await ClientFor(withExecutor.Owner).PostAsync("/api/v1/check-ins", null);
         Assert.Equal(HttpStatusCode.OK, checkIn.StatusCode);

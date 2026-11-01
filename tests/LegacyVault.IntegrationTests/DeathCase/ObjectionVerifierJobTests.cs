@@ -336,6 +336,8 @@ public sealed class ObjectionVerifierJobTests : IAsyncLifetime
         Assert.Equal(IncidentNoticeKind.Reminder, notice.Kind);
         Assert.Equal(second.User.Email, notice.ToEmail);
         Assert.NotEqual(submitted.Verifier.User.Email, notice.ToEmail);
+        // Verifier không vào được /admin: link trong thư dẫn về trang Verifier.
+        Assert.Equal(IncidentRecipientArea.Verifier, notice.Area);
     }
 
     private static string ConcludeUrl(Guid caseId)

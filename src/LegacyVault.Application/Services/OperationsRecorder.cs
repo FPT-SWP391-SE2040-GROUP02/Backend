@@ -1,3 +1,4 @@
+using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
@@ -13,9 +14,22 @@ public enum IncidentNoticeKind
     Escalation = 2,
 }
 
+/// <summary>Khu vực web của người nhận thư; quyết định link trong thư (Executor và Verifier không vào được /admin).</summary>
+public enum IncidentRecipientArea
+{
+    Admin = 0,
+    Verifier = 1,
+    Executor = 2,
+}
+
 public sealed class IncidentNotice
 {
     public IncidentNoticeKind Kind { get; set; }
+
+    public IncidentRecipientArea Area { get; set; }
+
+    /// <summary>Kho của sự cố; link cho Executor mở đúng kho.</summary>
+    public Guid? VaultId { get; set; }
 
     public string ToEmail { get; set; } = string.Empty;
 
@@ -59,6 +73,9 @@ public sealed class OperationsRecorder : IOperationsRecorder
     private readonly ICheckInRepository checkIns;
     private readonly IExecutorReader executorReader;
     private readonly IIncidentService incidentService;
+    private readonly IIncidentRepository incidents;
+    private readonly IUserRepository users;
+    private readonly IIncidentNoticeSender noticeSender;
     private readonly IUnitOfWork unitOfWork;
 
     public OperationsRecorder(
@@ -66,12 +83,18 @@ public sealed class OperationsRecorder : IOperationsRecorder
         ICheckInRepository checkIns,
         IExecutorReader executorReader,
         IIncidentService incidentService,
+        IIncidentRepository incidents,
+        IUserRepository users,
+        IIncidentNoticeSender noticeSender,
         IUnitOfWork unitOfWork)
     {
         this.deathCases = deathCases;
         this.checkIns = checkIns;
         this.executorReader = executorReader;
         this.incidentService = incidentService;
+        this.incidents = incidents;
+        this.users = users;
+        this.noticeSender = noticeSender;
         this.unitOfWork = unitOfWork;
     }
 
@@ -128,15 +151,52 @@ public sealed class OperationsRecorder : IOperationsRecorder
         }
         if (assignee != null)
         {
-            await incidentService.RaiseAsync(IncidentType.CheckInOverdue, plan.VaultId, TargetCheckInPeriod, period.Id,
-                "Owner quá hạn điểm danh; Executor kiểm tra tình trạng Owner.", assignee, ct);
+            // Job gọi lại hàm này mỗi vòng; chỉ báo Executor ở lần đầu mở sự cố, các lần sau RaiseAsync trả sự cố cũ.
+            Incident? alreadyOpen = await incidents.FindOpenAsync(
+                IncidentType.CheckInOverdue, TargetCheckInPeriod, period.Id, ct);
+            Incident incident = await incidentService.RaiseAsync(IncidentType.CheckInOverdue, plan.VaultId,
+                TargetCheckInPeriod, period.Id, "Owner quá hạn điểm danh; Executor kiểm tra tình trạng Owner.", assignee, ct);
+            await unitOfWork.SaveChangesAsync(ct);
+            if (alreadyOpen == null)
+            {
+                await NotifyExecutorAsync(incident, assignee.Value, ct);
+            }
+            return;
         }
-        else
-        {
-            // ASSIGN-05: không còn Executor thay thế → ghi "bị kẹt" (Admin phụ trách, có ngày xem lại), không mở kho.
-            await incidentService.RaiseAsync(IncidentType.NoExecutor, plan.VaultId, TargetCheckInPeriod, period.Id,
-                "Owner quá hạn điểm danh nhưng chưa có Executor hiệu lực.", null, ct);
-        }
+
+        // ASSIGN-05: không còn Executor thay thế → ghi "bị kẹt" (Admin phụ trách, có ngày xem lại), không mở kho.
+        await incidentService.RaiseAsync(IncidentType.NoExecutor, plan.VaultId, TargetCheckInPeriod, period.Id,
+            "Owner quá hạn điểm danh nhưng chưa có Executor hiệu lực.", null, ct);
         await unitOfWork.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// DMS-05: kế hoạch vừa sang AWAITING_CHECK thì báo ngay Executor được giao, link về trang Executor của kho.
+    /// Gửi sau khi đã lưu sự cố; gửi lỗi không làm hỏng việc đã ghi, thư nhắc sau 48 giờ của IncidentJob là lưới an toàn.
+    /// </summary>
+    private async Task NotifyExecutorAsync(Incident incident, Guid executorUserId, CancellationToken ct)
+    {
+        User? user = await users.FindByIdAsync(executorUserId, ct);
+        if (user == null || string.IsNullOrWhiteSpace(user.Email) || user.Status != UserStatus.Active)
+        {
+            return;
+        }
+        IncidentNotice notice = new IncidentNotice();
+        notice.Kind = IncidentNoticeKind.Assigned;
+        notice.Area = IncidentRecipientArea.Executor;
+        notice.ToEmail = user.Email;
+        notice.FullName = user.FullName;
+        notice.IncidentId = incident.Id;
+        notice.IncidentType = incident.Type.ToApiString();
+        notice.VaultId = incident.VaultId;
+        notice.DueAt = incident.DueAt;
+        try
+        {
+            await noticeSender.SendAsync(notice, ct);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // Không ném lại: sự cố đã lưu, IncidentJob sẽ nhắc Executor khi tới hạn.
+        }
     }
 }

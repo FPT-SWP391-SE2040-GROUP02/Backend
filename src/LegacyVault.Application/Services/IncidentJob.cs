@@ -30,6 +30,7 @@ public sealed class IncidentJob : IIncidentJob
     private readonly IAdminUserRepository adminUsers;
     private readonly IOperationsRecorder recorder;
     private readonly IIncidentNoticeSender sender;
+    private readonly IExecutorReader executorReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -39,6 +40,7 @@ public sealed class IncidentJob : IIncidentJob
         IAdminUserRepository adminUsers,
         IOperationsRecorder recorder,
         IIncidentNoticeSender sender,
+        IExecutorReader executorReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -47,6 +49,7 @@ public sealed class IncidentJob : IIncidentJob
         this.adminUsers = adminUsers;
         this.recorder = recorder;
         this.sender = sender;
+        this.executorReader = executorReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -145,6 +148,35 @@ public sealed class IncidentJob : IIncidentJob
         incidents.AddEvent(incidentEvent);
     }
 
+    /// <summary>
+    /// Link trong thư phải tới trang người nhận vào được: Executor của kho (sự cố quá hạn điểm danh) về trang Executor,
+    /// Verifier (sự cố báo còn sống) về trang Verifier, còn lại về khu quản trị. Executor xét theo kho vì tài khoản
+    /// Executor thường mang vai trò USER.
+    /// </summary>
+    private async Task<IncidentRecipientArea> FindAreaAsync(Incident incident, User user, CancellationToken ct)
+    {
+        if (user.Role == UserRole.Admin)
+        {
+            return IncidentRecipientArea.Admin;
+        }
+        if (user.Role == UserRole.Verifier)
+        {
+            return IncidentRecipientArea.Verifier;
+        }
+        if (incident.VaultId != null)
+        {
+            List<Executor> executors = await executorReader.GetAvailableAsync(incident.VaultId.Value, ct);
+            foreach (Executor executor in executors)
+            {
+                if (executor.UserId == user.Id)
+                {
+                    return IncidentRecipientArea.Executor;
+                }
+            }
+        }
+        return IncidentRecipientArea.Admin;
+    }
+
     private async Task<bool> TrySendAsync(Incident incident, Guid userId, IncidentNoticeKind kind, CancellationToken ct)
     {
         User? user = await users.FindByIdAsync(userId, ct);
@@ -154,6 +186,8 @@ public sealed class IncidentJob : IIncidentJob
         }
         IncidentNotice notice = new IncidentNotice();
         notice.Kind = kind;
+        notice.Area = await FindAreaAsync(incident, user, ct);
+        notice.VaultId = incident.VaultId;
         notice.ToEmail = user.Email;
         notice.FullName = user.FullName;
         notice.IncidentId = incident.Id;
