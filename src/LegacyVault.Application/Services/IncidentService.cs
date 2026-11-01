@@ -28,6 +28,7 @@ public static class IncidentRules
     public const string TargetDeathCase = "DEATH_CASE";
     public const string TargetPlan = "PLAN";
     public const string TargetHold = "HOLD";
+    public const string TargetUser = "USER";
 
     /// <summary>Chủ kho và Executor của kho không được xử lý sự cố của chính kho đó (ROLE-03).</summary>
     public static bool IsStaff(User? user)
