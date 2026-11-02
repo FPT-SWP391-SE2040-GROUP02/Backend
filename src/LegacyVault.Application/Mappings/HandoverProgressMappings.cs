@@ -12,6 +12,7 @@ public static class HandoverProgressMappings
         HandoverProgressTurnResponse response = new HandoverProgressTurnResponse();
         response.TurnId = turn.Id;
         response.ContainerName = turn.ContainerName;
+        response.BeneficiaryId = turn.BeneficiaryId;
         response.BeneficiaryCitizenIdLast4 = citizenIdLast4;
         response.Status = turn.Status.ToApiString();
         response.InvitedAt = turn.InvitedAt;
