@@ -175,6 +175,77 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         Assert.Equal(1825, quote.GetProperty("serviceDays").GetInt32());
     }
 
+    /// <summary>Admin tắt mở bán một hạng: ghi cờ Plans.{Xs|XsMax}.On = false thẳng vào DB.</summary>
+    private async Task SetTierOnSaleOffAsync(string key)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.SystemSettings.Where(s => s.Key == key).ExecuteDeleteAsync();
+            SystemSetting setting = new SystemSetting();
+            setting.Key = key;
+            setting.Value = "false";
+            setting.DataType = "BOOLEAN";
+            setting.Category = "Plans";
+            db.SystemSettings.Add(setting);
+            await db.SaveChangesAsync();
+        });
+    }
+
+    [SqlFact]
+    public async Task Sec81_GetPlans_TierTurnedOffByAdmin_ReportsOnSaleFalse()
+    {
+        // Chuẩn bị
+        await SetTierOnSaleOffAsync("Plans.Xs.On");
+        HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
+
+        // Hành động
+        HttpResponseMessage response = await client.GetAsync("/api/v1/billing/plans");
+
+        // Kiểm tra: chỉ XS bị tắt, XS_MAX vẫn bán
+        JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(response)).GetProperty("tiers");
+        Assert.False(tiers[0].GetProperty("onSale").GetBoolean());
+        Assert.True(tiers[1].GetProperty("onSale").GetBoolean());
+    }
+
+    [SqlFact]
+    public async Task Sec83_Quote_And_CreateOrder_TierTurnedOffByAdmin_TierNotOnSale()
+    {
+        // Chuẩn bị
+        await SetTierOnSaleOffAsync("Plans.Xs.On");
+        (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
+
+        // Hành động
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage order = await client.PostAsJsonAsync("/api/v1/billing/orders", new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage otherTier = await QuoteAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0 });
+
+        // Kiểm tra: hạng bị tắt bị chặn ở cả báo giá lẫn tạo đơn, không tạo đơn; hạng còn bán vẫn báo giá được
+        JsonElement quoteProblem = await ApiTestHelpers.AssertProblemAsync(quote, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
+        Assert.Equal("TIER_NOT_ON_SALE", quoteProblem.GetProperty("reason").GetString());
+        JsonElement orderProblem = await ApiTestHelpers.AssertProblemAsync(order, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
+        Assert.Equal("TIER_NOT_ON_SALE", orderProblem.GetProperty("reason").GetString());
+        Assert.Equal(0, await CountPaymentOrdersAsync());
+        Assert.Equal(HttpStatusCode.OK, otherTier.StatusCode);
+    }
+
+    [SqlFact]
+    public async Task Sec83_Quote_PaidVaultTierTurnedOff_AddonBlockedButRenewalAllowed()
+    {
+        // Chuẩn bị: kho đang dùng XS còn hạn, rồi Admin tắt mở bán XS
+        (HttpClient client, Guid vaultId, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
+        await MakePaidActiveAsync(vaultId, daysLeft: 180);
+        await SetTierOnSaleOffAsync("Plans.Xs.On");
+
+        // Hành động
+        HttpResponseMessage addon = await QuoteAsync(client, new { extraSlots = 1 });
+        HttpResponseMessage renewal = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0, renew = true });
+
+        // Kiểm tra: mua thêm suất bị chặn, gia hạn vẫn báo giá được
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(addon, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
+        Assert.Equal("TIER_NOT_ON_SALE", problem.GetProperty("reason").GetString());
+        Assert.Equal(HttpStatusCode.OK, renewal.StatusCode);
+    }
+
     [SqlFact]
     public async Task Sec83_Quote_FreeVaultWithoutEkyc_OwnerEkycRequired()
     {

@@ -19,6 +19,10 @@ public class BillingPlansResponse
 public class BillingTierResponse
 {
     public string Tier { get; set; } = string.Empty;
+
+    /// <summary>false khi Admin đã tạm ngừng mở bán hạng này: Client ẩn nút mua; Backend vẫn chặn nếu gọi thẳng.</summary>
+    public bool OnSale { get; set; } = true;
+
     public long StorageQuotaBytes { get; set; }
     public int IncludedBeneficiarySlots { get; set; }
     public List<BillingPriceResponse> Prices { get; set; } = new List<BillingPriceResponse>();

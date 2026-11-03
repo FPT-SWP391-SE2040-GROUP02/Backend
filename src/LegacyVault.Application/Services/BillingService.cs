@@ -29,6 +29,7 @@ public sealed class BillingService : IBillingService
     private readonly IBillingBankSettings bankSettings;
     private readonly IBillingPriceSettings priceSettings;
     private readonly IBillingDevSettings devSettings;
+    private readonly ISystemSettingService systemSettings;
     private readonly PaymentGranter paymentGranter;
     private readonly TimeProvider timeProvider;
 
@@ -43,9 +44,11 @@ public sealed class BillingService : IBillingService
         IBillingBankSettings bankSettings,
         IBillingPriceSettings priceSettings,
         IBillingDevSettings devSettings,
+        ISystemSettingService systemSettings,
         PaymentGranter paymentGranter,
         TimeProvider timeProvider)
     {
+        this.systemSettings = systemSettings;
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.containerRepository = containerRepository;
@@ -60,10 +63,27 @@ public sealed class BillingService : IBillingService
         this.timeProvider = timeProvider;
     }
 
-    public Task<BillingPlansResponse> GetPlansAsync(CancellationToken ct)
+    public async Task<BillingPlansResponse> GetPlansAsync(CancellationToken ct)
     {
         BillingPlansResponse response = BillingMappings.ToPlansResponse(priceSettings);
-        return Task.FromResult(response);
+        foreach (BillingTierResponse tierResponse in response.Tiers)
+        {
+            foreach (ServiceTier tier in BillingPrices.SellableTiers)
+            {
+                if (tier.ToApiString() == tierResponse.Tier)
+                {
+                    tierResponse.OnSale = await IsTierOnSaleAsync(tier, ct);
+                }
+            }
+        }
+        return response;
+    }
+
+    /// <summary>Cờ mở bán do Admin đặt trong cài đặt hệ thống (Plans.Xs.On, Plans.XsMax.On); chưa có cờ thì coi là đang bán.</summary>
+    private async Task<bool> IsTierOnSaleAsync(ServiceTier tier, CancellationToken ct)
+    {
+        string key = tier == ServiceTier.XsMax ? "Plans.XsMax.On" : "Plans.Xs.On";
+        return await systemSettings.GetBoolAsync(key, true, ct);
     }
 
     public async Task<BillingQuoteResponse> QuoteAsync(BillingSelectionRequest request, CancellationToken ct)
@@ -357,6 +377,16 @@ public sealed class BillingService : IBillingService
         BillingSelectionRequest request, BillingEligibility eligibility, DateTimeOffset now, CancellationToken ct)
     {
         BillingQuote quote = BuildQuote(request, eligibility, now);
+
+        // Hạng đã bị Admin tạm ngừng bán: chặn mua mới, nâng lên hạng đó và mua thêm suất của hạng đó.
+        // Gia hạn đúng hạng đang dùng giữ nguyên để người đang dùng không mất dịch vụ; gia hạn sang hạng khác là mua hạng đó.
+        bool sellsTier = quote.Kind != PaymentOrderKind.Renewal || quote.Tier != eligibility.Vault.Entitlement.Tier;
+        if (sellsTier && !await IsTierOnSaleAsync(quote.Tier, ct))
+        {
+            throw BillingRules.NotAllowed(PaymentNotAllowedReason.TierNotOnSale,
+                "Gói này đang tạm ngừng mở bán. Vui lòng chọn gói khác hoặc quay lại sau.");
+        }
+
         if (quote.Kind == PaymentOrderKind.Renewal)
         {
             long usedBytes = await vaultRepository.SumUsedBytesAsync(eligibility.Vault.Id, ct);

@@ -4,6 +4,7 @@ using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,8 @@ public sealed class SystemSettingService : ISystemSettingService
 
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
     private const string AllSettingsCacheKey = "SystemSettings:All";
+    private const string DefaultsSeededCacheKey = "SystemSettings:DefaultsSeeded";
+    private static readonly SemaphoreSlim SeedGate = new(1, 1);
 
     public SystemSettingService(
         AppDbContext db,
@@ -170,6 +173,30 @@ public sealed class SystemSettingService : ISystemSettingService
 
     private async Task EnsureDefaultsSeededAsync(CancellationToken ct)
     {
+        // Đã kiểm tra gần đây thì bỏ qua: BillingService gọi hàm này trên mỗi báo giá và tạo đơn, không truy vấn lại mỗi lần.
+        if (cache.TryGetValue(DefaultsSeededCacheKey, out _))
+        {
+            return;
+        }
+
+        // Một request tạo mặc định tại một thời điểm: hai request cùng chèn hàng loạt vào bảng có khóa unique sẽ deadlock.
+        await SeedGate.WaitAsync(ct);
+        try
+        {
+            if (cache.TryGetValue(DefaultsSeededCacheKey, out _))
+            {
+                return;
+            }
+            await SeedDefaultsAsync(ct);
+        }
+        finally
+        {
+            SeedGate.Release();
+        }
+    }
+
+    private async Task SeedDefaultsAsync(CancellationToken ct)
+    {
         var defaults = new List<SystemSetting>
         {
             // Điểm danh (Check-in)
@@ -248,7 +275,20 @@ public sealed class SystemSettingService : ISystemSettingService
         if (missing.Count > 0)
         {
             db.SystemSettings.AddRange(missing);
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception exception) when (exception is DbUpdateException || exception.GetBaseException() is SqlException)
+            {
+                // Tiến trình khác (nhiều instance API) vừa tạo cùng các khóa mặc định (unique hoặc deadlock): bỏ phần mình vừa thêm, lần gọi sau kiểm tra lại.
+                foreach (var entry in db.ChangeTracker.Entries<SystemSetting>().Where(e => e.State == EntityState.Added).ToList())
+                {
+                    entry.State = EntityState.Detached;
+                }
+                return;
+            }
         }
+        cache.Set(DefaultsSeededCacheKey, true, CacheDuration);
     }
 }

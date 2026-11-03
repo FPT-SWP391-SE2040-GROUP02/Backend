@@ -14,4 +14,7 @@ public enum PaymentNotAllowedReason
 
     /// <summary>Gia hạn sang hạng hoặc số suất nhỏ hơn mức đang dùng (dung lượng hoặc suất người nhận).</summary>
     UsageExceedsPlan,
+
+    /// <summary>Admin đã tạm ngừng mở bán hạng này (Plans.Xs.On / Plans.XsMax.On = false): không mua mới, nâng lên hay mua thêm suất của hạng đó (gia hạn vẫn được).</summary>
+    TierNotOnSale,
 }
