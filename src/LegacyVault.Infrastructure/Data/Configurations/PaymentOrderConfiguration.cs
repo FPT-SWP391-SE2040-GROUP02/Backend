@@ -22,6 +22,9 @@ public sealed class PaymentOrderConfiguration : IEntityTypeConfiguration<Payment
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(o => o.PlanCode)
+            .HasMaxLength(32);
+
         builder.Property(o => o.Status)
             .IsRequired()
             .HasConversion<string>()

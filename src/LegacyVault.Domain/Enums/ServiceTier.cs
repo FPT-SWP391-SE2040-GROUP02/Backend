@@ -9,4 +9,6 @@ public enum ServiceTier
     Xs = 1,
     /// <summary>500 MiB, 5 suất.</summary>
     XsMax = 2,
+    /// <summary>Gói do Admin tạo thêm; mã gói cụ thể nằm ở <c>PlanCode</c> của quyền dịch vụ và đơn thanh toán.</summary>
+    Custom = 3,
 }

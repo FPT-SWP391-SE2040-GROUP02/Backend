@@ -20,6 +20,9 @@ public class VaultEntitlement
 
     public ServiceTier Tier { get; set; }
 
+    /// <summary>Mã gói đang dùng; null với dòng cũ (suy ra từ <see cref="Tier"/> qua <see cref="PlanCodes.Resolve"/>).</summary>
+    public string? PlanCode { get; set; }
+
     public EntitlementStatus Status { get; set; }
 
     public long StorageQuotaBytes { get; set; }

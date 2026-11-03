@@ -26,7 +26,10 @@ public class PaymentOrder
     /// <summary>Hạng được mua; với ADDON là hạng hiện tại của kho.</summary>
     public ServiceTier Tier { get; set; }
 
-    /// <summary>Số năm (1, 3, 5); null với ADDON.</summary>
+    /// <summary>Mã gói được mua; null với đơn cũ (suy ra từ <see cref="Tier"/> qua <see cref="PlanCodes.Resolve"/>).</summary>
+    public string? PlanCode { get; set; }
+
+    /// <summary>Số năm của kỳ bán do Admin cấu hình (1 đến 10); null với ADDON.</summary>
     public int? Years { get; set; }
 
     /// <summary>Số suất người nhận mua thêm (q).</summary>
