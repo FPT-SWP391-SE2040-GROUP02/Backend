@@ -6,7 +6,8 @@ namespace LegacyVault.Application.Dtos;
 /// <summary>Owner-only metadata; token hashes and raw tokens are never serialized.</summary>
 public sealed record ExecutorInvitationResponse(Guid Id, string Status, string InviteeEmail,
     bool IsBeneficiary, DateTimeOffset ExpiresAt, DateTimeOffset? AcceptedAt,
-    DateTimeOffset? InvitationSentAt, string? AcceptedScopeVersion, string Etag);
+    DateTimeOffset? InvitationSentAt, string? AcceptedScopeVersion, string Etag, bool AccountExists = false);
+public sealed record CheckInviteeEmailResponse(string Email, bool Exists);
 public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, bool CanActivate,
     string[] MissingRequirements, string PolicyVersion, string PolicyText, string ExecutorScopeVersion,
     string ExecutorScopeText, List<ExecutorInvitationResponse> Executors,

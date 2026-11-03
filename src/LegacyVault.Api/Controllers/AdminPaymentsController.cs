@@ -29,10 +29,10 @@ public sealed class AdminPaymentsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public Task<PaginatedList<AdminPaymentTransactionResponse>> List(
-        [FromQuery] string? status, CancellationToken ct,
+        [FromQuery] string? status, [FromQuery] string? search, CancellationToken ct,
         [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
     {
-        return adminPaymentService.ListAsync(status, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
+        return adminPaymentService.ListAsync(status, search, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
     }
 
     private static int Clamp(int value, int min, int max)

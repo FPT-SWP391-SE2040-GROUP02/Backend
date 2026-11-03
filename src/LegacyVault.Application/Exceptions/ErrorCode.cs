@@ -103,6 +103,8 @@ public enum ErrorCode
     SigningPasswordInvalid,
     /// <summary>423 (DEATH-03): chức năng duyệt/từ chối đang khóa tạm vì nhập sai mật khẩu nhiều lần, kèm lockedUntil.</summary>
     SigningLocked,
+    /// <summary>404: tham số cấu hình hệ thống không tồn tại.</summary>
+    SettingNotFound,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

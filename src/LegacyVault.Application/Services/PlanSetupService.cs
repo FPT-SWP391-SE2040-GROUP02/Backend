@@ -17,6 +17,7 @@ public interface IPlanSetupService
     Task<ExecutorInvitationInfo> InspectAsync(string token, CancellationToken ct);
     Task<ExecutorInvitationResponse> RespondAsync(RespondExecutorInvitationRequest request, CancellationToken ct);
     Task<PlanSetupResponse> ActivateAsync(Guid vaultId, ActivatePlanRequest request, CancellationToken ct);
+    Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct);
 }
 
 /// <summary>Owner setup and explicit recipient acceptance. No identity/payment bypass and no implicit activation.</summary>
@@ -32,12 +33,20 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     // The immutable version identifies this text. Change the version whenever changing these warnings.
     public static readonly string PolicyText = $"Kích hoạt bắt đầu lịch điểm danh đã chọn. Quá hạn chỉ tạo bước kiểm tra, không tự bàn giao. Lời mời người nhận có hạn phản hồi {HandoverRules.ResponseWindow.TotalDays:0} ngày; khi đủ điều kiện, hạn quyết định {HandoverRules.DecisionWindow.TotalDays:0} ngày và quyền xem/tải {HandoverRules.GrantWindow.TotalDays:0} ngày từ lúc đồng ý. Không thao tác đúng hạn có thể mất quyền tiếp nhận/tải. Dữ liệu chỉ được xóa sau khi kiểm tra các điều kiện lưu giữ, tham chiếu và chặn liên quan; không mặc nhiên xóa ngay khi hết một lời mời. Nếu Executor không thực hiện được nhiệm vụ, Chủ kho cần mời người thay để kế hoạch không bị chậm.";
 
+    public async Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct)
+    {
+        var normalized = (email ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized)) return false;
+        return await users.FindByEmailAsync(normalized, ct) is not null;
+    }
+
     public async Task<PlanSetupResponse> GetAsync(Guid vaultId, CancellationToken ct) =>
         await BuildAsync(await OwnedAsync(vaultId, ct), ct);
 
     public async Task<ExecutorInvitationResponse> InviteAsync(Guid vaultId, InviteExecutorRequest request, CancellationToken ct)
     {
         var token = tokens.CreateOpaqueToken();
+        bool accountExists = false;
         var executor = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
             var vault = await OwnedAsync(vaultId, ct);
@@ -45,6 +54,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             var email = request.Email.Trim().ToLowerInvariant();
             var owner = await users.FindByIdAsync(vault.OwnerId, ct);
             if (email == owner!.Email.Trim().ToLowerInvariant()) throw NotAllowed("OWNER_CANNOT_ACCEPT");
+            var inviteeUser = await users.FindByEmailAsync(email, ct);
+            accountExists = inviteeUser is not null;
             var now = time.GetUtcNow();
             foreach (var previous in vault.Executors.Where(e => e.Status == ExecutorStatus.Invited && e.ExpiresAt <= now))
             {
@@ -78,12 +89,13 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             await unitOfWork.SaveChangesAsync(ct);
             return item;
         }, ct);
-        return await DeliverAsync(executor, token.Value, ct);
+        return await DeliverAsync(executor, token.Value, accountExists, ct);
     }
 
     public async Task<ExecutorInvitationResponse> ResendAsync(Guid vaultId, Guid executorId, ResendExecutorRequest request, CancellationToken ct)
     {
         var token = tokens.CreateOpaqueToken();
+        bool accountExists = false;
         var executor = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
             var vault = await OwnedAsync(vaultId, ct);
@@ -92,6 +104,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (!Etag.Matches(request.Etag, item.UpdatedAt)) throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict, "Lời mời đã thay đổi. Tải lại trước khi gửi tiếp.");
             if (item.Status is not (ExecutorStatus.Invited or ExecutorStatus.Expired or ExecutorStatus.Suspended)
                 && !(item.Status == ExecutorStatus.Accepted && item.AcceptedScopeVersion != ScopeVersion)) throw NotAllowed("WRONG_STATE");
+            var inviteeUser = await users.FindByEmailAsync(item.InviteeEmail, ct);
+            accountExists = inviteeUser is not null;
             var now = time.GetUtcNow();
             item.Status = ExecutorStatus.Invited;
             item.InvitationTokenHash = token.Hash;
@@ -106,7 +120,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             await unitOfWork.SaveChangesAsync(ct);
             return item;
         }, ct);
-        return await DeliverAsync(executor, token.Value, ct);
+        return await DeliverAsync(executor, token.Value, accountExists, ct);
     }
 
     public async Task<ExecutorInvitationInfo> InspectAsync(string token, CancellationToken ct)
@@ -246,7 +260,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return await invitations.FindByTokenHashAsync(tokens.HashOpaqueToken(token), ct) ?? throw InvalidInvitation();
     }
 
-    private async Task<ExecutorInvitationResponse> DeliverAsync(Executor executor, string token, CancellationToken ct)
+    private async Task<ExecutorInvitationResponse> DeliverAsync(Executor executor, string token, bool accountExists, CancellationToken ct)
     {
         // External delivery follows the committed invitation. Failed delivery never grants access.
         if (await sender.SendAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct))
@@ -255,11 +269,12 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             executor.UpdatedAt = time.GetUtcNow();
             await unitOfWork.SaveChangesAsync(ct);
         }
-        return Map(executor);
+        return Map(executor, accountExists);
     }
-    private ExecutorInvitationResponse Map(Executor item) => new(item.Id,
+    private ExecutorInvitationResponse Map(Executor item) => Map(item, false);
+    private ExecutorInvitationResponse Map(Executor item, bool accountExists) => new(item.Id,
         item.Status == ExecutorStatus.Invited && item.ExpiresAt <= time.GetUtcNow() ? "EXPIRED" : item.Status.ToApiString(), item.InviteeEmail,
-        item.IsBeneficiary, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt));
+        item.IsBeneficiary, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt), accountExists);
     private static AppException InvalidInvitation() => new(AppErrorType.NotFound, ErrorCode.ExecutorInvitationInvalid, "Lời mời Executor không hợp lệ hoặc đã hết hạn.");
     private static AppException Conflict() => new(AppErrorType.Conflict, ErrorCode.ExecutorInvitationConflict, "Lời mời hoặc phân công Executor đã tồn tại/thay đổi. Tải lại để kiểm tra.");
     private static AppException NotAllowed(string reason) => new(AppErrorType.Conflict, ErrorCode.ExecutorNotAllowed, "Không thể thực hiện thao tác Executor lúc này.", new Dictionary<string, object?> { ["reason"] = reason });

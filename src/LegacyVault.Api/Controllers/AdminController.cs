@@ -108,11 +108,11 @@ public sealed class AdminController : ControllerBase
     [ProducesResponseType<PaginatedList<IncidentSummaryResponse>>(StatusCodes.Status200OK)]
     public Task<PaginatedList<IncidentSummaryResponse>> ListIncidents(
         [FromQuery] string? status, [FromQuery] string? type, [FromQuery] Guid? assigneeUserId,
-        CancellationToken ct, [FromQuery] bool overdueOnly = false,
+        [FromQuery] string? search, CancellationToken ct, [FromQuery] bool overdueOnly = false,
         [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
     {
         return incidentService.ListAsync(
-            status, type, assigneeUserId, overdueOnly, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
+            status, type, assigneeUserId, search, overdueOnly, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
     }
 
     [HttpGet("incidents/{incidentId:guid}")]
