@@ -83,6 +83,7 @@ public sealed class AdminSettingsController : ControllerBase
         CancellationToken ct)
     {
         var admin = await RequireAdminAsync(ct);
+        await settingService.ValidatePlanPricesAsync(request.Items, ct);
         var updated = new List<SystemSettingResponse>();
         foreach (var item in request.Items)
         {

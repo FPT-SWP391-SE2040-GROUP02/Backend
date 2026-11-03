@@ -21,6 +21,13 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         Validate();
     }
 
+    /// <summary>Dựng từ một bảng giá đã ghép (cấu hình gốc + giá Admin chỉnh). Giá sai vẫn ném InvalidOperationException.</summary>
+    internal BillingPriceSettings(BillingPricingSection pricing)
+    {
+        this.pricing = pricing;
+        Validate();
+    }
+
     public string PolicyVersion
     {
         get { return pricing.PolicyVersion; }
