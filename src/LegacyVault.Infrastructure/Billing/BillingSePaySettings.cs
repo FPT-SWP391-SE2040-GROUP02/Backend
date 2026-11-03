@@ -1,20 +1,30 @@
+using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Application.Services;
-using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Infrastructure.Billing;
 
+/// <summary>Khóa webhook và môi trường SePay đang có hiệu lực: dòng Admin đã lưu trên web đè "Billing:SePay" trong appsettings.</summary>
 public sealed class BillingSePaySettings : IBillingSePaySettings
 {
-    private readonly IOptions<BillingSettings> options;
+    private readonly ISyncConfigReader reader;
 
-    public BillingSePaySettings(IOptions<BillingSettings> options)
+    public BillingSePaySettings(ISyncConfigReader reader)
     {
-        this.options = options;
+        this.reader = reader;
     }
 
     public string WebhookApiKey
     {
-        get { return options.Value.SePay.WebhookApiKey; }
+        get
+        {
+            string? key = null;
+            ResolvedConfig? config = reader.Read(SystemConfigServices.SePay);
+            if (config != null && config.Secrets.TryGetValue("webhookApiKey", out key))
+            {
+                return key;
+            }
+            return string.Empty;
+        }
     }
 
     /// <remarks>
@@ -25,7 +35,12 @@ public sealed class BillingSePaySettings : IBillingSePaySettings
     {
         get
         {
-            string configured = options.Value.SePay.Environment;
+            string? configured = null;
+            ResolvedConfig? config = reader.Read(SystemConfigServices.SePay);
+            if (config == null || !config.Settings.TryGetValue("environment", out configured))
+            {
+                configured = "Test";
+            }
             if (string.Equals(configured, "Test", StringComparison.OrdinalIgnoreCase))
             {
                 return "Test";
@@ -34,7 +49,7 @@ public sealed class BillingSePaySettings : IBillingSePaySettings
             {
                 return "Live";
             }
-            throw new InvalidOperationException("Billing:SePay:Environment chỉ nhận Test hoặc Live.");
+            throw new InvalidOperationException("Môi trường SePay chỉ nhận Test hoặc Live.");
         }
     }
 }

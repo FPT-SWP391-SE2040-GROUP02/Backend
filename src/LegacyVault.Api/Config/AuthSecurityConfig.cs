@@ -61,6 +61,8 @@ public static class AuthSecurityConfig
                 ("check-ins", 10),
                 // Mã PIN kho: đặt/đổi/quên PIN. Quên PIN kiểm mật khẩu tài khoản nên cần giới hạn dò.
                 ("vault-pin", 10),
+                // Admin thử kết nối dịch vụ ngoài bằng giá trị đang nhập: mỗi lần là một lời gọi thật ra ngoài.
+                ("system-config-test", 10),
             };
             foreach (var (name, limit) in policies)
             {

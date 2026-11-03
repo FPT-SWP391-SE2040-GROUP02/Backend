@@ -1,6 +1,7 @@
 using LegacyVault.Application.Notifications;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Notifications;
+using LegacyVault.IntegrationTests.ServiceConfig;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -91,7 +92,7 @@ public sealed class SmtpEmailTests
     public async Task MailSender_DeliversMessageWithVietnameseSubjectAndBothBodies()
     {
         using FakeSmtpServer server = new FakeSmtpServer();
-        SmtpMailSender sender = new SmtpMailSender(Options.Create(SettingsFor(server)));
+        SmtpMailSender sender = SmtpTestSenders.Create(SettingsFor(server));
 
         await sender.SendAsync("an@test.local", "Nguyễn Văn An", "Tiêu đề có dấu",
             "Nội dung chữ thuần", "<p>Nội dung HTML</p>", CancellationToken.None);
@@ -110,7 +111,7 @@ public sealed class SmtpEmailTests
     public async Task CheckInReminderSender_SendsReminderPointingToClientCheckInPage()
     {
         using FakeSmtpServer server = new FakeSmtpServer();
-        SmtpMailSender mailSender = new SmtpMailSender(Options.Create(SettingsFor(server)));
+        SmtpMailSender mailSender = SmtpTestSenders.Create(SettingsFor(server));
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["App:ClientUrl"] = "http://localhost:5173/" })
             .Build();
@@ -129,7 +130,7 @@ public sealed class SmtpEmailTests
     public async Task VerificationSender_SendsLinkToRecipient()
     {
         using FakeSmtpServer server = new FakeSmtpServer();
-        SmtpMailSender mailSender = new SmtpMailSender(Options.Create(SettingsFor(server)));
+        SmtpMailSender mailSender = SmtpTestSenders.Create(SettingsFor(server));
         SmtpEmailSender sender = new SmtpEmailSender(mailSender);
         string url = "http://localhost:5173/verify-email?token=abc123";
 
@@ -145,7 +146,7 @@ public sealed class SmtpEmailTests
     {
         using FakeSmtpServer server = new FakeSmtpServer();
         server.RejectRecipientWith = "550 no such user";
-        SmtpMailSender sender = new SmtpMailSender(Options.Create(SettingsFor(server)));
+        SmtpMailSender sender = SmtpTestSenders.Create(SettingsFor(server));
 
         await Assert.ThrowsAnyAsync<Exception>(() => sender.SendAsync(
             "ghost@test.local", "Ghost", "Chủ đề", "nội dung", "<p>nội dung</p>", CancellationToken.None));

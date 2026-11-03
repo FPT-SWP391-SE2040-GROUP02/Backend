@@ -3,11 +3,13 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using LegacyVault.Infrastructure.Billing;
 using LegacyVault.Infrastructure.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Infrastructure.Services;
 
@@ -17,6 +19,7 @@ public sealed class SystemSettingService : ISystemSettingService
     private readonly IMemoryCache cache;
     private readonly TimeProvider time;
     private readonly ILogger<SystemSettingService> logger;
+    private readonly IOptions<BillingSettings> billingOptions;
 
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
     private const string AllSettingsCacheKey = "SystemSettings:All";
@@ -27,12 +30,90 @@ public sealed class SystemSettingService : ISystemSettingService
         AppDbContext db,
         IMemoryCache cache,
         TimeProvider time,
-        ILogger<SystemSettingService> logger)
+        ILogger<SystemSettingService> logger,
+        IOptions<BillingSettings> billingOptions)
     {
         this.db = db;
         this.cache = cache;
         this.time = time;
         this.logger = logger;
+        this.billingOptions = billingOptions;
+    }
+
+    /// <summary>
+    /// Kiểm tra các giá gói trong một lần lưu trước khi ghi DB: mỗi giá phải là số nguyên dương và bảng giá sau khi ghép
+    /// phải hợp lệ (giá XS Max không thấp hơn XS cùng kỳ). Kiểm tra cả lô một lượt vì từng dòng riêng lẻ có thể tạm sai thứ tự.
+    /// </summary>
+    public async Task ValidatePlanPricesAsync(List<BatchUpdateSystemSettingItem> items, CancellationToken ct = default)
+    {
+        bool touchesPrice = false;
+        foreach (BatchUpdateSystemSettingItem item in items)
+        {
+            if (PlanPriceRules.IsPriceKey(item.Key.Trim()))
+            {
+                touchesPrice = true;
+            }
+        }
+        if (!touchesPrice)
+        {
+            return;
+        }
+
+        // Dòng đọc ra không theo dõi thay đổi (AsNoTracking) nên sửa trong bộ nhớ để thử ghép không ghi vào DB.
+        List<SystemSetting> rows = await db.SystemSettings
+            .AsNoTracking()
+            .Where(s => s.Key.StartsWith(PlanPriceRules.PlanKeyPrefix))
+            .ToListAsync(ct);
+
+        foreach (BatchUpdateSystemSettingItem item in items)
+        {
+            string key = item.Key.Trim();
+            if (!PlanPriceRules.IsPriceKey(key))
+            {
+                continue;
+            }
+
+            long price;
+            if (!long.TryParse(item.Value.Trim(), out price) || price <= 0)
+            {
+                throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                    $"Giá của '{key}' phải là số nguyên dương.");
+            }
+
+            SystemSetting? row = null;
+            foreach (SystemSetting candidate in rows)
+            {
+                if (candidate.Key == key)
+                {
+                    row = candidate;
+                }
+            }
+            if (row == null)
+            {
+                row = new SystemSetting();
+                row.Key = key;
+                rows.Add(row);
+            }
+            row.Value = price.ToString();
+            row.UpdatedBy = "validation";
+            row.UpdatedAt = time.GetUtcNow();
+            if (item.IsEnabled.HasValue)
+            {
+                row.IsEnabled = item.IsEnabled.Value;
+            }
+        }
+
+        bool hasOverride;
+        BillingPricingSection effective = PlanPriceRules.BuildEffective(billingOptions.Value.Pricing, rows, out hasOverride);
+        try
+        {
+            new BillingPriceSettings(effective);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                "Bảng giá không hợp lệ: " + ex.Message);
+        }
     }
 
     public async Task<List<SystemSettingResponse>> GetAllAsync(CancellationToken ct = default)
@@ -72,6 +153,12 @@ public sealed class SystemSettingService : ISystemSettingService
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.SettingNotFound, $"Không tìm thấy tham số cấu hình '{key}'.");
         }
+
+        BatchUpdateSystemSettingItem priceCheck = new BatchUpdateSystemSettingItem();
+        priceCheck.Key = entity.Key;
+        priceCheck.Value = request.Value;
+        priceCheck.IsEnabled = request.IsEnabled;
+        await ValidatePlanPricesAsync(new List<BatchUpdateSystemSettingItem> { priceCheck }, ct);
 
         var oldValue = entity.Value;
         var oldEnabled = entity.IsEnabled;
