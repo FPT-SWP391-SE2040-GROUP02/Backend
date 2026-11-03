@@ -119,6 +119,8 @@ public static class InfrastructureConfig
         services.Configure<BillingSettings>(configuration.GetSection(BillingSettings.SectionName));
         services.AddSingleton<IBillingBankSettings, BillingBankSettings>();
         services.AddSingleton<IBillingPriceSettings, BillingPriceSettings>();
+        // Giá Admin chỉnh trong SystemSettings đè lên Billing:Pricing, đọc lại mỗi lần báo giá.
+        services.AddScoped<IBillingPriceProvider, BillingPriceProvider>();
         services.AddSingleton<IBillingDevSettings, BillingDevSettings>();
         // Webhook SePay (SRS §8.5): giao dịch tiền vào và cấu hình nhận webhook.
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
