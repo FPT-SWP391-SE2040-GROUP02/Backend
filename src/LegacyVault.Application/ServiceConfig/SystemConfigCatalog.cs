@@ -51,6 +51,8 @@ public static class SystemConfigCatalog
 
     private static readonly IReadOnlyList<ConfigFieldSpec> SmtpFields = BuildSmtpFields();
 
+    private static readonly IReadOnlyList<ConfigFieldSpec> R2Fields = BuildR2Fields();
+
     public static bool IsWired(string serviceKey)
     {
         return WiredServices().Contains(serviceKey);
@@ -61,6 +63,7 @@ public static class SystemConfigCatalog
         return new List<string>
         {
             SystemConfigServices.Gemini, SystemConfigServices.Ekyc, SystemConfigServices.Smtp, SystemConfigServices.SePay,
+            SystemConfigServices.R2,
         };
     }
 
@@ -90,6 +93,10 @@ public static class SystemConfigCatalog
         if (serviceKey == SystemConfigServices.SePay)
         {
             return SePayFields;
+        }
+        if (serviceKey == SystemConfigServices.R2)
+        {
+            return R2Fields;
         }
         return new List<ConfigFieldSpec>();
     }
@@ -135,6 +142,42 @@ public static class SystemConfigCatalog
             }
         }
         return defaults;
+    }
+
+    /// <summary>
+    /// R2: tài khoản và bucket Cloudflare lưu nội dung tài sản đã mã hóa, cùng cặp khóa truy cập. Tài khoản nằm trong tên máy
+    /// của địa chỉ gọi nên chỉ nhận chữ, số và gạch ngang; tên bucket theo luật đặt tên của R2. Không có ô dự phòng vì chuyển
+    /// sang bucket khác làm kho mất truy cập vào dữ liệu đã lưu ở bucket cũ.
+    /// </summary>
+    private static IReadOnlyList<ConfigFieldSpec> BuildR2Fields()
+    {
+        ConfigFieldSpec accountId = new ConfigFieldSpec();
+        accountId.Name = "accountId";
+        accountId.Kind = ConfigFieldKind.Text;
+        accountId.Required = true;
+        accountId.Pattern = "^[A-Za-z0-9-]{1,64}$";
+
+        ConfigFieldSpec bucketName = new ConfigFieldSpec();
+        bucketName.Name = "bucketName";
+        bucketName.Kind = ConfigFieldKind.Text;
+        bucketName.Required = true;
+        bucketName.Pattern = "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$";
+
+        ConfigFieldSpec accessKeyId = new ConfigFieldSpec();
+        accessKeyId.Name = "accessKeyId";
+        accessKeyId.Kind = ConfigFieldKind.Text;
+        accessKeyId.Secret = true;
+        accessKeyId.Required = true;
+        accessKeyId.Max = 256;
+
+        ConfigFieldSpec secretAccessKey = new ConfigFieldSpec();
+        secretAccessKey.Name = "secretAccessKey";
+        secretAccessKey.Kind = ConfigFieldKind.Text;
+        secretAccessKey.Secret = true;
+        secretAccessKey.Required = true;
+        secretAccessKey.Max = 512;
+
+        return new List<ConfigFieldSpec> { accountId, bucketName, accessKeyId, secretAccessKey };
     }
 
     /// <summary>

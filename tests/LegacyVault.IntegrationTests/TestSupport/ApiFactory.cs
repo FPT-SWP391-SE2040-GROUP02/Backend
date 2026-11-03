@@ -104,6 +104,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["AssetStorage:RootPath"] = StorageRoot;
             // user-secrets của người chạy test có thể đặt Provider = R2: ép lưu trên đĩa để test KHÔNG BAO GIỜ ghi vào bucket thật.
             settings["AssetStorage:Provider"] = "Local";
+            // Cũng ép trống tài khoản và khóa R2 của user-secrets: test không bao giờ phụ thuộc hay dùng khóa R2 thật
+            // (trang Admin đọc giá trị này làm mặc định của dịch vụ R2).
+            settings["AssetStorage:R2:AccountId"] = "";
+            settings["AssetStorage:R2:BucketName"] = "";
+            settings["AssetStorage:R2:AccessKeyId"] = "";
+            settings["AssetStorage:R2:SecretAccessKey"] = "";
+            // Khóa dùng chung của eKYC cũng không được lấy từ user-secrets của người chạy test.
+            settings["Ekyc:ApiKey"] = "";
             // Jwt riêng cho test (không phụ thuộc appsettings.Development.json); token tạo bằng ITokenService của chính factory.
             settings["Jwt:Issuer"] = "LegacyVault.Tests";
             settings["Jwt:Audience"] = "LegacyVault.Tests";

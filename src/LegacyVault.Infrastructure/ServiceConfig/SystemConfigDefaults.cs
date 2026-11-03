@@ -2,6 +2,7 @@ using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Infrastructure.Billing;
 using LegacyVault.Infrastructure.Ekyc;
 using LegacyVault.Infrastructure.Notifications;
+using LegacyVault.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -17,14 +18,17 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
     private readonly IOptions<EkycSettings> ekycOptions;
     private readonly IOptions<BillingSettings> billingOptions;
     private readonly IOptions<SmtpSettings> smtpOptions;
+    private readonly IOptions<AssetStorageSettings> storageOptions;
 
     public SystemConfigDefaults(
         IConfiguration configuration,
         IOptions<EkycSettings> ekycOptions,
         IOptions<BillingSettings> billingOptions,
-        IOptions<SmtpSettings> smtpOptions)
+        IOptions<SmtpSettings> smtpOptions,
+        IOptions<AssetStorageSettings> storageOptions)
     {
         this.smtpOptions = smtpOptions;
+        this.storageOptions = storageOptions;
         this.configuration = configuration;
         this.ekycOptions = ekycOptions;
         this.billingOptions = billingOptions;
@@ -48,7 +52,31 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
         {
             return ReadSmtp();
         }
+        if (serviceKey == SystemConfigServices.R2)
+        {
+            return ReadR2();
+        }
         return null;
+    }
+
+    /// <summary>R2 theo mục "AssetStorage:R2" (tài khoản, bucket; khóa truy cập chỉ đặt bằng user-secrets hoặc biến môi trường).</summary>
+    private ResolvedConfig ReadR2()
+    {
+        R2StorageSettings settings = storageOptions.Value.R2;
+        ResolvedConfig config = new ResolvedConfig();
+        config.Source = ConfigSources.AppSettings;
+        config.Settings = SystemConfigCatalog.DefaultSettings(SystemConfigServices.R2);
+        config.Settings["accountId"] = (settings.AccountId ?? string.Empty).Trim();
+        config.Settings["bucketName"] = (settings.BucketName ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(settings.AccessKeyId))
+        {
+            config.Secrets["accessKeyId"] = settings.AccessKeyId.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(settings.SecretAccessKey))
+        {
+            config.Secrets["secretAccessKey"] = settings.SecretAccessKey.Trim();
+        }
+        return config;
     }
 
     /// <summary>
