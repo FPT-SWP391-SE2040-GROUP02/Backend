@@ -215,7 +215,6 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Plans.Free.QuotaMb", Value = "20", DataType = "NUMBER", Category = "Plans", Description = "Dung lượng lưu trữ gói Free (MiB)" },
             new() { Key = "Plans.Free.Slots", Value = "0", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm theo gói Free" },
             new() { Key = "Plans.Free.MaxPackages", Value = "50", DataType = "NUMBER", Category = "Plans", Description = "Số gói bàn giao tối đa gói Free" },
-            new() { Key = "Plans.Free.PdfExport", Value = "false", DataType = "BOOLEAN", Category = "Plans", Description = "Cho phép xuất PDF cấu hình gói Free" },
 
             new() { Key = "Plans.Xs.On", Value = "true", DataType = "BOOLEAN", Category = "Plans", Description = "Trạng thái mở bán gói XS" },
             new() { Key = "Plans.Xs.Price1Y", Value = "199000", DataType = "NUMBER", Category = "Plans", Description = "Giá gói XS kỳ 1 năm (VNĐ)" },
@@ -224,7 +223,6 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Plans.Xs.QuotaMb", Value = "200", DataType = "NUMBER", Category = "Plans", Description = "Dung lượng lưu trữ gói XS (MiB)" },
             new() { Key = "Plans.Xs.Slots", Value = "2", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm theo gói XS" },
             new() { Key = "Plans.Xs.MaxPackages", Value = "50", DataType = "NUMBER", Category = "Plans", Description = "Số gói bàn giao tối đa gói XS" },
-            new() { Key = "Plans.Xs.PdfExport", Value = "false", DataType = "BOOLEAN", Category = "Plans", Description = "Cho phép xuất PDF cấu hình gói XS" },
 
             new() { Key = "Plans.XsMax.On", Value = "true", DataType = "BOOLEAN", Category = "Plans", Description = "Trạng thái mở bán gói XS Max" },
             new() { Key = "Plans.XsMax.Price1Y", Value = "399000", DataType = "NUMBER", Category = "Plans", Description = "Giá gói XS Max kỳ 1 năm (VNĐ)" },
@@ -233,7 +231,6 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Plans.XsMax.QuotaMb", Value = "500", DataType = "NUMBER", Category = "Plans", Description = "Dung lượng lưu trữ gói XS Max (MiB)" },
             new() { Key = "Plans.XsMax.Slots", Value = "5", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm theo gói XS Max" },
             new() { Key = "Plans.XsMax.MaxPackages", Value = "50", DataType = "NUMBER", Category = "Plans", Description = "Số gói bàn giao tối đa gói XS Max" },
-            new() { Key = "Plans.XsMax.PdfExport", Value = "true", DataType = "BOOLEAN", Category = "Plans", Description = "Cho phép xuất PDF cấu hình gói XS Max" },
 
             new() { Key = "Plans.Addon.SlotPricePerYear", Value = "49000", DataType = "NUMBER", Category = "Plans", Description = "Giá một suất người nhận thêm / năm (VNĐ)" },
             new() { Key = "Plans.Addon.MaxSlotsPerOrder", Value = "20", DataType = "NUMBER", Category = "Plans", Description = "Số suất người nhận thêm tối đa mỗi đơn hàng" },
