@@ -66,24 +66,7 @@ public sealed class VaultService(
     public async Task<VaultResponse> GetMyVaultAsync(CancellationToken ct)
     {
         var userId = currentUser.RequireUserId();
-        var existing = await vaultRepository.FindByOwnerIdAsync(userId, ct);
-        if (existing is null)
-        {
-            var user = await userRepository.FindByIdAsync(userId, ct);
-            if (user is not null && user.Status == UserStatus.Active)
-            {
-                var autoVault = BuildNewVault(userId, null);
-                auditLogRepository.Add(AuditRules.OwnerAction(
-                    autoVault.Id, userId, AuditAction.VaultCreated, AuditTargetType.Vault, autoVault.Id, null, autoVault.CreatedAt));
-                if (await vaultRepository.TryAddAsync(autoVault, ct))
-                {
-                    return await ToResponseAsync(autoVault, ct);
-                }
-                var winner = await vaultRepository.FindByOwnerIdAsync(userId, ct);
-                if (winner is not null) return await ToResponseAsync(winner, ct);
-            }
-        }
-        var vault = VaultRules.EnsureOwnedBy(existing, userId);
+        var vault = VaultRules.EnsureOwnedBy(await vaultRepository.FindByOwnerIdAsync(userId, ct), userId);
         return await ToResponseAsync(vault, ct);
     }
 
