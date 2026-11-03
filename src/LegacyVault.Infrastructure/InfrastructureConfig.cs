@@ -86,6 +86,7 @@ public static class InfrastructureConfig
         services.AddSingleton<ISyncConfigReader, SyncConfigReader>();
         services.AddScoped<IServiceConnectionTester, GeminiConnectionTester>();
         services.AddScoped<IServiceConnectionTester, EkycConnectionTester>();
+        services.AddScoped<IServiceConnectionTester, SmtpConnectionTester>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IVaultRepository, VaultRepository>();
         services.AddScoped<IContainerRepository, ContainerRepository>();

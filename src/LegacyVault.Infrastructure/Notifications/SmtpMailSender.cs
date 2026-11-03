@@ -1,8 +1,13 @@
 using System.Net.Http.Json;
+using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
+using LegacyVault.Application.ServiceConfig;
+using LegacyVault.Domain.Enums;
+using MailKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using MimeKit;
 
 namespace LegacyVault.Infrastructure.Notifications;
@@ -11,25 +16,82 @@ namespace LegacyVault.Infrastructure.Notifications;
 /// Dịch vụ email dùng chung: hỗ trợ gửi qua Webhook (Google Apps Script)
 /// hoặc SMTP trực tiếp (Gmail qua MailKit).
 /// </summary>
-public sealed class SmtpMailSender
+/// <remarks>
+/// Máy chủ, tài khoản, mật khẩu... đọc từ cấu hình đang có hiệu lực mỗi lần gửi (Admin sửa trên web đè appsettings).
+/// Ô chính gửi lỗi thì thử ô dự phòng nếu Admin đã bật; cả hai lỗi thì ném lỗi của ô chính như trước đây.
+/// Việc chọn gửi thư thật hay chỉ ghi log vẫn quyết định lúc khởi động theo appsettings (xem EmailConfig).
+/// </remarks>
+public class SmtpMailSender
 {
-    private readonly SmtpSettings settings;
+    private static readonly SystemConfigSlot[] Slots = { SystemConfigSlot.Primary, SystemConfigSlot.Fallback };
+
+    private readonly IServiceScopeFactory scopes;
+    private readonly IServiceStatusTracker tracker;
+    private readonly TimeProvider timeProvider;
     private readonly ILogger<SmtpMailSender>? logger;
 
-    public SmtpMailSender(IOptions<SmtpSettings> options, ILogger<SmtpMailSender>? logger = null)
+    public SmtpMailSender(
+        IServiceScopeFactory scopes,
+        IServiceStatusTracker tracker,
+        TimeProvider timeProvider,
+        ILogger<SmtpMailSender>? logger = null)
     {
-        settings = options.Value;
+        this.scopes = scopes;
+        this.tracker = tracker;
+        this.timeProvider = timeProvider;
         this.logger = logger;
     }
 
     public async Task SendAsync(
         string toEmail, string toName, string subject, string textBody, string htmlBody, CancellationToken ct)
     {
+        Exception? firstFailure = null;
+        foreach (SystemConfigSlot slot in Slots)
+        {
+            ResolvedConfig? config = await ResolveAsync(slot, ct);
+            if (config == null)
+            {
+                continue;
+            }
+            SmtpSettings settings = SmtpSettingsMapping.FromConfig(config);
+            try
+            {
+                await DeliverAsync(settings, toEmail, toName, subject, textBody, htmlBody, ct);
+                Record(slot, true, null);
+                return;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Record(slot, false, ErrorCodeOf(ex));
+                logger?.LogWarning("Email: Ô {Slot} gửi thư không được ({ErrorType}).", slot, ex.GetType().Name);
+                if (firstFailure == null)
+                {
+                    firstFailure = ex;
+                }
+            }
+        }
+
+        if (firstFailure != null)
+        {
+            ExceptionDispatchInfo.Capture(firstFailure).Throw();
+        }
+        throw new InvalidOperationException("Chưa có cấu hình email nào dùng được.");
+    }
+
+    /// <summary>Gửi một thư bằng đúng một bộ cấu hình: Webhook nếu có địa chỉ, không thì SMTP trực tiếp. Tách ra để test thay thế được.</summary>
+    protected virtual async Task DeliverAsync(
+        SmtpSettings settings, string toEmail, string toName, string subject, string textBody, string htmlBody,
+        CancellationToken ct)
+    {
         // 1. Ưu tiên gửi qua Google Apps Script Webhook (Port 443 HTTPS - không bao giờ bị chặn firewall)
         string webhookUrl = settings.ResolveWebhookUrl();
         if (!string.IsNullOrWhiteSpace(webhookUrl))
         {
-            await SendViaWebhookAsync(webhookUrl, toEmail, toName, subject, textBody, htmlBody, ct);
+            await SendViaWebhookAsync(settings, webhookUrl, toEmail, toName, subject, textBody, htmlBody, ct);
             return;
         }
 
@@ -97,7 +159,8 @@ public sealed class SmtpMailSender
     }
 
     private async Task SendViaWebhookAsync(
-        string webhookUrl, string toEmail, string toName, string subject, string textBody, string htmlBody, CancellationToken ct)
+        SmtpSettings settings, string webhookUrl, string toEmail, string toName, string subject, string textBody,
+        string htmlBody, CancellationToken ct)
     {
         logger?.LogInformation("Email: Đang gửi thư '{Subject}' tới {ToEmail} qua Webhook HTTPS ({WebhookUrl})...",
             subject, toEmail, webhookUrl);
@@ -133,6 +196,56 @@ public sealed class SmtpMailSender
         }
 
         logger?.LogInformation("Email: Gửi thư '{Subject}' tới {ToEmail} qua Webhook THÀNH CÔNG!", subject, toEmail);
+    }
+
+    /// <summary>Đọc cấu hình của ô; lỗi đọc (DB, giải mã) coi như ô không dùng được và không ném ra ngoài.</summary>
+    private async Task<ResolvedConfig?> ResolveAsync(SystemConfigSlot slot, CancellationToken ct)
+    {
+        try
+        {
+            using (IServiceScope scope = scopes.CreateScope())
+            {
+                ISystemConfigResolver resolver = scope.ServiceProvider.GetRequiredService<ISystemConfigResolver>();
+                return await resolver.ResolveAsync(SystemConfigServices.Smtp, slot, ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning("Email: Không đọc được cấu hình ô {Slot} ({ErrorType}).", slot, ex.GetType().Name);
+            return null;
+        }
+    }
+
+    private void Record(SystemConfigSlot slot, bool succeeded, string? errorCode)
+    {
+        tracker.Record(SystemConfigServices.Smtp, slot, succeeded, errorCode, timeProvider.GetUtcNow());
+    }
+
+    /// <summary>Mã lỗi ngắn nói loại sự cố (không kèm chi tiết, không bao giờ có mật khẩu).</summary>
+    internal static string ErrorCodeOf(Exception ex)
+    {
+        if (ex is AuthenticationException)
+        {
+            return "AUTH";
+        }
+        if (ex is TimeoutException || ex is OperationCanceledException)
+        {
+            return "TIMEOUT";
+        }
+        SmtpCommandException? command = ex as SmtpCommandException;
+        if (command != null)
+        {
+            return "SMTP_" + (int)command.StatusCode;
+        }
+        if (ex is SocketException || ex is IOException || ex is HttpRequestException)
+        {
+            return "NETWORK";
+        }
+        return "ERROR";
     }
 
     /// <summary>Đính logo nội tuyến để Gmail và Outlook hiện ngay, không cần người nhận bấm "tải ảnh".</summary>

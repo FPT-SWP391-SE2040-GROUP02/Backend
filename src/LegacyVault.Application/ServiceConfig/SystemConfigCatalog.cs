@@ -49,6 +49,8 @@ public static class SystemConfigCatalog
 
     private static readonly IReadOnlyList<ConfigFieldSpec> SePayFields = BuildSePayFields();
 
+    private static readonly IReadOnlyList<ConfigFieldSpec> SmtpFields = BuildSmtpFields();
+
     public static bool IsWired(string serviceKey)
     {
         return WiredServices().Contains(serviceKey);
@@ -56,13 +58,18 @@ public static class SystemConfigCatalog
 
     public static IReadOnlyList<string> WiredServices()
     {
-        return new List<string> { SystemConfigServices.Gemini, SystemConfigServices.Ekyc, SystemConfigServices.SePay };
+        return new List<string>
+        {
+            SystemConfigServices.Gemini, SystemConfigServices.Ekyc, SystemConfigServices.Smtp, SystemConfigServices.SePay,
+        };
     }
 
     /// <summary>SePay và R2 không tự chuyển dịch vụ: đổi nơi nhận tiền hay bucket tự động có thể làm sai đối soát hoặc mất truy cập dữ liệu.</summary>
     public static bool SupportsFallback(string serviceKey)
     {
-        return serviceKey == SystemConfigServices.Gemini || serviceKey == SystemConfigServices.Ekyc;
+        return serviceKey == SystemConfigServices.Gemini
+            || serviceKey == SystemConfigServices.Ekyc
+            || serviceKey == SystemConfigServices.Smtp;
     }
 
     /// <summary>Các trường của dịch vụ; dịch vụ chưa nối thì danh sách rỗng.</summary>
@@ -75,6 +82,10 @@ public static class SystemConfigCatalog
         if (serviceKey == SystemConfigServices.Ekyc)
         {
             return EkycFields;
+        }
+        if (serviceKey == SystemConfigServices.Smtp)
+        {
+            return SmtpFields;
         }
         if (serviceKey == SystemConfigServices.SePay)
         {
@@ -124,6 +135,74 @@ public static class SystemConfigCatalog
             }
         }
         return defaults;
+    }
+
+    /// <summary>
+    /// Email: máy chủ SMTP (mặc định Gmail) hoặc Webhook HTTPS (Google Apps Script, qua cổng 443 khi nhà cung cấp chặn cổng SMTP).
+    /// Có địa chỉ Webhook thì gửi qua Webhook, không thì SMTP. Ô dự phòng thường chỉ đặt Webhook.
+    /// </summary>
+    private static IReadOnlyList<ConfigFieldSpec> BuildSmtpFields()
+    {
+        ConfigFieldSpec host = new ConfigFieldSpec();
+        host.Name = "host";
+        host.Kind = ConfigFieldKind.Text;
+        host.Required = true;
+        host.Max = 255;
+        host.DefaultValue = "smtp.gmail.com";
+
+        ConfigFieldSpec port = new ConfigFieldSpec();
+        port.Name = "port";
+        port.Kind = ConfigFieldKind.Integer;
+        port.Required = true;
+        port.Min = 1;
+        port.Max = 65535;
+        port.DefaultValue = "587";
+
+        ConfigFieldSpec secureSocket = new ConfigFieldSpec();
+        secureSocket.Name = "secureSocket";
+        secureSocket.Kind = ConfigFieldKind.Choice;
+        secureSocket.Required = true;
+        secureSocket.Choices = new List<string> { "None", "Auto", "SslOnConnect", "StartTls", "StartTlsWhenAvailable" };
+        secureSocket.DefaultValue = "StartTls";
+
+        ConfigFieldSpec userName = new ConfigFieldSpec();
+        userName.Name = "userName";
+        userName.Kind = ConfigFieldKind.Text;
+        userName.Max = 256;
+
+        ConfigFieldSpec fromAddress = new ConfigFieldSpec();
+        fromAddress.Name = "fromAddress";
+        fromAddress.Kind = ConfigFieldKind.Text;
+        fromAddress.Max = 256;
+
+        ConfigFieldSpec fromName = new ConfigFieldSpec();
+        fromName.Name = "fromName";
+        fromName.Kind = ConfigFieldKind.Text;
+        fromName.Max = 100;
+        fromName.DefaultValue = "LegacyVault";
+
+        ConfigFieldSpec timeout = new ConfigFieldSpec();
+        timeout.Name = "timeoutSeconds";
+        timeout.Kind = ConfigFieldKind.Integer;
+        timeout.Required = true;
+        timeout.Min = 5;
+        timeout.Max = 120;
+        timeout.DefaultValue = "20";
+
+        ConfigFieldSpec webhookUrl = new ConfigFieldSpec();
+        webhookUrl.Name = "webhookUrl";
+        webhookUrl.Kind = ConfigFieldKind.Url;
+
+        ConfigFieldSpec password = new ConfigFieldSpec();
+        password.Name = "password";
+        password.Kind = ConfigFieldKind.Text;
+        password.Secret = true;
+        password.Max = 512;
+
+        return new List<ConfigFieldSpec>
+        {
+            host, port, secureSocket, userName, fromAddress, fromName, timeout, webhookUrl, password,
+        };
     }
 
     /// <summary>

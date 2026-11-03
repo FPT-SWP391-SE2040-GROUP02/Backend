@@ -1,6 +1,9 @@
 using LegacyVault.Application.Notifications;
+using LegacyVault.Application.ServiceConfig;
+using LegacyVault.Infrastructure.ServiceConfig;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Infrastructure.Notifications;
@@ -70,6 +73,9 @@ public static class EmailConfig
             .Validate(settings => settings.FindError() == null,
                 "Cấu hình Email:Smtp không hợp lệ (Port 1–65535, SecureSocket đúng tên, FromAddress là email).")
             .ValidateOnStart();
+        // SmtpMailSender ghi trạng thái lần gửi gần nhất và đọc cấu hình lúc chạy: bảo đảm có đủ thứ nó cần.
+        services.TryAddSingleton<IServiceStatusTracker, ServiceStatusTracker>();
+        services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<SmtpMailSender>();
         services.AddHostedService<EmailStartupLogger>();
         services.AddSingleton<ICheckInReminderSender>(provider => ChooseReminderSender(provider));

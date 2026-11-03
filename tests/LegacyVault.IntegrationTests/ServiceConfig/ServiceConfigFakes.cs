@@ -1,5 +1,6 @@
 using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Domain.Enums;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LegacyVault.IntegrationTests.ServiceConfig;
 
@@ -79,6 +80,47 @@ internal static class EkycTestClients
         return new LegacyVault.Infrastructure.Ekyc.EkycHttpClient(
             new HttpClient(handler),
             resolver,
+            new LegacyVault.Infrastructure.ServiceConfig.ServiceStatusTracker(),
+            TimeProvider.System);
+    }
+}
+
+/// <summary>Dựng SmtpMailSender cho test: cấu hình ô chính lấy từ SmtpSettings đã cho, qua bộ giải cấu hình giả.</summary>
+internal static class SmtpTestSenders
+{
+    public static ResolvedConfig ConfigFrom(LegacyVault.Infrastructure.Notifications.SmtpSettings settings)
+    {
+        Dictionary<string, string> values = new Dictionary<string, string>();
+        values["host"] = settings.Host;
+        values["port"] = settings.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        values["secureSocket"] = settings.SecureSocket;
+        values["userName"] = settings.UserName;
+        values["fromAddress"] = settings.FromAddress;
+        values["fromName"] = settings.FromName;
+        values["timeoutSeconds"] = settings.TimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        values["webhookUrl"] = settings.WebhookUrl;
+        Dictionary<string, string> secrets = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(settings.Password))
+        {
+            secrets["password"] = settings.Password;
+        }
+        return FakeConfigResolver.Config(values, secrets);
+    }
+
+    public static IServiceScopeFactory ScopesFor(FakeConfigResolver resolver)
+    {
+        ServiceCollection services = new ServiceCollection();
+        services.AddScoped<ISystemConfigResolver>(provider => resolver);
+        return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+    }
+
+    public static LegacyVault.Infrastructure.Notifications.SmtpMailSender Create(
+        LegacyVault.Infrastructure.Notifications.SmtpSettings settings)
+    {
+        FakeConfigResolver resolver = new FakeConfigResolver();
+        resolver.Slots[SystemConfigSlot.Primary] = ConfigFrom(settings);
+        return new LegacyVault.Infrastructure.Notifications.SmtpMailSender(
+            ScopesFor(resolver),
             new LegacyVault.Infrastructure.ServiceConfig.ServiceStatusTracker(),
             TimeProvider.System);
     }

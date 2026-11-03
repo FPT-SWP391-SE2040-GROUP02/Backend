@@ -1,6 +1,7 @@
 using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Infrastructure.Billing;
 using LegacyVault.Infrastructure.Ekyc;
+using LegacyVault.Infrastructure.Notifications;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -15,10 +16,15 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
     private readonly IConfiguration configuration;
     private readonly IOptions<EkycSettings> ekycOptions;
     private readonly IOptions<BillingSettings> billingOptions;
+    private readonly IOptions<SmtpSettings> smtpOptions;
 
     public SystemConfigDefaults(
-        IConfiguration configuration, IOptions<EkycSettings> ekycOptions, IOptions<BillingSettings> billingOptions)
+        IConfiguration configuration,
+        IOptions<EkycSettings> ekycOptions,
+        IOptions<BillingSettings> billingOptions,
+        IOptions<SmtpSettings> smtpOptions)
     {
+        this.smtpOptions = smtpOptions;
         this.configuration = configuration;
         this.ekycOptions = ekycOptions;
         this.billingOptions = billingOptions;
@@ -38,7 +44,36 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
         {
             return ReadSePay();
         }
+        if (serviceKey == SystemConfigServices.Smtp)
+        {
+            return ReadSmtp();
+        }
         return null;
+    }
+
+    /// <summary>
+    /// Email theo SmtpSettings đã bind và làm sạch lúc khởi động (kể cả các tên cấu hình cũ như SMTP__HOST), nên mặc định
+    /// đúng bằng cách hệ thống đang gửi thư hôm nay.
+    /// </summary>
+    private ResolvedConfig ReadSmtp()
+    {
+        SmtpSettings settings = smtpOptions.Value;
+        ResolvedConfig config = new ResolvedConfig();
+        config.Source = ConfigSources.AppSettings;
+        config.Settings = SystemConfigCatalog.DefaultSettings(SystemConfigServices.Smtp);
+        config.Settings["host"] = (settings.Host ?? string.Empty).Trim();
+        config.Settings["port"] = settings.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        config.Settings["secureSocket"] = (settings.SecureSocket ?? string.Empty).Trim();
+        config.Settings["userName"] = (settings.UserName ?? string.Empty).Trim();
+        config.Settings["fromAddress"] = (settings.FromAddress ?? string.Empty).Trim();
+        config.Settings["fromName"] = (settings.FromName ?? string.Empty).Trim();
+        config.Settings["timeoutSeconds"] = settings.TimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        config.Settings["webhookUrl"] = (settings.WebhookUrl ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(settings.Password))
+        {
+            config.Secrets["password"] = settings.Password.Trim();
+        }
+        return config;
     }
 
     /// <summary>SePay và tài khoản nhận tiền theo mục "Billing:SePay" và "Billing:Bank" (không đụng tới bảng giá "Billing:Pricing").</summary>

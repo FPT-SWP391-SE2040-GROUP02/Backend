@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
+using LegacyVault.IntegrationTests.ServiceConfig;
 using Xunit;
 using LegacyVault.IntegrationTests.Email;
 
@@ -88,7 +89,7 @@ public sealed class HandoverWiringTests
     public async Task SmtpSender_SendsLinkBuiltFromClientUrl()
     {
         using FakeSmtpServer server = new FakeSmtpServer();
-        SmtpMailSender mailSender = new SmtpMailSender(Options.Create(SettingsFor(server)));
+        SmtpMailSender mailSender = SmtpTestSenders.Create(SettingsFor(server));
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["App:ClientUrl"] = "http://localhost:5173/" })
             .Build();
