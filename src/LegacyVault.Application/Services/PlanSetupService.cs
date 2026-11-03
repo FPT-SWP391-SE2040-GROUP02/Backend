@@ -1,4 +1,5 @@
 using LegacyVault.Application.Dtos;
+using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Notifications;
@@ -16,6 +17,15 @@ public interface IPlanSetupService
     Task<ExecutorInvitationResponse> ResendAsync(Guid vaultId, Guid executorId, ResendExecutorRequest request, CancellationToken ct);
     Task<ExecutorInvitationInfo> InspectAsync(string token, CancellationToken ct);
     Task<ExecutorInvitationResponse> RespondAsync(RespondExecutorInvitationRequest request, CancellationToken ct);
+
+    /// <summary>Lời mời gửi tới email đã xác minh của tài khoản đang đăng nhập; email chưa xác minh thì danh sách rỗng.</summary>
+    Task<MyExecutorInvitationsResponse> ListMyInvitationsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Trả lời lời mời theo id thay cho token trong link email; cùng luật như RespondAsync.
+    /// Lời mời không gửi tới email của người gọi → 404 như lời mời không tồn tại.
+    /// </summary>
+    Task<ExecutorInvitationResponse> RespondByIdAsync(Guid invitationId, RespondMyExecutorInvitationRequest request, CancellationToken ct);
     Task<PlanSetupResponse> ActivateAsync(Guid vaultId, ActivatePlanRequest request, CancellationToken ct);
     Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct);
 }
@@ -130,18 +140,79 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return new(item.ExpiresAt, item.Status.ToApiString(), ScopeVersion, ScopeText);
     }
 
-    public Task<ExecutorInvitationResponse> RespondAsync(RespondExecutorInvitationRequest request, CancellationToken ct) =>
+    public Task<ExecutorInvitationResponse> RespondAsync(RespondExecutorInvitationRequest request, CancellationToken ct)
+    {
+        return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion,
+            responder => FindTokenAsync(request.Token, ct), ct);
+    }
+
+    public Task<ExecutorInvitationResponse> RespondByIdAsync(
+        Guid invitationId, RespondMyExecutorInvitationRequest request, CancellationToken ct)
+    {
+        return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion,
+            responder => FindMyInvitationAsync(invitationId, responder, ct), ct);
+    }
+
+    public async Task<MyExecutorInvitationsResponse> ListMyInvitationsAsync(CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        MyExecutorInvitationsResponse response = new MyExecutorInvitationsResponse();
+        response.ScopeVersion = ScopeVersion;
+        response.ScopeText = ScopeText;
+
+        User? user = await users.FindByIdAsync(userId, ct);
+        // Email chưa xác minh thì chưa chứng minh được là chủ email đó: không hiện lời mời gửi tới email này.
+        if (user == null || user.Status != UserStatus.Active || user.EmailVerifiedAt == null)
+        {
+            return response;
+        }
+
+        string email = user.Email.Trim().ToLowerInvariant();
+        DateTimeOffset now = time.GetUtcNow();
+        List<Executor> items = await invitations.ListByInviteeEmailAsync(email, MyInvitationsMaxCount, ct);
+        foreach (Executor item in items)
+        {
+            // Chủ kho không nhận lời mời của chính kho mình; lời mời đã nhận nằm ở danh sách kho của Executor.
+            if (item.Vault.OwnerId == userId)
+            {
+                continue;
+            }
+
+            bool expired = item.Status == ExecutorStatus.Invited && item.ExpiresAt <= now;
+            if (item.Status == ExecutorStatus.Invited && !expired)
+            {
+                response.Pending.Add(ToMyInvitation(item, "INVITED", null));
+            }
+            else if (expired)
+            {
+                response.Ended.Add(ToMyInvitation(item, "EXPIRED", item.ExpiresAt));
+            }
+            else if (item.Status == ExecutorStatus.Declined
+                || item.Status == ExecutorStatus.Expired
+                || item.Status == ExecutorStatus.Revoked)
+            {
+                response.Ended.Add(ToMyInvitation(item, item.Status.ToApiString(), item.EndedAt));
+            }
+        }
+
+        // Lời mời sắp hết hạn lên trước để người dùng trả lời kịp.
+        response.Pending.Sort(CompareByExpiresAt);
+        return response;
+    }
+
+    private Task<ExecutorInvitationResponse> RespondCoreAsync(bool accept, bool acknowledgeScope, string scopeVersion,
+        Func<User, Task<Executor>> findInvitation, CancellationToken ct) =>
         unitOfWork.ExecuteSerializableAsync(async () =>
         {
             var userId = currentUser.RequireUserId();
             var responder = await UsableUserAsync(userId, ct);
-            if (request.ScopeVersion != ScopeVersion || (request.Accept && !request.AcknowledgeScope))
+            if (scopeVersion != ScopeVersion || (accept && !acknowledgeScope))
                 throw new AppException(AppErrorType.Validation, ErrorCode.PolicyAcknowledgementRequired, "Cần đọc và xác nhận phạm vi nhiệm vụ hiện hành.");
-            var item = await FindTokenAsync(request.Token, ct);
+            var item = await findInvitation(responder);
             var vault = await vaults.FindByIdAsync(item.VaultId, ct) ?? throw InvalidInvitation();
             if (vault.OwnerId == userId) throw NotAllowed("OWNER_CANNOT_ACCEPT");
             if (item.UserId.HasValue && item.UserId != userId) throw Conflict();
-            if (item.UserId == userId && ((request.Accept && item.Status == ExecutorStatus.Accepted) || (!request.Accept && item.Status == ExecutorStatus.Declined)))
+            if (item.UserId == userId && ((accept && item.Status == ExecutorStatus.Accepted) || (!accept && item.Status == ExecutorStatus.Declined)))
                 return Map(item);
             if (item.Status != ExecutorStatus.Invited || item.ExpiresAt <= time.GetUtcNow()) throw InvalidInvitation();
             // M4, SETUP-20: người trả lời phải dùng tài khoản có email đã xác minh trùng email được mời; link bị chuyển tiếp
@@ -149,15 +220,15 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (!string.Equals(responder.Email?.Trim(), item.InviteeEmail?.Trim(), StringComparison.OrdinalIgnoreCase)) throw NotAllowed("INVITEE_EMAIL_MISMATCH");
             VaultRules.EnsureEditable(vault);
             if (vault.Plan.Status != PlanStatus.Draft && !PlanRules.IsRunning(vault.Plan.Status)) throw NotAllowed("PLAN_NOT_DRAFT");
-            if (request.Accept && vault.Executors.Any(e => e.Id != item.Id && e.UserId == userId && e.Status == ExecutorStatus.Accepted)) throw NotAllowed("INDEPENDENT_EXECUTOR_REQUIRED");
+            if (accept && vault.Executors.Any(e => e.Id != item.Id && e.UserId == userId && e.Status == ExecutorStatus.Accepted)) throw NotAllowed("INDEPENDENT_EXECUTOR_REQUIRED");
             var now = time.GetUtcNow();
             item.UserId = userId;
-            item.Status = request.Accept ? ExecutorStatus.Accepted : ExecutorStatus.Declined;
-            item.AcceptedAt = request.Accept ? now : null;
-            item.AcceptedScopeVersion = request.Accept ? ScopeVersion : null;
-            item.EndedAt = request.Accept ? null : now;
+            item.Status = accept ? ExecutorStatus.Accepted : ExecutorStatus.Declined;
+            item.AcceptedAt = accept ? now : null;
+            item.AcceptedScopeVersion = accept ? ScopeVersion : null;
+            item.EndedAt = accept ? null : now;
             item.UpdatedAt = now;
-            if (request.Accept && item.ReplacesExecutorId is Guid replacedId)
+            if (accept && item.ReplacesExecutorId is Guid replacedId)
             {
                 // SETUP-06: người thay chấp nhận thì người cũ thôi vai trò trong cùng giao dịch.
                 var replaced = vault.Executors.SingleOrDefault(e => e.Id == replacedId && e.Status == ExecutorStatus.Accepted);
@@ -252,6 +323,43 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
             vault.Executors.OrderByDescending(e => e.InvitedAt).Select(Map).ToList(),
             PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>());
+    }
+
+    private const int MyInvitationsMaxCount = 50;
+
+    /// <summary>Lời mời theo id, chỉ khi gửi tới đúng email của người gọi; khác email thì coi như không tồn tại.</summary>
+    private async Task<Executor> FindMyInvitationAsync(Guid invitationId, User responder, CancellationToken ct)
+    {
+        Executor? item = await invitations.FindByIdAsync(invitationId, ct);
+        if (item == null)
+        {
+            throw InvalidInvitation();
+        }
+        string responderEmail = responder.Email.Trim().ToLowerInvariant();
+        string inviteeEmail = item.InviteeEmail.Trim().ToLowerInvariant();
+        if (responderEmail != inviteeEmail)
+        {
+            throw InvalidInvitation();
+        }
+        return item;
+    }
+
+    private static MyExecutorInvitationResponse ToMyInvitation(Executor item, string status, DateTimeOffset? endedAt)
+    {
+        MyExecutorInvitationResponse response = new MyExecutorInvitationResponse();
+        response.Id = item.Id;
+        response.OwnerName = item.Vault.Owner.FullName;
+        response.InviteeEmail = item.InviteeEmail;
+        response.Status = status;
+        response.InvitedAt = item.InvitedAt;
+        response.ExpiresAt = item.ExpiresAt;
+        response.EndedAt = endedAt;
+        return response;
+    }
+
+    private static int CompareByExpiresAt(MyExecutorInvitationResponse left, MyExecutorInvitationResponse right)
+    {
+        return left.ExpiresAt.CompareTo(right.ExpiresAt);
     }
 
     private async Task<Executor> FindTokenAsync(string token, CancellationToken ct)

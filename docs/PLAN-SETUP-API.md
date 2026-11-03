@@ -9,11 +9,15 @@ Implemented 15/10/2026. Canonical prefix is `/api/v1` only. Swagger UI: `/swagge
 | POST `/vaults/{vaultId}/executors/{executorId}/resend` | Owner: etag | Rotates token and expiry; old link invalid |
 | POST `/executor-invitations/inspect` | Public: token | Minimal role/status/expiry/scope; no owner/vault content |
 | POST `/executor-invitations/respond` | Verified active account: token, accept, acknowledgeScope, scopeVersion | Explicit accept/decline; Owner, second claimant and an account whose verified email differs from the invited email (409 `EXECUTOR_NOT_ALLOWED`, reason `INVITEE_EMAIL_MISMATCH`) are rejected |
+| GET `/executor-invitations/mine` | Signed-in account | `{ scopeVersion, scopeText, pending[], ended[] }`. Mỗi lời mời: `id, ownerName, inviteeEmail, status (INVITED/DECLINED/EXPIRED/REVOKED), invitedAt, expiresAt, endedAt`. Chỉ lời mời gửi tới email **đã xác minh** của tài khoản; email chưa xác minh hoặc tài khoản không Active thì hai danh sách rỗng. Không có token, không có nội dung kho. `pending` sắp hết hạn trước, `ended` mới nhất trước (tối đa 50 lời mời) |
+| POST `/executor-invitations/{invitationId}/respond` | Verified active account: accept, acknowledgeScope, scopeVersion | Giống respond bằng token (cùng luật và mã lỗi). Lời mời không gửi tới email của người gọi → 404 `EXECUTOR_INVITATION_INVALID` (không lộ lời mời của người khác) |
 | POST `/vaults/{vaultId}/activate` | Owner: configVersion, policyVersion, acknowledgePolicy=true | Recheck requirements, atomically activate and open first period |
 
 Paths in the table follow `/api/v1`. Request/response schemas are generated from DTOs in OpenAPI. FE validates wire responses with Zod.
 
 Activation requires an active email-verified Owner, open vault, unexpired paid service, latest Passed Owner eKYC with purpose OWNER_ENROLLMENT, a Ready container, and an active verified distinct primary Executor who accepted the current scope. If primary is also a beneficiary, an independent accepted non-beneficiary backup is required. Policy acknowledgement is explicit and stores version/time. A stale configVersion returns EDIT_CONFLICT. Duplicate activation does not reset deadlines. Deactivation suspends accepted Executors; reactivation requires fresh acceptance. Existing pending check-in settings apply when a new period starts.
+
+**Lời mời của tôi (FE: mục Lời mời).** Người được mời xem và trả lời lời mời ngay trong app, không cần link email: `GET /executor-invitations/mine` rồi `POST /executor-invitations/{invitationId}/respond`. Vẫn phải bấm chấp nhận rõ ràng; chỉ email đã xác minh trùng email được mời mới thấy và trả lời được. `GET mine` không áp giới hạn tần suất `executor-invitations` (chỉ đọc theo tài khoản).
 
 Invitations expire after seven days. Only the token hash is persisted. The email link uses `/executor-invitation#token=...`; inspect/respond send the token in the JSON body. No token appears in API responses or cache keys. The token is a capability: a verified separate account explicitly claims it; invitation email alone does not bind an account. Do not forward links.
 

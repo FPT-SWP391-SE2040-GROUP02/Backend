@@ -277,6 +277,82 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.False(response.CanActivate);
     }
 
+    // ---- Lời mời của tôi: xem danh sách và trả lời theo id, không cần link email ----------------------------
+
+    private static Task<HttpResponseMessage> RespondByIdAsync(HttpClient client, Guid invitationId, bool accept)
+    {
+        return client.PostAsJsonAsync($"/api/v1/executor-invitations/{invitationId}/respond",
+            new { accept, acknowledgeScope = accept, scopeVersion = PlanSetupService.ScopeVersion });
+    }
+
+    [SqlFact]
+    public async Task MyInvitations_ListPendingThenAcceptById()
+    {
+        (HttpClient owner, HttpClient recipient, Guid vaultId) = await PrepareAsync();
+        ExecutorInvitationResponse invitation = await InviteAsync(owner, vaultId);
+
+        JsonElement before = await recipient.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
+        JsonElement pending = before.GetProperty("pending");
+        Assert.Equal(1, pending.GetArrayLength());
+        Assert.Equal(invitation.Id, pending[0].GetProperty("id").GetGuid());
+        Assert.Equal("INVITED", pending[0].GetProperty("status").GetString());
+        Assert.False(string.IsNullOrEmpty(pending[0].GetProperty("ownerName").GetString()));
+        Assert.Equal(PlanSetupService.ScopeVersion, before.GetProperty("scopeVersion").GetString());
+        Assert.DoesNotContain(mail.Token, before.GetRawText());
+
+        Assert.Equal(HttpStatusCode.OK, (await RespondByIdAsync(recipient, invitation.Id, true)).StatusCode);
+
+        JsonElement after = await recipient.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
+        Assert.Equal(0, after.GetProperty("pending").GetArrayLength());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Executor saved = await db.Set<Executor>().SingleAsync(e => e.Id == invitation.Id);
+            Assert.Equal(ExecutorStatus.Accepted, saved.Status);
+            Assert.Equal(PlanSetupService.ScopeVersion, saved.AcceptedScopeVersion);
+        });
+    }
+
+    [SqlFact]
+    public async Task MyInvitations_DeclineByIdMovesItToEnded()
+    {
+        (HttpClient owner, HttpClient recipient, Guid vaultId) = await PrepareAsync();
+        ExecutorInvitationResponse invitation = await InviteAsync(owner, vaultId);
+
+        Assert.Equal(HttpStatusCode.OK, (await RespondByIdAsync(recipient, invitation.Id, false)).StatusCode);
+
+        JsonElement mine = await recipient.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
+        Assert.Equal(0, mine.GetProperty("pending").GetArrayLength());
+        JsonElement ended = mine.GetProperty("ended");
+        Assert.Equal(1, ended.GetArrayLength());
+        Assert.Equal("DECLINED", ended[0].GetProperty("status").GetString());
+    }
+
+    [SqlFact]
+    public async Task MyInvitations_OtherEmailCannotSeeOrRespond()
+    {
+        (HttpClient owner, _, Guid vaultId) = await PrepareAsync();
+        ExecutorInvitationResponse invitation = await InviteAsync(owner, vaultId);
+        HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "stranger@example.test");
+
+        JsonElement mine = await stranger.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
+        Assert.Equal(0, mine.GetProperty("pending").GetArrayLength());
+        await ApiTestHelpers.AssertProblemAsync(
+            await RespondByIdAsync(stranger, invitation.Id, true), HttpStatusCode.NotFound, "EXECUTOR_INVITATION_INVALID");
+    }
+
+    [SqlFact]
+    public async Task MyInvitations_UnverifiedEmailSeesNothing()
+    {
+        (HttpClient owner, _, Guid vaultId) = await PrepareAsync();
+        await InviteAsync(owner, vaultId, null, "unverified@example.test");
+        HttpClient unverified = await ApiTestHelpers.CreateClientForNewUserAsync(factory, false, "unverified@example.test");
+
+        JsonElement mine = await unverified.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
+
+        Assert.Equal(0, mine.GetProperty("pending").GetArrayLength());
+        Assert.Equal(0, mine.GetProperty("ended").GetArrayLength());
+    }
+
     private sealed class FaultInjectingScheduler(ICheckInScheduler inner, AppDbContext db, Func<bool> shouldFail) : ICheckInScheduler
     {
         public async Task StartFirstPeriodAsync(HandoverPlan plan, CancellationToken ct)

@@ -34,6 +34,17 @@ public sealed class RespondExecutorInvitationRequest : InspectExecutorInvitation
     public bool AcknowledgeScope { get; set; }
     [Required, MaxLength(64)] public string ScopeVersion { get; set; } = "";
 }
+
+/// <summary>Trả lời lời mời theo id (lấy từ GET /executor-invitations/mine), không cần token trong link email.</summary>
+public sealed class RespondMyExecutorInvitationRequest
+{
+    public bool Accept { get; set; }
+
+    public bool AcknowledgeScope { get; set; }
+
+    [Required, MaxLength(64)]
+    public string ScopeVersion { get; set; } = "";
+}
 public sealed class ActivatePlanRequest
 {
     [Range(1, int.MaxValue)] public int ConfigVersion { get; set; }
