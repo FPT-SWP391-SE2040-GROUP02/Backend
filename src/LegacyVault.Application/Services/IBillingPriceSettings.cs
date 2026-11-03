@@ -17,6 +17,24 @@ public interface IBillingPriceSettings
     /// <summary>Giá một suất người nhận thêm cho một năm (ADDON-01).</summary>
     long SlotPricePerYear { get; }
 
+    /// <summary>Mọi gói trả phí (kể cả tạm ngừng và đã xóa), theo thứ tự tăng dần.</summary>
+    IReadOnlyList<PlanInfo> Plans { get; }
+
+    /// <summary>Tìm gói theo mã (không phân biệt hoa thường); không có → null.</summary>
+    PlanInfo? FindPlan(string code);
+
+    /// <summary>Các kỳ (số năm) đang bán, tăng dần. Admin thêm, bớt hoặc tạm ngừng từng kỳ.</summary>
+    IReadOnlyList<int> SaleYears { get; }
+
+    /// <summary>true khi kỳ này đang bán và hạng này có giá cho kỳ đó.</summary>
+    bool HasTierPrice(ServiceTier tier, int years);
+
+    /// <summary>Dung lượng của hạng theo cấu hình hiện hành (Admin chỉnh được). Hạng không bán → ArgumentOutOfRangeException.</summary>
+    long GetStorageQuotaBytes(ServiceTier tier);
+
+    /// <summary>Số suất người nhận kèm theo hạng theo cấu hình hiện hành (Admin chỉnh được).</summary>
+    int GetIncludedSlots(ServiceTier tier);
+
     /// <summary>Giá hạng cho cả kỳ (không nhân thêm theo năm). Hạng hoặc số năm không bán → ArgumentOutOfRangeException.</summary>
     long GetTierPrice(ServiceTier tier, int years);
 }

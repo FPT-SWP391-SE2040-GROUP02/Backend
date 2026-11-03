@@ -1,6 +1,7 @@
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Mappings;
 
@@ -24,7 +25,7 @@ public static class VaultMappings
             PlanStatus = vault.Plan.Status.ToApiString(),
             PlanConfigVersion = vault.Plan.ConfigVersion,
             PlanActivatedAt = vault.Plan.ActivatedAt,
-            ServiceTier = entitlement.Tier.ToApiString(),
+            ServiceTier = PlanCodes.Resolve(entitlement.Tier, entitlement.PlanCode),
             ServiceStatus = entitlement.Status.ToApiString(),
             ServiceExpiresAt = entitlement.ServiceExpiresAt,
             StorageQuotaBytes = entitlement.StorageQuotaBytes,

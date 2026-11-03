@@ -18,7 +18,22 @@ public class BillingPlansResponse
 /// <summary>Một hạng bán được: "XS" hoặc "XS_MAX".</summary>
 public class BillingTierResponse
 {
+    /// <summary>Mã gói: "XS", "XS_MAX" hoặc mã gói Admin tạo thêm.</summary>
     public string Tier { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Subtitle { get; set; } = string.Empty;
+
+    /// <summary>Thứ tự gói tăng dần; gói đứng sau là gói cao hơn khi nâng hạng.</summary>
+    public int Order { get; set; }
+
+    /// <summary>false khi Admin đã tạm ngừng mở bán hoặc xóa gói: Client ẩn nút mua; Backend vẫn chặn nếu gọi thẳng.</summary>
+    public bool OnSale { get; set; } = true;
+
+    /// <summary>true khi Admin đã xóa gói: Client không vẽ thẻ gói nhưng vẫn biết gói này để so thứ tự.</summary>
+    public bool Hidden { get; set; }
+
     public long StorageQuotaBytes { get; set; }
     public int IncludedBeneficiarySlots { get; set; }
     public List<BillingPriceResponse> Prices { get; set; } = new List<BillingPriceResponse>();

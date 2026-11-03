@@ -17,6 +17,9 @@ public sealed class VaultEntitlementConfiguration : IEntityTypeConfiguration<Vau
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(e => e.PlanCode)
+            .HasMaxLength(32);
+
         builder.Property(e => e.Status)
             .IsRequired()
             .HasConversion<string>()

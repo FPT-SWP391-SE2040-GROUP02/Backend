@@ -13,6 +13,9 @@ public class BillingQuote
     /// <summary>Hạng được mua; với ADDON là hạng hiện tại của kho.</summary>
     public ServiceTier Tier { get; set; }
 
+    /// <summary>Mã gói được mua (XS, XS_MAX hoặc mã gói Admin tạo); với ADDON là gói hiện tại của kho.</summary>
+    public string PlanCode { get; set; } = string.Empty;
+
     /// <summary>Số năm; null với ADDON.</summary>
     public int? Years { get; set; }
 

@@ -14,7 +14,7 @@ public static class BillingMappings
     {
         BillingQuoteResponse response = new BillingQuoteResponse();
         response.Kind = quote.Kind.ToApiString();
-        response.Tier = quote.Tier.ToApiString();
+        response.Tier = PlanCodes.Resolve(quote.Tier, quote.PlanCode);
         response.Years = quote.Years;
         response.ExtraSlots = quote.ExtraSlots;
         response.TierAmount = quote.TierAmount;
@@ -69,7 +69,7 @@ public static class BillingMappings
         {
             response.Status = order.Status.ToApiString();
         }
-        response.Tier = order.Tier.ToApiString();
+        response.Tier = PlanCodes.Resolve(order.Tier, order.PlanCode);
         response.Years = order.Years;
         response.ExtraSlots = order.ExtraSlots;
         response.TotalAmount = order.TotalAmount;
@@ -92,7 +92,7 @@ public static class BillingMappings
         response.Id = order.Id;
         response.Kind = order.Kind.ToApiString();
         response.Status = order.Status.ToApiString();
-        response.Tier = order.Tier.ToApiString();
+        response.Tier = PlanCodes.Resolve(order.Tier, order.PlanCode);
         response.Years = order.Years;
         response.ExtraSlots = order.ExtraSlots;
         response.TierAmount = order.TierAmount;
@@ -131,7 +131,7 @@ public static class BillingMappings
             + "&des=" + Uri.EscapeDataString(order.PaymentCode);
     }
 
-    /// <summary>Bảng giá hiện hành từ cấu hình Billing:Pricing, không đọc DB.</summary>
+    /// <summary>Bảng giá hiện hành: các gói (kể cả tạm ngừng, đã xóa kèm cờ), kỳ bán và giá, đã ghép cấu hình gốc với phần Admin chỉnh.</summary>
     public static BillingPlansResponse ToPlansResponse(IBillingPriceSettings prices)
     {
         BillingPlansResponse response = new BillingPlansResponse();
@@ -141,17 +141,27 @@ public static class BillingMappings
         response.ExtraSlot.PricePerYear = prices.SlotPricePerYear;
         response.ExtraSlot.MaxPerOrder = BillingPrices.MaxExtraSlotsPerOrder;
 
-        foreach (ServiceTier tier in BillingPrices.SellableTiers)
+        foreach (PlanInfo plan in prices.Plans)
         {
             BillingTierResponse tierResponse = new BillingTierResponse();
-            tierResponse.Tier = tier.ToApiString();
-            tierResponse.StorageQuotaBytes = BillingPrices.GetStorageQuotaBytes(tier);
-            tierResponse.IncludedBeneficiarySlots = BillingPrices.GetIncludedSlots(tier);
-            foreach (int years in BillingPrices.SupportedYears)
+            tierResponse.Tier = plan.Code;
+            tierResponse.Name = plan.Name;
+            tierResponse.Subtitle = plan.Subtitle;
+            tierResponse.Order = plan.Order;
+            tierResponse.OnSale = plan.CanBuy;
+            tierResponse.Hidden = plan.Hidden;
+            tierResponse.StorageQuotaBytes = plan.StorageQuotaBytes;
+            tierResponse.IncludedBeneficiarySlots = plan.IncludedSlots;
+            foreach (int years in prices.SaleYears)
             {
+                long amount;
+                if (!plan.Prices.TryGetValue(years, out amount))
+                {
+                    continue;
+                }
                 BillingPriceResponse price = new BillingPriceResponse();
                 price.Years = years;
-                price.Amount = prices.GetTierPrice(tier, years);
+                price.Amount = amount;
                 price.ServiceDays = years * BillingPrices.DaysPerYear;
                 tierResponse.Prices.Add(price);
             }

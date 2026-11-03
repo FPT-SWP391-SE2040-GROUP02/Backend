@@ -63,10 +63,8 @@ public sealed class BillingService : IBillingService
     public async Task<BillingPlansResponse> GetPlansAsync(CancellationToken ct)
     {
         IBillingPriceSettings prices = await priceProvider.GetCurrentAsync(ct);
-        BillingPlansResponse response = BillingMappings.ToPlansResponse(prices);
-        return response;
+        return BillingMappings.ToPlansResponse(prices);
     }
-
     public async Task<BillingQuoteResponse> QuoteAsync(BillingSelectionRequest request, CancellationToken ct)
     {
         // Người đăng nhập → kho → điều kiện (§8.3 bước 1–5).
@@ -317,8 +315,9 @@ public sealed class BillingService : IBillingService
 
         BillingRules.EnsureVaultAndPlanAllowPayment(vault);
 
+        IBillingPriceSettings prices = await priceProvider.GetCurrentAsync(ct);
         PaymentOrderKind kind = BillingRules.DetermineKind(
-            vault.Entitlement, request.Tier, request.ExtraSlots, request.Renew, now);
+            prices, vault.Entitlement, request.Tier, request.ExtraSlots, request.Renew, now);
 
         if (kind == PaymentOrderKind.Purchase)
         {
@@ -334,11 +333,13 @@ public sealed class BillingService : IBillingService
 
         BillingEligibility eligibility = new BillingEligibility();
         eligibility.Vault = vault;
+        eligibility.Prices = prices;
         eligibility.Kind = kind;
         if (kind == PaymentOrderKind.Upgrade)
         {
             // Giá nâng hạng tính theo kỳ (số năm) của đơn mua đã trả gần nhất.
             eligibility.PaidYears = await paymentOrderRepository.FindLatestPaidPurchaseYearsAsync(vault.Id, ct);
+            eligibility.UpgradeTarget = BillingRules.FindUpgradeTarget(prices, vault.Entitlement, request.Tier, request.ExtraSlots);
         }
         return eligibility;
     }
@@ -357,8 +358,18 @@ public sealed class BillingService : IBillingService
     private async Task<BillingQuote> BuildCheckedQuoteAsync(
         BillingSelectionRequest request, BillingEligibility eligibility, DateTimeOffset now, CancellationToken ct)
     {
-        IBillingPriceSettings prices = await priceProvider.GetCurrentAsync(ct);
+        IBillingPriceSettings prices = eligibility.Prices;
         BillingQuote quote = BuildQuote(prices, request, eligibility, now);
+
+        // Hạng đã bị Admin tạm ngừng bán: chặn mọi đơn mới của hạng đó (mua mới, nâng hạng, gia hạn, mua thêm suất),
+        // kể cả người đang dùng. Dịch vụ đã trả vẫn chạy đến hết kỳ.
+        PlanInfo? quotedPlan = prices.FindPlan(quote.PlanCode);
+        if (quotedPlan == null || !quotedPlan.CanBuy)
+        {
+            throw BillingRules.NotAllowed(PaymentNotAllowedReason.TierNotOnSale,
+                "Gói này đang tạm ngừng mở bán. Vui lòng chọn gói khác hoặc quay lại sau.");
+        }
+
         if (quote.Kind == PaymentOrderKind.Renewal)
         {
             long usedBytes = await vaultRepository.SumUsedBytesAsync(eligibility.Vault.Id, ct);
@@ -384,7 +395,7 @@ public sealed class BillingService : IBillingService
         if (eligibility.Kind == PaymentOrderKind.Upgrade)
         {
             return BillingRules.QuoteUpgrade(
-                prices, eligibility.Vault.Entitlement, eligibility.PaidYears, request.ExtraSlots, now);
+                prices, eligibility.Vault.Entitlement, eligibility.UpgradeTarget!, eligibility.PaidYears, request.ExtraSlots, now);
         }
         return BillingRules.QuoteAddon(prices, eligibility.Vault.Entitlement, request.ExtraSlots, now);
     }
@@ -397,6 +408,7 @@ public sealed class BillingService : IBillingService
         order.OwnerId = ownerId;
         order.Kind = quote.Kind;
         order.Tier = quote.Tier;
+        order.PlanCode = quote.PlanCode;
         order.Years = quote.Years;
         order.ExtraSlots = quote.ExtraSlots;
         order.TierAmount = quote.TierAmount;
@@ -470,6 +482,11 @@ public sealed class BillingService : IBillingService
     private sealed class BillingEligibility
     {
         public Vault Vault { get; set; } = null!;
+
+        public IBillingPriceSettings Prices { get; set; } = null!;
+
+        /// <summary>Gói đích khi là nâng hạng.</summary>
+        public PlanInfo? UpgradeTarget { get; set; }
 
         public PaymentOrderKind Kind { get; set; }
 

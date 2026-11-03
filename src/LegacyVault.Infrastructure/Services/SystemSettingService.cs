@@ -5,6 +5,7 @@ using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Billing;
 using LegacyVault.Infrastructure.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,8 @@ public sealed class SystemSettingService : ISystemSettingService
 
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
     private const string AllSettingsCacheKey = "SystemSettings:All";
+    private const string DefaultsSeededCacheKey = "SystemSettings:DefaultsSeeded";
+    private static readonly SemaphoreSlim SeedGate = new(1, 1);
 
     public SystemSettingService(
         AppDbContext db,
@@ -46,7 +49,7 @@ public sealed class SystemSettingService : ISystemSettingService
         bool touchesPrice = false;
         foreach (BatchUpdateSystemSettingItem item in items)
         {
-            if (PlanPriceRules.IsPriceKey(item.Key.Trim()))
+            if (PlanPriceRules.IsPricingKey(item.Key.Trim()))
             {
                 touchesPrice = true;
             }
@@ -65,16 +68,81 @@ public sealed class SystemSettingService : ISystemSettingService
         foreach (BatchUpdateSystemSettingItem item in items)
         {
             string key = item.Key.Trim();
-            if (!PlanPriceRules.IsPriceKey(key))
+            if (!PlanPriceRules.IsPricingKey(key))
             {
                 continue;
             }
 
-            long price;
-            if (!long.TryParse(item.Value.Trim(), out price) || price <= 0)
+            string text = item.Value.Trim();
+            if (PlanPriceRules.IsPriceKey(key))
             {
-                throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
-                    $"Giá của '{key}' phải là số nguyên dương.");
+                long price;
+                if (!long.TryParse(text, out price) || price <= 0)
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        $"Giá của '{key}' phải là số nguyên dương.");
+                }
+                int? priceYears = PlanPriceRules.PriceKeyYears(key);
+                if (priceYears != null && (priceYears.Value < 1 || priceYears.Value > BillingPriceSettings.MaxSaleYears))
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        $"Kỳ của '{key}' phải từ 1 đến {BillingPriceSettings.MaxSaleYears} năm.");
+                }
+            }
+            else if (PlanPriceRules.IsLimitKey(key))
+            {
+                long limit;
+                bool isQuota = key.EndsWith(".QuotaMb", StringComparison.Ordinal);
+                if (!long.TryParse(text, out limit) || limit > 1000000 || (isQuota ? limit < 1 : limit < 0))
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        isQuota
+                            ? $"Dung lượng của '{key}' phải là số nguyên từ 1 đến 1.000.000 MiB."
+                            : $"Số suất của '{key}' phải là số nguyên từ 0 đến 1.000.000.");
+                }
+            }
+            else if (key == PlanPriceRules.CatalogKey)
+            {
+                List<BillingPlanSection>? declared = PlanPriceRules.ParseCatalog(text);
+                if (declared == null)
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        "Danh sách gói không hợp lệ: mã gói gồm chữ hoa, số, gạch dưới (2 đến 24 ký tự, bắt đầu bằng chữ cái, không trùng XS, XS_MAX, FREE), tên 1 đến 40 ký tự.");
+                }
+                if (declared.Select(p => p.Code).Distinct().Count() != declared.Count)
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        "Danh sách gói có mã bị trùng.");
+                }
+            }
+            else if (key == PlanPriceRules.PeriodsKey)
+            {
+                List<int> allYears;
+                List<int>? onYears = PlanPriceRules.ParsePeriods(text, out allYears);
+                if (onYears == null || allYears.Count == 0 || allYears.Distinct().Count() != allYears.Count)
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        "Danh sách kỳ bán không hợp lệ: cần mảng các kỳ, mỗi số năm xuất hiện một lần.");
+                }
+                if (allYears.Any(y => y < 1 || y > BillingPriceSettings.MaxSaleYears))
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        $"Kỳ bán phải từ 1 đến {BillingPriceSettings.MaxSaleYears} năm.");
+                }
+                if (onYears.Count == 0)
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        "Phải còn ít nhất một kỳ đang bán.");
+                }
+            }
+            else
+            {
+                bool flag;
+                if (!bool.TryParse(text, out flag))
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        $"Giá trị của '{key}' phải là true hoặc false.");
+                }
             }
 
             SystemSetting? row = null;
@@ -91,7 +159,7 @@ public sealed class SystemSettingService : ISystemSettingService
                 row.Key = key;
                 rows.Add(row);
             }
-            row.Value = price.ToString();
+            row.Value = text;
             row.UpdatedBy = "validation";
             row.UpdatedAt = time.GetUtcNow();
             if (item.IsEnabled.HasValue)
@@ -196,6 +264,8 @@ public sealed class SystemSettingService : ISystemSettingService
     public async Task<SystemSettingResponse> CreateAsync(
         CreateSystemSettingRequest request,
         string? createdBy,
+        Guid? actorUserId = null,
+        string? reason = null,
         CancellationToken ct = default)
     {
         var trimmedKey = request.Key.Trim();
@@ -218,6 +288,20 @@ public sealed class SystemSettingService : ISystemSettingService
         };
 
         db.SystemSettings.Add(entity);
+        db.AuditLogs.Add(new AuditLog
+        {
+            Id = Guid.CreateVersion7(),
+            ActorUserId = actorUserId,
+            ActorRole = AuditActorRole.Admin,
+            Action = AuditAction.SystemSettingUpdated,
+            TargetType = AuditTargetType.Configuration,
+            TargetId = entity.Id,
+            Outcome = AuditOutcome.Succeeded,
+            Reason = string.IsNullOrWhiteSpace(reason)
+                ? $"Tạo tham số '{entity.Key}' = '{entity.Value}'"
+                : $"[{entity.Key}] tạo '{entity.Value}'. Lý do: {reason.Trim()}",
+            At = time.GetUtcNow()
+        });
         await db.SaveChangesAsync(ct);
 
         InvalidateCache(entity.Key);
@@ -256,6 +340,30 @@ public sealed class SystemSettingService : ISystemSettingService
         new(s.Id, s.Key, s.Value, s.DataType, s.Category, s.Description, s.IsEnabled, s.UpdatedAt, s.UpdatedBy);
 
     private async Task EnsureDefaultsSeededAsync(CancellationToken ct)
+    {
+        // Đã kiểm tra gần đây thì bỏ qua: BillingService gọi hàm này trên mỗi báo giá và tạo đơn, không truy vấn lại mỗi lần.
+        if (cache.TryGetValue(DefaultsSeededCacheKey, out _))
+        {
+            return;
+        }
+
+        // Một request tạo mặc định tại một thời điểm: hai request cùng chèn hàng loạt vào bảng có khóa unique sẽ deadlock.
+        await SeedGate.WaitAsync(ct);
+        try
+        {
+            if (cache.TryGetValue(DefaultsSeededCacheKey, out _))
+            {
+                return;
+            }
+            await SeedDefaultsAsync(ct);
+        }
+        finally
+        {
+            SeedGate.Release();
+        }
+    }
+
+    private async Task SeedDefaultsAsync(CancellationToken ct)
     {
         var defaults = new List<SystemSetting>
         {
@@ -335,7 +443,20 @@ public sealed class SystemSettingService : ISystemSettingService
         if (missing.Count > 0)
         {
             db.SystemSettings.AddRange(missing);
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception exception) when (exception is DbUpdateException || exception.GetBaseException() is SqlException)
+            {
+                // Tiến trình khác (nhiều instance API) vừa tạo cùng các khóa mặc định (unique hoặc deadlock): bỏ phần mình vừa thêm, lần gọi sau kiểm tra lại.
+                foreach (var entry in db.ChangeTracker.Entries<SystemSetting>().Where(e => e.State == EntityState.Added).ToList())
+                {
+                    entry.State = EntityState.Detached;
+                }
+                return;
+            }
         }
+        cache.Set(DefaultsSeededCacheKey, true, CacheDuration);
     }
 }

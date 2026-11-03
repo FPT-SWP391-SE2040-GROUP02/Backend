@@ -1999,6 +1999,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<string>("PlanCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("PolicyVersion")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -2591,6 +2595,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<int>("IncludedBeneficiarySlots")
                         .HasColumnType("int");
+
+                    b.Property<string>("PlanCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<DateTimeOffset?>("ServiceExpiresAt")
                         .HasColumnType("datetimeoffset");
