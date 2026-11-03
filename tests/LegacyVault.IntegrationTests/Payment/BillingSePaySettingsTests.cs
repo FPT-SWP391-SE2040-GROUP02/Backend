@@ -1,26 +1,44 @@
+using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Infrastructure.Billing;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Payment;
 
-/// <summary>Đọc cấu hình Billing:SePay (PAY-01: môi trường Test và Live tách biệt). Không cần database.</summary>
+/// <summary>Đọc cấu hình SePay (PAY-01: môi trường Test và Live tách biệt) từ cấu hình đang có hiệu lực. Không cần database.</summary>
 public sealed class BillingSePaySettingsTests
 {
-    private static BillingSePaySettings NewSettings(string environment, string key)
+    private sealed class FakeReader : ISyncConfigReader
     {
-        BillingSettings billing = new BillingSettings();
-        billing.SePay.Environment = environment;
-        billing.SePay.WebhookApiKey = key;
-        return new BillingSePaySettings(Options.Create(billing));
+        public ResolvedConfig? Config { get; set; }
+
+        public ResolvedConfig? Read(string serviceKey)
+        {
+            return Config;
+        }
+    }
+
+    private static BillingSePaySettings NewSettings(string environment, string? key)
+    {
+        ResolvedConfig config = new ResolvedConfig();
+        config.Settings["environment"] = environment;
+        if (key != null)
+        {
+            config.Secrets["webhookApiKey"] = key;
+        }
+        FakeReader reader = new FakeReader();
+        reader.Config = config;
+        return new BillingSePaySettings(reader);
     }
 
     [Fact]
     public void Pay01_Environment_DefaultIsTestAndKeyIsEmpty()
     {
-        // Chuẩn bị
-        BillingSettings billing = new BillingSettings();
-        BillingSePaySettings settings = new BillingSePaySettings(Options.Create(billing));
+        // Chuẩn bị: cấu hình mặc định của danh mục (chưa đặt môi trường, chưa có khóa)
+        ResolvedConfig config = new ResolvedConfig();
+        config.Settings = SystemConfigCatalog.DefaultSettings(SystemConfigServices.SePay);
+        FakeReader reader = new FakeReader();
+        reader.Config = config;
+        BillingSePaySettings settings = new BillingSePaySettings(reader);
 
         // Hành động
         string environment = settings.Environment;
@@ -55,5 +73,12 @@ public sealed class BillingSePaySettingsTests
 
         // Hành động + Kiểm tra
         Assert.Throws<InvalidOperationException>(() => settings.Environment);
+    }
+
+    [Fact]
+    public void WebhookApiKey_ComesFromTheCurrentConfig_AndIsEmptyWhenMissing()
+    {
+        Assert.Equal("fake-key", NewSettings("Test", "fake-key").WebhookApiKey);
+        Assert.Equal(string.Empty, NewSettings("Test", null).WebhookApiKey);
     }
 }

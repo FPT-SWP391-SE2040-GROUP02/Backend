@@ -5,7 +5,9 @@ using System.Text;
 using System.Text.Json;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Application.Services;
+using LegacyVault.Domain.Enums;
 using Microsoft.Extensions.Logging;
 
 namespace LegacyVault.Infrastructure.Ekyc;
@@ -23,12 +25,27 @@ public sealed class EkycHttpClient : IEkycClient
     private const int MaxDetailLength = 300;
     private const string UnavailableMessage = "Dịch vụ xác minh danh tính tạm thời không khả dụng. Vui lòng thử lại sau.";
 
+    private const int DefaultTimeoutSeconds = 60;
+
+    private static readonly SystemConfigSlot[] Slots = { SystemConfigSlot.Primary, SystemConfigSlot.Fallback };
+
     private readonly HttpClient httpClient;
+    private readonly ISystemConfigResolver resolver;
+    private readonly IServiceStatusTracker tracker;
+    private readonly TimeProvider timeProvider;
     private readonly ILogger<EkycHttpClient>? logger;
 
-    public EkycHttpClient(HttpClient httpClient, ILogger<EkycHttpClient>? logger = null)
+    public EkycHttpClient(
+        HttpClient httpClient,
+        ISystemConfigResolver resolver,
+        IServiceStatusTracker tracker,
+        TimeProvider timeProvider,
+        ILogger<EkycHttpClient>? logger = null)
     {
         this.httpClient = httpClient;
+        this.resolver = resolver;
+        this.tracker = tracker;
+        this.timeProvider = timeProvider;
         this.logger = logger;
     }
 
@@ -206,25 +223,13 @@ public sealed class EkycHttpClient : IEkycClient
 
     public async Task DeleteDocumentAsync(string documentToken, CancellationToken ct)
     {
-        EnsureConfigured();
-        try
+        using (HttpResponseMessage response = await SendAsync(
+            HttpMethod.Delete, "api/documents/" + Uri.EscapeDataString(documentToken), null, ct))
         {
-            using (HttpResponseMessage response = await httpClient.DeleteAsync(
-                "api/documents/" + Uri.EscapeDataString(documentToken), ct))
+            if (!response.IsSuccessStatusCode)
             {
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw Unavailable();
-                }
+                throw Unavailable();
             }
-        }
-        catch (HttpRequestException)
-        {
-            throw Unavailable();
-        }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw Unavailable();
         }
     }
 
@@ -254,59 +259,35 @@ public sealed class EkycHttpClient : IEkycClient
 
     public async Task<byte[]> GetLivenessSelfieAsync(string sessionId, CancellationToken ct)
     {
-        EnsureConfigured();
-        try
+        using (HttpResponseMessage response = await SendAsync(
+            HttpMethod.Get, "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie?allow_captured=true", null, ct))
         {
-            using (HttpResponseMessage response = await httpClient.GetAsync(
-                "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie?allow_captured=true", ct))
+            if (response.IsSuccessStatusCode)
             {
-                if (response.IsSuccessStatusCode)
-                {
-                    return await response.Content.ReadAsByteArrayAsync(ct);
-                }
-                if (response.StatusCode == HttpStatusCode.Conflict)
-                {
-                    throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessNotPassed,
-                        "Bạn chưa hoàn thành thử thách camera.");
-                }
-                if (response.StatusCode == HttpStatusCode.Gone)
-                {
-                    throw LivenessExpired();
-                }
-                throw Unavailable();
+                return await response.Content.ReadAsByteArrayAsync(ct);
             }
-        }
-        catch (HttpRequestException)
-        {
-            throw Unavailable();
-        }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-        {
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessNotPassed,
+                    "Bạn chưa hoàn thành thử thách camera.");
+            }
+            if (response.StatusCode == HttpStatusCode.Gone)
+            {
+                throw LivenessExpired();
+            }
             throw Unavailable();
         }
     }
 
     public async Task DeleteLivenessAsync(string sessionId, CancellationToken ct)
     {
-        EnsureConfigured();
-        try
+        using (HttpResponseMessage response = await SendAsync(
+            HttpMethod.Delete, "api/liveness/" + Uri.EscapeDataString(sessionId), null, ct))
         {
-            using (HttpResponseMessage response = await httpClient.DeleteAsync(
-                "api/liveness/" + Uri.EscapeDataString(sessionId), ct))
+            if (!response.IsSuccessStatusCode)
             {
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw Unavailable();
-                }
+                throw Unavailable();
             }
-        }
-        catch (HttpRequestException)
-        {
-            throw Unavailable();
-        }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw Unavailable();
         }
     }
 
@@ -377,13 +358,11 @@ public sealed class EkycHttpClient : IEkycClient
     private async Task<JsonElement> PostAsync(
         string path, HttpContent form, CancellationToken ct, bool livenessSession = false)
     {
-        EnsureConfigured();
         try
         {
-            logger?.LogInformation("eKYC: Đang gọi {BaseAddress}{Path} (Timeout {Timeout}s)...",
-                httpClient.BaseAddress, path, httpClient.Timeout.TotalSeconds);
+            logger?.LogInformation("eKYC: Đang gọi {Path}...", path);
 
-            using (HttpResponseMessage response = await httpClient.PostAsync(path, form, ct))
+            using (HttpResponseMessage response = await SendAsync(HttpMethod.Post, path, form, ct))
             {
                 string body = await response.Content.ReadAsStringAsync(ct);
                 if (response.IsSuccessStatusCode)
@@ -412,32 +391,134 @@ public sealed class EkycHttpClient : IEkycClient
                 throw Unavailable();
             }
         }
-        catch (HttpRequestException ex)
-        {
-            logger?.LogError(ex, "eKYC: Lỗi kết nối HTTP tới {BaseAddress}{Path}: {Message}", httpClient.BaseAddress, path, ex.Message);
-            throw Unavailable();
-        }
         catch (JsonException ex)
         {
             logger?.LogError(ex, "eKYC: Lỗi phân tích JSON từ {Path}", path);
             throw Unavailable();
         }
-        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+    }
+
+    /// <summary>
+    /// Gửi một yêu cầu tới dịch vụ eKYC bằng cấu hình đang có hiệu lực (Admin sửa trên web): thử ô chính rồi ô dự phòng
+    /// nếu ô chính hết thời gian, lỗi mạng hoặc trả 5xx, 401, 403, 429. Trả phản hồi của lần thử cuối; người gọi tự đổi mã
+    /// lỗi nghiệp vụ (422, 410...) thành AppException. Chưa có địa chỉ nào dùng được hoặc mọi ô đều không kết nối được
+    /// thì ném 503. Không dispose yêu cầu để nội dung gửi lại được cho ô dự phòng; người gọi dispose nội dung.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method, string path, HttpContent? content, CancellationToken ct)
+    {
+        HttpResponseMessage? lastFailure = null;
+        foreach (SystemConfigSlot slot in Slots)
         {
-            logger?.LogError(ex, "eKYC: Quá thời gian chờ (Timeout {Timeout}s) khi gọi {BaseAddress}{Path}", httpClient.Timeout.TotalSeconds, httpClient.BaseAddress, path);
-            // HttpClient hết thời gian chờ (không phải người dùng hủy request).
-            throw Unavailable();
+            ResolvedConfig? config = await ResolveAsync(slot, ct);
+            Uri? baseUri = ReadBaseUri(config);
+            if (config == null || baseUri == null)
+            {
+                continue;
+            }
+            if (lastFailure != null)
+            {
+                lastFailure.Dispose();
+                lastFailure = null;
+            }
+
+            HttpRequestMessage request = new HttpRequestMessage(method, new Uri(baseUri, path));
+            request.Content = content;
+            string? apiKey = null;
+            if (config.Secrets.TryGetValue("apiKey", out apiKey) && !string.IsNullOrWhiteSpace(apiKey))
+            {
+                request.Headers.Add("X-Ekyc-Key", apiKey);
+            }
+
+            using (CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                timeout.CancelAfter(TimeSpan.FromSeconds(ReadTimeoutSeconds(config)));
+                try
+                {
+                    HttpResponseMessage response = await httpClient.SendAsync(request, timeout.Token);
+                    int code = (int)response.StatusCode;
+                    if (!ServiceFailover.ShouldFailOver(code))
+                    {
+                        Record(slot, true, null);
+                        return response;
+                    }
+                    logger?.LogWarning("eKYC: Ô {Slot} trả HTTP {StatusCode} cho {Path}.", slot, code, path);
+                    Record(slot, false, "HTTP_" + code);
+                    lastFailure = response;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    logger?.LogError("eKYC: Ô {Slot} quá thời gian chờ khi gọi {Path}.", slot, path);
+                    Record(slot, false, "TIMEOUT");
+                }
+                catch (HttpRequestException ex)
+                {
+                    logger?.LogError("eKYC: Ô {Slot} lỗi kết nối khi gọi {Path} ({ErrorType}).", slot, path, ex.GetType().Name);
+                    Record(slot, false, "NETWORK");
+                }
+            }
+        }
+
+        if (lastFailure != null)
+        {
+            return lastFailure;
+        }
+        logger?.LogError("eKYC: Không có địa chỉ dịch vụ nào dùng được hoặc mọi ô đều không kết nối được.");
+        throw Unavailable();
+    }
+
+    /// <summary>Đọc cấu hình của ô; lỗi đọc (DB, giải mã) coi như ô không dùng được và không ném ra ngoài.</summary>
+    private async Task<ResolvedConfig?> ResolveAsync(SystemConfigSlot slot, CancellationToken ct)
+    {
+        try
+        {
+            return await resolver.ResolveAsync(SystemConfigServices.Ekyc, slot, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning("eKYC: Không đọc được cấu hình ô {Slot} ({ErrorType}).", slot, ex.GetType().Name);
+            return null;
         }
     }
 
-    /// <summary>Chưa cấu hình Ekyc:BaseUrl thì không có địa chỉ để gọi → 503.</summary>
-    private void EnsureConfigured()
+    /// <summary>Địa chỉ gốc của ô, luôn có dấu "/" cuối để nối đúng đường dẫn tương đối; chưa cấu hình thì null.</summary>
+    private static Uri? ReadBaseUri(ResolvedConfig? config)
     {
-        if (httpClient.BaseAddress == null)
+        string? url = null;
+        if (config == null || !config.Settings.TryGetValue("baseUrl", out url) || string.IsNullOrWhiteSpace(url))
         {
-            logger?.LogError("eKYC: httpClient.BaseAddress rỗng hoặc chưa được cấu hình.");
-            throw Unavailable();
+            return null;
         }
+        Uri? uri = null;
+        if (Uri.TryCreate(url.Trim().TrimEnd('/') + "/", UriKind.Absolute, out uri))
+        {
+            return uri;
+        }
+        return null;
+    }
+
+    private static int ReadTimeoutSeconds(ResolvedConfig config)
+    {
+        string? text = null;
+        int seconds = 0;
+        if (config.Settings.TryGetValue("timeoutSeconds", out text) && int.TryParse(text, out seconds) && seconds > 0)
+        {
+            return seconds;
+        }
+        return DefaultTimeoutSeconds;
+    }
+
+    private void Record(SystemConfigSlot slot, bool succeeded, string? errorCode)
+    {
+        tracker.Record(SystemConfigServices.Ekyc, slot, succeeded, errorCode, timeProvider.GetUtcNow());
     }
 
     private static AppException Unavailable()

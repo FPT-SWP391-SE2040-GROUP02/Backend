@@ -2,8 +2,10 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.ServiceConfig;
+using LegacyVault.Domain.Enums;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Infrastructure.Storage;
 
@@ -13,24 +15,29 @@ namespace LegacyVault.Infrastructure.Storage;
 /// <remarks>
 /// R2 dùng vùng "auto" và địa chỉ path-style. Hai tùy chọn checksum đặt WHEN_REQUIRED vì
 /// R2 không hỗ trợ checksum tự động mặc định của SDK bản mới.
-/// Client chỉ được tạo khi lần đầu cần dùng, nên chạy Provider "Local" không đụng tới cấu hình R2.
+/// Tài khoản, bucket và khóa đọc từ cấu hình đang có hiệu lực ở MỖI thao tác (Admin sửa trên web đè appsettings), không còn
+/// cố định lúc khởi động. Client S3 chỉ được tạo lại khi bộ giá trị đổi, nên chạy Provider "Local" không đụng tới R2.
 /// </remarks>
-public sealed class S3R2ObjectClient : IR2ObjectClient, IDisposable
+public class S3R2ObjectClient : IR2ObjectClient, IDisposable
 {
-    private readonly Lazy<AmazonS3Client> client;
-    private readonly string bucketName;
+    private readonly IServiceScopeFactory scopes;
+    private readonly ISystemConfigDefaults defaults;
     private readonly ILogger<S3R2ObjectClient> logger;
+    private readonly object gate = new object();
+    private AmazonS3Client? current;
+    private string currentFingerprint = string.Empty;
 
-    public S3R2ObjectClient(IOptions<AssetStorageSettings> options, ILogger<S3R2ObjectClient> logger)
+    public S3R2ObjectClient(
+        IServiceScopeFactory scopes, ISystemConfigDefaults defaults, ILogger<S3R2ObjectClient> logger)
     {
+        this.scopes = scopes;
+        this.defaults = defaults;
         this.logger = logger;
-        R2StorageSettings r2 = options.Value.R2;
-        bucketName = r2.BucketName;
-        client = new Lazy<AmazonS3Client>(() => CreateClient(r2));
     }
 
     public async Task PutAsync(string key, Stream content, CancellationToken ct)
     {
+        (AmazonS3Client client, string bucketName) = await GetClientAsync(ct);
         try
         {
             PutObjectRequest request = new PutObjectRequest();
@@ -43,7 +50,7 @@ public sealed class S3R2ObjectClient : IR2ObjectClient, IDisposable
             {
                 request.Headers.ContentLength = content.Length;
             }
-            await client.Value.PutObjectAsync(request, ct);
+            await client.PutObjectAsync(request, ct);
         }
         catch (AmazonServiceException exception)
         {
@@ -57,9 +64,10 @@ public sealed class S3R2ObjectClient : IR2ObjectClient, IDisposable
 
     public async Task<Stream> GetAsync(string key, CancellationToken ct)
     {
+        (AmazonS3Client client, string bucketName) = await GetClientAsync(ct);
         try
         {
-            GetObjectResponse response = await client.Value.GetObjectAsync(bucketName, key, ct);
+            GetObjectResponse response = await client.GetObjectAsync(bucketName, key, ct);
             return response.ResponseStream;
         }
         catch (AmazonServiceException exception) when (IsMissingObject(exception))
@@ -80,9 +88,10 @@ public sealed class S3R2ObjectClient : IR2ObjectClient, IDisposable
 
     public async Task DeleteAsync(string key, CancellationToken ct)
     {
+        (AmazonS3Client client, string bucketName) = await GetClientAsync(ct);
         try
         {
-            await client.Value.DeleteObjectAsync(bucketName, key, ct);
+            await client.DeleteObjectAsync(bucketName, key, ct);
         }
         catch (AmazonServiceException exception)
         {
@@ -106,6 +115,62 @@ public sealed class S3R2ObjectClient : IR2ObjectClient, IDisposable
         return false;
     }
 
+    /// <summary>Cấu hình S3 cho R2: địa chỉ theo tài khoản, vùng auto, path-style. Tách ra để test chèn HTTP giả.</summary>
+    protected virtual AmazonS3Config BuildConfig(R2StorageSettings settings)
+    {
+        return R2ClientSettings.BuildConfig(settings);
+    }
+
+    /// <summary>Lấy client ứng với cấu hình hiện hành (tạo lại khi tài khoản hoặc khóa đổi) và tên bucket hiện hành.</summary>
+    private async Task<(AmazonS3Client Client, string BucketName)> GetClientAsync(CancellationToken ct)
+    {
+        R2StorageSettings settings = await ReadSettingsAsync(ct);
+        string? error = settings.FindError();
+        if (error != null)
+        {
+            // Chưa cấu hình đủ R2 là lỗi cấu hình máy chủ: không lộ chi tiết, thao tác trả 503 như khi R2 không trả lời.
+            logger.LogWarning("R2 chưa được cấu hình đủ (tài khoản, bucket, khóa truy cập).");
+            throw new AppException(AppErrorType.ServiceUnavailable, ErrorCode.StorageUnavailable,
+                "Kho lưu trữ tạm thời không khả dụng. Vui lòng thử lại sau.");
+        }
+
+        string fingerprint = R2ClientSettings.Fingerprint(settings);
+        lock (gate)
+        {
+            if (current == null || fingerprint != currentFingerprint)
+            {
+                current = new AmazonS3Client(
+                    new BasicAWSCredentials(settings.AccessKeyId, settings.SecretAccessKey), BuildConfig(settings));
+                currentFingerprint = fingerprint;
+            }
+            return (current, settings.BucketName);
+        }
+    }
+
+    /// <summary>Đọc cấu hình đang có hiệu lực; lỗi đọc (DB, giải mã) thì dùng giá trị mặc định của appsettings để lưu trữ không ngừng.</summary>
+    private async Task<R2StorageSettings> ReadSettingsAsync(CancellationToken ct)
+    {
+        ResolvedConfig? config = null;
+        try
+        {
+            using (IServiceScope scope = scopes.CreateScope())
+            {
+                ISystemConfigResolver resolver = scope.ServiceProvider.GetRequiredService<ISystemConfigResolver>();
+                config = await resolver.ResolveAsync(SystemConfigServices.R2, SystemConfigSlot.Primary, ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning("Không đọc được cấu hình R2 từ DB ({ErrorType}), dùng cấu hình mặc định của máy chủ.", ex.GetType().Name);
+            config = defaults.ReadPrimary(SystemConfigServices.R2);
+        }
+        return R2ClientSettings.FromConfig(config);
+    }
+
     /// <summary>Lỗi R2 (mạng, sai khóa, thiếu bucket) đổi thành 503; không đưa chi tiết lỗi hay khóa vào thông báo.</summary>
     private AppException CreateUnavailableException(Exception exception)
     {
@@ -126,20 +191,10 @@ public sealed class S3R2ObjectClient : IR2ObjectClient, IDisposable
 
     public void Dispose()
     {
-        if (client.IsValueCreated)
+        lock (gate)
         {
-            client.Value.Dispose();
+            current?.Dispose();
+            current = null;
         }
-    }
-
-    private static AmazonS3Client CreateClient(R2StorageSettings r2)
-    {
-        AmazonS3Config config = new AmazonS3Config();
-        config.ServiceURL = $"https://{r2.AccountId}.r2.cloudflarestorage.com";
-        config.AuthenticationRegion = "auto";
-        config.ForcePathStyle = true;
-        config.RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED;
-        config.ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED;
-        return new AmazonS3Client(new BasicAWSCredentials(r2.AccessKeyId, r2.SecretAccessKey), config);
     }
 }

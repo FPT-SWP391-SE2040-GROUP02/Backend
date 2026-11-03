@@ -37,6 +37,7 @@ public static class ApplicationConfig
         services.AddScoped<IHoldService, HoldService>();
         services.AddScoped<IHoldReader, HoldReader>();
         services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<ISystemConfigService, SystemConfigService>();
         services.AddScoped<IOperationsRecorder, OperationsRecorder>();
         services.AddScoped<IIncidentJob, IncidentJob>();
         services.AddScoped<IOwnerObjectionService, OwnerObjectionService>();

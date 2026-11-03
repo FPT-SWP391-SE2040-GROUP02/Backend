@@ -3,6 +3,7 @@ using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Application.Services;
 using LegacyVault.Application.Storage;
 using LegacyVault.Infrastructure.Billing;
@@ -13,6 +14,7 @@ using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
 using LegacyVault.Infrastructure.Security;
+using LegacyVault.Infrastructure.ServiceConfig;
 using LegacyVault.Infrastructure.Services;
 using LegacyVault.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -73,6 +75,20 @@ public static class InfrastructureConfig
         // Xác thực hai bước TOTP của Admin: khóa, mã khôi phục, thử thách; bí mật bọc bằng KEK của DataKeyProtector.
         services.AddScoped<ITwoFactorRepository, TwoFactorRepository>();
         services.AddSingleton<ITotpSecretProtector, TotpSecretProtector>();
+        // Khóa API/mật khẩu của cấu hình dịch vụ ngoài do Admin sửa trên web, cũng bọc bằng KEK của DataKeyProtector.
+        services.AddSingleton<ISystemConfigSecretProtector, SystemConfigSecretProtector>();
+        // Cấu hình dịch vụ ngoài đọc lúc chạy: dòng DB đè appsettings, cache 30 giây, theo dõi lần gọi gần nhất.
+        services.AddMemoryCache();
+        services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();
+        services.AddScoped<ISystemConfigResolver, SystemConfigResolver>();
+        services.AddSingleton<ISystemConfigDefaults, SystemConfigDefaults>();
+        services.AddSingleton<IServiceStatusTracker, ServiceStatusTracker>();
+        // Đọc đồng bộ cho các lớp singleton có thuộc tính đồng bộ (tài khoản nhận tiền, khóa webhook SePay).
+        services.AddSingleton<ISyncConfigReader, SyncConfigReader>();
+        services.AddScoped<IServiceConnectionTester, GeminiConnectionTester>();
+        services.AddScoped<IServiceConnectionTester, EkycConnectionTester>();
+        services.AddScoped<IServiceConnectionTester, SmtpConnectionTester>();
+        services.AddScoped<IServiceConnectionTester, R2ConnectionTester>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IVaultRepository, VaultRepository>();
         services.AddScoped<IContainerRepository, ContainerRepository>();
@@ -308,21 +324,11 @@ public static class InfrastructureConfig
         // Danh tính đã gắn của Owner (EKYC-27, DATA-02): CCCD đủ 12 số, họ tên, ngày sinh mã hóa envelope.
         services.AddScoped<IOwnerIdentityRepository, OwnerIdentityRepository>();
         services.AddSingleton<IOwnerIdentityProtector, OwnerIdentityProtector>();
-        services.AddHttpClient<IEkycClient, EkycHttpClient>((provider, client) =>
+        services.AddHttpClient<IEkycClient, EkycHttpClient>(client =>
         {
-            EkycSettings settings = provider.GetRequiredService<IOptions<EkycSettings>>().Value;
-            string baseUrl = (settings.BaseUrl ?? string.Empty).Trim().Trim('"').Trim('\'');
-            if (!string.IsNullOrWhiteSpace(baseUrl))
-            {
-                // Dấu "/" cuối để địa chỉ tương đối "api/ocr" nối đúng vào BaseUrl có đường dẫn.
-                client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-            }
-            string apiKey = (settings.ApiKey ?? string.Empty).Trim().Trim('"').Trim('\'');
-            if (!string.IsNullOrWhiteSpace(apiKey))
-            {
-                client.DefaultRequestHeaders.Add("X-Ekyc-Key", apiKey);
-            }
-            client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds > 0 ? settings.TimeoutSeconds : 120);
+            // Địa chỉ, khóa và thời gian chờ đọc theo từng lời gọi từ cấu hình lúc chạy (Admin sửa trên web);
+            // thời gian chờ do EkycHttpClient tự canh nên HttpClient không đặt giới hạn riêng.
+            client.Timeout = Timeout.InfiniteTimeSpan;
         });
 
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)

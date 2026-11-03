@@ -116,4 +116,8 @@ public enum AuditAction
     DeathCaseDraftCancelled = 52,
     /// <summary>Admin cập nhật tham số cấu hình hệ thống (SYS-01).</summary>
     SystemSettingUpdated = 53,
+    /// <summary>Admin lưu cấu hình một dịch vụ ngoài (model, địa chỉ, khóa...). Nhật ký chỉ ghi tên trường đã đổi, không ghi giá trị.</summary>
+    SystemConfigUpdated = 54,
+    /// <summary>Admin khôi phục cấu hình một dịch vụ ngoài về giá trị mặc định trong appsettings.</summary>
+    SystemConfigReset = 55,
 }

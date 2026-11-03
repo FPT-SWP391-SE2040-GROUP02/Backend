@@ -2,7 +2,10 @@ using System.Net;
 using System.Text;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Ekyc;
+using LegacyVault.Infrastructure.ServiceConfig;
+using LegacyVault.IntegrationTests.ServiceConfig;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
@@ -31,9 +34,7 @@ public sealed class EkycHttpClientTests
 
     private static EkycHttpClient CreateClient(HttpStatusCode status, string body)
     {
-        HttpClient http = new HttpClient(new StubHandler(status, body));
-        http.BaseAddress = new Uri("http://ekyc.test/");
-        return new EkycHttpClient(http);
+        return EkycTestClients.Create(new StubHandler(status, body));
     }
 
     private static readonly byte[] Image = new byte[] { 1, 2, 3 };
@@ -113,9 +114,12 @@ public sealed class EkycHttpClientTests
     }
 
     [Fact]
-    public async Task NoBaseAddress_IsServiceUnavailable()
+    public async Task NoBaseUrl_IsServiceUnavailable()
     {
-        EkycHttpClient client = new EkycHttpClient(new HttpClient(new StubHandler(HttpStatusCode.OK, "{}")));
+        // Chưa cấu hình địa chỉ (ô chính không có baseUrl) thì mọi lệnh eKYC trả 503 như trước.
+        EkycHttpClient client = new EkycHttpClient(
+            new HttpClient(new StubHandler(HttpStatusCode.OK, "{}")),
+            new FakeConfigResolver(), new ServiceStatusTracker(), TimeProvider.System);
 
         AppException error = await Assert.ThrowsAsync<AppException>(
             () => client.CheckSpoofAsync(Image, "s.jpg", "image/jpeg", CancellationToken.None));

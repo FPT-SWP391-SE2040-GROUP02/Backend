@@ -3,6 +3,7 @@ using System.Text;
 using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Infrastructure.Ekyc;
+using LegacyVault.IntegrationTests.ServiceConfig;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
@@ -48,9 +49,7 @@ public sealed class EkycLivenessHttpClientTests
 
     private static EkycHttpClient CreateClient(RecordingHandler handler)
     {
-        HttpClient http = new HttpClient(handler);
-        http.BaseAddress = new Uri("http://ekyc.test/");
-        return new EkycHttpClient(http);
+        return EkycTestClients.Create(handler);
     }
 
     private const string StartJson = "{\"session_id\":\"sess-1\",\"expires_in\":90,"

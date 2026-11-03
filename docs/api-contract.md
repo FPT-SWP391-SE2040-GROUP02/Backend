@@ -1219,6 +1219,32 @@ Không cần PIN: tạo tài sản, liệt kê, xem thông tin, đưa tài sản
 - `409 CHECKIN_NOT_ALLOWED` kèm `planStatus` và `reason`: `PLAN_NOT_OVERDUE` (chủ kho không quá hạn, ví dụ vừa điểm danh) hoặc `DEATH_CASE_OPEN`. Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`. Dùng chung rate limit với điểm danh của chủ kho.
 - FE: `GET /v1/executor/vaults` chỉ hiện nút "Điểm danh thay chủ kho" khi `checkInOverdue = true` và `openDeathCaseId = null`; thành công thì tải lại danh sách kho.
 
+### 6.22. Cấu hình dịch vụ ngoài (Admin)
+
+Admin sửa model, khóa và dịch vụ dự phòng của dịch vụ ngoài ngay trên web, không cần sửa appsettings hay deploy lại. Tất cả cần Bearer; không phải Admin đang hoạt động → `404` (SEC-04). Đã nối năm dịch vụ: `GEMINI` (AI nhận diện giấy chứng tử), `EKYC`, `SMTP` (email), `SEPAY` (nhận tiền) và `R2` (lưu nội dung đã mã hóa). Mọi giá trị trong `settings` và `secrets` là chuỗi, số cũng vậy.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/v1/admin/system-config` | — | 200 `SystemConfigListResponse`: `services[]` gồm `serviceKey`, `supportsFallback`, `slots[]`, `status` | 404 |
+| PUT | `/v1/admin/system-config/{serviceKey}/{slot}` | `{ settings, secrets?, enabled, reason, version, confirmText? }` | 200 `SystemConfigSlotResponse` | 400 `VALIDATION_ERROR`, 404, 409 `EDIT_CONFLICT` |
+| POST | `/v1/admin/system-config/{serviceKey}/{slot}/test` | `{ settings, secrets? }` | 200 `{ ok, errorCode, latencyMs }` | 400 `VALIDATION_ERROR`, 404, 429 |
+| POST | `/v1/admin/system-config/{serviceKey}/{slot}/reset` | `{ reason }` | 204 | 400 `VALIDATION_ERROR`, 404 |
+
+- `slot` là `PRIMARY` hoặc `FALLBACK` (chỉ dịch vụ có `supportsFallback = true` mới có `FALLBACK`). Mỗi ô trả `slot`, `enabled`, `source` (`DATABASE` khi Admin đã lưu, `APPSETTINGS` khi đang dùng cấu hình máy chủ), `settings`, `secrets[]` (`name`, `hasValue`, `last4`), `version`, `updatedAt`, `updatedBy`.
+- **Khóa bí mật không bao giờ có trong response**: chỉ có `hasValue` và `last4` (4 ký tự cuối, chỉ khi khóa lưu trong DB và dài từ 8 ký tự). `PUT` bỏ trống hoặc không gửi một khóa nghĩa là giữ nguyên khóa cũ; lần lưu đầu tiên của ô `PRIMARY` mà bỏ trống thì chép khóa đang dùng từ appsettings vào dòng mới (đã mã hóa); không có khóa nào thì `400` với lỗi ở `secrets.apiKey`.
+- `version` là số của ô lúc Admin mở form (`0` khi ô chưa có dòng trong DB). Lệch → `409 EDIT_CONFLICT`: FE tải lại danh sách rồi cho sửa tiếp. Ô `PRIMARY` luôn bật (`enabled = false` → 400); ô `FALLBACK` bật thì bắt buộc có khóa.
+- `reason` bắt buộc, tối đa 500 ký tự. Mỗi lần lưu ghi nhật ký `SYSTEM_CONFIG_UPDATED` và mỗi lần khôi phục ghi `SYSTEM_CONFIG_RESET` (đối tượng `CONFIGURATION`); nhật ký chỉ ghi tên trường đã đổi, không ghi giá trị. Khôi phục một ô chưa có dòng trong DB là thao tác rỗng: vẫn `204`, không ghi nhật ký.
+- Trường của `GEMINI`: `model` (chữ, số, `.`, `_`, `-`, tối đa 100 ký tự vì nằm trong URL gọi Gemini), `timeoutSeconds` (5–60), khóa `apiKey`. Giá trị trong DB đè appsettings (`Gemini:ApiKey`, `Gemini:Model`, `Gemini:TimeoutSeconds`, và `Ekyc`, `Email:Smtp`, `Billing`, `AssetStorage:R2` cho các dịch vụ còn lại); cache 30 giây và được xóa ngay khi lưu hoặc khôi phục.
+- **Dịch vụ và trường** (`settings` / khóa trong `secrets`; chữ in nghiêng là không bắt buộc):
+  - `GEMINI`: `model`, `timeoutSeconds` / `apiKey`. Có ô `FALLBACK`.
+  - `EKYC`: `baseUrl` (http/https, không kèm tài khoản), `timeoutSeconds` (5–300) / *`apiKey`* (header `X-Ekyc-Key`). Có ô `FALLBACK` (địa chỉ phụ); `422`/`400`/`410` của dịch vụ không chuyển ô.
+  - `SMTP`: `host`, `port` (1–65535), `secureSocket` (`None`, `Auto`, `SslOnConnect`, `StartTls`, `StartTlsWhenAvailable`), *`userName`*, *`fromAddress`*, *`fromName`*, `timeoutSeconds` (5–120), *`webhookUrl`* / *`password`*. Có ô `FALLBACK` (thường chỉ đặt `webhookUrl`); ô chính gửi lỗi thì thử ô dự phòng, cả hai lỗi thì trả lỗi của ô chính. Việc chọn gửi thư thật hay chỉ ghi log vẫn quyết định lúc khởi động theo appsettings.
+  - `SEPAY`: `environment` (`Test` | `Live`), *`bankCode`*, *`accountNumber`*, *`accountName`* / *`webhookApiKey`*. Không có ô dự phòng, không có `/test`.
+  - `R2`: `accountId` (chữ, số, gạch ngang), `bucketName` (3–63 ký tự chữ thường, số, gạch ngang) / `accessKeyId`, `secretAccessKey`. Không có ô dự phòng; chỉ có tác dụng khi `AssetStorage:Provider` là `R2` (đặt lúc khởi động).
+- **`confirmText`**: bắt buộc (gõ lại đúng tên dịch vụ, không phân biệt hoa thường) khi chuyển `SEPAY` sang `Live`, hoặc khi đổi `accountId` hay `bucketName` của `R2`; thiếu hoặc sai → `400` ở `confirmText`.
+- **Thử kết nối** (`/test`) thử giá trị Admin đang nhập mà không lưu và không ghi nhật ký; khóa để trống thì dùng khóa đang lưu (hoặc khóa của appsettings với ô chính chưa có dòng). Chờ tối đa 10 giây, giới hạn 10 lần/phút theo địa chỉ IP (vượt → `429`). Dịch vụ hỏng vẫn trả `200` với `ok = false` và `errorCode` ngắn (`HTTP_401`, `TIMEOUT`, `NETWORK`, `ERROR`); kết quả không bao giờ chứa khóa.
+- `status` là lần gọi gần nhất kể từ lúc máy chủ khởi động (giữ trong bộ nhớ): `activeSlot` (ô trả lời thành công), `lastOutcome` (`SUCCEEDED` | `FAILED`), `lastAt`, `lastErrorCode` (`HTTP_503`, `TIMEOUT`, `NETWORK`...).
+
 ## 7. Tóm tắt thay đổi FE cần làm
 
 | # | Việc | File FE |
