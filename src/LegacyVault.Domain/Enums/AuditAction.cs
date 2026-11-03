@@ -114,4 +114,6 @@ public enum AuditAction
     ServiceGraceStarted = 51,
     /// <summary>Executor hủy hồ sơ chứng tử còn nháp (chưa gửi lần nào); hồ sơ và các trang đã tải bị xóa.</summary>
     DeathCaseDraftCancelled = 52,
+    /// <summary>Admin cập nhật tham số cấu hình hệ thống (SYS-01).</summary>
+    SystemSettingUpdated = 53,
 }

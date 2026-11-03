@@ -128,7 +128,7 @@ public sealed class IncidentRepository : IIncidentRepository
     }
 
     public async Task<(List<Incident> Items, int TotalCount)> ListAsync(
-        IncidentStatus? status, IncidentType? type, Guid? assigneeUserId, bool overdueOnly, DateTimeOffset now,
+        IncidentStatus? status, IncidentType? type, Guid? assigneeUserId, string? search, bool overdueOnly, DateTimeOffset now,
         int pageIndex, int pageSize, CancellationToken ct)
     {
         IQueryable<Incident> query = context.Set<Incident>().AsNoTracking();
@@ -143,6 +143,11 @@ public sealed class IncidentRepository : IIncidentRepository
         if (assigneeUserId != null)
         {
             query = query.Where(i => i.AssigneeUserId == assigneeUserId.Value);
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            query = query.Where(i => i.Summary.Contains(s) || i.Id.ToString().Contains(s));
         }
         if (overdueOnly)
         {

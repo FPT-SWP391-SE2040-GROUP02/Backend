@@ -29,6 +29,10 @@ public class IncidentSummaryResponse
 
     public DateTimeOffset CreatedAt { get; set; }
 
+    public bool HasActiveHold { get; set; }
+
+    public Guid? HoldId { get; set; }
+
     public string Etag { get; set; } = string.Empty;
 }
 

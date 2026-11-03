@@ -24,12 +24,22 @@ public sealed class PaymentTransactionRepository : IPaymentTransactionRepository
     }
 
     public async Task<(List<PaymentTransaction> Items, int Total)> ListAsync(
-        PaymentTransactionStatus? status, int pageIndex, int pageSize, CancellationToken ct)
+        PaymentTransactionStatus? status, string? search, int pageIndex, int pageSize, CancellationToken ct)
     {
         IQueryable<PaymentTransaction> query = context.PaymentTransactions.AsNoTracking();
         if (status != null)
         {
             query = query.Where(t => t.Status == status.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            query = query.Where(t =>
+                (t.MatchedPaymentCode != null && t.MatchedPaymentCode.Contains(s)) ||
+                (t.ReferenceCode != null && t.ReferenceCode.Contains(s)) ||
+                (t.Code != null && t.Code.Contains(s)) ||
+                t.ProviderTransactionId.ToString().Contains(s));
         }
 
         int total = await query.CountAsync(ct);

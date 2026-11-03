@@ -61,7 +61,7 @@ public interface IIncidentService
         IncidentType type, string targetType, Guid? targetId, Guid newAssigneeUserId, string note, CancellationToken ct);
 
     Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
-        string? status, string? type, Guid? assigneeUserId, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct);
+        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct);
 
     Task<IncidentDetailResponse> GetAsync(Guid incidentId, CancellationToken ct);
 
@@ -189,14 +189,14 @@ public sealed class IncidentService : IIncidentService
     }
 
     public async Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
-        string? status, string? type, Guid? assigneeUserId, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
+        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
     {
         await RequireAdminAsync(ct);
         IncidentStatus? statusFilter = ParseEnum<IncidentStatus>(status, "status");
         IncidentType? typeFilter = ParseEnum<IncidentType>(type, "type");
         DateTimeOffset now = timeProvider.GetUtcNow();
         (List<Incident> items, int total) = await incidents.ListAsync(
-            statusFilter, typeFilter, assigneeUserId, overdueOnly, now, pageIndex, pageSize, ct);
+            statusFilter, typeFilter, assigneeUserId, search, overdueOnly, now, pageIndex, pageSize, ct);
 
         PaginatedList<IncidentSummaryResponse> page = new PaginatedList<IncidentSummaryResponse>();
         foreach (Incident incident in items)
