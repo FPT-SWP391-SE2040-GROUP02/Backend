@@ -16,6 +16,12 @@ public class UpdateSystemConfigRequest
     /// <summary>Lý do thay đổi, bắt buộc, tối đa 500 ký tự; kiểm bằng SystemConfigValidator.RequireReason.</summary>
     public string? Reason { get; set; }
 
+    /// <summary>
+    /// Tên dịch vụ (ví dụ SEPAY, R2) Admin gõ lại để xác nhận thay đổi nguy hiểm: chuyển SePay sang Live, đổi tài khoản
+    /// hoặc bucket của R2. Chỉ bắt buộc khi SystemConfigCatalog.RequiresConfirm đúng; không phân biệt hoa thường.
+    /// </summary>
+    public string? ConfirmText { get; set; }
+
     /// <summary>Version của ô lúc Admin mở form (0 khi ô chưa có dòng trong DB). Lệch thì 409 EDIT_CONFLICT.</summary>
     public int Version { get; set; }
 }

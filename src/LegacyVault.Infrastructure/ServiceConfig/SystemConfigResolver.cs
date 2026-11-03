@@ -32,13 +32,27 @@ public sealed class SystemConfigResolver : ISystemConfigResolver
         this.cache = cache;
     }
 
+    /// <summary>Lấy cấu hình đã cache (kể cả kết quả "không có"); false khi chưa có hoặc đã hết hạn. Cho phép đọc đồng bộ.</summary>
+    internal static bool TryGetCached(
+        IMemoryCache cache, string serviceKey, SystemConfigSlot slot, out ResolvedConfig? config)
+    {
+        object? hit = null;
+        if (cache.TryGetValue(CacheKey(serviceKey, slot), out hit) && hit is CachedConfig cached)
+        {
+            config = cached.Value;
+            return true;
+        }
+        config = null;
+        return false;
+    }
+
     public async Task<ResolvedConfig?> ResolveAsync(string serviceKey, SystemConfigSlot slot, CancellationToken ct)
     {
         string key = CacheKey(serviceKey, slot);
-        object? hit = null;
-        if (cache.TryGetValue(key, out hit) && hit is CachedConfig cached)
+        ResolvedConfig? cachedValue = null;
+        if (TryGetCached(cache, serviceKey, slot, out cachedValue))
         {
-            return cached.Value;
+            return cachedValue;
         }
 
         ResolvedConfig? loaded = await LoadAsync(serviceKey, slot, ct);

@@ -122,6 +122,11 @@ public sealed class SystemConfigService : ISystemConfigService
         }
 
         Draft draft = BuildDraft(serviceKey, slot, row, request.Settings, rawSecrets);
+        if (SystemConfigCatalog.RequiresConfirm(serviceKey, CurrentSettings(serviceKey, slot, row), draft.Settings)
+            && !string.Equals((request.ConfirmText ?? string.Empty).Trim(), serviceKey, StringComparison.OrdinalIgnoreCase))
+        {
+            throw ValidationErrors.For("confirmText", $"Gõ lại {serviceKey} để xác nhận thay đổi này.");
+        }
         Dictionary<string, string> settings = draft.Settings;
         Dictionary<string, string> secrets = draft.Secrets;
         List<string> changed = draft.Changed;

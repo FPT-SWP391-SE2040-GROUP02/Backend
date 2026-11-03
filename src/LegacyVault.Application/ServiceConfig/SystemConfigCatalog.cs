@@ -47,6 +47,8 @@ public static class SystemConfigCatalog
 
     private static readonly IReadOnlyList<ConfigFieldSpec> EkycFields = BuildEkycFields();
 
+    private static readonly IReadOnlyList<ConfigFieldSpec> SePayFields = BuildSePayFields();
+
     public static bool IsWired(string serviceKey)
     {
         return WiredServices().Contains(serviceKey);
@@ -54,7 +56,7 @@ public static class SystemConfigCatalog
 
     public static IReadOnlyList<string> WiredServices()
     {
-        return new List<string> { SystemConfigServices.Gemini, SystemConfigServices.Ekyc };
+        return new List<string> { SystemConfigServices.Gemini, SystemConfigServices.Ekyc, SystemConfigServices.SePay };
     }
 
     /// <summary>SePay và R2 không tự chuyển dịch vụ: đổi nơi nhận tiền hay bucket tự động có thể làm sai đối soát hoặc mất truy cập dữ liệu.</summary>
@@ -73,6 +75,10 @@ public static class SystemConfigCatalog
         if (serviceKey == SystemConfigServices.Ekyc)
         {
             return EkycFields;
+        }
+        if (serviceKey == SystemConfigServices.SePay)
+        {
+            return SePayFields;
         }
         return new List<ConfigFieldSpec>();
     }
@@ -118,6 +124,43 @@ public static class SystemConfigCatalog
             }
         }
         return defaults;
+    }
+
+    /// <summary>
+    /// SePay: môi trường (Test hoặc Live, PAY-01), tài khoản nhận tiền hiện QR cho Owner (thông tin công khai) và khóa
+    /// SePay gửi trong header Authorization khi gọi webhook. Chưa đặt tài khoản thì không tạo được đơn thanh toán.
+    /// </summary>
+    private static IReadOnlyList<ConfigFieldSpec> BuildSePayFields()
+    {
+        ConfigFieldSpec environment = new ConfigFieldSpec();
+        environment.Name = "environment";
+        environment.Kind = ConfigFieldKind.Choice;
+        environment.Required = true;
+        environment.Choices = new List<string> { "Test", "Live" };
+        environment.DefaultValue = "Test";
+
+        ConfigFieldSpec bankCode = new ConfigFieldSpec();
+        bankCode.Name = "bankCode";
+        bankCode.Kind = ConfigFieldKind.Text;
+        bankCode.Max = 32;
+
+        ConfigFieldSpec accountNumber = new ConfigFieldSpec();
+        accountNumber.Name = "accountNumber";
+        accountNumber.Kind = ConfigFieldKind.Text;
+        accountNumber.Max = 32;
+
+        ConfigFieldSpec accountName = new ConfigFieldSpec();
+        accountName.Name = "accountName";
+        accountName.Kind = ConfigFieldKind.Text;
+        accountName.Max = 100;
+
+        ConfigFieldSpec webhookApiKey = new ConfigFieldSpec();
+        webhookApiKey.Name = "webhookApiKey";
+        webhookApiKey.Kind = ConfigFieldKind.Text;
+        webhookApiKey.Secret = true;
+        webhookApiKey.Max = 512;
+
+        return new List<ConfigFieldSpec> { environment, bankCode, accountNumber, accountName, webhookApiKey };
     }
 
     /// <summary>eKYC là chương trình Python riêng: địa chỉ, khóa dùng chung (header X-Ekyc-Key, tùy chọn) và thời gian chờ (OCR chạy CPU nên lâu).</summary>

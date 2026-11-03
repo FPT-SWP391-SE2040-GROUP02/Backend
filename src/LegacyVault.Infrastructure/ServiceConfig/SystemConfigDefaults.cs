@@ -1,4 +1,5 @@
 using LegacyVault.Application.ServiceConfig;
+using LegacyVault.Infrastructure.Billing;
 using LegacyVault.Infrastructure.Ekyc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -13,11 +14,14 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
 {
     private readonly IConfiguration configuration;
     private readonly IOptions<EkycSettings> ekycOptions;
+    private readonly IOptions<BillingSettings> billingOptions;
 
-    public SystemConfigDefaults(IConfiguration configuration, IOptions<EkycSettings> ekycOptions)
+    public SystemConfigDefaults(
+        IConfiguration configuration, IOptions<EkycSettings> ekycOptions, IOptions<BillingSettings> billingOptions)
     {
         this.configuration = configuration;
         this.ekycOptions = ekycOptions;
+        this.billingOptions = billingOptions;
     }
 
     public ResolvedConfig? ReadPrimary(string serviceKey)
@@ -30,7 +34,33 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
         {
             return ReadEkyc();
         }
+        if (serviceKey == SystemConfigServices.SePay)
+        {
+            return ReadSePay();
+        }
         return null;
+    }
+
+    /// <summary>SePay và tài khoản nhận tiền theo mục "Billing:SePay" và "Billing:Bank" (không đụng tới bảng giá "Billing:Pricing").</summary>
+    private ResolvedConfig ReadSePay()
+    {
+        BillingSettings settings = billingOptions.Value;
+        ResolvedConfig config = new ResolvedConfig();
+        config.Source = ConfigSources.AppSettings;
+        config.Settings = SystemConfigCatalog.DefaultSettings(SystemConfigServices.SePay);
+        string environment = (settings.SePay.Environment ?? string.Empty).Trim();
+        if (environment.Length > 0)
+        {
+            config.Settings["environment"] = environment;
+        }
+        config.Settings["bankCode"] = (settings.Bank.BankCode ?? string.Empty).Trim();
+        config.Settings["accountNumber"] = (settings.Bank.AccountNumber ?? string.Empty).Trim();
+        config.Settings["accountName"] = (settings.Bank.AccountName ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(settings.SePay.WebhookApiKey))
+        {
+            config.Secrets["webhookApiKey"] = settings.SePay.WebhookApiKey.Trim();
+        }
+        return config;
     }
 
     /// <summary>eKYC theo mục "Ekyc" đã bind và làm sạch lúc khởi động (cắt khoảng trắng và dấu nháy, mặc định thời gian chờ).</summary>
