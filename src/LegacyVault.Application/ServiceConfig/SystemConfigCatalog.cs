@@ -6,6 +6,10 @@ public enum ConfigFieldKind
     Text,
     /// <summary>Số nguyên trong khoảng [Min, Max].</summary>
     Integer,
+    /// <summary>Địa chỉ http hoặc https, không kèm tài khoản, tối đa 2048 ký tự.</summary>
+    Url,
+    /// <summary>Một trong các giá trị của Choices, khớp chính xác từng ký tự.</summary>
+    Choice,
 }
 
 /// <summary>Mô tả một trường cấu hình của dịch vụ ngoài: tên, loại, có bí mật hay không và luật kiểm tra.</summary>
@@ -26,6 +30,9 @@ public sealed class ConfigFieldSpec
 
     public string? Pattern { get; set; }
 
+    /// <summary>Các giá trị hợp lệ của trường loại Choice.</summary>
+    public List<string> Choices { get; set; } = new List<string>();
+
     /// <summary>Giá trị dùng khi appsettings không đặt trường này (chuỗi, kể cả số).</summary>
     public string DefaultValue { get; set; } = string.Empty;
 }
@@ -38,19 +45,22 @@ public static class SystemConfigCatalog
 
     private static readonly IReadOnlyList<ConfigFieldSpec> GeminiFields = BuildGeminiFields();
 
+    private static readonly IReadOnlyList<ConfigFieldSpec> EkycFields = BuildEkycFields();
+
     public static bool IsWired(string serviceKey)
     {
-        return serviceKey == SystemConfigServices.Gemini;
+        return WiredServices().Contains(serviceKey);
     }
 
     public static IReadOnlyList<string> WiredServices()
     {
-        return new List<string> { SystemConfigServices.Gemini };
+        return new List<string> { SystemConfigServices.Gemini, SystemConfigServices.Ekyc };
     }
 
+    /// <summary>SePay và R2 không tự chuyển dịch vụ: đổi nơi nhận tiền hay bucket tự động có thể làm sai đối soát hoặc mất truy cập dữ liệu.</summary>
     public static bool SupportsFallback(string serviceKey)
     {
-        return serviceKey == SystemConfigServices.Gemini;
+        return serviceKey == SystemConfigServices.Gemini || serviceKey == SystemConfigServices.Ekyc;
     }
 
     /// <summary>Các trường của dịch vụ; dịch vụ chưa nối thì danh sách rỗng.</summary>
@@ -60,7 +70,40 @@ public static class SystemConfigCatalog
         {
             return GeminiFields;
         }
+        if (serviceKey == SystemConfigServices.Ekyc)
+        {
+            return EkycFields;
+        }
         return new List<ConfigFieldSpec>();
+    }
+
+    /// <summary>
+    /// Thay đổi này có cần Admin gõ lại tên dịch vụ để xác nhận không. R2: đổi tài khoản hoặc bucket làm kho mất truy cập
+    /// dữ liệu cũ. SePay: chuyển sang Live là bắt đầu nhận tiền thật. before/after là các trường thường đang có và sắp lưu.
+    /// </summary>
+    public static bool RequiresConfirm(
+        string serviceKey, IReadOnlyDictionary<string, string> before, IReadOnlyDictionary<string, string> after)
+    {
+        if (serviceKey == SystemConfigServices.SePay)
+        {
+            return ValueOf(after, "environment") == "Live" && ValueOf(before, "environment") != "Live";
+        }
+        if (serviceKey == SystemConfigServices.R2)
+        {
+            return ValueOf(after, "accountId") != ValueOf(before, "accountId")
+                || ValueOf(after, "bucketName") != ValueOf(before, "bucketName");
+        }
+        return false;
+    }
+
+    private static string ValueOf(IReadOnlyDictionary<string, string> values, string name)
+    {
+        string? value = null;
+        if (values.TryGetValue(name, out value))
+        {
+            return value;
+        }
+        return string.Empty;
     }
 
     /// <summary>Giá trị mặc định của các trường thường (không bí mật) của dịch vụ.</summary>
@@ -75,6 +118,31 @@ public static class SystemConfigCatalog
             }
         }
         return defaults;
+    }
+
+    /// <summary>eKYC là chương trình Python riêng: địa chỉ, khóa dùng chung (header X-Ekyc-Key, tùy chọn) và thời gian chờ (OCR chạy CPU nên lâu).</summary>
+    private static IReadOnlyList<ConfigFieldSpec> BuildEkycFields()
+    {
+        ConfigFieldSpec baseUrl = new ConfigFieldSpec();
+        baseUrl.Name = "baseUrl";
+        baseUrl.Kind = ConfigFieldKind.Url;
+        baseUrl.Required = true;
+
+        ConfigFieldSpec timeout = new ConfigFieldSpec();
+        timeout.Name = "timeoutSeconds";
+        timeout.Kind = ConfigFieldKind.Integer;
+        timeout.Required = true;
+        timeout.Min = 5;
+        timeout.Max = 300;
+        timeout.DefaultValue = "60";
+
+        ConfigFieldSpec apiKey = new ConfigFieldSpec();
+        apiKey.Name = "apiKey";
+        apiKey.Kind = ConfigFieldKind.Text;
+        apiKey.Secret = true;
+        apiKey.Max = 512;
+
+        return new List<ConfigFieldSpec> { baseUrl, timeout, apiKey };
     }
 
     private static IReadOnlyList<ConfigFieldSpec> BuildGeminiFields()

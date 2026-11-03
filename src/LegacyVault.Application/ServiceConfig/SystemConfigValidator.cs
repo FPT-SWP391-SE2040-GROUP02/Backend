@@ -12,6 +12,8 @@ public static class SystemConfigValidator
 {
     public const int MaxReasonLength = 500;
 
+    private const int MaxUrlLength = 2048;
+
     /// <summary>
     /// Mọi trường thường bắt buộc phải có và hợp lệ; tên lạ bị từ chối. Giá trị được so sau khi bỏ khoảng trắng hai đầu,
     /// người gọi phải lưu đúng giá trị đã bỏ khoảng trắng.
@@ -45,7 +47,7 @@ public static class SystemConfigValidator
                 }
                 continue;
             }
-            CheckValue(field, value, path);
+            ValidateField(field, value, path);
         }
     }
 
@@ -84,6 +86,17 @@ public static class SystemConfigValidator
         return text;
     }
 
+    private static bool IsHttpUrl(string value)
+    {
+        Uri? uri = null;
+        if (value.Length > MaxUrlLength || !Uri.TryCreate(value, UriKind.Absolute, out uri))
+        {
+            return false;
+        }
+        bool httpScheme = uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
+        return httpScheme && uri.UserInfo.Length == 0 && uri.Host.Length > 0;
+    }
+
     private static ConfigFieldSpec? FindField(IReadOnlyList<ConfigFieldSpec> fields, string name, bool secret)
     {
         foreach (ConfigFieldSpec field in fields)
@@ -96,8 +109,25 @@ public static class SystemConfigValidator
         return null;
     }
 
-    private static void CheckValue(ConfigFieldSpec field, string value, string path)
+    /// <summary>Kiểm một giá trị (đã bỏ khoảng trắng hai đầu, không rỗng) theo loại của trường.</summary>
+    public static void ValidateField(ConfigFieldSpec field, string value, string path)
     {
+        if (field.Kind == ConfigFieldKind.Url)
+        {
+            if (!IsHttpUrl(value))
+            {
+                throw ValidationErrors.For(path, "Phải là địa chỉ http hoặc https hợp lệ, không kèm tài khoản.");
+            }
+            return;
+        }
+        if (field.Kind == ConfigFieldKind.Choice)
+        {
+            if (!field.Choices.Contains(value))
+            {
+                throw ValidationErrors.For(path, "Giá trị phải là một trong: " + string.Join(", ", field.Choices) + ".");
+            }
+            return;
+        }
         if (field.Kind == ConfigFieldKind.Integer)
         {
             int number = 0;

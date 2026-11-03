@@ -121,6 +121,100 @@ public sealed class SystemConfigValidatorTests
         AssertValidationError(() => SystemConfigValidator.ValidateSecrets(SystemConfigServices.Gemini, tooLong));
     }
 
+    private static ConfigFieldSpec UrlField()
+    {
+        ConfigFieldSpec field = new ConfigFieldSpec();
+        field.Name = "baseUrl";
+        field.Kind = ConfigFieldKind.Url;
+        return field;
+    }
+
+    [Theory]
+    [InlineData("https://api.example.com")]
+    [InlineData("http://127.0.0.1:8879")]
+    [InlineData("http://localhost:8879/path")]
+    public void Url_AcceptsHttpAndHttps(string value)
+    {
+        SystemConfigValidator.ValidateField(UrlField(), value, "settings.baseUrl");
+    }
+
+    [Theory]
+    [InlineData("ftp://example.com")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("http://user:pass@example.com")]
+    [InlineData("not a url")]
+    [InlineData("//example.com")]
+    [InlineData("https://")]
+    public void Url_RejectsOtherSchemesCredentialsAndGarbage(string value)
+    {
+        AssertValidationError(() => SystemConfigValidator.ValidateField(UrlField(), value, "settings.baseUrl"));
+    }
+
+    [Fact]
+    public void Url_Over2048Characters_IsRejected()
+    {
+        string value = "https://example.com/" + new string('a', 2040);
+
+        AssertValidationError(() => SystemConfigValidator.ValidateField(UrlField(), value, "settings.baseUrl"));
+    }
+
+    [Fact]
+    public void Choice_AcceptsOnlyListedValuesExactly()
+    {
+        ConfigFieldSpec field = new ConfigFieldSpec();
+        field.Name = "environment";
+        field.Kind = ConfigFieldKind.Choice;
+        field.Choices = new List<string> { "Test", "Live" };
+
+        SystemConfigValidator.ValidateField(field, "Test", "settings.environment");
+        SystemConfigValidator.ValidateField(field, "Live", "settings.environment");
+        AssertValidationError(() => SystemConfigValidator.ValidateField(field, "live", "settings.environment"));
+        AssertValidationError(() => SystemConfigValidator.ValidateField(field, "Prod", "settings.environment"));
+    }
+
+    private static Dictionary<string, string> Values(params string[] pairs)
+    {
+        Dictionary<string, string> values = new Dictionary<string, string>();
+        for (int i = 0; i < pairs.Length; i += 2)
+        {
+            values[pairs[i]] = pairs[i + 1];
+        }
+        return values;
+    }
+
+    [Fact]
+    public void RequiresConfirm_SePay_OnlyWhenSwitchingToLive()
+    {
+        Assert.True(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.SePay,
+            Values("environment", "Test"), Values("environment", "Live")));
+        Assert.False(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.SePay,
+            Values("environment", "Live"), Values("environment", "Live")));
+        Assert.False(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.SePay,
+            Values("environment", "Live"), Values("environment", "Test")));
+    }
+
+    [Fact]
+    public void RequiresConfirm_R2_WhenAccountOrBucketChanges()
+    {
+        Dictionary<string, string> before = Values("accountId", "acc1", "bucketName", "bucket1");
+
+        Assert.True(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.R2, before,
+            Values("accountId", "acc2", "bucketName", "bucket1")));
+        Assert.True(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.R2, before,
+            Values("accountId", "acc1", "bucketName", "bucket2")));
+        Assert.False(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.R2, before,
+            Values("accountId", "acc1", "bucketName", "bucket1")));
+    }
+
+    [Fact]
+    public void RequiresConfirm_OtherServices_NeverRequire()
+    {
+        Assert.False(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.Gemini,
+            Values("model", "a"), Values("model", "b")));
+        Assert.False(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.Smtp,
+            Values("host", "a"), Values("host", "b")));
+    }
+
     [Fact]
     public void Reason_IsRequired_TrimmedAndLimitedTo500()
     {

@@ -132,6 +132,16 @@ public sealed class AdminSystemConfigTestEndpointTests : IAsyncLifetime
         return new { settings, secrets };
     }
 
+    private static object EkycDraft(string baseUrl, string? apiKey)
+    {
+        Dictionary<string, string?> settings = new Dictionary<string, string?>();
+        settings["baseUrl"] = baseUrl;
+        settings["timeoutSeconds"] = "20";
+        Dictionary<string, string?> secrets = new Dictionary<string, string?>();
+        secrets["apiKey"] = apiKey;
+        return new { settings, secrets };
+    }
+
     private async Task SaveKeyAsync(HttpClient client, string apiKey)
     {
         Dictionary<string, string?> settings = new Dictionary<string, string?>();
@@ -267,6 +277,68 @@ public sealed class AdminSystemConfigTestEndpointTests : IAsyncLifetime
             JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.False(body.GetProperty("ok").GetBoolean());
             Assert.Equal("TIMEOUT", body.GetProperty("errorCode").GetString());
+        }
+    }
+
+    [SqlFact]
+    public async Task RealEkycTester_ReachableService_IsOk_EvenWhenRootIs404()
+    {
+        StubHandler handler = new StubHandler();
+        handler.Responder = () => new HttpResponseMessage(HttpStatusCode.NotFound);
+        using (WebApplicationFactory<Program> host = WithHttp(handler))
+        {
+            HttpClient client = await AdminClientAsync(host);
+
+            HttpResponseMessage response = await client.PostAsJsonAsync(
+                BaseUrl + "/EKYC/PRIMARY/test", EkycDraft("http://ekyc.example.test:8879", null));
+
+            JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(body.GetProperty("ok").GetBoolean());
+            Assert.Equal(1, handler.Calls);
+        }
+    }
+
+    [SqlFact]
+    public async Task RealEkycTester_Rejected401_ReportsErrorCodeWithoutKey()
+    {
+        StubHandler handler = new StubHandler();
+        handler.Responder = () => new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        using (WebApplicationFactory<Program> host = WithHttp(handler))
+        {
+            HttpClient client = await AdminClientAsync(host);
+
+            HttpResponseMessage response = await client.PostAsJsonAsync(
+                BaseUrl + "/EKYC/PRIMARY/test", EkycDraft("http://ekyc.example.test:8879", DraftKey));
+
+            string text = await response.Content.ReadAsStringAsync();
+            Assert.DoesNotContain(DraftKey, text);
+            JsonElement body = JsonDocument.Parse(text).RootElement;
+            Assert.False(body.GetProperty("ok").GetBoolean());
+            Assert.Equal("HTTP_401", body.GetProperty("errorCode").GetString());
+        }
+    }
+
+    [SqlFact]
+    public async Task RealEkycTester_DownOrTimeout_ReportsNetworkOrTimeout()
+    {
+        StubHandler network = new StubHandler();
+        network.Responder = () => throw new HttpRequestException("down");
+        StubHandler slow = new StubHandler();
+        slow.Responder = () => throw new TaskCanceledException("timeout");
+
+        foreach ((StubHandler handler, string expected) in new[] { (network, "NETWORK"), (slow, "TIMEOUT") })
+        {
+            using (WebApplicationFactory<Program> host = WithHttp(handler))
+            {
+                HttpClient client = await AdminClientAsync(host);
+
+                HttpResponseMessage response = await client.PostAsJsonAsync(
+                    BaseUrl + "/EKYC/PRIMARY/test", EkycDraft("http://ekyc.example.test:8879", null));
+
+                JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.False(body.GetProperty("ok").GetBoolean());
+                Assert.Equal(expected, body.GetProperty("errorCode").GetString());
+            }
         }
     }
 

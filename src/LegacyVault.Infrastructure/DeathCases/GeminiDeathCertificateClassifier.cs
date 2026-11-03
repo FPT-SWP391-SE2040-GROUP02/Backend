@@ -186,7 +186,7 @@ public sealed class GeminiDeathCertificateClassifier : IDeathCertificateClassifi
         {
             int code = (int)response.StatusCode;
             logger.LogWarning("Gemini ở ô {Slot} trả mã lỗi {StatusCode} khi nhận diện giấy chứng tử.", slot, code);
-            return AttemptResult.Failed("HTTP_" + code, ShouldFailOver(code));
+            return AttemptResult.Failed("HTTP_" + code, ServiceFailover.ShouldFailOver(code));
         }
 
         string responseJson = await response.Content.ReadAsStringAsync(ct);
@@ -201,12 +201,6 @@ public sealed class GeminiDeathCertificateClassifier : IDeathCertificateClassifi
             return AttemptResult.Failed("BAD_RESPONSE", false);
         }
         return AttemptResult.Success(check);
-    }
-
-    /// <summary>Lỗi do phía dịch vụ hoặc khóa/quota của ô này (5xx, 401, 403, 429) thì ô khác có thể trả lời được.</summary>
-    private static bool ShouldFailOver(int statusCode)
-    {
-        return statusCode >= 500 || statusCode == 401 || statusCode == 403 || statusCode == 429;
     }
 
     private static string? ReadAnswerText(string responseJson)

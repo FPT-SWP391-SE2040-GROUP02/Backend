@@ -80,6 +80,16 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
         return new { settings, secrets, enabled, reason, version };
     }
 
+    private static object EkycBody(string baseUrl, string? apiKey, int version, bool enabled = true)
+    {
+        Dictionary<string, string?> settings = new Dictionary<string, string?>();
+        settings["baseUrl"] = baseUrl;
+        settings["timeoutSeconds"] = "60";
+        Dictionary<string, string?> secrets = new Dictionary<string, string?>();
+        secrets["apiKey"] = apiKey;
+        return new { settings, secrets, enabled, reason = "đổi cấu hình eKYC", version };
+    }
+
     private static async Task<JsonElement> ReadAsync(HttpResponseMessage response)
     {
         return await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -125,6 +135,69 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
             JsonElement fallback = gemini.GetProperty("slots")[1];
             Assert.Equal("FALLBACK", fallback.GetProperty("slot").GetString());
             Assert.False(fallback.GetProperty("enabled").GetBoolean());
+        }
+    }
+
+    [SqlFact]
+    public async Task Get_ListsEkycFromAppSettings_WithBaseUrlAndNoKeyValue()
+    {
+        using (WebApplicationFactory<Program> host = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((context, configuration) =>
+            {
+                Dictionary<string, string?> values = new Dictionary<string, string?>();
+                values["Ekyc:BaseUrl"] = "http://127.0.0.1:8879";
+                values["Ekyc:ApiKey"] = "ekyc-key-LEAK-4321";
+                values["Ekyc:TimeoutSeconds"] = "90";
+                configuration.AddInMemoryCollection(values);
+            });
+        }))
+        {
+            HttpClient client = await AdminClientAsync(host);
+
+            HttpResponseMessage response = await client.GetAsync(BaseUrl);
+
+            string text = await response.Content.ReadAsStringAsync();
+            Assert.DoesNotContain("ekyc-key-LEAK-4321", text);
+            JsonElement ekyc = JsonDocument.Parse(text).RootElement.GetProperty("services")
+                .EnumerateArray().Single(s => s.GetProperty("serviceKey").GetString() == "EKYC");
+            Assert.True(ekyc.GetProperty("supportsFallback").GetBoolean());
+            JsonElement primary = ekyc.GetProperty("slots")[0];
+            Assert.Equal("APPSETTINGS", primary.GetProperty("source").GetString());
+            Assert.Equal("http://127.0.0.1:8879", primary.GetProperty("settings").GetProperty("baseUrl").GetString());
+            Assert.Equal("90", primary.GetProperty("settings").GetProperty("timeoutSeconds").GetString());
+            Assert.True(primary.GetProperty("secrets")[0].GetProperty("hasValue").GetBoolean());
+        }
+    }
+
+    [SqlFact]
+    public async Task Put_Ekyc_SavesUrlWithoutKey_AndResolverSeesIt()
+    {
+        HttpClient client = await AdminClientAsync();
+
+        HttpResponseMessage response = await client.PutAsJsonAsync(
+            BaseUrl + "/EKYC/PRIMARY", EkycBody("https://ekyc.example.test/api", null, 0));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            ISystemConfigResolver resolver = scope.ServiceProvider.GetRequiredService<ISystemConfigResolver>();
+            ResolvedConfig? config = await resolver.ResolveAsync("EKYC", SystemConfigSlot.Primary, CancellationToken.None);
+            Assert.Equal("https://ekyc.example.test/api", config!.Settings["baseUrl"]);
+            Assert.Empty(config.Secrets);
+        }
+    }
+
+    [SqlFact]
+    public async Task Put_Ekyc_RejectsBadUrls()
+    {
+        HttpClient client = await AdminClientAsync();
+
+        foreach (string url in new[] { "ftp://ekyc.test", "http://user:pass@ekyc.test", "không phải địa chỉ", "" })
+        {
+            HttpResponseMessage response = await client.PutAsJsonAsync(BaseUrl + "/EKYC/PRIMARY", EkycBody(url, null, 0));
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
     }
 
