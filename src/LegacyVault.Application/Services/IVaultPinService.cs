@@ -26,6 +26,6 @@ public interface IVaultPinService
     /// </summary>
     Task VerifyAsync(Guid vaultId, string? pin, CancellationToken ct);
 
-    /// <summary>Chặn tạo thêm tài sản khi kho đã có tài sản mà chưa đặt PIN (409 VAULT_PIN_NOT_SET).</summary>
+    /// <summary>Chặn tạo tài sản (kể cả tài sản đầu tiên) khi kho chưa đặt PIN (409 VAULT_PIN_NOT_SET).</summary>
     Task EnsurePinSetBeforeNewAssetAsync(Guid vaultId, CancellationToken ct);
 }

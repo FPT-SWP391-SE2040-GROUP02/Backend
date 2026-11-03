@@ -115,7 +115,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `PAYMENT_ORDER_NOT_PAYABLE` | Hủy hoặc ghi nhận thanh toán một đơn không còn ở trạng thái cho phép | `reason`: `PAID` / `EXPIRED` / `CANCELLED` / `VAULT_CLOSED` / `ENTITLEMENT_CHANGED` |
 | 404 | `PAYMENT_ORDER_NOT_FOUND` | Không có đơn thanh toán, hoặc đơn của kho khác; cũng là kết quả của `dev-pay` khi công tắc dev tắt | |
 | 409 | `DEV_TOOL_NOT_ALLOWED` | Công cụ thử nghiệm (chỉ Development): kho không có mốc này ở trạng thái hiện tại hoặc đã qua mốc | `milestone`, `state` |
-| 409 | `VAULT_PIN_NOT_SET` | Kho đã có tài sản nhưng chưa đặt mã PIN (mục 6.20): chặn tạo thêm tài sản và các thao tác cần PIN | |
+| 409 | `VAULT_PIN_NOT_SET` | Kho chưa đặt mã PIN (mục 6.20): chặn tạo tài sản (kể cả tài sản đầu tiên) và các thao tác cần PIN | |
 | 409 | `VAULT_PIN_ALREADY_SET` | Kho đã có PIN, không đặt lần đầu nữa; dùng đổi PIN | |
 | 403 | `VAULT_PIN_REQUIRED` | Thao tác cần PIN nhưng thiếu header `X-Vault-Pin`; không tính là một lần đoán | |
 | 403 | `INVALID_VAULT_PIN` | Sai mã PIN | `attemptsRemaining` |
@@ -1160,7 +1160,7 @@ Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Own
 | POST | `/api/v1/vaults/{vaultId}/pin/reset` | `{ password, newPin, confirmPin }` | 200 `VaultPinStatus` | 400, 401 `REAUTHENTICATION_FAILED` (sai mật khẩu), 404, 409 `VAULT_PIN_NOT_SET` / `VAULT_PIN_RESET_NEEDS_PASSWORD`, 429 |
 | POST | `/api/v1/vaults/{vaultId}/pin/verify` | — (PIN trong header `X-Vault-Pin`) | 204 | 403 `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN`, 404, 409 `VAULT_PIN_NOT_SET`, 423 `VAULT_PIN_LOCKED` |
 
-`VaultPinStatus`: `{ isSet, isRequired, lockedUntil, attemptsRemaining }`. `isRequired = true` khi kho đã có tài sản; FE hiện hộp thoại bắt buộc đặt PIN khi `isRequired && !isSet`. `lockedUntil` là `null` khi không bị khóa. `attemptsRemaining` là `null` khi chưa đặt PIN. Không bao giờ trả PIN hay hash.
+`VaultPinStatus`: `{ isSet, isRequired, lockedUntil, attemptsRemaining }`. `isRequired = true` khi kho đã có tài sản; FE hiện hộp thoại bắt buộc đặt PIN khi `isRequired && !isSet`. Màn Tài sản dựa vào `isSet = false` để khóa thêm tài sản và mời đặt PIN. `lockedUntil` là `null` khi không bị khóa. `attemptsRemaining` là `null` khi chưa đặt PIN. Không bao giờ trả PIN hay hash.
 
 **Thao tác cần PIN.** Gửi PIN trong header `X-Vault-Pin: 482913` (6 chữ số). Áp dụng cho:
 
@@ -1171,7 +1171,7 @@ Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Own
 - `POST /vaults/{vaultId}/executors` (mời Executor) và `POST /vaults/{vaultId}/executors/{executorId}/revoke` (thu hồi).
 - Token của đồng hồ thông minh (có claim `device_id`) bị từ chối `403 ROLE_NOT_ALLOWED`, không cho nhập PIN.
 
-Không cần PIN: tạo tài sản, liệt kê, xem thông tin, đưa tài sản vào gói.
+Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem "Ép đặt PIN"), liệt kê, xem thông tin, đưa tài sản vào gói.
 
 **Luật kiểm tra** (theo thứ tự):
 
@@ -1184,7 +1184,7 @@ Không cần PIN: tạo tài sản, liệt kê, xem thông tin, đưa tài sản
 
 **Khóa lũy tiến.** Sai 5 lần liên tiếp thì khóa: lần khóa thứ nhất 15 phút, thứ hai 1 giờ, từ lần thứ ba 24 giờ. Lần sai thứ 5 trả luôn `423`. Mỗi lần khóa gửi email cảnh báo cho Owner. Đúng PIN thì bậc khóa về 0. Đặt PIN hoặc đổi PIN từ chối PIN quá dễ đoán (`VAULT_PIN_TOO_WEAK`).
 
-**Ép đặt PIN.** Kho đã có ít nhất 1 tài sản mà chưa có PIN thì `POST .../assets` và `POST .../assets/text` trả `409 VAULT_PIN_NOT_SET`. Tài sản đầu tiên được tạo bình thường.
+**Ép đặt PIN.** Kho chưa có PIN thì `POST .../assets` và `POST .../assets/text` trả `409 VAULT_PIN_NOT_SET`, kể cả tài sản đầu tiên: phải đặt PIN trước khi thêm tài sản.
 
 **Quên PIN** (`pin/reset`): nhập đúng mật khẩu tài khoản thì đặt PIN mới ngay, không có độ trễ hay link xác nhận; gỡ luôn khóa. Sai mật khẩu → `401 REAUTHENTICATION_FAILED` (phiên đăng nhập vẫn còn, FE không coi là hết phiên). Tài khoản chỉ đăng nhập bằng Google không có mật khẩu → `409 VAULT_PIN_RESET_NEEDS_PASSWORD`. Gọi được cả khi đang bị khóa. Rate limit 10 request/phút/IP cho ba API ghi.
 

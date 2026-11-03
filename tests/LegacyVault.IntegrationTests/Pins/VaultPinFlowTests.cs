@@ -49,32 +49,33 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task FirstAssetIsFree_SecondAssetNeedsAPin()
+    public async Task FirstAssetNeedsAPin()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();
-        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
 
         HttpResponseMessage blocked = await client.PostAsJsonAsync(
-            $"/api/v1/vaults/{vaultId}/assets/text", new { name = "Tài sản hai", content = "nội dung" });
+            $"/api/v1/vaults/{vaultId}/assets/text", new { name = "Tài sản đầu", content = "nội dung" });
         await ApiTestHelpers.AssertProblemAsync(blocked, HttpStatusCode.Conflict, "VAULT_PIN_NOT_SET");
 
         await SetPinAsync(client, vaultId);
-        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản hai");
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
     }
 
     [SqlFact]
     public async Task StatusReportsRequiredAndSet()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();
-        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
 
+        // Kho mới chưa có tài sản: chưa đặt PIN và isRequired = false (isRequired chỉ bật khi kho đã có tài sản).
         JsonElement before = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync(PinUrl(vaultId)));
         Assert.False(before.GetProperty("isSet").GetBoolean());
-        Assert.True(before.GetProperty("isRequired").GetBoolean());
+        Assert.False(before.GetProperty("isRequired").GetBoolean());
 
         await SetPinAsync(client, vaultId);
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         JsonElement after = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync(PinUrl(vaultId)));
         Assert.True(after.GetProperty("isSet").GetBoolean());
+        Assert.True(after.GetProperty("isRequired").GetBoolean());
         Assert.Equal(5, after.GetProperty("attemptsRemaining").GetInt32());
     }
 
@@ -82,8 +83,8 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     public async Task ProtectedActions_NeedTheRightPinInTheHeader()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();
-        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         await SetPinAsync(client, vaultId);
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         string contentUrl = $"/api/v1/vaults/{vaultId}/assets/{assetId}/content";
 
         // Thiếu header: không tính là một lần đoán.
@@ -106,8 +107,8 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     public async Task VerifyPin_ChecksOnlyTheHeader()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();
-        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         await SetPinAsync(client, vaultId);
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         string verifyUrl = PinUrl(vaultId) + "/verify";
 
         await ApiTestHelpers.AssertProblemAsync(
@@ -125,8 +126,8 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     public async Task RenameAsset_NeedsTheRightPinInTheHeader()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();
-        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tên cũ");
         await SetPinAsync(client, vaultId);
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tên cũ");
         string assetUrl = $"/api/v1/vaults/{vaultId}/assets/{assetId}";
         JsonElement asset = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync(assetUrl));
         string etag = asset.GetProperty("etag").GetString()!;
@@ -145,8 +146,8 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     public async Task FiveWrongPins_LockWithHttp423()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();
-        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         await SetPinAsync(client, vaultId);
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         string contentUrl = $"/api/v1/vaults/{vaultId}/assets/{assetId}/content";
 
         for (int i = 0; i < 4; i++)
@@ -167,8 +168,8 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     public async Task ChangePin_NeedsTheCurrentPin()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();
-        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         await SetPinAsync(client, vaultId);
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
 
         HttpResponseMessage wrong = await client.PostAsJsonAsync(
             PinUrl(vaultId) + "/change", new { currentPin = WrongPin, newPin = OtherPin, confirmPin = OtherPin });
@@ -186,8 +187,8 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, email);
         await SetPasswordAsync(email);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
-        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         await SetPinAsync(client, vaultId);
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         string contentUrl = $"/api/v1/vaults/{vaultId}/assets/{assetId}/content";
 
         // Quên PIN nên nhập sai tới khi bị khóa.
@@ -212,8 +213,8 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     public async Task ForgotPin_AccountWithoutPassword_ReturnsConflict()
     {
         (HttpClient client, Guid vaultId) = await NewVaultAsync();
-        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
         await SetPinAsync(client, vaultId);
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Tài sản đầu");
 
         HttpResponseMessage reset = await client.PostAsJsonAsync(
             PinUrl(vaultId) + "/reset", new { password = Password, newPin = OtherPin, confirmPin = OtherPin });
@@ -225,7 +226,7 @@ public sealed class VaultPinFlowTests : IAsyncLifetime
     public async Task AnotherUsersVault_Returns404()
     {
         (HttpClient owner, Guid vaultId) = await NewVaultAsync();
-        await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Tài sản đầu");
+        await SetPinAsync(owner, vaultId);
         HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
 
         HttpResponseMessage response = await stranger.GetAsync(PinUrl(vaultId));

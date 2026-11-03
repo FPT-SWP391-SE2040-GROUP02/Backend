@@ -260,15 +260,20 @@ public sealed class VaultPinServiceTests
     // ---- Chặn thêm tài sản khi chưa có PIN ------------------------------------------------------------------
 
     [Fact]
-    public async Task EnsurePinSetBeforeNewAsset_PassesForTheFirstAsset()
+    public async Task EnsurePinSetBeforeNewAsset_BlocksTheFirstAssetUntilPinIsSet()
     {
         assets.Count = 0;
 
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => service.EnsurePinSetBeforeNewAssetAsync(vault.Id, CancellationToken.None));
+        Assert.Equal(ErrorCode.VaultPinNotSet, error.Code);
+
+        await SetPinAsync();
         await service.EnsurePinSetBeforeNewAssetAsync(vault.Id, CancellationToken.None);
     }
 
     [Fact]
-    public async Task EnsurePinSetBeforeNewAsset_BlocksTheSecondAssetUntilPinIsSet()
+    public async Task EnsurePinSetBeforeNewAsset_BlocksLaterAssetsUntilPinIsSet()
     {
         assets.Count = 1;
 

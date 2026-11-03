@@ -165,11 +165,9 @@ public sealed class VaultPinService : IVaultPinService
 
     public async Task EnsurePinSetBeforeNewAssetAsync(Guid vaultId, CancellationToken ct)
     {
-        if (await pinRepository.FindByVaultIdAsync(vaultId, ct) != null)
-        {
-            return;
-        }
-        if (await assetRepository.CountByVaultIdAsync(vaultId, ct) >= 1)
+        // Phải đặt PIN trước khi thêm tài sản, kể cả tài sản đầu tiên: kho chưa có PIN thì không cho tạo.
+        VaultPin? pin = await pinRepository.FindByVaultIdAsync(vaultId, ct);
+        if (pin == null)
         {
             throw NotSet();
         }
@@ -293,7 +291,7 @@ public sealed class VaultPinService : IVaultPinService
     private static AppException NotSet()
     {
         return new AppException(AppErrorType.Conflict, ErrorCode.VaultPinNotSet,
-            "Kho đã có tài sản nên cần đặt mã PIN trước.");
+            "Kho chưa có mã PIN. Hãy đặt mã PIN cho kho trước.");
     }
 
     private static AppException AlreadySet()
