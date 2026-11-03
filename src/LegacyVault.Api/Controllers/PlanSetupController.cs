@@ -1,5 +1,6 @@
 using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos;
+using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -54,4 +55,28 @@ public sealed class ExecutorInvitationsController(IPlanSetupService service) : C
     [HttpPost("respond"), Authorize]
     public Task<ExecutorInvitationResponse> Respond(RespondExecutorInvitationRequest request, CancellationToken ct) =>
         service.RespondAsync(request, ct);
+
+    /// <summary>
+    /// Lời mời gửi tới email đã xác minh của tài khoản đang đăng nhập: đang chờ và đã kết thúc.
+    /// Không giới hạn tần suất như inspect/respond vì chỉ đọc theo tài khoản, FE gọi ở Tổng quan và sidebar.
+    /// </summary>
+    [HttpGet("mine"), Authorize, DisableRateLimiting]
+    [ProducesResponseType<MyExecutorInvitationsResponse>(StatusCodes.Status200OK)]
+    public Task<MyExecutorInvitationsResponse> Mine(CancellationToken ct)
+    {
+        return service.ListMyInvitationsAsync(ct);
+    }
+
+    /// <summary>Chấp nhận/từ chối lời mời theo id, cùng luật như respond bằng token. Không đúng email được mời → 404.</summary>
+    [HttpPost("{invitationId:guid}/respond"), Authorize]
+    [ProducesResponseType<ExecutorInvitationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ExecutorInvitationResponse> RespondById(
+        Guid invitationId, RespondMyExecutorInvitationRequest request, CancellationToken ct)
+    {
+        return service.RespondByIdAsync(invitationId, request, ct);
+    }
 }
