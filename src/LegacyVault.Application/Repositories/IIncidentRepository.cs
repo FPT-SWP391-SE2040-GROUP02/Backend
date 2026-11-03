@@ -17,7 +17,7 @@ public interface IIncidentRepository
     Task<Incident?> FindOpenAsync(IncidentType type, string targetType, Guid? targetId, CancellationToken ct);
 
     Task<(List<Incident> Items, int TotalCount)> ListAsync(
-        IncidentStatus? status, IncidentType? type, Guid? assigneeUserId, bool overdueOnly, DateTimeOffset now,
+        IncidentStatus? status, IncidentType? type, Guid? assigneeUserId, string? search, bool overdueOnly, DateTimeOffset now,
         int pageIndex, int pageSize, CancellationToken ct);
 
     /// <summary>Id sự cố chưa đóng cần job xử lý: quá hạn nhắc, quá 72 giờ chưa báo Admin, hoặc chưa có người phụ trách.</summary>

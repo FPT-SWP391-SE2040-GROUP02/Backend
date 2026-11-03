@@ -205,7 +205,7 @@ public sealed class FakeIncidentService : IIncidentService
     }
 
     public Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
-        string? status, string? type, Guid? assigneeUserId, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
+        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
     {
         throw new NotSupportedException();
     }

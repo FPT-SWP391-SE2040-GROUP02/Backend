@@ -20,5 +20,5 @@ public interface IPaymentTransactionRepository
     /// thay đổi. pageIndex bắt đầu từ 1. Trả (các dòng của trang, tổng số dòng sau khi lọc).
     /// </summary>
     Task<(List<PaymentTransaction> Items, int Total)> ListAsync(
-        PaymentTransactionStatus? status, int pageIndex, int pageSize, CancellationToken ct);
+        PaymentTransactionStatus? status, string? search, int pageIndex, int pageSize, CancellationToken ct);
 }

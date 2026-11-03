@@ -16,7 +16,7 @@ public interface IAdminPaymentService
     /// Không phải Admin đang hoạt động → 404; status lạ → 400.
     /// </summary>
     Task<PaginatedList<AdminPaymentTransactionResponse>> ListAsync(
-        string? status, int pageIndex, int pageSize, CancellationToken ct);
+        string? status, string? search, int pageIndex, int pageSize, CancellationToken ct);
 }
 
 /// <remarks>
@@ -41,13 +41,13 @@ public sealed class AdminPaymentService : IAdminPaymentService
     }
 
     public async Task<PaginatedList<AdminPaymentTransactionResponse>> ListAsync(
-        string? status, int pageIndex, int pageSize, CancellationToken ct)
+        string? status, string? search, int pageIndex, int pageSize, CancellationToken ct)
     {
         await RequireAdminAsync(ct);
         PaymentTransactionStatus? statusFilter = ParseStatus(status);
 
         (List<PaymentTransaction> items, int total) = await transactionRepository.ListAsync(
-            statusFilter, pageIndex, pageSize, ct);
+            statusFilter, search, pageIndex, pageSize, ct);
 
         PaginatedList<AdminPaymentTransactionResponse> page = new PaginatedList<AdminPaymentTransactionResponse>();
         foreach (PaymentTransaction transaction in items)

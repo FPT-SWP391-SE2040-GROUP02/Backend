@@ -13,6 +13,7 @@ using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
 using LegacyVault.Infrastructure.Security;
+using LegacyVault.Infrastructure.Services;
 using LegacyVault.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -151,6 +152,7 @@ public static class InfrastructureConfig
 
         // Security & Notifications
         services.AddMemoryCache();
+        services.AddScoped<ISystemSettingService, SystemSettingService>();
         services.AddSingleton<IPasswordHasher, Sha256PasswordHasher>();
         services.AddSingleton<IVaultPinHasher, VaultPinHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
