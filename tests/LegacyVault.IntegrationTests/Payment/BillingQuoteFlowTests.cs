@@ -186,9 +186,201 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
             setting.Value = "false";
             setting.DataType = "BOOLEAN";
             setting.Category = "Plans";
+            setting.UpdatedBy = "admin@test";
             db.SystemSettings.Add(setting);
             await db.SaveChangesAsync();
         });
+    }
+
+    /// <summary>Admin lưu một tham số Plans.* (UpdatedBy khác null nên đè lên cấu hình gốc).</summary>
+    private async Task SetAdminSettingAsync(string key, string value, string dataType)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.SystemSettings.Where(s => s.Key == key).ExecuteDeleteAsync();
+            SystemSetting setting = new SystemSetting();
+            setting.Key = key;
+            setting.Value = value;
+            setting.DataType = dataType;
+            setting.Category = "Plans";
+            setting.UpdatedBy = "admin@test";
+            db.SystemSettings.Add(setting);
+            await db.SaveChangesAsync();
+        });
+    }
+
+    [SqlFact]
+    public async Task Sec81_GetPlans_AdminAddsSevenYearPeriodAndStopsFive_ListsOnlySaleYears()
+    {
+        // Chuẩn bị: thêm kỳ 7 năm (kèm giá hai hạng), tạm ngừng kỳ 5 năm
+        await SetAdminSettingAsync("Plans.Xs.Price7Y", "1099000", "NUMBER");
+        await SetAdminSettingAsync("Plans.XsMax.Price7Y", "2199000", "NUMBER");
+        await SetAdminSettingAsync("Plans.Periods",
+            "[{\"years\":1,\"on\":true},{\"years\":3,\"on\":true},{\"years\":5,\"on\":false},{\"years\":7,\"on\":true}]", "JSON");
+        (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
+
+        // Hành động
+        HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
+        HttpResponseMessage sevenYears = await QuoteAsync(client, new { tier = "XS", years = 7, extraSlots = 0 });
+        HttpResponseMessage fiveYears = await QuoteAsync(client, new { tier = "XS", years = 5, extraSlots = 0 });
+
+        // Kiểm tra: bảng giá chỉ có 1, 3, 7 năm; báo giá 7 năm đúng tiền; kỳ 5 năm bị từ chối
+        JsonElement prices = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers")[0].GetProperty("prices");
+        List<int> years = new List<int>();
+        foreach (JsonElement price in prices.EnumerateArray())
+        {
+            years.Add(price.GetProperty("years").GetInt32());
+        }
+        Assert.Equal(new List<int> { 1, 3, 7 }, years);
+        Assert.Equal(HttpStatusCode.OK, sevenYears.StatusCode);
+        Assert.Equal(1099000, (await ApiTestHelpers.ReadJsonAsync(sevenYears)).GetProperty("tierAmount").GetInt64());
+        Assert.Equal(HttpStatusCode.BadRequest, fiveYears.StatusCode);
+    }
+
+    [SqlFact]
+    public async Task Sec81_GetPlansAndQuote_AdminChangesQuotaAndSlots_UsesNewLimits()
+    {
+        // Chuẩn bị: Admin đổi dung lượng XS Max lên 800 MiB và suất người nhận kèm lên 9
+        await SetAdminSettingAsync("Plans.XsMax.QuotaMb", "800", "NUMBER");
+        await SetAdminSettingAsync("Plans.XsMax.Slots", "9", "NUMBER");
+        (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
+
+        // Hành động
+        HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0 });
+
+        // Kiểm tra: bảng giá và báo giá lấy hạn mức mới; hạng XS không bị ảnh hưởng
+        JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers");
+        Assert.Equal(200 * 1048576L, tiers[0].GetProperty("storageQuotaBytes").GetInt64());
+        Assert.Equal(800 * 1048576L, tiers[1].GetProperty("storageQuotaBytes").GetInt64());
+        Assert.Equal(9, tiers[1].GetProperty("includedBeneficiarySlots").GetInt32());
+        JsonElement quoted = await ApiTestHelpers.ReadJsonAsync(quote);
+        Assert.Equal(800 * 1048576L, quoted.GetProperty("storageQuotaBytes").GetInt64());
+        Assert.Equal(9, quoted.GetProperty("includedBeneficiarySlots").GetInt32());
+    }
+
+    [SqlFact]
+    public async Task Sec81_GetPlans_AdminHidesXsAndEditsXsMax_ReturnsEditedXsMax()
+    {
+        // Chuẩn bị: đúng trạng thái admin đã lưu trên máy phát triển
+        await SetAdminSettingAsync("Plans.Xs.Hidden", "true", "BOOLEAN");
+        await SetAdminSettingAsync("Plans.Xs.Price1Y", "10000", "NUMBER");
+        await SetAdminSettingAsync("Plans.XsMax.Price1Y", "50000", "NUMBER");
+        await SetAdminSettingAsync("Plans.XsMax.QuotaMb", "45234", "NUMBER");
+        await SetAdminSettingAsync("Plans.XsMax.Slots", "90", "NUMBER");
+        HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
+
+        // Hành động
+        HttpResponseMessage response = await client.GetAsync("/api/v1/billing/plans");
+
+        // Kiểm tra
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        JsonElement plans = await ApiTestHelpers.ReadJsonAsync(response);
+        JsonElement tiers = plans.GetProperty("tiers");
+        Assert.Equal(2, tiers.GetArrayLength());
+        Assert.True(tiers[0].GetProperty("hidden").GetBoolean());
+        Assert.Equal("XS_MAX", tiers[1].GetProperty("tier").GetString());
+        Assert.Equal(45234 * 1048576L, tiers[1].GetProperty("storageQuotaBytes").GetInt64());
+        Assert.Equal(90, tiers[1].GetProperty("includedBeneficiarySlots").GetInt32());
+        Assert.Equal(50000, tiers[1].GetProperty("prices")[0].GetProperty("amount").GetInt64());
+        Assert.StartsWith("DB-", plans.GetProperty("policyVersion").GetString());
+    }
+
+    /// <summary>Admin tạo gói GOLD (đứng sau XS Max) với giá ba kỳ, dung lượng 1000 MiB, 7 suất, đang mở bán.</summary>
+    private async Task CreateGoldPlanAsync(bool onSale)
+    {
+        await SetAdminSettingAsync("Plans.Catalog", "[{\"code\":\"GOLD\",\"name\":\"Gold\",\"subtitle\":\"Cao nhất\",\"order\":30}]", "JSON");
+        await SetAdminSettingAsync("Plans.GOLD.On", onSale ? "true" : "false", "BOOLEAN");
+        await SetAdminSettingAsync("Plans.GOLD.QuotaMb", "1000", "NUMBER");
+        await SetAdminSettingAsync("Plans.GOLD.Slots", "7", "NUMBER");
+        await SetAdminSettingAsync("Plans.GOLD.Price1Y", "599000", "NUMBER");
+        await SetAdminSettingAsync("Plans.GOLD.Price3Y", "1499000", "NUMBER");
+        await SetAdminSettingAsync("Plans.GOLD.Price5Y", "2399000", "NUMBER");
+    }
+
+    [SqlFact]
+    public async Task Sec81_AdminCreatesNewPlan_ListedPurchasableAndUpgradeTarget()
+    {
+        // Chuẩn bị: gói GOLD do Admin tạo; kho đang dùng XS còn 180 ngày
+        await CreateGoldPlanAsync(onSale: true);
+        (HttpClient client, Guid vaultId, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
+
+        // Hành động 1: bảng giá và báo giá mua mới gói GOLD (kho còn Free)
+        HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
+        HttpResponseMessage purchase = await QuoteAsync(client, new { tier = "GOLD", years = 3, extraSlots = 0 });
+
+        // Kiểm tra 1: GOLD đứng cuối bảng giá với tên và giá do Admin đặt; báo giá đúng tiền, dung lượng, suất
+        JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers");
+        Assert.Equal(3, tiers.GetArrayLength());
+        Assert.Equal("GOLD", tiers[2].GetProperty("tier").GetString());
+        Assert.Equal("Gold", tiers[2].GetProperty("name").GetString());
+        Assert.Equal(1000 * 1048576L, tiers[2].GetProperty("storageQuotaBytes").GetInt64());
+        Assert.True(tiers[2].GetProperty("onSale").GetBoolean());
+        JsonElement quoted = await ApiTestHelpers.ReadJsonAsync(purchase);
+        Assert.Equal("PURCHASE", quoted.GetProperty("kind").GetString());
+        Assert.Equal("GOLD", quoted.GetProperty("tier").GetString());
+        Assert.Equal(1499000, quoted.GetProperty("tierAmount").GetInt64());
+        Assert.Equal(7, quoted.GetProperty("includedBeneficiarySlots").GetInt32());
+
+        // Hành động 2: kho thành XS còn hạn rồi báo giá nâng lên GOLD
+        await MakePaidActiveAsync(vaultId, daysLeft: 180);
+        HttpResponseMessage upgrade = await QuoteAsync(client, new { tier = "GOLD", extraSlots = 0 });
+
+        // Kiểm tra 2: là nâng hạng lên GOLD, hạn mức theo GOLD, giá là phần chênh (nhỏ hơn chênh cả kỳ)
+        JsonElement upgraded = await ApiTestHelpers.ReadJsonAsync(upgrade);
+        Assert.Equal("UPGRADE", upgraded.GetProperty("kind").GetString());
+        Assert.Equal("GOLD", upgraded.GetProperty("tier").GetString());
+        Assert.Equal(7, upgraded.GetProperty("includedBeneficiarySlots").GetInt32());
+        long difference = 599000 - 199000;
+        Assert.InRange(upgraded.GetProperty("tierAmount").GetInt64(), 1, difference);
+    }
+
+    [SqlFact]
+    public async Task Sec83_AdminNewPlanTurnedOff_PurchaseBlockedAsTierNotOnSale()
+    {
+        // Chuẩn bị: gói GOLD tồn tại nhưng đang tạm ngừng
+        await CreateGoldPlanAsync(onSale: false);
+        (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
+
+        // Hành động
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "GOLD", years = 1, extraSlots = 0 });
+
+        // Kiểm tra
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(quote, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
+        Assert.Equal("TIER_NOT_ON_SALE", problem.GetProperty("reason").GetString());
+    }
+
+    [SqlFact]
+    public async Task Sec83_Quote_UnknownPlanCode_Returns400()
+    {
+        // Chuẩn bị
+        (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
+
+        // Hành động
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "PLATINUM", years = 1, extraSlots = 0 });
+
+        // Kiểm tra: mã gói không tồn tại là lỗi dữ liệu, không phải 500
+        Assert.Equal(HttpStatusCode.BadRequest, quote.StatusCode);
+    }
+
+    [SqlFact]
+    public async Task Sec83_Quote_AdminHidesTier_TierNotOnSale()
+    {
+        // Chuẩn bị: Admin xóa (ẩn) hạng XS
+        await SetAdminSettingAsync("Plans.Xs.Hidden", "true", "BOOLEAN");
+        (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
+
+        // Hành động
+        HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+
+        // Kiểm tra: hạng đã xóa vẫn có trong danh sách nhưng kèm hidden và không mua được
+        JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers");
+        Assert.Equal(2, tiers.GetArrayLength());
+        Assert.True(tiers[0].GetProperty("hidden").GetBoolean());
+        Assert.False(tiers[0].GetProperty("onSale").GetBoolean());
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(quote, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
+        Assert.Equal("TIER_NOT_ON_SALE", problem.GetProperty("reason").GetString());
     }
 
     [SqlFact]
@@ -229,7 +421,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Sec83_Quote_PaidVaultTierTurnedOff_AddonBlockedButRenewalAllowed()
+    public async Task Sec83_Quote_PaidVaultTierTurnedOff_AddonAndRenewalBlocked()
     {
         // Chuẩn bị: kho đang dùng XS còn hạn, rồi Admin tắt mở bán XS
         (HttpClient client, Guid vaultId, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
@@ -240,10 +432,11 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         HttpResponseMessage addon = await QuoteAsync(client, new { extraSlots = 1 });
         HttpResponseMessage renewal = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0, renew = true });
 
-        // Kiểm tra: mua thêm suất bị chặn, gia hạn vẫn báo giá được
+        // Kiểm tra: cả mua thêm suất lẫn gia hạn đều bị chặn, kể cả người đang dùng
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(addon, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
         Assert.Equal("TIER_NOT_ON_SALE", problem.GetProperty("reason").GetString());
-        Assert.Equal(HttpStatusCode.OK, renewal.StatusCode);
+        JsonElement renewalProblem = await ApiTestHelpers.AssertProblemAsync(renewal, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
+        Assert.Equal("TIER_NOT_ON_SALE", renewalProblem.GetProperty("reason").GetString());
     }
 
     [SqlFact]
