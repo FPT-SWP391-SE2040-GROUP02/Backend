@@ -74,6 +74,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
 
+    // Cấu hình dịch vụ ngoài do Admin sửa trên web
+    public DbSet<SystemConfig> SystemConfigs => Set<SystemConfig>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

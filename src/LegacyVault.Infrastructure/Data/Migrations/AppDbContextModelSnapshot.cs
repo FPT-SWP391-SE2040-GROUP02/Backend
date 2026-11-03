@@ -2232,6 +2232,68 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("StorageReservations", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.SystemConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("EncryptionKeyId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<byte[]>("SecretsEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("varbinary(4000)");
+
+                    b.Property<string>("ServiceKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("SettingsJson")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Slot")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("UpdateReason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("WrappedDataKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varbinary(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceKey", "Slot")
+                        .IsUnique();
+
+                    b.ToTable("SystemConfigs", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.TwoFactorChallenge", b =>
                 {
                     b.Property<Guid>("Id")

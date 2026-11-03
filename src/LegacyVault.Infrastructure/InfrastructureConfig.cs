@@ -3,6 +3,7 @@ using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Application.Services;
 using LegacyVault.Application.Storage;
 using LegacyVault.Infrastructure.Billing;
@@ -13,6 +14,7 @@ using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Repositories;
 using LegacyVault.Infrastructure.Security;
+using LegacyVault.Infrastructure.ServiceConfig;
 using LegacyVault.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -72,6 +74,15 @@ public static class InfrastructureConfig
         // Xác thực hai bước TOTP của Admin: khóa, mã khôi phục, thử thách; bí mật bọc bằng KEK của DataKeyProtector.
         services.AddScoped<ITwoFactorRepository, TwoFactorRepository>();
         services.AddSingleton<ITotpSecretProtector, TotpSecretProtector>();
+        // Khóa API/mật khẩu của cấu hình dịch vụ ngoài do Admin sửa trên web, cũng bọc bằng KEK của DataKeyProtector.
+        services.AddSingleton<ISystemConfigSecretProtector, SystemConfigSecretProtector>();
+        // Cấu hình dịch vụ ngoài đọc lúc chạy: dòng DB đè appsettings, cache 30 giây, theo dõi lần gọi gần nhất.
+        services.AddMemoryCache();
+        services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();
+        services.AddScoped<ISystemConfigResolver, SystemConfigResolver>();
+        services.AddSingleton<ISystemConfigDefaults, SystemConfigDefaults>();
+        services.AddSingleton<IServiceStatusTracker, ServiceStatusTracker>();
+        services.AddScoped<IServiceConnectionTester, GeminiConnectionTester>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IVaultRepository, VaultRepository>();
         services.AddScoped<IContainerRepository, ContainerRepository>();
