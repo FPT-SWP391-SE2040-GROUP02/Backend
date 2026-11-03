@@ -76,6 +76,47 @@ public static class BillingRules
     /// Chỉ có một đường nâng hạng: kho đang ở XS chọn XS_MAX và không mua thêm suất. Mua thêm suất cần extraSlots từ 1
     /// nên extraSlots = 0 không thể là mua thêm suất. Hạ hạng hoặc chọn cùng hạng không phải nâng hạng.
     /// </summary>
+    /// <summary>
+    /// Như <see cref="DetermineKind(VaultEntitlement, string?, int, bool, DateTimeOffset)"/> nhưng dùng bảng gói hiện hành:
+    /// nâng hạng là chọn gói đứng sau gói đang dùng (theo thứ tự gói) mà không mua thêm suất.
+    /// </summary>
+    public static PaymentOrderKind DetermineKind(
+        IBillingPriceSettings prices, VaultEntitlement entitlement, string? requestedTierText, int extraSlots, bool renew,
+        DateTimeOffset now)
+    {
+        PaymentOrderKind kind = DetermineKind(entitlement, now);
+        if (kind != PaymentOrderKind.Addon)
+        {
+            return kind;
+        }
+        if (renew)
+        {
+            return PaymentOrderKind.Renewal;
+        }
+        if (FindUpgradeTarget(prices, entitlement, requestedTierText, extraSlots) != null)
+        {
+            return PaymentOrderKind.Upgrade;
+        }
+        return kind;
+    }
+
+    /// <summary>Gói đích khi yêu cầu là nâng hạng; null nếu không phải: có mua thêm suất, gói lạ, cùng gói hoặc gói thấp hơn.</summary>
+    public static PlanInfo? FindUpgradeTarget(
+        IBillingPriceSettings prices, VaultEntitlement entitlement, string? requestedTierText, int extraSlots)
+    {
+        if (extraSlots != 0 || string.IsNullOrWhiteSpace(requestedTierText))
+        {
+            return null;
+        }
+        PlanInfo? target = prices.FindPlan(requestedTierText);
+        PlanInfo? current = prices.FindPlan(PlanCodes.Resolve(entitlement.Tier, entitlement.PlanCode));
+        if (target == null || current == null || target.Code == current.Code || target.Order <= current.Order)
+        {
+            return null;
+        }
+        return target;
+    }
+
     public static bool IsUpgradeRequest(VaultEntitlement entitlement, string? requestedTierText, int extraSlots)
     {
         if (extraSlots != 0)
@@ -138,14 +179,21 @@ public static class BillingRules
     public static BillingQuote QuotePurchase(
         IBillingPriceSettings prices, string? tierText, int? years, int extraSlots)
     {
-        ServiceTier tier = ParseSellableTier(tierText);
+        PlanInfo plan = ParseSellablePlan(prices, tierText);
+        if (!plan.CanBuy)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.TierNotOnSale,
+                "Gói này đang tạm ngừng mở bán. Vui lòng chọn gói khác hoặc quay lại sau.");
+        }
         if (years == null)
         {
             throw ValidationErrors.For("years", "Số năm là bắt buộc.");
         }
-        if (!BillingPrices.IsSupportedYears(years.Value))
+        long tierPrice;
+        if (!plan.Prices.TryGetValue(years.Value, out tierPrice))
         {
-            throw ValidationErrors.For("years", "Số năm chỉ có thể là 1, 3 hoặc 5.");
+            throw ValidationErrors.For("years",
+                "Kỳ này không được bán. Số năm hợp lệ: " + string.Join(", ", plan.Prices.Keys.OrderBy(y => y)) + ".");
         }
         if (extraSlots < 0 || extraSlots > BillingPrices.MaxExtraSlotsPerOrder)
         {
@@ -155,14 +203,15 @@ public static class BillingRules
 
         BillingQuote quote = new BillingQuote();
         quote.Kind = PaymentOrderKind.Purchase;
-        quote.Tier = tier;
+        quote.Tier = plan.Tier;
+        quote.PlanCode = plan.Code;
         quote.Years = years.Value;
         quote.ExtraSlots = extraSlots;
-        quote.TierAmount = prices.GetTierPrice(tier, years.Value);
+        quote.TierAmount = tierPrice;
         quote.SlotAmount = prices.SlotPricePerYear * extraSlots * years.Value;
         quote.TotalAmount = quote.TierAmount + quote.SlotAmount;
-        quote.StorageQuotaBytes = BillingPrices.GetStorageQuotaBytes(tier);
-        quote.IncludedBeneficiarySlots = BillingPrices.GetIncludedSlots(tier);
+        quote.StorageQuotaBytes = plan.StorageQuotaBytes;
+        quote.IncludedBeneficiarySlots = plan.IncludedSlots;
         quote.TotalBeneficiarySlots = quote.IncludedBeneficiarySlots + extraSlots;
         quote.ServiceDays = years.Value * BillingPrices.DaysPerYear;
         quote.BaseServiceExpiresAt = null;
@@ -201,6 +250,7 @@ public static class BillingRules
         BillingQuote quote = new BillingQuote();
         quote.Kind = PaymentOrderKind.Addon;
         quote.Tier = entitlement.Tier;
+        quote.PlanCode = PlanCodes.Resolve(entitlement.Tier, entitlement.PlanCode);
         quote.Years = null;
         quote.ExtraSlots = extraSlots;
         quote.TierAmount = 0;
@@ -234,7 +284,7 @@ public static class BillingRules
             && entitlement.ServiceExpiresAt.Value > now)
         {
             quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
-            if (quote.Tier != entitlement.Tier)
+            if (quote.PlanCode != PlanCodes.Resolve(entitlement.Tier, entitlement.PlanCode))
             {
                 throw ValidationErrors.For("tier",
                     "Gia hạn khi còn hạn giữ nguyên hạng hiện tại. Muốn lên hạng cao hơn hãy dùng nâng hạng; muốn hạ hạng hãy chờ hết kỳ.");
@@ -280,7 +330,7 @@ public static class BillingRules
         {
             // Đơn gia hạn sớm: kỳ hiện tại phải còn nguyên như lúc tạo đơn.
             bool unchanged = entitlement.Status == EntitlementStatus.PaidActive
-                && entitlement.Tier == order.Tier
+                && SamePlan(entitlement, order)
                 && entitlement.ServiceExpiresAt != null
                 && entitlement.ServiceExpiresAt.Value == order.BaseServiceExpiresAt.Value;
             if (!unchanged)
@@ -307,6 +357,7 @@ public static class BillingRules
         }
 
         entitlement.Tier = order.Tier;
+        entitlement.PlanCode = PlanCodes.Resolve(order.Tier, order.PlanCode);
         entitlement.Status = EntitlementStatus.PaidActive;
         entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
         entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
@@ -316,14 +367,29 @@ public static class BillingRules
     }
 
     /// <summary>
-    /// Báo giá nâng hạng giữa kỳ XS → XS_MAX: trả phần chênh giá theo thời gian còn lại của kỳ hiện tại.
-    /// Giá = ceil((giá XS_MAX − giá XS của kỳ N năm đã mua) × số giây còn lại / (N × 365 ngày tính bằng giây)).
-    /// N lấy từ đơn mua đã trả gần nhất (<paramref name="paidYears"/>); không có thì dùng bảng giá 1 năm. Số giây còn lại
-    /// không vượt tổng số giây của kỳ. Tính hoàn toàn bằng số nguyên long. Hạn dịch vụ giữ nguyên; dung lượng và suất
-    /// kèm theo lên theo XS_MAX; suất mua thêm đang có được giữ.
+    /// Báo giá nâng hạng giữa kỳ XS → XS_MAX (dùng khi chưa có bảng gói đích). Xem overload có gói đích.
     /// </summary>
     public static BillingQuote QuoteUpgrade(
         IBillingPriceSettings prices, VaultEntitlement entitlement, int? paidYears, int extraSlots, DateTimeOffset now)
+    {
+        PlanInfo? target = prices.FindPlan(PlanCodes.XsMax);
+        if (target == null)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.TierNotOnSale, "Không có gói để nâng hạng.");
+        }
+        return QuoteUpgrade(prices, entitlement, target, paidYears, extraSlots, now);
+    }
+
+    /// <summary>
+    /// Báo giá nâng hạng giữa kỳ lên gói đứng sau: trả phần chênh giá theo thời gian còn lại của kỳ hiện tại.
+    /// Giá = ceil((giá gói đích − giá gói hiện tại của kỳ N năm đã mua) × số giây còn lại / (N × 365 ngày tính bằng giây)).
+    /// N lấy từ đơn mua đã trả gần nhất (<paramref name="paidYears"/>); kỳ đó không còn bán thì lấy kỳ ngắn nhất còn đủ giá cả hai
+    /// gói. Số giây còn lại không vượt tổng số giây của kỳ. Tính hoàn toàn bằng số nguyên long. Hạn dịch vụ giữ nguyên; dung
+    /// lượng và suất kèm theo lên theo gói đích; suất mua thêm đang có được giữ.
+    /// </summary>
+    public static BillingQuote QuoteUpgrade(
+        IBillingPriceSettings prices, VaultEntitlement entitlement, PlanInfo target, int? paidYears, int extraSlots,
+        DateTimeOffset now)
     {
         if (extraSlots != 0)
         {
@@ -339,14 +405,38 @@ public static class BillingRules
         {
             throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported, "Kỳ dịch vụ đã hết hạn.");
         }
+        if (!target.CanBuy)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.TierNotOnSale,
+                "Gói này đang tạm ngừng mở bán. Vui lòng chọn gói khác hoặc quay lại sau.");
+        }
+        PlanInfo? current = prices.FindPlan(PlanCodes.Resolve(entitlement.Tier, entitlement.PlanCode));
+        if (current == null || target.Order <= current.Order)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported, "Chỉ nâng được lên gói cao hơn gói đang dùng.");
+        }
 
-        int years = 1;
-        if (paidYears != null && BillingPrices.IsSupportedYears(paidYears.Value))
+        // Giá chênh tính theo kỳ của đơn mua đã trả; kỳ đó không còn bán (Admin bớt kỳ) thì lấy kỳ ngắn nhất còn đủ giá cả hai gói.
+        int years = 0;
+        if (paidYears != null && current.Prices.ContainsKey(paidYears.Value) && target.Prices.ContainsKey(paidYears.Value))
         {
             years = paidYears.Value;
         }
-        long priceDifference = prices.GetTierPrice(ServiceTier.XsMax, years)
-            - prices.GetTierPrice(ServiceTier.Xs, years);
+        if (years == 0)
+        {
+            foreach (int candidate in prices.SaleYears)
+            {
+                if (years == 0 && current.Prices.ContainsKey(candidate) && target.Prices.ContainsKey(candidate))
+                {
+                    years = candidate;
+                }
+            }
+        }
+        if (years == 0)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.TierNotOnSale, "Hiện không có kỳ nào để tính giá nâng hạng.");
+        }
+        long priceDifference = target.Prices[years] - current.Prices[years];
         long periodSeconds = BillingPrices.SecondsPerYear * years;
         if (remainingSeconds > periodSeconds)
         {
@@ -357,21 +447,21 @@ public static class BillingRules
 
         BillingQuote quote = new BillingQuote();
         quote.Kind = PaymentOrderKind.Upgrade;
-        quote.Tier = ServiceTier.XsMax;
+        quote.Tier = target.Tier;
+        quote.PlanCode = target.Code;
         quote.Years = null;
         quote.ExtraSlots = 0;
         quote.TierAmount = price;
         quote.SlotAmount = 0;
         quote.TotalAmount = price;
-        quote.StorageQuotaBytes = BillingPrices.GetStorageQuotaBytes(ServiceTier.XsMax);
-        quote.IncludedBeneficiarySlots = BillingPrices.GetIncludedSlots(ServiceTier.XsMax);
+        quote.StorageQuotaBytes = target.StorageQuotaBytes;
+        quote.IncludedBeneficiarySlots = target.IncludedSlots;
         quote.TotalBeneficiarySlots = quote.IncludedBeneficiarySlots + entitlement.ExtraBeneficiarySlots;
         quote.ServiceDays = null;
         quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
         quote.PolicyVersion = prices.PolicyVersion;
         return quote;
     }
-
     /// <summary>
     /// Hạn của đơn (ADDON-03): PURCHASE = lúc tạo + 15 phút; ADDON = mốc sớm hơn giữa lúc tạo + 15 phút và hết kỳ hiện tại.
     /// </summary>
@@ -402,6 +492,7 @@ public static class BillingRules
         }
 
         entitlement.Tier = order.Tier;
+        entitlement.PlanCode = PlanCodes.Resolve(order.Tier, order.PlanCode);
         entitlement.Status = EntitlementStatus.PaidActive;
         entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
         entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
@@ -417,7 +508,7 @@ public static class BillingRules
     public static void ApplyAddon(VaultEntitlement entitlement, PaymentOrder order, DateTimeOffset paidAt)
     {
         bool unchanged = entitlement.Status == EntitlementStatus.PaidActive
-            && entitlement.Tier == order.Tier
+            && SamePlan(entitlement, order)
             && entitlement.ServiceExpiresAt != null
             && order.BaseServiceExpiresAt != null
             && entitlement.ServiceExpiresAt.Value == order.BaseServiceExpiresAt.Value
@@ -438,8 +529,9 @@ public static class BillingRules
     /// </summary>
     public static void ApplyUpgrade(VaultEntitlement entitlement, PaymentOrder order, DateTimeOffset paidAt)
     {
+        // Gói hiện tại phải khác gói của đơn (nâng hạng đã được kiểm tra thứ tự gói lúc tạo đơn).
         bool unchanged = entitlement.Status == EntitlementStatus.PaidActive
-            && entitlement.Tier == ServiceTier.Xs
+            && !SamePlan(entitlement, order)
             && entitlement.ServiceExpiresAt != null
             && order.BaseServiceExpiresAt != null
             && entitlement.ServiceExpiresAt.Value == order.BaseServiceExpiresAt.Value
@@ -451,9 +543,16 @@ public static class BillingRules
         }
 
         entitlement.Tier = order.Tier;
+        entitlement.PlanCode = PlanCodes.Resolve(order.Tier, order.PlanCode);
         entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
         entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
         entitlement.UpdatedAt = paidAt;
+    }
+
+    /// <summary>Quyền dịch vụ đang ở đúng gói của đơn (so mã gói; dòng cũ chưa có mã được suy ra từ hạng).</summary>
+    private static bool SamePlan(VaultEntitlement entitlement, PaymentOrder order)
+    {
+        return PlanCodes.Resolve(entitlement.Tier, entitlement.PlanCode) == PlanCodes.Resolve(order.Tier, order.PlanCode);
     }
 
     /// <summary>Đơn còn Pending nhưng đã tới hoặc qua hạn thanh toán (D7: không có job, kiểm lúc đọc/tạo/hủy/trả).</summary>
@@ -468,7 +567,7 @@ public static class BillingRules
     public static bool IsSameSelection(PaymentOrder order, BillingQuote quote)
     {
         return order.Kind == quote.Kind
-            && order.Tier == quote.Tier
+            && PlanCodes.Resolve(order.Tier, order.PlanCode) == PlanCodes.Resolve(quote.Tier, quote.PlanCode)
             && order.Years == quote.Years
             && order.ExtraSlots == quote.ExtraSlots;
     }
@@ -492,23 +591,20 @@ public static class BillingRules
         return new string(characters);
     }
 
-    /// <summary>Đọc hạng từ chuỗi API ("XS" hoặc "XS_MAX"); thiếu hoặc không bán → 400 theo trường tier.</summary>
-    private static ServiceTier ParseSellableTier(string? tierText)
+    /// <summary>Đọc gói từ mã trên API ("XS", "XS_MAX" hoặc mã gói Admin tạo); thiếu hoặc không có → 400 theo trường tier.</summary>
+    private static PlanInfo ParseSellablePlan(IBillingPriceSettings prices, string? tierText)
     {
         if (string.IsNullOrWhiteSpace(tierText))
         {
             throw ValidationErrors.For("tier", "Hạng dịch vụ là bắt buộc.");
         }
-        string normalized = tierText.Trim().ToUpperInvariant();
-        for (int i = 0; i < BillingPrices.SellableTiers.Length; i++)
+        PlanInfo? plan = prices.FindPlan(tierText);
+        if (plan == null)
         {
-            ServiceTier candidate = BillingPrices.SellableTiers[i];
-            if (candidate.ToApiString() == normalized)
-            {
-                return candidate;
-            }
+            throw ValidationErrors.For("tier", "Hạng dịch vụ không hợp lệ. Hạng đang có: "
+                + string.Join(", ", prices.Plans.Where(p => !p.Hidden).Select(p => p.Code)) + ".");
         }
-        throw ValidationErrors.For("tier", "Hạng dịch vụ chỉ có thể là XS hoặc XS_MAX.");
+        return plan;
     }
 
     public static AppException NotPayable(PaymentOrderNotPayableReason reason, string message)

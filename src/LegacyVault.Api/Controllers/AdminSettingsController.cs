@@ -87,6 +87,20 @@ public sealed class AdminSettingsController : ControllerBase
         var updated = new List<SystemSettingResponse>();
         foreach (var item in request.Items)
         {
+            // Kỳ bán mới, giá của kỳ mới và cờ xóa hạng chưa có dòng trong DB: tạo ngay trong lần lưu này (upsert cho khóa Plans.*).
+            var key = item.Key.Trim();
+            if (key.StartsWith("Plans.", StringComparison.Ordinal) && await settingService.GetByKeyAsync(key, ct) == null)
+            {
+                var dataType = key == "Plans.Periods" ? "JSON" : (key.EndsWith(".Hidden", StringComparison.Ordinal) ? "BOOLEAN" : "NUMBER");
+                var created = await settingService.CreateAsync(
+                    new CreateSystemSettingRequest { Key = key, Value = item.Value, DataType = dataType, Category = "Plans", Description = "Do Admin tạo từ trang cấu hình gói", IsEnabled = item.IsEnabled ?? true },
+                    admin.Email,
+                    admin.Id,
+                    request.Reason,
+                    ct);
+                updated.Add(created);
+                continue;
+            }
             var res = await settingService.UpdateAsync(
                 item.Key,
                 new UpdateSystemSettingRequest(item.Value, item.IsEnabled, request.Reason),
@@ -107,7 +121,7 @@ public sealed class AdminSettingsController : ControllerBase
         CancellationToken ct)
     {
         var admin = await RequireAdminAsync(ct);
-        var created = await settingService.CreateAsync(request, admin.Email, ct);
+        var created = await settingService.CreateAsync(request, admin.Email, admin.Id, null, ct);
         return Created($"/api/v1/admin/settings/{created.Key}", created);
     }
 }
