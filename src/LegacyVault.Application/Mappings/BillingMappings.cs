@@ -139,6 +139,8 @@ public static class BillingMappings
         response.Currency = BillingPrices.Currency;
         response.Notice = NoAutoHandoverNotice;
         response.FreeFeatures = prices.FreeFeatures.ToList();
+        response.Free.StorageQuotaBytes = StorageLimits.FreeQuotaBytes;
+        response.Free.IncludedBeneficiarySlots = RuntimeSettings.NonNegativeInt("Plans.Free.Slots", 0);
         response.ExtraSlot.PricePerYear = prices.SlotPricePerYear;
         response.ExtraSlot.MaxPerOrder = prices.MaxExtraSlotsPerOrder;
 

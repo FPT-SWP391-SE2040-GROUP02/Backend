@@ -21,6 +21,7 @@ public sealed class BillingController : ControllerBase
     }
 
     /// <summary>Bảng giá hiện hành (hạng, năm, suất thêm).</summary>
+    [AllowAnonymous]
     [HttpGet("plans")]
     [ProducesResponseType<BillingPlansResponse>(StatusCodes.Status200OK)]
     public Task<BillingPlansResponse> GetPlans(CancellationToken ct)

@@ -16,6 +16,17 @@ public class BillingPlansResponse
 
     /// <summary>Mô tả tính năng của gói Free do Admin viết; rỗng thì Client dùng mô tả mặc định.</summary>
     public List<string> FreeFeatures { get; set; } = new List<string>();
+
+    /// <summary>Dung lượng và số suất người nhận của gói Free theo cấu hình Admin hiện hành.</summary>
+    public FreePlanResponse Free { get; set; } = new FreePlanResponse();
+}
+
+/// <summary>Hạn mức gói Free (không bán nên không có giá hay kỳ).</summary>
+public class FreePlanResponse
+{
+    public long StorageQuotaBytes { get; set; }
+
+    public int IncludedBeneficiarySlots { get; set; }
 }
 
 /// <summary>Một hạng bán được: "XS" hoặc "XS_MAX".</summary>
