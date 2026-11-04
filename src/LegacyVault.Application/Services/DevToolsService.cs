@@ -22,7 +22,9 @@ public sealed class DevToolsService(
     IOperationsRecorder operationsRecorder,
     TimeProvider timeProvider,
     IEkycOptions ekycOptions,
-    IAssetContentStore contentStore) : IDevToolsService
+    IAssetContentStore contentStore,
+    IHandoverRepository handover,
+    IHandoverJob handoverJob) : IDevToolsService
 {
     /// <summary>Đủ cho dữ liệu thử trên máy dev; ô chọn không cần phân trang.</summary>
     private const int MaxVaults = 200;
@@ -67,6 +69,7 @@ public sealed class DevToolsService(
         Guid targetId;
         Guid? periodToProcess = null;
         bool runEntitlementExpiry = false;
+        List<Guid> turnsToExpire = new List<Guid>();
 
         if (key == DevToolsRules.CheckInOverdue || key == DevToolsRules.GraceEnded)
         {
@@ -135,6 +138,27 @@ public sealed class DevToolsService(
             targetType = AuditTargetType.DeathCase;
             targetId = openCase.Id;
         }
+        else if (key == DevToolsRules.RecipientDecisionEnded)
+        {
+            // Dời hạn quyết định (7 ngày sau khi xác nhận danh tính) của mọi lượt đang chờ về quá khứ;
+            // job hết hạn quyết định của hệ thống chuyển lượt sang DECISION_EXPIRED và đóng kế hoạch nếu mọi lượt đã xong.
+            List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
+            EnsureAvailable(DevToolsRules.EvaluateRecipientDecision(turns, now));
+            foreach (HandoverTurn turn in turns)
+            {
+                if (turn.Status == HandoverTurnStatus.ReadyToAccept && turn.DecisionDeadline != null)
+                {
+                    if (turn.DecisionDeadline.Value > past)
+                    {
+                        turn.DecisionDeadline = past;
+                        turn.UpdatedAt = now;
+                    }
+                    turnsToExpire.Add(turn.Id);
+                }
+            }
+            targetType = AuditTargetType.Vault;
+            targetId = vault.Id;
+        }
         else
         {
             DeathCaseObjection? objection = await repository.FindLatestObjectionAsync(vault.Id, ct);
@@ -159,6 +183,11 @@ public sealed class DevToolsService(
         {
             // Chạy ngay job hết hạn cho kho này, giống job nền, để màn hình thấy kho đã sang ân hạn.
             await entitlementExpiryJob.ProcessVaultAsync(vault.Id, ct);
+        }
+        foreach (Guid turnId in turnsToExpire)
+        {
+            // Chạy ngay job hết hạn quyết định cho từng lượt, giống job nền, để màn hình thấy kết quả liền.
+            await handoverJob.ProcessDecisionExpiryAsync(turnId, ct);
         }
 
         Vault refreshed = await LoadVaultAsync(vault.Id, ct);
@@ -439,6 +468,8 @@ public sealed class DevToolsService(
         response.Milestones.Add(DevToolsRules.EvaluateObjectionWindow(openCase, now));
         response.Milestones.Add(DevToolsRules.EvaluateSelfieDeadline(objection, now));
         response.Milestones.Add(DevToolsRules.EvaluateServiceExpired(vault.Entitlement));
+        List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
+        response.Milestones.Add(DevToolsRules.EvaluateRecipientDecision(turns, now));
         return response;
     }
 

@@ -15,6 +15,7 @@ public static class DevToolsRules
     public const string ObjectionWindowEnded = "OBJECTION_WINDOW_ENDED";
     public const string SelfieDeadlinePassed = "SELFIE_DEADLINE_PASSED";
     public const string ServiceExpired = "SERVICE_EXPIRED";
+    public const string RecipientDecisionEnded = "RECIPIENT_DECISION_ENDED";
 
     public const string Available = "AVAILABLE";
     public const string Passed = "PASSED";
@@ -71,6 +72,7 @@ public static class DevToolsRules
         keys.Add(ObjectionWindowEnded);
         keys.Add(SelfieDeadlinePassed);
         keys.Add(ServiceExpired);
+        keys.Add(RecipientDecisionEnded);
         return keys;
     }
 
@@ -218,6 +220,36 @@ public static class DevToolsRules
             return Build(ServiceExpired, NotApplicable, "Kho chưa có hạn dịch vụ.");
         }
         return Build(ServiceExpired, Available, string.Empty);
+    }
+
+    /// <summary>
+    /// Mốc hết 7 ngày quyết định của người nhận: tua được khi còn lượt đã xác nhận danh tính (READY_TO_ACCEPT) và chưa
+    /// tới hạn quyết định; đã có lượt hết hạn quyết định mà không còn lượt nào chờ là đã qua.
+    /// </summary>
+    public static DevMilestoneResponse EvaluateRecipientDecision(List<HandoverTurn> turns, DateTimeOffset now)
+    {
+        bool anyExpired = false;
+        foreach (HandoverTurn turn in turns)
+        {
+            if (turn.Status == HandoverTurnStatus.ReadyToAccept && turn.DecisionDeadline != null)
+            {
+                if (turn.DecisionDeadline.Value > now)
+                {
+                    return Build(RecipientDecisionEnded, Available, string.Empty);
+                }
+                anyExpired = true;
+            }
+            if (turn.Status == HandoverTurnStatus.DecisionExpired)
+            {
+                anyExpired = true;
+            }
+        }
+        if (anyExpired)
+        {
+            return Build(RecipientDecisionEnded, Passed, string.Empty);
+        }
+        return Build(RecipientDecisionEnded, NotApplicable,
+            "Chưa có người nhận nào đã xác nhận danh tính và đang trong 7 ngày quyết định.");
     }
 
     private static DevMilestoneResponse Build(string key, string state, string note)
