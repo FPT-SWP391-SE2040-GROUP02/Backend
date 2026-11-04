@@ -34,49 +34,38 @@ public sealed class SmtpIncidentNoticeSender : IIncidentNoticeSender
     public Task SendAsync(IncidentNotice notice, CancellationToken ct)
     {
         string code = notice.IncidentId.ToString("N").Substring(24).ToUpperInvariant();
-        string subject;
-        string paragraph;
         if (notice.Area == IncidentRecipientArea.Executor && notice.IncidentType == "CHECK_IN_OVERDUE")
         {
-            // DMS-05: Executor không cần biết khái niệm "sự cố"; nói rõ việc cần làm, không có tên hay thông tin Owner.
-            subject = "LegacyVault: chủ kho quá hạn điểm danh, cần bạn kiểm tra";
-            paragraph = "Chủ một kho mà bạn là người thực hiện đã quá hạn điểm danh và hết thời gian chờ. "
-                + "Vui lòng liên hệ kiểm tra tình trạng của chủ kho. Nếu chủ kho vẫn ổn, bạn có thể điểm danh thay; "
-                + "nếu chủ kho đã mất, hãy mở hồ sơ báo tin trên trang người thực hiện.";
-            if (notice.Kind == IncidentNoticeKind.Reminder)
+            // DMS-05: Executor không cần biết khái niệm "sự cố"; dùng mẫu ExecutorOverdueNoticeEmail chuẩn LegacyVaultEmailTheme.
+            string executorLink = clientUrl + "/executor";
+            if (notice.VaultId != null)
             {
-                paragraph = "Nhắc lại: " + paragraph;
+                executorLink = executorLink + "?vault=" + notice.VaultId.Value.ToString();
             }
+            EmailContent overdueEmail = ExecutorOverdueNoticeEmail.Build(
+                notice.FullName, executorLink, notice.Kind == IncidentNoticeKind.Reminder);
+            return mailSender.SendAsync(
+                notice.ToEmail, notice.FullName, overdueEmail.Subject, overdueEmail.TextBody, overdueEmail.HtmlBody, ct);
+        }
+
+        string subject = "LegacyVault: sự cố cần xử lý " + code;
+        string paragraph;
+        if (notice.Kind == IncidentNoticeKind.Assigned)
+        {
+            paragraph = $"Bạn được giao sự cố {code} (loại {notice.IncidentType}), hạn xử lý {notice.DueAt:dd/MM/yyyy HH:mm} UTC.";
+        }
+        else if (notice.Kind == IncidentNoticeKind.Reminder)
+        {
+            paragraph = $"Sự cố {code} (loại {notice.IncidentType}) đã tới hạn xử lý {notice.DueAt:dd/MM/yyyy HH:mm} UTC và chưa đóng.";
         }
         else
         {
-            subject = "LegacyVault: sự cố cần xử lý " + code;
-            if (notice.Kind == IncidentNoticeKind.Assigned)
-            {
-                paragraph = $"Bạn được giao sự cố {code} (loại {notice.IncidentType}), hạn xử lý {notice.DueAt:dd/MM/yyyy HH:mm} UTC.";
-            }
-            else if (notice.Kind == IncidentNoticeKind.Reminder)
-            {
-                paragraph = $"Sự cố {code} (loại {notice.IncidentType}) đã tới hạn xử lý {notice.DueAt:dd/MM/yyyy HH:mm} UTC và chưa đóng.";
-            }
-            else
-            {
-                paragraph = $"Sự cố {code} (loại {notice.IncidentType}) quá 72 giờ chưa được xử lý. Vui lòng điều phối.";
-            }
+            paragraph = $"Sự cố {code} (loại {notice.IncidentType}) quá 72 giờ chưa được xử lý. Vui lòng điều phối.";
         }
 
         string linkText;
         string link;
-        if (notice.Area == IncidentRecipientArea.Executor)
-        {
-            linkText = "Mở trang người thực hiện";
-            link = clientUrl + "/executor";
-            if (notice.VaultId != null)
-            {
-                link = link + "?vault=" + notice.VaultId.Value.ToString();
-            }
-        }
-        else if (notice.Area == IncidentRecipientArea.Verifier)
+        if (notice.Area == IncidentRecipientArea.Verifier)
         {
             linkText = "Mở trang người xét duyệt";
             link = clientUrl + "/notary/workspace";
@@ -88,8 +77,14 @@ public sealed class SmtpIncidentNoticeSender : IIncidentNoticeSender
         }
 
         string text = $"Xin chào {notice.FullName},\n\n{paragraph}\n\n{linkText}: {link}\n";
-        string html = $"<p>Xin chào {WebUtility.HtmlEncode(notice.FullName)},</p><p>{WebUtility.HtmlEncode(paragraph)}</p>"
-            + $"<p><a href=\"{WebUtility.HtmlEncode(link)}\">{WebUtility.HtmlEncode(linkText)}</a></p>";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            subject,
+            notice.FullName,
+            paragraph,
+            link,
+            linkText,
+            "Email này dành cho nhân sự được phân công xử lý sự cố hệ thống.",
+            "Thông báo sự cố");
         return mailSender.SendAsync(notice.ToEmail, notice.FullName, subject, text, html, ct);
     }
 }
