@@ -93,6 +93,8 @@ else
 app.UseRouting();
 app.UseCors(CorsConfig.FrontendPolicy);
 app.UseAuthentication();
+// Bảo trì: cần biết vai trò từ Bearer token nên đặt sau UseAuthentication, trước rate limit và controller.
+app.UseMiddleware<LegacyVault.Api.Security.MaintenanceModeMiddleware>();
 app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
