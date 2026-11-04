@@ -470,6 +470,8 @@ public sealed class VaultPinServiceTests
 
         public Task<int> CountByVaultIdAsync(Guid vaultId, CancellationToken ct) => Task.FromResult(Count);
 
+        public Task<int> CountCreatedSinceAsync(Guid vaultId, DateTimeOffset since, CancellationToken ct) => Task.FromResult(0);
+
         public Task<Asset?> FindByIdAsync(Guid vaultId, Guid assetId, CancellationToken ct) => throw new NotSupportedException();
 
         public Task<List<Asset>> FindOutsideContainerByVaultIdAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();

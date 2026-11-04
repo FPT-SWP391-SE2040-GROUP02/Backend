@@ -8,24 +8,26 @@ public static class VaultPinRules
     public const int PinLength = 6;
 
     /// <summary>Số lần sai liên tiếp trước khi bị khóa.</summary>
-    public const int MaxFailedAttempts = 5;
+    public static int MaxFailedAttempts => RuntimeSettings.Int("Security.MaxPinAttempts", 5);
 
     /// <summary>Thời gian khóa theo bậc: lần khóa thứ nhất 15 phút, thứ hai 1 giờ, từ lần thứ ba 24 giờ.</summary>
-    private static readonly TimeSpan[] LockDurations =
-    [
-        TimeSpan.FromMinutes(15),
-        TimeSpan.FromHours(1),
-        TimeSpan.FromHours(24),
-    ];
+    /// <summary>Số bậc khóa; bậc đầu do Admin đặt (Security.PinLockoutMinutes), các bậc sau không ngắn hơn bậc trước.</summary>
+    private const int LockLevels = 3;
 
     /// <summary>Bậc khóa tối đa (khóa bậc này lặp lại cho các lần sau).</summary>
-    public static int MaxLockLevel => LockDurations.Length;
+    public static int MaxLockLevel => LockLevels;
 
     /// <summary>Thời gian khóa của bậc level (1..MaxLockLevel).</summary>
     public static TimeSpan LockDuration(int level)
     {
-        int index = Math.Clamp(level, 1, LockDurations.Length) - 1;
-        return LockDurations[index];
+        TimeSpan first = RuntimeSettings.Minutes("Security.PinLockoutMinutes", 15);
+        int index = Math.Clamp(level, 1, LockLevels);
+        if (index == 1)
+        {
+            return first;
+        }
+        TimeSpan tier = index == 2 ? TimeSpan.FromHours(1) : TimeSpan.FromHours(24);
+        return tier > first ? tier : first;
     }
 
     /// <summary>true khi đúng 6 chữ số 0-9.</summary>

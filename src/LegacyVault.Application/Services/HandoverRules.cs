@@ -7,13 +7,13 @@ namespace LegacyVault.Application.Services;
 public static class HandoverRules
 {
     /// <summary>Hạn phản hồi lời mời, tính từ lúc mời (INVITE-02).</summary>
-    public static readonly TimeSpan ResponseWindow = TimeSpan.FromDays(5);
+    public static TimeSpan ResponseWindow => RuntimeSettings.Days("Handover.ResponseWindowDays", 5);
 
     /// <summary>Hạn quyết định đồng ý/từ chối, tính từ lúc sẵn sàng nhận (ACCEPT-02).</summary>
-    public static readonly TimeSpan DecisionWindow = TimeSpan.FromDays(7);
+    public static TimeSpan DecisionWindow => RuntimeSettings.Days("Handover.DecisionWindowDays", 7);
 
     /// <summary>Thời hạn quyền xem và tải, tính từ lúc đồng ý (DOWNLOAD-01).</summary>
-    public static readonly TimeSpan GrantWindow = TimeSpan.FromDays(30);
+    public static TimeSpan GrantWindow => RuntimeSettings.Days("Handover.GrantWindowDays", 30);
 
     /// <summary>Lượt đã kết thúc, không đổi trạng thái nữa.</summary>
     public static bool IsTerminal(HandoverTurnStatus status)

@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Services;
 public static class RetentionRules
 {
     /// <summary>RETENTION-01: 30 ngày lưu trước khi xóa.</summary>
-    public static readonly TimeSpan RetentionWindow = TimeSpan.FromDays(30);
+    public static TimeSpan RetentionWindow => RuntimeSettings.Days("Handover.RetentionWindowDays", 30);
 
     /// <summary>CLAIM-06, RETENTION-04: claim đang xử lý giữ dữ liệu tối đa 30 ngày kể từ lúc nhận lượt.</summary>
     public static readonly TimeSpan ClaimHoldWindow = TimeSpan.FromDays(30);

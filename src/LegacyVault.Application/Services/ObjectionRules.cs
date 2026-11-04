@@ -10,13 +10,13 @@ public static class ObjectionRules
     /// ALIVE-03: 7 ngày từ lần báo đầu tiên; báo lại hay thử lại không đặt lại. Chỉ kết luận "chưa đủ bằng chứng" của
     /// Verifier mở cửa sổ 7 ngày mới (BR-76 c, RequestNewSelfie).
     /// </summary>
-    public static readonly TimeSpan SelfieWindow = TimeSpan.FromDays(7);
+    public static TimeSpan SelfieWindow => RuntimeSettings.Days("Alive.SelfieWindowDays", 7);
 
     /// <summary>SRS §6.5: Verifier có 48 giờ để kết luận (sau khi được giao, và không sớm hơn hết hạn selfie + 48 giờ).</summary>
-    public static readonly TimeSpan VerifierDecisionWindow = TimeSpan.FromHours(48);
+    public static TimeSpan VerifierDecisionWindow => RuntimeSettings.Hours("Alive.VerifierDecisionHours", 48);
 
     /// <summary>EKYC-20: tối đa 3 lần selfie không khớp trong 24 giờ.</summary>
-    public const int MaxSelfieFailures = 3;
+    public static int MaxSelfieFailures => RuntimeSettings.Int("Alive.MaxSelfieFailures", 3);
 
     public static readonly TimeSpan SelfieFailureWindow = TimeSpan.FromHours(24);
 

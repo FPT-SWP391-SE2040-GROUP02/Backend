@@ -25,7 +25,7 @@ public sealed partial class AssetService : IAssetService
     private const int MaxContentTypeLength = 100;
     private const string DefaultContentType = "application/octet-stream";
     /// <summary>QUOTA-02: giữ chỗ dung lượng 15 phút cho mỗi lần tải lên.</summary>
-    private static readonly TimeSpan ReservationHold = TimeSpan.FromMinutes(15);
+    private static TimeSpan ReservationHold => RuntimeSettings.Minutes("Limits.ReservationHoldMinutes", 15);
 
     private const string TextContentType = "text/plain; charset=utf-8";
     private const string DefaultSortBy = "createdAt";
@@ -172,8 +172,25 @@ public sealed partial class AssetService : IAssetService
         // Kho đã có tài sản đầu tiên thì phải đặt mã PIN trước khi thêm tài sản tiếp theo.
         await vaultPinService.EnsurePinSetBeforeNewAssetAsync(vault.Id, ct);
 
-        long quotaBytes = vault.Entitlement.StorageQuotaBytes;
+        long quotaBytes = EntitlementLimits.EffectiveQuotaBytes(vault.Entitlement);
         DateTimeOffset now = timeProvider.GetUtcNow();
+
+        // Giới hạn chống lạm dụng do Admin đặt (Limits.*): dung lượng mỗi lần tải, số tài sản mỗi kho, số lần tải mỗi giờ.
+        if (declaredLength > StorageLimits.ConfiguredMaxUploadBytes)
+        {
+            throw new AppException(AppErrorType.PayloadTooLarge, ErrorCode.FileTooLarge,
+                "Tệp vượt giới hạn " + (StorageLimits.ConfiguredMaxUploadBytes / StorageLimits.MiB) + " MiB cho mỗi lần tải lên.");
+        }
+        int maxAssets = RuntimeSettings.Int("Limits.MaxAssetsPerVault", 2000);
+        if (await assetRepository.CountByVaultIdAsync(vault.Id, ct) >= maxAssets)
+        {
+            throw ValidationErrors.For("file", "Kho đã đạt giới hạn " + maxAssets + " tài sản.");
+        }
+        int maxPerHour = RuntimeSettings.Int("Limits.MaxUploadsPerHour", 60);
+        if (await assetRepository.CountCreatedSinceAsync(vault.Id, now.AddHours(-1), ct) >= maxPerHour)
+        {
+            throw ValidationErrors.For("file", "Bạn đã tải lên tối đa " + maxPerHour + " lần trong một giờ. Vui lòng thử lại sau.");
+        }
 
         // QUOTA-02: giữ chỗ 15 phút, tính cả phần các lần tải khác đang giữ. Kiểm và ghi chỗ giữ dưới khóa của kho.
         ReservationOutcome outcome = new ReservationOutcome();

@@ -26,6 +26,9 @@ public interface IAssetRepository
     /// <summary>Số tài sản của kho (dùng để biết kho đã có tài sản nào chưa khi áp mã PIN).</summary>
     Task<int> CountByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
+    /// <summary>Số tài sản của kho tạo từ mốc since trở đi (giới hạn số lần tải lên mỗi giờ).</summary>
+    Task<int> CountCreatedSinceAsync(Guid vaultId, DateTimeOffset since, CancellationToken ct);
+
     /// <summary>Đánh dấu "sẽ INSERT" tài sản mới.</summary>
     void Add(Asset asset);
 

@@ -14,7 +14,7 @@ public static class DeathCaseReviewRules
     public const int MaxReasonLength = 1000;
 
     /// <summary>DEATH-01: Executor có 7 ngày để bổ sung sau yêu cầu của Verifier.</summary>
-    public const int SupplementDueDays = 7;
+    public static int SupplementDueDays => RuntimeSettings.Int("DeathCase.SupplementDueDays", 7);
 
     /// <summary>AC-71: hồ sơ đã có quyết định cuối (duyệt hoặc từ chối).</summary>
     public static bool IsClosed(DeathCaseStatus status)

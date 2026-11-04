@@ -7,10 +7,10 @@ namespace LegacyVault.Application.Services;
 public static class CheckInRules
 {
     /// <summary>Chu kỳ điểm danh mặc định (ngày).</summary>
-    public const int DefaultCycleDays = 30;
+    public static int DefaultCycleDays => RuntimeSettings.Int("CheckIn.DefaultCycleDays", 30);
 
     /// <summary>Thời gian chờ mặc định sau hạn điểm danh (ngày).</summary>
-    public const int DefaultGraceDays = 7;
+    public static int DefaultGraceDays => RuntimeSettings.Int("CheckIn.DefaultGraceDays", 7);
 
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
@@ -47,12 +47,12 @@ public static class CheckInRules
 
     public static bool IsAllowedCycleDays(int days)
     {
-        return Array.IndexOf(AllowedCycleDays, days) >= 0;
+        return days == DefaultCycleDays || Array.IndexOf(AllowedCycleDays, days) >= 0;
     }
 
     public static bool IsAllowedGraceDays(int days)
     {
-        return Array.IndexOf(AllowedGraceDays, days) >= 0;
+        return days == DefaultGraceDays || Array.IndexOf(AllowedGraceDays, days) >= 0;
     }
 
     /// <summary>Kế hoạch đang chạy lịch điểm danh: Owner được điểm danh (SRS §11.2).</summary>
