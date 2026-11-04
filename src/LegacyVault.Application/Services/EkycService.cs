@@ -238,13 +238,17 @@ public sealed class EkycService : IEkycService
             }
         }
 
-        // Bản tự khai không nâng kết quả từ ảnh thành MATCHED. Riêng nơi cư trú của Owner đăng ký: lưu MÃ HÓA cùng bản tạm
-        // danh tính để gắn vào OwnerIdentity khi lượt đạt. CCCD, họ tên, ngày sinh vẫn lấy từ OCR, không ghi đè bằng bản khai.
+        // Bản tự khai không nâng kết quả từ ảnh thành MATCHED. Owner đăng ký: họ tên, ngày sinh và nơi cư trú Owner xác nhận
+        // được lưu MÃ HÓA vào bản tạm danh tính để gắn vào OwnerIdentity khi lượt đạt, vì OCR hay đọc sai tên tiếng Việt và
+        // tên sai bị lưu thì lần eKYC sau không đối chiếu được. Số CCCD vẫn giữ theo OCR: kiểm tra trùng CCCD giữa các
+        // tài khoản và với người nhận đã chạy trên số đọc từ ảnh. Đã có danh tính gắn trước đó thì bản tạm không được dùng.
         if (purpose == EkycPurpose.OwnerEnrollment)
         {
             OwnerIdentityData? pending = identityProtector.UnprotectPending(verification);
             if (pending != null)
             {
+                pending.FullName = EkycRules.NormalizeName(request.FullName);
+                pending.DateOfBirth = request.DateOfBirth!.Value;
                 pending.ResidenceAddress = request.ResidenceAddress.Trim();
                 identityProtector.ProtectPending(verification, pending);
                 await unitOfWork.SaveChangesAsync(ct);
