@@ -1,12 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Auth;
@@ -124,6 +128,66 @@ public sealed class MaintenanceModeTests : IAsyncLifetime
         HttpResponseMessage resumed = await RefreshAsync(browser);
         Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
         Assert.True(HasRefreshCookie(resumed));
+    }
+
+    [SqlFact]
+    public async Task MaintenanceOn_GoogleLoginIsClosed_UntilMaintenanceEnds()
+    {
+        HttpClient admin = await AdminClientAsync();
+        HttpClient browser = SecureClient();
+        await SetMaintenanceAsync(admin, true);
+
+        // Đóng ngay ở middleware, trước cả bước kiểm CSRF và token Google, nên không tạo được tài khoản mới.
+        HttpResponseMessage google = await browser.PostAsJsonAsync("/api/v1/auth/google",
+            new { idToken = "google-token", nonce = "nonce", rememberMe = false });
+        await ApiTestHelpers.AssertProblemAsync(google, HttpStatusCode.ServiceUnavailable, "MAINTENANCE_MODE");
+        HttpResponseMessage linkConfirm = await browser.PostAsJsonAsync("/api/v1/auth/google/link-confirm",
+            new { linkTicket = "ticket", password = "Mat-khau-1!" });
+        await ApiTestHelpers.AssertProblemAsync(linkConfirm, HttpStatusCode.ServiceUnavailable, "MAINTENANCE_MODE");
+        int users = await CountUsersAsync();
+
+        // Hết bảo trì: cổng Google mở lại (request thiếu CSRF bị từ chối bởi bước kiểm thường lệ, không còn 503).
+        await SetMaintenanceAsync(admin, false);
+        HttpResponseMessage reopened = await browser.PostAsJsonAsync("/api/v1/auth/google",
+            new { idToken = "google-token", nonce = "nonce", rememberMe = false });
+        Assert.NotEqual(HttpStatusCode.ServiceUnavailable, reopened.StatusCode);
+        Assert.Equal(users, await CountUsersAsync());
+    }
+
+    [SqlFact]
+    public async Task MaintenanceOn_SessionIssuer_UsedByGoogleAndTwoFactor_OpensOnlyAdminSessions()
+    {
+        HttpClient adminApi = await AdminClientAsync();
+        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        await SetMaintenanceAsync(adminApi, true);
+
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            LoginSessionIssuer issuer = scope.ServiceProvider.GetRequiredService<LoginSessionIssuer>();
+            AppException blocked = await Assert.ThrowsAsync<AppException>(
+                () => issuer.OpenSessionAsync(owner, false, CancellationToken.None));
+            Assert.Equal(ErrorCode.MaintenanceMode, blocked.Code);
+        }
+        Assert.Equal(0, await CountSessionsAsync(owner.Id));
+
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            LoginSessionIssuer issuer = scope.ServiceProvider.GetRequiredService<LoginSessionIssuer>();
+            AuthResult result = await issuer.OpenSessionAsync(admin, false, CancellationToken.None);
+            Assert.False(string.IsNullOrEmpty(result.RefreshToken));
+        }
+        Assert.Equal(1, await CountSessionsAsync(admin.Id));
+    }
+
+    private async Task<int> CountUsersAsync()
+    {
+        int count = 0;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            count = await db.Users.CountAsync();
+        });
+        return count;
     }
 
     private async Task<HttpClient> AdminClientAsync()

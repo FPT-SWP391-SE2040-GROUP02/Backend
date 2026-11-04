@@ -13,8 +13,11 @@ namespace LegacyVault.Api.Security;
 /// <remarks>
 /// - Chạy sau UseAuthentication để biết vai trò của Bearer token (claim "role" = "ADMIN").
 /// - Luôn cho qua các đường không phải API (health, OpenAPI), cờ công khai để giao diện biết đang bảo trì,
-///   và các bước đăng nhập. Chính các service đăng nhập chặn tài khoản không phải Admin, vì trước khi đăng nhập
-///   chưa biết vai trò.
+///   và các bước đăng nhập bằng email, mật khẩu (kể cả xác thực hai bước). Chính các service đăng nhập chặn tài khoản
+///   không phải Admin, vì trước khi đăng nhập chưa biết vai trò.
+/// - Đăng nhập Google (/auth/google, /auth/google/link-confirm) bị đóng hẳn khi bảo trì: tài khoản Admin chỉ tạo
+///   trực tiếp trên hệ thống và đăng nhập bằng email, mật khẩu; đóng ở đây để người mới không được tạo tài khoản
+///   Google trong lúc bảo trì. Hết bảo trì thì Google chạy như cũ.
 /// - Cho qua webhook SePay để không mất giao dịch ngân hàng báo về trong lúc bảo trì.
 /// - Ghi ProblemDetails trực tiếp, không ném exception, để không ghi log lỗi cho mỗi request bị chặn.
 /// - Không đọc được cờ (database dừng) thì cho qua: bảo trì không thay cho xác thực và phân quyền ở endpoint.
@@ -31,8 +34,6 @@ public sealed class MaintenanceModeMiddleware
         "/v1/auth/login",
         "/v1/auth/refresh",
         "/v1/auth/logout",
-        "/v1/auth/google",
-        "/v1/auth/google/link-confirm",
         "/v1/auth/2fa/verify",
         "/v1/billing/sepay/webhook",
     };
