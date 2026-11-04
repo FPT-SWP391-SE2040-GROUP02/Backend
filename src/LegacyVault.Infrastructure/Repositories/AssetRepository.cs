@@ -23,6 +23,11 @@ public sealed class AssetRepository(AppDbContext context) : IAssetRepository
             .FirstOrDefaultAsync(a => a.Id == assetId && a.VaultId == vaultId, ct);
     }
 
+    public Task<int> CountCreatedSinceAsync(Guid vaultId, DateTimeOffset since, CancellationToken ct)
+    {
+        return context.Assets.CountAsync(a => a.VaultId == vaultId && a.CreatedAt >= since, ct);
+    }
+
     public Task<int> CountByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
         return context.Assets.CountAsync(a => a.VaultId == vaultId, ct);

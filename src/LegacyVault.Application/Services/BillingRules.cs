@@ -195,10 +195,10 @@ public static class BillingRules
             throw ValidationErrors.For("years",
                 "Kỳ này không được bán. Số năm hợp lệ: " + string.Join(", ", plan.Prices.Keys.OrderBy(y => y)) + ".");
         }
-        if (extraSlots < 0 || extraSlots > BillingPrices.MaxExtraSlotsPerOrder)
+        if (extraSlots < 0 || extraSlots > prices.MaxExtraSlotsPerOrder)
         {
             throw ValidationErrors.For("extraSlots",
-                $"Số suất mua thêm phải từ 0 đến {BillingPrices.MaxExtraSlotsPerOrder}.");
+                $"Số suất mua thêm phải từ 0 đến {prices.MaxExtraSlotsPerOrder}.");
         }
 
         BillingQuote quote = new BillingQuote();
@@ -226,10 +226,10 @@ public static class BillingRules
     public static BillingQuote QuoteAddon(
         IBillingPriceSettings prices, VaultEntitlement entitlement, int extraSlots, DateTimeOffset now)
     {
-        if (extraSlots < 1 || extraSlots > BillingPrices.MaxExtraSlotsPerOrder)
+        if (extraSlots < 1 || extraSlots > prices.MaxExtraSlotsPerOrder)
         {
             throw ValidationErrors.For("extraSlots",
-                $"Số suất mua thêm phải từ 1 đến {BillingPrices.MaxExtraSlotsPerOrder}.");
+                $"Số suất mua thêm phải từ 1 đến {prices.MaxExtraSlotsPerOrder}.");
         }
         if (entitlement.ServiceExpiresAt == null)
         {
@@ -468,7 +468,14 @@ public static class BillingRules
     public static DateTimeOffset ComputeOrderExpiresAt(
         PaymentOrderKind kind, DateTimeOffset now, DateTimeOffset? serviceExpiresAt)
     {
-        DateTimeOffset byLifetime = now + BillingPrices.OrderLifetime;
+        return ComputeOrderExpiresAt(kind, now, serviceExpiresAt, BillingPrices.OrderLifetime);
+    }
+
+    /// <summary>Như trên nhưng thời gian chờ do Admin cấu hình (<see cref="IBillingPriceSettings.OrderLifetime"/>).</summary>
+    public static DateTimeOffset ComputeOrderExpiresAt(
+        PaymentOrderKind kind, DateTimeOffset now, DateTimeOffset? serviceExpiresAt, TimeSpan lifetime)
+    {
+        DateTimeOffset byLifetime = now + lifetime;
         if ((kind == PaymentOrderKind.Addon || kind == PaymentOrderKind.Upgrade) && serviceExpiresAt != null)
         {
             if (serviceExpiresAt.Value < byLifetime)

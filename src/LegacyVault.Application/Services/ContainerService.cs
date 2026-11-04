@@ -68,9 +68,10 @@ public sealed class ContainerService : IContainerService
         // Hạn chế đã biết: hai request tạo đồng thời có thể cùng qua bước đếm này và vượt 50
         // (chờ chốt concurrency token cho HandoverPlan.ConfigVersion).
         int activeCount = await containerRepository.CountActiveByVaultIdAsync(vault.Id, ct);
-        if (activeCount >= ContainerRules.MaxActiveContainers)
+        int maxContainers = ContainerRules.MaxActiveFor(vault.Entitlement);
+        if (activeCount >= maxContainers)
         {
-            throw LimitExceeded();
+            throw LimitExceeded(maxContainers);
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -397,7 +398,7 @@ public sealed class ContainerService : IContainerService
         if (!alreadyDesignated)
         {
             int usedSlots = await containerRepository.CountUsedBeneficiarySlotsAsync(vault.Id, ct);
-            int maxSlots = vault.Entitlement.IncludedBeneficiarySlots + vault.Entitlement.ExtraBeneficiarySlots;
+            int maxSlots = EntitlementLimits.EffectiveTotalSlots(vault.Entitlement);
             if (usedSlots + 1 > maxSlots)
             {
                 throw SlotsExceeded(usedSlots, maxSlots);
@@ -611,11 +612,11 @@ public sealed class ContainerService : IContainerService
             "Kho đã dùng hết suất người nhận. Vui lòng mua thêm suất.", extensions);
     }
 
-    private static AppException LimitExceeded()
+    private static AppException LimitExceeded(int maxContainers)
     {
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["maxContainers"] = ContainerRules.MaxActiveContainers;
+        extensions["maxContainers"] = maxContainers;
         return new AppException(AppErrorType.Conflict, ErrorCode.ContainerLimitExceeded,
-            "Kho đã có đủ 50 gói chưa bị xóa.", extensions);
+            "Kho đã có đủ " + maxContainers + " gói chưa bị xóa.", extensions);
     }
 }

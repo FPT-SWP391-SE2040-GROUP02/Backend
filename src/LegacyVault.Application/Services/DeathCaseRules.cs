@@ -9,19 +9,19 @@ namespace LegacyVault.Application.Services;
 public static class DeathCaseRules
 {
     /// <summary>DEATH-08: Owner có 72 giờ phản đối, tính từ lúc thông báo được giao.</summary>
-    public const int ObjectionHours = 72;
+    public static int ObjectionHours => RuntimeSettings.Int("DeathCase.ObjectionHours", 72);
 
     /// <summary>ASSIGN-01: Verifier có 48 giờ để xét hồ sơ được giao.</summary>
-    public const int ReviewDueHours = 48;
+    public static int ReviewDueHours => RuntimeSettings.Int("DeathCase.ReviewDueHours", 48);
 
     /// <summary>NFR-09: tối đa 10 tệp giấy chứng tử mỗi phiên bản.</summary>
-    public const int MaxFilesPerVersion = 10;
+    public static int MaxFilesPerVersion => RuntimeSettings.Int("DeathCase.MaxFilesPerVersion", 10);
 
     /// <summary>NFR-09: mỗi tệp tối đa 20 MiB.</summary>
-    public const long MaxFileBytes = 20L * 1024 * 1024;
+    public static long MaxFileBytes => RuntimeSettings.Int("DeathCase.MaxFileSizeMb", 20) * 1024L * 1024;
 
     /// <summary>D3: thử gửi thông báo tối đa 5 lần rồi đánh dấu Failed.</summary>
-    public const int MaxNoticeAttempts = 5;
+    public static int MaxNoticeAttempts => RuntimeSettings.Int("DeathCase.MaxNoticeAttempts", 5);
 
     /// <summary>Số ký tự của Id hồ sơ dùng làm mã rút gọn trong thư.</summary>
     public const int CaseCodeLength = 8;

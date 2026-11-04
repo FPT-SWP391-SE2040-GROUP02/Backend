@@ -91,6 +91,7 @@ public sealed class BillingService : IBillingService
 
         // Sau DiscardPendingChanges các entity đã nạp bị bỏ, nên chỉ giữ lại các giá trị cần dùng.
         Guid vaultId = eligibility.Vault.Id;
+        TimeSpan orderLifetime = eligibility.Prices.OrderLifetime;
 
         for (int attempt = 0; attempt < MaxCreateAttempts; attempt++)
         {
@@ -115,7 +116,7 @@ public sealed class BillingService : IBillingService
                 }
             }
 
-            PaymentOrder order = BuildOrder(vaultId, userId, quote, now);
+            PaymentOrder order = BuildOrder(vaultId, userId, quote, now, orderLifetime);
             auditLogRepository.Add(AuditRules.OwnerAction(
                 vaultId, userId, AuditAction.PaymentOrderCreated, AuditTargetType.PaymentOrder, order.Id, null, now));
 
@@ -401,7 +402,8 @@ public sealed class BillingService : IBillingService
     }
 
     /// <summary>Dựng đơn Pending từ báo giá: giá, dung lượng, số suất, phiên bản chính sách đều được chốt tại đây (PAY-11).</summary>
-    private static PaymentOrder BuildOrder(Guid vaultId, Guid ownerId, BillingQuote quote, DateTimeOffset now)
+    private static PaymentOrder BuildOrder(
+        Guid vaultId, Guid ownerId, BillingQuote quote, DateTimeOffset now, TimeSpan orderLifetime)
     {
         PaymentOrder order = new PaymentOrder();
         order.VaultId = vaultId;
@@ -420,8 +422,8 @@ public sealed class BillingService : IBillingService
         order.PolicyVersion = quote.PolicyVersion;
         order.PaymentCode = BillingRules.NewPaymentCode();
         order.Status = PaymentOrderStatus.Pending;
-        // ADDON-03: đơn mua thêm hết hạn ở mốc sớm hơn giữa 15 phút và hết kỳ hiện tại.
-        order.ExpiresAt = BillingRules.ComputeOrderExpiresAt(quote.Kind, now, quote.BaseServiceExpiresAt);
+        // ADDON-03: đơn mua thêm hết hạn ở mốc sớm hơn giữa thời gian chờ (Admin cấu hình, mặc định 15 phút) và hết kỳ hiện tại.
+        order.ExpiresAt = BillingRules.ComputeOrderExpiresAt(quote.Kind, now, quote.BaseServiceExpiresAt, orderLifetime);
         order.CreatedAt = now;
         order.UpdatedAt = now;
         return order;

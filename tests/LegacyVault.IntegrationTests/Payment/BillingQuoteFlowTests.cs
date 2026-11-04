@@ -364,6 +364,27 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Sec81_GetPlans_AdminWritesFeatureLines_ReturnsTrimmedLinesWithoutBlanks()
+    {
+        // Chuẩn bị: Admin viết mô tả tính năng cho XS Max và Free (có dòng trống và khoảng trắng thừa)
+        await SetAdminSettingAsync("Plans.XsMax.Features", "[\"  Lưu 500 MiB  \",\"\",\"Hỗ trợ ưu tiên\"]", "JSON");
+        await SetAdminSettingAsync("Plans.Free.Features", "[\"Dùng thử miễn phí\"]", "JSON");
+        HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
+
+        // Hành động
+        HttpResponseMessage response = await client.GetAsync("/api/v1/billing/plans");
+
+        // Kiểm tra: dòng được cắt khoảng trắng, bỏ dòng trống; gói chưa viết thì rỗng để Client dùng mô tả mặc định
+        JsonElement plans = await ApiTestHelpers.ReadJsonAsync(response);
+        JsonElement xsMax = plans.GetProperty("tiers")[1].GetProperty("features");
+        Assert.Equal(2, xsMax.GetArrayLength());
+        Assert.Equal("Lưu 500 MiB", xsMax[0].GetString());
+        Assert.Equal("Hỗ trợ ưu tiên", xsMax[1].GetString());
+        Assert.Equal(0, plans.GetProperty("tiers")[0].GetProperty("features").GetArrayLength());
+        Assert.Equal("Dùng thử miễn phí", plans.GetProperty("freeFeatures")[0].GetString());
+    }
+
+    [SqlFact]
     public async Task Sec83_Quote_AdminHidesTier_TierNotOnSale()
     {
         // Chuẩn bị: Admin xóa (ẩn) hạng XS

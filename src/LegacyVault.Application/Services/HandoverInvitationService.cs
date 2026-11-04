@@ -20,7 +20,7 @@ namespace LegacyVault.Application.Services;
 public sealed class HandoverInvitationService : IHandoverInvitationService
 {
     /// <summary>Giãn cách tối thiểu giữa hai lần gửi để Executor không dội thư vào người nhận.</summary>
-    public static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(15);
+    public static TimeSpan ResendCooldown => RuntimeSettings.Minutes("Handover.ResendCooldownMinutes", 15);
 
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaults;

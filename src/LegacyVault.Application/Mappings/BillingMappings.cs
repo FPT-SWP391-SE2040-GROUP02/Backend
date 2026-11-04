@@ -138,8 +138,9 @@ public static class BillingMappings
         response.PolicyVersion = prices.PolicyVersion;
         response.Currency = BillingPrices.Currency;
         response.Notice = NoAutoHandoverNotice;
+        response.FreeFeatures = prices.FreeFeatures.ToList();
         response.ExtraSlot.PricePerYear = prices.SlotPricePerYear;
-        response.ExtraSlot.MaxPerOrder = BillingPrices.MaxExtraSlotsPerOrder;
+        response.ExtraSlot.MaxPerOrder = prices.MaxExtraSlotsPerOrder;
 
         foreach (PlanInfo plan in prices.Plans)
         {
@@ -148,6 +149,7 @@ public static class BillingMappings
             tierResponse.Name = plan.Name;
             tierResponse.Subtitle = plan.Subtitle;
             tierResponse.Order = plan.Order;
+            tierResponse.Features = plan.Features.ToList();
             tierResponse.OnSale = plan.CanBuy;
             tierResponse.Hidden = plan.Hidden;
             tierResponse.StorageQuotaBytes = plan.StorageQuotaBytes;

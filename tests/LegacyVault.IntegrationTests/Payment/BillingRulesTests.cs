@@ -262,6 +262,20 @@ public sealed class BillingRulesTests
     }
 
     [Fact]
+    public void OrderExpiry_UsesAdminConfiguredLifetime()
+    {
+        // Chuẩn bị / Hành động: Admin đặt hạn đơn 20 phút
+        DateTimeOffset purchase = BillingRules.ComputeOrderExpiresAt(
+            PaymentOrderKind.Purchase, Now, null, TimeSpan.FromMinutes(20));
+        DateTimeOffset addonNearEnd = BillingRules.ComputeOrderExpiresAt(
+            PaymentOrderKind.Addon, Now, Now.AddMinutes(5), TimeSpan.FromMinutes(20));
+
+        // Kiểm tra: vẫn lấy mốc sớm hơn khi kỳ sắp hết
+        Assert.Equal(Now.AddMinutes(20), purchase);
+        Assert.Equal(Now.AddMinutes(5), addonNearEnd);
+    }
+
+    [Fact]
     public void Sec83_PurchaseOrderExpiry_IsFifteenMinutes()
     {
         // Chuẩn bị / Hành động

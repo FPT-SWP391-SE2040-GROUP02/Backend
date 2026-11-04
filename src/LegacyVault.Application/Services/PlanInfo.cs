@@ -27,6 +27,9 @@ public sealed class PlanInfo
     /// <summary>true khi Admin đã xóa (ẩn) gói: không bán nữa, người đang dùng vẫn dùng đến hết kỳ.</summary>
     public bool Hidden { get; set; }
 
+    /// <summary>Các dòng mô tả tính năng do Admin viết; rỗng thì Client dùng mô tả mặc định.</summary>
+    public IReadOnlyList<string> Features { get; set; } = new List<string>();
+
     public long StorageQuotaBytes { get; set; }
 
     public int IncludedSlots { get; set; }

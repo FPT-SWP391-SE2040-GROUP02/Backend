@@ -12,13 +12,13 @@ namespace LegacyVault.Application.Services;
 public static class IncidentRules
 {
     /// <summary>Hạn xử lý mặc định và mốc nhắc người phụ trách (bảng thời hạn: việc thủ công nhắc sau 48 giờ).</summary>
-    public static readonly TimeSpan ReminderAfter = TimeSpan.FromHours(48);
+    public static TimeSpan ReminderAfter => RuntimeSettings.Hours("Incident.ReminderAfterHours", 48);
 
     /// <summary>Báo Admin khi quá 72 giờ chưa xử lý.</summary>
-    public static readonly TimeSpan EscalateAfter = TimeSpan.FromHours(72);
+    public static TimeSpan EscalateAfter => RuntimeSettings.Hours("Incident.EscalateAfterHours", 72);
 
     /// <summary>Xem lại sự cố và hold tối đa 7 ngày một lần.</summary>
-    public static readonly TimeSpan MaxReviewInterval = TimeSpan.FromDays(7);
+    public static TimeSpan MaxReviewInterval => RuntimeSettings.Days("Incident.MaxReviewIntervalDays", 7);
 
     /// <summary>Chưa có ai nhận: xem lại sau 1 ngày để không bị trôi (ASSIGN-05).</summary>
     public static readonly TimeSpan UnassignedReview = TimeSpan.FromDays(1);

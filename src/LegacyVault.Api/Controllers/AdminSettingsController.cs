@@ -91,7 +91,7 @@ public sealed class AdminSettingsController : ControllerBase
             var key = item.Key.Trim();
             if (key.StartsWith("Plans.", StringComparison.Ordinal) && await settingService.GetByKeyAsync(key, ct) == null)
             {
-                var dataType = key == "Plans.Periods" ? "JSON" : (key.EndsWith(".Hidden", StringComparison.Ordinal) ? "BOOLEAN" : "NUMBER");
+                var dataType = key == "Plans.Periods" || key == "Plans.Catalog" || key.EndsWith(".Features", StringComparison.Ordinal) ? "JSON" : (key.EndsWith(".Hidden", StringComparison.Ordinal) ? "BOOLEAN" : "NUMBER");
                 var created = await settingService.CreateAsync(
                     new CreateSystemSettingRequest { Key = key, Value = item.Value, DataType = dataType, Category = "Plans", Description = "Do Admin tạo từ trang cấu hình gói", IsEnabled = item.IsEnabled ?? true },
                     admin.Email,

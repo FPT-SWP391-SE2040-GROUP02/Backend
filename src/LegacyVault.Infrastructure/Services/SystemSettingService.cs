@@ -89,6 +89,27 @@ public sealed class SystemSettingService : ISystemSettingService
                         $"Kỳ của '{key}' phải từ 1 đến {BillingPriceSettings.MaxSaleYears} năm.");
                 }
             }
+            else if (PlanPriceRules.IsFeaturesKey(key))
+            {
+                if (PlanPriceRules.ParseFeatures(text) == null)
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        $"Mô tả tính năng của '{key}' phải là mảng chuỗi, tối đa {PlanPriceRules.MaxFeatureLines} dòng, mỗi dòng tối đa {PlanPriceRules.MaxFeatureLength} ký tự.");
+                }
+            }
+            else if (PlanPriceRules.IsOrderRuleKey(key))
+            {
+                bool isSlots = key == PlanPriceRules.MaxSlotsPerOrderKey;
+                int maxValue = isSlots ? 100 : 1440;
+                int count;
+                if (!int.TryParse(text, out count) || count < 1 || count > maxValue)
+                {
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        isSlots
+                            ? "Số suất thêm tối đa mỗi đơn phải là số nguyên từ 1 đến 100."
+                            : "Hạn đơn chờ thanh toán phải là số phút nguyên từ 1 đến 1440.");
+                }
+            }
             else if (PlanPriceRules.IsLimitKey(key))
             {
                 long limit;
@@ -332,6 +353,15 @@ public sealed class SystemSettingService : ISystemSettingService
 
     private void InvalidateCache(string key)
     {
+        // Admin vừa lưu: nạp lại ảnh chụp tham số ngay để cấu hình có hiệu lực không phải đợi vòng nạp định kỳ.
+        try
+        {
+            RuntimeSettingsRefresher.LoadAsync(db, CancellationToken.None).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning("Nạp lại tham số Admin sau khi lưu lỗi: {ExceptionType}", ex.GetType().Name);
+        }
         cache.Remove(AllSettingsCacheKey);
         cache.Remove($"SystemSetting:{key.Trim().ToLowerInvariant()}");
     }

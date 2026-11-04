@@ -115,7 +115,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // Giới hạn số hồ sơ người nhận theo tổng suất của kho (suất kèm hạng + suất mua thêm), tính cả hồ sơ chưa ở gói nào.
         // Kiểm sau bước tìm trùng CCCD: gửi lại đúng người đã có vẫn trả hồ sơ cũ dù kho đã đủ suất.
         int profileCount = await beneficiaryRepository.CountByVaultIdAsync(vault.Id, ct);
-        int maxSlots = vault.Entitlement.IncludedBeneficiarySlots + vault.Entitlement.ExtraBeneficiarySlots;
+        int maxSlots = EntitlementLimits.EffectiveTotalSlots(vault.Entitlement);
         if (profileCount + 1 > maxSlots)
         {
             throw SlotsExceeded(profileCount, maxSlots);

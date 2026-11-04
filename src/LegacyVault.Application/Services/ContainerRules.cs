@@ -14,6 +14,19 @@ public static class ContainerRules
     /// <summary>NFR-14: tối đa 50 gói chưa bị xóa mỗi kho.</summary>
     public const int MaxActiveContainers = 50;
 
+    /// <summary>
+    /// Số gói tối đa của kho theo gói dịch vụ đang dùng do Admin đặt (Plans.Free|Xs|XsMax|MÃ.MaxPackages); chưa đặt thì
+    /// dùng mức gốc <see cref="MaxActiveContainers"/>.
+    /// </summary>
+    public static int MaxActiveFor(VaultEntitlement entitlement)
+    {
+        string code = entitlement.Status == EntitlementStatus.Free
+            ? PlanCodes.Free
+            : PlanCodes.Resolve(entitlement.Tier, entitlement.PlanCode);
+        string segment = code == PlanCodes.Free ? "Free" : code == PlanCodes.Xs ? "Xs" : code == PlanCodes.XsMax ? "XsMax" : code;
+        return RuntimeSettings.Int("Plans." + segment + ".MaxPackages", MaxActiveContainers);
+    }
+
     public const string NoAsset = "NO_ASSET";
     public const string NoDesignation = "NO_DESIGNATION";
 

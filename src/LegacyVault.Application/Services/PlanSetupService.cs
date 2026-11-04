@@ -41,7 +41,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     public const string ScopeVersion = "executor-2026-10-15";
     public const string ScopeText = "Executor theo dõi khi Owner quá hạn điểm danh và thực hiện nhiệm vụ kiểm tra/chứng tử theo phân công. Chấp nhận nhiệm vụ không cấp quyền đọc tài sản, duyệt thay danh tính hoặc tự nhận di sản.";
     // The immutable version identifies this text. Change the version whenever changing these warnings.
-    public static readonly string PolicyText = $"Kích hoạt bắt đầu lịch điểm danh đã chọn. Quá hạn chỉ tạo bước kiểm tra, không tự bàn giao. Lời mời người nhận có hạn phản hồi {HandoverRules.ResponseWindow.TotalDays:0} ngày; khi đủ điều kiện, hạn quyết định {HandoverRules.DecisionWindow.TotalDays:0} ngày và quyền xem/tải {HandoverRules.GrantWindow.TotalDays:0} ngày từ lúc đồng ý. Không thao tác đúng hạn có thể mất quyền tiếp nhận/tải. Dữ liệu chỉ được xóa sau khi kiểm tra các điều kiện lưu giữ, tham chiếu và chặn liên quan; không mặc nhiên xóa ngay khi hết một lời mời. Nếu Executor không thực hiện được nhiệm vụ, Chủ kho cần mời người thay để kế hoạch không bị chậm.";
+    public static string PolicyText => $"Kích hoạt bắt đầu lịch điểm danh đã chọn. Quá hạn chỉ tạo bước kiểm tra, không tự bàn giao. Lời mời người nhận có hạn phản hồi {HandoverRules.ResponseWindow.TotalDays:0} ngày; khi đủ điều kiện, hạn quyết định {HandoverRules.DecisionWindow.TotalDays:0} ngày và quyền xem/tải {HandoverRules.GrantWindow.TotalDays:0} ngày từ lúc đồng ý. Không thao tác đúng hạn có thể mất quyền tiếp nhận/tải. Dữ liệu chỉ được xóa sau khi kiểm tra các điều kiện lưu giữ, tham chiếu và chặn liên quan; không mặc nhiên xóa ngay khi hết một lời mời. Nếu Executor không thực hiện được nhiệm vụ, Chủ kho cần mời người thay để kế hoạch không bị chậm.";
 
     public async Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct)
     {
@@ -91,7 +91,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 VaultId = vault.Id, Status = ExecutorStatus.Invited,
                 InviteeEmail = email, InvitationTokenHash = token.Hash,
                 IsBeneficiary = request.BeneficiaryId.HasValue, BeneficiaryId = request.BeneficiaryId,
-                InvitedAt = now, ExpiresAt = now.AddDays(7),
+                InvitedAt = now, ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7)),
                 ReplacesExecutorId = replaces,
             };
             invitations.Add(item);
@@ -120,7 +120,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             item.Status = ExecutorStatus.Invited;
             item.InvitationTokenHash = token.Hash;
             item.InvitedAt = now;
-            item.ExpiresAt = now.AddDays(7);
+            item.ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7));
             item.InvitationSentAt = null;
             item.AcceptedAt = null;
             item.AcceptedScopeVersion = null;

@@ -32,7 +32,7 @@ public sealed class ExecutorInvitationJob(IExecutorInvitationRepository invitati
     private const int BatchSize = 50;
 
     /// <summary>SETUP-20: nhắc sau 48 giờ chưa trả lời.</summary>
-    public static readonly TimeSpan ReminderAfter = TimeSpan.FromHours(48);
+    public static TimeSpan ReminderAfter => RuntimeSettings.Hours("Executor.ReminderAfterHours", 48);
 
     public Task<List<Guid>> FindDueIdsAsync(CancellationToken ct)
     {
