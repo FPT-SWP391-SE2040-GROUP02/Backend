@@ -29,6 +29,7 @@ public sealed class AuthService : IAuthService
     private readonly ITwoFactorService? _twoFactorService;
     private readonly ISessionRevocationValidator? _sessionValidator;
     private readonly IIncidentService? _incidentService;
+    private readonly MaintenanceModeGuard? _maintenanceGuard;
 
     public AuthService(
         IUserRepository userRepository,
@@ -41,8 +42,10 @@ public sealed class AuthService : IAuthService
         TimeProvider timeProvider,
         ITwoFactorService? twoFactorService = null,
         ISessionRevocationValidator? sessionValidator = null,
-        IIncidentService? incidentService = null)
+        IIncidentService? incidentService = null,
+        MaintenanceModeGuard? maintenanceGuard = null)
     {
+        _maintenanceGuard = maintenanceGuard;
         _twoFactorService = twoFactorService;
         _sessionValidator = sessionValidator;
         _incidentService = incidentService;
@@ -59,11 +62,13 @@ public sealed class AuthService : IAuthService
     /// <summary>Đăng nhập cùng bộ đếm dưới Serializable; lỗi credentials chỉ phát sau commit bộ đếm.</summary>
     public async Task<AuthResult> LoginAsync(LoginRequest request, string ipRange, CancellationToken ct)
     {
+        // Đọc cờ bảo trì trước khi mở giao dịch để không đọc hoặc tạo dòng cấu hình bên trong giao dịch Serializable.
+        bool maintenanceOn = await IsMaintenanceOnAsync(ct);
         var outcome = await _unitOfWork.ExecuteSerializableAsync(async () =>
         {
             try
             {
-                var result = await LoginCoreAsync(request, ipRange, ct);
+                var result = await LoginCoreAsync(request, ipRange, maintenanceOn, ct);
                 return (Result: (AuthResult?)result, Failure: (ApiException?)null);
             }
             catch (InvalidCredentialsException failure)
@@ -82,7 +87,7 @@ public sealed class AuthService : IAuthService
         return outcome.Result!;
     }
 
-    private async Task<AuthResult> LoginCoreAsync(LoginRequest request, string ipRange, CancellationToken ct)
+    private async Task<AuthResult> LoginCoreAsync(LoginRequest request, string ipRange, bool maintenanceOn, CancellationToken ct)
     {
         var email = request.Email.Trim().ToLowerInvariant();
         var now = _timeProvider.GetUtcNow();
@@ -118,6 +123,10 @@ public sealed class AuthService : IAuthService
         {
             throw new AccountNotActiveException();
         }
+
+        // 5b. Đang bảo trì: chỉ Admin được đăng nhập. Kiểm sau khi mật khẩu đúng để người lạ không dò được vai trò.
+        // Lỗi ném ra làm giao dịch rollback nên không cấp phiên và không đổi bộ đếm.
+        MaintenanceModeGuard.EnsureAllowed(maintenanceOn, user);
 
         // 6. Đăng nhập đúng: xóa bộ đếm sai nếu có
         if (throttle != null)
@@ -185,7 +194,8 @@ public sealed class AuthService : IAuthService
         {
             throw new SessionExpiredException();
         }
-        var result = await _unitOfWork.ExecuteSerializableAsync(() => RefreshCoreAsync(refreshToken, ct), ct);
+        bool maintenanceOn = await IsMaintenanceOnAsync(ct);
+        var result = await _unitOfWork.ExecuteSerializableAsync(() => RefreshCoreAsync(refreshToken, maintenanceOn, ct), ct);
         if (result == null)
         {
             // Thu hồi family do replay phải commit trước khi phát lỗi HTTP.
@@ -194,7 +204,7 @@ public sealed class AuthService : IAuthService
         return result;
     }
 
-    private async Task<AuthResult?> RefreshCoreAsync(string? refreshToken, CancellationToken ct)
+    private async Task<AuthResult?> RefreshCoreAsync(string? refreshToken, bool maintenanceOn, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
         {
@@ -239,6 +249,10 @@ public sealed class AuthService : IAuthService
             return null;
         }
 
+        // Đang bảo trì: không xoay token của tài khoản không phải Admin. Lỗi làm giao dịch rollback nên refresh token
+        // cũ vẫn còn, hết bảo trì (trong thời hạn phiên) thì dùng tiếp được mà không phải đăng nhập lại.
+        MaintenanceModeGuard.EnsureAllowed(maintenanceOn, tokenEntity.User);
+
         // Xoay vòng token
         tokenEntity.RevokedAt = now;
 
@@ -279,6 +293,16 @@ public sealed class AuthService : IAuthService
             RefreshTokenExpiresAt = maxSessionLimit,
             IsPersistent = tokenEntity.IsPersistent,
         };
+    }
+
+    /// <summary>Hệ thống có đang bảo trì không; test dựng AuthService không có bộ kiểm tra thì coi như không bảo trì.</summary>
+    private async Task<bool> IsMaintenanceOnAsync(CancellationToken ct)
+    {
+        if (_maintenanceGuard == null)
+        {
+            return false;
+        }
+        return await _maintenanceGuard.IsOnAsync(ct);
     }
 
     /// <summary>Thu hồi theo family/tài khoản dưới Serializable; không cho token revoked/expired thu hồi mọi thiết bị.</summary>
