@@ -73,4 +73,7 @@ public class BillingExtraSlotResponse
     public long PricePerYear { get; set; }
 
     public int MaxPerOrder { get; set; }
+
+    /// <summary>Tổng số người nhận tối đa của một tài khoản (suất kèm gói + suất mua thêm).</summary>
+    public int MaxTotal { get; set; }
 }

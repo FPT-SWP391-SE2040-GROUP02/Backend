@@ -1014,7 +1014,7 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
     },
     { "tier": "XS_MAX", "storageQuotaBytes": 524288000, "includedBeneficiarySlots": 5, "prices": [ "..." ] }
   ],
-  "extraSlot": { "pricePerYear": 49000, "maxPerOrder": 20 },
+  "extraSlot": { "pricePerYear": 49000, "maxPerOrder": 20, "maxTotal": 50 },
   "notice": "Thanh toán không tự kích hoạt bàn giao."
 }
 

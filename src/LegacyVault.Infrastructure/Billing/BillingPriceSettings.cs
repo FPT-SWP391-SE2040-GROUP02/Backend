@@ -64,6 +64,11 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         get { return pricing.MaxExtraSlotsPerOrder ?? BillingPrices.MaxExtraSlotsPerOrder; }
     }
 
+    public int MaxTotalSlotsPerAccount
+    {
+        get { return pricing.MaxTotalSlots ?? BillingPrices.DefaultMaxTotalSlots; }
+    }
+
     public TimeSpan OrderLifetime
     {
         get
@@ -267,6 +272,16 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         {
             throw new InvalidOperationException("Số suất thêm tối đa mỗi đơn phải lớn hơn 0.");
         }
+        if (MaxTotalSlotsPerAccount < 1 || MaxTotalSlotsPerAccount > BillingPrices.MaxTotalSlotsLimit)
+        {
+            throw new InvalidOperationException(
+                "Tổng suất người nhận tối đa mỗi tài khoản phải từ 1 đến " + BillingPrices.MaxTotalSlotsLimit + ".");
+        }
+        if (pricing.SlotPricePerYear > BillingPrices.MaxSlotPricePerYear)
+        {
+            throw new InvalidOperationException(
+                "Giá một suất thêm tối đa " + BillingPrices.FormatMoney(BillingPrices.MaxSlotPricePerYear) + "đ mỗi năm.");
+        }
         if (OrderLifetime <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("Hạn đơn chờ thanh toán phải lớn hơn 0 phút.");
@@ -306,6 +321,21 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
                 {
                     throw new InvalidOperationException(
                         "Gói " + plan.Name + " thiếu giá cho kỳ " + years + " năm (phải lớn hơn 0).");
+                }
+            }
+            if (plan.IncludedSlots > MaxTotalSlotsPerAccount)
+            {
+                throw new InvalidOperationException(
+                    "Gói " + plan.Name + " có " + plan.IncludedSlots + " suất kèm, vượt tổng suất tối đa mỗi tài khoản ("
+                    + MaxTotalSlotsPerAccount + ").");
+            }
+            foreach (int years in saleYears)
+            {
+                if (section.Get(years) > BillingPrices.MaxTierPrice)
+                {
+                    throw new InvalidOperationException(
+                        "Giá gói " + plan.Name + " kỳ " + years + " năm vượt mức tối đa "
+                        + BillingPrices.FormatMoney(BillingPrices.MaxTierPrice) + "đ.");
                 }
             }
             selling.Add(plan);

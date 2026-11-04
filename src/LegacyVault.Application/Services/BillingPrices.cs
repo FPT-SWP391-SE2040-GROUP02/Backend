@@ -16,6 +16,33 @@ public static class BillingPrices
     /// <summary>Số suất thêm tối đa trong một đơn (§8.2).</summary>
     public const int MaxExtraSlotsPerOrder = 20;
 
+    /// <summary>
+    /// Giá một hạng cho một kỳ tối đa 50.000.000đ. Lý do: gói đắt nhất hiện tại (XS Max 5 năm) là 1.599.000đ nên mức trần
+    /// còn dư khoảng 30 lần để Admin tăng giá; chặn gõ thừa số 0 (ví dụ 199000 thành 1990000000) làm báo giá vô lý.
+    /// </summary>
+    public const long MaxTierPrice = 50_000_000;
+
+    /// <summary>Giá một suất thêm cho một năm tối đa 2.000.000đ (hiện 49.000đ, dư khoảng 40 lần). Cùng lý do chặn gõ thừa số 0.</summary>
+    public const long MaxSlotPricePerYear = 2_000_000;
+
+    /// <summary>
+    /// Tổng tiền một đơn tối đa 500.000.000đ. Lý do: đơn trả bằng chuyển khoản/VietQR, các ngân hàng thường giới hạn mỗi lần
+    /// chuyển khoản trực tuyến ở mức vài trăm triệu đồng; đơn lớn hơn mức này người mua không trả được.
+    /// </summary>
+    public const long MaxOrderAmount = 500_000_000;
+
+    /// <summary>Tổng số suất người nhận tối đa của một kho nếu Admin chưa đặt (suất kèm gói + suất mua thêm).</summary>
+    public const int DefaultMaxTotalSlots = 50;
+
+    /// <summary>Mức Admin được đặt cho tổng suất người nhận mỗi kho.</summary>
+    public const int MaxTotalSlotsLimit = 1000;
+
+    /// <summary>Số tiền viết theo kiểu Việt Nam (dấu chấm ngăn nghìn), không phụ thuộc ngôn ngữ máy chủ.</summary>
+    public static string FormatMoney(long amount)
+    {
+        return amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture).Replace(',', '.');
+    }
+
     /// <summary>Một năm dịch vụ = 365 ngày (PAY-08).</summary>
     public const int DaysPerYear = 365;
 

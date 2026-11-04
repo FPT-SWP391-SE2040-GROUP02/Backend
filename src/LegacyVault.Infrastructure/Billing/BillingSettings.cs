@@ -52,6 +52,9 @@ public class BillingPricingSection
     /// <summary>Số suất thêm tối đa mỗi đơn do Admin đặt; null = mức gốc trong BillingPrices.</summary>
     public int? MaxExtraSlotsPerOrder { get; set; }
 
+    /// <summary>Tổng suất người nhận tối đa của một kho do Admin đặt; null = mức gốc trong BillingPrices.</summary>
+    public int? MaxTotalSlots { get; set; }
+
     /// <summary>Số phút đơn chờ thanh toán do Admin đặt; null = mức gốc trong BillingPrices.</summary>
     public int? OrderTimeoutMinutes { get; set; }
 

@@ -170,10 +170,21 @@ public static class PlanPriceRules
 
     public const string OrderTimeoutKey = "Plans.Addon.OrderTimeoutMinutes";
 
+    public const string MaxTotalSlotsKey = "Plans.Addon.MaxTotalSlots";
+
+    /// <summary>Tên hiển thị của gói gốc (đã chuẩn hóa); gói Admin tạo không được trùng.</summary>
+    public static readonly string[] ReservedDisplayNames = new string[] { "free", "xs", "xs max", "xsmax", "legacy xs", "legacy xs max" };
+
+    /// <summary>Chuẩn hóa tên để so trùng: bỏ khoảng trắng đầu cuối và thừa, chữ thường.</summary>
+    public static string NormalizeName(string name)
+    {
+        return Regex.Replace(name.Trim(), @"\s+", " ").ToLowerInvariant();
+    }
+
     /// <summary>Khóa luật của đơn: số suất thêm tối đa mỗi đơn, số phút đơn chờ thanh toán.</summary>
     public static bool IsOrderRuleKey(string key)
     {
-        return key == MaxSlotsPerOrderKey || key == OrderTimeoutKey;
+        return key == MaxSlotsPerOrderKey || key == OrderTimeoutKey || key == MaxTotalSlotsKey;
     }
 
     /// <summary>Khóa ảnh hưởng tới bảng giá, kỳ bán, danh sách gói hoặc hạn mức, nên phải kiểm tra bảng giá sau khi ghép trước khi lưu.</summary>
@@ -404,6 +415,10 @@ public static class PlanPriceRules
             {
                 pricing.MaxExtraSlotsPerOrder = count;
             }
+            else if (key == MaxTotalSlotsKey)
+            {
+                pricing.MaxTotalSlots = count;
+            }
             else
             {
                 pricing.OrderTimeoutMinutes = count;
@@ -448,6 +463,7 @@ public static class PlanPriceRules
         copy.SlotPricePerYear = source.SlotPricePerYear;
         copy.MaxExtraSlotsPerOrder = source.MaxExtraSlotsPerOrder;
         copy.OrderTimeoutMinutes = source.OrderTimeoutMinutes;
+        copy.MaxTotalSlots = source.MaxTotalSlots;
         CopyTier(source.Xs, copy.Xs);
         CopyTier(source.XsMax, copy.XsMax);
         copy.SaleYears = source.SaleYears == null ? null : new List<int>(source.SaleYears);

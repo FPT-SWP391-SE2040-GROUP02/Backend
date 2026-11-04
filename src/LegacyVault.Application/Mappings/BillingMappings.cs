@@ -143,6 +143,7 @@ public static class BillingMappings
         response.Free.IncludedBeneficiarySlots = RuntimeSettings.NonNegativeInt("Plans.Free.Slots", 0);
         response.ExtraSlot.PricePerYear = prices.SlotPricePerYear;
         response.ExtraSlot.MaxPerOrder = prices.MaxExtraSlotsPerOrder;
+        response.ExtraSlot.MaxTotal = prices.MaxTotalSlotsPerAccount;
 
         foreach (PlanInfo plan in prices.Plans)
         {

@@ -361,6 +361,11 @@ public sealed class BillingService : IBillingService
     {
         IBillingPriceSettings prices = eligibility.Prices;
         BillingQuote quote = BuildQuote(prices, request, eligibility, now);
+        if (quote.TotalAmount > BillingPrices.MaxOrderAmount)
+        {
+            throw ValidationErrors.For("extraSlots",
+                $"Tổng tiền đơn ({BillingPrices.FormatMoney(quote.TotalAmount)}đ) vượt mức tối đa {BillingPrices.FormatMoney(BillingPrices.MaxOrderAmount)}đ cho một lần chuyển khoản. Hãy giảm số suất hoặc chọn kỳ ngắn hơn.");
+        }
 
         // Hạng đã bị Admin tạm ngừng bán: chặn mọi đơn mới của hạng đó (mua mới, nâng hạng, gia hạn, mua thêm suất),
         // kể cả người đang dùng. Dịch vụ đã trả vẫn chạy đến hết kỳ.
