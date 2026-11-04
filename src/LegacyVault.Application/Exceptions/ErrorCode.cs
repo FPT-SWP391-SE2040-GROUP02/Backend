@@ -105,6 +105,8 @@ public enum ErrorCode
     SigningLocked,
     /// <summary>404: tham số cấu hình hệ thống không tồn tại.</summary>
     SettingNotFound,
+    /// <summary>503: hệ thống đang bảo trì, chỉ tài khoản Quản trị viên được đăng nhập và gọi API.</summary>
+    MaintenanceMode,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

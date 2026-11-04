@@ -22,24 +22,37 @@ public sealed class LoginSessionIssuer
     private readonly ITokenService _tokenService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _timeProvider;
+    private readonly MaintenanceModeGuard? _maintenanceGuard;
 
     public LoginSessionIssuer(
         IRefreshTokenRepository refreshTokenRepository,
         ITokenService tokenService,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        MaintenanceModeGuard? maintenanceGuard = null)
     {
         _refreshTokenRepository = refreshTokenRepository;
         _tokenService = tokenService;
         _unitOfWork = unitOfWork;
         _timeProvider = timeProvider;
+        _maintenanceGuard = maintenanceGuard;
     }
 
     /// <summary>
     /// Tạo phiên mới rồi lưu DB (kèm mọi thay đổi đang chờ khác của request, ví dụ LastLoginAt).
     /// </summary>
+    /// <exception cref="Exceptions.AppException">
+    /// 503 MAINTENANCE_MODE khi hệ thống đang bảo trì và tài khoản không phải Admin. Lỗi ném trước khi tạo
+    /// refresh token nên không có phiên nào được mở.
+    /// </exception>
     public async Task<AuthResult> OpenSessionAsync(User user, bool rememberMe, CancellationToken ct)
     {
+        // Mọi cách đăng nhập không qua mật khẩu (Google, liên kết Google, xác thực hai bước) đều mở phiên ở đây.
+        if (_maintenanceGuard != null)
+        {
+            await _maintenanceGuard.EnsureAllowedAsync(user, ct);
+        }
+
         var now = _timeProvider.GetUtcNow();
 
         // Phiên hết khi không dùng 30 phút, nhưng không bao giờ quá 12 giờ kể từ lúc đăng nhập.
