@@ -464,7 +464,6 @@ public sealed class SystemSettingService : ISystemSettingService
             // Security & Features
             new() { Key = "Security.MaxPinAttempts", Value = "5", DataType = "NUMBER", Category = "Security", Description = "Số lần nhập sai mã PIN bảo vệ tối đa trước khi khóa" },
             new() { Key = "Security.PinLockoutMinutes", Value = "15", DataType = "NUMBER", Category = "Security", Description = "Thời gian tạm khóa mã PIN bảo vệ khi vượt số lần thử (phút)" },
-            new() { Key = "Features.EnableRegistration", Value = "true", DataType = "BOOLEAN", Category = "Features", Description = "Cho phép đăng ký tài khoản mới" },
             new() { Key = "Features.MaintenanceMode", Value = "false", DataType = "BOOLEAN", Category = "Features", Description = "Bật chế độ bảo trì toàn hệ thống" },
         };
 
