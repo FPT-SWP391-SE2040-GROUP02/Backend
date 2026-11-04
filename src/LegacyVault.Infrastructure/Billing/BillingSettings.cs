@@ -49,6 +49,12 @@ public class BillingPricingSection
     /// <summary>Giá một suất người nhận thêm cho một năm, đơn vị đồng (ADDON-01).</summary>
     public long SlotPricePerYear { get; set; }
 
+    /// <summary>Số suất thêm tối đa mỗi đơn do Admin đặt; null = mức gốc trong BillingPrices.</summary>
+    public int? MaxExtraSlotsPerOrder { get; set; }
+
+    /// <summary>Số phút đơn chờ thanh toán do Admin đặt; null = mức gốc trong BillingPrices.</summary>
+    public int? OrderTimeoutMinutes { get; set; }
+
     public BillingTierPricesSection Xs { get; set; } = new BillingTierPricesSection();
 
     public BillingTierPricesSection XsMax { get; set; } = new BillingTierPricesSection();
@@ -57,6 +63,9 @@ public class BillingPricingSection
     /// Các kỳ (số năm) đang bán do Admin đặt. null = chưa đặt, bán các kỳ 1, 3 và 5 năm như cấu hình gốc.
     /// </summary>
     public List<int>? SaleYears { get; set; }
+
+    /// <summary>Các dòng mô tả tính năng của gói Free do Admin viết; null = Client dùng mô tả mặc định.</summary>
+    public List<string>? FreeFeatures { get; set; }
 
     /// <summary>Gói Admin tạo thêm, khóa là mã gói (ví dụ "GOLD"). Cấu hình gốc không có; chỉ do cài đặt hệ thống thêm vào.</summary>
     public Dictionary<string, BillingPlanSection> Custom { get; set; } = new Dictionary<string, BillingPlanSection>();
@@ -83,6 +92,9 @@ public class BillingTierPricesSection
     public long ThreeYears { get; set; }
 
     public long FiveYears { get; set; }
+
+    /// <summary>Các dòng mô tả tính năng của gói do Admin viết; null = Client dùng mô tả mặc định.</summary>
+    public List<string>? Features { get; set; }
 
     /// <summary>false khi Admin tạm ngừng mở bán gói này.</summary>
     public bool OnSale { get; set; } = true;

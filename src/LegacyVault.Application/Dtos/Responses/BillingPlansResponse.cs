@@ -13,6 +13,9 @@ public class BillingPlansResponse
     public BillingExtraSlotResponse ExtraSlot { get; set; } = new BillingExtraSlotResponse();
 
     public string Notice { get; set; } = string.Empty;
+
+    /// <summary>Mô tả tính năng của gói Free do Admin viết; rỗng thì Client dùng mô tả mặc định.</summary>
+    public List<string> FreeFeatures { get; set; } = new List<string>();
 }
 
 /// <summary>Một hạng bán được: "XS" hoặc "XS_MAX".</summary>
@@ -33,6 +36,9 @@ public class BillingTierResponse
 
     /// <summary>true khi Admin đã xóa gói: Client không vẽ thẻ gói nhưng vẫn biết gói này để so thứ tự.</summary>
     public bool Hidden { get; set; }
+
+    /// <summary>Các dòng mô tả tính năng do Admin viết; rỗng thì Client dùng mô tả mặc định.</summary>
+    public List<string> Features { get; set; } = new List<string>();
 
     public long StorageQuotaBytes { get; set; }
     public int IncludedBeneficiarySlots { get; set; }

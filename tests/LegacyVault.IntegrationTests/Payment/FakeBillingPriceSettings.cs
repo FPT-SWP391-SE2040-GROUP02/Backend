@@ -19,6 +19,21 @@ public sealed class FakeBillingPriceSettings : IBillingPriceSettings
         get { return 49000; }
     }
 
+    public int MaxExtraSlotsPerOrder
+    {
+        get { return BillingPrices.MaxExtraSlotsPerOrder; }
+    }
+
+    public TimeSpan OrderLifetime
+    {
+        get { return BillingPrices.OrderLifetime; }
+    }
+
+    public IReadOnlyList<string> FreeFeatures
+    {
+        get { return new List<string>(); }
+    }
+
     public IReadOnlyList<PlanInfo> Plans
     {
         get

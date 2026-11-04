@@ -22,6 +22,14 @@ public static class PlanPriceRules
     /// <summary>Khóa lưu danh sách kỳ bán: mảng JSON [{"years":1,"on":true}, ...].</summary>
     public const string PeriodsKey = "Plans.Periods";
 
+    /// <summary>Khóa lưu mô tả tính năng của gói Free: mảng JSON các chuỗi.</summary>
+    public const string FreeFeaturesKey = "Plans.Free.Features";
+
+    /// <summary>Số dòng mô tả tối đa của một gói và độ dài tối đa của một dòng.</summary>
+    public const int MaxFeatureLines = 8;
+
+    public const int MaxFeatureLength = 120;
+
     /// <summary>Khóa lưu các gói Admin tạo thêm: mảng JSON [{"code":"GOLD","name":"Gold","subtitle":"","order":30}, ...].</summary>
     public const string CatalogKey = "Plans.Catalog";
 
@@ -37,7 +45,7 @@ public static class PlanPriceRules
     private static readonly string[] ReservedSegments = new string[] { "Free", "Addon", "Periods", "Catalog" };
 
     private static readonly Regex PlanKeyPattern = new Regex(
-        @"^Plans\.([A-Za-z][A-Za-z0-9_]{0,31})\.(?:Price(\d{1,2})Y|(On|Hidden|QuotaMb|Slots))$",
+        @"^Plans\.([A-Za-z][A-Za-z0-9_]{0,31})\.(?:Price(\d{1,2})Y|(On|Hidden|QuotaMb|Slots|Features))$",
         RegexOptions.CultureInvariant);
 
     /// <summary>Mã gói Admin đặt: chữ hoa, số, gạch dưới, bắt đầu bằng chữ cái; không trùng mã gốc.</summary>
@@ -101,6 +109,56 @@ public static class PlanPriceRules
         return parsed != null && (parsed.Field == "QuotaMb" || parsed.Field == "Slots");
     }
 
+    /// <summary>Khóa mô tả tính năng của một gói (kể cả Free).</summary>
+    public static bool IsFeaturesKey(string key)
+    {
+        if (key == FreeFeaturesKey)
+        {
+            return true;
+        }
+        PlanKey? parsed = ParsePlanKey(key);
+        return parsed != null && parsed.Field == "Features";
+    }
+
+    /// <summary>
+    /// Đọc mô tả tính năng: mảng JSON các chuỗi. Bỏ dòng trống và cắt khoảng trắng; trả null nếu không phải mảng chuỗi,
+    /// quá <see cref="MaxFeatureLines"/> dòng hoặc có dòng dài hơn <see cref="MaxFeatureLength"/> ký tự.
+    /// </summary>
+    public static List<string>? ParseFeatures(string json)
+    {
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+            List<string> lines = new List<string>();
+            foreach (JsonElement item in doc.RootElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String)
+                {
+                    return null;
+                }
+                string text = (item.GetString() ?? string.Empty).Trim();
+                if (text.Length == 0)
+                {
+                    continue;
+                }
+                if (text.Length > MaxFeatureLength)
+                {
+                    return null;
+                }
+                lines.Add(text);
+            }
+            return lines.Count > MaxFeatureLines ? null : lines;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Khóa cờ true/false của gói: mở bán hoặc đã xóa.</summary>
     public static bool IsFlagKey(string key)
     {
@@ -108,10 +166,21 @@ public static class PlanPriceRules
         return parsed != null && (parsed.Field == "On" || parsed.Field == "Hidden");
     }
 
+    public const string MaxSlotsPerOrderKey = "Plans.Addon.MaxSlotsPerOrder";
+
+    public const string OrderTimeoutKey = "Plans.Addon.OrderTimeoutMinutes";
+
+    /// <summary>Khóa luật của đơn: số suất thêm tối đa mỗi đơn, số phút đơn chờ thanh toán.</summary>
+    public static bool IsOrderRuleKey(string key)
+    {
+        return key == MaxSlotsPerOrderKey || key == OrderTimeoutKey;
+    }
+
     /// <summary>Khóa ảnh hưởng tới bảng giá, kỳ bán, danh sách gói hoặc hạn mức, nên phải kiểm tra bảng giá sau khi ghép trước khi lưu.</summary>
     public static bool IsPricingKey(string key)
     {
-        return IsPriceKey(key) || IsLimitKey(key) || IsFlagKey(key) || key == PeriodsKey || key == CatalogKey;
+        return IsPriceKey(key) || IsLimitKey(key) || IsFlagKey(key) || IsFeaturesKey(key) || IsOrderRuleKey(key)
+            || key == PeriodsKey || key == CatalogKey;
     }
 
     /// <summary>Số năm của khóa giá kỳ; null nếu khóa không phải giá kỳ.</summary>
@@ -248,10 +317,30 @@ public static class PlanPriceRules
     /// <summary>Gán giá trị vào đúng ô của bảng giá theo tên tham số. Trả false nếu tên không phải tham số giá hoặc giá trị sai dạng.</summary>
     public static bool TryApply(BillingPricingSection pricing, string key, string value)
     {
+        if (key == FreeFeaturesKey)
+        {
+            List<string>? free = ParseFeatures(value);
+            if (free == null)
+            {
+                return false;
+            }
+            pricing.FreeFeatures = free;
+            return true;
+        }
         PlanKey? parsed = ParsePlanKey(key);
         if (parsed != null)
         {
             BillingTierPricesSection section = SectionFor(pricing, parsed.Plan, true)!;
+            if (parsed.Field == "Features")
+            {
+                List<string>? lines = ParseFeatures(value);
+                if (lines == null)
+                {
+                    return false;
+                }
+                section.Features = lines;
+                return true;
+            }
             if (parsed.Field == "On" || parsed.Field == "Hidden")
             {
                 bool flag;
@@ -304,6 +393,23 @@ public static class PlanPriceRules
             pricing.SlotPricePerYear = amount;
             return true;
         }
+        if (IsOrderRuleKey(key))
+        {
+            int count;
+            if (!int.TryParse(value, out count) || count < 1)
+            {
+                return false;
+            }
+            if (key == MaxSlotsPerOrderKey)
+            {
+                pricing.MaxExtraSlotsPerOrder = count;
+            }
+            else
+            {
+                pricing.OrderTimeoutMinutes = count;
+            }
+            return true;
+        }
         if (key == PeriodsKey)
         {
             List<int> allYears;
@@ -340,9 +446,12 @@ public static class PlanPriceRules
         BillingPricingSection copy = new BillingPricingSection();
         copy.PolicyVersion = source.PolicyVersion;
         copy.SlotPricePerYear = source.SlotPricePerYear;
+        copy.MaxExtraSlotsPerOrder = source.MaxExtraSlotsPerOrder;
+        copy.OrderTimeoutMinutes = source.OrderTimeoutMinutes;
         CopyTier(source.Xs, copy.Xs);
         CopyTier(source.XsMax, copy.XsMax);
         copy.SaleYears = source.SaleYears == null ? null : new List<int>(source.SaleYears);
+        copy.FreeFeatures = source.FreeFeatures == null ? null : new List<string>(source.FreeFeatures);
         foreach (KeyValuePair<string, BillingPlanSection> pair in source.Custom)
         {
             BillingPlanSection plan = new BillingPlanSection();
@@ -363,6 +472,7 @@ public static class PlanPriceRules
         to.FiveYears = from.FiveYears;
         to.QuotaMb = from.QuotaMb;
         to.IncludedSlots = from.IncludedSlots;
+        to.Features = from.Features == null ? null : new List<string>(from.Features);
         to.OnSale = from.OnSale;
         to.Hidden = from.Hidden;
         to.Extra = new Dictionary<int, long>(from.Extra);
