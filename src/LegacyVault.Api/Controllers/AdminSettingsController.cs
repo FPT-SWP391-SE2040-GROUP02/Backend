@@ -106,7 +106,8 @@ public sealed class AdminSettingsController : ControllerBase
                 new UpdateSystemSettingRequest(item.Value, item.IsEnabled, request.Reason),
                 admin.Email,
                 admin.Id,
-                ct);
+                ct,
+                pricesAlreadyValidated: true);
             updated.Add(res);
         }
         return Ok(updated);

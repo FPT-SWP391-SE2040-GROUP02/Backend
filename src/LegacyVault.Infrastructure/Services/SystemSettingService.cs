@@ -232,7 +232,8 @@ public sealed class SystemSettingService : ISystemSettingService
         UpdateSystemSettingRequest request,
         string? updatedBy,
         Guid? actorUserId = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool pricesAlreadyValidated = false)
     {
         var entity = await db.SystemSettings.SingleOrDefaultAsync(s => s.Key == key.Trim(), ct);
         if (entity == null)
@@ -240,11 +241,14 @@ public sealed class SystemSettingService : ISystemSettingService
             throw new AppException(AppErrorType.NotFound, ErrorCode.SettingNotFound, $"Không tìm thấy tham số cấu hình '{key}'.");
         }
 
-        BatchUpdateSystemSettingItem priceCheck = new BatchUpdateSystemSettingItem();
-        priceCheck.Key = entity.Key;
-        priceCheck.Value = request.Value;
-        priceCheck.IsEnabled = request.IsEnabled;
-        await ValidatePlanPricesAsync(new List<BatchUpdateSystemSettingItem> { priceCheck }, ct);
+        if (!pricesAlreadyValidated)
+        {
+            BatchUpdateSystemSettingItem priceCheck = new BatchUpdateSystemSettingItem();
+            priceCheck.Key = entity.Key;
+            priceCheck.Value = request.Value;
+            priceCheck.IsEnabled = request.IsEnabled;
+            await ValidatePlanPricesAsync(new List<BatchUpdateSystemSettingItem> { priceCheck }, ct);
+        }
 
         var oldValue = entity.Value;
         var oldEnabled = entity.IsEnabled;

@@ -437,6 +437,11 @@ public static class BillingRules
             throw NotAllowed(PaymentNotAllowedReason.TierNotOnSale, "Hiện không có kỳ nào để tính giá nâng hạng.");
         }
         long priceDifference = target.Prices[years] - current.Prices[years];
+        if (priceDifference <= 0)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported,
+                "Gói này không đắt hơn gói đang dùng ở kỳ này nên không nâng hạng được.");
+        }
         long periodSeconds = BillingPrices.SecondsPerYear * years;
         if (remainingSeconds > periodSeconds)
         {
