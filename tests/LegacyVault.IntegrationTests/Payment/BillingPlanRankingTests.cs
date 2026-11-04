@@ -45,4 +45,69 @@ public sealed class BillingPlanRankingTests
 
         Assert.Equal(new[] { "XS", "XS_MAX", "GOLD" }, prices.Plans.Select(plan => plan.Code).ToArray());
     }
+
+    [Fact]
+    public void TierPriceAboveCap_IsRejected()
+    {
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(
+            () => Build(goldOneYear: BillingPrices.MaxTierPrice + 1));
+
+        Assert.Contains("vượt mức tối đa", error.Message);
+    }
+
+    [Fact]
+    public void TierPriceAtCap_IsAccepted()
+    {
+        // 3 năm và 5 năm của gói Gold tính theo bội số nên chỉ thử kỳ 1 năm ở mức trần với giá bội nhỏ hơn
+        BillingSettings settings = new BillingSettings();
+        settings.Pricing.PolicyVersion = "TEST";
+        settings.Pricing.SlotPricePerYear = BillingPrices.MaxSlotPricePerYear;
+        settings.Pricing.Xs = new BillingTierPricesSection
+        {
+            OneYear = BillingPrices.MaxTierPrice,
+            ThreeYears = BillingPrices.MaxTierPrice,
+            FiveYears = BillingPrices.MaxTierPrice,
+        };
+        settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
+
+        BillingPriceSettings prices = new BillingPriceSettings(Options.Create(settings));
+
+        Assert.Equal(BillingPrices.MaxTierPrice, prices.FindPlan("XS")!.Prices[1]);
+    }
+
+    [Fact]
+    public void SlotPriceAboveCap_IsRejected()
+    {
+        BillingSettings settings = new BillingSettings();
+        settings.Pricing.PolicyVersion = "TEST";
+        settings.Pricing.SlotPricePerYear = BillingPrices.MaxSlotPricePerYear + 1;
+        settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
+        settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
+
+        Assert.Throws<InvalidOperationException>(() => new BillingPriceSettings(Options.Create(settings)));
+    }
+
+    [Fact]
+    public void IncludedSlotsAboveTotalCap_IsRejected()
+    {
+        BillingSettings settings = new BillingSettings();
+        settings.Pricing.PolicyVersion = "TEST";
+        settings.Pricing.SlotPricePerYear = 49000;
+        settings.Pricing.MaxTotalSlots = 3;
+        settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
+        settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 2, ThreeYears = 2, FiveYears = 2 };
+
+        // XS Max kèm 5 suất, trần chỉ 3
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(
+            () => new BillingPriceSettings(Options.Create(settings)));
+        Assert.Contains("vượt tổng suất tối đa", error.Message);
+    }
+
+    [Theory]
+    [InlineData("  Gold  PLUS ", "gold plus")]
+    [InlineData("GOLD", "gold")]
+    public void PlanName_IsNormalizedForDuplicateCheck(string input, string expected)
+    {
+        Assert.Equal(expected, PlanPriceRules.NormalizeName(input));
+    }
 }

@@ -88,6 +88,29 @@ public sealed class BillingRulesTests
     }
 
     [Fact]
+    public void TotalSlots_Addon_BeyondAccountCap_IsRejectedWithRoomLeft()
+    {
+        // Chuẩn bị: XS kèm 2 suất, đã mua thêm 47 suất = 49; trần mặc định 50
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(180), 47);
+
+        // Hành động / Kiểm tra: mua thêm 2 vượt trần, mua thêm 1 vừa chạm trần
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteAddon(Prices, entitlement, 2, Now));
+        AssertValidationOnField(exception, "extraSlots");
+        Dictionary<string, string[]> errors = (Dictionary<string, string[]>)exception.Extensions["errors"]!;
+        Assert.Contains("tối đa 1 suất", errors["extraSlots"][0]);
+        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
+        Assert.Equal(50, quote.TotalBeneficiarySlots);
+    }
+
+    [Fact]
+    public void TotalSlots_Purchase_IncludesSlotsComingWithThePlan()
+    {
+        // XS kèm 2 suất; trần 50 nên mua mới tối đa 48 suất thêm (bị chặn thêm bởi 20 suất mỗi đơn, nên thử 20 vẫn qua)
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 20);
+        Assert.Equal(22, quote.TotalBeneficiarySlots);
+    }
+
+    [Fact]
     public void Addon01_Purchase_ExtraSlotsTwentyOne_Rejected()
     {
         // Chuẩn bị / Hành động
