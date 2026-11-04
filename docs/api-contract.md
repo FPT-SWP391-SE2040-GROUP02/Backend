@@ -124,6 +124,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `VAULT_PIN_RESET_NEEDS_PASSWORD` | Quên PIN nhưng tài khoản không có mật khẩu (chỉ đăng nhập bằng Google) | |
 | 403 | `SIGNING_PASSWORD_INVALID` | Verifier Duyệt/Từ chối hồ sơ chứng tử nhập sai mật khẩu xác nhận, hoặc tài khoản chưa có mật khẩu (mục 6.12, DEATH-03) | `attemptsRemaining` (không có khi tài khoản chưa có mật khẩu) |
 | 423 | `SIGNING_LOCKED` | Chức năng Duyệt/Từ chối của Verifier bị khóa tạm vì sai mật khẩu 5 lần liên tiếp; đang khóa thì mật khẩu đúng cũng bị từ chối | `lockedUntil` |
+| 503 | `MAINTENANCE_MODE` | Hệ thống đang bảo trì (Admin bật `Features.MaintenanceMode`): chỉ tài khoản Quản trị viên đăng nhập và gọi API được. Tài khoản khác bị chặn khi đăng nhập email (sau khi mật khẩu đúng), làm mới phiên (refresh token cũ được giữ, hết bảo trì dùng tiếp) và mọi API còn lại; đăng nhập Google đóng hẳn. Luôn mở: `GET /settings/public`, `/auth/csrf`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/2fa/verify`, webhook SePay, health. Khác `EKYC_SERVICE_UNAVAILABLE`/`STORAGE_UNAVAILABLE` cùng 503: FE so theo `code` để hiện màn hình bảo trì | |
 
 ---
 
