@@ -408,9 +408,30 @@ public sealed class EkycConsentAndMatchTests
 
         OwnerIdentityData pending = identityProtector.UnprotectPending(stored)!;
         Assert.Equal("Địa chỉ thử nghiệm", pending.ResidenceAddress);
-        // Các trường còn lại vẫn lấy từ OCR, bản khai không ghi đè.
+        // Số CCCD vẫn lấy từ OCR, bản khai không ghi đè.
         Assert.Equal("079200012345", pending.CitizenId);
         Assert.False(stored.EnrollmentIdentityEncrypted!.AsSpan().IndexOf(System.Text.Encoding.UTF8.GetBytes("thử nghiệm")) >= 0);
+    }
+
+    [Fact]
+    public async Task Confirm_OwnerEnrollment_StoresCorrectedNameAndBirthDate_KeepsCitizenIdFromOcr()
+    {
+        // OCR đọc sai tên và ngày sinh; Owner sửa lại trên form thì bản sửa được lưu làm danh tính tạm.
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        client.Reading = Reading("079200012345", "NGUYEN VAN AM", "2000-02-11");
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, default);
+        EkycVerification stored = Assert.Single(repository.Verifications);
+
+        EkycDocumentConfirmationRequest request = Confirmation(front.VerificationId!.Value);
+        // Gửi số CCCD khác cũng không đổi được số đã đọc từ ảnh.
+        request.IdNumber = "079200099999";
+        await service.ConfirmDocumentAsync(request, default);
+
+        OwnerIdentityData pending = identityProtector.UnprotectPending(stored)!;
+        Assert.Equal(EkycRules.NormalizeName("Nguyễn Văn An"), pending.FullName);
+        Assert.Equal(new DateOnly(2000, 2, 1), pending.DateOfBirth);
+        Assert.Equal("079200012345", pending.CitizenId);
+        Assert.Equal(EkycIdentityMatch.NotChecked, stored.IdentityMatch);
     }
 
     [Fact]
