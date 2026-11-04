@@ -45,10 +45,20 @@ public static class DeathCaseExecutorNoticeEmail
         const string note = "Email này không chứa nội dung hồ sơ.";
 
         string text = $"Xin chào {fullName},\n\n{paragraph}\n\nĐăng nhập: {link}\n\n{note}\n";
-        string html = $"<p>Xin chào {WebUtility.HtmlEncode(fullName)},</p>"
-            + $"<p>{WebUtility.HtmlEncode(paragraph)}</p>"
-            + $"<p><a href=\"{WebUtility.HtmlEncode(link)}\">Mở trang Executor</a> ({WebUtility.HtmlEncode(link)})</p>"
-            + $"<p><small>{WebUtility.HtmlEncode(note)}</small></p>";
+        string title = kind == DeathCaseDecisionKind.SupplementRequested
+            ? "Hồ sơ chứng tử cần bổ sung"
+            : "Hồ sơ chứng tử đã bị từ chối";
+        string kicker = kind == DeathCaseDecisionKind.SupplementRequested
+            ? "Hồ sơ chứng tử"
+            : "Kết quả xét duyệt";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            title,
+            fullName,
+            paragraph,
+            link,
+            "Mở trang Executor",
+            note,
+            kicker);
         return new EmailContent(subject, text, html);
     }
 }
