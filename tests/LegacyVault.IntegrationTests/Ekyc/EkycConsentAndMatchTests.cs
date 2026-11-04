@@ -256,7 +256,10 @@ public sealed class EkycConsentAndMatchTests
     [InlineData("079200012345", "Nguyễn Văn An", "01/02/2000", EkycIdentityMatch.Matched)]
     [InlineData("079200012345", "Nguyễn Văn An", "2000-02-02", EkycIdentityMatch.NeedsReview)]
     [InlineData("079200012345", "  nguyễn   văn an ", "2000-02-01", EkycIdentityMatch.Matched)]
-    [InlineData("079200012345", "Nguyen Van An", "01/02/2000", EkycIdentityMatch.NeedsReview)]
+    [InlineData("079200012345", "Nguyen Van An", "01/02/2000", EkycIdentityMatch.Matched)]
+    [InlineData("079200012345", "NGUYỄN VĂN AN", "01/02/2000", EkycIdentityMatch.Matched)]
+    [InlineData("079200012345", "Nguyễn Văn Anh", "01/02/2000", EkycIdentityMatch.NeedsReview)]
+    [InlineData("079200012345", "Trần Thị Bích", "01/02/2000", EkycIdentityMatch.NeedsReview)]
     [InlineData("079200012345", "Nguyễn Văn An", "02/02/2000", EkycIdentityMatch.NeedsReview)]
     [InlineData("079200012345", "Nguyễn Văn An", "khong ro", EkycIdentityMatch.NeedsReview)]
     [InlineData("0792000123", "Nguyễn Văn An", "01/02/2000", EkycIdentityMatch.NeedsReview)]
@@ -288,6 +291,30 @@ public sealed class EkycConsentAndMatchTests
         EkycDocumentReading reading = Reading("079200012345", "Trần Hiếu", "01/02/2000");
 
         Assert.Equal(EkycIdentityMatch.Matched, EkycRules.CompareIdentity(reading, person));
+    }
+
+    [Theory]
+    [InlineData("Trịnh Văn An", "TRINH VAN AN")]
+    [InlineData("Đặng Đức Anh", "DANG DUC ANH")]
+    [InlineData("  trịnh   văn an ", "Trinh Van An")]
+    public void CompareIdentity_NameIgnoresDiacriticsAndD_Matched(string declaredName, string readName)
+    {
+        BeneficiaryPersonalData person = Person();
+        person.FullName = declaredName;
+        EkycDocumentReading reading = Reading("079200012345", readName, "01/02/2000");
+
+        Assert.Equal(EkycIdentityMatch.Matched, EkycRules.CompareIdentity(reading, person));
+    }
+
+    [Fact]
+    public void CompareIdentity_NameWithDifferentLetters_StillNeedsReview()
+    {
+        // Bỏ dấu chỉ cứu lỗi sai dấu; mất hay sai chữ cái (Trịnh đọc thành Tịnh) vẫn phải kiểm tra lại.
+        BeneficiaryPersonalData person = Person();
+        person.FullName = "Trịnh Văn An";
+        EkycDocumentReading reading = Reading("079200012345", "Tịnh Văn An", "01/02/2000");
+
+        Assert.Equal(EkycIdentityMatch.NeedsReview, EkycRules.CompareIdentity(reading, person));
     }
 
     [Fact]

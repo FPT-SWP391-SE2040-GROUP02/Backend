@@ -212,7 +212,7 @@ public static class EkycRules
         }
 
         // CCCD trùng: tên hoặc ngày sinh lệch có thể do Owner nhập sai (MATCH-06), để Executor xem.
-        if (NormalizeName(reading.FullName) != NormalizeName(expectedFullName))
+        if (NormalizeNameForCompare(reading.FullName) != NormalizeNameForCompare(expectedFullName))
         {
             return EkycIdentityMatch.NeedsReview;
         }
@@ -236,6 +236,24 @@ public static class EkycRules
         string composed = name.Normalize(NormalizationForm.FormC);
         string[] parts = composed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         return string.Join(" ", parts).ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// Tên dùng để so khớp: như <see cref="NormalizeName"/> nhưng bỏ dấu tiếng Việt và đổi Đ thành D, vì OCR hay đọc sai dấu
+    /// (ví dụ Trịnh thành Trinh) và Chủ kho có thể khai tên không dấu. Chỉ để so sánh, không dùng để lưu.
+    /// </summary>
+    public static string NormalizeNameForCompare(string name)
+    {
+        string decomposed = NormalizeName(name).Normalize(NormalizationForm.FormD);
+        StringBuilder builder = new StringBuilder(decomposed.Length);
+        foreach (char character in decomposed)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+            {
+                builder.Append(character);
+            }
+        }
+        return builder.ToString().Replace('Đ', 'D').Normalize(NormalizationForm.FormC);
     }
 
     private static bool IsAllDigits(string text)
