@@ -262,7 +262,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Sec81_GetPlans_AdminHidesXsAndEditsXsMax_ReturnsEditedXsMax()
     {
-        // Chuẩn bị: đúng trạng thái admin đã lưu trên máy phát triển
+        // Chuẩn bị: đúng trạng thái admin đã lưu trên máy phát triển (XS Max kèm 90 suất, vượt tổng người nhận mặc định 50)
         await SetAdminSettingAsync("Plans.Xs.Hidden", "true", "BOOLEAN");
         await SetAdminSettingAsync("Plans.Xs.Price1Y", "10000", "NUMBER");
         await SetAdminSettingAsync("Plans.XsMax.Price1Y", "50000", "NUMBER");
@@ -278,7 +278,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         JsonElement plans = await ApiTestHelpers.ReadJsonAsync(response);
         JsonElement tiers = plans.GetProperty("tiers");
         Assert.Equal(2, tiers.GetArrayLength());
-        Assert.True(tiers[0].GetProperty("hidden").GetBoolean());
+        Assert.True(tiers[0].GetProperty("hidden").GetBoolean(), plans.ToString());
         Assert.Equal("XS_MAX", tiers[1].GetProperty("tier").GetString());
         Assert.Equal(45234 * 1048576L, tiers[1].GetProperty("storageQuotaBytes").GetInt64());
         Assert.Equal(90, tiers[1].GetProperty("includedBeneficiarySlots").GetInt32());

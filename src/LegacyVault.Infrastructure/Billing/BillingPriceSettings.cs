@@ -64,6 +64,11 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         get { return pricing.MaxExtraSlotsPerOrder ?? BillingPrices.MaxExtraSlotsPerOrder; }
     }
 
+    public int MaxTotalSlotsPerAccount
+    {
+        get { return pricing.MaxTotalSlots ?? BillingPrices.DefaultMaxTotalSlots; }
+    }
+
     public TimeSpan OrderLifetime
     {
         get
@@ -89,6 +94,22 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
     public IReadOnlyList<string> FreeFeatures
     {
         get { return pricing.FreeFeatures ?? new List<string>(); }
+    }
+
+    /// <summary>
+    /// Gói chưa xóa có số suất kèm lớn hơn tổng người nhận tối đa mỗi tài khoản; null nếu không có. Chỉ dùng khi Admin lưu cấu hình
+    /// (chặn đặt sai); lúc chạy không ném lỗi để dữ liệu đã lưu từ trước (ví dụ gói kèm 90 suất) không làm cả bảng giá quay về mặc định.
+    /// </summary>
+    public PlanInfo? FindPlanExceedingTotalSlots()
+    {
+        foreach (PlanInfo plan in plans)
+        {
+            if (!plan.Hidden && plan.IncludedSlots > MaxTotalSlotsPerAccount)
+            {
+                return plan;
+            }
+        }
+        return null;
     }
 
     public PlanInfo? FindPlan(string code)
@@ -172,7 +193,34 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
             result.Add(BuildPlan(custom.Code, ServiceTier.Custom, custom.Name, custom.Subtitle, custom.Order, custom));
         }
         result.Sort((a, b) => a.Order.CompareTo(b.Order));
+        RankByPrice(result);
         return result;
+    }
+
+    /// <summary>
+    /// Xếp gói từ rẻ đến đắt theo giá kỳ bán ngắn nhất rồi đánh lại thứ tự (10, 20, 30...), nên Admin đặt giá thế nào
+    /// thì gói rẻ đứng trước, gói đắt đứng sau; nâng hạng luôn đi từ gói rẻ lên gói đắt hơn. Giá bằng nhau giữ thứ tự cũ;
+    /// gói chưa có giá ở kỳ đó (gói đã xóa) xếp cuối.
+    /// </summary>
+    private void RankByPrice(List<PlanInfo> ranked)
+    {
+        if (saleYears.Count == 0)
+        {
+            return;
+        }
+        int rankYear = saleYears[0];
+        List<PlanInfo> original = new List<PlanInfo>(ranked);
+        ranked.Sort((a, b) =>
+        {
+            long left = a.Prices.ContainsKey(rankYear) ? a.Prices[rankYear] : long.MaxValue;
+            long right = b.Prices.ContainsKey(rankYear) ? b.Prices[rankYear] : long.MaxValue;
+            int byPrice = left.CompareTo(right);
+            return byPrice != 0 ? byPrice : original.IndexOf(a).CompareTo(original.IndexOf(b));
+        });
+        for (int i = 0; i < ranked.Count; i++)
+        {
+            ranked[i].Order = (i + 1) * 10;
+        }
     }
 
     private PlanInfo BuildPlan(
@@ -240,6 +288,16 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         {
             throw new InvalidOperationException("Số suất thêm tối đa mỗi đơn phải lớn hơn 0.");
         }
+        if (MaxTotalSlotsPerAccount < 1 || MaxTotalSlotsPerAccount > BillingPrices.MaxTotalSlotsLimit)
+        {
+            throw new InvalidOperationException(
+                "Tổng suất người nhận tối đa mỗi tài khoản phải từ 1 đến " + BillingPrices.MaxTotalSlotsLimit + ".");
+        }
+        if (pricing.SlotPricePerYear > BillingPrices.MaxSlotPricePerYear)
+        {
+            throw new InvalidOperationException(
+                "Giá một suất thêm tối đa " + BillingPrices.FormatMoney(BillingPrices.MaxSlotPricePerYear) + "đ mỗi năm.");
+        }
         if (OrderLifetime <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("Hạn đơn chờ thanh toán phải lớn hơn 0 phút.");
@@ -281,6 +339,15 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
                         "Gói " + plan.Name + " thiếu giá cho kỳ " + years + " năm (phải lớn hơn 0).");
                 }
             }
+            foreach (int years in saleYears)
+            {
+                if (section.Get(years) > BillingPrices.MaxTierPrice)
+                {
+                    throw new InvalidOperationException(
+                        "Giá gói " + plan.Name + " kỳ " + years + " năm vượt mức tối đa "
+                        + BillingPrices.FormatMoney(BillingPrices.MaxTierPrice) + "đ.");
+                }
+            }
             selling.Add(plan);
         }
 
@@ -289,20 +356,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         {
             throw new InvalidOperationException(
                 "Tối đa " + (MaxPaidPlans + 1) + " gói (tính cả Free): hiện có " + selling.Count + " gói trả phí đang hiện. Xóa bớt một gói.");
-        }
-
-        // Gói đứng sau (cao hơn) không được rẻ hơn gói đứng trước cùng kỳ, nếu không giá nâng hạng sẽ âm.
-        for (int i = 1; i < selling.Count; i++)
-        {
-            foreach (int years in saleYears)
-            {
-                if (selling[i].Prices[years] < selling[i - 1].Prices[years])
-                {
-                    throw new InvalidOperationException(
-                        "Giá gói " + selling[i].Name + " không được thấp hơn gói " + selling[i - 1].Name
-                        + " cùng kỳ (kỳ " + years + " năm).");
-                }
-            }
         }
     }
 

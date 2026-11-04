@@ -200,6 +200,7 @@ public static class BillingRules
             throw ValidationErrors.For("extraSlots",
                 $"Số suất mua thêm phải từ 0 đến {prices.MaxExtraSlotsPerOrder}.");
         }
+        EnsureWithinTotalSlots(prices, plan.IncludedSlots, extraSlots);
 
         BillingQuote quote = new BillingQuote();
         quote.Kind = PaymentOrderKind.Purchase;
@@ -220,6 +221,23 @@ public static class BillingRules
     }
 
     /// <summary>
+    /// Tổng suất người nhận của một kho không vượt mức Admin đặt (<see cref="IBillingPriceSettings.MaxTotalSlotsPerAccount"/>).
+    /// currentSlots là số suất kho sẽ có trước khi cộng đơn này (suất kèm gói, cộng suất đã mua nếu là mua thêm).
+    /// </summary>
+    private static void EnsureWithinTotalSlots(IBillingPriceSettings prices, int currentSlots, int extraSlots)
+    {
+        int cap = prices.MaxTotalSlotsPerAccount;
+        // Không mua thêm suất thì không bị trần chặn (gói kèm sẵn nhiều suất hơn trần vẫn mua được).
+        if (extraSlots <= 0 || currentSlots + extraSlots <= cap)
+        {
+            return;
+        }
+        int room = Math.Max(0, cap - currentSlots);
+        throw ValidationErrors.For("extraSlots",
+            $"Mỗi tài khoản có tối đa {cap} người nhận (kể cả suất kèm gói). Kho hiện có {currentSlots}, bạn chỉ mua thêm được tối đa {room} suất.");
+    }
+
+    /// <summary>
     /// Báo giá mua thêm suất giữa kỳ (ADDON-02): giá = ceil(49.000 × q × số giây còn lại / 31.536.000).
     /// Tính hoàn toàn bằng số nguyên long để không sai số làm tròn.
     /// </summary>
@@ -231,6 +249,7 @@ public static class BillingRules
             throw ValidationErrors.For("extraSlots",
                 $"Số suất mua thêm phải từ 1 đến {prices.MaxExtraSlotsPerOrder}.");
         }
+        EnsureWithinTotalSlots(prices, EntitlementLimits.EffectiveTotalSlots(entitlement), extraSlots);
         if (entitlement.ServiceExpiresAt == null)
         {
             throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported, "Kho không có kỳ dịch vụ còn hạn.");
@@ -437,6 +456,11 @@ public static class BillingRules
             throw NotAllowed(PaymentNotAllowedReason.TierNotOnSale, "Hiện không có kỳ nào để tính giá nâng hạng.");
         }
         long priceDifference = target.Prices[years] - current.Prices[years];
+        if (priceDifference <= 0)
+        {
+            throw NotAllowed(PaymentNotAllowedReason.RenewalNotSupported,
+                "Gói này không đắt hơn gói đang dùng ở kỳ này nên không nâng hạng được.");
+        }
         long periodSeconds = BillingPrices.SecondsPerYear * years;
         if (remainingSeconds > periodSeconds)
         {
