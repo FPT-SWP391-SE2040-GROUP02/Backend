@@ -171,6 +171,7 @@ public static class InfrastructureConfig
         // Security & Notifications
         services.AddMemoryCache();
         services.AddScoped<ISystemSettingService, SystemSettingService>();
+        services.AddHostedService<RuntimeSettingsRefresher>();
         services.AddSingleton<IPasswordHasher, Sha256PasswordHasher>();
         services.AddSingleton<IVaultPinHasher, VaultPinHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
