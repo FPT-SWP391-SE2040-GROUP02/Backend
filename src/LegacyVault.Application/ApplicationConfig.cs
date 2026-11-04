@@ -74,6 +74,8 @@ public static class ApplicationConfig
         services.AddScoped<IAdminPaymentService, AdminPaymentService>();
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsService, DevToolsService>();
+        // Chế độ bảo trì: chặn tài khoản không phải Admin ở đăng nhập, làm mới phiên và middleware API
+        services.AddScoped<MaintenanceModeGuard>();
         return services;
     }
 }
