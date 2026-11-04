@@ -973,7 +973,7 @@ Mua dịch vụ, mua thêm suất người nhận, giả lập trả tiền và 
 
 | Method | URL | Body | Thành công | Lỗi |
 |---|---|---|---|---|
-| GET | `/api/v1/billing/plans` | — | 200 `BillingPlansResponse` | 401 |
+| GET | `/api/v1/billing/plans` | — | 200 `BillingPlansResponse` (công khai, không cần đăng nhập; kèm `free` là hạn mức gói Free) | — |
 | POST | `/api/v1/billing/quote` | `{ tier?, years?, extraSlots }` | 200 `BillingQuoteResponse` (không ghi DB) | 400 `VALIDATION_ERROR`, 404 `VAULT_NOT_FOUND`, 409 `PAYMENT_NOT_ALLOWED` |
 | POST | `/api/v1/billing/orders` | như `quote` | **201** đơn mới / **200** trả lại đơn `PENDING` cùng lựa chọn; `PaymentOrderResponse` | 400, 404 `VAULT_NOT_FOUND`, 409 `PAYMENT_NOT_ALLOWED`, 409 `PAYMENT_ORDER_PENDING` |
 | GET | `/api/v1/billing/orders` | Query phân trang (`pageIndex`, `pageSize`, `sortBy` = `createdAt`, `isAscending`) | 200 `PaginatedList<PaymentOrderSummaryResponse>` (đơn của kho mình, lịch sử thanh toán) | 400 `VALIDATION_ERROR`, 404 `VAULT_NOT_FOUND` |

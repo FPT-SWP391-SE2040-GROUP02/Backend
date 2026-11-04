@@ -115,7 +115,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Sec81_PlansAndQuote_WithoutLogin_Return401()
+    public async Task Sec81_Plans_WithoutLogin_ReturnsPublicPriceList_ButQuoteStillReturns401()
     {
         // Chuẩn bị
         HttpClient anonymous = factory.CreateClient();
@@ -124,8 +124,8 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         HttpResponseMessage plans = await anonymous.GetAsync("/api/v1/billing/plans");
         HttpResponseMessage quote = await QuoteAsync(anonymous, new { tier = "XS", years = 1, extraSlots = 0 });
 
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.Unauthorized, plans.StatusCode);
+        // Kiểm tra: bảng giá là thông tin công khai cho trang giới thiệu; báo giá và đơn vẫn cần đăng nhập
+        Assert.Equal(HttpStatusCode.OK, plans.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, quote.StatusCode);
     }
 
