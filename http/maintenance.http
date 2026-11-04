@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:5000
+@adminToken = <accessToken của tài khoản ADMIN>
+@userToken = <accessToken của tài khoản USER>
+
+### Cờ công khai (không cần đăng nhập): "Features.MaintenanceMode": true khi đang bảo trì
+GET {{baseUrl}}/api/v1/settings/public
+
+### Admin bật bảo trì (gọi GET /api/v1/admin/settings một lần trước để có dòng mặc định)
+PUT {{baseUrl}}/api/v1/admin/settings/Features.MaintenanceMode
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "value": "true",
+  "isEnabled": true,
+  "reason": "Bảo trì hệ thống"
+}
+
+### Tài khoản thường gọi API khi đang bảo trì: 503 MAINTENANCE_MODE
+GET {{baseUrl}}/api/v1/auth/session
+Authorization: Bearer {{userToken}}
+
+### Admin vẫn dùng API bình thường: 200
+GET {{baseUrl}}/api/v1/admin/settings
+Authorization: Bearer {{adminToken}}
+
+### Admin tắt bảo trì: tài khoản thường dùng lại được ngay
+PUT {{baseUrl}}/api/v1/admin/settings/Features.MaintenanceMode
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "value": "false",
+  "isEnabled": true,
+  "reason": "Kết thúc bảo trì"
+}
