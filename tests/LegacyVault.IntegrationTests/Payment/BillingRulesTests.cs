@@ -103,6 +103,14 @@ public sealed class BillingRulesTests
     }
 
     [Fact]
+    public void TotalSlots_PlanWithManyIncludedSlots_CanStillBePurchasedWithoutExtras()
+    {
+        // Trần mặc định 50 nhưng XS kèm 2 suất; không mua thêm suất thì không bị trần chặn
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 0);
+        Assert.Equal(2, quote.TotalBeneficiarySlots);
+    }
+
+    [Fact]
     public void TotalSlots_Purchase_IncludesSlotsComingWithThePlan()
     {
         // XS kèm 2 suất; trần 50 nên mua mới tối đa 48 suất thêm (bị chặn thêm bởi 20 suất mỗi đơn, nên thử 20 vẫn qua)

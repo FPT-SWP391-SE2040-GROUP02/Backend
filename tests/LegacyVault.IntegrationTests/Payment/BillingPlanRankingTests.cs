@@ -88,7 +88,7 @@ public sealed class BillingPlanRankingTests
     }
 
     [Fact]
-    public void IncludedSlotsAboveTotalCap_IsRejected()
+    public void IncludedSlotsAboveTotalCap_IsReportedForSaving_ButDoesNotBreakPricing()
     {
         BillingSettings settings = new BillingSettings();
         settings.Pricing.PolicyVersion = "TEST";
@@ -97,10 +97,11 @@ public sealed class BillingPlanRankingTests
         settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
         settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 2, ThreeYears = 2, FiveYears = 2 };
 
-        // XS Max kèm 5 suất, trần chỉ 3
-        InvalidOperationException error = Assert.Throws<InvalidOperationException>(
-            () => new BillingPriceSettings(Options.Create(settings)));
-        Assert.Contains("vượt tổng suất tối đa", error.Message);
+        // XS Max kèm 5 suất, trần chỉ 3: lúc chạy vẫn dựng được bảng giá, lúc Admin lưu thì bị báo
+        BillingPriceSettings prices = new BillingPriceSettings(Options.Create(settings));
+
+        Assert.Equal("XS_MAX", prices.FindPlanExceedingTotalSlots()!.Code);
+        Assert.Equal(2, prices.Plans.Count);
     }
 
     [Theory]
@@ -109,5 +110,20 @@ public sealed class BillingPlanRankingTests
     public void PlanName_IsNormalizedForDuplicateCheck(string input, string expected)
     {
         Assert.Equal(expected, PlanPriceRules.NormalizeName(input));
+    }
+
+    [Fact]
+    public void HiddenPlan_KeepsItsRank_WhenCheaperThanTheOthers()
+    {
+        BillingSettings settings = new BillingSettings();
+        settings.Pricing.PolicyVersion = "TEST";
+        settings.Pricing.SlotPricePerYear = 49000;
+        settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 10000, ThreeYears = 499000, FiveYears = 799000, Hidden = true };
+        settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 50000, ThreeYears = 999000, FiveYears = 1599000 };
+
+        BillingPriceSettings prices = new BillingPriceSettings(Options.Create(settings));
+
+        Assert.Equal(new[] { "XS", "XS_MAX" }, prices.Plans.Select(plan => plan.Code).ToArray());
+        Assert.True(prices.Plans[0].Hidden);
     }
 }

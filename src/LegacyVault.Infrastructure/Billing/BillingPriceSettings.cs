@@ -96,6 +96,22 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         get { return pricing.FreeFeatures ?? new List<string>(); }
     }
 
+    /// <summary>
+    /// Gói chưa xóa có số suất kèm lớn hơn tổng người nhận tối đa mỗi tài khoản; null nếu không có. Chỉ dùng khi Admin lưu cấu hình
+    /// (chặn đặt sai); lúc chạy không ném lỗi để dữ liệu đã lưu từ trước (ví dụ gói kèm 90 suất) không làm cả bảng giá quay về mặc định.
+    /// </summary>
+    public PlanInfo? FindPlanExceedingTotalSlots()
+    {
+        foreach (PlanInfo plan in plans)
+        {
+            if (!plan.Hidden && plan.IncludedSlots > MaxTotalSlotsPerAccount)
+            {
+                return plan;
+            }
+        }
+        return null;
+    }
+
     public PlanInfo? FindPlan(string code)
     {
         string wanted = code.Trim().ToUpperInvariant();
@@ -322,12 +338,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
                     throw new InvalidOperationException(
                         "Gói " + plan.Name + " thiếu giá cho kỳ " + years + " năm (phải lớn hơn 0).");
                 }
-            }
-            if (plan.IncludedSlots > MaxTotalSlotsPerAccount)
-            {
-                throw new InvalidOperationException(
-                    "Gói " + plan.Name + " có " + plan.IncludedSlots + " suất kèm, vượt tổng suất tối đa mỗi tài khoản ("
-                    + MaxTotalSlotsPerAccount + ").");
             }
             foreach (int years in saleYears)
             {

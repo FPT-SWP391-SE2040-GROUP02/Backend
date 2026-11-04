@@ -214,7 +214,13 @@ public sealed class SystemSettingService : ISystemSettingService
         BillingPricingSection effective = PlanPriceRules.BuildEffective(billingOptions.Value.Pricing, rows, out hasOverride);
         try
         {
-            new BillingPriceSettings(effective);
+            BillingPriceSettings merged = new BillingPriceSettings(effective);
+            PlanInfo? tooMany = merged.FindPlanExceedingTotalSlots();
+            if (tooMany != null)
+            {
+                throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                    $"Gói {tooMany.Name} có {tooMany.IncludedSlots} suất kèm, vượt tổng người nhận tối đa mỗi tài khoản ({merged.MaxTotalSlotsPerAccount}). Hãy tăng số này hoặc giảm suất kèm của gói.");
+            }
         }
         catch (InvalidOperationException ex)
         {

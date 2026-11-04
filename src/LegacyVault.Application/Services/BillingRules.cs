@@ -227,7 +227,8 @@ public static class BillingRules
     private static void EnsureWithinTotalSlots(IBillingPriceSettings prices, int currentSlots, int extraSlots)
     {
         int cap = prices.MaxTotalSlotsPerAccount;
-        if (currentSlots + extraSlots <= cap)
+        // Không mua thêm suất thì không bị trần chặn (gói kèm sẵn nhiều suất hơn trần vẫn mua được).
+        if (extraSlots <= 0 || currentSlots + extraSlots <= cap)
         {
             return;
         }
