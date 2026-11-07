@@ -111,6 +111,15 @@ public static class InfrastructureConfig
             }
             return ActivatorUtilities.CreateInstance<LogIncidentNoticeSender>(provider);
         });
+        services.AddSingleton<IDownloadCodeSender>(provider =>
+        {
+            SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
+            if (smtp.IsConfigured)
+            {
+                return ActivatorUtilities.CreateInstance<SmtpDownloadCodeSender>(provider);
+            }
+            return ActivatorUtilities.CreateInstance<LogDownloadCodeSender>(provider);
+        });
         services.AddScoped<IOwnerIdentityReader, OwnerIdentityReader>();
         services.AddScoped<IStorageReservationRepository, StorageReservationRepository>();
 

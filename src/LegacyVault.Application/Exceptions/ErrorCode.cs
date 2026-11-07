@@ -33,6 +33,10 @@ public enum ErrorCode
     HandoverDecisionExpired,
     GrantNotActive,
     ContentIntegrityFailed,
+    /// <summary>Admin bật mã tải nhưng yêu cầu tải không kèm mã (403).</summary>
+    DownloadCodeRequired,
+    /// <summary>Mã tải sai, hết hạn hoặc nhập sai quá số lần cho phép (403).</summary>
+    DownloadCodeInvalid,
     StorageQuotaExceeded,
     FileTooLarge,
     InternalError,

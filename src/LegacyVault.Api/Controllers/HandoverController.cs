@@ -19,13 +19,16 @@ public sealed class HandoverController : ControllerBase
 {
     private readonly IHandoverService handoverService;
     private readonly IHandoverDownloadService downloadService;
+    private readonly IDownloadCodeService downloadCodes;
     private readonly ILogger<HandoverController> logger;
 
     public HandoverController(
         IHandoverService handoverService,
         IHandoverDownloadService downloadService,
+        IDownloadCodeService downloadCodes,
         ILogger<HandoverController> logger)
     {
+        this.downloadCodes = downloadCodes;
         this.handoverService = handoverService;
         this.downloadService = downloadService;
         this.logger = logger;
@@ -89,6 +92,27 @@ public sealed class HandoverController : ControllerBase
         return handoverService.DeclineAsync(turnId, ct);
     }
 
+    /// <summary>Cho biết Admin có bật mã tải không, để màn tải biết cần hỏi mã hay không.</summary>
+    [HttpGet("download-code")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult DownloadCodeStatus()
+    {
+        return Ok(new { required = downloadCodes.Required });
+    }
+
+    /// <summary>Gửi mã tải 6 số dùng một lần (hạn 10 phút) qua email của người đang đăng nhập; chỉ cho người có quyền tải này.</summary>
+    [HttpPost("grants/{grantId:guid}/download-code")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RequestDownloadCode(Guid grantId, CancellationToken ct)
+    {
+        // Kiểm quyền bằng chính việc xem danh sách tài sản của quyền tải này.
+        await handoverService.ListAssetsAsync(grantId, ct);
+        await downloadCodes.RequestAsync(grantId, ct);
+        return NoContent();
+    }
+
     /// <summary>Danh sách tài sản trong quyền xem của tôi.</summary>
     [HttpGet("grants/{grantId:guid}/assets")]
     [ProducesResponseType<List<HandoverItemResponse>>(StatusCodes.Status200OK)]
@@ -110,6 +134,8 @@ public sealed class HandoverController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DownloadContent(Guid grantId, Guid itemId, CancellationToken ct)
     {
+        // Admin bật mã tải: kiểm mã trước khi chuẩn bị nội dung; mã đúng chỉ dùng được một lần.
+        downloadCodes.Consume(grantId, Request.Headers["X-Download-Code"].ToString());
         PreparedDownload download;
         try
         {
