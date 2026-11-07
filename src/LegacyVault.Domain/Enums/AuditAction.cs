@@ -120,4 +120,6 @@ public enum AuditAction
     SystemConfigUpdated = 54,
     /// <summary>Admin khôi phục cấu hình một dịch vụ ngoài về giá trị mặc định trong appsettings.</summary>
     SystemConfigReset = 55,
+    /// <summary>Admin giao hoặc đổi Người thực thi của một kho, kèm lý do (người được giao phải chấp nhận lời mời).</summary>
+    ExecutorAssignedByAdmin = 56,
 }

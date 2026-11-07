@@ -21,6 +21,12 @@ public enum IncidentType
     Payment = 7,
     /// <summary>Tài khoản bị tạm khóa vì nhập sai mật khẩu quá nhiều lần, có thể đang bị dò mật khẩu (SEC-10).</summary>
     SuspiciousLogin = 8,
+    /// <summary>Hồ sơ chứng tử quá hạn xét duyệt mà Verifier được giao chưa quyết định.</summary>
+    StaleCase = 9,
+    /// <summary>Hồ sơ chứng tử bị yêu cầu bổ sung nhiều lần liên tiếp, cần Admin xem vì sao chưa xong.</summary>
+    SupplementLoop = 10,
+    /// <summary>Gói trả phí của kho sắp hết hạn; hết hạn rồi kho sẽ bị khóa rồi xóa.</summary>
+    PlanExpiring = 11,
 }
 
 public enum IncidentStatus
