@@ -76,6 +76,8 @@ public static class DeathCaseMappings
         response.VaultId = row.VaultId;
         response.OwnerFullName = row.OwnerFullName;
         response.PlanStatus = row.PlanStatus.ToApiString();
+        response.ProxyUsed = row.ProxyUsed;
+        response.ProxyLimit = CheckInRules.ExecutorProxyLimit;
         response.ExecutorNote = row.ExecutorNote;
         response.ExecutorNoteUpdatedAt = row.ExecutorNoteUpdatedAt;
         // DMS-05: quá hạn điểm danh = đang trong thời gian chờ hoặc đã hết thời gian chờ.

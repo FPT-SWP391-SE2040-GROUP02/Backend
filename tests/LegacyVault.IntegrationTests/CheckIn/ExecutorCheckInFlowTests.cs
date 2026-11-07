@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Net;
 using System.Text.Json;
 using LegacyVault.Domain.Entities;
@@ -95,6 +96,26 @@ public sealed class ExecutorCheckInFlowTests : IAsyncLifetime
             Assert.Equal(AuditActorRole.Executor, log.ActorRole);
             Assert.Equal(executor.User.Id, log.ActorUserId);
         });
+    }
+
+    [SqlFact]
+    public async Task MyVaults_ShowProxyUsedAndLimit()
+    {
+        // Chuẩn bị: kho quá hạn, chưa điểm danh thay lần nào
+        (DeathCaseTestData.OwnerVault vault, DeathCaseTestData.ExecutorClient executor) =
+            await CreateOverdueVaultAsync(PlanStatus.AwaitingCheck);
+        JsonElement before = await executor.Client.GetFromJsonAsync<JsonElement>("/api/v1/executor/vaults");
+        Assert.Equal(0, before[0].GetProperty("proxyUsed").GetInt32());
+        Assert.Equal(2, before[0].GetProperty("proxyLimit").GetInt32());
+
+        // Hành động: điểm danh thay một lần
+        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Kiểm tra: đã dùng 1 trên giới hạn 2
+        JsonElement after = await executor.Client.GetFromJsonAsync<JsonElement>("/api/v1/executor/vaults");
+        Assert.Equal(1, after[0].GetProperty("proxyUsed").GetInt32());
+        Assert.Equal(2, after[0].GetProperty("proxyLimit").GetInt32());
     }
 
     [SqlFact]

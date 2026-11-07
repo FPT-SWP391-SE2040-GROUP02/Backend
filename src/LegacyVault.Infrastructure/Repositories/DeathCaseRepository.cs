@@ -66,6 +66,27 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
                     .FirstOrDefault(),
             })
             .ToListAsync(ct);
+        foreach (ExecutorVaultRow row in rows)
+        {
+            // Đếm các kỳ gần nhất do Executor mở cho tới khi gặp kỳ chủ kho tự điểm danh.
+            List<bool> startedByExecutor = await context.Set<CheckInPeriod>()
+                .AsNoTracking()
+                .Where(p => p.Plan.VaultId == row.VaultId)
+                .OrderByDescending(p => p.Sequence)
+                .Select(p => p.StartedByExecutor)
+                .Take(50)
+                .ToListAsync(ct);
+            int used = 0;
+            foreach (bool byExecutor in startedByExecutor)
+            {
+                if (!byExecutor)
+                {
+                    break;
+                }
+                used++;
+            }
+            row.ProxyUsed = used;
+        }
         return rows;
     }
 

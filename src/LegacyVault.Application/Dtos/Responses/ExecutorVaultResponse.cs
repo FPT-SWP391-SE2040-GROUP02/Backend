@@ -10,6 +10,12 @@ public class ExecutorVaultResponse
 
     public string PlanStatus { get; set; } = string.Empty;
 
+    /// <summary>Số lần Executor đã điểm danh thay liên tiếp; chủ kho tự điểm danh thì đếm lại từ 0.</summary>
+    public int ProxyUsed { get; set; }
+
+    /// <summary>Giới hạn điểm danh thay liên tiếp do Admin đặt (cài đặt CheckIn.ExecutorProxyLimit).</summary>
+    public int ProxyLimit { get; set; }
+
     /// <summary>Hướng dẫn Owner để lại cho Executor, xem được trước khi hồ sơ chứng tử được duyệt; null khi Owner chưa viết.</summary>
     public string? ExecutorNote { get; set; }
 

@@ -13,6 +13,9 @@ public sealed class ExecutorVaultRow
 
     public PlanStatus PlanStatus { get; set; }
 
+    /// <summary>Số lần Executor điểm danh thay liên tiếp gần nhất (kỳ do Executor mở); chủ kho tự điểm danh thì về 0.</summary>
+    public int ProxyUsed { get; set; }
+
     /// <summary>Hướng dẫn Owner để lại cho Executor (Vault.ExecutorNote); null khi chưa viết.</summary>
     public string? ExecutorNote { get; set; }
 
