@@ -36,10 +36,6 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
 
     public ResolvedConfig? ReadPrimary(string serviceKey)
     {
-        if (serviceKey == SystemConfigServices.Gemini)
-        {
-            return ReadGemini();
-        }
         if (serviceKey == SystemConfigServices.Ekyc)
         {
             return ReadEkyc();
@@ -145,26 +141,4 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
         return config;
     }
 
-    private ResolvedConfig ReadGemini()
-    {
-        ResolvedConfig config = new ResolvedConfig();
-        config.Source = ConfigSources.AppSettings;
-        config.Settings = SystemConfigCatalog.DefaultSettings(SystemConfigServices.Gemini);
-        string? model = configuration["Gemini:Model"];
-        if (!string.IsNullOrWhiteSpace(model))
-        {
-            config.Settings["model"] = model.Trim();
-        }
-        string? timeout = configuration["Gemini:TimeoutSeconds"];
-        if (!string.IsNullOrWhiteSpace(timeout))
-        {
-            config.Settings["timeoutSeconds"] = timeout.Trim();
-        }
-        string? apiKey = configuration["Gemini:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(apiKey))
-        {
-            config.Secrets["apiKey"] = apiKey.Trim();
-        }
-        return config;
-    }
 }

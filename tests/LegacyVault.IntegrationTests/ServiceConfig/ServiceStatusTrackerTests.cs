@@ -15,7 +15,7 @@ public sealed class ServiceStatusTrackerTests
     {
         ServiceStatusTracker tracker = new ServiceStatusTracker();
 
-        ServiceStatus status = tracker.Get(SystemConfigServices.Gemini);
+        ServiceStatus status = tracker.Get(SystemConfigServices.Ekyc);
 
         Assert.Null(status.ActiveSlot);
         Assert.Null(status.LastSucceeded);
@@ -28,10 +28,10 @@ public sealed class ServiceStatusTrackerTests
     {
         ServiceStatusTracker tracker = new ServiceStatusTracker();
 
-        tracker.Record(SystemConfigServices.Gemini, SystemConfigSlot.Primary, false, "HTTP_503", Now);
-        tracker.Record(SystemConfigServices.Gemini, SystemConfigSlot.Fallback, true, null, Now.AddSeconds(1));
+        tracker.Record(SystemConfigServices.Ekyc, SystemConfigSlot.Primary, false, "HTTP_503", Now);
+        tracker.Record(SystemConfigServices.Ekyc, SystemConfigSlot.Fallback, true, null, Now.AddSeconds(1));
 
-        ServiceStatus status = tracker.Get(SystemConfigServices.Gemini);
+        ServiceStatus status = tracker.Get(SystemConfigServices.Ekyc);
         Assert.Equal(SystemConfigSlot.Fallback, status.ActiveSlot);
         Assert.True(status.LastSucceeded);
         Assert.Equal(Now.AddSeconds(1), status.LastAt);
@@ -43,9 +43,9 @@ public sealed class ServiceStatusTrackerTests
     {
         ServiceStatusTracker tracker = new ServiceStatusTracker();
 
-        tracker.Record(SystemConfigServices.Gemini, SystemConfigSlot.Primary, false, "TIMEOUT", Now);
+        tracker.Record(SystemConfigServices.Ekyc, SystemConfigSlot.Primary, false, "TIMEOUT", Now);
 
-        ServiceStatus status = tracker.Get(SystemConfigServices.Gemini);
+        ServiceStatus status = tracker.Get(SystemConfigServices.Ekyc);
         Assert.Null(status.ActiveSlot);
         Assert.False(status.LastSucceeded);
         Assert.Equal("TIMEOUT", status.LastErrorCode);
@@ -56,8 +56,8 @@ public sealed class ServiceStatusTrackerTests
     {
         ServiceStatusTracker tracker = new ServiceStatusTracker();
 
-        tracker.Record(SystemConfigServices.Gemini, SystemConfigSlot.Primary, true, null, Now);
+        tracker.Record(SystemConfigServices.Ekyc, SystemConfigSlot.Primary, true, null, Now);
 
-        Assert.Null(tracker.Get(SystemConfigServices.Ekyc).LastSucceeded);
+        Assert.Null(tracker.Get(SystemConfigServices.Smtp).LastSucceeded);
     }
 }

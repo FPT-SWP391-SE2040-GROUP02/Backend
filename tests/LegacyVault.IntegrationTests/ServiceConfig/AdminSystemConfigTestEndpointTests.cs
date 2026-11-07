@@ -22,7 +22,7 @@ namespace LegacyVault.IntegrationTests.ServiceConfig;
 public sealed class AdminSystemConfigTestEndpointTests : IAsyncLifetime
 {
     private const string BaseUrl = "/api/v1/admin/system-config";
-    private const string GeminiPrimary = BaseUrl + "/GEMINI/PRIMARY";
+    private const string GeminiPrimary = BaseUrl + "/EKYC/PRIMARY";
     private const string TestUrl = GeminiPrimary + "/test";
     private const string DraftKey = "draft-key-LEAK-7777";
 
@@ -53,7 +53,7 @@ public sealed class AdminSystemConfigTestEndpointTests : IAsyncLifetime
     {
         public string ServiceKey
         {
-            get { return SystemConfigServices.Gemini; }
+            get { return SystemConfigServices.Ekyc; }
         }
 
         public ResolvedConfig? Draft { get; private set; }
@@ -125,7 +125,7 @@ public sealed class AdminSystemConfigTestEndpointTests : IAsyncLifetime
     private static object Draft(string model, string? apiKey, string timeout = "20")
     {
         Dictionary<string, string?> settings = new Dictionary<string, string?>();
-        settings["model"] = model;
+        settings["baseUrl"] = "http://" + model + ".test";
         settings["timeoutSeconds"] = timeout;
         Dictionary<string, string?> secrets = new Dictionary<string, string?>();
         secrets["apiKey"] = apiKey;
@@ -145,7 +145,7 @@ public sealed class AdminSystemConfigTestEndpointTests : IAsyncLifetime
     private async Task SaveKeyAsync(HttpClient client, string apiKey)
     {
         Dictionary<string, string?> settings = new Dictionary<string, string?>();
-        settings["model"] = "gemini-flash-lite-latest";
+        settings["baseUrl"] = "http://gemini-flash-lite-latest.test";
         settings["timeoutSeconds"] = "20";
         Dictionary<string, string?> secrets = new Dictionary<string, string?>();
         secrets["apiKey"] = apiKey;
@@ -168,7 +168,7 @@ public sealed class AdminSystemConfigTestEndpointTests : IAsyncLifetime
             JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.True(body.GetProperty("ok").GetBoolean());
             Assert.Equal(12, body.GetProperty("latencyMs").GetInt32());
-            Assert.Equal("draft-model", tester.Draft!.Settings["model"]);
+            Assert.Equal("http://draft-model.test", tester.Draft!.Settings["baseUrl"]);
             Assert.Equal("30", tester.Draft.Settings["timeoutSeconds"]);
             Assert.Equal(DraftKey, tester.Draft.Secrets["apiKey"]);
             await ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -192,91 +192,7 @@ public sealed class AdminSystemConfigTestEndpointTests : IAsyncLifetime
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal("stored-key-ABCDEFGH", tester.Draft!.Secrets["apiKey"]);
-            Assert.Equal("gemini-2.5-flash", tester.Draft.Settings["model"]);
-        }
-    }
-
-    [SqlFact]
-    public async Task Test_BlankSecretAndNoKeyAnywhere_Returns400()
-    {
-        FakeTester tester = new FakeTester();
-        using (WebApplicationFactory<Program> host = WithFakeTester(tester))
-        {
-            HttpClient client = await AdminClientAsync(host);
-
-            HttpResponseMessage response = await client.PostAsJsonAsync(TestUrl, Draft("gemini-2.5-flash", ""));
-
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.Null(tester.Draft);
-        }
-    }
-
-    [SqlFact]
-    public async Task Test_InvalidModel_Returns400_AndNeverCallsTester()
-    {
-        FakeTester tester = new FakeTester();
-        using (WebApplicationFactory<Program> host = WithFakeTester(tester))
-        {
-            HttpClient client = await AdminClientAsync(host);
-
-            HttpResponseMessage response = await client.PostAsJsonAsync(TestUrl, Draft("a/../b", DraftKey));
-
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.Null(tester.Draft);
-        }
-    }
-
-    [SqlFact]
-    public async Task RealTester_Success_ReportsOk()
-    {
-        StubHandler handler = new StubHandler();
-        using (WebApplicationFactory<Program> host = WithHttp(handler))
-        {
-            HttpClient client = await AdminClientAsync(host);
-
-            HttpResponseMessage response = await client.PostAsJsonAsync(TestUrl, Draft("gemini-2.5-flash", DraftKey));
-
-            JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.True(body.GetProperty("ok").GetBoolean());
-            Assert.Equal(JsonValueKind.Null, body.GetProperty("errorCode").ValueKind);
-            Assert.Equal(1, handler.Calls);
-        }
-    }
-
-    [SqlFact]
-    public async Task RealTester_Http401_ReportsErrorCodeWithoutKey()
-    {
-        StubHandler handler = new StubHandler();
-        handler.Responder = () => new HttpResponseMessage(HttpStatusCode.Unauthorized);
-        using (WebApplicationFactory<Program> host = WithHttp(handler))
-        {
-            HttpClient client = await AdminClientAsync(host);
-
-            HttpResponseMessage response = await client.PostAsJsonAsync(TestUrl, Draft("gemini-2.5-flash", DraftKey));
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            string text = await response.Content.ReadAsStringAsync();
-            Assert.DoesNotContain(DraftKey, text);
-            JsonElement body = JsonDocument.Parse(text).RootElement;
-            Assert.False(body.GetProperty("ok").GetBoolean());
-            Assert.Equal("HTTP_401", body.GetProperty("errorCode").GetString());
-        }
-    }
-
-    [SqlFact]
-    public async Task RealTester_Timeout_ReportsTimeout()
-    {
-        StubHandler handler = new StubHandler();
-        handler.Responder = () => throw new TaskCanceledException("timeout");
-        using (WebApplicationFactory<Program> host = WithHttp(handler))
-        {
-            HttpClient client = await AdminClientAsync(host);
-
-            HttpResponseMessage response = await client.PostAsJsonAsync(TestUrl, Draft("gemini-2.5-flash", DraftKey));
-
-            JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.False(body.GetProperty("ok").GetBoolean());
-            Assert.Equal("TIMEOUT", body.GetProperty("errorCode").GetString());
+            Assert.Equal("http://gemini-2.5-flash.test", tester.Draft.Settings["baseUrl"]);
         }
     }
 

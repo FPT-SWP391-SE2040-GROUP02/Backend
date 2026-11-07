@@ -41,11 +41,11 @@ public sealed class SystemConfigResolverTests : IAsyncLifetime
     private async Task AddRowAsync(SystemConfigSlot slot, bool enabled, string model, string apiKey)
     {
         SystemConfig row = new SystemConfig();
-        row.ServiceKey = SystemConfigServices.Gemini;
+        row.ServiceKey = SystemConfigServices.Ekyc;
         row.Slot = slot;
         row.Enabled = enabled;
         Dictionary<string, string> settings = new Dictionary<string, string>();
-        settings["model"] = model;
+        settings["baseUrl"] = "http://" + model + ".test";
         settings["timeoutSeconds"] = "30";
         row.SettingsJson = JsonSerializer.Serialize(settings);
         Dictionary<string, string> secrets = new Dictionary<string, string>();
@@ -68,7 +68,7 @@ public sealed class SystemConfigResolverTests : IAsyncLifetime
         using (IServiceScope scope = services.CreateScope())
         {
             ISystemConfigResolver resolver = scope.ServiceProvider.GetRequiredService<ISystemConfigResolver>();
-            return await resolver.ResolveAsync(SystemConfigServices.Gemini, slot, CancellationToken.None);
+            return await resolver.ResolveAsync(SystemConfigServices.Ekyc, slot, CancellationToken.None);
         }
     }
 
@@ -76,43 +76,8 @@ public sealed class SystemConfigResolverTests : IAsyncLifetime
     {
         using (IServiceScope scope = services.CreateScope())
         {
-            scope.ServiceProvider.GetRequiredService<ISystemConfigResolver>().Invalidate(SystemConfigServices.Gemini);
+            scope.ServiceProvider.GetRequiredService<ISystemConfigResolver>().Invalidate(SystemConfigServices.Ekyc);
         }
-    }
-
-    [SqlFact]
-    public async Task NoRow_PrimaryComesFromAppSettings()
-    {
-        using (WebApplicationFactory<Program> withKey = factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureAppConfiguration((context, configuration) =>
-            {
-                Dictionary<string, string?> values = new Dictionary<string, string?>();
-                values["Gemini:ApiKey"] = "env-key";
-                values["Gemini:Model"] = "gemini-2.5-flash";
-                configuration.AddInMemoryCollection(values);
-            });
-        }))
-        {
-            ResolvedConfig? config = await ResolveAsync(withKey.Services, SystemConfigSlot.Primary);
-
-            Assert.NotNull(config);
-            Assert.Equal(ConfigSources.AppSettings, config.Source);
-            Assert.Equal("gemini-2.5-flash", config.Settings["model"]);
-            Assert.Equal("20", config.Settings["timeoutSeconds"]);
-            Assert.Equal("env-key", config.Secrets["apiKey"]);
-        }
-    }
-
-    [SqlFact]
-    public async Task NoRowAndNoAppSettingsKey_PrimaryUsesCatalogDefaultsWithoutKey()
-    {
-        ResolvedConfig? config = await ResolveAsync(factory.Services, SystemConfigSlot.Primary);
-
-        Assert.NotNull(config);
-        Assert.Equal(ConfigSources.AppSettings, config.Source);
-        Assert.Equal("gemini-flash-lite-latest", config.Settings["model"]);
-        Assert.False(config.Secrets.ContainsKey("apiKey"));
     }
 
     [SqlFact]
@@ -124,26 +89,9 @@ public sealed class SystemConfigResolverTests : IAsyncLifetime
 
         Assert.NotNull(config);
         Assert.Equal(ConfigSources.Database, config.Source);
-        Assert.Equal("row-model", config.Settings["model"]);
+        Assert.Equal("http://row-model.test", config.Settings["baseUrl"]);
         Assert.Equal("30", config.Settings["timeoutSeconds"]);
         Assert.Equal("row-key", config.Secrets["apiKey"]);
-    }
-
-    [SqlFact]
-    public async Task Row_MissingSetting_GetsCatalogDefault()
-    {
-        await AddRowAsync(SystemConfigSlot.Primary, true, "row-model", "row-key");
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            SystemConfig row = await db.SystemConfigs.SingleAsync();
-            row.SettingsJson = "{}";
-            await db.SaveChangesAsync();
-        });
-
-        ResolvedConfig? config = await ResolveAsync(factory.Services, SystemConfigSlot.Primary);
-
-        Assert.NotNull(config);
-        Assert.Equal("gemini-flash-lite-latest", config.Settings["model"]);
     }
 
     [SqlFact]
@@ -176,21 +124,21 @@ public sealed class SystemConfigResolverTests : IAsyncLifetime
     {
         await AddRowAsync(SystemConfigSlot.Primary, true, "old-model", "k");
         ResolvedConfig? first = await ResolveAsync(factory.Services, SystemConfigSlot.Primary);
-        Assert.Equal("old-model", first!.Settings["model"]);
+        Assert.Equal("http://old-model.test", first!.Settings["baseUrl"]);
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             SystemConfig row = await db.SystemConfigs.SingleAsync();
-            row.SettingsJson = JsonSerializer.Serialize(new Dictionary<string, string> { ["model"] = "new-model" });
+            row.SettingsJson = JsonSerializer.Serialize(new Dictionary<string, string> { ["baseUrl"] = "http://new-model.test" });
             await db.SaveChangesAsync();
         });
 
         ResolvedConfig? stale = await ResolveAsync(factory.Services, SystemConfigSlot.Primary);
-        Assert.Equal("old-model", stale!.Settings["model"]);
+        Assert.Equal("http://old-model.test", stale!.Settings["baseUrl"]);
 
         Invalidate(factory.Services);
 
         ResolvedConfig? fresh = await ResolveAsync(factory.Services, SystemConfigSlot.Primary);
-        Assert.Equal("new-model", fresh!.Settings["model"]);
+        Assert.Equal("http://new-model.test", fresh!.Settings["baseUrl"]);
     }
 }
