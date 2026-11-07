@@ -19,7 +19,17 @@ public sealed class ExecutorInvitationSender(
     IHostEnvironment env,
     ILogger<ExecutorInvitationSender> logger) : IExecutorInvitationSender
 {
-    public async Task<bool> SendAsync(string email, string token, DateTimeOffset expiresAt, CancellationToken ct)
+    public Task<bool> SendAsync(string email, string token, DateTimeOffset expiresAt, CancellationToken ct)
+    {
+        return DeliverAsync(email, token, expiresAt, false, ct);
+    }
+
+    public Task<bool> SendAssignedByAdminAsync(string email, string token, DateTimeOffset expiresAt, CancellationToken ct)
+    {
+        return DeliverAsync(email, token, expiresAt, true, ct);
+    }
+
+    private async Task<bool> DeliverAsync(string email, string token, DateTimeOffset expiresAt, bool assignedByAdmin, CancellationToken ct)
     {
         var link = urlProvider.GetExecutorInvitationUrl(token);
 
@@ -29,7 +39,10 @@ public sealed class ExecutorInvitationSender(
         if (deliveryEnabled && settings.Value.IsConfigured)
         {
             var text = $"Bạn được mời làm Executor trên LegacyVault. Đọc phạm vi nhiệm vụ và tự quyết định tại {link} . Lời mời hết hạn {expiresAt:O}. Không chuyển tiếp liên kết này. Bỏ qua thư nếu bạn không chấp nhận nhiệm vụ.";
-            string lead = $"Bạn vừa được một Chủ kho trên LegacyVault tin tưởng chỉ định đảm nhiệm vai trò Người thi hành (Executor). "
+            string appointer = assignedByAdmin
+                ? "Quản trị viên LegacyVault vừa chỉ định bạn đảm nhiệm vai trò Người thực thi cho một kho đang cần người phụ trách. "
+                : "Bạn vừa được một Chủ kho trên LegacyVault tin tưởng chỉ định đảm nhiệm vai trò Người thi hành (Executor). ";
+            string lead = appointer
                 + "Trong vai trò này, bạn sẽ hỗ trợ kích hoạt và thực thi kế hoạch bàn giao di sản số khi có sự kiện diễn ra. Vui lòng nhấn vào nút bên dưới để xem phạm vi nhiệm vụ và quyết định chấp nhận hoặc từ chối.";
             string notice = $"Lời mời này có hiệu lực đến {expiresAt.ToOffset(TimeSpan.FromHours(7)):HH:mm 'ngày' dd/MM/yyyy}. Vì lý do bảo mật, không chuyển tiếp liên kết này cho người khác. Nếu bạn không muốn đảm nhiệm vai trò này, bạn có thể từ chối hoặc bỏ qua email.";
             string html = LegacyVaultEmailTheme.BuildHtml(

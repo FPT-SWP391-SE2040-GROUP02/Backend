@@ -154,7 +154,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             await unitOfWork.SaveChangesAsync(ct);
             return item;
         }, ct);
-        return await DeliverAsync(executor, token.Value, accountExists, ct);
+        // Thư do quản trị viên giao, lời thư không nói "Chủ kho mời".
+        return await DeliverAsync(executor, token.Value, accountExists, ct, assignedByAdmin: true);
     }
 
     public async Task<ExecutorInvitationResponse> ResendAsync(Guid vaultId, Guid executorId, ResendExecutorRequest request, CancellationToken ct)
@@ -423,10 +424,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return await invitations.FindByTokenHashAsync(tokens.HashOpaqueToken(token), ct) ?? throw InvalidInvitation();
     }
 
-    private async Task<ExecutorInvitationResponse> DeliverAsync(Executor executor, string token, bool accountExists, CancellationToken ct)
+    private async Task<ExecutorInvitationResponse> DeliverAsync(
+        Executor executor, string token, bool accountExists, CancellationToken ct, bool assignedByAdmin = false)
     {
         // External delivery follows the committed invitation. Failed delivery never grants access.
-        if (await sender.SendAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct))
+        bool delivered = assignedByAdmin
+            ? await sender.SendAssignedByAdminAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct)
+            : await sender.SendAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct);
+        if (delivered)
         {
             executor.InvitationSentAt = time.GetUtcNow();
             executor.UpdatedAt = time.GetUtcNow();
