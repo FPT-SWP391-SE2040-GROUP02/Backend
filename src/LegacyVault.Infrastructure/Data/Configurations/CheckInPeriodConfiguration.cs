@@ -19,6 +19,13 @@ public sealed class CheckInPeriodConfiguration : IEntityTypeConfiguration<CheckI
         builder.Property(p => p.StartedByExecutor)
             .HasDefaultValue(false);
 
+        // Kỳ mở trước khi có cấu hình thư nhắc trễ dùng mặc định 3 thư, cách nhau 3 ngày.
+        builder.Property(p => p.LateReminderGapDays)
+            .HasDefaultValue(3);
+
+        builder.Property(p => p.MaxLateReminders)
+            .HasDefaultValue(3);
+
         builder.HasIndex(p => new { p.PlanId, p.Sequence })
             .IsUnique();
 

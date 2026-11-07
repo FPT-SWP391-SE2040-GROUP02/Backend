@@ -17,6 +17,11 @@ public interface ICheckInRepository
     /// <summary>Số thứ tự lớn nhất của các kỳ đã có; chưa có kỳ nào → 0.</summary>
     Task<int> GetMaxSequenceAsync(Guid planId, CancellationToken ct);
 
+    /// <summary>
+    /// Số kỳ liên tiếp (tính từ kỳ mới nhất) do Người thực thi mở. Gặp kỳ chủ kho tự điểm danh hoặc kỳ đầu thì dừng đếm.
+    /// </summary>
+    Task<int> CountConsecutiveExecutorPeriodsAsync(Guid planId, CancellationToken ct);
+
     /// <summary>Một trang lịch sử các kỳ, kỳ mới nhất (Sequence lớn nhất) trước. pageIndex bắt đầu từ 1.</summary>
     Task<(List<CheckInPeriod> Items, int TotalCount)> FindPeriodPageByPlanIdAsync(
         Guid planId, int pageIndex, int pageSize, CancellationToken ct);

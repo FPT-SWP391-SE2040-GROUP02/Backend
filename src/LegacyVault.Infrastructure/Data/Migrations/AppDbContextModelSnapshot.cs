@@ -237,6 +237,16 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("GraceEndsAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<int>("LateReminderGapDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(3);
+
+                    b.Property<int>("MaxLateReminders")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(3);
+
                     b.Property<DateTimeOffset?>("OverdueAt")
                         .HasColumnType("datetimeoffset");
 

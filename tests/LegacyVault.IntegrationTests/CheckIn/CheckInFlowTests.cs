@@ -239,7 +239,7 @@ public sealed class CheckInFlowTests : IAsyncLifetime
             List<CheckInReminder> reminders = await db.CheckInReminders.Where(r => r.PeriodId == periodId).ToListAsync();
             // Job mở lần đầu sau hạn: mốc mới nhất (GraceStarted) được gửi một lần, hai mốc cũ bị bỏ qua.
             CheckInReminder sent = Assert.Single(reminders, r => r.Status == CheckInReminderStatus.Sent);
-            Assert.Equal(CheckInReminderKind.GraceStarted, sent.Kind);
+            Assert.Equal(CheckInReminderKind.LateReminder1, sent.Kind);
             Assert.Equal(2, reminders.Count(r => r.Status == CheckInReminderStatus.Skipped));
             Assert.Equal(3, reminders.Count);
         });

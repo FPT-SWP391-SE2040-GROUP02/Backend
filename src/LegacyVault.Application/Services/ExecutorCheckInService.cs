@@ -12,6 +12,7 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
 {
     private const string ReasonPlanNotOverdue = "PLAN_NOT_OVERDUE";
     private const string ReasonDeathCaseOpen = "DEATH_CASE_OPEN";
+    private const string ReasonProxyLimitReached = "PROXY_LIMIT_REACHED";
     private const string AuditReason = "Executor điểm danh thay chủ kho khi chủ kho quá hạn điểm danh.";
 
     private readonly ICurrentUser currentUser;
@@ -65,6 +66,14 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
             throw NotAllowed(plan.Status, ReasonDeathCaseOpen);
         }
 
+        // Điểm danh thay có giới hạn liên tiếp do Admin đặt; chủ kho tự điểm danh thì đếm lại từ 0.
+        int proxyUsed = await checkInRepository.CountConsecutiveExecutorPeriodsAsync(plan.Id, ct);
+        int proxyLimit = CheckInRules.ExecutorProxyLimit;
+        if (proxyUsed >= proxyLimit)
+        {
+            throw NotAllowed(plan.Status, ReasonProxyLimitReached);
+        }
+
         DateTimeOffset now = timeProvider.GetUtcNow();
         CheckInSchedule? schedule = await checkInRepository.FindScheduleByPlanIdAsync(plan.Id, ct);
         if (schedule == null)
@@ -90,10 +99,8 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         CheckInPeriod next = new CheckInPeriod();
         next.PlanId = plan.Id;
         next.Sequence = lastSequence + 1;
-        next.StartedAt = now;
         next.StartedByExecutor = true;
-        next.DueAt = CheckInTimeline.ComputeDueAt(now, schedule.CycleDays);
-        next.GraceEndsAt = CheckInTimeline.ComputeGraceEndsAt(next.DueAt, schedule.GraceDays);
+        CheckInRules.StartPeriodTimeline(next, now, schedule.CycleDays);
         checkInRepository.AddPeriod(next);
 
         plan.Status = PlanStatus.Active;
@@ -113,6 +120,8 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         response.CheckedInAt = now;
         response.NextCheckInDueAt = next.DueAt;
         response.GraceEndsAt = next.GraceEndsAt;
+        response.ProxyUsed = proxyUsed + 1;
+        response.ProxyLimit = proxyLimit;
         return response;
     }
 

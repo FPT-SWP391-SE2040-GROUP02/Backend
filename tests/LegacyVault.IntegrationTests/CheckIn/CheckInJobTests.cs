@@ -12,7 +12,7 @@ public sealed class CheckInJobTests
     // Kỳ mẫu: chu kỳ 30 ngày, chờ 7 ngày.
     private static readonly DateTimeOffset Start = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Due = new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 7, 8, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 9, 8, 0, 0, TimeSpan.Zero);
 
     private readonly FakeCheckInRepository repository = new FakeCheckInRepository();
     private readonly FakeCheckInReminderSender sender = new FakeCheckInReminderSender();
@@ -28,7 +28,7 @@ public sealed class CheckInJobTests
     private CheckInPeriod SeedPeriod(PlanStatus planStatus)
     {
         Vault vault = CheckInTestData.CreateVault(Guid.NewGuid(), planStatus);
-        CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, 1, Start, 30, 7);
+        CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, 1, Start, 30);
         repository.Periods.Add(period);
         return period;
     }
@@ -51,7 +51,7 @@ public sealed class CheckInJobTests
     }
 
     [Fact]
-    public async Task Process_AtDue_MovesToOverdueOnceAndSendsGraceStarted()
+    public async Task Process_AtDue_MovesToOverdueOnceAndSendsFirstLateReminder()
     {
         CheckInPeriod period = SeedPeriod(PlanStatus.Active);
 
@@ -59,7 +59,7 @@ public sealed class CheckInJobTests
 
         Assert.Equal(PlanStatus.CheckinOverdue, period.Plan.Status);
         Assert.Equal(Due, period.OverdueAt);
-        Assert.Equal(new[] { CheckInReminderKind.GraceStarted }, sender.Sent);
+        Assert.Equal(new[] { CheckInReminderKind.LateReminder1 }, sender.Sent);
     }
 
     [Fact]
@@ -98,31 +98,64 @@ public sealed class CheckInJobTests
         await RunAtAsync(period, Due);
 
         Assert.Single(sender.Sent);
-        Assert.Single(period.Reminders, r => r.Kind == CheckInReminderKind.GraceStarted);
+        Assert.Single(period.Reminders, r => r.Kind == CheckInReminderKind.LateReminder1);
         Assert.Equal(overdueAfterFirst, period.OverdueAt);
         Assert.Null(period.AwaitingCheckAt);
     }
 
     [Fact]
-    public async Task Process_SendsEachFourMilestoneOnce()
+    public async Task Process_SendsEachMilestoneOnce()
     {
         CheckInPeriod period = SeedPeriod(PlanStatus.Active);
 
         await RunAtAsync(period, Due.AddDays(-7));
         await RunAtAsync(period, Due.AddDays(-1));
         await RunAtAsync(period, Due);
-        await RunAtAsync(period, GraceEnds.AddDays(-2));
-        await RunAtAsync(period, GraceEnds.AddDays(-2).AddHours(1));
+        await RunAtAsync(period, Due.AddDays(3));
+        await RunAtAsync(period, Due.AddDays(6));
+        await RunAtAsync(period, Due.AddDays(6).AddHours(1));
 
         Assert.Equal(
             new[]
             {
                 CheckInReminderKind.DueInSevenDays,
                 CheckInReminderKind.DueInOneDay,
-                CheckInReminderKind.GraceStarted,
-                CheckInReminderKind.GraceTwoDaysLeft,
+                CheckInReminderKind.LateReminder1,
+                CheckInReminderKind.LateReminder2,
+                CheckInReminderKind.LateReminder3,
             },
             sender.Sent);
+        Assert.Equal(PlanStatus.CheckinOverdue, period.Plan.Status);
+    }
+
+    [Fact]
+    public async Task Process_AfterLastLateReminderGap_NotifiesExecutorAndStopsReminders()
+    {
+        CheckInPeriod period = SeedPeriod(PlanStatus.Active);
+
+        await RunAtAsync(period, Due.AddDays(6));
+        await RunAtAsync(period, Due.AddDays(9));
+
+        Assert.Equal(PlanStatus.AwaitingCheck, period.Plan.Status);
+        Assert.Equal(Due.AddDays(9), period.AwaitingCheckAt);
+        Assert.DoesNotContain(CheckInReminderKind.GraceStarted, sender.Sent);
+        Assert.Equal(CheckInReminderKind.LateReminder3, sender.Sent[sender.Sent.Count - 1]);
+    }
+
+    [Fact]
+    public async Task Process_UsesLateReminderSettingsFrozenInThePeriod()
+    {
+        // Kỳ này được chốt 2 thư nhắc trễ cách nhau 1 ngày: thư gửi ở ngày 0 và ngày 1, báo Người thực thi ở ngày 2.
+        Vault vault = CheckInTestData.CreateVault(Guid.NewGuid(), PlanStatus.Active);
+        CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, 1, Start, 30, maxLateReminders: 2, gapDays: 1);
+        repository.Periods.Add(period);
+
+        await RunAtAsync(period, Due);
+        await RunAtAsync(period, Due.AddDays(1));
+        await RunAtAsync(period, Due.AddDays(2));
+
+        Assert.Equal(new[] { CheckInReminderKind.LateReminder1, CheckInReminderKind.LateReminder2 }, sender.Sent);
+        Assert.Equal(PlanStatus.AwaitingCheck, period.Plan.Status);
     }
 
     [Fact]

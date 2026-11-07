@@ -34,7 +34,7 @@ public sealed class AuditCheckInServiceTests
     {
         Vault vault = CheckInTestData.CreateVault(ownerId, PlanStatus.Active);
         vaults.Vaults.Add(vault);
-        repository.Periods.Add(CheckInTestData.CreateOpenPeriod(vault.Plan, 1, PeriodStart, 30, 7));
+        repository.Periods.Add(CheckInTestData.CreateOpenPeriod(vault.Plan, 1, PeriodStart, 30));
         return vault;
     }
 
@@ -76,12 +76,11 @@ public sealed class AuditCheckInServiceTests
         // Chưa có lịch điểm danh: etag của bản "chưa sửa lần nào" (Etag.From(null)).
         request.Etag = Etag.From(null);
         request.CycleDays = 60;
-        request.GraceDays = 14;
 
         await service.UpdateSettingsAsync(request, CancellationToken.None);
 
         AuditLog log = Assert.Single(auditLogs.Logs);
         Assert.Equal(AuditAction.CheckInSettingsUpdated, log.Action);
-        Assert.Equal("Chu kỳ 60 ngày, chờ 14 ngày; áp dụng từ kỳ sau", log.Reason);
+        Assert.Equal("Chu kỳ 60 ngày; áp dụng từ kỳ sau", log.Reason);
     }
 }

@@ -62,6 +62,20 @@ public sealed class FakeCheckInRepository : ICheckInRepository
         return Task.FromResult(Periods.FirstOrDefault(p => p.PlanId == planId && p.ClosedAt == null));
     }
 
+    public Task<int> CountConsecutiveExecutorPeriodsAsync(Guid planId, CancellationToken ct)
+    {
+        int count = 0;
+        foreach (CheckInPeriod period in Periods.Where(p => p.PlanId == planId).OrderByDescending(p => p.Sequence))
+        {
+            if (!period.StartedByExecutor)
+            {
+                break;
+            }
+            count++;
+        }
+        return Task.FromResult(count);
+    }
+
     public Task<int> GetMaxSequenceAsync(Guid planId, CancellationToken ct)
     {
         int max = 0;
@@ -172,9 +186,12 @@ public static class CheckInTestData
         return vault;
     }
 
-    /// <summary>Tạo một kỳ đang mở với hạn tính theo chu kỳ/thời gian chờ cho trước.</summary>
+    /// <summary>
+    /// Tạo một kỳ đang mở với hạn tính theo chu kỳ, số thư nhắc trễ và khoảng cách giữa các thư cho trước.
+    /// Mốc báo Người thực thi = hạn + số thư × khoảng cách.
+    /// </summary>
     public static CheckInPeriod CreateOpenPeriod(
-        HandoverPlan plan, int sequence, DateTimeOffset startedAt, int cycleDays, int graceDays)
+        HandoverPlan plan, int sequence, DateTimeOffset startedAt, int cycleDays, int maxLateReminders = 3, int gapDays = 3)
     {
         CheckInPeriod period = new CheckInPeriod();
         period.PlanId = plan.Id;
@@ -182,7 +199,9 @@ public static class CheckInTestData
         period.Sequence = sequence;
         period.StartedAt = startedAt;
         period.DueAt = startedAt.AddDays(cycleDays);
-        period.GraceEndsAt = period.DueAt.AddDays(graceDays);
+        period.MaxLateReminders = maxLateReminders;
+        period.LateReminderGapDays = gapDays;
+        period.GraceEndsAt = period.DueAt.AddDays((double)maxLateReminders * gapDays);
         return period;
     }
 }
