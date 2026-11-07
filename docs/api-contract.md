@@ -853,13 +853,17 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 |---|---|---|---|---|
 | GET | `/v1/admin/dashboard` | — | 200 `AdminDashboardResponse` (sự cố mở/quá hạn/chưa có người, hold, hồ sơ chưa có Verifier; thêm `planStages` [{stage, count}] kế hoạch theo giai đoạn không tính kho đã đóng, `closedPlans`, `verifierLoad` [{userId, fullName, openCases, overdueCases}] của Verifier đang hoạt động, `recentActivity` [{at, actorFullName, action}] năm dòng nhật ký mới nhất) | 404 |
 | GET | `/v1/admin/users/{userId}` | — | 200 `AdminUserDetailResponse` (thông tin tài khoản; `assignedCases` hồ sơ đang xét của Verifier, `recentDecisions` 10 quyết định gần nhất, `recentActivity` 10 thao tác gần nhất, không kèm lý do hay nội dung hồ sơ) | 404 (không phải Admin hoặc không có tài khoản) |
+| GET | `/api/v1/executor/vaults/{vaultId}/assets?pageIndex=&pageSize=&sortBy=&searchTerm=` | — | 200 `PaginatedList<AssetResponse>` (chỉ mô tả, không nội dung) | 400, 404 (không phải Executor hiệu lực của kho; chủ kho cũng 404) |
+| GET | `/api/v1/executor/vaults/{vaultId}/assets/{assetId}/content` | — | 200 nội dung đã giải mã; ghi `AssetContentDownloaded` vai trò Executor | 404, 500 `CONTENT_INTEGRITY_FAILED` |
+| GET | `/api/v1/handover/download-code` | — | 200 `{ required }`: Admin có bật mã tải không (cài đặt `Handover.DownloadCodeRequired`) | 401 |
+| POST | `/api/v1/handover/grants/{grantId}/download-code` | — | 204; gửi mã 6 số dùng một lần (hạn 10 phút) qua email người đang đăng nhập | 403, 404 |
 | GET | `/v1/admin/audit-logs?pageIndex=&pageSize=&sortBy=at&isAscending=&action=&from=&to=` | — | 200 `PaginatedList<AdminAuditLogResponse>` (`AuditLogResponse` kèm `vaultId`, `actorFullName`, `actorEmail`; `isAscending=false` = mới nhất trước; `action` UPPER_SNAKE_CASE; `from` tính cả mốc, `to` không tính mốc) | 400 `VALIDATION_ERROR`, 404 |
 | GET | `/v1/admin/users?search=&role=&status=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminUserResponse>` (không có mật khẩu) | 400, 404 |
 | POST | `/v1/admin/users` | `{ fullName, email, password, role: VERIFIER/ADMIN, phone? }` | 201 `AdminUserResponse` | 400 (`role` = `EXECUTOR` hoặc `USER` bị từ chối), 404, 409 `EMAIL_ALREADY_EXISTS` |
 | PUT | `/v1/admin/users/{userId}/role` | `{ role: USER/VERIFIER/ADMIN, reason }` | 200 | 400 (`role` = `EXECUTOR` bị từ chối), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CANNOT_CHANGE_SELF`, `LAST_ADMIN`) |
 | PUT | `/v1/admin/users/{userId}/status` | `{ status: ACTIVE/LOCKED/DISABLED, reason }` | 200 | như trên |
 | POST | `/v1/admin/death-cases/{caseId}/reassign-verifier` | `{ verifierUserId, reason }` | 204 (gọi lặp cùng người: 204) | 400 (không phải Verifier hợp lệ / là chủ kho, Executor, người gửi), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CASE_NOT_PENDING`) / `EDIT_CONFLICT`. Nhận cả hồ sơ `SUSPENDED` có lời báo còn sống đang mở: lời báo và sự cố `OWNER_ALIVE` chuyển theo Verifier mới, hạn kết luận tính lại |
-| GET | `/v1/admin/incidents?status=&type=&assigneeUserId=&overdueOnly=&search=&mine=` | — | 200 `PaginatedList<IncidentSummaryResponse>` | 400 |
+| GET | `/v1/admin/incidents?status=&type=&assigneeUserId=&overdueOnly=&search=&mine=` (mỗi sự cố có `responsibleRole`: ADMIN, EXECUTOR hoặc VERIFIER) | — | 200 `PaginatedList<IncidentSummaryResponse>` | 400 |
 | GET | `/v1/admin/incidents/{id}` | — | 200 `IncidentDetailResponse` (kèm lịch sử `events`) | 404 `INCIDENT_NOT_FOUND` |
 | POST | `/v1/admin/incidents/{id}/assign` | `{ assigneeUserId, reason, etag }` | 200 | 400 (không phải Admin/Verifier hoạt động, hoặc là chủ kho/Executor của kho), 409 `EDIT_CONFLICT` / `INCIDENT_NOT_OPEN` |
 | POST | `/v1/admin/incidents/{id}/notes` | `{ note }` | 200 | 404 |
