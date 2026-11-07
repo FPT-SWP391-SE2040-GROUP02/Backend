@@ -1,4 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
 using LegacyVault.Application.Repositories;
+using LegacyVault.Application.ServiceConfig;
+using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
@@ -23,7 +27,24 @@ public sealed class OperationsScanner : IOperationsScanner
 
     private const int BatchSize = 100;
 
+    public const string TargetPlan = "PLAN";
+    public const string TargetService = "SERVICE";
+
+    private static readonly string[] WatchedServices =
+    {
+        SystemConfigServices.Ekyc, SystemConfigServices.Smtp, SystemConfigServices.SePay, SystemConfigServices.R2,
+    };
+
+    /// <summary>Mã đối tượng cố định cho một dịch vụ ngoài, để cùng một dịch vụ không mở trùng sự cố.</summary>
+    public static Guid ServiceTargetId(string serviceKey)
+    {
+        return new Guid(MD5.HashData(Encoding.UTF8.GetBytes("service:" + serviceKey)));
+    }
+
     private readonly IOperationsScanRepository scan;
+    private readonly IServiceStatusTracker serviceStatus;
+    private readonly IExecutorReader executorReader;
+    private readonly ICheckInRepository checkIns;
     private readonly IIncidentRepository incidents;
     private readonly IIncidentService incidentService;
     private readonly IUnitOfWork unitOfWork;
@@ -31,12 +52,18 @@ public sealed class OperationsScanner : IOperationsScanner
 
     public OperationsScanner(
         IOperationsScanRepository scan,
+        IServiceStatusTracker serviceStatus,
+        IExecutorReader executorReader,
+        ICheckInRepository checkIns,
         IIncidentRepository incidents,
         IIncidentService incidentService,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
         this.scan = scan;
+        this.serviceStatus = serviceStatus;
+        this.executorReader = executorReader;
+        this.checkIns = checkIns;
         this.incidents = incidents;
         this.incidentService = incidentService;
         this.unitOfWork = unitOfWork;
@@ -78,7 +105,8 @@ public sealed class OperationsScanner : IOperationsScanner
             if (!openLoops.Contains(row.CaseId))
             {
                 await incidentService.RaiseAsync(IncidentType.SupplementLoop, row.VaultId, IncidentRules.TargetDeathCase, row.CaseId,
-                    "Hồ sơ chứng tử bị yêu cầu bổ sung nhiều lần, cần xem vì sao chưa xong.", null, ct);
+                    "Hồ sơ chứng tử bị yêu cầu bổ sung nhiều lần, cần xem vì sao chưa xong.",
+                    await ExecutorOfAsync(row.VaultId, ct), ct);
                 opened++;
             }
         }
@@ -93,18 +121,74 @@ public sealed class OperationsScanner : IOperationsScanner
             if (!openExpiring.Contains(vaultId))
             {
                 await incidentService.RaiseAsync(IncidentType.PlanExpiring, vaultId, TargetVault, vaultId,
-                    "Gói trả phí của kho sắp hết hạn.", null, ct);
+                    "Gói trả phí của kho sắp hết hạn.", await ExecutorOfAsync(vaultId, ct), ct);
                 opened++;
             }
         }
         resolved += await ResolveGoneAsync(
             IncidentType.PlanExpiring, TargetVault, openExpiring, expiring, "Gói đã gia hạn hoặc không còn sắp hết hạn.", ct);
 
+        // Hết lượt điểm danh thay: Executor không điểm danh hộ được nữa nên kho kẹt ở trạng thái quá hạn.
+        List<PlanRow> overdue = await scan.ListOverduePlansAsync(BatchSize, ct);
+        List<Guid> openProxy = await incidents.ListOpenTargetIdsAsync(IncidentType.ProxyLimit, ct);
+        List<Guid> reached = new List<Guid>();
+        int limit = CheckInRules.ExecutorProxyLimit;
+        foreach (PlanRow row in overdue)
+        {
+            if (await checkIns.CountConsecutiveExecutorPeriodsAsync(row.PlanId, ct) < limit)
+            {
+                continue;
+            }
+            reached.Add(row.PlanId);
+            if (!openProxy.Contains(row.PlanId))
+            {
+                await incidentService.RaiseAsync(IncidentType.ProxyLimit, row.VaultId, TargetPlan, row.PlanId,
+                    "Executor đã dùng hết lượt điểm danh thay mà chủ kho vẫn quá hạn.", await ExecutorOfAsync(row.VaultId, ct), ct);
+                opened++;
+            }
+        }
+        resolved += await ResolveGoneAsync(
+            IncidentType.ProxyLimit, TargetPlan, openProxy, reached, "Chủ kho đã điểm danh hoặc kế hoạch không còn quá hạn.", ct);
+
+        // Dịch vụ ngoài lỗi: lần gọi gần nhất thất bại thì mở sự cố cho Admin, thành công lại thì đóng.
+        List<Guid> openService = await incidents.ListOpenTargetIdsAsync(IncidentType.Integration, ct);
+        List<Guid> failing = new List<Guid>();
+        foreach (string key in WatchedServices)
+        {
+            ServiceStatus status = serviceStatus.Get(key);
+            if (status.LastSucceeded != false)
+            {
+                continue;
+            }
+            Guid target = ServiceTargetId(key);
+            failing.Add(target);
+            if (!openService.Contains(target))
+            {
+                string code = string.IsNullOrWhiteSpace(status.LastErrorCode) ? "không rõ mã lỗi" : status.LastErrorCode;
+                await incidentService.RaiseAsync(IncidentType.Integration, null, TargetService, target,
+                    "Dịch vụ ngoài " + key + " gọi lỗi (" + code + ").", null, ct);
+                opened++;
+            }
+        }
+        resolved += await ResolveGoneAsync(
+            IncidentType.Integration, TargetService, openService, failing, "Dịch vụ ngoài đã gọi lại được.", ct);
+
         if (opened > 0 || resolved > 0)
         {
             await unitOfWork.SaveChangesAsync(ct);
         }
         return (opened, resolved);
+    }
+
+    /// <summary>Executor đang hoạt động đầu tiên của kho; không có thì null và sự cố rơi về Admin ít việc nhất.</summary>
+    private async Task<Guid?> ExecutorOfAsync(Guid vaultId, CancellationToken ct)
+    {
+        List<Executor> active = await executorReader.GetAvailableAsync(vaultId, ct);
+        if (active.Count == 0)
+        {
+            return null;
+        }
+        return active[0].UserId;
     }
 
     private async Task<int> ResolveGoneAsync(

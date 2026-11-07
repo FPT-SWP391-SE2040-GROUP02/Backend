@@ -11,6 +11,28 @@ namespace LegacyVault.Application.Services;
 /// <summary>Luật thuần của sự cố (SRS §6.4, ASSIGN-04, AC-40).</summary>
 public static class IncidentRules
 {
+    /// <summary>
+    /// Vai trò chịu trách nhiệm xử lý theo loại sự cố: ADMIN tự xử lý, EXECUTOR hoặc VERIFIER là người liên quan
+    /// đến kho hoặc hồ sơ, Admin chỉ theo dõi và nhận báo khi quá hạn.
+    /// </summary>
+    public static string ResponsibleRole(IncidentType type)
+    {
+        switch (type)
+        {
+            case IncidentType.CheckInOverdue:
+            case IncidentType.NotificationFailed:
+            case IncidentType.SupplementLoop:
+            case IncidentType.PlanExpiring:
+            case IncidentType.ProxyLimit:
+                return "EXECUTOR";
+            case IncidentType.StaleCase:
+            case IncidentType.OwnerAlive:
+                return "VERIFIER";
+            default:
+                return "ADMIN";
+        }
+    }
+
     /// <summary>Hạn xử lý mặc định và mốc nhắc người phụ trách (bảng thời hạn: việc thủ công nhắc sau 48 giờ).</summary>
     public static TimeSpan ReminderAfter => RuntimeSettings.Hours("Incident.ReminderAfterHours", 48);
 

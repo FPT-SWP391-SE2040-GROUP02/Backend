@@ -21,6 +21,9 @@ public class IncidentSummaryResponse
     /// <summary>null = chưa có ai nhận ("bị kẹt"), luôn kèm nextReviewAt.</summary>
     public Guid? AssigneeUserId { get; set; }
 
+    /// <summary>ADMIN | EXECUTOR | VERIFIER: ai chịu trách nhiệm xử lý loại sự cố này; Admin chỉ theo dõi khi không phải ADMIN.</summary>
+    public string ResponsibleRole { get; set; } = string.Empty;
+
     public DateTimeOffset DueAt { get; set; }
 
     public bool Overdue { get; set; }

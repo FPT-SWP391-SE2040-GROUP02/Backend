@@ -374,6 +374,17 @@ public sealed class OperationsScanRepository : IOperationsScanRepository
         return rows.Select(r => new CaseRow(r.Id, r.VaultId)).ToList();
     }
 
+    public async Task<List<PlanRow>> ListOverduePlansAsync(int take, CancellationToken ct)
+    {
+        var rows = await context.Set<HandoverPlan>().AsNoTracking()
+            .Where(p => p.Status == PlanStatus.CheckinOverdue || p.Status == PlanStatus.AwaitingCheck)
+            .OrderBy(p => p.UpdatedAt)
+            .Select(p => new { p.Id, p.VaultId })
+            .Take(take)
+            .ToListAsync(ct);
+        return rows.Select(r => new PlanRow(r.Id, r.VaultId)).ToList();
+    }
+
     public Task<List<Guid>> ListExpiringVaultIdsAsync(DateTimeOffset now, DateTimeOffset until, int take, CancellationToken ct)
     {
         return context.Set<VaultEntitlement>().AsNoTracking()

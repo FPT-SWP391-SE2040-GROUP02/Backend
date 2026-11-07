@@ -1,3 +1,4 @@
+using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
@@ -122,6 +123,120 @@ public sealed class OperationsScannerTests : IAsyncLifetime
         Assert.Equal(submitted.CaseId, incident.TargetId);
         Assert.NotEqual(submitted.Verifier.User.Id, incident.AssigneeUserId);
         Assert.NotNull(incident.AssigneeUserId);
+    }
+
+    [SqlFact]
+    public async Task ProxyLimit_OpensWhenExecutorUsedAllProxyCheckIns_AndResolvesWhenOwnerChecksIn()
+    {
+        // Chuẩn bị: kế hoạch quá hạn điểm danh, hai kỳ gần nhất do Executor mở (bằng giới hạn mặc định 2)
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            for (int sequence = 1; sequence <= 2; sequence++)
+            {
+                CheckInPeriod period = new CheckInPeriod();
+                period.PlanId = vault.PlanId;
+                period.Sequence = sequence;
+                period.StartedByExecutor = true;
+                period.StartedAt = now.AddDays(-40 + sequence);
+                period.DueAt = now.AddDays(-10 + sequence);
+                period.GraceEndsAt = now.AddDays(-3 + sequence);
+                // Chỉ kỳ cuối còn mở; kỳ trước đã đóng bởi lượt điểm danh thay.
+                period.ClosedAt = sequence < 2 ? now.AddDays(-9) : null;
+                db.CheckInPeriods.Add(period);
+            }
+            await db.SaveChangesAsync();
+            await db.HandoverPlans.Where(p => p.Id == vault.PlanId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, PlanStatus.AwaitingCheck));
+        });
+
+        // Hành động
+        (int opened, int _) = await ScanAsync();
+        (int openedAgain, int _) = await ScanAsync();
+
+        // Kiểm tra: một sự cố trên kế hoạch, vòng sau không mở trùng
+        Assert.Equal(1, opened);
+        Assert.Equal(0, openedAgain);
+        Incident incident = Assert.Single(await IncidentsOfAsync(IncidentType.ProxyLimit));
+        Assert.Equal(vault.PlanId, incident.TargetId);
+        Assert.Equal(vault.VaultId, incident.VaultId);
+
+        // Chủ kho điểm danh: kế hoạch về Active, sự cố được đóng
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.HandoverPlans.Where(p => p.Id == vault.PlanId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, PlanStatus.Active));
+        });
+        (int _, int resolved) = await ScanAsync();
+        Assert.Equal(1, resolved);
+    }
+
+    [SqlFact]
+    public async Task ProxyLimit_NotOpenedWhenProxyCheckInsRemain()
+    {
+        // Chuẩn bị: quá hạn nhưng mới một kỳ do Executor mở (còn lượt)
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            CheckInPeriod period = new CheckInPeriod();
+            period.PlanId = vault.PlanId;
+            period.Sequence = 1;
+            period.StartedByExecutor = true;
+            period.StartedAt = now.AddDays(-40);
+            period.DueAt = now.AddDays(-10);
+            period.GraceEndsAt = now.AddDays(-3);
+            db.CheckInPeriods.Add(period);
+            await db.SaveChangesAsync();
+            await db.HandoverPlans.Where(p => p.Id == vault.PlanId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, PlanStatus.AwaitingCheck));
+        });
+
+        // Hành động
+        (int opened, int _) = await ScanAsync();
+
+        // Kiểm tra
+        Assert.Equal(0, opened);
+    }
+
+    [SqlFact]
+    public async Task ServiceDown_OpensForFailedService_AndResolvesWhenCallSucceedsAgain()
+    {
+        // Chuẩn bị: lần gọi gần nhất tới SMTP thất bại
+        IServiceStatusTracker tracker = factory.Services.GetRequiredService<IServiceStatusTracker>();
+        tracker.Record("SMTP", SystemConfigSlot.Primary, false, "HTTP_503", DateTimeOffset.UtcNow);
+
+        // Hành động
+        (int opened, int _) = await ScanAsync();
+        (int openedAgain, int _) = await ScanAsync();
+
+        // Kiểm tra: một sự cố loại tích hợp, không mở trùng, không chứa khóa hay nội dung
+        Assert.Equal(1, opened);
+        Assert.Equal(0, openedAgain);
+        Incident incident = Assert.Single(await IncidentsOfAsync(IncidentType.Integration));
+        Assert.Contains("SMTP", incident.Summary);
+        Assert.Contains("HTTP_503", incident.Summary);
+
+        // Gọi lại thành công: vòng sau đóng sự cố
+        tracker.Record("SMTP", SystemConfigSlot.Primary, true, null, DateTimeOffset.UtcNow);
+        (int _, int resolved) = await ScanAsync();
+        Assert.Equal(1, resolved);
+        Assert.Equal(IncidentStatus.Resolved, Assert.Single(await IncidentsOfAsync(IncidentType.Integration)).Status);
+    }
+
+    [Theory]
+    [InlineData(IncidentType.NoExecutor, "ADMIN")]
+    [InlineData(IncidentType.Integration, "ADMIN")]
+    [InlineData(IncidentType.SuspiciousLogin, "ADMIN")]
+    [InlineData(IncidentType.CheckInOverdue, "EXECUTOR")]
+    [InlineData(IncidentType.ProxyLimit, "EXECUTOR")]
+    [InlineData(IncidentType.PlanExpiring, "EXECUTOR")]
+    [InlineData(IncidentType.SupplementLoop, "EXECUTOR")]
+    [InlineData(IncidentType.StaleCase, "VERIFIER")]
+    public void ResponsibleRole_FollowsPrototype(IncidentType type, string expected)
+    {
+        Assert.Equal(expected, IncidentRules.ResponsibleRole(type));
     }
 
     [SqlFact]

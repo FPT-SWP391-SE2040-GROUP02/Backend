@@ -27,6 +27,8 @@ public enum IncidentType
     SupplementLoop = 10,
     /// <summary>Gói trả phí của kho sắp hết hạn; hết hạn rồi kho sẽ bị khóa rồi xóa.</summary>
     PlanExpiring = 11,
+    /// <summary>Executor đã dùng hết lượt điểm danh thay liên tiếp mà chủ kho vẫn quá hạn; không ai điểm danh thay được nữa.</summary>
+    ProxyLimit = 12,
 }
 
 public enum IncidentStatus
