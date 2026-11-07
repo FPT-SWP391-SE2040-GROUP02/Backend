@@ -39,6 +39,8 @@ public static class ApplicationConfig
         services.AddScoped<IOperationsRecorder, OperationsRecorder>();
         services.AddScoped<IIncidentJob, IncidentJob>();
         services.AddScoped<IOperationsScanner, OperationsScanner>();
+        services.AddScoped<IDownloadCodeService, DownloadCodeService>();
+        services.AddScoped<IExecutorAssetService, ExecutorAssetService>();
         services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
         services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();
         services.AddScoped<IDeathCaseAssignmentJob, DeathCaseAssignmentJob>();
