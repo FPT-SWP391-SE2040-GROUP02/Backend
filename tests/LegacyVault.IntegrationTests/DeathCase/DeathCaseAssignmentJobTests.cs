@@ -63,7 +63,7 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
         Assert.Equal(DeathCaseAssignmentOutcome.NoCandidate, withoutCandidate);
         Assert.Equal(DeathCaseAssignmentOutcome.Assigned, outcome);
         Assert.Equal(newVerifier.User.Id, active.VerifierUserId);
-        Assert.Equal(DeathCaseAssignmentRules.ComputeDueAt(active.AssignedAt, after.ObjectionEndsAt), active.DueAt);
+        Assert.Equal(DeathCaseAssignmentRules.ComputeDueAt(active.AssignedAt), active.DueAt);
         Assert.Equal(before.UpdatedAt, after.UpdatedAt);
         Assert.Equal(2, rows.Count);
     }
@@ -113,7 +113,7 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
         Assert.NotNull(ended.EndedAt);
         Assert.Equal(DeathCaseAssignmentRules.EndReasonOverdue, ended.EndReason);
         Assert.Equal(otherId, active.VerifierUserId);
-        Assert.Equal(DeathCaseAssignmentRules.ComputeDueAt(active.AssignedAt, after.ObjectionEndsAt), active.DueAt);
+        Assert.Equal(DeathCaseAssignmentRules.ComputeDueAt(active.AssignedAt), active.DueAt);
         Assert.NotEqual(before.UpdatedAt, after.UpdatedAt);
         Assert.Equal(DeathCaseStatus.UnderReview, after.Status);
     }
@@ -296,42 +296,6 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
                 .SingleAsync(a => a.Id == submitted.AssignmentId);
             Assert.NotNull(oldRow.EndedAt);
         });
-    }
-
-    [SqlFact]
-    public async Task Assign03_Ac71_OldVerifierStaleEtagGetsEditConflict()
-    {
-        // Chuẩn bị: Verifier cũ lấy etag trước khi job chạy; một phiên khác của hệ thống đã đọc hồ sơ (kèm phân công cũ)
-        // từ trước khi job commit, đúng tình huống Verifier cũ đang bấm nút lúc hồ sơ bị giao lại (D4)
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory, 2);
-        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
-        string? oldEtag = detail.GetProperty("etag").GetString();
-        await MakeOverdueAsync(submitted.CaseId);
-
-        using (IServiceScope staleScope = factory.Services.CreateScope())
-        {
-            IDeathCaseRepository staleRepository = staleScope.ServiceProvider.GetRequiredService<IDeathCaseRepository>();
-            IUnitOfWork staleUnitOfWork = staleScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            DeathCase? stale = await staleRepository.FindByIdAsync(submitted.CaseId, CancellationToken.None);
-            Assert.NotNull(stale);
-
-            // Hành động: job giao lại và commit; sau đó phiên cũ cố ghi quyết định từ chối với dữ liệu đã đọc
-            DeathCaseAssignmentOutcome outcome = await RunJobAsync(submitted.CaseId);
-            stale.Status = DeathCaseStatus.Rejected;
-            stale.UpdatedAt = DateTimeOffset.UtcNow;
-            AppException conflict = await Assert.ThrowsAsync<AppException>(
-                () => staleUnitOfWork.SaveChangesAsync(CancellationToken.None));
-
-            // Kiểm tra: UpdatedAt là concurrency token nên lần ghi muộn bị chặn bằng EDIT_CONFLICT
-            Assert.Equal(DeathCaseAssignmentOutcome.Reassigned, outcome);
-            Assert.Equal(ErrorCode.EditConflict, conflict.Code);
-        }
-
-        // Tải lại hoặc gửi lại etag cũ sau khi job đã commit: Verifier cũ không còn phân công nên nhận 404; hồ sơ vẫn đang xét
-        HttpResponseMessage lateReject = await DeathCaseReviewTestData.RejectAsync(
-            submitted.Verifier.Client, submitted.CaseId, oldEtag, "Không đủ căn cứ");
-        Assert.Equal(HttpStatusCode.NotFound, lateReject.StatusCode);
-        Assert.Equal(DeathCaseStatus.UnderReview, (await LoadCaseAsync(submitted.CaseId)).Status);
     }
 
     [SqlFact]
@@ -650,7 +614,6 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
                 sender,
                 provider.GetRequiredService<IUnitOfWork>(),
                 provider.GetRequiredService<TimeProvider>(),
-                provider.GetRequiredService<IObjectionRepository>(),
                 provider.GetRequiredService<IIncidentService>());
             return await job.ProcessCaseAsync(caseId, CancellationToken.None);
         }

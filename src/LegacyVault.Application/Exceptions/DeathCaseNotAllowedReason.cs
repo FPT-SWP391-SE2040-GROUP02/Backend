@@ -16,9 +16,7 @@ public enum DeathCaseNotAllowedReason
     /// <summary>DEATH-04: Executor đang có bản nháp mới hơn bản đang xét, chưa duyệt được.</summary>
     NewerVersionPending,
     /// <summary>DEATH-08: chưa báo được Owner nên đồng hồ 72 giờ chưa chạy.</summary>
-    OwnerNotNotified,
     /// <summary>DEATH-09: chưa hết 72 giờ phản đối của Owner.</summary>
-    ObjectionPeriodNotOver,
     /// <summary>DEATH-10: còn cờ của bản đang xét chưa được Verifier xem xét.</summary>
     FlagsNotReviewed,
     /// <summary>ROLE-03, AC-67: Verifier là Owner, Executor đang hiệu lực hoặc người gửi bản đang xét.</summary>
@@ -30,7 +28,6 @@ public enum DeathCaseNotAllowedReason
     ObjectionAlreadyRejected,
 
     /// <summary>F2C: đã quá 7 ngày kể từ lần báo đầu, không chụp selfie nữa (ALIVE-03).</summary>
-    ObjectionWindowClosed,
 
     /// <summary>F2C: đã thất bại 3 lần trong 24 giờ (EKYC-20).</summary>
     SelfieAttemptsExceeded,

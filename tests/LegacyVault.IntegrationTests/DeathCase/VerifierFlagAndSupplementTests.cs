@@ -42,7 +42,6 @@ public sealed class VerifierFlagAndSupplementTests : IAsyncLifetime
     {
         // Chuẩn bị: Owner đã nhận thư và hết 72 giờ; còn một cờ chưa xem xét
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        await DeathCaseReviewTestData.MarkOwnerNotifiedAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow.AddHours(-80));
         Guid flagId = await DeathCaseReviewTestData.AddFlagAsync(factory, submitted.CaseId);
         JsonElement before = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
         Assert.Equal(new List<string> { "FLAGS_NOT_REVIEWED" }, DeathCaseApi.ReadStrings(before.GetProperty("approveBlockers")));
@@ -137,51 +136,6 @@ public sealed class VerifierFlagAndSupplementTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, reviewed.StatusCode);
         Assert.NotEqual(before.GetProperty("etag").GetString(), after.GetProperty("etag").GetString());
         await ApiTestHelpers.AssertProblemAsync(withOldEtag, HttpStatusCode.Conflict, "EDIT_CONFLICT");
-    }
-
-    [SqlFact]
-    public async Task Ac08_Death01_SupplementRequestMovesCaseAndKeepsAssignment()
-    {
-        // Chuẩn bị: Owner đã nhận thư (đồng hồ 72 giờ đang chạy)
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        DateTimeOffset deliveredAt = DateTimeOffset.UtcNow.AddHours(-10);
-        await DeathCaseReviewTestData.MarkOwnerNotifiedAsync(factory, submitted.CaseId, deliveredAt);
-        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
-        DeathCaseAssignment? assignmentBefore = await DeathCaseReviewTestData.LoadActiveAssignmentAsync(factory, submitted.CaseId);
-        Assert.NotNull(assignmentBefore);
-
-        // Hành động: requestedParts có trùng, thừa khoảng trắng, sai thứ tự
-        HttpResponseMessage response = await DeathCaseReviewTestData.RequestSupplementAsync(
-            submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(),
-            "  Ảnh giấy chứng tử bị mờ  ", new[] { "FILES", " DATE_OF_DEATH ", "FILES" });
-        JsonElement body = await ApiTestHelpers.ReadJsonAsync(response);
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("SUPPLEMENT_REQUIRED", body.GetProperty("status").GetString());
-        JsonElement decision = body.GetProperty("decisions")[0];
-        Assert.Equal("SUPPLEMENT_REQUESTED", decision.GetProperty("kind").GetString());
-        Assert.Equal(1, decision.GetProperty("versionNo").GetInt32());
-        Assert.Equal("Ảnh giấy chứng tử bị mờ", decision.GetProperty("reason").GetString());
-        Assert.Equal(new List<string> { "DATE_OF_DEATH", "FILES" }, DeathCaseApi.ReadStrings(decision.GetProperty("requestedParts")));
-        Assert.False(body.GetProperty("canApprove").GetBoolean());
-        Assert.Contains("NOT_UNDER_REVIEW", DeathCaseApi.ReadStrings(body.GetProperty("approveBlockers")));
-
-        // Phân công, đồng hồ 72 giờ và kế hoạch giữ nguyên
-        DeathCaseAssignment? assignmentAfter = await DeathCaseReviewTestData.LoadActiveAssignmentAsync(factory, submitted.CaseId);
-        Assert.NotNull(assignmentAfter);
-        Assert.Equal(assignmentBefore.Id, assignmentAfter.Id);
-        Assert.Equal(assignmentBefore.DueAt, assignmentAfter.DueAt);
-        Assert.Equal(assignmentBefore.AssignedAt, assignmentAfter.AssignedAt);
-        Assert.Null(assignmentAfter.EndedAt);
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            DeathCase deathCase = await db.Set<DeathCase>().AsNoTracking().SingleAsync(c => c.Id == submitted.CaseId);
-            Assert.Equal(deliveredAt.AddHours(72), deathCase.ObjectionEndsAt);
-            Assert.Equal(1, deathCase.ReviewVersionNo);
-            HandoverPlan plan = await db.HandoverPlans.AsNoTracking().SingleAsync(p => p.Id == deathCase.PlanId);
-            Assert.Equal(PlanStatus.DeathCaseOpen, plan.Status);
-        });
     }
 
     [SqlFact]

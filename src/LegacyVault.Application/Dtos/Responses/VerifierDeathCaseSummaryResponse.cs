@@ -25,7 +25,6 @@ public class VerifierDeathCaseSummaryResponse
     /// <summary>Hạn xét của phân công đang hiệu lực.</summary>
     public DateTimeOffset DueAt { get; set; }
 
-    public DateTimeOffset? ObjectionEndsAt { get; set; }
 
     /// <summary>
     /// DEATH-01: lúc job đánh dấu Executor bổ sung quá hạn 7 ngày; null = chưa quá hạn hoặc đã gửi lại.

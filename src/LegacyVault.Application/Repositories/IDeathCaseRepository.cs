@@ -86,9 +86,6 @@ public interface IDeathCaseRepository
     /// <summary>D8: số dòng file (mọi phiên bản, mọi hồ sơ) đang dùng StorageKey này, đã lưu trong DB.</summary>
     Task<int> CountFilesUsingStorageKeyAsync(string storageKey, CancellationToken ct);
 
-    /// <summary>DEATH-10: kế hoạch có lần điểm danh nào lúc cutoffUtc hoặc sau đó không.</summary>
-    Task<bool> HasCheckInAtOrAfterAsync(Guid planId, DateTimeOffset cutoffUtc, CancellationToken ct);
-
     /// <summary>
     /// ASSIGN-01, ROLE-03 (D4): Id Verifier Active có lần được giao gần nhất cũ nhất (chưa từng giao đứng trước),
     /// hòa thì theo Id; bỏ qua các tài khoản trong excludedUserIds và tài khoản có email nằm trong excludedEmails

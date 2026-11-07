@@ -52,7 +52,7 @@ public static class DeathCaseReviewRules
     /// <summary>
     /// DEATH-08, DEATH-09, DEATH-10, DEATH-04: các lý do chưa duyệt được, cộng dồn theo thứ tự cố định,
     /// mỗi phần tử là mã reason UPPER_SNAKE_CASE; rỗng nghĩa là duyệt được. Cần hồ sơ đã nạp Versions và Flags.
-    /// TODO: hold/phản đối của Owner (F2C).
+    /// Không còn điều kiện chờ chủ kho phản đối (đã bỏ): duyệt được ngay khi các mục đều khớp.
     /// </summary>
     public static List<string> GetApproveBlockers(DeathCase deathCase, DateTimeOffset now)
     {
@@ -64,14 +64,6 @@ public static class DeathCaseReviewRules
         if (deathCase.ReviewVersionNo != null && deathCase.CurrentVersionNo != deathCase.ReviewVersionNo.Value)
         {
             blockers.Add(DeathCaseNotAllowedReason.NewerVersionPending.ToApiString());
-        }
-        if (deathCase.ObjectionEndsAt == null)
-        {
-            blockers.Add(DeathCaseNotAllowedReason.OwnerNotNotified.ToApiString());
-        }
-        else if (now < deathCase.ObjectionEndsAt.Value)
-        {
-            blockers.Add(DeathCaseNotAllowedReason.ObjectionPeriodNotOver.ToApiString());
         }
         if (HasUnreviewedFlag(deathCase))
         {

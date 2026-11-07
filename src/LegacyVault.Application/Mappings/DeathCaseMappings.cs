@@ -64,8 +64,6 @@ public static class DeathCaseMappings
             ownerFullName, ownerCitizenId, current.DateOfDeath, certificateNumber, current.IssuedOn, issuedBy, current.Files.Count);
         response.SupplementRequest = ToSupplementRequestResponse(deathCase);
         response.RejectReason = ToRejectReason(deathCase);
-        response.OwnerNotice = ToNoticeResponse(deathCase);
-        response.ObjectionEndsAt = deathCase.ObjectionEndsAt;
         response.CreatedAt = deathCase.CreatedAt;
         response.UpdatedAt = deathCase.UpdatedAt;
         response.Etag = Etag.From(deathCase.UpdatedAt);

@@ -137,15 +137,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Email:Smtp:UserName"] = "";
             settings["Email:Smtp:Password"] = "";
             settings["Email:Smtp:WebhookUrl"] = "";
-            // Không gọi Gemini thật từ test dù user-secrets có key.
-            settings["Gemini:ApiKey"] = "";
             configuration.AddInMemoryCollection(settings);
         });
         builder.ConfigureServices(services =>
         {
-            // Mặc định AI nhận ra mọi trang là giấy chứng tử; test cần kết quả khác thì thay trong ConfigureAdditionalServices.
-            services.RemoveAll<IDeathCertificateClassifier>();
-            services.AddSingleton<IDeathCertificateClassifier>(new FakeDeathCertificateClassifier());
             if (!EnforceVaultPin)
             {
                 services.RemoveAll<IVaultPinService>();

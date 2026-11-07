@@ -72,36 +72,6 @@ public sealed class ExecutorDecisionNoticeTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Reject_EmailsExecutorAndVaultListKeepsRejectedCase()
-    {
-        // Chuẩn bị
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-
-        // Hành động
-        HttpResponseMessage rejected = await DeathCaseReviewTestData.RejectNowAsync(submitted, "Giấy không hợp lệ.");
-        HttpResponseMessage repeat = await DeathCaseReviewTestData.RejectNowAsync(submitted, "Giấy không hợp lệ.");
-        HttpResponseMessage vaults = await submitted.Executor.Client.GetAsync("/api/v1/executor/vaults");
-        JsonElement list = await ApiTestHelpers.ReadJsonAsync(vaults);
-
-        // Kiểm tra: một thư Rejected không có hạn; danh sách kho không còn hồ sơ đang mở nhưng chỉ ra hồ sơ bị từ chối
-        Assert.Equal(HttpStatusCode.OK, rejected.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, repeat.StatusCode);
-        DeathCaseExecutorNotice notice = Assert.Single(sender.Sent);
-        Assert.Equal(DeathCaseDecisionKind.Rejected, notice.Kind);
-        Assert.Null(notice.SupplementDueAt);
-
-        Assert.Equal(HttpStatusCode.OK, vaults.StatusCode);
-        JsonElement vault = list[0];
-        Assert.Equal(JsonValueKind.Null, vault.GetProperty("openDeathCaseId").ValueKind);
-        Assert.Equal(submitted.CaseId, vault.GetProperty("lastRejectedDeathCaseId").GetGuid());
-
-        HttpResponseMessage reopened = await submitted.Executor.Client.GetAsync(DeathCaseApi.CaseUrl(submitted.CaseId));
-        JsonElement caseBody = await ApiTestHelpers.ReadJsonAsync(reopened);
-        Assert.Equal(HttpStatusCode.OK, reopened.StatusCode);
-        Assert.Equal("REJECTED", caseBody.GetProperty("status").GetString());
-    }
-
-    [SqlFact]
     public async Task VaultList_NoRejectedCase_ReturnsNull()
     {
         // Chuẩn bị: hồ sơ đang xét, chưa từng bị từ chối

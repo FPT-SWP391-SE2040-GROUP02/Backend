@@ -39,10 +39,8 @@ public class DeathCaseResponse
     public string? RejectReason { get; set; }
 
     /// <summary>Thông báo gần nhất cho Owner (DEATH-08); null khi chưa gửi hồ sơ lần nào.</summary>
-    public DeathCaseNoticeResponse? OwnerNotice { get; set; }
 
     /// <summary>DEATH-08: hết 72 giờ phản đối; null khi đồng hồ chưa chạy (thông báo chưa được giao).</summary>
-    public DateTimeOffset? ObjectionEndsAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

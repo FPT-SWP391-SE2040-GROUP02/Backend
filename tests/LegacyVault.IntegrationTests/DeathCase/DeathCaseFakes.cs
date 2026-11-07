@@ -158,27 +158,6 @@ public sealed class FakeDeathCaseVerifierReminderSender : IDeathCaseVerifierRemi
     }
 }
 
-/// <summary>Bộ gửi giả: ghi lại thông báo đã gửi; Fail = true thì ném lỗi như SMTP không nhận thư.</summary>
-public sealed class FakeDeathCaseNoticeSender : IDeathCaseNoticeSender
-{
-    public List<DeathCaseOwnerNotice> Sent { get; } = new List<DeathCaseOwnerNotice>();
-
-    public bool Fail { get; set; }
-
-    public int CallCount { get; private set; }
-
-    public Task SendAsync(DeathCaseOwnerNotice notice, CancellationToken ct)
-    {
-        CallCount++;
-        if (Fail)
-        {
-            throw new InvalidOperationException("SMTP giả không nhận thư.");
-        }
-        Sent.Add(notice);
-        return Task.CompletedTask;
-    }
-}
-
 /// <summary>Dịch vụ sự cố giả: chỉ ghi lại các sự cố được mở, các thao tác của Admin không dùng trong test job.</summary>
 public sealed class FakeIncidentService : IIncidentService
 {
@@ -205,7 +184,7 @@ public sealed class FakeIncidentService : IIncidentService
     }
 
     public Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
-        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
+        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct, bool mine = false)
     {
         throw new NotSupportedException();
     }

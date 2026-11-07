@@ -121,30 +121,4 @@ public sealed class DeathCaseRulesTests
         Assert.False(critical);
     }
 
-    [Fact]
-    public void Death10_CutoffIsMidnightVietnamAfterDeathDate()
-    {
-        // Chuẩn bị
-        DateOnly death = new DateOnly(2026, 10, 1);
-
-        // Hành động
-        DateTimeOffset cutoff = DeathCaseRules.CheckInCutoffUtc(death);
-
-        // Kiểm tra: 00:00 ngày 02/10 giờ VN = 17:00 ngày 01/10 UTC
-        Assert.Equal(new DateTimeOffset(2026, 10, 1, 17, 0, 0, TimeSpan.Zero), cutoff);
-        Assert.Equal(TimeSpan.Zero, cutoff.Offset);
-    }
-
-    [Fact]
-    public void Death08_ObjectionEndsSeventyTwoHoursAfterDelivery()
-    {
-        // Chuẩn bị
-        DateTimeOffset deliveredAt = new DateTimeOffset(2026, 10, 15, 8, 30, 0, TimeSpan.Zero);
-
-        // Hành động
-        DateTimeOffset endsAt = DeathCaseRules.ObjectionEndsAt(deliveredAt);
-
-        // Kiểm tra
-        Assert.Equal(new DateTimeOffset(2026, 10, 18, 8, 30, 0, TimeSpan.Zero), endsAt);
-    }
 }

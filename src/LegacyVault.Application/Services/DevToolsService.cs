@@ -128,18 +128,9 @@ public sealed class DevToolsService(
             targetId = vault.Id;
             runEntitlementExpiry = true;
         }
-        else if (key == DevToolsRules.ObjectionWindowEnded)
+        else
         {
-            DeathCase? openCase = await repository.FindOpenDeathCaseAsync(vault.Id, ct);
-            EnsureAvailable(DevToolsRules.EvaluateObjectionWindow(openCase, now));
-            openCase!.ObjectionEndsAt = past;
-            openCase.ObjectionStartsAt = past.AddHours(-DeathCaseRules.ObjectionHours);
-            openCase.UpdatedAt = now;
-            targetType = AuditTargetType.DeathCase;
-            targetId = openCase.Id;
-        }
-        else if (key == DevToolsRules.RecipientDecisionEnded)
-        {
+            // Mốc cuối: key đã được kiểm là mốc hợp lệ nên chỉ còn RecipientDecisionEnded.
             // Dời hạn quyết định (7 ngày sau khi xác nhận danh tính) của mọi lượt đang chờ về quá khứ;
             // job hết hạn quyết định của hệ thống chuyển lượt sang DECISION_EXPIRED và đóng kế hoạch nếu mọi lượt đã xong.
             List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
@@ -158,15 +149,6 @@ public sealed class DevToolsService(
             }
             targetType = AuditTargetType.Vault;
             targetId = vault.Id;
-        }
-        else
-        {
-            DeathCaseObjection? objection = await repository.FindLatestObjectionAsync(vault.Id, ct);
-            EnsureAvailable(DevToolsRules.EvaluateSelfieDeadline(objection, now));
-            objection!.SelfieDeadlineAt = past;
-            objection.UpdatedAt = now;
-            targetType = AuditTargetType.DeathCase;
-            targetId = objection.CaseId;
         }
 
         auditLogs.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.DevTimeTravel,
@@ -455,7 +437,6 @@ public sealed class DevToolsService(
         PlanStatus status = vault.Plan.Status;
         CheckInPeriod? period = await repository.FindOpenPeriodAsync(vault.Plan.Id, ct);
         DeathCase? openCase = await repository.FindOpenDeathCaseAsync(vault.Id, ct);
-        DeathCaseObjection? objection = await repository.FindLatestObjectionAsync(vault.Id, ct);
         AuditAction? latestClockAction = await repository.FindLatestClockActionAsync(vault.Id, ct);
 
         DevClockResponse response = new DevClockResponse();
@@ -465,8 +446,6 @@ public sealed class DevToolsService(
         response.ClockState = DevToolsRules.GetClockState(latestClockAction);
         response.Milestones.Add(DevToolsRules.EvaluateCheckInOverdue(status, period, now));
         response.Milestones.Add(DevToolsRules.EvaluateGraceEnded(status, period, now));
-        response.Milestones.Add(DevToolsRules.EvaluateObjectionWindow(openCase, now));
-        response.Milestones.Add(DevToolsRules.EvaluateSelfieDeadline(objection, now));
         response.Milestones.Add(DevToolsRules.EvaluateServiceExpired(vault.Entitlement));
         List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
         response.Milestones.Add(DevToolsRules.EvaluateRecipientDecision(turns, now));

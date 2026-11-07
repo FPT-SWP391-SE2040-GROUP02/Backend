@@ -1,3 +1,4 @@
+using LegacyVault.Application.Services;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Notifications;
@@ -15,7 +16,7 @@ public sealed class SmtpEmailTests
 {
     // 08:00 UTC = 15:00 giờ Việt Nam (UTC+7).
     private static readonly DateTimeOffset Due = new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 7, 8, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 9, 8, 0, 0, TimeSpan.Zero);
     private const string CheckInUrl = "http://localhost:5173/dms";
 
     private static SmtpSettings SettingsFor(FakeSmtpServer server)
@@ -44,14 +45,25 @@ public sealed class SmtpEmailTests
     public void Build_EachReminderKindHasItsOwnSubject()
     {
         List<string> subjects = new List<string>();
-        foreach (CheckInReminderKind kind in Enum.GetValues<CheckInReminderKind>())
+        foreach (CheckInReminderKind kind in CheckInTimeline.ActiveKinds(CheckInRules.MaxLateRemindersLimit))
         {
             EmailContent content = CheckInReminderEmail.Build(kind, "Nguyễn Văn An", Due, GraceEnds, CheckInUrl);
             Assert.False(string.IsNullOrWhiteSpace(content.Subject));
             subjects.Add(content.Subject);
         }
 
-        Assert.Equal(4, subjects.Distinct().Count());
+        // Hai mốc trước hạn và năm thư nhắc trễ, mỗi thư một tiêu đề riêng.
+        Assert.Equal(7, subjects.Distinct().Count());
+    }
+
+    [Fact]
+    public void Build_LegacyKindsStillRenderForStoredData()
+    {
+        foreach (CheckInReminderKind kind in Enum.GetValues<CheckInReminderKind>())
+        {
+            EmailContent content = CheckInReminderEmail.Build(kind, "Nguyễn Văn An", Due, GraceEnds, CheckInUrl);
+            Assert.False(string.IsNullOrWhiteSpace(content.Subject));
+        }
     }
 
     [Fact]
@@ -68,12 +80,14 @@ public sealed class SmtpEmailTests
     }
 
     [Fact]
-    public void Build_GraceStartedMentionsGraceEnd()
+    public void Build_LateReminderMentionsOrdinalAndExecutorNoticeTime()
     {
         EmailContent content = CheckInReminderEmail.Build(
-            CheckInReminderKind.GraceStarted, "An", Due, GraceEnds, CheckInUrl);
+            CheckInReminderKind.LateReminder2, "An", Due, GraceEnds, CheckInUrl);
 
-        Assert.Contains("07/11/2026", content.TextBody);
+        Assert.Contains("lần 2", content.TextBody);
+        Assert.Contains("09/11/2026", content.TextBody);
+        Assert.Contains("Người thực thi", content.TextBody);
     }
 
     [Fact]

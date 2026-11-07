@@ -69,15 +69,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .FirstOrDefaultAsync(ct);
     }
 
-    public Task<DeathCaseObjection?> FindLatestObjectionAsync(Guid vaultId, CancellationToken ct)
-    {
-        return context.Set<DeathCaseObjection>()
-            .Where(o => o.VaultId == vaultId)
-            .OrderByDescending(o => o.FirstReportedAt)
-            .ThenBy(o => o.Id)
-            .FirstOrDefaultAsync(ct);
-    }
-
     public async Task<AuditAction?> FindLatestClockActionAsync(Guid vaultId, CancellationToken ct)
     {
         AuditLog? log = await context.Set<AuditLog>()

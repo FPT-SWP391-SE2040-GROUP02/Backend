@@ -39,22 +39,12 @@ public static class DeathCaseAssignmentRules
     }
 
     /// <summary>
-    /// D1, ASSIGN-04, TIME-07: hạn Verifier phải ra quyết định = mốc muộn hơn giữa (start + 48 giờ)
-    /// và (hết phản đối + 48 giờ). start là lúc giao hoặc lúc Executor gửi bản mới gần nhất.
-    /// Các đồng hồ không đặt lại hay tạm dừng nhau; hạn Verifier chỉ có mức sàn "sau khi hồ sơ duyệt được".
+    /// D1, ASSIGN-04: hạn Verifier phải ra quyết định = lúc bắt đầu + số giờ xét hồ sơ. start là lúc giao hoặc lúc Executor
+    /// gửi bản mới gần nhất. Không còn chờ cửa sổ phản đối của chủ kho (đã bỏ).
     /// </summary>
-    public static DateTimeOffset ComputeDueAt(DateTimeOffset start, DateTimeOffset? objectionEndsAt)
+    public static DateTimeOffset ComputeDueAt(DateTimeOffset start)
     {
-        DateTimeOffset dueAt = start.AddHours(DeathCaseRules.ReviewDueHours);
-        if (objectionEndsAt != null)
-        {
-            DateTimeOffset afterObjection = objectionEndsAt.Value.AddHours(DeathCaseRules.ReviewDueHours);
-            if (afterObjection > dueAt)
-            {
-                dueAt = afterObjection;
-            }
-        }
-        return dueAt;
+        return start.AddHours(DeathCaseRules.ReviewDueHours);
     }
 
     /// <summary>

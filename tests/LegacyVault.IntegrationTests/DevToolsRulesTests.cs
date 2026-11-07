@@ -73,91 +73,6 @@ public sealed class DevToolsRulesTests
     }
 
     [Fact]
-    public void ObjectionWindow_NoOpenCase_IsNotApplicable()
-    {
-        // Hành động
-        DevMilestoneResponse result = DevToolsRules.EvaluateObjectionWindow(null, Now);
-
-        // Kiểm tra
-        Assert.Equal(DevToolsRules.NotApplicable, result.State);
-    }
-
-    [Fact]
-    public void ObjectionWindow_NoticeNotDelivered_IsNotApplicable()
-    {
-        // Chuẩn bị
-        DeathCase openCase = new DeathCase();
-        openCase.Status = DeathCaseStatus.UnderReview;
-
-        // Hành động
-        DevMilestoneResponse result = DevToolsRules.EvaluateObjectionWindow(openCase, Now);
-
-        // Kiểm tra
-        Assert.Equal(DevToolsRules.NotApplicable, result.State);
-    }
-
-    [Fact]
-    public void ObjectionWindow_RunningWindow_IsAvailable()
-    {
-        // Chuẩn bị
-        DeathCase openCase = new DeathCase();
-        openCase.Status = DeathCaseStatus.UnderReview;
-        openCase.ObjectionEndsAt = Now.AddHours(70);
-
-        // Hành động
-        DevMilestoneResponse result = DevToolsRules.EvaluateObjectionWindow(openCase, Now);
-
-        // Kiểm tra
-        Assert.Equal(DevToolsRules.Available, result.State);
-    }
-
-    [Fact]
-    public void SelfieDeadline_OpenObjectionWithoutSelfie_IsAvailable()
-    {
-        // Chuẩn bị
-        DeathCaseObjection objection = new DeathCaseObjection();
-        objection.Status = ObjectionStatus.Open;
-        objection.SelfieDeadlineAt = Now.AddDays(7);
-
-        // Hành động
-        DevMilestoneResponse result = DevToolsRules.EvaluateSelfieDeadline(objection, Now);
-
-        // Kiểm tra
-        Assert.Equal(DevToolsRules.Available, result.State);
-    }
-
-    [Fact]
-    public void SelfieDeadline_SelfiePassed_IsNotApplicable()
-    {
-        // Chuẩn bị
-        DeathCaseObjection objection = new DeathCaseObjection();
-        objection.Status = ObjectionStatus.Open;
-        objection.SelfieDeadlineAt = Now.AddDays(7);
-        objection.SelfiePassedAt = Now.AddHours(-1);
-
-        // Hành động
-        DevMilestoneResponse result = DevToolsRules.EvaluateSelfieDeadline(objection, Now);
-
-        // Kiểm tra
-        Assert.Equal(DevToolsRules.NotApplicable, result.State);
-    }
-
-    [Fact]
-    public void SelfieDeadline_ConcludedObjection_IsNotApplicable()
-    {
-        // Chuẩn bị
-        DeathCaseObjection objection = new DeathCaseObjection();
-        objection.Status = ObjectionStatus.Concluded;
-        objection.SelfieDeadlineAt = Now.AddDays(7);
-
-        // Hành động
-        DevMilestoneResponse result = DevToolsRules.EvaluateSelfieDeadline(objection, Now);
-
-        // Kiểm tra
-        Assert.Equal(DevToolsRules.NotApplicable, result.State);
-    }
-
-    [Fact]
     public void CheckInState_ActiveBeforeDue_IsOnTime()
     {
         // Hành động
@@ -194,15 +109,6 @@ public sealed class DevToolsRulesTests
         Assert.Equal(DevToolsRules.ClockRealTime, DevToolsRules.GetClockState(null));
         Assert.Equal(DevToolsRules.ClockShifted, DevToolsRules.GetClockState(AuditAction.DevTimeTravel));
         Assert.Equal(DevToolsRules.ClockRealTime, DevToolsRules.GetClockState(AuditAction.DevClockReset));
-    }
-
-    [Fact]
-    public void IsKnownMilestone_AcceptsOnlyFourKeys()
-    {
-        // Kiểm tra
-        Assert.True(DevToolsRules.IsKnownMilestone(DevToolsRules.CheckInOverdue));
-        Assert.True(DevToolsRules.IsKnownMilestone(DevToolsRules.SelfieDeadlinePassed));
-        Assert.False(DevToolsRules.IsKnownMilestone("TOMORROW"));
     }
 
     [Fact]

@@ -121,76 +121,6 @@ public sealed class DeathCaseVersionFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Ac63_Death11_ChangingDeathDateRenotifiesAndRestartsClock()
-    {
-        // Chuẩn bị: bản 1 đã gửi và đã báo Owner xong, đồng hồ 72 giờ đang chạy
-        Submitted submitted = await SubmitFirstVersionAsync();
-        Guid caseId = submitted.Body.GetProperty("id").GetGuid();
-        await RunNoticeJobAsync();
-        DeathCase afterFirst = await LoadCaseAsync(caseId);
-        Assert.NotNull(afterFirst.ObjectionStartsAt);
-        DateTimeOffset firstStart = afterFirst.ObjectionStartsAt.Value;
-
-        // Hành động: bản 2 đổi ngày mất rồi gửi lại
-        JsonElement draft = await ApiTestHelpers.ReadJsonAsync(await CreateVersionAsync(submitted.Executor.Client, submitted.Body));
-        JsonElement edited = await EditAsync(submitted.Executor.Client, draft, new
-        {
-            etag = draft.GetProperty("etag").GetString(),
-            dateOfDeath = DeathCaseApi.Format(DeathCaseApi.Today().AddDays(-4)),
-        });
-        JsonElement resubmitted = await DeathCaseApi.SubmitOkAsync(submitted.Executor.Client, edited);
-
-        // Kiểm tra: có thông báo mới cho bản 2, đồng hồ cũ bị xóa tới khi thư mới được giao
-        List<DeathCaseNotice> notices = await LoadNoticesAsync(caseId);
-        Assert.Equal(2, notices.Count);
-        DeathCaseNotice second = notices.Single(n => n.VersionNo == 2);
-        Assert.Equal(DeathCaseNoticeStatus.Pending, second.Status);
-        DeathCase renotified = await LoadCaseAsync(caseId);
-        Assert.Equal(2, renotified.NotifiedVersionNo);
-        Assert.Null(renotified.ObjectionStartsAt);
-        Assert.Null(renotified.ObjectionEndsAt);
-        Assert.Equal(JsonValueKind.Null, resubmitted.GetProperty("objectionEndsAt").ValueKind);
-
-        // Job gửi thông báo bản 2 → đồng hồ 72 giờ chạy lại từ lúc giao thư mới
-        await Task.Delay(50);
-        await RunNoticeJobAsync();
-        DeathCase restarted = await LoadCaseAsync(caseId);
-        Assert.NotNull(restarted.ObjectionStartsAt);
-        Assert.True(restarted.ObjectionStartsAt.Value > firstStart);
-        Assert.Equal(restarted.ObjectionStartsAt.Value.AddHours(72), restarted.ObjectionEndsAt);
-    }
-
-    [SqlFact]
-    public async Task Death11_NonCriticalChangeKeepsClock()
-    {
-        // Chuẩn bị: bản 1 đã gửi và đã báo Owner xong
-        Submitted submitted = await SubmitFirstVersionAsync();
-        Guid caseId = submitted.Body.GetProperty("id").GetGuid();
-        await RunNoticeJobAsync();
-        DeathCase before = await LoadCaseAsync(caseId);
-        Assert.NotNull(before.ObjectionEndsAt);
-
-        // Hành động: bản 2 chỉ đổi số giấy và nơi cấp (không trọng yếu) rồi gửi lại
-        JsonElement draft = await ApiTestHelpers.ReadJsonAsync(await CreateVersionAsync(submitted.Executor.Client, submitted.Body));
-        JsonElement edited = await EditAsync(submitted.Executor.Client, draft, new
-        {
-            etag = draft.GetProperty("etag").GetString(),
-            certificateNumber = "999/2026/TT",
-            issuedBy = "UBND quận 1",
-        });
-        JsonElement resubmitted = await DeathCaseApi.SubmitOkAsync(submitted.Executor.Client, edited);
-
-        // Kiểm tra: không có thông báo mới, đồng hồ giữ nguyên
-        Assert.Equal(2, resubmitted.GetProperty("reviewVersionNo").GetInt32());
-        DeathCaseNotice notice = Assert.Single(await LoadNoticesAsync(caseId));
-        Assert.Equal(1, notice.VersionNo);
-        DeathCase after = await LoadCaseAsync(caseId);
-        Assert.Equal(1, after.NotifiedVersionNo);
-        Assert.Equal(before.ObjectionStartsAt, after.ObjectionStartsAt);
-        Assert.Equal(before.ObjectionEndsAt, after.ObjectionEndsAt);
-    }
-
-    [SqlFact]
     public async Task Death01_SupplementRequiredCaseAcceptsNewVersion()
     {
         // Chuẩn bị: Verifier yêu cầu bổ sung (đặt bằng SQL; nhánh B sẽ đặt trạng thái này)
@@ -280,20 +210,6 @@ public sealed class DeathCaseVersionFlowTests : IAsyncLifetime
             DeathCaseApi.CaseUrl(caseBody.GetProperty("id").GetGuid()) + "/draft", payload);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await ApiTestHelpers.ReadJsonAsync(response);
-    }
-
-    /// <summary>Chạy job gửi mọi thông báo đang chờ (bộ gửi chỉ ghi log nên coi là đã giao).</summary>
-    private async Task RunNoticeJobAsync()
-    {
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IDeathCaseNoticeJob job = scope.ServiceProvider.GetRequiredService<IDeathCaseNoticeJob>();
-            List<Guid> pending = await job.FindPendingNoticeIdsAsync(CancellationToken.None);
-            foreach (Guid noticeId in pending)
-            {
-                await job.ProcessNoticeAsync(noticeId, CancellationToken.None);
-            }
-        }
     }
 
     private async Task<DeathCase> LoadCaseAsync(Guid caseId)

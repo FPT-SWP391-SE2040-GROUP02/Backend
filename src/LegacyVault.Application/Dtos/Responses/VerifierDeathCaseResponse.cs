@@ -37,9 +37,7 @@ public class VerifierDeathCaseResponse
     public List<VerifierDecisionResponse> Decisions { get; set; } = new List<VerifierDecisionResponse>();
 
     /// <summary>Thông báo của bản đã báo Owner gần nhất; null khi chưa có.</summary>
-    public DeathCaseNoticeResponse? OwnerNotice { get; set; }
 
-    public DateTimeOffset? ObjectionEndsAt { get; set; }
 
     /// <summary>
     /// DEATH-01: lúc job đánh dấu Executor bổ sung quá hạn 7 ngày; null = chưa quá hạn hoặc đã gửi lại.

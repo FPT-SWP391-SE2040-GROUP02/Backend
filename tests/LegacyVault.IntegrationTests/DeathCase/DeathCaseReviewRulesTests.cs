@@ -50,36 +50,6 @@ public sealed class DeathCaseReviewRulesTests
     }
 
     [Fact]
-    public void Death09_ApproveBlockedBeforeObjectionEnds()
-    {
-        // Chuẩn bị: còn 1 giờ nữa mới hết 72 giờ phản đối
-        DeathCase deathCase = NewReadyCase();
-        deathCase.ObjectionEndsAt = Now.AddHours(1);
-
-        // Hành động
-        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase, Now);
-
-        // Kiểm tra
-        Assert.Equal(new List<string> { "OBJECTION_PERIOD_NOT_OVER" }, blockers);
-    }
-
-    [Fact]
-    public void Death08_ApproveBlockedWhenOwnerNotNotified()
-    {
-        // Chuẩn bị: đồng hồ 72 giờ chưa chạy vì Owner chưa nhận được thư
-        DeathCase deathCase = NewReadyCase();
-        deathCase.NotifiedVersionNo = null;
-        deathCase.ObjectionStartsAt = null;
-        deathCase.ObjectionEndsAt = null;
-
-        // Hành động
-        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase, Now);
-
-        // Kiểm tra
-        Assert.Equal(new List<string> { "OWNER_NOT_NOTIFIED" }, blockers);
-    }
-
-    [Fact]
     public void Death10_UnreviewedFlagOfReviewVersionBlocksApprove()
     {
         // Chuẩn bị: một cờ của bản đang xét chưa được xem xét
@@ -158,10 +128,9 @@ public sealed class DeathCaseReviewRulesTests
     [Fact]
     public void Death09_BlockersAccumulateInFixedOrder()
     {
-        // Chuẩn bị: SupplementRequired + bản nháp mới + Owner chưa được báo + cờ chưa xem xét
+        // Chuẩn bị: SupplementRequired + bản nháp mới + cờ chưa xem xét
         DeathCase deathCase = NewReadyCase();
         deathCase.Status = DeathCaseStatus.SupplementRequired;
-        deathCase.ObjectionEndsAt = null;
         AddFlag(deathCase, deathCase.Versions[0], null);
         AddVersion(deathCase, 2);
         deathCase.CurrentVersionNo = 2;
@@ -172,7 +141,7 @@ public sealed class DeathCaseReviewRulesTests
         // Kiểm tra
         Assert.Equal(new List<string>
         {
-            "NOT_UNDER_REVIEW", "NEWER_VERSION_PENDING", "OWNER_NOT_NOTIFIED", "FLAGS_NOT_REVIEWED",
+            "NOT_UNDER_REVIEW", "NEWER_VERSION_PENDING", "FLAGS_NOT_REVIEWED",
         }, blockers);
     }
 

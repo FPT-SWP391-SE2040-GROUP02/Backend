@@ -9,7 +9,6 @@ namespace LegacyVault.Application.Services;
 public static class DeathCaseRules
 {
     /// <summary>DEATH-08: Owner có 72 giờ phản đối, tính từ lúc thông báo được giao.</summary>
-    public static int ObjectionHours => RuntimeSettings.Int("DeathCase.ObjectionHours", 72);
 
     /// <summary>ASSIGN-01: Verifier có 48 giờ để xét hồ sơ được giao.</summary>
     public static int ReviewDueHours => RuntimeSettings.Int("DeathCase.ReviewDueHours", 48);
@@ -21,7 +20,6 @@ public static class DeathCaseRules
     public static long MaxFileBytes => RuntimeSettings.Int("DeathCase.MaxFileSizeMb", 20) * 1024L * 1024;
 
     /// <summary>D3: thử gửi thông báo tối đa 5 lần rồi đánh dấu Failed.</summary>
-    public static int MaxNoticeAttempts => RuntimeSettings.Int("DeathCase.MaxNoticeAttempts", 5);
 
     /// <summary>Số ký tự của Id hồ sơ dùng làm mã rút gọn trong thư.</summary>
     public const int CaseCodeLength = 8;
@@ -221,19 +219,6 @@ public static class DeathCaseRules
             return false;
         }
         return !string.Equals(boundCitizenId, caseCitizenId, StringComparison.Ordinal);
-    }
-
-    public static DateTimeOffset CheckInCutoffUtc(DateOnly dateOfDeath)
-    {
-        DateTime nextDayStart = dateOfDeath.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        DateTimeOffset cutoffInVietnam = new DateTimeOffset(nextDayStart, VietnamOffset);
-        return cutoffInVietnam.ToUniversalTime();
-    }
-
-    /// <summary>DEATH-08: hạn phản đối = lúc thông báo được giao + 72 giờ.</summary>
-    public static DateTimeOffset ObjectionEndsAt(DateTimeOffset deliveredAt)
-    {
-        return deliveredAt.AddHours(ObjectionHours);
     }
 
     /// <summary>

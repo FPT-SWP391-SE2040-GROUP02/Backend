@@ -11,40 +11,11 @@ public sealed class DeathCaseAssignmentRulesTests
     private static readonly DateTimeOffset Start = new DateTimeOffset(2026, 10, 15, 3, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Assign04_DueAtIsFortyEightHoursAfterStartWhenNoObjectionClock()
+    public void Assign04_DueAtIsFortyEightHoursAfterStart()
     {
-        // Chuẩn bị: chưa có đồng hồ phản đối (thư báo Owner chưa được giao)
+        // Không còn cửa sổ phản đối của chủ kho: hạn = lúc bắt đầu + 48 giờ.
+        DateTimeOffset dueAt = DeathCaseAssignmentRules.ComputeDueAt(Start);
 
-        // Hành động
-        DateTimeOffset dueAt = DeathCaseAssignmentRules.ComputeDueAt(Start, null);
-
-        // Kiểm tra
-        Assert.Equal(Start.AddHours(48), dueAt);
-    }
-
-    [Fact]
-    public void Assign04_Time07_DueAtNotBeforeFortyEightHoursAfterObjectionEnds()
-    {
-        // Chuẩn bị: phản đối còn 60 giờ nữa mới hết, sau mốc start + 48 giờ
-        DateTimeOffset objectionEndsAt = Start.AddHours(60);
-
-        // Hành động
-        DateTimeOffset dueAt = DeathCaseAssignmentRules.ComputeDueAt(Start, objectionEndsAt);
-
-        // Kiểm tra: hạn = hết phản đối + 48 giờ
-        Assert.Equal(objectionEndsAt.AddHours(48), dueAt);
-    }
-
-    [Fact]
-    public void Assign04_EarlierObjectionEndKeepsStartBasedDueAt()
-    {
-        // Chuẩn bị: phản đối đã hết từ lâu, hạn tính từ lúc start vẫn muộn hơn
-        DateTimeOffset objectionEndsAt = Start.AddHours(-30);
-
-        // Hành động
-        DateTimeOffset dueAt = DeathCaseAssignmentRules.ComputeDueAt(Start, objectionEndsAt);
-
-        // Kiểm tra
         Assert.Equal(Start.AddHours(48), dueAt);
     }
 

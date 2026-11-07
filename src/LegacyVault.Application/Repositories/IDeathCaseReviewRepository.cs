@@ -24,7 +24,6 @@ public sealed class VerifierCaseRow
 
     public DateTimeOffset DueAt { get; set; }
 
-    public DateTimeOffset? ObjectionEndsAt { get; set; }
 
     /// <summary>DEATH-01: lúc job đánh dấu Executor bổ sung quá hạn 7 ngày; null = chưa quá hạn hoặc đã gửi lại.</summary>
     public DateTimeOffset? SupplementOverdueAt { get; set; }
