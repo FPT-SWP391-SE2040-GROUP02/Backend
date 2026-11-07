@@ -17,6 +17,10 @@ public interface IIncidentRepository
     Task<Incident?> FindOpenAsync(IncidentType type, string targetType, Guid? targetId, CancellationToken ct);
 
     /// <summary>Mã đối tượng của các sự cố đang mở thuộc một loại (để job quét đóng sự cố hết còn đúng).</summary>
+    /// <summary>Số sự cố theo từng trạng thái, cùng bộ lọc với danh sách nhưng bỏ qua trạng thái.</summary>
+    Task<Dictionary<IncidentStatus, int>> CountByStatusAsync(
+        IncidentType? type, Guid? assigneeUserId, string? search, bool overdueOnly, DateTimeOffset now, CancellationToken ct);
+
     Task<List<Guid>> ListOpenTargetIdsAsync(IncidentType type, CancellationToken ct);
 
     Task<(List<Incident> Items, int TotalCount)> ListAsync(

@@ -9,6 +9,9 @@ public interface IAdminUserRepository
     Task<(List<User> Items, int TotalCount)> ListAsync(
         string? search, UserRole? role, UserStatus? status, int pageIndex, int pageSize, CancellationToken ct);
 
+    /// <summary>Số tài khoản theo vai trò, cùng bộ lọc tìm kiếm và trạng thái với danh sách nhưng bỏ qua vai trò.</summary>
+    Task<Dictionary<UserRole, int>> CountByRoleAsync(string? search, UserStatus? status, CancellationToken ct);
+
     /// <summary>Số Admin đang hoạt động (luôn phải còn ít nhất một).</summary>
     Task<int> CountActiveAdminsAsync(CancellationToken ct);
 

@@ -852,6 +852,9 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 | Method | URL | Body | Thành công | Lỗi |
 |---|---|---|---|---|
 | GET | `/v1/admin/dashboard` | — | 200 `AdminDashboardResponse` (sự cố mở/quá hạn/chưa có người, hold, hồ sơ chưa có Verifier; thêm `planStages` [{stage, count}] kế hoạch theo giai đoạn không tính kho đã đóng, `closedPlans`, `verifierLoad` [{userId, fullName, openCases, overdueCases}] của Verifier đang hoạt động, `recentActivity` [{at, actorFullName, action}] năm dòng nhật ký mới nhất) | 404 |
+| GET | `/v1/admin/incidents/counts?type=&assigneeUserId=&overdueOnly=&search=&mine=` | — | 200 `CountsResponse { counts: { OPEN, IN_PROGRESS, RESOLVED }, total }`: số sự cố theo trạng thái, cùng bộ lọc với danh sách nhưng bỏ qua trạng thái | 400, 404 |
+| GET | `/v1/admin/users/counts?search=&status=` | — | 200 `CountsResponse { counts: { USER, VERIFIER, ADMIN, EXECUTOR }, total }`: số tài khoản theo vai trò, bỏ qua vai trò | 400, 404 |
+| GET | `/v1/admin/holds/counts?vaultId=` | — | 200 `CountsResponse { counts: { ACTIVE, RELEASED }, total }` | 404 |
 | GET | `/v1/admin/users/{userId}` | — | 200 `AdminUserDetailResponse` (thông tin tài khoản; `assignedCases` hồ sơ đang xét của Verifier, `recentDecisions` 10 quyết định gần nhất, `recentActivity` 10 thao tác gần nhất, không kèm lý do hay nội dung hồ sơ) | 404 (không phải Admin hoặc không có tài khoản) |
 | GET | `/api/v1/executor/vaults/{vaultId}/assets?pageIndex=&pageSize=&sortBy=&searchTerm=` | — | 200 `PaginatedList<AssetResponse>` (chỉ mô tả, không nội dung) | 400, 404 (không phải Executor hiệu lực của kho; chủ kho cũng 404) |
 | GET | `/api/v1/executor/vaults/{vaultId}/assets/{assetId}/content` | — | 200 nội dung đã giải mã; ghi `AssetContentDownloaded` vai trò Executor | 404, 500 `CONTENT_INTEGRITY_FAILED` |

@@ -75,6 +75,17 @@ public sealed class HoldRepository : IHoldRepository
         return (items, total);
     }
 
+    public async Task<Dictionary<HoldStatus, int>> CountByStatusAsync(Guid? vaultId, CancellationToken ct)
+    {
+        IQueryable<Hold> query = context.Set<Hold>().AsNoTracking();
+        if (vaultId != null)
+        {
+            query = query.Where(h => h.VaultId == vaultId.Value);
+        }
+        var rows = await query.GroupBy(h => h.Status).Select(g => new { Status = g.Key, Count = g.Count() }).ToListAsync(ct);
+        return rows.ToDictionary(r => r.Status, r => r.Count);
+    }
+
     public Task<int> CountActiveAsync(CancellationToken ct)
     {
         return context.Set<Hold>().CountAsync(h => h.Status == HoldStatus.Active, ct);
@@ -119,6 +130,31 @@ public sealed class IncidentRepository : IIncidentRepository
     {
         return context.Set<Incident>().FirstOrDefaultAsync(
             i => i.Type == type && i.TargetType == targetType && i.TargetId == targetId && i.Status != IncidentStatus.Resolved, ct);
+    }
+
+    public async Task<Dictionary<IncidentStatus, int>> CountByStatusAsync(
+        IncidentType? type, Guid? assigneeUserId, string? search, bool overdueOnly, DateTimeOffset now, CancellationToken ct)
+    {
+        IQueryable<Incident> query = context.Set<Incident>().AsNoTracking();
+        if (type != null)
+        {
+            query = query.Where(i => i.Type == type.Value);
+        }
+        if (assigneeUserId != null)
+        {
+            query = query.Where(i => i.AssigneeUserId == assigneeUserId.Value);
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            query = query.Where(i => i.Summary.Contains(s) || i.Id.ToString().Contains(s));
+        }
+        if (overdueOnly)
+        {
+            query = query.Where(i => i.Status != IncidentStatus.Resolved && i.DueAt <= now);
+        }
+        var rows = await query.GroupBy(i => i.Status).Select(g => new { Status = g.Key, Count = g.Count() }).ToListAsync(ct);
+        return rows.ToDictionary(r => r.Status, r => r.Count);
     }
 
     public Task<List<Guid>> ListOpenTargetIdsAsync(IncidentType type, CancellationToken ct)
@@ -251,6 +287,22 @@ public sealed class AdminUserRepository : IAdminUserRepository
             .Take(pageSize)
             .ToListAsync(ct);
         return (items, total);
+    }
+
+    public async Task<Dictionary<UserRole, int>> CountByRoleAsync(string? search, UserStatus? status, CancellationToken ct)
+    {
+        IQueryable<User> query = context.Set<User>().AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            string term = search.Trim().ToLowerInvariant();
+            query = query.Where(u => u.Email.Contains(term) || u.FullName.ToLower().Contains(term));
+        }
+        if (status != null)
+        {
+            query = query.Where(u => u.Status == status.Value);
+        }
+        var rows = await query.GroupBy(u => u.Role).Select(g => new { Role = g.Key, Count = g.Count() }).ToListAsync(ct);
+        return rows.ToDictionary(r => r.Role, r => r.Count);
     }
 
     public Task<List<User>> FindByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)

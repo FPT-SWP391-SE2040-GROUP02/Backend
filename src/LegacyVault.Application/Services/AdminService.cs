@@ -14,6 +14,9 @@ public interface IAdminService
     Task<PaginatedList<AdminUserResponse>> ListUsersAsync(
         string? search, string? role, string? status, int pageIndex, int pageSize, CancellationToken ct);
 
+    /// <summary>Số tài khoản theo vai trò cho các thẻ lọc; cùng bộ lọc tìm kiếm và trạng thái với danh sách.</summary>
+    Task<CountsResponse> CountUsersByRoleAsync(string? search, string? status, CancellationToken ct);
+
     /// <summary>Chi tiết một tài khoản: thông tin, hồ sơ đang giữ, quyết định và hoạt động gần đây. Không có tài khoản → 404.</summary>
     Task<AdminUserDetailResponse> GetUserDetailAsync(Guid userId, CancellationToken ct);
 
@@ -129,6 +132,25 @@ public sealed class AdminService : IAdminService
         page.HasPreviousPage = pageIndex > 1;
         page.HasNextPage = pageIndex < page.TotalPages;
         return page;
+    }
+
+    public async Task<CountsResponse> CountUsersByRoleAsync(string? search, string? status, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        UserStatus? statusFilter = null;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            statusFilter = ParseStatus(status, "status");
+        }
+        Dictionary<UserRole, int> byRole = await adminUsers.CountByRoleAsync(search, statusFilter, ct);
+        CountsResponse response = new CountsResponse();
+        foreach (UserRole role in Enum.GetValues<UserRole>())
+        {
+            int count = byRole.TryGetValue(role, out int found) ? found : 0;
+            response.Counts[role.ToApiString()] = count;
+            response.Total += count;
+        }
+        return response;
     }
 
     public async Task<AdminUserDetailResponse> GetUserDetailAsync(Guid userId, CancellationToken ct)

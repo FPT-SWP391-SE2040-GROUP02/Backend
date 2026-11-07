@@ -63,6 +63,15 @@ public sealed class AdminController : ControllerBase
         return adminService.ListUsersAsync(search, role, status, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
     }
 
+    /// <summary>Số tài khoản theo vai trò cho các thẻ lọc; nhận cùng bộ lọc tìm kiếm và trạng thái với danh sách.</summary>
+    [HttpGet("users/counts")]
+    [ProducesResponseType<CountsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    public Task<CountsResponse> CountUsers([FromQuery] string? search, [FromQuery] string? status, CancellationToken ct)
+    {
+        return adminService.CountUsersByRoleAsync(search, status, ct);
+    }
+
     [HttpGet("users/{userId:guid}")]
     [ProducesResponseType<AdminUserDetailResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -142,6 +151,16 @@ public sealed class AdminController : ControllerBase
             status, type, assigneeUserId, search, overdueOnly, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct, mine);
     }
 
+    /// <summary>Số sự cố theo trạng thái cho các thẻ lọc; nhận cùng bộ lọc với danh sách, trừ trạng thái.</summary>
+    [HttpGet("incidents/counts")]
+    [ProducesResponseType<CountsResponse>(StatusCodes.Status200OK)]
+    public Task<CountsResponse> CountIncidents(
+        [FromQuery] string? type, [FromQuery] Guid? assigneeUserId, [FromQuery] string? search, CancellationToken ct,
+        [FromQuery] bool overdueOnly = false, [FromQuery] bool mine = false)
+    {
+        return incidentService.CountsAsync(type, assigneeUserId, search, overdueOnly, mine, ct);
+    }
+
     [HttpGet("incidents/{incidentId:guid}")]
     [ProducesResponseType<IncidentDetailResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -187,6 +206,14 @@ public sealed class AdminController : ControllerBase
         [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
     {
         return holdService.ListAsync(status, vaultId, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
+    }
+
+    /// <summary>Số hold theo trạng thái cho các thẻ lọc.</summary>
+    [HttpGet("holds/counts")]
+    [ProducesResponseType<CountsResponse>(StatusCodes.Status200OK)]
+    public Task<CountsResponse> CountHolds([FromQuery] Guid? vaultId, CancellationToken ct)
+    {
+        return holdService.CountsAsync(vaultId, ct);
     }
 
     [HttpGet("holds/{holdId:guid}")]

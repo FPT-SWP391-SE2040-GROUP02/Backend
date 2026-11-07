@@ -43,6 +43,9 @@ public interface IHoldService
     /// <summary>Admin chỉ xem hold; không có API đặt, xem lại hay gỡ hold bằng tay (hold chỉ do hệ thống đặt và gỡ).</summary>
     Task<PaginatedList<HoldResponse>> ListAsync(string? status, Guid? vaultId, int pageIndex, int pageSize, CancellationToken ct);
 
+    /// <summary>Số hold theo trạng thái cho các thẻ lọc.</summary>
+    Task<CountsResponse> CountsAsync(Guid? vaultId, CancellationToken ct);
+
     Task<HoldResponse> GetAsync(Guid holdId, CancellationToken ct);
 }
 
@@ -73,6 +76,20 @@ public sealed class HoldService : IHoldService
         this.holds = holds;
         this.audit = audit;
         this.timeProvider = timeProvider;
+    }
+
+    public async Task<CountsResponse> CountsAsync(Guid? vaultId, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        Dictionary<HoldStatus, int> byStatus = await holds.CountByStatusAsync(vaultId, ct);
+        CountsResponse response = new CountsResponse();
+        foreach (HoldStatus status in Enum.GetValues<HoldStatus>())
+        {
+            int count = byStatus.TryGetValue(status, out int found) ? found : 0;
+            response.Counts[status.ToApiString()] = count;
+            response.Total += count;
+        }
+        return response;
     }
 
     public async Task<PaginatedList<HoldResponse>> ListAsync(

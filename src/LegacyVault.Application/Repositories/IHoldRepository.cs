@@ -18,6 +18,9 @@ public interface IHoldRepository
     Task<(List<Hold> Items, int TotalCount)> ListAsync(
         HoldStatus? status, Guid? vaultId, int pageIndex, int pageSize, CancellationToken ct);
 
+    /// <summary>Số hold theo trạng thái (tuỳ chọn trong một kho).</summary>
+    Task<Dictionary<HoldStatus, int>> CountByStatusAsync(Guid? vaultId, CancellationToken ct);
+
     Task<int> CountActiveAsync(CancellationToken ct);
 
     /// <summary>Hold đang hiệu lực đã quá ngày xem lại (chưa ai xem lại), dùng cho dashboard và job nhắc.</summary>
