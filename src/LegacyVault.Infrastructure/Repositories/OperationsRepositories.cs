@@ -48,12 +48,6 @@ public sealed class HoldRepository : IHoldRepository
         return context.Set<Hold>().FirstOrDefaultAsync(h => h.Id == holdId, ct);
     }
 
-    public Task<Hold?> FindActiveOwnerAliveAsync(Guid vaultId, CancellationToken ct)
-    {
-        return context.Set<Hold>().FirstOrDefaultAsync(
-            h => h.VaultId == vaultId && h.Type == HoldType.OwnerAlive && h.Status == HoldStatus.Active, ct);
-    }
-
     public Task<bool> HasActiveHoldAsync(Guid vaultId, CancellationToken ct)
     {
         return context.Set<Hold>().AnyAsync(h => h.VaultId == vaultId && h.Status == HoldStatus.Active, ct);
@@ -125,6 +119,14 @@ public sealed class IncidentRepository : IIncidentRepository
     {
         return context.Set<Incident>().FirstOrDefaultAsync(
             i => i.Type == type && i.TargetType == targetType && i.TargetId == targetId && i.Status != IncidentStatus.Resolved, ct);
+    }
+
+    public Task<List<Guid>> ListOpenTargetIdsAsync(IncidentType type, CancellationToken ct)
+    {
+        return context.Set<Incident>().AsNoTracking()
+            .Where(i => i.Type == type && i.Status != IncidentStatus.Resolved && i.TargetId != null)
+            .Select(i => i.TargetId!.Value)
+            .ToListAsync(ct);
     }
 
     public async Task<(List<Incident> Items, int TotalCount)> ListAsync(
@@ -261,10 +263,125 @@ public sealed class AdminUserRepository : IAdminUserRepository
         return context.Set<User>().CountAsync(u => u.Role == UserRole.Admin && u.Status == UserStatus.Active, ct);
     }
 
+    public async Task<List<(Guid CaseId, DeathCaseStatus Status, DateTimeOffset DueAt)>> ListOpenAssignmentsAsync(
+        Guid verifierUserId, CancellationToken ct)
+    {
+        var rows = await context.Set<DeathCaseAssignment>().AsNoTracking()
+            .Join(context.Set<DeathCase>().AsNoTracking(), a => a.CaseId, c => c.Id, (a, c) => new { Assignment = a, Case = c })
+            .Where(x => x.Assignment.VerifierUserId == verifierUserId && x.Assignment.EndedAt == null
+                && (x.Case.Status == DeathCaseStatus.UnderReview || x.Case.Status == DeathCaseStatus.SupplementRequired))
+            .OrderBy(x => x.Assignment.DueAt)
+            .Select(x => new { x.Case.Id, x.Case.Status, x.Assignment.DueAt })
+            .ToListAsync(ct);
+        return rows.Select(r => (r.Id, r.Status, r.DueAt)).ToList();
+    }
+
+    public Task<List<DeathCaseDecision>> ListRecentDecisionsAsync(Guid verifierUserId, int take, CancellationToken ct)
+    {
+        return context.Set<DeathCaseDecision>().AsNoTracking()
+            .Where(d => d.VerifierUserId == verifierUserId)
+            .OrderByDescending(d => d.DecidedAt)
+            .ThenByDescending(d => d.Id)
+            .Take(take)
+            .ToListAsync(ct);
+    }
+
+    public Task<List<AuditLog>> ListRecentAuditByActorAsync(Guid userId, int take, CancellationToken ct)
+    {
+        return context.Set<AuditLog>().AsNoTracking()
+            .Where(l => l.ActorUserId == userId)
+            .OrderByDescending(l => l.At)
+            .ThenByDescending(l => l.Id)
+            .Take(take)
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<(PlanStatus Status, int Count)>> CountPlansByStatusAsync(CancellationToken ct)
+    {
+        var rows = await context.Set<HandoverPlan>().AsNoTracking()
+            .GroupBy(p => p.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        return rows.Select(r => (r.Status, r.Count)).ToList();
+    }
+
+    public async Task<List<(Guid VerifierUserId, int Open, int Overdue)>> CountVerifierLoadAsync(
+        DateTimeOffset now, CancellationToken ct)
+    {
+        var rows = await context.Set<DeathCaseAssignment>().AsNoTracking()
+            .Join(context.Set<DeathCase>().AsNoTracking(), a => a.CaseId, c => c.Id, (a, c) => new { Assignment = a, Case = c })
+            .Where(x => x.Assignment.EndedAt == null
+                && (x.Case.Status == DeathCaseStatus.UnderReview || x.Case.Status == DeathCaseStatus.SupplementRequired))
+            .Select(x => x.Assignment)
+            .GroupBy(a => a.VerifierUserId)
+            .Select(g => new { VerifierUserId = g.Key, Open = g.Count(), Overdue = g.Count(a => a.DueAt < now) })
+            .ToListAsync(ct);
+        return rows.Select(r => (r.VerifierUserId, r.Open, r.Overdue)).ToList();
+    }
+
+    public async Task<List<(AuditLog Log, string? ActorFullName)>> ListRecentAuditAsync(int take, CancellationToken ct)
+    {
+        var rows = await (
+            from log in context.Set<AuditLog>().AsNoTracking()
+            join user in context.Set<User>().AsNoTracking() on log.ActorUserId equals user.Id into actors
+            from actor in actors.DefaultIfEmpty()
+            orderby log.At descending, log.Id descending
+            select new { Log = log, Name = actor == null ? (string?)null : actor.FullName })
+            .Take(take)
+            .ToListAsync(ct);
+        return rows.Select(r => (r.Log, (string?)r.Name)).ToList();
+    }
+
     public Task<int> CountCasesWithoutVerifierAsync(CancellationToken ct)
     {
         return context.Set<DeathCase>().CountAsync(
             c => (c.Status == DeathCaseStatus.UnderReview || c.Status == DeathCaseStatus.SupplementRequired)
                 && !c.Assignments.Any(a => a.EndedAt == null), ct);
+    }
+}
+
+public sealed class OperationsScanRepository : IOperationsScanRepository
+{
+    private readonly AppDbContext context;
+
+    public OperationsScanRepository(AppDbContext context)
+    {
+        this.context = context;
+    }
+
+    public async Task<List<StaleCaseRow>> ListStaleCasesAsync(DateTimeOffset now, int take, CancellationToken ct)
+    {
+        var rows = await context.Set<DeathCaseAssignment>().AsNoTracking()
+            .Join(context.Set<DeathCase>().AsNoTracking(), a => a.CaseId, c => c.Id, (a, c) => new { Assignment = a, Case = c })
+            .Where(x => x.Assignment.EndedAt == null && x.Assignment.DueAt < now
+                && (x.Case.Status == DeathCaseStatus.UnderReview || x.Case.Status == DeathCaseStatus.SupplementRequired))
+            .OrderBy(x => x.Assignment.DueAt)
+            .Select(x => new { x.Case.Id, x.Case.VaultId, x.Assignment.VerifierUserId })
+            .Take(take)
+            .ToListAsync(ct);
+        return rows.Select(r => new StaleCaseRow(r.Id, r.VaultId, r.VerifierUserId)).ToList();
+    }
+
+    public async Task<List<CaseRow>> ListSupplementLoopCasesAsync(int minCount, int take, CancellationToken ct)
+    {
+        var rows = await context.Set<DeathCase>().AsNoTracking()
+            .Where(c => (c.Status == DeathCaseStatus.UnderReview || c.Status == DeathCaseStatus.SupplementRequired)
+                && context.Set<DeathCaseDecision>().Count(
+                    d => d.CaseId == c.Id && d.Kind == DeathCaseDecisionKind.SupplementRequested) >= minCount)
+            .Select(c => new { c.Id, c.VaultId })
+            .Take(take)
+            .ToListAsync(ct);
+        return rows.Select(r => new CaseRow(r.Id, r.VaultId)).ToList();
+    }
+
+    public Task<List<Guid>> ListExpiringVaultIdsAsync(DateTimeOffset now, DateTimeOffset until, int take, CancellationToken ct)
+    {
+        return context.Set<VaultEntitlement>().AsNoTracking()
+            .Where(e => e.Status == EntitlementStatus.PaidActive && e.ServiceExpiresAt != null
+                && e.ServiceExpiresAt > now && e.ServiceExpiresAt <= until)
+            .OrderBy(e => e.ServiceExpiresAt)
+            .Select(e => e.VaultId)
+            .Take(take)
+            .ToListAsync(ct);
     }
 }

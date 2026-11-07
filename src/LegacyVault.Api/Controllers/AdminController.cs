@@ -1,3 +1,4 @@
+using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
@@ -20,9 +21,12 @@ public sealed class AdminController : ControllerBase
     private readonly IAdminService adminService;
     private readonly IIncidentService incidentService;
     private readonly IHoldService holdService;
+    private readonly IPlanSetupService planSetupService;
 
-    public AdminController(IAdminService adminService, IIncidentService incidentService, IHoldService holdService)
+    public AdminController(IAdminService adminService, IIncidentService incidentService, IHoldService holdService,
+        IPlanSetupService planSetupService)
     {
+        this.planSetupService = planSetupService;
         this.adminService = adminService;
         this.incidentService = incidentService;
         this.holdService = holdService;
@@ -57,6 +61,14 @@ public sealed class AdminController : ControllerBase
         CancellationToken ct, [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
     {
         return adminService.ListUsersAsync(search, role, status, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
+    }
+
+    [HttpGet("users/{userId:guid}")]
+    [ProducesResponseType<AdminUserDetailResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<AdminUserDetailResponse> GetUser(Guid userId, CancellationToken ct)
+    {
+        return adminService.GetUserDetailAsync(userId, ct);
     }
 
     [HttpPut("users/{userId:guid}/role")]
@@ -102,6 +114,21 @@ public sealed class AdminController : ControllerBase
         return NoContent();
     }
 
+    // ---- Người thực thi ----
+
+    /// <summary>
+    /// Giao hoặc đổi Người thực thi của kho (lý do bắt buộc). Người được giao nhận lời mời và phải chấp nhận; người cũ giữ vai trò
+    /// tới khi người mới chấp nhận. Kế hoạch đã nộp giấy chứng tử hoặc kho đã đóng → 409 EXECUTOR_NOT_ALLOWED (PLAN_LOCKED).
+    /// </summary>
+    [HttpPost("vaults/{vaultId:guid}/executor")]
+    [ProducesResponseType<ExecutorInvitationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<ExecutorInvitationResponse> AssignExecutor(Guid vaultId, AssignExecutorRequest request, CancellationToken ct)
+    {
+        return await planSetupService.AssignByAdminAsync(vaultId, request, ct);
+    }
+
     // ---- Sự cố ----
 
     [HttpGet("incidents")]
@@ -109,10 +136,10 @@ public sealed class AdminController : ControllerBase
     public Task<PaginatedList<IncidentSummaryResponse>> ListIncidents(
         [FromQuery] string? status, [FromQuery] string? type, [FromQuery] Guid? assigneeUserId,
         [FromQuery] string? search, CancellationToken ct, [FromQuery] bool overdueOnly = false,
-        [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
+        [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20, [FromQuery] bool mine = false)
     {
         return incidentService.ListAsync(
-            status, type, assigneeUserId, search, overdueOnly, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
+            status, type, assigneeUserId, search, overdueOnly, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct, mine);
     }
 
     [HttpGet("incidents/{incidentId:guid}")]

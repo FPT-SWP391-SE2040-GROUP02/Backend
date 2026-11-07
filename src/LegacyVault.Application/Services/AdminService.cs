@@ -14,6 +14,9 @@ public interface IAdminService
     Task<PaginatedList<AdminUserResponse>> ListUsersAsync(
         string? search, string? role, string? status, int pageIndex, int pageSize, CancellationToken ct);
 
+    /// <summary>Chi tiết một tài khoản: thông tin, hồ sơ đang giữ, quyết định và hoạt động gần đây. Không có tài khoản → 404.</summary>
+    Task<AdminUserDetailResponse> GetUserDetailAsync(Guid userId, CancellationToken ct);
+
     /// <summary>
     /// Cấp hoặc đổi vai trò hệ thống (ROLE-01: Verifier/Admin chỉ được cấp qua quản trị). Lỗi: 404, 409
     /// ADMIN_ACTION_NOT_ALLOWED reason CANNOT_CHANGE_SELF / LAST_ADMIN.
@@ -60,7 +63,6 @@ public sealed class AdminService : IAdminService
     private readonly IExecutorReader executorReader;
     private readonly IIncidentService incidentService;
     private readonly IIncidentRepository incidents;
-    private readonly IObjectionRepository objections;
     private readonly IHoldRepository holds;
     private readonly IRefreshTokenRepository refreshTokens;
     private readonly IAuditLogRepository audit;
@@ -77,7 +79,6 @@ public sealed class AdminService : IAdminService
         IExecutorReader executorReader,
         IIncidentService incidentService,
         IIncidentRepository incidents,
-        IObjectionRepository objections,
         IHoldRepository holds,
         IRefreshTokenRepository refreshTokens,
         IAuditLogRepository audit,
@@ -94,7 +95,6 @@ public sealed class AdminService : IAdminService
         this.executorReader = executorReader;
         this.incidentService = incidentService;
         this.incidents = incidents;
-        this.objections = objections;
         this.holds = holds;
         this.audit = audit;
         this.unitOfWork = unitOfWork;
@@ -129,6 +129,54 @@ public sealed class AdminService : IAdminService
         page.HasPreviousPage = pageIndex > 1;
         page.HasNextPage = pageIndex < page.TotalPages;
         return page;
+    }
+
+    public async Task<AdminUserDetailResponse> GetUserDetailAsync(Guid userId, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        User user = await LoadUserAsync(userId, ct);
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        AdminUserDetailResponse response = new AdminUserDetailResponse();
+        AdminUserResponse basic = OperationsMapper.ToAdminUser(user);
+        response.Id = basic.Id;
+        response.Email = basic.Email;
+        response.FullName = basic.FullName;
+        response.Role = basic.Role;
+        response.Status = basic.Status;
+        response.EmailVerified = basic.EmailVerified;
+        response.CreatedAt = basic.CreatedAt;
+        response.LastLoginAt = basic.LastLoginAt;
+        response.Etag = basic.Etag;
+
+        if (user.Role == UserRole.Verifier)
+        {
+            foreach ((Guid caseId, DeathCaseStatus status, DateTimeOffset dueAt) in await adminUsers.ListOpenAssignmentsAsync(userId, ct))
+            {
+                AdminUserCaseResponse item = new AdminUserCaseResponse();
+                item.CaseId = caseId;
+                item.Status = status.ToApiString();
+                item.DueAt = dueAt;
+                item.Overdue = dueAt < now;
+                response.AssignedCases.Add(item);
+            }
+            foreach (DeathCaseDecision decision in await adminUsers.ListRecentDecisionsAsync(userId, 10, ct))
+            {
+                AdminUserDecisionResponse item = new AdminUserDecisionResponse();
+                item.CaseId = decision.CaseId;
+                item.Kind = decision.Kind.ToApiString();
+                item.DecidedAt = decision.DecidedAt;
+                response.RecentDecisions.Add(item);
+            }
+        }
+        foreach (AuditLog log in await adminUsers.ListRecentAuditByActorAsync(userId, 10, ct))
+        {
+            AdminUserActivityResponse item = new AdminUserActivityResponse();
+            item.At = log.At;
+            item.Action = log.Action.ToApiString();
+            item.Outcome = log.Outcome.ToApiString();
+            response.RecentActivity.Add(item);
+        }
+        return response;
     }
 
     public async Task<PaginatedList<AdminAuditLogResponse>> ListAuditLogsAsync(
@@ -256,17 +304,8 @@ public sealed class AdminService : IAdminService
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
         }
-        // Hồ sơ đang chờ quyết định, hoặc đang tạm dừng vì Owner báo còn sống mà lời báo chưa được kết luận (ALIVE-08).
-        DeathCaseObjection? openObjection = null;
-        if (deathCase.Status == DeathCaseStatus.Suspended)
-        {
-            openObjection = await objections.FindOpenByCaseAsync(deathCase.Id, ct);
-            if (openObjection == null)
-            {
-                throw NotAllowed("CASE_NOT_PENDING");
-            }
-        }
-        else if (!DeathCaseReviewRules.CanDecide(deathCase.Status))
+        // Chỉ giao lại được khi hồ sơ đang chờ quyết định.
+        if (!DeathCaseReviewRules.CanDecide(deathCase.Status))
         {
             throw NotAllowed("CASE_NOT_PENDING");
         }
@@ -315,23 +354,13 @@ public sealed class AdminService : IAdminService
         created.CaseId = deathCase.Id;
         created.VerifierUserId = verifierId;
         created.AssignedAt = now;
-        created.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now, deathCase.ObjectionEndsAt);
+        created.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now);
         deathCase.Assignments.Add(created);
         deathCases.AddAssignment(created);
         // Đổi etag để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT, tải lại thì 404.
         deathCase.UpdatedAt = now;
         await incidentService.ResolveByTargetAsync(
             IncidentType.NoVerifier, IncidentRules.TargetDeathCase, deathCase.Id, "Admin đã giao Verifier.", ct);
-        if (openObjection != null)
-        {
-            // Lời báo còn sống đi theo Verifier mới: tính lại hạn kết luận như job giao lại (D2a), nếu không job thấy hạn cũ
-            // đã qua sẽ chuyển hồ sơ khỏi người Admin vừa chọn. Hạn selfie của Owner giữ nguyên (ALIVE-03).
-            openObjection.VerifierUserId = verifierId;
-            openObjection.VerifierDueAt = ObjectionRules.ComputeVerifierDueAt(now, openObjection.SelfieDeadlineAt);
-            openObjection.UpdatedAt = now;
-            await incidentService.ReassignByTargetAsync(IncidentType.OwnerAlive, IncidentRules.TargetDeathCase,
-                deathCase.Id, verifierId, "Admin giao lại Verifier: " + reason, ct);
-        }
         audit.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.VerifierReassigned,
             AuditTargetType.DeathCase, deathCase.Id, null, AuditOutcome.Succeeded, reason, now));
         try
@@ -362,6 +391,45 @@ public sealed class AdminService : IAdminService
         response.ActiveVerifiers = verifierCount;
         response.CasesWithoutVerifier = await adminUsers.CountCasesWithoutVerifierAsync(ct);
         response.ServerTime = now;
+
+        foreach ((PlanStatus status, int count) in await adminUsers.CountPlansByStatusAsync(ct))
+        {
+            if (status == PlanStatus.Closed)
+            {
+                response.ClosedPlans = count;
+                continue;
+            }
+            DashboardPlanStageResponse stage = new DashboardPlanStageResponse();
+            stage.Stage = status.ToApiString();
+            stage.Count = count;
+            response.PlanStages.Add(stage);
+        }
+
+        List<(Guid VerifierUserId, int Open, int Overdue)> load = await adminUsers.CountVerifierLoadAsync(now, ct);
+        List<User> loadUsers = await adminUsers.FindByIdsAsync(load.Select(l => l.VerifierUserId).ToList(), ct);
+        foreach ((Guid verifierUserId, int open, int overdue) in load.OrderByDescending(l => l.Open))
+        {
+            User? verifier = loadUsers.FirstOrDefault(u => u.Id == verifierUserId);
+            if (verifier == null || verifier.Status != UserStatus.Active)
+            {
+                continue;
+            }
+            DashboardVerifierLoadResponse item = new DashboardVerifierLoadResponse();
+            item.UserId = verifierUserId;
+            item.FullName = verifier.FullName;
+            item.OpenCases = open;
+            item.OverdueCases = overdue;
+            response.VerifierLoad.Add(item);
+        }
+
+        foreach ((AuditLog log, string? actorName) in await adminUsers.ListRecentAuditAsync(5, ct))
+        {
+            DashboardRecentActivityResponse activity = new DashboardRecentActivityResponse();
+            activity.At = log.At;
+            activity.ActorFullName = actorName;
+            activity.Action = log.Action.ToApiString();
+            response.RecentActivity.Add(activity);
+        }
         return response;
     }
 
