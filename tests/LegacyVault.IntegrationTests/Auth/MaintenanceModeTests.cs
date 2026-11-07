@@ -66,6 +66,7 @@ public sealed class MaintenanceModeTests : IAsyncLifetime
             password = "Mat-khau-moi-1!",
             confirmPassword = "Mat-khau-moi-1!",
             fullName = "Người mới",
+            phone = "0912345678",
         });
         await ApiTestHelpers.AssertProblemAsync(register, HttpStatusCode.ServiceUnavailable, "MAINTENANCE_MODE");
 
