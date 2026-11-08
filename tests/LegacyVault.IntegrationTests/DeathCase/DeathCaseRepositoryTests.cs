@@ -160,27 +160,6 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Death10_FindsCheckInAtOrAfterCutoffOnly()
-    {
-        // Chuẩn bị: ngày mất 01/10/2026 → mốc 17:00 UTC 01/10 (00:00 giờ VN 02/10)
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DeathCaseTestData.OwnerVault otherVault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DateTimeOffset cutoff = new DateTimeOffset(2026, 10, 1, 17, 0, 0, TimeSpan.Zero);
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, vault.PlanId, 1, cutoff.AddDays(-20), cutoff.AddSeconds(-1));
-        // Kho khác điểm danh sau mốc: không được tính cho kho này.
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, otherVault.PlanId, 1, cutoff.AddDays(-20), cutoff.AddHours(1));
-
-        // Hành động
-        bool beforeOnly = await HasCheckInAsync(vault.PlanId, cutoff);
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, vault.PlanId, 2, cutoff.AddSeconds(-1), cutoff);
-        bool atCutoff = await HasCheckInAsync(vault.PlanId, cutoff);
-
-        // Kiểm tra
-        Assert.False(beforeOnly);
-        Assert.True(atCutoff);
-    }
-
-    [SqlFact]
     public async Task Role03_VerifierCandidateExcludesActiveExecutors()
     {
         // Chuẩn bị: Verifier A là Executor đang hiệu lực của kho (chưa từng được giao), B chỉ mới được mời,
@@ -269,12 +248,4 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
         }
     }
 
-    private async Task<bool> HasCheckInAsync(Guid planId, DateTimeOffset cutoff)
-    {
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IDeathCaseRepository repository = scope.ServiceProvider.GetRequiredService<IDeathCaseRepository>();
-            return await repository.HasCheckInAtOrAfterAsync(planId, cutoff, CancellationToken.None);
-        }
-    }
 }

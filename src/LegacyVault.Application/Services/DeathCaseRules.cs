@@ -182,10 +182,6 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-10, D7: điểm danh "sau ngày mất" là điểm danh từ 00:00 giờ Việt Nam của ngày kế tiếp ngày mất.
-    /// Trả mốc đó theo UTC.
-    /// </summary>
-    /// <summary>
     /// DEATH-13: CCCD khai trên hồ sơ khác CCCD đã xác minh của Owner. Owner chưa xác minh (verifiedLast4 null)
     /// hoặc hồ sơ chưa có số thì không kết luận được, trả false.
     /// </summary>
@@ -210,13 +206,6 @@ public static class DeathCaseRules
             return false;
         }
         return !string.Equals(boundCitizenId, caseCitizenId, StringComparison.Ordinal);
-    }
-
-    public static DateTimeOffset CheckInCutoffUtc(DateOnly dateOfDeath)
-    {
-        DateTime nextDayStart = dateOfDeath.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        DateTimeOffset cutoffInVietnam = new DateTimeOffset(nextDayStart, VietnamOffset);
-        return cutoffInVietnam.ToUniversalTime();
     }
 
     /// <summary>DEATH-08: hạn phản đối = lúc thông báo được giao + 72 giờ.</summary>

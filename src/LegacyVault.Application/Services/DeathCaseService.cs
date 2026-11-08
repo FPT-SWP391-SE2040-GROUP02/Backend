@@ -489,26 +489,6 @@ public sealed class DeathCaseService : IDeathCaseService
         deathCase.ReviewVersionNo = version.VersionNo;
         deathCase.Status = DeathCaseStatus.UnderReview;
 
-        // DEATH-10: có điểm danh sau ngày mất ghi trên giấy → đặt cờ, chặn duyệt tới khi Verifier xem xét.
-        // Ngày mất không còn bắt buộc (Người xét duyệt đọc trên giấy): chưa có ngày thì không so được, bỏ qua cờ này.
-        bool checkedInAfterDeath = false;
-        if (version.DateOfDeath != null)
-        {
-            DateTimeOffset cutoff = DeathCaseRules.CheckInCutoffUtc(version.DateOfDeath.Value);
-            checkedInAfterDeath = await deathCaseRepository.HasCheckInAtOrAfterAsync(plan.Id, cutoff, ct);
-        }
-        if (checkedInAfterDeath)
-        {
-            DeathCaseFlag flag = new DeathCaseFlag();
-            flag.CaseId = deathCase.Id;
-            flag.VersionId = version.Id;
-            flag.Kind = DeathCaseFlagKind.CheckinAfterDeath;
-            flag.Detail = "Owner có điểm danh sau ngày mất ghi trên giấy chứng tử.";
-            flag.CreatedAt = now;
-            deathCase.Flags.Add(flag);
-            deathCaseRepository.AddFlag(flag);
-        }
-
         // DEATH-13: số CCCD trên hồ sơ khác CCCD đã xác minh của Owner → đặt cờ, chặn duyệt tới khi Verifier xem xét.
         // Có danh tính đã gắn (EKYC-27) thì so đủ 12 số; chưa có (Owner đăng ký trước đó) thì chỉ so 4 số cuối của lượt đạt.
         string? boundCitizenId = await identityReader.FindBoundCitizenIdAsync(vault.OwnerId, ct);

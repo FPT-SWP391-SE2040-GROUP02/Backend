@@ -149,12 +149,6 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
         return context.Set<DeathCaseFile>().CountAsync(f => f.StorageKey == storageKey, ct);
     }
 
-    public Task<bool> HasCheckInAtOrAfterAsync(Guid planId, DateTimeOffset cutoffUtc, CancellationToken ct)
-    {
-        return context.Set<CheckInPeriod>()
-            .AnyAsync(p => p.PlanId == planId && p.CheckedInAt != null && p.CheckedInAt >= cutoffUtc, ct);
-    }
-
     public async Task<Guid?> FindVerifierCandidateAsync(
         List<Guid> excludedUserIds, List<string> excludedEmails, CancellationToken ct)
     {

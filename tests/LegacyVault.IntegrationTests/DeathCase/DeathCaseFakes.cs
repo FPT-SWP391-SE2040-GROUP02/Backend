@@ -101,11 +101,6 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         return Task.FromResult(Files.Count(f => f.StorageKey == storageKey));
     }
 
-    public Task<bool> HasCheckInAtOrAfterAsync(Guid planId, DateTimeOffset cutoffUtc, CancellationToken ct)
-    {
-        return Task.FromResult(false);
-    }
-
     public Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, List<string> excludedEmails, CancellationToken ct)
     {
         return Task.FromResult<Guid?>(null);

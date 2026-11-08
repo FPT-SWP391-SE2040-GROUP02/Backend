@@ -48,6 +48,7 @@ Tài liệu này mô tả **đúng những gì code hiện làm**, đọc từ n
 3. Mỗi loại giấy một tệp; gửi hồ sơ chỉ cần giấy chứng tử.
 4. Gửi (`submit`, cần `confirm = true`): hồ sơ thành `UNDER_REVIEW`, kế hoạch thành `DEATH_CASE_OPEN`, **kho và tài khoản Chủ kho bị khóa ngay**. Không còn AI đọc giấy (đã gỡ Gemini), chỉ kiểm đủ trường, loại tệp, số tệp, dung lượng.
 5. Hệ thống ghi mốc phản đối bằng đúng lúc nộp để các luật cũ (`OwnerNotNotified`, `ObjectionPeriodNotOver`) tự qua. Không còn cửa sổ phản đối 72 giờ và không còn "Tôi còn sống".
+5b. Không còn cờ "điểm danh sau ngày mất": gửi hồ sơ không so ngày mất với lần điểm danh của Chủ kho.
 6. Hồ sơ được giao cho một Người xét duyệt theo vòng xoay (loại Chủ kho, Người thực thi của kho, người gửi). Hạn xét `DeathCase.ReviewDueHours` (mặc định 48 giờ).
 
 ## 6. Người xét duyệt
@@ -80,7 +81,7 @@ Các bước:
 4. Người nhận đồng ý hoặc từ chối. Đồng ý thì có quyền xem và tải từng tài sản trong 30 ngày.
 5. Kế hoạch tự chuyển `CLOSED` khi mọi lượt kết thúc; job lưu và xóa dọn nội dung sau thời hạn lưu.
 
-**Người thực thi không thấy nội dung tài sản.** Màn Tài sản của Người thực thi chỉ liệt kê theo từng gói: người nhận (họ tên hoặc 4 số cuối CCCD) và danh sách tài sản (tên, loại, dung lượng). Màn tiến độ bàn giao cho biết từng lượt đang ở đâu, người nhận đã đồng ý chưa, tài sản nào đã được tải. Không có mã tải qua email.
+**Người thực thi không thấy nội dung tài sản.** Tổng quan của Người thực thi không còn thanh 8 bước vòng đời mà là **thanh tiến trình bàn giao** 5 bước (Báo tin, Xét duyệt, Xác minh eKYC, Đồng ý hoặc từ chối, Tải nội dung) kèm dòng "x/y người nhận đã đồng ý, a/b tài sản đã được tải". Màn Tài sản của Người thực thi chỉ liệt kê theo từng gói: người nhận (họ tên hoặc 4 số cuối CCCD) và danh sách tài sản (tên, loại, dung lượng). Màn tiến độ bàn giao cho biết từng lượt đang ở đâu, người nhận đã đồng ý chưa, tài sản nào đã được tải. Không có mã tải qua email.
 
 ## 8. Admin
 
@@ -150,8 +151,7 @@ Các bước:
 
 ## 12. Chỗ code và tài liệu cũ chưa khớp
 
-- `Backend/docs/api-contract.md` (mục 6.11) từng ghi cờ "điểm danh sau ngày mất" (DEATH-10) và thông báo Chủ kho đã gỡ. Trong code hiện vẫn còn đoạn đặt cờ `CheckinAfterDeath` khi nộp hồ sơ có ngày mất, và luật thông báo/phản đối còn nguyên bộ khung (mốc phản đối đặt bằng lúc nộp để tự qua). Cần nhóm thống nhất gỡ hẳn hay giữ.
+- Luật thông báo và phản đối vẫn còn nguyên bộ khung ở backend (mốc phản đối đặt bằng lúc nộp để tự qua). Cờ "điểm danh sau ngày mất" đã gỡ.
 - Bảng `DeathCaseObjection` và các enum phản đối vẫn còn; chưa có migration xóa. Cài đặt `DeathCase.MaxNoticeAttempts` và `DeathCase.ObjectionHours` còn trong dữ liệu mặc định phía backend.
-- Màn Người thực thi ở Frontend vẫn là thanh 8 bước của nhánh Executor; chưa đổi thành thanh tiến trình bàn giao như đã thống nhất.
 - Hạn xử lý sự cố của Admin tính bằng ngày/giờ thật, chưa đi qua chế độ demo.
 - `Pay11` (tạo đơn thanh toán trả 201) fail trên máy dev vì thiếu cấu hình tài khoản ngân hàng thử; không liên quan phần gộp.

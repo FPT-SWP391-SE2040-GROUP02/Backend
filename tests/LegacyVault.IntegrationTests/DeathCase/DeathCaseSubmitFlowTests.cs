@@ -309,50 +309,6 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Ac63_Death10_CheckInAfterDeathDateRaisesFlag()
-    {
-        // Chuẩn bị: ngày mất cách đây 3 ngày nhưng Owner còn điểm danh hôm qua
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, vault.PlanId, 1, now.AddDays(-20), now.AddDays(-1));
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
-        JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
-            executor.Client, vault.VaultId, DeathCaseApi.Today().AddDays(-3));
-
-        // Hành động
-        JsonElement submitted = await DeathCaseApi.SubmitOkAsync(executor.Client, prepared);
-
-        // Kiểm tra: có cờ, hồ sơ vẫn gửi được (Verifier xem xét sau); chi tiết cờ không lộ dữ liệu nhạy cảm
-        Guid caseId = submitted.GetProperty("id").GetGuid();
-        List<DeathCaseFlag> flags = await LoadFlagsAsync(caseId);
-        DeathCaseFlag flag = Assert.Single(flags);
-        Assert.Equal(DeathCaseFlagKind.CheckinAfterDeath, flag.Kind);
-        Assert.Equal((await LoadVersionAsync(caseId, 1)).Id, flag.VersionId);
-        Assert.DoesNotContain(DeathCaseApi.CitizenId, flag.Detail);
-        Assert.Null(flag.ReviewedAt);
-        Assert.Equal("UNDER_REVIEW", submitted.GetProperty("status").GetString());
-    }
-
-    [SqlFact]
-    public async Task Death10_CheckInOnDeathDayRaisesNoFlag()
-    {
-        // Chuẩn bị: Owner điểm danh trưa đúng ngày mất (giờ Việt Nam) — vẫn trước 00:00 ngày kế tiếp
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DateOnly deathDay = DeathCaseApi.Today().AddDays(-3);
-        DateTimeOffset noonOnDeathDay = new DateTimeOffset(deathDay.ToDateTime(new TimeOnly(12, 0)), TimeSpan.FromHours(7));
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, vault.PlanId, 1, noonOnDeathDay.AddDays(-20), noonOnDeathDay);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
-        JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(executor.Client, vault.VaultId, deathDay);
-
-        // Hành động
-        JsonElement submitted = await DeathCaseApi.SubmitOkAsync(executor.Client, prepared);
-
-        // Kiểm tra
-        List<DeathCaseFlag> flags = await LoadFlagsAsync(submitted.GetProperty("id").GetGuid());
-        Assert.Empty(flags);
-    }
-
-    [SqlFact]
     public async Task Assign01_Role03_SubmitAssignsVerifierNotOwnerOrExecutor()
     {
         // Chuẩn bị: Owner và người gửi cũng mang vai trò Verifier nhưng phải bị loại; chỉ một Verifier hợp lệ

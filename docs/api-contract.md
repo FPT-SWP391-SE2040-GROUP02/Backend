@@ -683,7 +683,7 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
 
 **Các điểm khác SRS (đã chốt với nhóm):**
 - Trạng thái kế hoạch trước khi gửi lần đầu lưu ở hồ sơ (`StatusBeforeCase`), không thêm cột vào `HandoverPlans` (SRS §11.6).
-- Cờ "điểm danh sau ngày mất" (DEATH-10) vẫn còn: khi gửi hồ sơ có ngày mất mà Chủ kho có điểm danh từ ngày đó trở đi thì đặt cờ `CHECKIN_AFTER_DEATH` và chặn duyệt tới khi Verifier xem xét. Hồ sơ không khai ngày mất thì bỏ qua cờ này. Chờ nhóm quyết định gỡ hay giữ.
+- Đã gỡ cờ "điểm danh sau ngày mất" (DEATH-10): gửi hồ sơ không còn so ngày mất với lần điểm danh của Chủ kho và không còn đặt cờ `CHECKIN_AFTER_DEATH`. Giá trị này chỉ còn trong dữ liệu cũ và nhãn hiển thị; các cờ khác (`IDENTITY_MISMATCH`, `CERTIFICATE_UNVERIFIED`) vẫn chặn duyệt tới khi Verifier xem xét.
 - Thông báo Owner theo hàng đợi (outbox) và SMTP nhận thư được coi là "đã giao" (DEATH-08); sự cố khi mọi kênh đều lỗi (F4) chưa làm, hiện chỉ ghi log.
 - Phân công Verifier xoay vòng theo lần được giao gần nhất; loại Owner, Executor đang hiệu lực của kho và người gửi. Chưa loại được người nhận vì người nhận chưa gắn tài khoản trước F3 (ROLE-03 một phần). Không có Verifier phù hợp thì hồ sơ để trống và job nền giao người ngay khi có Verifier phù hợp (ASSIGN-04; xem đoạn "Phân công Verifier (job nền)" ở mục 6.12).
 - Snapshot bàn giao ghim lúc **duyệt** (`IHandoverStarter`), không ghim lúc Executor gửi.
