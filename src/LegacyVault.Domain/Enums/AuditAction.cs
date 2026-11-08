@@ -120,4 +120,8 @@ public enum AuditAction
     SystemConfigUpdated = 54,
     /// <summary>Admin khôi phục cấu hình một dịch vụ ngoài về giá trị mặc định trong appsettings.</summary>
     SystemConfigReset = 55,
+    /// <summary>Owner cấp mảnh khóa lần đầu cho Người thực thi.</summary>
+    ExecutorKeyIssued = 56,
+    /// <summary>Owner cấp lại mảnh khóa vì Người thực thi quên hoặc mất; mảnh cũ hết hiệu lực.</summary>
+    ExecutorKeyReissued = 57,
 }

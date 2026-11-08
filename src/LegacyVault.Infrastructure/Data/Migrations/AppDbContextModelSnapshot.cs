@@ -1219,6 +1219,37 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("Executors", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.ExecutorKeyShard", b =>
+                {
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ReissuedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ShardHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("VaultId");
+
+                    b.ToTable("ExecutorKeyShards", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.ExternalLogin", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3005,6 +3036,15 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("User");
 
                     b.Navigation("Vault");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.ExecutorKeyShard", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Vault", null)
+                        .WithOne()
+                        .HasForeignKey("LegacyVault.Domain.Entities.ExecutorKeyShard", "VaultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.ExternalLogin", b =>
