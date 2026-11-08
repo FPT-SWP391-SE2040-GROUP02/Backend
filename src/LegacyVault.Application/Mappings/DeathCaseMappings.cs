@@ -84,6 +84,7 @@ public static class DeathCaseMappings
         response.CheckInOverdue = row.PlanStatus == PlanStatus.CheckinOverdue || row.PlanStatus == PlanStatus.AwaitingCheck;
         response.OpenDeathCaseId = row.OpenDeathCaseId;
         response.LastRejectedDeathCaseId = row.LastRejectedDeathCaseId;
+        response.LastOwnerCheckInAt = row.LastOwnerCheckInAt;
         return response;
     }
 

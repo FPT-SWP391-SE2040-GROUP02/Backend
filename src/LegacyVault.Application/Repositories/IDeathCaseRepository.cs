@@ -26,6 +26,9 @@ public sealed class ExecutorVaultRow
 
     /// <summary>Hồ sơ bị từ chối gần nhất của kho, để Executor mở lại xem lý do; null khi chưa có.</summary>
     public Guid? LastRejectedDeathCaseId { get; set; }
+
+    /// <summary>Lần chủ kho TỰ điểm danh gần nhất (điểm danh thay của Executor không tính); null khi chưa từng.</summary>
+    public DateTimeOffset? LastOwnerCheckInAt { get; set; }
 }
 
 /// <summary>

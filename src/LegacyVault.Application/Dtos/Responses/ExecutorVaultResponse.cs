@@ -24,6 +24,12 @@ public class ExecutorVaultResponse
     /// <summary>Hồ sơ bị từ chối gần nhất của kho; Executor mở bằng GET hồ sơ để xem lý do. Null khi chưa có.</summary>
     public Guid? LastRejectedDeathCaseId { get; set; }
 
+    /// <summary>
+    /// Lần chủ kho tự điểm danh gần nhất. Điểm danh thay của Executor không tính; null khi chủ kho chưa từng tự điểm danh.
+    /// FE dùng để báo xanh "chủ kho đã điểm danh thành công" khi kế hoạch đang an toàn.
+    /// </summary>
+    public DateTimeOffset? LastOwnerCheckInAt { get; set; }
+
     /// <summary>Số lần điểm danh thay liên tiếp tối đa (Admin đặt, mặc định 3).</summary>
     public int ProxyCheckInLimit { get; set; }
 

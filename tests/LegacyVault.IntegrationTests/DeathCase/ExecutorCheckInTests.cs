@@ -216,6 +216,40 @@ public sealed class ExecutorCheckInTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task ExecutorVaultList_ShowsOwnerCheckInButNotTheExecutorProxyCheckIn()
+    {
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+
+        // Chưa ai điểm danh: không có giờ điểm danh.
+        JsonElement before = (await ApiTestHelpers.ReadJsonAsync(await executor.Client.GetAsync("/api/v1/executor/vaults")))[0];
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("lastOwnerCheckInAt").ValueKind);
+
+        // Chủ kho tự điểm danh: Executor thấy giờ đó.
+        HttpResponseMessage ownerCheckIn = await vault.Client.PostAsync("/api/v1/check-ins", null);
+        Assert.Equal(HttpStatusCode.OK, ownerCheckIn.StatusCode);
+        JsonElement after = (await ApiTestHelpers.ReadJsonAsync(await executor.Client.GetAsync("/api/v1/executor/vaults")))[0];
+        Assert.NotEqual(JsonValueKind.Null, after.GetProperty("lastOwnerCheckInAt").ValueKind);
+        Assert.True(after.GetProperty("lastOwnerCheckInAt").GetDateTimeOffset() > DateTimeOffset.UtcNow.AddMinutes(-5));
+    }
+
+    [SqlFact]
+    public async Task ExecutorVaultList_ProxyCheckInDoesNotCountAsOwnerCheckIn()
+    {
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        await DeathCaseTestData.AddCheckInPeriodAsync(factory, vault.PlanId, 1, DateTimeOffset.UtcNow.AddDays(-31), null);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.CheckinOverdue);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+
+        HttpResponseMessage proxy = await executor.Client.PostAsync(
+            $"/api/v1/executor/vaults/{vault.VaultId}/check-in", ApiTestHelpers.ProxyCheckInBody());
+        Assert.Equal(HttpStatusCode.OK, proxy.StatusCode);
+
+        JsonElement mine = (await ApiTestHelpers.ReadJsonAsync(await executor.Client.GetAsync("/api/v1/executor/vaults")))[0];
+        Assert.Equal(JsonValueKind.Null, mine.GetProperty("lastOwnerCheckInAt").ValueKind);
+    }
+
+    [SqlFact]
     public async Task Sec04_OwnerCannotUseExecutorCheckIn()
     {
         // Chuẩn bị: Owner quá hạn tự gọi endpoint của Executor
