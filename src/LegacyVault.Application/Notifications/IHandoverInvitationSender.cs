@@ -13,6 +13,51 @@ public sealed class HandoverInvitation
     public string Token { get; set; } = string.Empty;
 
     public DateTimeOffset ResponseDeadline { get; set; }
+
+    /// <summary>Họ tên Chủ kho (đã mất) để thư nhắc lại ai đã chọn người nhận. Rỗng thì thư dùng cách nói chung.</summary>
+    public string OwnerFullName { get; set; } = string.Empty;
+
+    /// <summary>Người thực thi hiện tại của kho, để người nhận gọi hỏi được. Rỗng thì thư bỏ phần liên hệ này.</summary>
+    public string ExecutorFullName { get; set; } = string.Empty;
+
+    public string? ExecutorPhone { get; set; }
+
+    public string ExecutorEmail { get; set; } = string.Empty;
+
+    /// <summary>Lời nhắn Chủ kho để lại cho người nhận (không bắt buộc). Null thì thư bỏ khung này.</summary>
+    public string? OwnerMessage { get; set; }
+
+    /// <summary>Điền các thông tin liên hệ của kho vào lời mời; thiếu thông tin thì giữ nguyên giá trị rỗng.</summary>
+    public void ApplyContacts(HandoverContactInfo? contacts)
+    {
+        if (contacts == null)
+        {
+            return;
+        }
+        OwnerFullName = contacts.OwnerFullName;
+        ExecutorFullName = contacts.ExecutorFullName;
+        ExecutorPhone = contacts.ExecutorPhone;
+        ExecutorEmail = contacts.ExecutorEmail;
+    }
+}
+
+/// <summary>Thông tin liên hệ của một kho dùng trong thư mời nhận tài sản.</summary>
+public sealed class HandoverContactInfo
+{
+    public string OwnerFullName { get; set; } = string.Empty;
+
+    public string ExecutorFullName { get; set; } = string.Empty;
+
+    public string? ExecutorPhone { get; set; }
+
+    public string ExecutorEmail { get; set; } = string.Empty;
+}
+
+/// <summary>Đọc họ tên Chủ kho và liên hệ Người thực thi của kho. Chỉ đọc; không có nội dung tài sản.</summary>
+public interface IHandoverContactReader
+{
+    /// <summary>Kho không có Chủ kho hoặc chưa có Người thực thi đang hiệu lực thì trường tương ứng để rỗng.</summary>
+    Task<HandoverContactInfo> FindAsync(Guid vaultId, CancellationToken ct);
 }
 
 /// <summary>

@@ -19,6 +19,7 @@ public static class HandoverConfig
     {
         services.AddScoped<IHandoverRepository, HandoverRepository>();
         services.AddScoped<IHandoverSubmissionRepository, HandoverSubmissionRepository>();
+        services.AddScoped<IHandoverContactReader, HandoverContactReader>();
 
         // Công tắc bỏ qua xác minh: sai môi trường thì API không khởi động (HandoverSettingsValidator).
         services.AddOptions<HandoverSettings>()
