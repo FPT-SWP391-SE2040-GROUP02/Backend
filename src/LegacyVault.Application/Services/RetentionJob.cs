@@ -55,6 +55,7 @@ public sealed class RetentionJob : IRetentionJob
     private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IHandoverSubmissionRepository? submissions;
 
     public RetentionJob(
         IRetentionRepository repository,
@@ -65,7 +66,8 @@ public sealed class RetentionJob : IRetentionJob
         IRetentionNoticeSender sender,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverSubmissionRepository? submissions = null)
     {
         this.repository = repository;
         this.vaults = vaults;
@@ -76,6 +78,7 @@ public sealed class RetentionJob : IRetentionJob
         this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.submissions = submissions;
     }
 
     public Task<List<Guid>> FindPlanIdsAsync(CancellationToken ct)
@@ -153,6 +156,7 @@ public sealed class RetentionJob : IRetentionJob
         await unitOfWork.SaveChangesAsync(ct);
 
         await DeleteStoredFilesAsync(vault.Id, now, ct);
+        await DeleteSubmissionImagesAsync(due, ct);
         result.NoticesSent = await SendNoticesAsync(vault, turns, now, ct);
         return result;
     }
@@ -234,6 +238,36 @@ public sealed class RetentionJob : IRetentionJob
             }
         }
         return true;
+    }
+
+    /// <summary>Lượt bị dọn thì ảnh căn cước người nhận đã nộp cũng bị xóa; để trống khóa để không xóa lại.</summary>
+    private async Task DeleteSubmissionImagesAsync(List<HandoverTurn> due, CancellationToken ct)
+    {
+        if (submissions == null || due.Count == 0)
+        {
+            return;
+        }
+        List<Guid> turnIds = new List<Guid>();
+        foreach (HandoverTurn turn in due)
+        {
+            turnIds.Add(turn.Id);
+        }
+        List<HandoverSubmission> found = await submissions.ListByTurnIdsAsync(turnIds, ct);
+        bool changed = false;
+        foreach (HandoverSubmission submission in found)
+        {
+            await IdentityImageStorage.TryDeleteAsync(contentStore, submission.FrontImageStorageKey);
+            await IdentityImageStorage.TryDeleteAsync(contentStore, submission.BackImageStorageKey);
+            submission.FrontImageStorageKey = string.Empty;
+            submission.BackImageStorageKey = string.Empty;
+            submission.FrontImageWrappedDataKey = new byte[submission.FrontImageWrappedDataKey.Length];
+            submission.BackImageWrappedDataKey = new byte[submission.BackImageWrappedDataKey.Length];
+            changed = true;
+        }
+        if (changed)
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
     }
 
     private async Task DeleteStoredFilesAsync(Guid vaultId, DateTimeOffset now, CancellationToken ct)

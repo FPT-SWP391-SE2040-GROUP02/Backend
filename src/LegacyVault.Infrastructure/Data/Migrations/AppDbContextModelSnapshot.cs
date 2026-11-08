@@ -1708,6 +1708,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("ReadyAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("ReceivedAllAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset>("ResponseDeadline")
                         .HasColumnType("datetimeoffset");
 

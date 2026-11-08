@@ -91,6 +91,16 @@ public sealed class HandoverController : ControllerBase
         return handoverService.GetTurnAsync(turnId, ct);
     }
 
+    /// <summary>Người nhận xác nhận đã nhận đủ tài sản.</summary>
+    [HttpPost("turns/{turnId:guid}/received-all")]
+    [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverTurnResponse> ConfirmReceivedAll(Guid turnId, CancellationToken ct)
+    {
+        return handoverService.ConfirmReceivedAllAsync(turnId, ct);
+    }
+
     /// <summary>Đồng ý nhận: mở quyền xem và tải 30 ngày.</summary>
     [HttpPost("turns/{turnId:guid}/accept")]
     [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]

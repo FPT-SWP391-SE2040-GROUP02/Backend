@@ -18,6 +18,7 @@ public sealed class HandoverService : IHandoverService
     private readonly IHandoverPolicy policy;
     private readonly IHoldReader holdReader;
     private readonly IExecutorKeyShardRepository? keyShards;
+    private readonly IHandoverSubmissionRepository? submissions;
 
     /// <summary>Số lần nhập sai khóa mở gói tối đa trước khi khóa lượt.</summary>
     public const int MaxKeyFailures = 5;
@@ -47,7 +48,8 @@ public sealed class HandoverService : IHandoverService
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        IExecutorKeyShardRepository? keyShards = null)
+        IExecutorKeyShardRepository? keyShards = null,
+        IHandoverSubmissionRepository? submissions = null)
     {
         this.currentUser = currentUser;
         this.users = users;
@@ -57,6 +59,7 @@ public sealed class HandoverService : IHandoverService
         this.policy = policy;
         this.holdReader = holdReader;
         this.keyShards = keyShards;
+        this.submissions = submissions;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -378,6 +381,18 @@ public sealed class HandoverService : IHandoverService
         response.IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null;
         response.KeyRequired = await IsKeyRequiredAsync(turn, ct);
         response.KeyVerified = !response.KeyRequired || turn.KeyVerifiedAt != null;
+        response.ReceivedAllAt = turn.ReceivedAllAt;
+        if (submissions != null)
+        {
+            var reviewer = await submissions.FindApprovingVerifierAsync(turn.VaultId, ct);
+            if (reviewer != null)
+            {
+                HandoverReviewerResponse reviewerResponse = new HandoverReviewerResponse();
+                reviewerResponse.FullName = reviewer.Value.FullName;
+                reviewerResponse.LawyerCardNumber = reviewer.Value.LawyerCardNumber;
+                response.Reviewer = reviewerResponse;
+            }
+        }
 
         bool showContent = turn.Status == HandoverTurnStatus.ReadyToAccept
             || turn.Status == HandoverTurnStatus.HandoverCommitted;
@@ -413,6 +428,24 @@ public sealed class HandoverService : IHandoverService
             return false;
         }
         return await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null;
+    }
+
+    public async Task<HandoverTurnResponse> ConfirmReceivedAllAsync(Guid turnId, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        if (turn.Status != HandoverTurnStatus.HandoverCommitted || turn.Grant == null)
+        {
+            throw NotAllowed("NOT_COMMITTED", "Chỉ xác nhận đã nhận đủ sau khi đồng ý nhận tài sản.");
+        }
+        if (turn.ReceivedAllAt == null)
+        {
+            DateTimeOffset now = timeProvider.GetUtcNow();
+            turn.ReceivedAllAt = now;
+            turn.UpdatedAt = now;
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        return await BuildTurnResponseAsync(turn, ct);
     }
 
     public async Task<HandoverTurnResponse> VerifyKeyAsync(Guid turnId, string? key, CancellationToken ct)

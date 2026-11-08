@@ -90,4 +90,17 @@ public class HandoverTurnResponse
     public List<HandoverItemResponse> Items { get; set; } = new List<HandoverItemResponse>();
 
     public HandoverGrantResponse? Grant { get; set; }
+
+    /// <summary>Người xét duyệt đã duyệt hồ sơ chứng tử của kho; người nhận thấy tên và số thẻ luật sư để tự kiểm chứng.</summary>
+    public HandoverReviewerResponse? Reviewer { get; set; }
+
+    /// <summary>Lúc người nhận xác nhận đã nhận đủ tài sản; null khi chưa.</summary>
+    public DateTimeOffset? ReceivedAllAt { get; set; }
+}
+
+public class HandoverReviewerResponse
+{
+    public string FullName { get; set; } = string.Empty;
+
+    public string? LawyerCardNumber { get; set; }
 }

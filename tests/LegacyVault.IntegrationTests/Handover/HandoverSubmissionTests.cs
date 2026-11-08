@@ -77,6 +77,23 @@ public sealed class FakeHandoverSubmissionRepository : IHandoverSubmissionReposi
             .OrderBy(s => s.CreatedAt).ToList());
     }
 
+    public Task<List<HandoverSubmission>> ListByTurnIdsAsync(List<Guid> turnIds, CancellationToken ct)
+    {
+        return Task.FromResult(Items.Where(s => turnIds.Contains(s.TurnId)).ToList());
+    }
+
+    /// <summary>Người xét duyệt (họ tên, số thẻ) theo kho, đặt sẵn trong test.</summary>
+    public Dictionary<Guid, (string FullName, string? Card)> Reviewers { get; } = new Dictionary<Guid, (string, string?)>();
+
+    public Task<(string FullName, string? LawyerCardNumber)?> FindApprovingVerifierAsync(Guid vaultId, CancellationToken ct)
+    {
+        if (Reviewers.TryGetValue(vaultId, out var row))
+        {
+            return Task.FromResult<(string FullName, string? LawyerCardNumber)?>((row.FullName, row.Card));
+        }
+        return Task.FromResult<(string FullName, string? LawyerCardNumber)?>(null);
+    }
+
     public Task<bool> IsApprovingVerifierAsync(Guid verifierUserId, Guid vaultId, CancellationToken ct)
     {
         return Task.FromResult(Approvers.Contains((verifierUserId, vaultId)));
