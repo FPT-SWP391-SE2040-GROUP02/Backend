@@ -46,6 +46,15 @@ public sealed class EkycOptions : IEkycOptions
     }
 
     /// <inheritdoc/>
+    private volatile bool _paused;
+
+    public bool Paused => _paused;
+
+    public void SetPaused(bool paused)
+    {
+        _paused = paused;
+    }
+
     public void ResetDefault()
     {
         lock (_overrideLock)

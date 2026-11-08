@@ -96,6 +96,8 @@ public enum AuditAction
     DevRewindBeforeEkyc = 42,
     /// <summary>Admin đổi ngưỡng so khớp khuôn mặt eKYC bằng công cụ thử nghiệm (chỉ có ở Development/Staging).</summary>
     DevUpdateEkycThreshold = 43,
+    /// <summary>Admin bật hoặc tắt chế độ tạm ngừng eKYC bằng công cụ thử nghiệm (chỉ có ở Development/Staging).</summary>
+    DevToggleEkycPause = 59,
     /// <summary>Admin tạo tài khoản hệ thống mới (Verifier hoặc Executor).</summary>
     AdminCreatedUser = 44,
     /// <summary>Owner đặt mã PIN của kho lần đầu.</summary>

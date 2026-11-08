@@ -58,4 +58,10 @@ public interface IDevToolsService
     /// Lỗi: 400 VALIDATION_ERROR (ngoài dải an toàn), 404 USER_NOT_FOUND (không phải Admin).
     /// </summary>
     Task<DevEkycThresholdResponse> UpdateEkycThresholdAsync(DevEkycThresholdRequest request, CancellationToken ct);
+
+    /// <summary>Đọc trạng thái tạm ngừng eKYC.</summary>
+    Task<DevEkycPauseResponse> GetEkycPauseAsync(CancellationToken ct);
+
+    /// <summary>Bật hoặc tắt tạm ngừng eKYC (ở bộ nhớ, có ghi nhật ký). Bật thì mọi bước eKYC dùng dịch vụ giả và luôn đạt.</summary>
+    Task<DevEkycPauseResponse> UpdateEkycPauseAsync(DevEkycPauseRequest request, CancellationToken ct);
 }

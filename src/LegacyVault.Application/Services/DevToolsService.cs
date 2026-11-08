@@ -295,6 +295,26 @@ public sealed class DevToolsService(
         return BuildThresholdResponse();
     }
 
+    public async Task<DevEkycPauseResponse> GetEkycPauseAsync(CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        return new DevEkycPauseResponse { Paused = ekycOptions.Paused };
+    }
+
+    public async Task<DevEkycPauseResponse> UpdateEkycPauseAsync(DevEkycPauseRequest request, CancellationToken ct)
+    {
+        Guid adminId = await RequireAdminAsync(ct);
+        bool previous = ekycOptions.Paused;
+        ekycOptions.SetPaused(request.Paused);
+
+        // Sự kiện toàn cục: ghi rõ trạng thái cũ và mới để biết lúc nào eKYC bị ngừng.
+        string reason = $"paused {previous} -> {request.Paused}";
+        auditLogs.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.DevToggleEkycPause,
+            AuditTargetType.Configuration, null, null, AuditOutcome.Succeeded, reason, timeProvider.GetUtcNow()));
+        await unitOfWork.SaveChangesAsync(ct);
+        return new DevEkycPauseResponse { Paused = ekycOptions.Paused };
+    }
+
     private DevEkycThresholdResponse BuildThresholdResponse()
     {
         return new DevEkycThresholdResponse
