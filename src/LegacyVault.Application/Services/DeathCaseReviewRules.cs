@@ -146,6 +146,21 @@ public static class DeathCaseReviewRules
     }
 
     /// <summary>Tách chuỗi RequestedParts đã lưu thành danh sách để trả response; null/rỗng → danh sách rỗng.</summary>
+    /// <summary>
+    /// Mã biên bản thẩm định của quyết định duyệt: BB-yyyyMMdd(giờ Việt Nam)-6 ký tự đầu của Id quyết định, in hoa.
+    /// Suy ra từ dữ liệu đã lưu nên mỗi lần đọc ra cùng một mã, không cần cột riêng. Quyết định khác duyệt thì không có mã.
+    /// </summary>
+    public static string? RecordCode(DeathCaseDecision decision)
+    {
+        if (decision.Kind != DeathCaseDecisionKind.Approved)
+        {
+            return null;
+        }
+        DateTimeOffset vietnamTime = decision.DecidedAt.ToOffset(TimeSpan.FromHours(7));
+        string shortId = decision.Id.ToString("N").Substring(0, 6).ToUpperInvariant();
+        return "BB-" + vietnamTime.ToString("yyyyMMdd") + "-" + shortId;
+    }
+
     public static List<string> SplitRequestedParts(string? stored)
     {
         List<string> parts = new List<string>();

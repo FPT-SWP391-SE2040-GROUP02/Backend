@@ -294,4 +294,23 @@ public sealed class DeathCaseReviewRulesTests
         Assert.Equal(1, review.VersionNo);
         Assert.Throws<InvalidOperationException>(() => DeathCaseReviewRules.FindReviewVersion(draft));
     }
+
+    [Fact]
+    public void RecordCode_OnlyForApprovedAndUsesVietnamDate()
+    {
+        // 23:40 UTC ngày 07/11 là 06:40 ngày 08/11 giờ Việt Nam.
+        DeathCaseDecision approved = new DeathCaseDecision();
+        approved.Kind = DeathCaseDecisionKind.Approved;
+        approved.DecidedAt = new DateTimeOffset(2026, 11, 7, 23, 40, 0, TimeSpan.Zero);
+        DeathCaseDecision rejected = new DeathCaseDecision();
+        rejected.Kind = DeathCaseDecisionKind.Rejected;
+        rejected.DecidedAt = approved.DecidedAt;
+
+        string? code = DeathCaseReviewRules.RecordCode(approved);
+
+        Assert.NotNull(code);
+        Assert.Matches("^BB-20261108-[0-9A-F]{6}$", code);
+        Assert.Equal(code, DeathCaseReviewRules.RecordCode(approved));
+        Assert.Null(DeathCaseReviewRules.RecordCode(rejected));
+    }
 }

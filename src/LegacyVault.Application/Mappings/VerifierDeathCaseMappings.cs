@@ -180,6 +180,7 @@ public static class VerifierDeathCaseMappings
             decisionResponse.Reason = decision.Reason;
             decisionResponse.RequestedParts = DeathCaseReviewRules.SplitRequestedParts(decision.RequestedParts);
             decisionResponse.DecidedAt = decision.DecidedAt;
+            decisionResponse.RecordCode = DeathCaseReviewRules.RecordCode(decision);
             responses.Add(decisionResponse);
         }
         return responses;
