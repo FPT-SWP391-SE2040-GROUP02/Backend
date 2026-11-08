@@ -128,6 +128,7 @@ public static class InfrastructureConfig
 
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();
+        services.AddScoped<IExecutorAssetReader, ExecutorAssetReader>();
         services.AddScoped<IExecutorInvitationRepository, ExecutorInvitationRepository>();
         services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
         services.AddScoped<IExecutorReminderSender, ExecutorReminderSender>();

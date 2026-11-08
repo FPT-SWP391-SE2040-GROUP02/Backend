@@ -1235,6 +1235,31 @@ Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem
 - `409 CHECKIN_NOT_ALLOWED` kèm `planStatus` và `reason`: `PLAN_NOT_OVERDUE` (chủ kho không quá hạn, ví dụ vừa điểm danh) `DEATH_CASE_OPEN` hoặc `PROXY_LIMIT_REACHED`. Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`. Dùng chung rate limit với điểm danh của chủ kho.
 - FE: `GET /v1/executor/vaults` chỉ hiện nút "Điểm danh thay chủ kho" khi `checkInOverdue = true` và `openDeathCaseId = null`; mỗi kho trả thêm `proxyCheckInLimit`, `proxyCheckInsUsed`, `proxyCheckInsLeft` để hiện số lượt còn lại và khóa nút khi `proxyCheckInsLeft = 0`. Thành công thì tải lại danh sách kho.
 
+### 6.21a. Executor xem danh sách tài sản của kho
+
+| Method | URL | Quyền | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/v1/executor/vaults/{vaultId}/assets` | Executor đang hiệu lực của kho (không phải chủ kho) | 200 `ExecutorVaultPackageResponse[]` | 401, 404 `VAULT_NOT_FOUND` |
+
+```json
+[
+  {
+    "containerId": "0199e7a4-...",
+    "containerName": "Gói gia đình",
+    "recipients": [{ "fullName": "Trần Minh Anh", "citizenIdLast4": "0791" }],
+    "assets": [
+      { "id": "0199e7a5-...", "name": "Email gia đình", "kind": "TEXT", "sizeBytes": 640 },
+      { "id": "0199e7a6-...", "name": "Sổ tiết kiệm", "kind": "FILE", "sizeBytes": 2457600 }
+    ]
+  }
+]
+```
+
+- Chỉ các gói `READY` (không có bản nháp hay gói đã xóa). Tài sản đã bị xóa nội dung không hiện. Gói sắp theo tên.
+- **Chỉ danh sách:** không có nội dung tài sản, mô tả hay tên tệp gốc. Nội dung chỉ người nhận mở được.
+- `recipients[].fullName` là null khi không giải mã được; FE hiện 4 số cuối CCCD thay thế.
+- Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`.
+
 ### 6.22. Cấu hình dịch vụ ngoài (Admin)
 
 Admin sửa model, khóa và dịch vụ dự phòng của dịch vụ ngoài ngay trên web, không cần sửa appsettings hay deploy lại. Tất cả cần Bearer; không phải Admin đang hoạt động → `404` (SEC-04). Đã nối năm dịch vụ: `GEMINI` (AI nhận diện giấy chứng tử), `EKYC`, `SMTP` (email), `SEPAY` (nhận tiền) và `R2` (lưu nội dung đã mã hóa). Mọi giá trị trong `settings` và `secrets` là chuỗi, số cũng vậy.
