@@ -35,6 +35,8 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
+    private readonly IHandoverContactReader? contactReader;
+
     public HandoverInvitationService(
         ICurrentUser currentUser,
         IVaultRepository vaults,
@@ -47,8 +49,10 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
         IHandoverInvitationSender sender,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverContactReader? contactReader = null)
     {
+        this.contactReader = contactReader;
         this.currentUser = currentUser;
         this.vaults = vaults;
         this.executorReader = executorReader;
@@ -132,6 +136,10 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
         invitation.FullName = fullName;
         invitation.Token = token.Value;
         invitation.ResponseDeadline = responseDeadline;
+        if (contactReader != null)
+        {
+            invitation.ApplyContacts(await contactReader.FindAsync(vault.Id, ct));
+        }
         try
         {
             await sender.SendAsync(invitation, ct);

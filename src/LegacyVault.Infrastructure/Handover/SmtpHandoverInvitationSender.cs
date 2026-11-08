@@ -11,6 +11,7 @@ public sealed class SmtpHandoverInvitationSender : IHandoverInvitationSender
 
     private readonly SmtpMailSender mailSender;
     private readonly string receiveUrl;
+    private readonly string? supportContact;
 
     public SmtpHandoverInvitationSender(SmtpMailSender mailSender, IConfiguration configuration)
     {
@@ -22,12 +23,30 @@ public sealed class SmtpHandoverInvitationSender : IHandoverInvitationSender
             clientUrl = DefaultClientUrl;
         }
         receiveUrl = clientUrl.TrimEnd('/') + "/receive";
+
+        // Liên hệ hỗ trợ của nhóm lấy từ cấu hình (App:SupportEmail, App:SupportPhone); không có thì thư chỉ bảo báo lại cho LegacyVault.
+        string? supportEmail = configuration["App:SupportEmail"];
+        string? supportPhone = configuration["App:SupportPhone"];
+        bool hasEmail = !string.IsNullOrWhiteSpace(supportEmail);
+        bool hasPhone = !string.IsNullOrWhiteSpace(supportPhone);
+        if (hasEmail && hasPhone)
+        {
+            supportContact = $"email {supportEmail!.Trim()} hoặc số {supportPhone!.Trim()}";
+        }
+        else if (hasEmail)
+        {
+            supportContact = $"email {supportEmail!.Trim()}";
+        }
+        else if (hasPhone)
+        {
+            supportContact = $"số {supportPhone!.Trim()}";
+        }
     }
 
     public Task SendAsync(HandoverInvitation invitation, CancellationToken ct)
     {
         string link = receiveUrl + "?token=" + Uri.EscapeDataString(invitation.Token);
-        EmailContent content = HandoverInvitationEmail.Build(invitation.FullName, link, invitation.ResponseDeadline);
+        EmailContent content = HandoverInvitationEmail.Build(invitation, link, supportContact);
         return mailSender.SendAsync(invitation.ToEmail, invitation.FullName, content.Subject, content.TextBody, content.HtmlBody, ct);
     }
 }
