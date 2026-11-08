@@ -27,6 +27,8 @@ public enum ErrorCode
     /// <summary>409: tài sản còn trong gói hoặc đã được ghim vào snapshot bàn giao nên không xóa được.</summary>
     AssetInUse,
     HandoverInvitationInvalid,
+    /// <summary>423: nhập sai mã hồ sơ hoặc 4 số căn cước quá số lần cho phép khi kiểm thư mời.</summary>
+    HandoverMailCheckLocked,
     HandoverNotFound,
     HandoverNotAllowed,
     HandoverAlreadyClaimed,
