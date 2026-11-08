@@ -1,7 +1,9 @@
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace LegacyVault.Api.Controllers;
 
@@ -19,12 +21,15 @@ public sealed class ExecutorHandoverController : ControllerBase
     private readonly IHandoverProgressService handoverProgressService;
     private readonly IHandoverInvitationService handoverInvitationService;
     private readonly IExecutorIdentityConfirmationService identityConfirmationService;
+    private readonly IHandoverKeyMailService handoverKeyMailService;
 
     public ExecutorHandoverController(
         IHandoverProgressService handoverProgressService,
         IHandoverInvitationService handoverInvitationService,
-        IExecutorIdentityConfirmationService identityConfirmationService)
+        IExecutorIdentityConfirmationService identityConfirmationService,
+        IHandoverKeyMailService handoverKeyMailService)
     {
+        this.handoverKeyMailService = handoverKeyMailService;
         this.handoverProgressService = handoverProgressService;
         this.handoverInvitationService = handoverInvitationService;
         this.identityConfirmationService = identityConfirmationService;
@@ -56,6 +61,23 @@ public sealed class ExecutorHandoverController : ControllerBase
     public Task<ResendHandoverInvitationResponse> ResendInvitation(Guid caseId, Guid turnId, CancellationToken ct)
     {
         return handoverInvitationService.ResendAsync(caseId, turnId, ct);
+    }
+
+    /// <summary>
+    /// Người thực hiện gửi khóa mở gói cho người nhận của lượt qua email đã lưu. Body là khóa mình đang giữ để Backend kiểm;
+    /// khóa sai trả 403 HANDOVER_KEY_INVALID. Khóa không được lưu và không có trong phản hồi.
+    /// </summary>
+    [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/send-key")]
+    [EnableRateLimiting("plan-setup")]
+    [ProducesResponseType<SendHandoverKeyResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public Task<SendHandoverKeyResponse> SendKey(Guid caseId, Guid turnId, [FromBody] SendHandoverKeyRequest request, CancellationToken ct)
+    {
+        return handoverKeyMailService.SendAsync(caseId, turnId, request.Key, ct);
     }
 
     /// <summary>
