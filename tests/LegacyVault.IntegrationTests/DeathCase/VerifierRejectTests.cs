@@ -67,7 +67,6 @@ public sealed class VerifierRejectTests : IAsyncLifetime
         Assert.Equal("REJECTED", decision.GetProperty("kind").GetString());
         Assert.Equal(1, decision.GetProperty("versionNo").GetInt32());
         Assert.Equal(RejectReason, decision.GetProperty("reason").GetString());
-        Assert.Equal("DELIVERED", body.GetProperty("ownerNotice").GetProperty("status").GetString());
 
         HandoverPlan planAfter = await DeathCaseReviewTestData.LoadPlanAsync(factory, submitted.Vault.VaultId);
         Assert.Equal(PlanStatus.Active, planAfter.Status);
@@ -81,8 +80,6 @@ public sealed class VerifierRejectTests : IAsyncLifetime
             Assert.NotNull(stored.ClosedAt);
             Assert.Equal(PlanStatus.Active, stored.StatusBeforeCase);
             Assert.Equal(deliveredAt.AddHours(72), stored.ObjectionEndsAt);
-            DeathCaseNotice notice = await db.Set<DeathCaseNotice>().AsNoTracking().SingleAsync(n => n.CaseId == submitted.CaseId);
-            Assert.Equal(DeathCaseNoticeStatus.Delivered, notice.Status);
             DeathCaseDecision stored1 = await db.Set<DeathCaseDecision>().AsNoTracking().SingleAsync(d => d.CaseId == submitted.CaseId);
             Assert.Equal(submitted.AssignmentId, stored1.AssignmentId);
             Assert.Equal(submitted.Verifier.User.Id, stored1.VerifierUserId);
@@ -190,49 +187,6 @@ public sealed class VerifierRejectTests : IAsyncLifetime
         });
         JsonElement oldCase = await DeathCaseReviewTestData.GetExecutorCaseAsync(submitted);
         Assert.Equal("REJECTED", oldCase.GetProperty("status").GetString());
-    }
-
-    [SqlFact]
-    public async Task Death08_RejectCancelsPendingNoticeAndJobDoesNotSend()
-    {
-        // Chuẩn bị: thông báo Owner còn Pending (job chưa gửi)
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        Guid noticeId = Guid.Empty;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            DeathCaseNotice notice = await db.Set<DeathCaseNotice>().AsNoTracking().SingleAsync(n => n.CaseId == submitted.CaseId);
-            Assert.Equal(DeathCaseNoticeStatus.Pending, notice.Status);
-            noticeId = notice.Id;
-        });
-
-        // Hành động
-        HttpResponseMessage response = await DeathCaseReviewTestData.RejectNowAsync(submitted, RejectReason);
-        JsonElement body = await ApiTestHelpers.ReadJsonAsync(response);
-        DeathCaseNoticeStatus? jobResult = null;
-        List<Guid> pendingIds = new List<Guid>();
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IDeathCaseNoticeJob job = scope.ServiceProvider.GetRequiredService<IDeathCaseNoticeJob>();
-            pendingIds = await job.FindPendingNoticeIdsAsync(CancellationToken.None);
-            jobResult = await job.ProcessNoticeAsync(noticeId, CancellationToken.None);
-        }
-
-        // Kiểm tra: thông báo CANCELLED, job bỏ qua, đồng hồ 72 giờ không chạy
-        Assert.Equal("CANCELLED", body.GetProperty("ownerNotice").GetProperty("status").GetString());
-        Assert.DoesNotContain(noticeId, pendingIds);
-        Assert.Null(jobResult);
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            DeathCaseNotice notice = await db.Set<DeathCaseNotice>().AsNoTracking().SingleAsync(n => n.Id == noticeId);
-            Assert.Equal(DeathCaseNoticeStatus.Cancelled, notice.Status);
-            Assert.NotNull(notice.UpdatedAt);
-            Assert.Equal(0, notice.AttemptCount);
-            DeathCase stored = await db.Set<DeathCase>().AsNoTracking().SingleAsync(c => c.Id == submitted.CaseId);
-            Assert.Null(stored.ObjectionStartsAt);
-            Assert.Null(stored.ObjectionEndsAt);
-        });
-        JsonElement executorView = await DeathCaseReviewTestData.GetExecutorCaseAsync(submitted);
-        Assert.Equal("CANCELLED", executorView.GetProperty("ownerNotice").GetProperty("status").GetString());
     }
 
     [SqlFact]
@@ -411,8 +365,6 @@ public sealed class VerifierRejectTests : IAsyncLifetime
             Assert.Equal(DeathCaseStatus.UnderReview, stored.Status);
             Assert.Null(stored.ClosedAt);
             Assert.Equal(0, await db.Set<DeathCaseDecision>().CountAsync(d => d.CaseId == caseId));
-            DeathCaseNotice notice = await db.Set<DeathCaseNotice>().AsNoTracking().SingleAsync(n => n.CaseId == caseId);
-            Assert.Equal(DeathCaseNoticeStatus.Pending, notice.Status);
         });
     }
 

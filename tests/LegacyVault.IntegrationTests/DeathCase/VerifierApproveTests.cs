@@ -125,20 +125,6 @@ public sealed class VerifierApproveTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Ac63_Death08_ApproveWhenOwnerNotNotifiedIsBlocked()
-    {
-        // Chuẩn bị: thông báo vẫn Pending, đồng hồ 72 giờ chưa chạy
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-
-        // Hành động
-        HttpResponseMessage response = await DeathCaseReviewTestData.ApproveNowAsync(submitted, ApproveReason);
-
-        // Kiểm tra
-        await AssertBlockedAsync(response, "OWNER_NOT_NOTIFIED", new List<string> { "OWNER_NOT_NOTIFIED" });
-        await AssertNothingChangedAsync(submitted);
-    }
-
-    [SqlFact]
     public async Task Death10_ApproveWithUnreviewedFlagIsBlocked()
     {
         // Chuẩn bị: có cờ chưa xem xét
@@ -518,14 +504,6 @@ public sealed class VerifierApproveTests : IAsyncLifetime
             submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(), ApproveReason);
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(approve, HttpStatusCode.Conflict, "DEATH_CASE_NOT_ALLOWED");
         Assert.Equal("VERIFIER_CONFLICT", problem.GetProperty("reason").GetString());
-
-        // Khi còn lý do khác (Owner chưa nhận thư) thì VERIFIER_CONFLICT đứng sau chúng
-        DeathCaseReviewTestData.SubmittedCase other = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        await DeathCaseTestData.AddAcceptedExecutorAsync(
-            factory, other.Vault.VaultId, other.Verifier.User.Id);
-        JsonElement otherDetail = await DeathCaseReviewTestData.GetDetailAsync(other.Verifier.Client, other.CaseId);
-        Assert.Equal(new List<string> { "OWNER_NOT_NOTIFIED", "VERIFIER_CONFLICT" },
-            DeathCaseApi.ReadStrings(otherDetail.GetProperty("approveBlockers")));
     }
 
     private static async Task AssertBlockedAsync(HttpResponseMessage response, string reason, List<string> blockers)

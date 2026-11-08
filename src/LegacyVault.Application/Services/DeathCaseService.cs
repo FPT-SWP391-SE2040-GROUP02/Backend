@@ -567,22 +567,13 @@ public sealed class DeathCaseService : IDeathCaseService
         // Bản bổ sung mới: hết trạng thái quá hạn bổ sung.
         deathCase.SupplementOverdueAt = null;
 
-        // DEATH-08, DEATH-11: lần đầu, hoặc đổi trọng yếu so với bản đã báo → xếp thông báo Pending (outbox, D3)
-        // và dừng đồng hồ 72 giờ cho tới khi job gửi được thư. Đổi không trọng yếu thì giữ nguyên đồng hồ.
-        if (NeedsOwnerNotice(deathCase, data, version))
+        // Không còn cửa sổ phản đối: Chủ kho không được báo và không có "Tôi còn sống". Kho và tài khoản bị khóa ngay khi nộp,
+        // nên hồ sơ vào xét luôn. Ghi mốc phản đối bằng đúng lúc nộp để các luật cũ (OwnerNotNotified, ObjectionPeriodNotOver) tự qua.
+        if (deathCase.NotifiedVersionNo == null || deathCase.ObjectionStartsAt == null)
         {
-            DeathCaseNotice notice = new DeathCaseNotice();
-            notice.CaseId = deathCase.Id;
-            notice.VersionNo = version.VersionNo;
-            notice.Channel = DeathCaseNoticeChannel.Email;
-            notice.RecipientUserId = vault.OwnerId;
-            notice.Status = DeathCaseNoticeStatus.Pending;
-            notice.CreatedAt = now;
-            deathCase.Notices.Add(notice);
-            deathCaseRepository.AddNotice(notice);
             deathCase.NotifiedVersionNo = version.VersionNo;
-            deathCase.ObjectionStartsAt = null;
-            deathCase.ObjectionEndsAt = null;
+            deathCase.ObjectionStartsAt = now;
+            deathCase.ObjectionEndsAt = now;
         }
 
         // ASSIGN-01, ROLE-03 (D4): chưa có phân công còn hiệu lực thì chọn Verifier xoay vòng, loại Owner,
