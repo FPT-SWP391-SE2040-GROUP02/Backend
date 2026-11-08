@@ -21,4 +21,9 @@ public class RegisterRequest
     [Required(ErrorMessage = "Họ tên là bắt buộc.")]
     [MaxLength(200)]
     public string FullName { get; set; } = string.Empty;
+
+    /// <summary>Số di động Việt Nam; chuẩn hóa và kiểm tra ở PhoneRules.</summary>
+    [Required(ErrorMessage = "Số điện thoại là bắt buộc.")]
+    [MaxLength(20, ErrorMessage = "Số điện thoại không hợp lệ.")]
+    public string Phone { get; set; } = string.Empty;
 }

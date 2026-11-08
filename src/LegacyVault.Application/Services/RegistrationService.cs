@@ -44,6 +44,7 @@ public sealed class RegistrationService : IRegistrationService
     {
         var email = request.Email.Trim().ToLowerInvariant();
         var fullName = request.FullName.Trim();
+        string phone = PhoneRules.NormalizeVietnamPhone(request.Phone, "phone");
         var now = _timeProvider.GetUtcNow();
 
         // 1. Kiểm tra tài khoản đã tồn tại chưa
@@ -61,6 +62,7 @@ public sealed class RegistrationService : IRegistrationService
         {
             Email = email,
             FullName = fullName,
+            Phone = phone,
             PasswordHash = _passwordHasher.Hash(request.Password),
             Role = UserRole.User,
             Status = UserStatus.Active,

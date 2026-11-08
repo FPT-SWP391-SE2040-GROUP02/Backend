@@ -35,7 +35,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
-    TimeProvider time, IAssetRepository assets) : IPlanSetupService
+    TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-30";
     public const string ScopeVersion = "executor-2026-10-15";
@@ -244,7 +244,19 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             return Map(item);
         }, ct);
 
-    public Task<PlanSetupResponse> ActivateAsync(Guid vaultId, ActivatePlanRequest request, CancellationToken ct) =>
+    public async Task<PlanSetupResponse> ActivateAsync(Guid vaultId, ActivatePlanRequest request, CancellationToken ct)
+    {
+        bool activated = false;
+        PlanSetupResponse response = await ActivateCoreAsync(vaultId, request, () => activated = true, ct);
+        if (activated)
+        {
+            // Báo người nhận sau khi đã lưu kích hoạt, ngoài giao dịch để lần thử lại không gửi trùng thư.
+            await activatedNotifier.NotifyAsync(vaultId, ct);
+        }
+        return response;
+    }
+
+    private Task<PlanSetupResponse> ActivateCoreAsync(Guid vaultId, ActivatePlanRequest request, Action markActivated, CancellationToken ct) =>
         unitOfWork.ExecuteSerializableAsync(async () =>
         {
             var vault = await OwnedAsync(vaultId, ct);
@@ -269,6 +281,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             vault.Plan.UpdatedAt = now;
             await scheduler.StartFirstPeriodAsync(vault.Plan, ct);
             await unitOfWork.SaveChangesAsync(ct);
+            markActivated();
             return await BuildAsync(vault, ct);
         }, ct);
 

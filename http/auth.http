@@ -12,7 +12,8 @@ Content-Type: application/json
   "email": "an@gmail.com",
   "password": "Password123!",
   "confirmPassword": "Password123!",
-  "fullName": "Nguyen Van An"
+  "fullName": "Nguyen Van An",
+  "phone": "0912345678"
 }
 
 ### 2. Xac minh email bang token -> 200 OK UserResponse

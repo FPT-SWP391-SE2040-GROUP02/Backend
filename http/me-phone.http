@@ -1,0 +1,26 @@
+# Số điện thoại của người đang đăng nhập.
+# Dùng cho tài khoản tạo bằng Google chưa có số: Frontend bắt nhập số ở /auth/complete-phone trước khi vào trang chính.
+# Chỉ nhận số di động Việt Nam (03, 05, 07, 08, 09; nhận cả +84 và dấu cách, dấu chấm).
+#
+# Chuẩn bị: đăng nhập (http/auth.http) rồi dán access token vào biến dưới.
+
+@baseUrl = http://localhost:5000/api/v1
+@accessToken = <dán access token>
+
+### 1. Đặt số hợp lệ -> 200 UserResponse, phone = "0912345678"
+PUT {{baseUrl}}/me/phone
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "phone": "+84 912 345 678"
+}
+
+### 2. Số không phải di động Việt Nam -> 400 VALIDATION_ERROR (errors.phone)
+PUT {{baseUrl}}/me/phone
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "phone": "0212345678"
+}
