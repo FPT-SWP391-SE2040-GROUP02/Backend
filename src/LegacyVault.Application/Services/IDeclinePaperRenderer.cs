@@ -29,7 +29,7 @@ public sealed class DeclinePaperData
     public DateTimeOffset ReviewedAt { get; set; }
 }
 
-/// <summary>Dựng tệp PDF "Văn bản từ chối nhận di sản"; cài đặt cụ thể nằm ở Infrastructure.</summary>
+/// <summary>Dựng ảnh PNG "Văn bản từ chối nhận di sản" (một trang); cài đặt cụ thể nằm ở Infrastructure.</summary>
 public interface IDeclinePaperRenderer
 {
     byte[] Render(DeclinePaperData data);

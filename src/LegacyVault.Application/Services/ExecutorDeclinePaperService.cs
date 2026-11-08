@@ -9,7 +9,7 @@ namespace LegacyVault.Application.Services;
 
 public interface IExecutorDeclinePaperService
 {
-    /// <summary>Người thực thi tải PDF văn bản từ chối của một lượt đã bị người nhận từ chối.</summary>
+    /// <summary>Người thực thi xem ảnh văn bản từ chối của một lượt đã bị người nhận từ chối.</summary>
     Task<PreparedDownload> PrepareAsync(Guid caseId, Guid turnId, CancellationToken ct);
 }
 
@@ -70,7 +70,7 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
         stored.SizeBytes = submission.PaperSizeBytes;
         stored.EncryptionKeyId = submission.PaperEncryptionKeyId;
         stored.WrappedDataKey = submission.PaperWrappedDataKey;
-        return await IdentityImageStorage.PrepareAsync(contentStore, stored, "application/pdf", "van-ban-tu-choi.pdf", ct);
+        return await IdentityImageStorage.PrepareAsync(contentStore, stored, "image/png", "van-ban-tu-choi.png", ct);
     }
 
     private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)

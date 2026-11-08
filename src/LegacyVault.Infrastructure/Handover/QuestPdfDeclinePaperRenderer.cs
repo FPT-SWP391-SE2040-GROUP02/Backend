@@ -5,7 +5,7 @@ using QuestPDF.Infrastructure;
 
 namespace LegacyVault.Infrastructure.Handover;
 
-/// <summary>Dựng PDF văn bản từ chối bằng QuestPDF (giấy phép Community); dùng font Lato đi kèm gói nên máy chủ nào cũng dựng như nhau.</summary>
+/// <summary>Dựng ảnh PNG văn bản từ chối bằng QuestPDF (giấy phép Community); dùng font Lato đi kèm gói nên máy chủ nào cũng dựng như nhau.</summary>
 public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
 {
     static QuestPdfDeclinePaperRenderer()
@@ -50,7 +50,11 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
                 });
             });
         });
-        return document.GeneratePdf();
+        ImageGenerationSettings settings = new ImageGenerationSettings();
+        settings.ImageFormat = ImageFormat.Png;
+        settings.RasterDpi = 150;
+        // Văn bản chỉ một trang: lấy trang đầu làm ảnh PNG, xem như ảnh giấy chứng tử mà Người xét duyệt đọc.
+        return document.GenerateImages(settings).First();
     }
 
     private static string Match(bool value)

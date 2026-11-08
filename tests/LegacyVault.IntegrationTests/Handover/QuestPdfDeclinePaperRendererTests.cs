@@ -5,11 +5,11 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
 
-/// <summary>PDF văn bản từ chối: dựng được tệp PDF hợp lệ từ dữ liệu hệ thống đã giữ.</summary>
+/// <summary>Văn bản từ chối: dựng được ảnh PNG hợp lệ từ dữ liệu hệ thống đã giữ.</summary>
 public sealed class QuestPdfDeclinePaperRendererTests
 {
     [Fact]
-    public void Render_ProducesPdfBytes()
+    public void Render_ProducesPngBytes()
     {
         DeclinePaperData data = new DeclinePaperData
         {
@@ -27,9 +27,9 @@ public sealed class QuestPdfDeclinePaperRendererTests
             ReviewedAt = new DateTimeOffset(2026, 11, 9, 4, 0, 0, TimeSpan.Zero),
         };
 
-        byte[] pdf = new QuestPdfDeclinePaperRenderer().Render(data);
+        byte[] image = new QuestPdfDeclinePaperRenderer().Render(data);
 
-        Assert.True(pdf.Length > 500);
-        Assert.Equal("%PDF-", Encoding.ASCII.GetString(pdf, 0, 5));
+        Assert.True(image.Length > 500);
+        Assert.Equal("PNG", Encoding.ASCII.GetString(image, 1, 3));
     }
 }

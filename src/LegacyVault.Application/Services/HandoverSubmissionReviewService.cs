@@ -174,7 +174,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         return ToDetail(submission);
     }
 
-    /// <summary>Dựng và lưu mã hóa PDF văn bản từ chối; trả khóa lưu để bù trừ khi lưu bản ghi thất bại. Thiếu bộ dựng thì bỏ qua.</summary>
+    /// <summary>Dựng và lưu mã hóa ảnh văn bản từ chối; trả khóa lưu để bù trừ khi lưu bản ghi thất bại. Thiếu bộ dựng thì bỏ qua.</summary>
     private async Task<string?> StoreDeclinePaperAsync(
         HandoverSubmission submission, Vault vault, Guid reviewerId, DateTimeOffset now, CancellationToken ct)
     {
@@ -204,8 +204,8 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         data.ReviewerLawyerCardNumber = reviewer.LawyerCardNumber;
         data.ReviewedAt = now;
 
-        byte[] pdf = paperRenderer.Render(data);
-        StoredContent stored = await IdentityImageStorage.SaveAsync(contentStore, pdf, ct);
+        byte[] image = paperRenderer.Render(data);
+        StoredContent stored = await IdentityImageStorage.SaveAsync(contentStore, image, ct);
         submission.PaperStorageKey = stored.StorageKey;
         submission.PaperSizeBytes = stored.SizeBytes;
         submission.PaperEncryptionKeyId = stored.EncryptionKeyId;
