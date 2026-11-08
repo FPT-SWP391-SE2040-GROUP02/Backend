@@ -296,7 +296,7 @@ public sealed class DeathCaseReviewRulesTests
     }
 
     [Fact]
-    public void RecordCode_OnlyForApprovedAndUsesVietnamDate()
+    public void RecordCode_ForFinalDecisionsOnlyAndUsesVietnamDate()
     {
         // 23:40 UTC ngày 07/11 là 06:40 ngày 08/11 giờ Việt Nam.
         DeathCaseDecision approved = new DeathCaseDecision();
@@ -311,6 +311,10 @@ public sealed class DeathCaseReviewRulesTests
         Assert.NotNull(code);
         Assert.Matches("^BB-20261108-[0-9A-F]{6}$", code);
         Assert.Equal(code, DeathCaseReviewRules.RecordCode(approved));
-        Assert.Null(DeathCaseReviewRules.RecordCode(rejected));
+        Assert.Matches("^BB-20261108-[0-9A-F]{6}$", DeathCaseReviewRules.RecordCode(rejected));
+        DeathCaseDecision supplement = new DeathCaseDecision();
+        supplement.Kind = DeathCaseDecisionKind.SupplementRequested;
+        supplement.DecidedAt = approved.DecidedAt;
+        Assert.Null(DeathCaseReviewRules.RecordCode(supplement));
     }
 }

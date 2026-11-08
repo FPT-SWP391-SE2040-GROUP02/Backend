@@ -169,7 +169,7 @@ public class VerifierDecisionResponse
 
     public DateTimeOffset DecidedAt { get; set; }
 
-    /// <summary>Mã biên bản thẩm định, chỉ có với quyết định APPROVED (dạng BB-20261107-9F2C71); null với loại khác.</summary>
+    /// <summary>Mã biên bản thẩm định, có với quyết định APPROVED và REJECTED (dạng BB-20261107-9F2C71); null với yêu cầu bổ sung.</summary>
     public string? RecordCode { get; set; }
 }
 

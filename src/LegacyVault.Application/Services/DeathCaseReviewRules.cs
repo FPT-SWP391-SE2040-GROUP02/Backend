@@ -147,12 +147,12 @@ public static class DeathCaseReviewRules
 
     /// <summary>Tách chuỗi RequestedParts đã lưu thành danh sách để trả response; null/rỗng → danh sách rỗng.</summary>
     /// <summary>
-    /// Mã biên bản thẩm định của quyết định duyệt: BB-yyyyMMdd(giờ Việt Nam)-6 ký tự đầu của Id quyết định, in hoa.
-    /// Suy ra từ dữ liệu đã lưu nên mỗi lần đọc ra cùng một mã, không cần cột riêng. Quyết định khác duyệt thì không có mã.
+    /// Mã biên bản thẩm định của quyết định cuối (duyệt hoặc từ chối): BB-yyyyMMdd(giờ Việt Nam)-6 ký tự đầu của Id quyết định, in hoa.
+    /// Suy ra từ dữ liệu đã lưu nên mỗi lần đọc ra cùng một mã, không cần cột riêng. Yêu cầu bổ sung thì không có biên bản.
     /// </summary>
     public static string? RecordCode(DeathCaseDecision decision)
     {
-        if (decision.Kind != DeathCaseDecisionKind.Approved)
+        if (decision.Kind != DeathCaseDecisionKind.Approved && decision.Kind != DeathCaseDecisionKind.Rejected)
         {
             return null;
         }
