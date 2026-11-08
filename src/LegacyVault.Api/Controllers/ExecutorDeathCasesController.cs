@@ -1,6 +1,9 @@
+using LegacyVault.Api.DeathCases;
+using LegacyVault.Api.Exceptions;
 using LegacyVault.Api.Models;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,10 +24,13 @@ public sealed class ExecutorDeathCasesController : ControllerBase
     private const long MaxRequestBytes = 21L * 1024 * 1024;
 
     private readonly IDeathCaseService deathCaseService;
+    private readonly ILogger<ExecutorDeathCasesController> logger;
 
-    public ExecutorDeathCasesController(IDeathCaseService deathCaseService)
+    public ExecutorDeathCasesController(
+        IDeathCaseService deathCaseService, ILogger<ExecutorDeathCasesController> logger)
     {
         this.deathCaseService = deathCaseService;
+        this.logger = logger;
     }
 
     /// <summary>DMS-05: các kho mà tôi là Executor đang hiệu lực, kèm cờ quá hạn điểm danh.</summary>
@@ -145,6 +151,37 @@ public sealed class ExecutorDeathCasesController : ControllerBase
     {
         DeathCaseResponse response = await deathCaseService.CreateVersionAsync(caseId, request, ct);
         return CreatedAtAction(nameof(GetDeathCase), new { caseId }, response);
+    }
+
+    /// <summary>
+    /// Xem lại một tệp mình đã tải lên (bản nháp hay bản đã gửi). Nội dung được kiểm toàn vẹn trước khi gửi byte đầu tiên;
+    /// hỏng thì 500 CONTENT_INTEGRITY_FAILED không kèm byte nội dung nào.
+    /// </summary>
+    [HttpGet("death-cases/{caseId:guid}/files/{fileId:guid}/content")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetFileContent(Guid caseId, Guid fileId, CancellationToken ct)
+    {
+        PreparedDeathCaseFile prepared;
+        try
+        {
+            prepared = await deathCaseService.PrepareFileAsync(caseId, fileId, ct);
+        }
+        catch (ContentIntegrityException)
+        {
+            // Chỉ log id, không log nội dung, tên tệp hay khóa lưu trữ.
+            logger.LogError("Tệp hồ sơ chứng tử không qua kiểm toàn vẹn: hồ sơ {CaseId}, tệp {FileId}", caseId, fileId);
+            ProblemDetails problem = GlobalExceptionHandler.Problem(
+                StatusCodes.Status500InternalServerError, ErrorCode.ContentIntegrityFailed,
+                "Nội dung tệp không vượt qua kiểm tra toàn vẹn nên không thể xem.");
+            problem.Extensions["traceId"] = HttpContext.TraceIdentifier;
+            ObjectResult result = new ObjectResult(problem);
+            result.StatusCode = StatusCodes.Status500InternalServerError;
+            result.ContentTypes.Add("application/problem+json");
+            return result;
+        }
+        return new DeathCaseFileResult(prepared);
     }
 
     /// <summary>Gỡ một trang khỏi bản nháp. Bản đã gửi không gỡ được (409 DEATH_CASE_NOT_ALLOWED, VERSION_LOCKED).</summary>

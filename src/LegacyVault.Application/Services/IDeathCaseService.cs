@@ -36,6 +36,12 @@ public interface IDeathCaseService
     Task<DeathCaseResponse> RemoveFileAsync(Guid caseId, Guid fileId, CancellationToken ct);
 
     /// <summary>
+    /// Executor xem lại một tệp mình đã tải lên hồ sơ (bản nháp hay bản đã gửi). Nội dung được kiểm toàn vẹn trước khi
+    /// gửi byte đầu tiên; hỏng thì ném ContentIntegrityException. Tệp không thuộc hồ sơ này hoặc không phải Executor của kho → 404.
+    /// </summary>
+    Task<PreparedDeathCaseFile> PrepareFileAsync(Guid caseId, Guid fileId, CancellationToken ct);
+
+    /// <summary>
     /// Executor hủy hồ sơ còn nháp (chưa gửi lần nào): xóa hồ sơ, các phiên bản và trang đã tải, kho trở lại như
     /// chưa báo tin (mở lại hồ sơ, điểm danh thay chủ kho được). Đã gửi → 409 DEATH_CASE_NOT_ALLOWED (VERSION_LOCKED),
     /// hồ sơ đã đóng → CASE_CLOSED.

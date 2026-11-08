@@ -336,6 +336,57 @@ public sealed class DeathCaseService : IDeathCaseService
         return BuildResponse(deathCase);
     }
 
+    public async Task<PreparedDeathCaseFile> PrepareFileAsync(Guid caseId, Guid fileId, CancellationToken ct)
+    {
+        CaseContext context = await LoadCaseForExecutorAsync(caseId, ct);
+        DeathCaseFile? file = null;
+        foreach (DeathCaseVersion version in context.DeathCase.Versions)
+        {
+            foreach (DeathCaseFile candidate in version.Files)
+            {
+                if (candidate.Id == fileId)
+                {
+                    file = candidate;
+                }
+            }
+        }
+        if (file == null)
+        {
+            throw CaseNotFound();
+        }
+
+        StoredContent stored = new StoredContent();
+        stored.StorageKey = file.StorageKey;
+        stored.SizeBytes = file.SizeBytes;
+        stored.EncryptionKeyId = file.EncryptionKeyId;
+        stored.WrappedDataKey = file.WrappedDataKey;
+
+        // DATA-06: giải mã một lượt vào Stream.Null để kiểm toàn vẹn trước khi gửi byte đầu tiên.
+        try
+        {
+            await contentStore.CopyToAsync(stored, Stream.Null, ct);
+        }
+        catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException || ex is IOException)
+        {
+            throw new ContentIntegrityException("Nội dung trang giấy chứng tử không vượt qua kiểm tra toàn vẹn.", ex);
+        }
+
+        string fileName = file.FileName;
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            fileName = DeathCaseFileRules.DefaultFileName;
+        }
+        PreparedDeathCaseFile prepared = new PreparedDeathCaseFile();
+        prepared.CaseId = caseId;
+        prepared.FileId = fileId;
+        prepared.ViewerUserId = context.UserId;
+        prepared.FileName = fileName;
+        prepared.ContentType = file.ContentType;
+        prepared.Length = file.SizeBytes;
+        prepared.WriteToAsync = (destination, token) => contentStore.CopyToAsync(stored, destination, token);
+        return prepared;
+    }
+
     public async Task<DeathCaseResponse> RemoveFileAsync(Guid caseId, Guid fileId, CancellationToken ct)
     {
         CaseContext context = await LoadCaseForExecutorAsync(caseId, ct);
