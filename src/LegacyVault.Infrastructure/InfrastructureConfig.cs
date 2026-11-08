@@ -85,7 +85,6 @@ public static class InfrastructureConfig
         services.AddSingleton<IServiceStatusTracker, ServiceStatusTracker>();
         // Đọc đồng bộ cho các lớp singleton có thuộc tính đồng bộ (tài khoản nhận tiền, khóa webhook SePay).
         services.AddSingleton<ISyncConfigReader, SyncConfigReader>();
-        services.AddScoped<IServiceConnectionTester, GeminiConnectionTester>();
         services.AddScoped<IServiceConnectionTester, EkycConnectionTester>();
         services.AddScoped<IServiceConnectionTester, SmtpConnectionTester>();
         services.AddScoped<IServiceConnectionTester, R2ConnectionTester>();
@@ -102,6 +101,7 @@ public static class InfrastructureConfig
         services.AddScoped<IHoldRepository, HoldRepository>();
         services.AddScoped<IIncidentRepository, IncidentRepository>();
         services.AddScoped<IAdminUserRepository, AdminUserRepository>();
+        services.AddScoped<IOperationsScanRepository, OperationsScanRepository>();
         services.AddHostedService<IncidentMonitor>();
         services.AddSingleton<IIncidentNoticeSender>(provider =>
         {

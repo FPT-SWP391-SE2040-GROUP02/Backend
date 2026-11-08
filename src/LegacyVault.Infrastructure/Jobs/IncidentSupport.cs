@@ -139,6 +139,22 @@ public sealed class IncidentMonitor(IServiceScopeFactory scopeFactory, IConfigur
                 {
                     ids = await scope.ServiceProvider.GetRequiredService<IIncidentJob>().FindIdsAsync(stoppingToken);
                 }
+                // Quét mở sự cố mới (hồ sơ quá hạn xét, bổ sung nhiều lần, gói sắp hết) trước khi xử lý các sự cố đang mở.
+                try
+                {
+                    using (IServiceScope scope = scopeFactory.CreateScope())
+                    {
+                        await scope.ServiceProvider.GetRequiredService<IOperationsScanner>().ScanAsync(stoppingToken);
+                    }
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning("Quét sự cố vận hành lỗi: {ExceptionType}", ex.GetType().Name);
+                }
                 foreach (Guid id in ids)
                 {
                     try

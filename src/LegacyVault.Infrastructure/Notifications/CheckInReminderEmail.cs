@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Infrastructure.Notifications;
@@ -44,7 +45,18 @@ public static class CheckInReminderEmail
                 paragraph = $"Thời gian chờ sẽ hết lúc {graceEnds}. Hãy điểm danh trước thời điểm này để không phải nhờ người thực hiện (Executor) liên hệ kiểm tra.";
                 break;
             default:
-                throw new ArgumentOutOfRangeException(nameof(kind), kind, "Mốc nhắc không hợp lệ.");
+                int late = CheckInTimeline.LateReminderIndex(kind);
+                if (late == 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(kind), kind, "Mốc nhắc không hợp lệ.");
+                }
+                subject = late == 1
+                    ? "Bạn đã quá hạn điểm danh LegacyVault"
+                    : $"Nhắc lần {late}: bạn vẫn chưa điểm danh LegacyVault";
+                paragraph = $"Hạn điểm danh ({due}) đã qua. Đây là thư nhắc trễ lần {late}. Hãy điểm danh ngay. "
+                    + $"Nếu tới {graceEnds} mà chưa điểm danh, hệ thống sẽ báo cho Người thực thi do bạn chọn để liên hệ "
+                    + "kiểm tra tình hình của bạn. Việc này không tự mở kho và không bắt đầu bàn giao.";
+                break;
         }
 
         const string note = "Lưu ý: đăng nhập hoặc thanh toán không được tính là điểm danh. Email này không chứa nội dung tài sản của bạn.";

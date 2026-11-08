@@ -204,8 +204,14 @@ public sealed class FakeIncidentService : IIncidentService
         return Task.CompletedTask;
     }
 
+    public Task<CountsResponse> CountsAsync(
+        string? type, Guid? assigneeUserId, string? search, bool overdueOnly, bool mine, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
     public Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
-        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
+        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct, bool mine = false)
     {
         throw new NotSupportedException();
     }

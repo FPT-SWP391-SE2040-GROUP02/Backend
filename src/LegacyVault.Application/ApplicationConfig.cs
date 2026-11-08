@@ -27,7 +27,6 @@ public static class ApplicationConfig
         services.AddScoped<IEntitlementExpiryJob, EntitlementExpiryJob>();
 
         // Hồ sơ chứng tử (F2B)
-        services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
         services.AddScoped<IDeathCaseService, DeathCaseService>();
         services.AddScoped<IDeathCaseReviewService, DeathCaseReviewService>();
         services.AddScoped<ISigningPasswordChecker, SigningPasswordChecker>();
@@ -41,6 +40,8 @@ public static class ApplicationConfig
         services.AddScoped<ISystemConfigService, SystemConfigService>();
         services.AddScoped<IOperationsRecorder, OperationsRecorder>();
         services.AddScoped<IIncidentJob, IncidentJob>();
+        services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
+        services.AddScoped<IOperationsScanner, OperationsScanner>();
         services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
         services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();
         services.AddScoped<IDeathCaseAssignmentJob, DeathCaseAssignmentJob>();

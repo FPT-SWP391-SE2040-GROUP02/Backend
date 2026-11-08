@@ -24,7 +24,7 @@ public class CheckInStatusResponse
     /// <summary>Hạn điểm danh của kỳ đang mở; null khi chưa bắt đầu.</summary>
     public DateTimeOffset? NextCheckInDueAt { get; set; }
 
-    /// <summary>Hết thời gian chờ của kỳ đang mở; null khi chưa bắt đầu.</summary>
+    /// <summary>Mốc báo Người thực thi của kỳ đang mở; null khi chưa bắt đầu.</summary>
     public DateTimeOffset? GraceEndsAt { get; set; }
 
     public CheckInSettingsResponse Settings { get; set; } = new CheckInSettingsResponse();
@@ -36,12 +36,14 @@ public class CheckInSettingsResponse
 {
     public int CycleDays { get; set; }
 
-    public int GraceDays { get; set; }
+    /// <summary>Khoảng cách giữa hai thư nhắc trễ (ngày) do Admin đặt; chủ kho chỉ xem.</summary>
+    public int LateReminderGapDays { get; set; }
+
+    /// <summary>Số thư nhắc trễ trước khi báo Người thực thi do Admin đặt; chủ kho chỉ xem.</summary>
+    public int MaxLateReminders { get; set; }
 
     /// <summary>Chu kỳ sẽ áp dụng từ kỳ sau; null nếu không có thay đổi chờ.</summary>
     public int? PendingCycleDays { get; set; }
-
-    public int? PendingGraceDays { get; set; }
 
     /// <summary>Gửi lại trong body (trường etag) khi PATCH cấu hình.</summary>
     public string Etag { get; set; } = string.Empty;

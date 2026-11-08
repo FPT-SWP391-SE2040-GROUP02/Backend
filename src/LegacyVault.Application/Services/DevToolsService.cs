@@ -130,6 +130,7 @@ public sealed class DevToolsService(
         }
         else
         {
+            // Mốc cuối: key đã được kiểm là mốc hợp lệ nên chỉ còn RecipientDecisionEnded.
             // Dời hạn quyết định (7 ngày sau khi xác nhận danh tính) của mọi lượt đang chờ về quá khứ;
             // job hết hạn quyết định của hệ thống chuyển lượt sang DECISION_EXPIRED và đóng kế hoạch nếu mọi lượt đã xong.
             List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);

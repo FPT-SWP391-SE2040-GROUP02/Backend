@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Services;
 public static class ProxyCheckInRules
 {
     /// <summary>Khóa tham số Admin đặt trong SystemSettings.</summary>
-    public const string LimitSettingKey = "CheckIn.ProxyMaxConsecutive";
+    public const string LimitSettingKey = "CheckIn.ExecutorProxyLimit";
 
     /// <summary>Mức gốc khi Admin chưa đặt.</summary>
     public const int DefaultLimit = 3;
@@ -15,7 +15,7 @@ public static class ProxyCheckInRules
     /// <summary>Số lần điểm danh thay liên tiếp tối đa hiện hành.</summary>
     public static int Limit()
     {
-        return RuntimeSettings.Int(LimitSettingKey, DefaultLimit);
+        return Math.Clamp(RuntimeSettings.Int(LimitSettingKey, DefaultLimit), 1, 20);
     }
 
     /// <summary>Số lượt còn lại, không âm.</summary>

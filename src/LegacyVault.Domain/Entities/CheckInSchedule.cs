@@ -20,13 +20,13 @@ public class CheckInSchedule
     /// <summary>Chu kỳ điểm danh đang dùng, tính bằng ngày.</summary>
     public int CycleDays { get; set; } = 30;
 
-    /// <summary>Thời gian chờ sau hạn điểm danh, tính bằng ngày.</summary>
+    /// <summary>Không còn dùng: thời gian chờ nay tính từ số thư nhắc trễ do Admin đặt. Giữ cột đến khi có migration xóa.</summary>
     public int GraceDays { get; set; } = 7;
 
     /// <summary>Chu kỳ mới, chờ áp dụng khi mở kỳ kế tiếp; null nếu không có.</summary>
     public int? PendingCycleDays { get; set; }
 
-    /// <summary>Thời gian chờ mới, chờ áp dụng khi mở kỳ kế tiếp; null nếu không có.</summary>
+    /// <summary>Không còn dùng (xem GraceDays).</summary>
     public int? PendingGraceDays { get; set; }
 
     /// <summary>Lần điểm danh gần nhất; dùng để chống bấm lặp.</summary>

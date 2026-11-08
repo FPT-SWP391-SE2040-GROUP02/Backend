@@ -173,25 +173,6 @@ public sealed class VerifierDeathCasesController : ControllerBase
     }
 
     /// <summary>
-    /// Từ chối hồ sơ (lý do bắt buộc, Executor sẽ thấy). Hồ sơ đóng lại, kế hoạch về trạng thái trước khi gửi
-    /// (có thể trễ tối đa 60 giây so với lịch điểm danh), thông báo Owner đang chờ bị hủy.
-    /// </summary>
-    [HttpPost("death-cases/{caseId:guid}/reject")]
-    [Consumes("application/json")]
-    [ProducesResponseType<VerifierDeathCaseResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status423Locked)]
-    public async Task<VerifierDeathCaseResponse> Reject(
-        Guid caseId, RejectDeathCaseRequest request, CancellationToken ct)
-    {
-        Response.Headers["Cache-Control"] = "no-store";
-        return await reviewService.RejectAsync(caseId, request, ct);
-    }
-
-    /// <summary>
     /// Duyệt hồ sơ và mở bàn giao F3 (tạo lượt, ghim snapshot, gửi lời mời cho người nhận). Chưa duyệt được thì 409
     /// DEATH_CASE_NOT_ALLOWED kèm reason và approveBlockers. Gọi lặp trên hồ sơ đã duyệt trả 200 (handover = null).
     /// </summary>

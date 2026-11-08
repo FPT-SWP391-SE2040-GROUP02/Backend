@@ -125,14 +125,6 @@ public sealed class RetentionFlowTests : IAsyncLifetime
             ClientFor(executor.User), vaultId, DeathCaseApi.Today().AddDays(-3));
         JsonElement submitted = await DeathCaseApi.SubmitOkAsync(ClientFor(executor.User), prepared);
         Guid caseId = submitted.GetProperty("id").GetGuid();
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IDeathCaseNoticeJob job = scope.ServiceProvider.GetRequiredService<IDeathCaseNoticeJob>();
-            foreach (Guid id in await job.FindPendingNoticeIdsAsync(CancellationToken.None))
-            {
-                await job.ProcessNoticeAsync(id, CancellationToken.None);
-            }
-        }
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             await db.Set<DeathCase>().Where(c => c.Id == caseId).ExecuteUpdateAsync(s => s

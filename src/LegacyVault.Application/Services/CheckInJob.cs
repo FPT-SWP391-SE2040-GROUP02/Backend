@@ -91,14 +91,15 @@ public sealed class CheckInJob : ICheckInJob
     /// </summary>
     private async Task SendLatestReminderAsync(CheckInPeriod period, DateTimeOffset now, CancellationToken ct)
     {
-        CheckInReminderKind? latest = CheckInTimeline.LatestReachedMilestone(period.DueAt, period.GraceEndsAt, now);
+        CheckInReminderKind? latest = CheckInTimeline.LatestReachedMilestone(
+            period.DueAt, period.MaxLateReminders, period.LateReminderGapDays, now);
         if (latest == null)
         {
             return;
         }
 
         bool changed = false;
-        foreach (CheckInReminderKind kind in Enum.GetValues<CheckInReminderKind>())
+        foreach (CheckInReminderKind kind in CheckInTimeline.ActiveKinds(period.MaxLateReminders))
         {
             if ((int)kind >= (int)latest.Value)
             {

@@ -79,6 +79,17 @@ public class ReassignVerifierRequest
     public string Reason { get; set; } = string.Empty;
 }
 
+public class AssignExecutorRequest
+{
+    /// <summary>Tài khoản được giao làm Người thực thi của kho.</summary>
+    [Required]
+    public Guid? UserId { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng ghi lý do.")]
+    [MaxLength(500)]
+    public string Reason { get; set; } = string.Empty;
+}
+
 public class CreateAdminUserRequest
 {
     [Required(ErrorMessage = "Vui lòng nhập địa chỉ email.")]

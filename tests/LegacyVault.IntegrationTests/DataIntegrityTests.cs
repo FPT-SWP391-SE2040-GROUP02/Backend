@@ -182,17 +182,13 @@ public sealed class DataIntegrityTests : IAsyncLifetime
     {
         FakeEnvironment production = new FakeEnvironment(Environments.Production);
         FakeEnvironment development = new FakeEnvironment(Environments.Development);
-        DeathCaseOwnerNotice notice = new DeathCaseOwnerNotice();
         HandoverInvitation invitation = new HandoverInvitation();
         invitation.Token = "t";
 
-        LogDeathCaseNoticeSender noticeProd = new LogDeathCaseNoticeSender(NullLogger<LogDeathCaseNoticeSender>.Instance, production);
         LogHandoverInvitationSender handoverProd = new LogHandoverInvitationSender(NullLogger<LogHandoverInvitationSender>.Instance, production);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => noticeProd.SendAsync(notice, CancellationToken.None));
         await Assert.ThrowsAsync<InvalidOperationException>(() => handoverProd.SendAsync(invitation, CancellationToken.None));
 
         // Development vẫn chạy được luồng thử, không cần Gmail
-        await new LogDeathCaseNoticeSender(NullLogger<LogDeathCaseNoticeSender>.Instance, development).SendAsync(notice, CancellationToken.None);
         await new LogHandoverInvitationSender(NullLogger<LogHandoverInvitationSender>.Instance, development).SendAsync(invitation, CancellationToken.None);
     }
 

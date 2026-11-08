@@ -57,11 +57,12 @@ public sealed class AdminPaymentTransactionsTests : IAsyncLifetime
 
     /// <summary>Chèn thẳng một giao dịch với trạng thái và thời điểm nhận cho trước (số tiền, nội dung, số tài khoản giả).</summary>
     private async Task<Guid> AddTransactionAsync(
-        long providerTransactionId, PaymentTransactionStatus status, string? reason, DateTimeOffset receivedAt)
+        long providerTransactionId, PaymentTransactionStatus status, string? reason, DateTimeOffset receivedAt,
+        string environment = "Test")
     {
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.Provider = "SePay";
-        transaction.Environment = "Test";
+        transaction.Environment = environment;
         transaction.ProviderTransactionId = providerTransactionId;
         transaction.Gateway = "MBBank";
         transaction.AccountNumber = "0000000000";
@@ -127,6 +128,82 @@ public sealed class AdminPaymentTransactionsTests : IAsyncLifetime
         Assert.False(first.TryGetProperty("rowVersion", out _));
         Assert.DoesNotContain("noi dung chuyen khoan rieng tu", rawBody);
         Assert.DoesNotContain("0000000000", rawBody);
+    }
+
+    [SqlFact]
+    public async Task Admin09_Admin_FilterSuccessGroupsMatchedAndResolved()
+    {
+        // Chuẩn bị: một giao dịch mỗi trạng thái
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await AddTransactionAsync(1, PaymentTransactionStatus.Matched, null, now.AddMinutes(-4));
+        await AddTransactionAsync(2, PaymentTransactionStatus.Resolved, "ORDER_EXPIRED", now.AddMinutes(-3));
+        await AddTransactionAsync(3, PaymentTransactionStatus.ReconciliationRequired, "WRONG_ACCOUNT", now.AddMinutes(-2));
+        await AddTransactionAsync(4, PaymentTransactionStatus.Received, null, now.AddMinutes(-1));
+        HttpClient admin = await AdminClientAsync();
+
+        // Hành động
+        HttpResponseMessage response = await admin.GetAsync(ListUrl + "?status=SUCCESS");
+
+        // Kiểm tra: chỉ Matched và Resolved
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        JsonElement page = (await response.Content.ReadFromJsonAsync<JsonElement>());
+        Assert.Equal(2, page.GetProperty("totalCount").GetInt32());
+        List<string?> statuses = new List<string?>();
+        foreach (JsonElement item in page.GetProperty("items").EnumerateArray())
+        {
+            statuses.Add(item.GetProperty("status").GetString());
+        }
+        Assert.Contains("MATCHED", statuses);
+        Assert.Contains("RESOLVED", statuses);
+    }
+
+    [SqlFact]
+    public async Task Admin09_Admin_FiltersByEnvironmentAndSearch()
+    {
+        // Chuẩn bị
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await AddTransactionAsync(1, PaymentTransactionStatus.Resolved, null, now.AddMinutes(-2), "Live");
+        await AddTransactionAsync(2, PaymentTransactionStatus.Resolved, null, now.AddMinutes(-1), "Test");
+        HttpClient admin = await AdminClientAsync();
+
+        // Hành động
+        HttpResponseMessage live = await admin.GetAsync(ListUrl + "?environment=Live");
+        HttpResponseMessage test = await admin.GetAsync(ListUrl + "?environment=Test");
+        HttpResponseMessage bad = await admin.GetAsync(ListUrl + "?environment=Prod");
+        HttpResponseMessage byRef = await admin.GetAsync(ListUrl + "?search=FT26289000001");
+        HttpResponseMessage none = await admin.GetAsync(ListUrl + "?search=khongco");
+
+        // Kiểm tra
+        Assert.Equal(1, (await live.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(1, (await test.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Equal(2, (await byRef.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(0, (await none.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+    }
+
+    [SqlFact]
+    public async Task Admin09_Admin_FiltersByDateRangeInVietnamTime()
+    {
+        // Chuẩn bị: 23:30 ngày 10/11 giờ Việt Nam, 00:30 ngày 11/11, và 12:00 ngày 12/11
+        TimeSpan vn = TimeSpan.FromHours(7);
+        await AddTransactionAsync(1, PaymentTransactionStatus.Resolved, null, new DateTimeOffset(2026, 11, 10, 23, 30, 0, vn));
+        await AddTransactionAsync(2, PaymentTransactionStatus.Resolved, null, new DateTimeOffset(2026, 11, 11, 0, 30, 0, vn));
+        await AddTransactionAsync(3, PaymentTransactionStatus.Resolved, null, new DateTimeOffset(2026, 11, 12, 12, 0, 0, vn));
+        HttpClient admin = await AdminClientAsync();
+
+        // Hành động
+        HttpResponseMessage oneDay = await admin.GetAsync(ListUrl + "?from=2026-11-11&to=2026-11-11");
+        HttpResponseMessage fromOnly = await admin.GetAsync(ListUrl + "?from=2026-11-11");
+        HttpResponseMessage toOnly = await admin.GetAsync(ListUrl + "?to=2026-11-10");
+        HttpResponseMessage reversed = await admin.GetAsync(ListUrl + "?from=2026-11-12&to=2026-11-10");
+        HttpResponseMessage badDate = await admin.GetAsync(ListUrl + "?from=2026-13-40");
+
+        // Kiểm tra: tính cả hai đầu theo giờ Việt Nam
+        Assert.Equal(1, (await oneDay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(2, (await fromOnly.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(1, (await toOnly.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("totalCount").GetInt32());
+        Assert.Equal(HttpStatusCode.BadRequest, reversed.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, badDate.StatusCode);
     }
 
     [SqlFact]

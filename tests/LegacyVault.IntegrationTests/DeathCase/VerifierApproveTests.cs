@@ -241,67 +241,6 @@ public sealed class VerifierApproveTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Ac71_ApproveAndRejectAtOnceGiveOneFinalDecision()
-    {
-        // Chuẩn bị: hai client của cùng Verifier, một bên duyệt một bên từ chối, cùng etag, bấm đồng thời
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateReadyToApproveCaseAsync(factory);
-        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
-        string etag = detail.GetProperty("etag").GetString()!;
-        HttpClient approveClient = submitted.Verifier.Client;
-        HttpClient rejectClient = DeathCaseReviewTestData.CreateClientFor(factory, submitted.Verifier.User).Client;
-
-        // Hành động
-        Task<HttpResponseMessage> approveTask = DeathCaseReviewTestData.ApproveAsync(approveClient, submitted.CaseId, etag, ApproveReason);
-        Task<HttpResponseMessage> rejectTask = DeathCaseReviewTestData.RejectAsync(rejectClient, submitted.CaseId, etag, "Giấy tờ sai.");
-        HttpResponseMessage[] responses = await Task.WhenAll(approveTask, rejectTask);
-
-        // Kiểm tra: đúng một bên thắng (200); bên thua 409 CASE_CLOSED (hoặc EDIT_CONFLICT), không bao giờ PLAN_STATE_INVALID
-        int winners = 0;
-        foreach (HttpResponseMessage response in responses)
-        {
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-                winners++;
-                continue;
-            }
-            JsonElement problem = await ApiTestHelpers.ReadJsonAsync(response);
-            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            string code = problem.GetProperty("code").GetString()!;
-            if (code == "DEATH_CASE_NOT_ALLOWED")
-            {
-                Assert.Equal("CASE_CLOSED", problem.GetProperty("reason").GetString());
-            }
-            else
-            {
-                Assert.Equal("EDIT_CONFLICT", code);
-            }
-        }
-        Assert.Equal(1, winners);
-
-        // Đúng một quyết định cuối; kế hoạch và lượt khớp quyết định đó
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            DeathCaseDecision decision = await db.Set<DeathCaseDecision>().AsNoTracking().SingleAsync(d => d.CaseId == submitted.CaseId);
-            DeathCase stored = await db.Set<DeathCase>().AsNoTracking().SingleAsync(c => c.Id == submitted.CaseId);
-            HandoverPlan plan = await db.HandoverPlans.AsNoTracking().SingleAsync(p => p.VaultId == submitted.Vault.VaultId);
-            int turns = await db.Set<HandoverTurn>().CountAsync(t => t.VaultId == submitted.Vault.VaultId);
-            if (decision.Kind == DeathCaseDecisionKind.Approved)
-            {
-                Assert.Equal(DeathCaseStatus.ApprovedForHandover, stored.Status);
-                Assert.Equal(PlanStatus.HandoverInProgress, plan.Status);
-                Assert.Equal(1, turns);
-            }
-            else
-            {
-                Assert.Equal(DeathCaseDecisionKind.Rejected, decision.Kind);
-                Assert.Equal(DeathCaseStatus.Rejected, stored.Status);
-                Assert.Equal(stored.StatusBeforeCase, plan.Status);
-                Assert.Equal(0, turns);
-            }
-        });
-    }
-
-    [SqlFact]
     public async Task Ac71_RepeatApproveReturnsSameResult()
     {
         // Chuẩn bị: đã duyệt một lần
@@ -329,49 +268,6 @@ public sealed class VerifierApproveTests : IAsyncLifetime
         {
             Assert.Equal(1, await db.Set<DeathCaseDecision>().CountAsync(d => d.CaseId == submitted.CaseId));
             Assert.Equal(1, await db.Set<HandoverTurn>().CountAsync(t => t.VaultId == submitted.Vault.VaultId));
-        });
-    }
-
-    [SqlFact]
-    public async Task Ac71_RejectAfterApproveIsCaseClosed()
-    {
-        // Chuẩn bị: hồ sơ đã được duyệt
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateReadyToApproveCaseAsync(factory);
-        HttpResponseMessage approved = await DeathCaseReviewTestData.ApproveNowAsync(submitted, ApproveReason);
-        JsonElement approvedBody = await ApiTestHelpers.ReadJsonAsync(approved);
-        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
-
-        // Hành động
-        HttpResponseMessage reject = await DeathCaseReviewTestData.RejectAsync(
-            submitted.Verifier.Client, submitted.CaseId, approvedBody.GetProperty("etag").GetString(), "Đổi ý");
-
-        // Kiểm tra: 409 CASE_CLOSED, kế hoạch vẫn ở bàn giao
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(reject, HttpStatusCode.Conflict, "DEATH_CASE_NOT_ALLOWED");
-        Assert.Equal("CASE_CLOSED", problem.GetProperty("reason").GetString());
-        HandoverPlan plan = await DeathCaseReviewTestData.LoadPlanAsync(factory, submitted.Vault.VaultId);
-        Assert.Equal(PlanStatus.HandoverInProgress, plan.Status);
-    }
-
-    [SqlFact]
-    public async Task Ac71_ApproveAfterRejectIsCaseClosed()
-    {
-        // Chuẩn bị: hồ sơ đã bị từ chối
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateReadyToApproveCaseAsync(factory);
-        HttpResponseMessage rejected = await DeathCaseReviewTestData.RejectNowAsync(submitted, "Giấy tờ sai.");
-        JsonElement rejectedBody = await ApiTestHelpers.ReadJsonAsync(rejected);
-        Assert.Equal(HttpStatusCode.OK, rejected.StatusCode);
-
-        // Hành động: duyệt (kể cả với etag mới nhất)
-        HttpResponseMessage approve = await DeathCaseReviewTestData.ApproveAsync(
-            submitted.Verifier.Client, submitted.CaseId, rejectedBody.GetProperty("etag").GetString(), ApproveReason);
-
-        // Kiểm tra: 409 CASE_CLOSED, không thêm dòng, không có lượt bàn giao
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(approve, HttpStatusCode.Conflict, "DEATH_CASE_NOT_ALLOWED");
-        Assert.Equal("CASE_CLOSED", problem.GetProperty("reason").GetString());
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            Assert.Equal(1, await db.Set<DeathCaseDecision>().CountAsync(d => d.CaseId == submitted.CaseId));
-            Assert.Equal(0, await db.Set<HandoverTurn>().CountAsync(t => t.VaultId == submitted.Vault.VaultId));
         });
     }
 

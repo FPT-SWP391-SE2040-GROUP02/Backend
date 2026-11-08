@@ -43,7 +43,7 @@ public static class DeathCaseAssignmentRules
     /// và (hết phản đối + 48 giờ). start là lúc giao hoặc lúc Executor gửi bản mới gần nhất.
     /// Các đồng hồ không đặt lại hay tạm dừng nhau; hạn Verifier chỉ có mức sàn "sau khi hồ sơ duyệt được".
     /// </summary>
-    public static DateTimeOffset ComputeDueAt(DateTimeOffset start, DateTimeOffset? objectionEndsAt)
+    public static DateTimeOffset ComputeDueAt(DateTimeOffset start, DateTimeOffset? objectionEndsAt = null)
     {
         DateTimeOffset dueAt = start + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
         if (objectionEndsAt != null)

@@ -24,7 +24,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     /// Mã ghi vào nhật ký khi Verifier từ chối hồ sơ. Lý do tự do Verifier nhập nằm ở quyết định của hồ sơ, không ghi vào
     /// nhật ký vì Owner xem được nhật ký (SEC-07, SEC-13).
     /// </summary>
-    private const string RejectedReasonCode = "VERIFIER_REJECTED";
     private const string SortByDueAt = "dueAt";
     private const string SortByAssignedAt = "assignedAt";
 
@@ -281,95 +280,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         await unitOfWork.SaveChangesAsync(ct);
         // Báo Executor sau khi đã lưu: gửi thư lỗi không làm hỏng quyết định đã ghi.
         await NotifyExecutorsAsync(deathCase, DeathCaseDecisionKind.SupplementRequested, decision.DueAt, ct);
-        return await BuildResponseAsync(context, null, ct);
-    }
-
-    public async Task<VerifierDeathCaseResponse> RejectAsync(
-        Guid caseId, RejectDeathCaseRequest request, CancellationToken ct)
-    {
-        // 1) Chuẩn hóa input trước (DEATH-12: lý do bắt buộc).
-        string reason = DeathCaseReviewRules.NormalizeReason(request.Reason, "reason");
-
-        // 2) Verifier + phân công đang hiệu lực.
-        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
-        DeathCase deathCase = context.DeathCase;
-
-        // DEATH-03: nhập lại mật khẩu để xác nhận; đặt trước nhánh gọi lặp nên gọi lặp cũng phải đúng mật khẩu.
-        await CheckSigningPasswordAsync(context, request.Password, ct);
-
-        // 3) Hồ sơ đã đóng (kiểm TRƯỚC etag): đã từ chối rồi thì gọi lặp trả trạng thái hiện tại (không thêm dòng);
-        //    đã duyệt thì không từ chối được nữa (AC-71).
-        if (deathCase.Status == DeathCaseStatus.Rejected)
-        {
-            return await BuildResponseAsync(context, null, ct);
-        }
-        EnsureNotClosed(deathCase);
-
-        // 4) etag, 5) trạng thái, 6) xung đột lợi ích.
-        EnsureEtag(request.Etag, deathCase);
-        EnsureCanDecide(deathCase);
-        await EnsureNoConflictOfInterestAsync(context, ct);
-
-        // 7) DEATH-12: kế hoạch phải đang khóa DeathCaseOpen và hồ sơ phải nhớ trạng thái trước đó.
-        Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
-        // AC-71: hồ sơ và kế hoạch không được đọc cùng một lúc. Verifier khác có thể vừa từ chối/duyệt xong ngay sau lúc
-        // ta đọc hồ sơ (kế hoạch khi đó không còn DEATH_CASE_OPEN), nên kiểm sai thì ĐỌC LẠI hồ sơ trước khi báo lỗi:
-        // đã bị từ chối → 200, đã được duyệt → 409 CASE_CLOSED, còn lại → PLAN_STATE_INVALID như cũ.
-        if (vault == null || vault.Plan.Status != PlanStatus.DeathCaseOpen || deathCase.StatusBeforeCase == null)
-        {
-            VerifierDeathCaseResponse? current = await TryResolveDecisionConflictAsync(caseId, DeathCaseStatus.Rejected, ct);
-            if (current != null)
-            {
-                return current;
-            }
-            throw NotAllowed(DeathCaseNotAllowedReason.PlanStateInvalid);
-        }
-        HandoverPlan plan = vault.Plan;
-
-        // 8) Ghi trong MỘT lần lưu: quyết định, đóng hồ sơ, trả kế hoạch về trạng thái trước, hủy thông báo đang chờ.
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        DeathCaseDecision decision = NewDecision(context, DeathCaseDecisionKind.Rejected, reason, now);
-        deathCase.Decisions.Add(decision);
-        reviewRepository.AddDecision(decision);
-        deathCase.Status = DeathCaseStatus.Rejected;
-        deathCase.ClosedAt = now;
-        deathCase.UpdatedAt = now;
-
-        // DEATH-12, NFR-03: chỉ trả trạng thái kế hoạch; KHÔNG sửa kỳ điểm danh. CheckInJob tính lại theo kỳ
-        // (ACTIVE → CHECKIN_OVERDUE → AWAITING_CHECK) trong vòng 60 giây.
-        plan.Status = deathCase.StatusBeforeCase.Value;
-        plan.UpdatedAt = now;
-
-        // DEATH-08: thông báo còn Pending không được gửi nữa (job bỏ qua mọi thông báo khác Pending).
-        // Failed/Delivered giữ nguyên. Không gửi email khi từ chối. "Nhả snapshot" (§11.2): snapshot ghim lúc duyệt
-        // nên chưa có gì để nhả.
-        foreach (DeathCaseNotice notice in deathCase.Notices)
-        {
-            if (notice.Status == DeathCaseNoticeStatus.Pending)
-            {
-                notice.Status = DeathCaseNoticeStatus.Cancelled;
-                notice.UpdatedAt = now;
-            }
-        }
-
-        // SEC-07: nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
-        AddAudit(context, AuditAction.DeathCaseRejected, RejectedReasonCode, now);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(ct);
-        }
-        catch (Exception ex) when (IsSaveRace(ex))
-        {
-            // AC-71: Verifier khác (hoặc lần bấm trước) vừa từ chối xong → trả trạng thái hiện tại; còn lại ném lại lỗi gốc.
-            VerifierDeathCaseResponse? current = await TryResolveDecisionConflictAsync(caseId, DeathCaseStatus.Rejected, ct);
-            if (current != null)
-            {
-                return current;
-            }
-            throw;
-        }
-        // Báo Executor sau khi đã lưu, chỉ khi chính lần gọi này từ chối (lần gọi lặp đã trả về ở trên).
-        await NotifyExecutorsAsync(deathCase, DeathCaseDecisionKind.Rejected, null, ct);
         return await BuildResponseAsync(context, null, ct);
     }
 

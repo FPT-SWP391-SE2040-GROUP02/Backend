@@ -137,8 +137,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Email:Smtp:UserName"] = "";
             settings["Email:Smtp:Password"] = "";
             settings["Email:Smtp:WebhookUrl"] = "";
-            // Không gọi Gemini thật từ test dù user-secrets có key.
-            settings["Gemini:ApiKey"] = "";
             configuration.AddInMemoryCollection(settings);
         });
         builder.ConfigureServices(services =>

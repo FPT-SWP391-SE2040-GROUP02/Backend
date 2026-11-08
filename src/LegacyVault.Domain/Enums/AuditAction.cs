@@ -124,4 +124,6 @@ public enum AuditAction
     ExecutorKeyIssued = 56,
     /// <summary>Owner cấp lại mảnh khóa vì Người thực thi quên hoặc mất; mảnh cũ hết hiệu lực.</summary>
     ExecutorKeyReissued = 57,
+    /// <summary>Admin giao hoặc đổi Người thực thi của một kho, kèm lý do (người được giao phải chấp nhận lời mời).</summary>
+    ExecutorAssignedByAdmin = 58,
 }

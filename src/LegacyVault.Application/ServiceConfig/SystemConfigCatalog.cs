@@ -40,11 +40,6 @@ public sealed class ConfigFieldSpec
 /// <summary>Danh mục các dịch vụ đã nối vào trang cấu hình và trường của từng dịch vụ.</summary>
 public static class SystemConfigCatalog
 {
-    /// <summary>Tên model nằm trong URL gọi Gemini nên chỉ cho chữ, số, dấu chấm, gạch ngang và gạch dưới.</summary>
-    private const string GeminiModelPattern = "^[A-Za-z0-9._-]{1,100}$";
-
-    private static readonly IReadOnlyList<ConfigFieldSpec> GeminiFields = BuildGeminiFields();
-
     private static readonly IReadOnlyList<ConfigFieldSpec> EkycFields = BuildEkycFields();
 
     private static readonly IReadOnlyList<ConfigFieldSpec> SePayFields = BuildSePayFields();
@@ -62,7 +57,7 @@ public static class SystemConfigCatalog
     {
         return new List<string>
         {
-            SystemConfigServices.Gemini, SystemConfigServices.Ekyc, SystemConfigServices.Smtp, SystemConfigServices.SePay,
+            SystemConfigServices.Ekyc, SystemConfigServices.Smtp, SystemConfigServices.SePay,
             SystemConfigServices.R2,
         };
     }
@@ -70,18 +65,13 @@ public static class SystemConfigCatalog
     /// <summary>SePay và R2 không tự chuyển dịch vụ: đổi nơi nhận tiền hay bucket tự động có thể làm sai đối soát hoặc mất truy cập dữ liệu.</summary>
     public static bool SupportsFallback(string serviceKey)
     {
-        return serviceKey == SystemConfigServices.Gemini
-            || serviceKey == SystemConfigServices.Ekyc
+        return serviceKey == SystemConfigServices.Ekyc
             || serviceKey == SystemConfigServices.Smtp;
     }
 
     /// <summary>Các trường của dịch vụ; dịch vụ chưa nối thì danh sách rỗng.</summary>
     public static IReadOnlyList<ConfigFieldSpec> Fields(string serviceKey)
     {
-        if (serviceKey == SystemConfigServices.Gemini)
-        {
-            return GeminiFields;
-        }
         if (serviceKey == SystemConfigServices.Ekyc)
         {
             return EkycFields;
@@ -310,30 +300,4 @@ public static class SystemConfigCatalog
         return new List<ConfigFieldSpec> { baseUrl, timeout, apiKey };
     }
 
-    private static IReadOnlyList<ConfigFieldSpec> BuildGeminiFields()
-    {
-        ConfigFieldSpec model = new ConfigFieldSpec();
-        model.Name = "model";
-        model.Kind = ConfigFieldKind.Text;
-        model.Required = true;
-        model.Pattern = GeminiModelPattern;
-        model.DefaultValue = "gemini-flash-lite-latest";
-
-        ConfigFieldSpec timeout = new ConfigFieldSpec();
-        timeout.Name = "timeoutSeconds";
-        timeout.Kind = ConfigFieldKind.Integer;
-        timeout.Required = true;
-        timeout.Min = 5;
-        timeout.Max = 60;
-        timeout.DefaultValue = "20";
-
-        ConfigFieldSpec apiKey = new ConfigFieldSpec();
-        apiKey.Name = "apiKey";
-        apiKey.Kind = ConfigFieldKind.Text;
-        apiKey.Secret = true;
-        apiKey.Required = true;
-        apiKey.Max = 512;
-
-        return new List<ConfigFieldSpec> { model, timeout, apiKey };
-    }
 }

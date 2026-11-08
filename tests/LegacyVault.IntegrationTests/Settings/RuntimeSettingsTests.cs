@@ -4,6 +4,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Settings;
 
 /// <summary>Ảnh chụp tham số Admin: chỉ dùng khóa thử riêng để không ảnh hưởng các test khác chạy song song.</summary>
+[Collection("RuntimeSettings")]
 public sealed class RuntimeSettingsTests
 {
     [Fact]

@@ -430,14 +430,16 @@ public sealed class SystemSettingService : ISystemSettingService
         {
             // Điểm danh (Check-in)
             new() { Key = "CheckIn.DefaultCycleDays", Value = "30", DataType = "NUMBER", Category = "CheckIn", Description = "Chu kỳ điểm danh mặc định của chủ kho (ngày)" },
-            new() { Key = "CheckIn.DefaultGraceDays", Value = "7", DataType = "NUMBER", Category = "CheckIn", Description = "Thời gian chờ ân hạn sau hạn điểm danh (ngày)" },
-            new() { Key = "CheckIn.ProxyMaxConsecutive", Value = "3", DataType = "NUMBER", Category = "CheckIn", Description = "Số lần Người thực thi được điểm danh thay liên tiếp; về 0 khi Chủ kho tự điểm danh" },
+            new() { Key = "CheckIn.LateReminderGapDays", Value = "3", DataType = "NUMBER", Category = "CheckIn", Description = "Khoảng cách giữa hai thư nhắc trễ điểm danh (ngày)" },
+            new() { Key = "CheckIn.MaxLateReminders", Value = "3", DataType = "NUMBER", Category = "CheckIn", Description = "Số thư nhắc trễ gửi chủ kho trước khi báo Người thực thi (1 đến 5)" },
+            new() { Key = "CheckIn.ExecutorProxyLimit", Value = "3", DataType = "NUMBER", Category = "CheckIn", Description = "Số lần Người thực thi được điểm danh thay liên tiếp; về 0 khi Chủ kho tự điểm danh" },
 
             // Bàn giao & Lưu trữ (Handover & Retention)
             new() { Key = "Handover.ResponseWindowDays", Value = "5", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn người nhận phản hồi lời mời bàn giao di sản (ngày)" },
             new() { Key = "Handover.DecisionWindowDays", Value = "7", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn người nhận quyết định nhận hoặc từ chối (ngày)" },
             new() { Key = "Handover.GrantWindowDays", Value = "30", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn được cấp quyền xem/tải tài sản sau khi nhận (ngày)" },
             new() { Key = "Handover.RetentionWindowDays", Value = "30", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn lưu trữ dữ liệu trước khi xóa hoàn toàn (ngày)" },
+            new() { Key = "Handover.DownloadCodeRequired", Value = "false", DataType = "BOOLEAN", Category = "Handover", Description = "Bắt buộc mã tải gửi qua email mỗi lần người nhận tải tài sản (bật/tắt)" },
             new() { Key = "Handover.ResendCooldownMinutes", Value = "15", DataType = "NUMBER", Category = "Handover", Description = "Khoảng cách tối thiểu giữa hai lần gửi lại lời mời (phút)" },
 
             // Người thực thi (Executor)
@@ -449,13 +451,6 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "DeathCase.MaxFilesPerVersion", Value = "10", DataType = "NUMBER", Category = "DeathCase", Description = "Số lượng tệp tối đa tải lên trong một bản hồ sơ chứng tử" },
             new() { Key = "DeathCase.MaxFileSizeMb", Value = "20", DataType = "NUMBER", Category = "DeathCase", Description = "Dung lượng tối đa của một tệp hồ sơ chứng tử (MiB)" },
             new() { Key = "DeathCase.ReviewDueHours", Value = "48", DataType = "NUMBER", Category = "DeathCase", Description = "Thời hạn Người xét duyệt phải hoàn tất thẩm định (giờ)" },
-            new() { Key = "DeathCase.MaxNoticeAttempts", Value = "5", DataType = "NUMBER", Category = "DeathCase", Description = "Số lần gửi thông báo cho Chủ kho trước khi báo lỗi sự cố" },
-            new() { Key = "DeathCase.ObjectionHours", Value = "72", DataType = "NUMBER", Category = "DeathCase", Description = "Thời gian Chủ kho được quyền phản đối hồ sơ chứng tử (giờ)" },
-
-            // Chủ kho báo còn sống (Alive / Objection)
-            new() { Key = "Alive.SelfieWindowDays", Value = "7", DataType = "NUMBER", Category = "Alive", Description = "Thời hạn Chủ kho hoàn tất selfie chứng minh còn sống (ngày)" },
-            new() { Key = "Alive.MaxSelfieFailures", Value = "3", DataType = "NUMBER", Category = "Alive", Description = "Số lần selfie sai tối đa cho phép trong 24 giờ" },
-            new() { Key = "Alive.VerifierDecisionHours", Value = "48", DataType = "NUMBER", Category = "Alive", Description = "Thời hạn Người xét duyệt ra quyết định về phản đối còn sống (giờ)" },
 
             // Sự cố & Tạm giữ (Incident & Hold)
             new() { Key = "Incident.ReminderAfterHours", Value = "48", DataType = "NUMBER", Category = "Incident", Description = "Thời gian nhắc nhở người phụ trách sự cố chưa xử lý (giờ)" },

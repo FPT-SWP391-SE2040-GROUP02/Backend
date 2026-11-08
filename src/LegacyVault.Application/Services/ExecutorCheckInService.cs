@@ -109,13 +109,11 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         CheckInPeriod next = new CheckInPeriod();
         next.PlanId = plan.Id;
         next.Sequence = lastSequence + 1;
-        next.StartedAt = now;
         next.StartedByExecutor = true;
         next.ProxyContactedWho = request.ContactedWho.Trim();
         next.ProxyContactedAt = request.ContactedAt.Value;
         next.ProxyContactMethod = request.ContactMethod;
-        next.DueAt = CheckInTimeline.ComputeDueAt(now, schedule.CycleDays);
-        next.GraceEndsAt = CheckInTimeline.ComputeGraceEndsAt(next.DueAt, schedule.GraceDays);
+        CheckInRules.StartPeriodTimeline(next, now, schedule.CycleDays);
         checkInRepository.AddPeriod(next);
 
         plan.Status = PlanStatus.Active;

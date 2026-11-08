@@ -65,8 +65,6 @@ public static class DeathCaseMappings
             DeathCaseRules.CountCertificateFiles(current.Files));
         response.SupplementRequest = ToSupplementRequestResponse(deathCase);
         response.RejectReason = ToRejectReason(deathCase);
-        response.OwnerNotice = ToNoticeResponse(deathCase);
-        response.ObjectionEndsAt = deathCase.ObjectionEndsAt;
         response.CreatedAt = deathCase.CreatedAt;
         response.UpdatedAt = deathCase.UpdatedAt;
         response.Etag = Etag.From(deathCase.UpdatedAt);

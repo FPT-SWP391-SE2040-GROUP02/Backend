@@ -24,12 +24,32 @@ public sealed class PaymentTransactionRepository : IPaymentTransactionRepository
     }
 
     public async Task<(List<PaymentTransaction> Items, int Total)> ListAsync(
-        PaymentTransactionStatus? status, string? search, int pageIndex, int pageSize, CancellationToken ct)
+        PaymentTransactionStatus? status, string? search, int pageIndex, int pageSize, CancellationToken ct,
+        PaymentTransactionFilter? filter = null)
     {
         IQueryable<PaymentTransaction> query = context.PaymentTransactions.AsNoTracking();
-        if (status != null)
+        if (filter != null && filter.SuccessOnly)
+        {
+            query = query.Where(t => t.Status == PaymentTransactionStatus.Matched || t.Status == PaymentTransactionStatus.Resolved);
+        }
+        else if (status != null)
         {
             query = query.Where(t => t.Status == status.Value);
+        }
+        if (filter != null && !string.IsNullOrEmpty(filter.Environment))
+        {
+            string environment = filter.Environment;
+            query = query.Where(t => t.Environment == environment);
+        }
+        if (filter != null && filter.From != null)
+        {
+            DateTimeOffset from = filter.From.Value;
+            query = query.Where(t => t.ReceivedAt >= from);
+        }
+        if (filter != null && filter.ToExclusive != null)
+        {
+            DateTimeOffset to = filter.ToExclusive.Value;
+            query = query.Where(t => t.ReceivedAt < to);
         }
 
         if (!string.IsNullOrWhiteSpace(search))

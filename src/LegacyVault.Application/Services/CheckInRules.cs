@@ -9,8 +9,31 @@ public static class CheckInRules
     /// <summary>Chu kỳ điểm danh mặc định (ngày).</summary>
     public static int DefaultCycleDays => RuntimeSettings.Int("CheckIn.DefaultCycleDays", 30);
 
-    /// <summary>Thời gian chờ mặc định sau hạn điểm danh (ngày).</summary>
-    public static int DefaultGraceDays => RuntimeSettings.Int("CheckIn.DefaultGraceDays", 7);
+    /// <summary>Số thư nhắc trễ tối đa mà Admin được đặt (khớp các mốc LateReminder1 đến LateReminder5).</summary>
+    public const int MaxLateRemindersLimit = 5;
+
+    /// <summary>Khoảng cách giữa hai thư nhắc trễ (ngày), Admin đặt, từ 1 đến 30.</summary>
+    public static int LateReminderGapDays => Math.Clamp(RuntimeSettings.Int("CheckIn.LateReminderGapDays", 3), 1, 30);
+
+    /// <summary>Số thư nhắc trễ gửi cho chủ kho trước khi báo Người thực thi, Admin đặt, từ 1 đến 5.</summary>
+    public static int MaxLateReminders => Math.Clamp(RuntimeSettings.Int("CheckIn.MaxLateReminders", 3), 1, MaxLateRemindersLimit);
+
+    /// <summary>Số lần Người thực thi được điểm danh thay liên tiếp (về 0 khi chủ kho tự điểm danh), Admin đặt.</summary>
+    public static int ExecutorProxyLimit => ProxyCheckInRules.Limit();
+
+    /// <summary>
+    /// Mở một kỳ mới: chốt hạn điểm danh, số thư nhắc trễ, khoảng cách và mốc báo Người thực thi theo cấu hình hiện tại.
+    /// Đổi cấu hình sau đó chỉ áp dụng từ kỳ sau (DMS-01).
+    /// </summary>
+    public static void StartPeriodTimeline(CheckInPeriod period, DateTimeOffset startedAt, int cycleDays)
+    {
+        period.StartedAt = startedAt;
+        period.DueAt = CheckInTimeline.ComputeDueAt(startedAt, cycleDays);
+        period.LateReminderGapDays = LateReminderGapDays;
+        period.MaxLateReminders = MaxLateReminders;
+        period.GraceEndsAt = CheckInTimeline.ComputeNotifyExecutorAt(
+            period.DueAt, period.MaxLateReminders, period.LateReminderGapDays);
+    }
 
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
@@ -52,16 +75,10 @@ public static class CheckInRules
     }
 
     private static readonly int[] AllowedCycleDays = { 30, 60, 90 };
-    private static readonly int[] AllowedGraceDays = { 7, 14, 30 };
 
     public static bool IsAllowedCycleDays(int days)
     {
         return days == DefaultCycleDays || Array.IndexOf(AllowedCycleDays, days) >= 0;
-    }
-
-    public static bool IsAllowedGraceDays(int days)
-    {
-        return days == DefaultGraceDays || Array.IndexOf(AllowedGraceDays, days) >= 0;
     }
 
     /// <summary>Kế hoạch đang chạy lịch điểm danh: Owner được điểm danh (SRS §11.2).</summary>
@@ -102,12 +119,6 @@ public static class CheckInRules
         {
             schedule.CycleDays = schedule.PendingCycleDays.Value;
             schedule.PendingCycleDays = null;
-            changed = true;
-        }
-        if (schedule.PendingGraceDays != null)
-        {
-            schedule.GraceDays = schedule.PendingGraceDays.Value;
-            schedule.PendingGraceDays = null;
             changed = true;
         }
         if (changed)

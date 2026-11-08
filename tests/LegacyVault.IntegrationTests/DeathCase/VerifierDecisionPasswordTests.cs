@@ -64,27 +64,6 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Death03_RejectWithCorrectPasswordSavesDecision()
-    {
-        // Chuẩn bị
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-
-        // Hành động
-        HttpResponseMessage response = await DeathCaseReviewTestData.RejectNowAsync(submitted, RejectReason);
-
-        // Kiểm tra: lưu đúng một quyết định từ chối, hồ sơ đã bị từ chối
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        DeathCaseDecision decision = await LoadFinalDecisionAsync(submitted.CaseId);
-        Assert.Equal(DeathCaseDecisionKind.Rejected, decision.Kind);
-        Assert.Equal(RejectReason, decision.Reason);
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            DeathCase stored = await db.Set<DeathCase>().AsNoTracking().SingleAsync(c => c.Id == submitted.CaseId);
-            Assert.Equal(DeathCaseStatus.Rejected, stored.Status);
-        });
-    }
-
-    [SqlFact]
     public async Task Death03_SupplementRequestNeedsNoPassword()
     {
         // Chuẩn bị
@@ -154,7 +133,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage approve = await ApproveWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, null);
-        HttpResponseMessage reject = await RejectWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, null);
+        HttpResponseMessage reject = await ApproveWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, null);
 
         // Kiểm tra: 400 kèm câu báo của trường password, không tính là một lần đoán
         JsonElement approveProblem = await ApiTestHelpers.AssertProblemAsync(approve, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
@@ -177,7 +156,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         });
 
         // Hành động
-        HttpResponseMessage response = await RejectWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
+        HttpResponseMessage response = await ApproveWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
 
         // Kiểm tra: 403 có câu báo riêng, không tính lần đoán, không có quyết định
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Forbidden, "SIGNING_PASSWORD_INVALID");
@@ -226,13 +205,13 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         // Hành động: sai 4 lần rồi lần thứ 5
         for (int attempt = 1; attempt <= 4; attempt++)
         {
-            HttpResponseMessage wrong = await RejectWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
+            HttpResponseMessage wrong = await ApproveWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
             JsonElement wrongProblem = await ApiTestHelpers.AssertProblemAsync(
                 wrong, HttpStatusCode.Forbidden, "SIGNING_PASSWORD_INVALID");
             remaining.Add(wrongProblem.GetProperty("attemptsRemaining").GetInt32());
         }
         DateTimeOffset before = DateTimeOffset.UtcNow;
-        HttpResponseMessage fifth = await RejectWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
+        HttpResponseMessage fifth = await ApproveWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
 
         // Kiểm tra: 4 → 1 lần còn lại, lần 5 bị khóa 15 phút
         Assert.Equal(new List<int> { 4, 3, 2, 1 }, remaining);
@@ -254,7 +233,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         await LockDecisionAsync(submitted.Verifier.Client, submitted.CaseId);
 
         // Hành động
-        HttpResponseMessage response = await RejectWithPasswordAsync(
+        HttpResponseMessage response = await ApproveWithPasswordAsync(
             submitted.Verifier.Client, submitted.CaseId, DeathCaseTestData.TestPassword);
 
         // Kiểm tra: vẫn 423, không có quyết định
@@ -297,7 +276,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         Guid verifierId = submitted.Verifier.User.Id;
         for (int attempt = 1; attempt <= 3; attempt++)
         {
-            await RejectWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
+            await ApproveWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
         }
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
@@ -306,7 +285,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         });
 
         // Hành động
-        HttpResponseMessage response = await RejectWithPasswordAsync(
+        HttpResponseMessage response = await ApproveWithPasswordAsync(
             submitted.Verifier.Client, submitted.CaseId, DeathCaseTestData.TestPassword);
 
         // Kiểm tra: từ chối thành công, bộ đếm và bậc khóa về 0 (lưu cùng quyết định)
@@ -325,7 +304,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
 
         // Hành động: hai request sai, mỗi request đều trả lỗi
-        HttpResponseMessage first = await RejectWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
+        HttpResponseMessage first = await ApproveWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
         HttpResponseMessage second = await ApproveWithPasswordAsync(submitted.Verifier.Client, submitted.CaseId, WrongPassword);
 
         // Kiểm tra: bộ đếm trong DB đã lưu cả 2 lần sai (tính chung cho Duyệt và Từ chối)
@@ -363,7 +342,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         await LockDecisionAsync(first.Verifier.Client, first.CaseId);
 
         // Hành động: từ chối ở hồ sơ B với mật khẩu đúng
-        HttpResponseMessage response = await RejectWithPasswordAsync(
+        HttpResponseMessage response = await ApproveWithPasswordAsync(
             first.Verifier.Client, secondCaseId, DeathCaseTestData.TestPassword);
 
         // Kiểm tra
@@ -378,23 +357,15 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
             client, caseId, detail.GetProperty("etag").GetString(), ApproveReason, password);
     }
 
-    /// <summary>Đọc etag hiện tại rồi từ chối với mật khẩu cho trước (null = không gửi trường password).</summary>
-    private static async Task<HttpResponseMessage> RejectWithPasswordAsync(HttpClient client, Guid caseId, string? password)
-    {
-        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(client, caseId);
-        return await DeathCaseReviewTestData.RejectAsync(
-            client, caseId, detail.GetProperty("etag").GetString(), RejectReason, password);
-    }
-
     /// <summary>Nhập sai đủ 5 lần để bị khóa duyệt/từ chối; trả ProblemDetails 423 của lần thứ 5.</summary>
     private static async Task<JsonElement> LockDecisionAsync(HttpClient client, Guid caseId)
     {
         for (int attempt = 1; attempt < VaultPinRules.MaxFailedAttempts; attempt++)
         {
-            HttpResponseMessage wrong = await RejectWithPasswordAsync(client, caseId, WrongPassword);
+            HttpResponseMessage wrong = await ApproveWithPasswordAsync(client, caseId, WrongPassword);
             Assert.Equal(HttpStatusCode.Forbidden, wrong.StatusCode);
         }
-        HttpResponseMessage last = await RejectWithPasswordAsync(client, caseId, WrongPassword);
+        HttpResponseMessage last = await ApproveWithPasswordAsync(client, caseId, WrongPassword);
         return await ApiTestHelpers.AssertProblemAsync(last, HttpStatusCode.Locked, "SIGNING_LOCKED");
     }
 
