@@ -90,12 +90,12 @@ public sealed class DeathCaseCancelDraftFlowTests : IAsyncLifetime
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
         string checkInUrl = "/api/v1/executor/vaults/" + vault.VaultId + "/check-in";
-        HttpResponseMessage blocked = await executor.Client.PostAsync(checkInUrl, null);
+        HttpResponseMessage blocked = await executor.Client.PostAsync(checkInUrl, ApiTestHelpers.ProxyCheckInBody());
         await ApiTestHelpers.AssertProblemAsync(blocked, HttpStatusCode.Conflict, "CHECKIN_NOT_ALLOWED");
 
         // Hành động
         HttpResponseMessage cancel = await executor.Client.DeleteAsync(DraftUrl(opened.GetProperty("id").GetGuid()));
-        HttpResponseMessage checkIn = await executor.Client.PostAsync(checkInUrl, null);
+        HttpResponseMessage checkIn = await executor.Client.PostAsync(checkInUrl, ApiTestHelpers.ProxyCheckInBody());
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.NoContent, cancel.StatusCode);

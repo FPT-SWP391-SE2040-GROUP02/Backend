@@ -81,7 +81,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
 | 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
 | 409 | `EDIT_CONFLICT` | `etag` đã cũ: dữ liệu bị sửa ở tab/máy khác. FE tải lại rồi cho sửa tiếp | |
-| 409 | `CHECKIN_NOT_ALLOWED` | Điểm danh khi kế hoạch chưa kích hoạt (`DRAFT`) hoặc đã sang chứng tử/bàn giao/đóng; Executor điểm danh thay khi chủ kho chưa quá hạn hoặc kho đã có hồ sơ chứng tử đang mở (mục 6.21) | `planStatus`; `reason` (`PLAN_NOT_OVERDUE`, `DEATH_CASE_OPEN`) khi Executor điểm danh thay |
+| 409 | `CHECKIN_NOT_ALLOWED` | Điểm danh khi kế hoạch chưa kích hoạt (`DRAFT`) hoặc đã sang chứng tử/bàn giao/đóng; Executor điểm danh thay khi chủ kho chưa quá hạn hoặc kho đã có hồ sơ chứng tử đang mở (mục 6.21) | `planStatus`; `reason` (`PLAN_NOT_OVERDUE`, `DEATH_CASE_OPEN`, `PROXY_LIMIT_REACHED`) khi Executor điểm danh thay |
 | 400 | `EKYC_IMAGE_REJECTED` | Ảnh không phải JPEG/PNG, rỗng, hoặc dịch vụ eKYC từ chối (không thấy mặt, nhầm mặt thẻ...); `title` là câu hướng dẫn cho người dùng | |
 | 409 | `EKYC_DOCUMENT_EXPIRED` | Gửi selfie khi chưa đọc mặt trước, đã so khớp rồi, hoặc quá 30 phút | |
 | 503 | `EKYC_SERVICE_UNAVAILABLE` | Không gọi được dịch vụ eKYC (chưa cấu hình, tắt, quá thời gian chờ) | |
@@ -1199,7 +1199,18 @@ Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| POST | `/v1/executor/vaults/{vaultId}/check-in` | Executor đang hiệu lực của kho (không phải chủ kho) | Không có body | 200 `ExecutorCheckInResponse` | 401, 404 `VAULT_NOT_FOUND`, 409 `CHECKIN_NOT_ALLOWED` / `EDIT_CONFLICT`, 429 |
+| POST | `/v1/executor/vaults/{vaultId}/check-in` | Executor đang hiệu lực của kho (không phải chủ kho) | `ExecutorCheckInRequest` (bắt buộc) | 200 `ExecutorCheckInResponse` | 400 `VALIDATION_ERROR`, 401, 404 `VAULT_NOT_FOUND`, 409 `CHECKIN_NOT_ALLOWED` / `EDIT_CONFLICT`, 429 |
+
+```json
+// ExecutorCheckInRequest: Executor khai đã liên lạc với ai, lúc nào, cách nào
+{
+  "contactedWho": "Chị Lan (vợ)",
+  "contactedAt": "2026-11-07T08:30:00+07:00",
+  "contactMethod": "PHONE"
+}
+```
+
+`contactMethod` là một trong `PHONE`, `IN_PERSON`, `MESSAGE`, `EMAIL`. `contactedWho` dài 2 đến 200 ký tự. `contactedAt` không được ở tương lai (dung sai 5 phút), nếu không trả `400 VALIDATION_ERROR`.
 
 ```json
 // ExecutorCheckInResponse
@@ -1208,17 +1219,21 @@ Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem
   "planStatus": "ACTIVE",
   "checkedInAt": "2026-10-31T01:00:00+00:00",
   "nextCheckInDueAt": "2026-11-30T01:00:00+00:00",
-  "graceEndsAt": "2026-12-07T01:00:00+00:00"
+  "graceEndsAt": "2026-12-07T01:00:00+00:00",
+  "proxyCheckInLimit": 3,
+  "proxyCheckInsLeft": 2
 }
 ```
 
+- **Giới hạn lượt:** Executor chỉ điểm danh thay được tối đa `CheckIn.ProxyMaxConsecutive` lần liên tiếp (tham số Admin, mặc định 3). Bộ đếm đếm các kỳ cuối lịch sử do Executor mở (`StartedByExecutor`), gặp kỳ do chủ kho hoặc lúc kích hoạt mở thì dừng, nên chủ kho tự điểm danh là bộ đếm về 0. Hết lượt thì `409 CHECKIN_NOT_ALLOWED` với `reason = PROXY_LIMIT_REACHED`.
+- **Thông tin liên lạc:** lưu ở `CheckInPeriods.ProxyContactedWho`, `ProxyContactedAt`, `ProxyContactMethod` của kỳ mới. Nhật ký kho (Chủ kho đọc được) chỉ ghi mã cách liên lạc, không ghi tên người đã liên lạc (SEC-07).
 - Dùng khi chủ kho đã quá hạn điểm danh và Executor cần giữ kho chờ đến khi có giấy chứng tử. Chỉ cho phép khi kế hoạch `CHECKIN_OVERDUE` hoặc `AWAITING_CHECK` **và** kho chưa có hồ sơ chứng tử đang mở (kể cả bản nháp).
 - Một lần lưu: đóng kỳ đang quá hạn, mở kỳ mới theo chu kỳ hiện hành (áp dụng cả lựa chọn chờ của chủ kho), đưa kế hoạch về `ACTIVE`. Sự cố quá hạn của kỳ cũ được job sự cố tự đóng.
 - **Không tính là chủ kho đã điểm danh:** kỳ cũ đóng mà không ghi giờ điểm danh, `lastCheckInAt` của chủ kho giữ nguyên. Vì vậy lượt điểm danh thay không làm bật cờ "có điểm danh sau ngày mất" khi Executor gửi hồ sơ chứng tử.
 - Kỳ mới được đánh dấu `StartedByExecutor` (cột `CheckInPeriods.StartedByExecutor`); chỉ dùng để khóa nút điểm danh của chủ kho trong ngày Executor bấm (`checkedInByExecutorToday`, mục 6.8). Không ghi `CheckedInAt` nên không ảnh hưởng cờ "điểm danh sau ngày mất".
 - Nhật ký kho (mục 6.13) ghi `CHECKED_IN` với `actorRole = EXECUTOR`.
-- `409 CHECKIN_NOT_ALLOWED` kèm `planStatus` và `reason`: `PLAN_NOT_OVERDUE` (chủ kho không quá hạn, ví dụ vừa điểm danh) hoặc `DEATH_CASE_OPEN`. Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`. Dùng chung rate limit với điểm danh của chủ kho.
-- FE: `GET /v1/executor/vaults` chỉ hiện nút "Điểm danh thay chủ kho" khi `checkInOverdue = true` và `openDeathCaseId = null`; thành công thì tải lại danh sách kho.
+- `409 CHECKIN_NOT_ALLOWED` kèm `planStatus` và `reason`: `PLAN_NOT_OVERDUE` (chủ kho không quá hạn, ví dụ vừa điểm danh) `DEATH_CASE_OPEN` hoặc `PROXY_LIMIT_REACHED`. Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`. Dùng chung rate limit với điểm danh của chủ kho.
+- FE: `GET /v1/executor/vaults` chỉ hiện nút "Điểm danh thay chủ kho" khi `checkInOverdue = true` và `openDeathCaseId = null`; mỗi kho trả thêm `proxyCheckInLimit`, `proxyCheckInsUsed`, `proxyCheckInsLeft` để hiện số lượt còn lại và khóa nút khi `proxyCheckInsLeft = 0`. Thành công thì tải lại danh sách kho.
 
 ### 6.22. Cấu hình dịch vụ ngoài (Admin)
 

@@ -431,6 +431,7 @@ public sealed class SystemSettingService : ISystemSettingService
             // Điểm danh (Check-in)
             new() { Key = "CheckIn.DefaultCycleDays", Value = "30", DataType = "NUMBER", Category = "CheckIn", Description = "Chu kỳ điểm danh mặc định của chủ kho (ngày)" },
             new() { Key = "CheckIn.DefaultGraceDays", Value = "7", DataType = "NUMBER", Category = "CheckIn", Description = "Thời gian chờ ân hạn sau hạn điểm danh (ngày)" },
+            new() { Key = "CheckIn.ProxyMaxConsecutive", Value = "3", DataType = "NUMBER", Category = "CheckIn", Description = "Số lần Người thực thi được điểm danh thay liên tiếp; về 0 khi Chủ kho tự điểm danh" },
 
             // Bàn giao & Lưu trữ (Handover & Retention)
             new() { Key = "Handover.ResponseWindowDays", Value = "5", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn người nhận phản hồi lời mời bàn giao di sản (ngày)" },

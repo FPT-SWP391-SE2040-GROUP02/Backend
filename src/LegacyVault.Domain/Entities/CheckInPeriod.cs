@@ -43,6 +43,15 @@ public class CheckInPeriod
     /// </summary>
     public bool StartedByExecutor { get; set; }
 
+    /// <summary>Người Executor đã liên lạc trước khi điểm danh thay; chỉ có khi StartedByExecutor = true.</summary>
+    public string? ProxyContactedWho { get; set; }
+
+    /// <summary>Lúc Executor liên lạc (do Executor khai, không phải giờ server).</summary>
+    public DateTimeOffset? ProxyContactedAt { get; set; }
+
+    /// <summary>Cách liên lạc: PHONE, IN_PERSON, MESSAGE hoặc EMAIL.</summary>
+    public string? ProxyContactMethod { get; set; }
+
     /// <summary>Kỳ đóng vì điểm danh hoặc vì dừng lịch; null khi kỳ còn mở.</summary>
     public DateTimeOffset? ClosedAt { get; set; }
 

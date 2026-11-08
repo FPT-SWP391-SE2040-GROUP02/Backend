@@ -193,6 +193,18 @@ public static class ApiTestHelpers
         return vault.GetProperty("planConfigVersion").GetInt32();
     }
 
+    /// <summary>Body hợp lệ của POST /executor/vaults/{id}/check-in (đã liên lạc với ai, lúc nào, cách nào).</summary>
+    public static JsonContent ProxyCheckInBody(string method = "PHONE", DateTimeOffset? contactedAt = null)
+    {
+        DateTimeOffset when = contactedAt ?? DateTimeOffset.UtcNow.AddHours(-1);
+        return JsonContent.Create(new
+        {
+            contactedWho = "Chị Lan (vợ)",
+            contactedAt = when,
+            contactMethod = method,
+        });
+    }
+
     public static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
     {
         JsonElement json = await response.Content.ReadFromJsonAsync<JsonElement>();

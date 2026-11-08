@@ -243,6 +243,17 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ProxyContactMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset?>("ProxyContactedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ProxyContactedWho")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()

@@ -8,6 +8,9 @@ public sealed class ExecutorVaultRow
 {
     public Guid VaultId { get; set; }
 
+    /// <summary>Kế hoạch của kho, để đếm các lần điểm danh thay.</summary>
+    public Guid PlanId { get; set; }
+
     /// <summary>Họ tên tài khoản Owner (dùng để Executor nhận ra kho; không phải dữ liệu trong hồ sơ chứng tử).</summary>
     public string OwnerFullName { get; set; } = string.Empty;
 

@@ -16,4 +16,10 @@ public class ExecutorCheckInResponse
 
     /// <summary>Hết thời gian chờ của kỳ mới vừa mở.</summary>
     public DateTimeOffset GraceEndsAt { get; set; }
+
+    /// <summary>Số lần điểm danh thay liên tiếp tối đa (Admin đặt).</summary>
+    public int ProxyCheckInLimit { get; set; }
+
+    /// <summary>Số lượt điểm danh thay còn lại sau lần này; về lại mức tối đa khi chủ kho tự điểm danh.</summary>
+    public int ProxyCheckInsLeft { get; set; }
 }

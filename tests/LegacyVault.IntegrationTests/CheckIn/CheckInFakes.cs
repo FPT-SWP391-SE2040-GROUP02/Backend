@@ -75,6 +75,20 @@ public sealed class FakeCheckInRepository : ICheckInRepository
         return Task.FromResult(max);
     }
 
+    public Task<int> CountConsecutiveExecutorPeriodsAsync(Guid planId, CancellationToken ct)
+    {
+        int count = 0;
+        foreach (CheckInPeriod period in Periods.Where(p => p.PlanId == planId).OrderByDescending(p => p.Sequence))
+        {
+            if (!period.StartedByExecutor)
+            {
+                break;
+            }
+            count++;
+        }
+        return Task.FromResult(count);
+    }
+
     public Task<(List<CheckInPeriod> Items, int TotalCount)> FindPeriodPageByPlanIdAsync(
         Guid planId, int pageIndex, int pageSize, CancellationToken ct)
     {

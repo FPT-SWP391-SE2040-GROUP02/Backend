@@ -19,6 +19,12 @@ public sealed class CheckInPeriodConfiguration : IEntityTypeConfiguration<CheckI
         builder.Property(p => p.StartedByExecutor)
             .HasDefaultValue(false);
 
+        builder.Property(p => p.ProxyContactedWho)
+            .HasMaxLength(200);
+
+        builder.Property(p => p.ProxyContactMethod)
+            .HasMaxLength(20);
+
         builder.HasIndex(p => new { p.PlanId, p.Sequence })
             .IsUnique();
 

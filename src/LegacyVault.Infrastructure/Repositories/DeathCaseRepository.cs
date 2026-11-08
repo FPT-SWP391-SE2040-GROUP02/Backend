@@ -50,6 +50,7 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
             .Select(e => new ExecutorVaultRow
             {
                 VaultId = e.VaultId,
+                PlanId = e.Vault.Plan.Id,
                 OwnerFullName = e.Vault.Owner.FullName,
                 PlanStatus = e.Vault.Plan.Status,
                 ExecutorNote = e.Vault.ExecutorNote,

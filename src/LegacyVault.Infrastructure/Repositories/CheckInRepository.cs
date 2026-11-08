@@ -29,6 +29,27 @@ public sealed class CheckInRepository : ICheckInRepository
             .FirstOrDefaultAsync(p => p.PlanId == planId && p.ClosedAt == null, ct);
     }
 
+    public async Task<int> CountConsecutiveExecutorPeriodsAsync(Guid planId, CancellationToken ct)
+    {
+        List<bool> startedByExecutor = await context.CheckInPeriods
+            .AsNoTracking()
+            .Where(p => p.PlanId == planId)
+            .OrderByDescending(p => p.Sequence)
+            .Select(p => p.StartedByExecutor)
+            .Take(100)
+            .ToListAsync(ct);
+        int count = 0;
+        foreach (bool flag in startedByExecutor)
+        {
+            if (!flag)
+            {
+                break;
+            }
+            count++;
+        }
+        return count;
+    }
+
     public async Task<int> GetMaxSequenceAsync(Guid planId, CancellationToken ct)
     {
         int? max = await context.CheckInPeriods
