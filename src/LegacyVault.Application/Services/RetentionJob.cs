@@ -258,6 +258,9 @@ public sealed class RetentionJob : IRetentionJob
         {
             await IdentityImageStorage.TryDeleteAsync(contentStore, submission.FrontImageStorageKey);
             await IdentityImageStorage.TryDeleteAsync(contentStore, submission.BackImageStorageKey);
+            await IdentityImageStorage.TryDeleteAsync(contentStore, submission.PaperStorageKey);
+            submission.PaperStorageKey = string.Empty;
+            submission.PaperWrappedDataKey = new byte[submission.PaperWrappedDataKey.Length];
             submission.FrontImageStorageKey = string.Empty;
             submission.BackImageStorageKey = string.Empty;
             submission.FrontImageWrappedDataKey = new byte[submission.FrontImageWrappedDataKey.Length];

@@ -1,5 +1,6 @@
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Api.DeathCases;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,13 +23,16 @@ public sealed class ExecutorHandoverController : ControllerBase
     private readonly IHandoverInvitationService handoverInvitationService;
     private readonly IExecutorIdentityConfirmationService identityConfirmationService;
     private readonly IHandoverKeyMailService handoverKeyMailService;
+    private readonly IExecutorDeclinePaperService declinePaperService;
 
     public ExecutorHandoverController(
         IHandoverProgressService handoverProgressService,
         IHandoverInvitationService handoverInvitationService,
         IExecutorIdentityConfirmationService identityConfirmationService,
-        IHandoverKeyMailService handoverKeyMailService)
+        IHandoverKeyMailService handoverKeyMailService,
+        IExecutorDeclinePaperService declinePaperService)
     {
+        this.declinePaperService = declinePaperService;
         this.handoverKeyMailService = handoverKeyMailService;
         this.handoverProgressService = handoverProgressService;
         this.handoverInvitationService = handoverInvitationService;
@@ -52,6 +56,17 @@ public sealed class ExecutorHandoverController : ControllerBase
     /// Gửi lại lời mời nhận tài sản cho một lượt chưa ai nhận (INVITE-02, INVITE-04). Link cũ hết dùng, hạn phản hồi không đặt lại
     /// (trừ khi lời mời chưa từng được giao). Giãn cách tối thiểu 15 phút giữa hai lần gửi.
     /// </summary>
+    /// <summary>PDF văn bản từ chối của một lượt người nhận đã từ chối. Trả tệp PDF, không phải JSON.</summary>
+    [HttpGet("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/decline-paper")]
+    [Produces("application/pdf", "application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDeclinePaper(Guid caseId, Guid turnId, CancellationToken ct)
+    {
+        PreparedDownload download = await declinePaperService.PrepareAsync(caseId, turnId, ct);
+        return new IdentityImageResult(download);
+    }
+
     [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/resend-invitation")]
     [ProducesResponseType<ResendHandoverInvitationResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]

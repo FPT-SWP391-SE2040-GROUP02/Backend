@@ -86,6 +86,15 @@ public class HandoverSubmission
 
     public byte[] BackImageWrappedDataKey { get; set; } = Array.Empty<byte>();
 
+    /// <summary>PDF văn bản từ chối, dựng khi Người xét duyệt duyệt hồ sơ Từ chối; rỗng khi không có.</summary>
+    public string PaperStorageKey { get; set; } = string.Empty;
+
+    public long PaperSizeBytes { get; set; }
+
+    public string PaperEncryptionKeyId { get; set; } = string.Empty;
+
+    public byte[] PaperWrappedDataKey { get; set; } = Array.Empty<byte>();
+
     /// <summary>Lý do yêu cầu bổ sung (khi Status = SupplementRequested).</summary>
     public string? SupplementReason { get; set; }
 

@@ -39,6 +39,9 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     private readonly IAuditLogRepository auditLogs;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IBeneficiaryRepository? beneficiaries;
+    private readonly IBeneficiaryDataProtector? protector;
+    private readonly IDeclinePaperRenderer? paperRenderer;
 
     public HandoverSubmissionReviewService(
         ICurrentUser currentUser,
@@ -49,7 +52,10 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         IAssetContentStore contentStore,
         IAuditLogRepository auditLogs,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IBeneficiaryRepository? beneficiaries = null,
+        IBeneficiaryDataProtector? protector = null,
+        IDeclinePaperRenderer? paperRenderer = null)
     {
         this.currentUser = currentUser;
         this.users = users;
@@ -60,6 +66,9 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         this.auditLogs = auditLogs;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.beneficiaries = beneficiaries;
+        this.protector = protector;
+        this.paperRenderer = paperRenderer;
     }
 
     public async Task<List<VerifierHandoverSubmissionSummaryResponse>> ListPendingAsync(CancellationToken ct)
@@ -144,11 +153,64 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống.
         vault.Plan.UpdatedAt = now;
 
+        string? paperKey = null;
+        if (submission.Kind == HandoverSubmissionKind.Decline)
+        {
+            paperKey = await StoreDeclinePaperAsync(submission, vault, userId, now, ct);
+        }
+
         auditLogs.Add(AuditRules.Create(
             turn.VaultId, userId, AuditActorRole.Verifier, AuditAction.HandoverSubmissionApproved,
             AuditTargetType.HandoverTurn, turn.Id, null, AuditOutcome.Succeeded, null, now));
-        await unitOfWork.SaveChangesAsync(ct);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (Exception)
+        {
+            await IdentityImageStorage.TryDeleteAsync(contentStore, paperKey);
+            throw;
+        }
         return ToDetail(submission);
+    }
+
+    /// <summary>Dựng và lưu mã hóa PDF văn bản từ chối; trả khóa lưu để bù trừ khi lưu bản ghi thất bại. Thiếu bộ dựng thì bỏ qua.</summary>
+    private async Task<string?> StoreDeclinePaperAsync(
+        HandoverSubmission submission, Vault vault, Guid reviewerId, DateTimeOffset now, CancellationToken ct)
+    {
+        if (paperRenderer == null || beneficiaries == null || protector == null)
+        {
+            return null;
+        }
+        Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, submission.Turn.BeneficiaryId, ct);
+        User? reviewer = await users.FindByIdAsync(reviewerId, ct);
+        User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+        if (beneficiary == null || reviewer == null)
+        {
+            return null;
+        }
+
+        DeclinePaperData data = new DeclinePaperData();
+        data.TurnCode = submission.TurnId.ToString("N").Substring(24).ToUpperInvariant();
+        data.ContainerName = submission.Turn.ContainerName;
+        data.OwnerFullName = owner?.FullName ?? string.Empty;
+        data.DeclinerFullName = protector.Unprotect(beneficiary).FullName;
+        data.CitizenIdLast4 = submission.CitizenIdLast4;
+        data.SubmittedAt = submission.CreatedAt;
+        data.NameMatches = submission.NameMatches;
+        data.CitizenIdMatches = submission.CitizenIdMatches;
+        data.DateOfBirthMatches = submission.DateOfBirthMatches;
+        data.ReviewerFullName = reviewer.FullName;
+        data.ReviewerLawyerCardNumber = reviewer.LawyerCardNumber;
+        data.ReviewedAt = now;
+
+        byte[] pdf = paperRenderer.Render(data);
+        StoredContent stored = await IdentityImageStorage.SaveAsync(contentStore, pdf, ct);
+        submission.PaperStorageKey = stored.StorageKey;
+        submission.PaperSizeBytes = stored.SizeBytes;
+        submission.PaperEncryptionKeyId = stored.EncryptionKeyId;
+        submission.PaperWrappedDataKey = stored.WrappedDataKey;
+        return stored.StorageKey;
     }
 
     public async Task<VerifierHandoverSubmissionResponse> RequestSupplementAsync(

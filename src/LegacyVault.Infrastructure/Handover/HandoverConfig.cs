@@ -34,6 +34,7 @@ public static class HandoverConfig
 
         // Lưu và xóa dữ liệu sau bàn giao (§7.7).
         services.AddScoped<IRetentionRepository, RetentionRepository>();
+        services.AddSingleton<IDeclinePaperRenderer, QuestPdfDeclinePaperRenderer>();
         services.Configure<RetentionJobSettings>(configuration.GetSection(RetentionJobSettings.SectionName));
         services.AddHostedService<RetentionMonitor>();
         services.AddSingleton<IRetentionNoticeSender>(provider => ChooseRetentionSender(provider));

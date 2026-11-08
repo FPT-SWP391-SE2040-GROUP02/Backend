@@ -1588,6 +1588,29 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<bool>("NameMatches")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PaperEncryptionKeyId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasDefaultValue("");
+
+                    b.Property<long>("PaperSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PaperStorageKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasDefaultValue("");
+
+                    b.Property<byte[]>("PaperWrappedDataKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varbinary(max)")
+                        .HasDefaultValue(new byte[0]);
+
                     b.Property<DateTimeOffset?>("ReviewedAt")
                         .HasColumnType("datetimeoffset");
 

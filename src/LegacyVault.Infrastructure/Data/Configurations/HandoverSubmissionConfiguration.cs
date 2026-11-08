@@ -26,6 +26,10 @@ public sealed class HandoverSubmissionConfiguration : IEntityTypeConfiguration<H
         builder.Property(s => s.BackImageEncryptionKeyId).IsRequired().HasMaxLength(64);
         builder.Property(s => s.BackImageWrappedDataKey).IsRequired();
 
+        builder.Property(s => s.PaperStorageKey).IsRequired().HasMaxLength(256).HasDefaultValue(string.Empty);
+        builder.Property(s => s.PaperEncryptionKeyId).IsRequired().HasMaxLength(64).HasDefaultValue(string.Empty);
+        builder.Property(s => s.PaperWrappedDataKey).IsRequired().HasDefaultValue(Array.Empty<byte>());
+
         builder.Property(s => s.RowVersion).IsRowVersion();
 
         builder.HasOne(s => s.Turn)

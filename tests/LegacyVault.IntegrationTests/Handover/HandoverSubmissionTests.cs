@@ -353,6 +353,54 @@ public sealed class HandoverSubmissionTests
         Assert.Equal(AuditAction.HandoverSubmissionApproved, Assert.Single(audit.Logs).Action);
     }
 
+    private sealed class FakePaperRenderer : IDeclinePaperRenderer
+    {
+        public DeclinePaperData? Last { get; private set; }
+
+        public byte[] Render(DeclinePaperData data)
+        {
+            Last = data;
+            return new byte[] { 0x25, 0x50, 0x44, 0x46 };
+        }
+    }
+
+    private HandoverSubmissionReviewService ReviewWithPaper(FakePaperRenderer renderer)
+    {
+        return new HandoverSubmissionReviewService(
+            currentUser, users, vaults, submissions, holds, store, audit, unitOfWork, time,
+            beneficiaries, protector, renderer);
+    }
+
+    [Fact]
+    public async Task Approve_Decline_StoresEncryptedPaperWithDataFromSystemRecords()
+    {
+        HandoverSubmission submission = await SubmitAndAttach(Request("DECLINE", voluntary: true));
+        FakePaperRenderer renderer = new FakePaperRenderer();
+        currentUser.UserId = verifier.Id;
+
+        await ReviewWithPaper(renderer).ApproveAsync(submission.Id, CancellationToken.None);
+
+        Assert.NotEmpty(submission.PaperStorageKey);
+        Assert.True(store.Contents.ContainsKey(submission.PaperStorageKey));
+        Assert.Equal("Trần Minh Anh", renderer.Last!.DeclinerFullName);
+        Assert.Equal("1234", renderer.Last.CitizenIdLast4);
+        Assert.Equal("Luật sư Dũng", renderer.Last.ReviewerFullName);
+        Assert.Equal("Gói gia đình", renderer.Last.ContainerName);
+    }
+
+    [Fact]
+    public async Task Approve_Accept_DoesNotCreateAPaper()
+    {
+        HandoverSubmission submission = await SubmitAndAttach(Request());
+        FakePaperRenderer renderer = new FakePaperRenderer();
+        currentUser.UserId = verifier.Id;
+
+        await ReviewWithPaper(renderer).ApproveAsync(submission.Id, CancellationToken.None);
+
+        Assert.Equal(string.Empty, submission.PaperStorageKey);
+        Assert.Null(renderer.Last);
+    }
+
     [Fact]
     public async Task Approve_Twice_ReturnsSameResultWithoutSecondAudit()
     {
