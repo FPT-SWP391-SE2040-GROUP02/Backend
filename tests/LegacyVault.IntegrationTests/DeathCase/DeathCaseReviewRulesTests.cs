@@ -224,14 +224,15 @@ public sealed class DeathCaseReviewRulesTests
     }
 
     [Fact]
-    public void Death01_MissingRequirementsMatchAllRequirementCodes()
+    public void Death01_EveryMissingRequirementIsAnAllowedSupplementCode()
     {
-        // Chuẩn bị: bản nháp rỗng thiếu đủ mọi phần
-        // Hành động
-        List<string> allMissing = DeathCaseRules.GetMissingRequirements(null, null, null, null, null, null, 0);
+        // Hồ sơ chưa có giấy nào thiếu mã FILES; mã đó vẫn nằm trong danh sách Người xét duyệt được yêu cầu bổ sung.
+        List<string> allMissing = DeathCaseRules.GetMissingRequirements(0);
 
-        // Kiểm tra: danh sách mã cho phép khớp từng phần tử, đúng thứ tự
-        Assert.Equal(new List<string>(DeathCaseRules.AllRequirementCodes), allMissing);
+        foreach (string code in allMissing)
+        {
+            Assert.Contains(code, DeathCaseRules.AllRequirementCodes);
+        }
     }
 
     [Fact]

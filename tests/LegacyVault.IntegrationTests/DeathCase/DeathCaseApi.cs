@@ -63,16 +63,28 @@ public static class DeathCaseApi
     }
 
     /// <summary>Tải một trang PDF giả (201), trả JSON hồ sơ mới.</summary>
-    public static async Task<JsonElement> UploadPdfAsync(HttpClient client, Guid caseId, string marker)
+    public static async Task<JsonElement> UploadPdfAsync(
+        HttpClient client, Guid caseId, string marker, string? kind = null)
+    {
+        HttpResponseMessage response = await TryUploadPdfAsync(client, caseId, marker, kind);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
+    /// <summary>Tải một trang PDF giả, trả nguyên response để test tự kiểm mã trạng thái. kind null là như trước (thêm trang).</summary>
+    public static async Task<HttpResponseMessage> TryUploadPdfAsync(
+        HttpClient client, Guid caseId, string marker, string? kind = null)
     {
         byte[] content = Encoding.ASCII.GetBytes("%PDF-1.7\n" + marker + "\n" + new string('A', 512));
         ByteArrayContent fileContent = new ByteArrayContent(content);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         MultipartFormDataContent form = new MultipartFormDataContent();
         form.Add(fileContent, "file", "trang.pdf");
-        HttpResponseMessage response = await client.PostAsync(CaseUrl(caseId) + "/files", form);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return await ApiTestHelpers.ReadJsonAsync(response);
+        if (kind != null)
+        {
+            form.Add(new StringContent(kind), "kind");
+        }
+        return await client.PostAsync(CaseUrl(caseId) + "/files", form);
     }
 
     /// <summary>Mở hồ sơ rồi khai đủ trường và tải một trang: hồ sơ sẵn sàng để gửi. Trả JSON hồ sơ mới nhất.</summary>

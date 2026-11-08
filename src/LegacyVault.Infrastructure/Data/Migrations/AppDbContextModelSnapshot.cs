@@ -616,6 +616,14 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("DEATH_CERTIFICATE");
+
                     b.Property<int>("Position")
                         .HasColumnType("int");
 

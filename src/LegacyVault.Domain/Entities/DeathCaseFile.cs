@@ -18,6 +18,9 @@ public class DeathCaseFile
     /// <summary>Thứ tự trang trong phiên bản, bắt đầu từ 1.</summary>
     public int Position { get; set; }
 
+    /// <summary>Loại giấy: DEATH_CERTIFICATE (mặc định, các tệp cũ) hoặc DEATH_NOTICE. Xem DeathCaseFileKind.</summary>
+    public string Kind { get; set; } = DeathCaseFileKind.DeathCertificate;
+
     /// <summary>Tên tệp gốc đã làm sạch (SEC-12: bỏ phần đường dẫn, ký tự điều khiển).</summary>
     public string FileName { get; set; } = string.Empty;
 

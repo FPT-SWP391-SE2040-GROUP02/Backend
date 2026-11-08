@@ -231,8 +231,32 @@ public sealed class DeathCaseService : IDeathCaseService
         DeathCaseVersion version = DeathCaseMappings.FindVersion(deathCase, deathCase.CurrentVersionNo);
         EnsureVersionEditable(deathCase, version);
 
-        // NFR-09: tối đa 10 tệp mỗi phiên bản.
-        if (version.Files.Count >= DeathCaseRules.MaxFilesPerVersion)
+        // Có kind rõ ràng thì mỗi loại giấy chỉ giữ một tệp: tệp mới thay tệp cũ cùng loại (xóa tệp cũ sau khi lưu được tệp mới).
+        string kind = DeathCaseFileKind.DeathCertificate;
+        DeathCaseFile? replaced = null;
+        if (!string.IsNullOrWhiteSpace(request.Kind))
+        {
+            kind = request.Kind.Trim().ToUpperInvariant();
+            if (!DeathCaseFileKind.IsValid(kind))
+            {
+                throw ValidationErrors.For("kind", "Loại giấy không hợp lệ.");
+            }
+            foreach (DeathCaseFile existingFile in version.Files)
+            {
+                if (existingFile.Kind == kind)
+                {
+                    replaced = existingFile;
+                }
+            }
+        }
+
+        // NFR-09: tối đa 10 tệp mỗi phiên bản (tệp sắp bị thay không tính).
+        int fileCountAfterReplace = version.Files.Count;
+        if (replaced != null)
+        {
+            fileCountAfterReplace--;
+        }
+        if (fileCountAfterReplace >= DeathCaseRules.MaxFilesPerVersion)
         {
             Dictionary<string, object?> limitExtensions = new Dictionary<string, object?>();
             limitExtensions["maxFiles"] = DeathCaseRules.MaxFilesPerVersion;
@@ -272,6 +296,7 @@ public sealed class DeathCaseService : IDeathCaseService
         DeathCaseFile file = new DeathCaseFile();
         file.VersionId = version.Id;
         file.Position = nextPosition;
+        file.Kind = kind;
         file.FileName = DeathCaseFileRules.SanitizeFileName(request.FileName);
         file.ContentType = contentType;
         file.SizeBytes = stored.SizeBytes;
@@ -282,6 +307,13 @@ public sealed class DeathCaseService : IDeathCaseService
         file.UploadedAt = now;
         version.Files.Add(file);
         deathCaseRepository.AddFile(file);
+        string? replacedStorageKey = null;
+        if (replaced != null)
+        {
+            replacedStorageKey = replaced.StorageKey;
+            version.Files.Remove(replaced);
+            deathCaseRepository.RemoveFile(replaced);
+        }
         version.UpdatedAt = now;
         deathCase.UpdatedAt = now;
         try
@@ -293,6 +325,16 @@ public sealed class DeathCaseService : IDeathCaseService
             // Bù trừ: không để nội dung không có bản ghi trong kho lưu trữ. Không dùng ct vì request có thể đã bị hủy.
             await contentStore.DeleteAsync(stored.StorageKey, CancellationToken.None);
             throw;
+        }
+
+        // D8: nội dung của tệp bị thay có thể dùng chung với phiên bản khác; chỉ xóa khi không còn dòng nào dùng.
+        if (replacedStorageKey != null)
+        {
+            int stillUsed = await deathCaseRepository.CountFilesUsingStorageKeyAsync(replacedStorageKey, ct);
+            if (stillUsed == 0)
+            {
+                await contentStore.DeleteAsync(replacedStorageKey, CancellationToken.None);
+            }
         }
         return BuildResponse(deathCase);
     }
@@ -407,22 +449,20 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         EnsureVersionEditable(deathCase, version);
 
-        // DEATH-01: đủ 6 trường và ít nhất một trang giấy.
+        // Chỉ cần ít nhất một giấy chứng tử hoặc trích lục khai tử; các trường nhập tay không còn bắt buộc.
         DeathCaseIdentityData? identity = dataProtector.Unprotect(version);
         DeathCaseIdentityData data = new DeathCaseIdentityData();
         if (identity != null)
         {
             data = identity;
         }
-        List<string> missing = DeathCaseRules.GetMissingRequirements(
-            data.OwnerFullName, data.OwnerCitizenId, version.DateOfDeath,
-            data.CertificateNumber, version.IssuedOn, data.IssuedBy, version.Files.Count);
+        List<string> missing = DeathCaseRules.GetMissingRequirements(DeathCaseRules.CountCertificateFiles(version.Files));
         if (missing.Count > 0)
         {
             Dictionary<string, object?> incompleteExtensions = new Dictionary<string, object?>();
             incompleteExtensions["missingRequirements"] = missing;
             throw new AppException(AppErrorType.Conflict, ErrorCode.DeathCaseIncomplete,
-                "Hồ sơ chứng tử chưa đủ thông tin hoặc chưa có trang giấy nào.", incompleteExtensions);
+                "Hồ sơ chưa có giấy chứng tử hoặc trích lục khai tử.", incompleteExtensions);
         }
 
         // AI xem các trang giấy: không trang nào là giấy chứng tử → chặn gửi để Verifier không phải xét hồ sơ rác.
@@ -468,9 +508,13 @@ public sealed class DeathCaseService : IDeathCaseService
         deathCase.Status = DeathCaseStatus.UnderReview;
 
         // DEATH-10: có điểm danh sau ngày mất ghi trên giấy → đặt cờ, chặn duyệt tới khi Verifier xem xét.
-        // version.DateOfDeath chắc chắn có giá trị vì hồ sơ đã đủ trường.
-        DateTimeOffset cutoff = DeathCaseRules.CheckInCutoffUtc(version.DateOfDeath!.Value);
-        bool checkedInAfterDeath = await deathCaseRepository.HasCheckInAtOrAfterAsync(plan.Id, cutoff, ct);
+        // Ngày mất không còn bắt buộc (Người xét duyệt đọc trên giấy): chưa có ngày thì không so được, bỏ qua cờ này.
+        bool checkedInAfterDeath = false;
+        if (version.DateOfDeath != null)
+        {
+            DateTimeOffset cutoff = DeathCaseRules.CheckInCutoffUtc(version.DateOfDeath.Value);
+            checkedInAfterDeath = await deathCaseRepository.HasCheckInAtOrAfterAsync(plan.Id, cutoff, ct);
+        }
         if (checkedInAfterDeath)
         {
             DeathCaseFlag flag = new DeathCaseFlag();
@@ -625,6 +669,7 @@ public sealed class DeathCaseService : IDeathCaseService
             DeathCaseFile copy = new DeathCaseFile();
             copy.VersionId = next.Id;
             copy.Position = source.Position;
+            copy.Kind = source.Kind;
             copy.FileName = source.FileName;
             copy.ContentType = source.ContentType;
             copy.SizeBytes = source.SizeBytes;

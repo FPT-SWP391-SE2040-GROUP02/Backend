@@ -62,11 +62,8 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         Assert.Equal(0, version.GetProperty("files").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("reviewVersionNo").ValueKind);
         List<string> missing = ReadStrings(body.GetProperty("missingRequirements"));
-        Assert.Equal(new List<string>
-        {
-            "OWNER_FULL_NAME", "OWNER_CITIZEN_ID", "DATE_OF_DEATH",
-            "CERTIFICATE_NUMBER", "ISSUED_ON", "ISSUED_BY", "FILES",
-        }, missing);
+        // Chỉ còn thiếu giấy chứng tử: các trường nhập tay không còn bắt buộc.
+        Assert.Equal(new List<string> { "FILES" }, missing);
         Assert.False(string.IsNullOrEmpty(body.GetProperty("etag").GetString()));
         // Mở hồ sơ nháp chưa khóa kế hoạch (D1).
         await AssertPlanStatusAsync(vault.VaultId, PlanStatus.Active);

@@ -1,5 +1,6 @@
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
+using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using Xunit;
 
@@ -39,26 +40,38 @@ public sealed class DeathCaseRulesTests
     }
 
     [Fact]
-    public void Death01_MissingRequirementsListsEachField()
+    public void Death01_OnlyTheCertificateFileIsRequiredToSubmit()
     {
-        // Chuẩn bị: bản nháp rỗng, chuỗi chỉ có khoảng trắng tính là thiếu
-        DateOnly day = new DateOnly(2026, 10, 1);
+        // Họ tên, số giấy, ngày mất, ngày cấp, nơi cấp không còn bắt buộc: chỉ cần có giấy chứng tử.
+        List<string> noCertificate = DeathCaseRules.GetMissingRequirements(0);
+        List<string> hasCertificate = DeathCaseRules.GetMissingRequirements(1);
 
-        // Hành động
-        List<string> allMissing = DeathCaseRules.GetMissingRequirements(null, "   ", null, null, null, "", 0);
-        List<string> noneMissing = DeathCaseRules.GetMissingRequirements(
-            "Nguyễn Văn An", "012345678901", day, "123/TT", day, "UBND phường A", 1);
-        List<string> onlyFiles = DeathCaseRules.GetMissingRequirements(
-            "Nguyễn Văn An", "012345678901", day, "123/TT", day, "UBND phường A", 0);
+        Assert.Equal(new List<string> { "FILES" }, noCertificate);
+        Assert.Empty(hasCertificate);
+    }
 
-        // Kiểm tra
-        Assert.Equal(new List<string>
-        {
-            "OWNER_FULL_NAME", "OWNER_CITIZEN_ID", "DATE_OF_DEATH",
-            "CERTIFICATE_NUMBER", "ISSUED_ON", "ISSUED_BY", "FILES",
-        }, allMissing);
-        Assert.Empty(noneMissing);
-        Assert.Equal(new List<string> { "FILES" }, onlyFiles);
+    [Fact]
+    public void Death01_OnlyDeathCertificateFilesCountTowardsTheRequirement()
+    {
+        DeathCaseFile certificate = new DeathCaseFile();
+        certificate.Kind = DeathCaseFileKind.DeathCertificate;
+        DeathCaseFile notice = new DeathCaseFile();
+        notice.Kind = DeathCaseFileKind.DeathNotice;
+
+        // Giấy báo tử đứng một mình không đủ để nộp.
+        Assert.Equal(0, DeathCaseRules.CountCertificateFiles(new List<DeathCaseFile> { notice }));
+        Assert.Equal(1, DeathCaseRules.CountCertificateFiles(new List<DeathCaseFile> { notice, certificate }));
+        Assert.Equal(new List<string> { "FILES" },
+            DeathCaseRules.GetMissingRequirements(DeathCaseRules.CountCertificateFiles(new List<DeathCaseFile> { notice })));
+    }
+
+    [Fact]
+    public void Death01_FileKindOnlyAcceptsKnownValues()
+    {
+        Assert.True(DeathCaseFileKind.IsValid("DEATH_CERTIFICATE"));
+        Assert.True(DeathCaseFileKind.IsValid("DEATH_NOTICE"));
+        Assert.False(DeathCaseFileKind.IsValid("OTHER"));
+        Assert.False(DeathCaseFileKind.IsValid(null));
     }
 
     [Fact]

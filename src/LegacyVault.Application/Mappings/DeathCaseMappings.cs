@@ -47,6 +47,7 @@ public static class DeathCaseMappings
             DeathCaseFileResponse fileResponse = new DeathCaseFileResponse();
             fileResponse.Id = file.Id;
             fileResponse.Position = file.Position;
+            fileResponse.Kind = file.Kind;
             fileResponse.FileName = file.FileName;
             fileResponse.ContentType = file.ContentType;
             fileResponse.SizeBytes = file.SizeBytes;
@@ -61,7 +62,7 @@ public static class DeathCaseMappings
         response.CurrentVersion = version;
         response.ReviewVersionNo = deathCase.ReviewVersionNo;
         response.MissingRequirements = DeathCaseRules.GetMissingRequirements(
-            ownerFullName, ownerCitizenId, current.DateOfDeath, certificateNumber, current.IssuedOn, issuedBy, current.Files.Count);
+            DeathCaseRules.CountCertificateFiles(current.Files));
         response.SupplementRequest = ToSupplementRequestResponse(deathCase);
         response.RejectReason = ToRejectReason(deathCase);
         response.OwnerNotice = ToNoticeResponse(deathCase);

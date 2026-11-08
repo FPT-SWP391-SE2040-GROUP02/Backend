@@ -153,32 +153,117 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Death01_IncompleteSubmitListsMissingParts()
+    public async Task Death01_SubmitWithoutACertificateFileListsTheMissingPart()
     {
-        // Chuẩn bị: mới khai họ tên, chưa có gì khác
+        // Chuẩn bị: mở hồ sơ, chưa có giấy nào
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
         Guid caseId = opened.GetProperty("id").GetGuid();
-        HttpResponseMessage edit = await executor.Client.PutAsJsonAsync(
-            DeathCaseApi.CaseUrl(caseId) + "/draft",
-            new { etag = opened.GetProperty("etag").GetString(), ownerFullName = "Nguyễn Văn An" });
-        JsonElement edited = await ApiTestHelpers.ReadJsonAsync(edit);
 
         // Hành động
         HttpResponseMessage response = await DeathCaseApi.SubmitAsync(
-            executor.Client, caseId, edited.GetProperty("etag").GetString());
+            executor.Client, caseId, opened.GetProperty("etag").GetString());
 
-        // Kiểm tra: không khóa gì cả
+        // Kiểm tra: chỉ thiếu giấy chứng tử, không khóa gì cả
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "DEATH_CASE_INCOMPLETE");
-        Assert.Equal(new List<string>
-        {
-            "OWNER_CITIZEN_ID", "DATE_OF_DEATH", "CERTIFICATE_NUMBER", "ISSUED_ON", "ISSUED_BY", "FILES",
-        }, DeathCaseApi.ReadStrings(problem.GetProperty("missingRequirements")));
+        Assert.Equal(new List<string> { "FILES" }, DeathCaseApi.ReadStrings(problem.GetProperty("missingRequirements")));
         Assert.Equal(PlanStatus.Active, await LoadPlanStatusAsync(vault.VaultId));
         DeathCase deathCase = await LoadCaseAsync(caseId);
         Assert.Equal(DeathCaseStatus.Draft, deathCase.Status);
         Assert.Null(deathCase.FirstSubmittedAt);
+    }
+
+    [SqlFact]
+    public async Task Death01_SubmitsWithOnlyTheCertificateFileAndNoTypedFields()
+    {
+        // Chuẩn bị: không khai họ tên, số giấy, ngày mất, ngày cấp, nơi cấp; chỉ tải một giấy chứng tử
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
+        Guid caseId = opened.GetProperty("id").GetGuid();
+        JsonElement withFile = await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "giay chung tu", "DEATH_CERTIFICATE");
+        Assert.Empty(DeathCaseApi.ReadStrings(withFile.GetProperty("missingRequirements")));
+
+        // Hành động
+        JsonElement submitted = await DeathCaseApi.SubmitOkAsync(executor.Client, withFile);
+
+        // Kiểm tra: hồ sơ sang bước xét, kế hoạch bị khóa, không có cờ điểm danh sau ngày mất (chưa có ngày mất)
+        Assert.Equal("UNDER_REVIEW", submitted.GetProperty("status").GetString());
+        Assert.Equal(PlanStatus.DeathCaseOpen, await LoadPlanStatusAsync(vault.VaultId));
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(0, await db.Set<DeathCaseFlag>().CountAsync(f => f.CaseId == caseId));
+        });
+    }
+
+    [SqlFact]
+    public async Task Death01_ADeathNoticeAloneIsNotEnoughToSubmit()
+    {
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
+        Guid caseId = opened.GetProperty("id").GetGuid();
+        JsonElement withNotice = await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "giay bao tu", "DEATH_NOTICE");
+
+        HttpResponseMessage response = await DeathCaseApi.SubmitAsync(
+            executor.Client, caseId, withNotice.GetProperty("etag").GetString());
+
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "DEATH_CASE_INCOMPLETE");
+        Assert.Equal(new List<string> { "FILES" }, DeathCaseApi.ReadStrings(problem.GetProperty("missingRequirements")));
+    }
+
+    [SqlFact]
+    public async Task Death04_UploadingTheSameKindAgainReplacesTheOldFile()
+    {
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
+        Guid caseId = opened.GetProperty("id").GetGuid();
+
+        JsonElement first = await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "ban dau", "DEATH_CERTIFICATE");
+        Guid firstFileId = first.GetProperty("currentVersion").GetProperty("files")[0].GetProperty("id").GetGuid();
+        await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "co dau", "DEATH_NOTICE");
+        JsonElement replaced = await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "ban moi", "DEATH_CERTIFICATE");
+
+        // Hai loại giấy, mỗi loại một tệp; tệp giấy chứng tử cũ đã bị thay.
+        JsonElement files = replaced.GetProperty("currentVersion").GetProperty("files");
+        Assert.Equal(2, files.GetArrayLength());
+        List<string> kinds = new List<string>();
+        foreach (JsonElement file in files.EnumerateArray())
+        {
+            kinds.Add(file.GetProperty("kind").GetString()!);
+            Assert.NotEqual(firstFileId, file.GetProperty("id").GetGuid());
+        }
+        kinds.Sort();
+        Assert.Equal(new List<string> { "DEATH_CERTIFICATE", "DEATH_NOTICE" }, kinds);
+    }
+
+    [SqlFact]
+    public async Task Death04_UnknownFileKindIsRejected()
+    {
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
+
+        HttpResponseMessage response = await DeathCaseApi.TryUploadPdfAsync(
+            executor.Client, opened.GetProperty("id").GetGuid(), "la", "KHONG_BIET");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [SqlFact]
+    public async Task Death04_UploadWithoutAKindStillAddsAnotherCertificatePage()
+    {
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
+        Guid caseId = opened.GetProperty("id").GetGuid();
+
+        await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "trang 1");
+        JsonElement second = await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "trang 2");
+
+        Assert.Equal(2, second.GetProperty("currentVersion").GetProperty("files").GetArrayLength());
     }
 
     [SqlFact]

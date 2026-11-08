@@ -84,6 +84,9 @@ public class DeathCaseFileResponse
 
     public int Position { get; set; }
 
+    /// <summary>DEATH_CERTIFICATE hoặc DEATH_NOTICE.</summary>
+    public string Kind { get; set; } = string.Empty;
+
     public string FileName { get; set; } = string.Empty;
 
     public string ContentType { get; set; } = string.Empty;

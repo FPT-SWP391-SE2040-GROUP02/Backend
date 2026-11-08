@@ -107,6 +107,7 @@ public sealed class ExecutorDeathCasesController : ControllerBase
         {
             AddDeathCaseFileRequest request = new AddDeathCaseFileRequest();
             request.FileName = file.FileName;
+            request.Kind = form.Kind;
             request.Length = file.Length;
             request.Content = content;
             DeathCaseResponse response = await deathCaseService.AddFileAsync(caseId, request, ct);
