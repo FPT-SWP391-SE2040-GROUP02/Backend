@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -320,7 +321,16 @@ public static class InfrastructureConfig
         services.AddScoped<IEkycConsentRepository, EkycConsentRepository>();
         // Ngưỡng so khớp cấu hình được (Ekyc:MatchThreshold, mặc định EkycRules.MatchThreshold).
         // Application không tham chiếu IOptions nên bridge qua IEkycOptions (mẫu IHandoverPolicy).
-        services.AddOptions<EkycOptions>().Bind(configuration.GetSection(EkycOptions.SectionName));
+        services.AddOptions<EkycOptions>()
+            .Bind(configuration.GetSection(EkycOptions.SectionName))
+            .PostConfigure<IHostEnvironment>((options, environment) =>
+            {
+                // Tạm ngừng eKYC khi khởi động chỉ dành cho môi trường thử; môi trường thật luôn dùng eKYC thật.
+                if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
+                {
+                    options.PausedOnStartup = false;
+                }
+            });
         services.AddSingleton<IEkycOptions>(
             provider => provider.GetRequiredService<IOptions<EkycOptions>>().Value);
         // Mẫu khuôn mặt Owner (EKYC-22, PRIV-03): vector mã hóa envelope, dùng chung DataKeyProtector của tài sản.
