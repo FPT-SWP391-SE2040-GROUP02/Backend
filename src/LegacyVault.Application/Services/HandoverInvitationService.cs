@@ -110,11 +110,13 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, turn.BeneficiaryId, ct);
         string? email = null;
         string fullName = string.Empty;
+        string? ownerMessage = null;
         if (beneficiary != null)
         {
             BeneficiaryPersonalData data = protector.Unprotect(beneficiary);
             email = data.Email;
             fullName = data.FullName;
+            ownerMessage = data.Message;
         }
         if (string.IsNullOrWhiteSpace(email))
         {
@@ -136,6 +138,7 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
         invitation.FullName = fullName;
         invitation.Token = token.Value;
         invitation.ResponseDeadline = responseDeadline;
+        invitation.OwnerMessage = ownerMessage;
         if (contactReader != null)
         {
             invitation.ApplyContacts(await contactReader.FindAsync(vault.Id, ct));

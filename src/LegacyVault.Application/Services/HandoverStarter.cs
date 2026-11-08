@@ -122,6 +122,7 @@ public sealed class HandoverStarter : IHandoverStarter
                 invitation.Token = token.Value;
                 invitation.ResponseDeadline = turn.ResponseDeadline;
                 invitation.ApplyContacts(contacts);
+                invitation.OwnerMessage = data.Message;
                 invitations.Add(invitation);
             }
         }

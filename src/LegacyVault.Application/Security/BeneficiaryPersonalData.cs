@@ -16,4 +16,12 @@ public class BeneficiaryPersonalData
     public string? Email { get; set; }
 
     public string? Phone { get; set; }
+
+    /// <summary>
+    /// Lời nhắn Chủ kho để lại cho người nhận (không bắt buộc, tối đa <see cref="MessageMaxLength"/> ký tự). Được gửi kèm thư mời nhận
+    /// tài sản. Lưu trong phần liên hệ đã mã hóa nên không cần cột mới; hồ sơ cũ không có thì null.
+    /// </summary>
+    public string? Message { get; set; }
+
+    public const int MessageMaxLength = 300;
 }

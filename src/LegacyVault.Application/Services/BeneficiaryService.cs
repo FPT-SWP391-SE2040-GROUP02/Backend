@@ -83,6 +83,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         data.DateOfBirth = request.DateOfBirth.Value;
         data.Email = request.Email;
         data.Phone = request.Phone;
+        data.Message = NormalizeMessage(request.Message);
         NormalizeContact(data);
         string? ownerCitizenId = await ownerIdentityReader.FindBoundCitizenIdAsync(vault.OwnerId, ct);
         if (ownerCitizenId != null && string.Equals(data.CitizenId, ownerCitizenId, StringComparison.Ordinal))
@@ -244,6 +245,11 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         updated.DateOfBirth = current.DateOfBirth;
         updated.Email = current.Email;
         updated.Phone = current.Phone;
+        updated.Message = current.Message;
+        if (request.Message != null)
+        {
+            updated.Message = NormalizeMessage(request.Message);
+        }
         if (request.FullName != null)
         {
             updated.FullName = NormalizeFullName(request.FullName);
@@ -278,7 +284,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         bool changed = !string.Equals(updated.FullName, current.FullName, StringComparison.Ordinal)
             || updated.DateOfBirth != current.DateOfBirth
             || !string.Equals(updated.Email, current.Email, StringComparison.Ordinal)
-            || !string.Equals(updated.Phone, current.Phone, StringComparison.Ordinal);
+            || !string.Equals(updated.Phone, current.Phone, StringComparison.Ordinal)
+            || !string.Equals(updated.Message, current.Message, StringComparison.Ordinal);
 
         List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
 
@@ -422,6 +429,22 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
         data.Email = email;
         data.Phone = phone;
+    }
+
+    /// <summary>Lời nhắn: bỏ khoảng trắng đầu cuối, gộp xuống dòng thành khoảng trắng; rỗng thì null; quá 300 ký tự thì báo lỗi.</summary>
+    private static string? NormalizeMessage(string? message)
+    {
+        string? trimmed = TextInput.NullIfBlank(message);
+        if (trimmed == null)
+        {
+            return null;
+        }
+        string single = trimmed.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ').Trim();
+        if (single.Length > BeneficiaryPersonalData.MessageMaxLength)
+        {
+            throw ValidationErrors.For("message", "Lời nhắn tối đa 300 ký tự.");
+        }
+        return single;
     }
 
     /// <summary>Ngày hiện tại theo giờ Việt Nam (UTC+07:00).</summary>

@@ -21,6 +21,7 @@ public static class BeneficiaryMappings
             DateOfBirth = data.DateOfBirth,
             Email = data.Email,
             Phone = data.Phone,
+            Message = data.Message,
             MinorAcknowledgedAt = beneficiary.MinorAcknowledgedAt,
             ContainerIds = containerIds,
             CreatedAt = beneficiary.CreatedAt,

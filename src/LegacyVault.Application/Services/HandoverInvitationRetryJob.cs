@@ -112,12 +112,14 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
 
         string? email = null;
         string fullName = string.Empty;
+        string? ownerMessage = null;
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, turn.BeneficiaryId, ct);
         if (beneficiary != null)
         {
             BeneficiaryPersonalData data = protector.Unprotect(beneficiary);
             email = data.Email;
             fullName = data.FullName;
+            ownerMessage = data.Message;
         }
         if (string.IsNullOrWhiteSpace(email))
         {
@@ -139,6 +141,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         invitation.FullName = fullName;
         invitation.Token = token.Value;
         invitation.ResponseDeadline = responseDeadline;
+        invitation.OwnerMessage = ownerMessage;
         if (contactReader != null)
         {
             invitation.ApplyContacts(await contactReader.FindAsync(vault.Id, ct));
