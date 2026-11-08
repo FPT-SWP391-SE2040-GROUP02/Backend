@@ -28,7 +28,6 @@ public static class DeathCaseConfig
         services.AddScoped<IOwnerFaceVerifier, OwnerFaceVerifier>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
         // AI nhận diện trang giấy có phải giấy chứng tử khi Executor gửi hồ sơ.
-        services.AddScoped<IDeathCertificateClassifier, GeminiDeathCertificateClassifier>();
         // DEATH-03: bộ đếm nhập sai mật khẩu xác nhận duyệt/từ chối của Verifier.
         services.AddScoped<IVerifierSigningGuardRepository, VerifierSigningGuardRepository>();
 

@@ -67,6 +67,15 @@ public class HandoverTurn
 
     public DateTimeOffset? IdentityConfirmedAt { get; set; }
 
+    /// <summary>
+    /// Lúc người nhận nhập đúng khóa mở gói do Người thực hiện đưa (khóa do Chủ kho cấp, xem ExecutorKeyShard).
+    /// Chỉ cần khi kho đã cấp khóa; kho chưa cấp khóa thì bỏ qua bước này.
+    /// </summary>
+    public DateTimeOffset? KeyVerifiedAt { get; set; }
+
+    /// <summary>Số lần nhập sai khóa mở gói; đủ giới hạn thì khóa lượt này (cần Người thực hiện hoặc Admin xử lý).</summary>
+    public int KeyFailedCount { get; set; }
+
     /// <summary>Lúc lượt sẵn sàng để đồng ý/từ chối.</summary>
     public DateTimeOffset? ReadyAt { get; set; }
 

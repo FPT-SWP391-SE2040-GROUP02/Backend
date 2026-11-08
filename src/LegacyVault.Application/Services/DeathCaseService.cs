@@ -28,7 +28,6 @@ public sealed class DeathCaseService : IDeathCaseService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IAuditLogRepository auditLogRepository;
-    private readonly DeathCertificateChecker certificateChecker;
     private readonly ICheckInRepository checkInRepository;
 
     public DeathCaseService(
@@ -43,7 +42,6 @@ public sealed class DeathCaseService : IDeathCaseService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IAuditLogRepository auditLogRepository,
-        DeathCertificateChecker certificateChecker,
         ICheckInRepository checkInRepository)
     {
         this.currentUser = currentUser;
@@ -57,7 +55,6 @@ public sealed class DeathCaseService : IDeathCaseService
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
         this.auditLogRepository = auditLogRepository;
-        this.certificateChecker = certificateChecker;
         this.checkInRepository = checkInRepository;
     }
 
@@ -465,21 +462,6 @@ public sealed class DeathCaseService : IDeathCaseService
                 "Hồ sơ chưa có giấy chứng tử hoặc trích lục khai tử.", incompleteExtensions);
         }
 
-        // AI xem các trang giấy: không trang nào là giấy chứng tử → chặn gửi để Verifier không phải xét hồ sơ rác.
-        // AI không kiểm tra được → vẫn cho gửi, đặt cờ CertificateUnverified bên dưới để Verifier tự xem kỹ.
-        DeathCertificateCheckResult certificateCheck = await certificateChecker.CheckAsync(version, ct);
-        if (certificateCheck.Status == DeathCertificateCheckStatus.NotRecognized)
-        {
-            List<string> notRecognized = new List<string>();
-            notRecognized.Add(DeathCertificateCheckRules.NotRecognizedCode);
-            Dictionary<string, object?> certificateExtensions = new Dictionary<string, object?>();
-            certificateExtensions["missingRequirements"] = notRecognized;
-            certificateExtensions["fileChecks"] = certificateCheck.Files;
-            throw new AppException(AppErrorType.Conflict, ErrorCode.DeathCaseIncomplete,
-                "Không tìm thấy trang nào là giấy chứng tử hoặc trích lục khai tử. Vui lòng tải lên ảnh chụp rõ giấy chứng tử.",
-                certificateExtensions);
-        }
-
         DateTimeOffset now = timeProvider.GetUtcNow();
         int submittingVersionNo = version.VersionNo;
 
@@ -550,18 +532,6 @@ public sealed class DeathCaseService : IDeathCaseService
             mismatch.CreatedAt = now;
             deathCase.Flags.Add(mismatch);
             deathCaseRepository.AddFlag(mismatch);
-        }
-
-        if (certificateCheck.Status == DeathCertificateCheckStatus.Unavailable)
-        {
-            DeathCaseFlag unverified = new DeathCaseFlag();
-            unverified.CaseId = deathCase.Id;
-            unverified.VersionId = version.Id;
-            unverified.Kind = DeathCaseFlagKind.CertificateUnverified;
-            unverified.Detail = "AI chưa kiểm tra được các trang giấy có phải giấy chứng tử. Verifier cần tự xem kỹ.";
-            unverified.CreatedAt = now;
-            deathCase.Flags.Add(unverified);
-            deathCaseRepository.AddFlag(unverified);
         }
 
         // Bản bổ sung mới: hết trạng thái quá hạn bổ sung.

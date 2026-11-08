@@ -93,6 +93,10 @@ public enum ErrorCode
     ExecutorKeyAlreadyIssued,
     /// <summary>409: kho chưa cấp mảnh khóa Người thực thi nên chưa có gì để cấp lại.</summary>
     ExecutorKeyNotIssued,
+    /// <summary>403: người nhận nhập sai khóa mở gói, kèm attemptsRemaining.</summary>
+    HandoverKeyInvalid,
+    /// <summary>423: người nhận nhập sai khóa quá nhiều lần, lượt bị khóa.</summary>
+    HandoverKeyLocked,
     /// <summary>403: thiếu header X-Vault-Pin.</summary>
     VaultPinRequired,
     /// <summary>403: sai mã PIN, kèm attemptsRemaining.</summary>

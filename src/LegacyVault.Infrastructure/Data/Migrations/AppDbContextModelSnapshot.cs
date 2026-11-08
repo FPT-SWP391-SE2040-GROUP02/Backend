@@ -1572,6 +1572,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("InvitedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<int>("KeyFailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("KeyVerifiedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uniqueidentifier");
 

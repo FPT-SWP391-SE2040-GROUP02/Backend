@@ -143,9 +143,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         });
         builder.ConfigureServices(services =>
         {
-            // Mặc định AI nhận ra mọi trang là giấy chứng tử; test cần kết quả khác thì thay trong ConfigureAdditionalServices.
-            services.RemoveAll<IDeathCertificateClassifier>();
-            services.AddSingleton<IDeathCertificateClassifier>(new FakeDeathCertificateClassifier());
             if (!EnforceVaultPin)
             {
                 services.RemoveAll<IVaultPinService>();

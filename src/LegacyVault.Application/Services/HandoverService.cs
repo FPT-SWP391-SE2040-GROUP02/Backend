@@ -17,6 +17,10 @@ public sealed class HandoverService : IHandoverService
     private readonly ITokenService tokens;
     private readonly IHandoverPolicy policy;
     private readonly IHoldReader holdReader;
+    private readonly IExecutorKeyShardRepository? keyShards;
+
+    /// <summary>Số lần nhập sai khóa mở gói tối đa trước khi khóa lượt.</summary>
+    public const int MaxKeyFailures = 5;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -42,7 +46,8 @@ public sealed class HandoverService : IHandoverService
         IHandoverPolicy policy,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IExecutorKeyShardRepository? keyShards = null)
     {
         this.currentUser = currentUser;
         this.users = users;
@@ -51,6 +56,7 @@ public sealed class HandoverService : IHandoverService
         this.tokens = tokens;
         this.policy = policy;
         this.holdReader = holdReader;
+        this.keyShards = keyShards;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -172,6 +178,10 @@ public sealed class HandoverService : IHandoverService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverPlan plan = await EnsureDecidableAsync(turn, now, ct);
+        if (await IsKeyRequiredAsync(turn, ct) && turn.KeyVerifiedAt == null)
+        {
+            throw NotAllowed("KEY_REQUIRED", "Cần nhập khóa mở gói do Người thực hiện đưa trước khi đồng ý nhận.");
+        }
         plan.UpdatedAt = now;
 
         HandoverGrant grant = new HandoverGrant();
@@ -353,7 +363,7 @@ public sealed class HandoverService : IHandoverService
         return turn;
     }
 
-    private Task<HandoverTurnResponse> BuildTurnResponseAsync(HandoverTurn turn, CancellationToken ct)
+    private async Task<HandoverTurnResponse> BuildTurnResponseAsync(HandoverTurn turn, CancellationToken ct)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
 
@@ -366,6 +376,8 @@ public sealed class HandoverService : IHandoverService
         response.DecisionDeadline = turn.DecisionDeadline;
         response.IdentityBypassed = turn.IdentityBypassed;
         response.IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null;
+        response.KeyRequired = await IsKeyRequiredAsync(turn, ct);
+        response.KeyVerified = !response.KeyRequired || turn.KeyVerifiedAt != null;
 
         bool showContent = turn.Status == HandoverTurnStatus.ReadyToAccept
             || turn.Status == HandoverTurnStatus.HandoverCommitted;
@@ -390,7 +402,58 @@ public sealed class HandoverService : IHandoverService
             response.Grant = grant;
         }
 
-        return Task.FromResult(response);
+        return response;
+    }
+
+    /// <summary>Kho đã cấp khóa mở gói thì người nhận phải nhập khóa; chưa cấp thì bỏ qua.</summary>
+    private async Task<bool> IsKeyRequiredAsync(HandoverTurn turn, CancellationToken ct)
+    {
+        if (keyShards == null)
+        {
+            return false;
+        }
+        return await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null;
+    }
+
+    public async Task<HandoverTurnResponse> VerifyKeyAsync(Guid turnId, string? key, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        ExecutorKeyShard? shard = null;
+        if (keyShards != null)
+        {
+            shard = await keyShards.FindByVaultIdAsync(turn.VaultId, ct);
+        }
+        if (shard == null || turn.KeyVerifiedAt != null)
+        {
+            return await BuildTurnResponseAsync(turn, ct);
+        }
+        if (turn.Status != HandoverTurnStatus.ReadyToAccept)
+        {
+            throw NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để nhập khóa.");
+        }
+        if (turn.KeyFailedCount >= MaxKeyFailures)
+        {
+            throw new AppException(AppErrorType.Locked, ErrorCode.HandoverKeyLocked,
+                "Đã nhập sai khóa quá nhiều lần. Hãy liên hệ Người thực hiện hoặc quản trị viên.");
+        }
+
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        if (ExecutorKeyRules.Matches(turn.VaultId, shard.Version, key ?? string.Empty, shard.ShardHash))
+        {
+            turn.KeyVerifiedAt = now;
+            turn.UpdatedAt = now;
+            await unitOfWork.SaveChangesAsync(ct);
+            return await BuildTurnResponseAsync(turn, ct);
+        }
+
+        // Lưu bộ đếm rồi mới báo lỗi, nên lần thử sai không bị mất khi request kết thúc bằng exception.
+        turn.KeyFailedCount = turn.KeyFailedCount + 1;
+        turn.UpdatedAt = now;
+        await unitOfWork.SaveChangesAsync(ct);
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["attemptsRemaining"] = Math.Max(0, MaxKeyFailures - turn.KeyFailedCount);
+        throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverKeyInvalid, "Khóa mở gói chưa đúng.", extensions);
     }
 
     private static HandoverItemResponse ToItemResponse(HandoverSnapshotItem item)
