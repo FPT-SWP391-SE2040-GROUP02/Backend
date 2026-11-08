@@ -91,7 +91,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 VaultId = vault.Id, Status = ExecutorStatus.Invited,
                 InviteeEmail = email, InvitationTokenHash = token.Hash,
                 IsBeneficiary = request.BeneficiaryId.HasValue, BeneficiaryId = request.BeneficiaryId,
-                InvitedAt = now, ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7)),
+                InvitedAt = now, ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7),
                 ReplacesExecutorId = replaces,
             };
             invitations.Add(item);
@@ -120,7 +120,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             item.Status = ExecutorStatus.Invited;
             item.InvitationTokenHash = token.Hash;
             item.InvitedAt = now;
-            item.ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7));
+            item.ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7);
             item.InvitationSentAt = null;
             item.AcceptedAt = null;
             item.AcceptedScopeVersion = null;

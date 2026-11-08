@@ -427,6 +427,8 @@ public sealed class AdminService : IAdminService
             Email = email,
             FullName = fullName,
             Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            PracticeCertificateNumber = TrimOrNull(request.PracticeCertificateNumber, targetRole),
+            LawyerCardNumber = TrimOrNull(request.LawyerCardNumber, targetRole),
             PasswordHash = passwordHasher.Hash(request.Password),
             Role = targetRole,
             Status = UserStatus.Active,
@@ -447,6 +449,16 @@ public sealed class AdminService : IAdminService
         await unitOfWork.SaveChangesAsync(ct);
 
         return OperationsMapper.ToAdminUser(newUser);
+    }
+
+    /// <summary>Số chứng chỉ và thẻ luật sư chỉ có ý nghĩa với Người xét duyệt; vai trò khác bỏ qua. Trống = không có.</summary>
+    private static string? TrimOrNull(string? value, UserRole role)
+    {
+        if (role != UserRole.Verifier || string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+        return value.Trim();
     }
 
     private static string RequireReason(string? reason)

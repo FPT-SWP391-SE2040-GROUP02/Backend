@@ -21,6 +21,11 @@ public static class CheckInRules
         {
             return false;
         }
+        if (TimeUnits.IsDemo)
+        {
+            // Demo: "một ngày" chỉ còn 1 giây nên điểm danh được lại gần như ngay.
+            return now - lastCheckInAt.Value < TimeUnits.Days(1);
+        }
         DateTime lastDate = lastCheckInAt.Value.ToOffset(VietnamOffset).Date;
         DateTime today = now.ToOffset(VietnamOffset).Date;
         // Giữ khóa cả khi dữ liệu nằm ở tương lai (ví dụ kho vừa được tua giờ demo).
@@ -36,6 +41,10 @@ public static class CheckInRules
         if (openPeriod == null || !openPeriod.StartedByExecutor)
         {
             return false;
+        }
+        if (TimeUnits.IsDemo)
+        {
+            return now - openPeriod.StartedAt < TimeUnits.Days(1);
         }
         DateTime startedDate = openPeriod.StartedAt.ToOffset(VietnamOffset).Date;
         DateTime today = now.ToOffset(VietnamOffset).Date;

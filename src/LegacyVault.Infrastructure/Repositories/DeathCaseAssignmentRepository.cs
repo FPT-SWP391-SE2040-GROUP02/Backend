@@ -25,7 +25,7 @@ public sealed class DeathCaseAssignmentRepository : IDeathCaseAssignmentReposito
     public Task<List<Guid>> FindCaseIdsForJobAsync(DateTimeOffset now, int maxCount, CancellationToken ct)
     {
         // D3: DueAt - 12 giờ <= now tương đương DueAt <= now + 12 giờ (tính một lần ở đây, không tính trên cột).
-        DateTimeOffset remindFrom = now.AddHours(DeathCaseAssignmentRules.ReminderBeforeHours);
+        DateTimeOffset remindFrom = now + TimeUnits.Hours(DeathCaseAssignmentRules.ReminderBeforeHours);
 
         return context.Set<DeathCase>()
             .AsNoTracking()

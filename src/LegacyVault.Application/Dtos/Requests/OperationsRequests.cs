@@ -102,5 +102,13 @@ public class CreateAdminUserRequest
 
     [MaxLength(32)]
     public string? Phone { get; set; }
+
+    /// <summary>Số chứng chỉ hành nghề luật sư (chỉ dùng cho VERIFIER).</summary>
+    [MaxLength(64)]
+    public string? PracticeCertificateNumber { get; set; }
+
+    /// <summary>Số thẻ luật sư (chỉ dùng cho VERIFIER).</summary>
+    [MaxLength(64)]
+    public string? LawyerCardNumber { get; set; }
 }
 

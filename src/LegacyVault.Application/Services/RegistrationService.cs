@@ -174,6 +174,8 @@ public sealed class RegistrationService : IRegistrationService
             Email = user.Email,
             FullName = user.FullName,
             Phone = user.Phone,
+            PracticeCertificateNumber = user.PracticeCertificateNumber,
+            LawyerCardNumber = user.LawyerCardNumber,
             Role = user.Role.ToString().ToUpperInvariant(),
             Status = user.Status.ToString().ToUpperInvariant(),
             EmailVerified = user.EmailVerifiedAt != null,

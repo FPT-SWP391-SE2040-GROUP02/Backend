@@ -8,6 +8,12 @@ public class UserResponse
     public string FullName { get; set; } = string.Empty;
     public string? Phone { get; set; }
 
+    /// <summary>Số chứng chỉ hành nghề luật sư; chỉ có ở tài khoản VERIFIER do Admin nhập.</summary>
+    public string? PracticeCertificateNumber { get; set; }
+
+    /// <summary>Số thẻ luật sư; chỉ có ở tài khoản VERIFIER do Admin nhập.</summary>
+    public string? LawyerCardNumber { get; set; }
+
     /// <summary>"USER", "VERIFIER", "ADMIN".</summary>
     public string Role { get; set; } = string.Empty;
 

@@ -16,7 +16,7 @@ namespace LegacyVault.Application.Services;
 /// SEC-07: không ghi CCCD, họ tên, ngày sinh, email, số điện thoại vào log hay message lỗi.
 /// SETUP-02: không gửi thông báo, không tạo tài khoản cho người nhận.
 /// </remarks>
-public sealed partial class BeneficiaryService : IBeneficiaryService
+public sealed class BeneficiaryService : IBeneficiaryService
 {
     private const string DefaultSortBy = "createdAt";
     private const int MaxSearchDigits = 4;
@@ -385,7 +385,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
     /// <summary>
     /// Chuẩn hóa email/số điện thoại ngay trên data. Email là bắt buộc. "" hoặc chỉ khoảng trắng = không có.
-    /// Email: trim, chữ thường, phải đúng định dạng email. Phone: nếu có thì bỏ khoảng trắng, dấu chấm, dấu gạch rồi khớp ^\+?[0-9]{9,15}$.
+    /// Email: trim, chữ thường, phải đúng định dạng email. Phone: nếu có thì chỉ bỏ khoảng trắng, dấu chấm, dấu gạch, không kiểm định dạng (đồ án, demo dễ nhập).
     /// </summary>
     private static void NormalizeContact(BeneficiaryPersonalData data)
     {
@@ -414,10 +414,6 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
                 }
             }
             phone = builder.ToString();
-            if (!PhonePattern().IsMatch(phone))
-            {
-                throw ValidationErrors.For("phone", "Số điện thoại không hợp lệ (9 đến 15 chữ số).");
-            }
         }
 
         data.Email = email;
@@ -540,9 +536,6 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiaryIdentityConflict,
             "Số CCCD này đã tồn tại trong danh sách người nhận của kho (với thông tin khác). Vui lòng kiểm tra lại.", extensions);
     }
-
-    [GeneratedRegex("^\\+?[0-9]{9,15}$")]
-    private static partial Regex PhonePattern();
 
     /// <summary>Hồ sơ cùng CCCD tìm được và dữ liệu đã giải mã của nó.</summary>
     private sealed class MatchedBeneficiary

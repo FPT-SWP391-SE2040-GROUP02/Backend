@@ -498,6 +498,7 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Security.MaxPinAttempts", Value = "5", DataType = "NUMBER", Category = "Security", Description = "Số lần nhập sai mã PIN bảo vệ tối đa trước khi khóa" },
             new() { Key = "Security.PinLockoutMinutes", Value = "15", DataType = "NUMBER", Category = "Security", Description = "Thời gian tạm khóa mã PIN bảo vệ khi vượt số lần thử (phút)" },
             new() { Key = "Features.MaintenanceMode", Value = "false", DataType = "BOOLEAN", Category = "Features", Description = "Bật chế độ bảo trì toàn hệ thống" },
+            new() { Key = "Time.DemoSeconds", Value = "false", DataType = "BOOLEAN", Category = "Features", Description = "Chế độ demo: mọi mốc ngày, giờ, phút của nghiệp vụ (điểm danh, ân hạn, hạn xét duyệt, hạn bổ sung, cửa sổ bàn giao...) tính bằng giây" },
         };
 
         var existingKeys = await db.SystemSettings.Select(s => s.Key).ToHashSetAsync(ct);

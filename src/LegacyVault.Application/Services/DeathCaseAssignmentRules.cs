@@ -45,10 +45,10 @@ public static class DeathCaseAssignmentRules
     /// </summary>
     public static DateTimeOffset ComputeDueAt(DateTimeOffset start, DateTimeOffset? objectionEndsAt)
     {
-        DateTimeOffset dueAt = start.AddHours(DeathCaseRules.ReviewDueHours);
+        DateTimeOffset dueAt = start + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
         if (objectionEndsAt != null)
         {
-            DateTimeOffset afterObjection = objectionEndsAt.Value.AddHours(DeathCaseRules.ReviewDueHours);
+            DateTimeOffset afterObjection = objectionEndsAt.Value + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
             if (afterObjection > dueAt)
             {
                 dueAt = afterObjection;
@@ -63,7 +63,7 @@ public static class DeathCaseAssignmentRules
     /// </summary>
     public static DateTimeOffset ExtendForObjection(DateTimeOffset dueAt, DateTimeOffset objectionEndsAt)
     {
-        DateTimeOffset afterObjection = objectionEndsAt.AddHours(DeathCaseRules.ReviewDueHours);
+        DateTimeOffset afterObjection = objectionEndsAt + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
         if (afterObjection > dueAt)
         {
             return afterObjection;
@@ -84,7 +84,7 @@ public static class DeathCaseAssignmentRules
     /// </summary>
     public static bool NeedsReminder(DeathCaseAssignment assignment, DateTimeOffset now)
     {
-        DateTimeOffset remindFrom = assignment.DueAt.AddHours(-ReminderBeforeHours);
+        DateTimeOffset remindFrom = assignment.DueAt - TimeUnits.Hours(ReminderBeforeHours);
         if (now < remindFrom)
         {
             return false;

@@ -11,13 +11,13 @@ public static class CheckInTimeline
     /// <summary>Hạn điểm danh = lúc bắt đầu kỳ + chu kỳ.</summary>
     public static DateTimeOffset ComputeDueAt(DateTimeOffset startedAt, int cycleDays)
     {
-        return startedAt.AddDays(cycleDays);
+        return startedAt + TimeUnits.Days(cycleDays);
     }
 
     /// <summary>Hết thời gian chờ = hạn điểm danh + thời gian chờ.</summary>
     public static DateTimeOffset ComputeGraceEndsAt(DateTimeOffset dueAt, int graceDays)
     {
-        return dueAt.AddDays(graceDays);
+        return dueAt + TimeUnits.Days(graceDays);
     }
 
     /// <summary>
@@ -43,13 +43,13 @@ public static class CheckInTimeline
         switch (kind)
         {
             case CheckInReminderKind.DueInSevenDays:
-                return dueAt.AddDays(-7);
+                return dueAt - TimeUnits.Days(7);
             case CheckInReminderKind.DueInOneDay:
-                return dueAt.AddDays(-1);
+                return dueAt - TimeUnits.Days(1);
             case CheckInReminderKind.GraceStarted:
                 return dueAt;
             case CheckInReminderKind.GraceTwoDaysLeft:
-                return graceEndsAt.AddDays(-2);
+                return graceEndsAt - TimeUnits.Days(2);
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Mốc nhắc không hợp lệ.");
         }

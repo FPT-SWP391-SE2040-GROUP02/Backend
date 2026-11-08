@@ -29,4 +29,23 @@ public sealed class RuntimeSettingsTests
             RuntimeSettings.Replace(new Dictionary<string, string>());
         }
     }
+
+    [Fact]
+    public void DemoMode_TurnsDaysHoursAndMinutesIntoSeconds()
+    {
+        RuntimeSettings.Replace(new Dictionary<string, string> { [TimeUnits.DemoSettingKey] = "true", ["Test.Only.Good"] = "48" });
+        try
+        {
+            Assert.Equal(TimeSpan.FromSeconds(3), TimeUnits.Days(3));
+            Assert.Equal(TimeSpan.FromSeconds(48), RuntimeSettings.Hours("Test.Only.Good", 72));
+            Assert.Equal(TimeSpan.FromSeconds(30), CheckInTimeline.ComputeDueAt(DateTimeOffset.UnixEpoch, 30) - DateTimeOffset.UnixEpoch);
+            Assert.True(CheckInRules.HasCheckedInToday(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            Assert.False(CheckInRules.HasCheckedInToday(DateTimeOffset.UtcNow.AddSeconds(-5), DateTimeOffset.UtcNow));
+        }
+        finally
+        {
+            RuntimeSettings.Replace(new Dictionary<string, string>());
+        }
+        Assert.Equal(TimeSpan.FromDays(3), TimeUnits.Days(3));
+    }
 }

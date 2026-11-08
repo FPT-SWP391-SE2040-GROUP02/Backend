@@ -26,6 +26,12 @@ public class User
 
     public string? Phone { get; set; }
 
+    /// <summary>Số chứng chỉ hành nghề luật sư của Người xét duyệt, do Admin nhập khi tạo tài khoản; người dùng chỉ xem.</summary>
+    public string? PracticeCertificateNumber { get; set; }
+
+    /// <summary>Số thẻ luật sư của Người xét duyệt, do Admin nhập khi tạo tài khoản; người dùng chỉ xem.</summary>
+    public string? LawyerCardNumber { get; set; }
+
     public UserRole Role { get; set; }
 
     public UserStatus Status { get; set; }

@@ -26,6 +26,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Phone)
             .HasMaxLength(32);
 
+        builder.Property(u => u.PracticeCertificateNumber)
+            .HasMaxLength(64);
+
+        builder.Property(u => u.LawyerCardNumber)
+            .HasMaxLength(64);
+
         builder.Property(u => u.PasswordHash)
             .HasMaxLength(256);
 

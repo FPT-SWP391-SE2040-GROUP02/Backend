@@ -52,16 +52,16 @@ public static class RuntimeSettings
 
     public static TimeSpan Days(string key, int fallbackDays)
     {
-        return TimeSpan.FromDays(Int(key, fallbackDays));
+        return TimeUnits.Days(Int(key, fallbackDays));
     }
 
     public static TimeSpan Hours(string key, int fallbackHours)
     {
-        return TimeSpan.FromHours(Int(key, fallbackHours));
+        return TimeUnits.Hours(Int(key, fallbackHours));
     }
 
     public static TimeSpan Minutes(string key, int fallbackMinutes)
     {
-        return TimeSpan.FromMinutes(Int(key, fallbackMinutes));
+        return TimeUnits.Minutes(Int(key, fallbackMinutes));
     }
 }
