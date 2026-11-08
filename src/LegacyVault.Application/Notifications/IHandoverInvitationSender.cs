@@ -24,6 +24,14 @@ public sealed class HandoverInvitation
 
     public string ExecutorEmail { get; set; } = string.Empty;
 
+    /// <summary>Mã hồ sơ chứng tử (8 ký tự), để người nhận kiểm thư trên trang lời mời.</summary>
+    public string CaseCode { get; set; } = string.Empty;
+
+    /// <summary>Họ tên và số thẻ luật sư của Người xét duyệt đã duyệt hồ sơ; rỗng khi chưa có.</summary>
+    public string VerifierFullName { get; set; } = string.Empty;
+
+    public string? VerifierLawyerCardNumber { get; set; }
+
     /// <summary>Lời nhắn Chủ kho để lại cho người nhận (không bắt buộc). Null thì thư bỏ khung này.</summary>
     public string? OwnerMessage { get; set; }
 
@@ -38,6 +46,9 @@ public sealed class HandoverInvitation
         ExecutorFullName = contacts.ExecutorFullName;
         ExecutorPhone = contacts.ExecutorPhone;
         ExecutorEmail = contacts.ExecutorEmail;
+        CaseCode = contacts.CaseCode;
+        VerifierFullName = contacts.VerifierFullName;
+        VerifierLawyerCardNumber = contacts.VerifierLawyerCardNumber;
     }
 }
 
@@ -51,6 +62,12 @@ public sealed class HandoverContactInfo
     public string? ExecutorPhone { get; set; }
 
     public string ExecutorEmail { get; set; } = string.Empty;
+
+    public string CaseCode { get; set; } = string.Empty;
+
+    public string VerifierFullName { get; set; } = string.Empty;
+
+    public string? VerifierLawyerCardNumber { get; set; }
 }
 
 /// <summary>Đọc họ tên Chủ kho và liên hệ Người thực thi của kho. Chỉ đọc; không có nội dung tài sản.</summary>

@@ -489,6 +489,13 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Plans.Addon.MaxTotalSlots", Value = "50", DataType = "NUMBER", Category = "Plans", Description = "Tổng số người nhận tối đa của một tài khoản (suất kèm gói + suất mua thêm)" },
             new() { Key = "Plans.Addon.OrderTimeoutMinutes", Value = "15", DataType = "NUMBER", Category = "Plans", Description = "Thời hạn đơn hàng chờ thanh toán SePay (phút)" },
 
+            // Thông tin công ty hiện trong mọi thư gửi người nhận (cảnh báo lừa đảo kèm số liên lạc để họ tự xác minh)
+            new() { Key = "Company.Name", Value = "LegacyVault", DataType = "STRING", Category = "Company", Description = "Tên công ty hiện trong thư gửi người nhận" },
+            new() { Key = "Company.Website", Value = "legacyvault.vn", DataType = "STRING", Category = "Company", Description = "Website công ty hiện trong thư gửi người nhận" },
+            new() { Key = "Company.Email", Value = "ho-tro@legacyvault.vn", DataType = "STRING", Category = "Company", Description = "Email liên hệ công ty hiện trong thư gửi người nhận" },
+            new() { Key = "Company.Phone", Value = "1900 0000", DataType = "STRING", Category = "Company", Description = "Số điện thoại công ty để người nhận gọi xác minh thư" },
+            new() { Key = "Company.Address", Value = "", DataType = "STRING", Category = "Company", Description = "Địa chỉ công ty hiện trong thư gửi người nhận (để trống thì không hiện)" },
+
             // Security & Features
             new() { Key = "Security.MaxPinAttempts", Value = "5", DataType = "NUMBER", Category = "Security", Description = "Số lần nhập sai mã PIN bảo vệ tối đa trước khi khóa" },
             new() { Key = "Security.PinLockoutMinutes", Value = "15", DataType = "NUMBER", Category = "Security", Description = "Thời gian tạm khóa mã PIN bảo vệ khi vượt số lần thử (phút)" },

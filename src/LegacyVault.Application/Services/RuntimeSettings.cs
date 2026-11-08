@@ -39,6 +39,17 @@ public static class RuntimeSettings
         return fallback;
     }
 
+    /// <summary>Chữ Admin đặt (đã cắt khoảng trắng); thiếu, tắt hoặc rỗng → fallback.</summary>
+    public static string Text(string key, string fallback)
+    {
+        string? text;
+        if (values.TryGetValue(key, out text) && !string.IsNullOrWhiteSpace(text))
+        {
+            return text.Trim();
+        }
+        return fallback;
+    }
+
     public static bool Bool(string key, bool fallback)
     {
         string? text;
