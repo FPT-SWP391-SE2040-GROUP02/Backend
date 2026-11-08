@@ -110,4 +110,34 @@ public sealed class AdminIncidentListFilterTests : IAsyncLifetime
         Assert.DoesNotContain("kho C lỗi", spoofed);
         Assert.Equal(new List<string> { "kho B lỗi" }, searched);
     }
+
+    [SqlFact]
+    public async Task List_ReturnsAssigneeNameAndRoleOrNullWhenUnassigned()
+    {
+        // Chuẩn bị: một sự cố giao cho Người xét duyệt có tên, một sự cố chưa giao
+        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User verifier = await DeathCaseTestData.AddUserAsync(factory, UserRole.Verifier, UserStatus.Active);
+        await AddIncidentAsync("giao cho người xét duyệt", verifier.Id);
+        await AddIncidentAsync("chưa giao", null);
+        HttpClient client = factory.CreateClient();
+        ApiTestHelpers.AuthorizeAs(client, factory.Services, admin);
+
+        // Hành động
+        JsonElement page = await client.GetFromJsonAsync<JsonElement>(ListUrl);
+
+        // Kiểm tra: có họ tên và vai trò để hiện thẳng trên danh sách, chưa giao thì null
+        foreach (JsonElement item in page.GetProperty("items").EnumerateArray())
+        {
+            if (item.GetProperty("summary").GetString() == "giao cho người xét duyệt")
+            {
+                Assert.Equal(verifier.FullName, item.GetProperty("assigneeFullName").GetString());
+                Assert.Equal("VERIFIER", item.GetProperty("assigneeRole").GetString());
+            }
+            else
+            {
+                Assert.Equal(JsonValueKind.Null, item.GetProperty("assigneeFullName").ValueKind);
+                Assert.Equal(JsonValueKind.Null, item.GetProperty("assigneeRole").ValueKind);
+            }
+        }
+    }
 }

@@ -257,6 +257,7 @@ public sealed class IncidentService : IIncidentService
         {
             page.Items.Add(OperationsMapper.ToSummary(incident, now));
         }
+        await FillAssigneesAsync(page.Items, ct);
         page.TotalCount = total;
         page.PageIndex = pageIndex;
         page.PageSize = pageSize;
@@ -270,7 +271,33 @@ public sealed class IncidentService : IIncidentService
     {
         await RequireAdminAsync(ct);
         Incident incident = await LoadAsync(incidentId, ct);
-        return OperationsMapper.ToDetail(incident, timeProvider.GetUtcNow());
+        IncidentDetailResponse detail = OperationsMapper.ToDetail(incident, timeProvider.GetUtcNow());
+        await FillAssigneesAsync(new List<IncidentSummaryResponse> { detail }, ct);
+        return detail;
+    }
+
+    /// <summary>Điền họ tên và vai trò người phụ trách; mỗi tài khoản chỉ tra một lần dù có nhiều sự cố.</summary>
+    private async Task FillAssigneesAsync(List<IncidentSummaryResponse> items, CancellationToken ct)
+    {
+        Dictionary<Guid, User?> found = new Dictionary<Guid, User?>();
+        foreach (IncidentSummaryResponse item in items)
+        {
+            if (item.AssigneeUserId == null)
+            {
+                continue;
+            }
+            Guid id = item.AssigneeUserId.Value;
+            if (!found.ContainsKey(id))
+            {
+                found[id] = await users.FindByIdAsync(id, ct);
+            }
+            User? user = found[id];
+            if (user != null)
+            {
+                item.AssigneeFullName = user.FullName;
+                item.AssigneeRole = user.Role.ToApiString();
+            }
+        }
     }
 
     public async Task<IncidentDetailResponse> AssignAsync(

@@ -21,6 +21,12 @@ public class IncidentSummaryResponse
     /// <summary>null = chưa có ai nhận ("bị kẹt"), luôn kèm nextReviewAt.</summary>
     public Guid? AssigneeUserId { get; set; }
 
+    /// <summary>Họ tên người phụ trách để hiện thẳng trên danh sách; null khi chưa có người nhận hoặc tài khoản không còn.</summary>
+    public string? AssigneeFullName { get; set; }
+
+    /// <summary>Vai trò tài khoản người phụ trách (USER | VERIFIER | ADMIN); null khi chưa có người nhận hoặc tài khoản không còn.</summary>
+    public string? AssigneeRole { get; set; }
+
     /// <summary>ADMIN | EXECUTOR | VERIFIER: ai chịu trách nhiệm xử lý loại sự cố này; Admin chỉ theo dõi khi không phải ADMIN.</summary>
     public string ResponsibleRole { get; set; } = string.Empty;
 

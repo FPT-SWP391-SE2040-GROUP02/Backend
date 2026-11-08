@@ -862,7 +862,7 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 | PUT | `/v1/admin/users/{userId}/role` | `{ role: USER/VERIFIER/ADMIN, reason }` | 200 | 400 (`role` = `EXECUTOR` bị từ chối), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CANNOT_CHANGE_SELF`, `LAST_ADMIN`) |
 | PUT | `/v1/admin/users/{userId}/status` | `{ status: ACTIVE/LOCKED/DISABLED, reason }` | 200 | như trên |
 | POST | `/v1/admin/death-cases/{caseId}/reassign-verifier` | `{ verifierUserId, reason }` | 204 (gọi lặp cùng người: 204) | 400 (không phải Verifier hợp lệ / là chủ kho, Executor, người gửi), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CASE_NOT_PENDING`) / `EDIT_CONFLICT`. Nhận cả hồ sơ `SUSPENDED` có lời báo còn sống đang mở: lời báo và sự cố `OWNER_ALIVE` chuyển theo Verifier mới, hạn kết luận tính lại |
-| GET | `/v1/admin/incidents?status=&type=&assigneeUserId=&overdueOnly=&search=&mine=` (mỗi sự cố có `responsibleRole`: ADMIN, EXECUTOR hoặc VERIFIER) | — | 200 `PaginatedList<IncidentSummaryResponse>` | 400 |
+| GET | `/v1/admin/incidents?status=&type=&assigneeUserId=&overdueOnly=&search=&mine=` (mỗi sự cố có `responsibleRole`: ADMIN, EXECUTOR hoặc VERIFIER; có `assigneeFullName` và `assigneeRole` (USER, VERIFIER, ADMIN) của người phụ trách để hiện thẳng trên danh sách, null khi chưa giao hoặc tài khoản không còn) | — | 200 `PaginatedList<IncidentSummaryResponse>` | 400 |
 | GET | `/v1/admin/incidents/{id}` | — | 200 `IncidentDetailResponse` (kèm lịch sử `events`) | 404 `INCIDENT_NOT_FOUND` |
 | POST | `/v1/admin/incidents/{id}/assign` | `{ assigneeUserId, reason, etag }` | 200 | 400 (không phải Admin/Verifier hoạt động, hoặc là chủ kho/Executor của kho), 409 `EDIT_CONFLICT` / `INCIDENT_NOT_OPEN` |
 | POST | `/v1/admin/incidents/{id}/notes` | `{ note }` | 200 | 404 |
