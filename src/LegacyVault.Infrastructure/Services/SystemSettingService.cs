@@ -439,7 +439,6 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Handover.DecisionWindowDays", Value = "7", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn người nhận quyết định nhận hoặc từ chối (ngày)" },
             new() { Key = "Handover.GrantWindowDays", Value = "30", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn được cấp quyền xem/tải tài sản sau khi nhận (ngày)" },
             new() { Key = "Handover.RetentionWindowDays", Value = "30", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn lưu trữ dữ liệu trước khi xóa hoàn toàn (ngày)" },
-            new() { Key = "Handover.DownloadCodeRequired", Value = "false", DataType = "BOOLEAN", Category = "Handover", Description = "Bắt buộc mã tải gửi qua email mỗi lần người nhận tải tài sản (bật/tắt)" },
             new() { Key = "Handover.ResendCooldownMinutes", Value = "15", DataType = "NUMBER", Category = "Handover", Description = "Khoảng cách tối thiểu giữa hai lần gửi lại lời mời (phút)" },
 
             // Người thực thi (Executor)
