@@ -32,4 +32,30 @@ public sealed class QuestPdfDeclinePaperRendererTests
         Assert.True(image.Length > 500);
         Assert.Equal("PNG", Encoding.ASCII.GetString(image, 1, 3));
     }
+
+    [Fact]
+    public void Render_Acceptance_ProducesPngBytes()
+    {
+        DeclinePaperData data = new DeclinePaperData
+        {
+            TurnCode = "AB12CD34",
+            ContainerName = "Gói gia đình",
+            OwnerFullName = "Nguyễn Văn A",
+            DeclinerFullName = "Trần Minh Anh",
+            CitizenIdLast4 = "1234",
+            SubmittedAt = new DateTimeOffset(2026, 11, 9, 3, 0, 0, TimeSpan.Zero),
+            NameMatches = true,
+            CitizenIdMatches = true,
+            DateOfBirthMatches = true,
+            ReviewerFullName = "Luật sư Dũng",
+            ReviewerLawyerCardNumber = "LS-12345",
+            ReviewedAt = new DateTimeOffset(2026, 11, 9, 4, 0, 0, TimeSpan.Zero),
+            IsAcceptance = true,
+        };
+
+        byte[] image = new QuestPdfDeclinePaperRenderer().Render(data);
+
+        Assert.True(image.Length > 500);
+        Assert.Equal("PNG", Encoding.ASCII.GetString(image, 1, 3));
+    }
 }

@@ -240,7 +240,7 @@ public sealed class RetentionJob : IRetentionJob
         return true;
     }
 
-    /// <summary>Lượt bị dọn thì ảnh căn cước người nhận đã nộp cũng bị xóa; để trống khóa để không xóa lại.</summary>
+    /// <summary>Lượt bị dọn thì ảnh căn cước người nhận đã nộp cũng bị xóa (giữ lại văn bản từ chối và biên bản đồng ý); để trống khóa để không xóa lại.</summary>
     private async Task DeleteSubmissionImagesAsync(List<HandoverTurn> due, CancellationToken ct)
     {
         if (submissions == null || due.Count == 0)
@@ -258,9 +258,7 @@ public sealed class RetentionJob : IRetentionJob
         {
             await IdentityImageStorage.TryDeleteAsync(contentStore, submission.FrontImageStorageKey);
             await IdentityImageStorage.TryDeleteAsync(contentStore, submission.BackImageStorageKey);
-            await IdentityImageStorage.TryDeleteAsync(contentStore, submission.PaperStorageKey);
-            submission.PaperStorageKey = string.Empty;
-            submission.PaperWrappedDataKey = new byte[submission.PaperWrappedDataKey.Length];
+            // Văn bản từ chối và biên bản đồng ý chỉ có họ tên, 4 số cuối căn cước: giữ lại làm bằng chứng, không xóa.
             submission.FrontImageStorageKey = string.Empty;
             submission.BackImageStorageKey = string.Empty;
             submission.FrontImageWrappedDataKey = new byte[submission.FrontImageWrappedDataKey.Length];

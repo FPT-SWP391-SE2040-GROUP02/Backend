@@ -15,6 +15,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
     private readonly IHandoverRepository handover;
     private readonly IAssetContentStore contentStore;
     private readonly IHoldReader holdReader;
+    private readonly IExecutorKeyShardRepository? keyShards;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -36,13 +37,15 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         IAssetContentStore contentStore,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IExecutorKeyShardRepository? keyShards = null)
     {
         this.currentUser = currentUser;
         this.vaults = vaults;
         this.handover = handover;
         this.contentStore = contentStore;
         this.holdReader = holdReader;
+        this.keyShards = keyShards;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -72,6 +75,12 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         {
             // Hold đang hiệu lực chặn tải (SRS §6.4), kể cả hold Admin đặt không đổi trạng thái grant.
             deniedReason = "HOLD_ACTIVE";
+        }
+        if (deniedReason == null && turn.KeyVerifiedAt == null && keyShards != null
+            && await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null)
+        {
+            // Người nhận phải nhập khóa mở gói do Người thực thi đưa trước khi tải.
+            deniedReason = "KEY_REQUIRED";
         }
         if (deniedReason != null)
         {

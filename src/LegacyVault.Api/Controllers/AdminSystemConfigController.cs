@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Cấu hình dịch vụ ngoài (Gemini...) do Admin sửa trên web. Quyền kiểm từ DB trong service: không phải Admin đang hoạt
+/// Cấu hình dịch vụ ngoài (eKYC, SMTP, SePay, R2) do Admin sửa trên web. Quyền kiểm từ DB trong service: không phải Admin đang hoạt
 /// động thì 404 như khu vực không tồn tại (SEC-04). Response không bao giờ chứa khóa bí mật.
 /// </summary>
 [ApiController]

@@ -69,15 +69,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .FirstOrDefaultAsync(ct);
     }
 
-    public Task<DeathCaseObjection?> FindLatestObjectionAsync(Guid vaultId, CancellationToken ct)
-    {
-        return context.Set<DeathCaseObjection>()
-            .Where(o => o.VaultId == vaultId)
-            .OrderByDescending(o => o.FirstReportedAt)
-            .ThenBy(o => o.Id)
-            .FirstOrDefaultAsync(ct);
-    }
-
     public async Task<AuditAction?> FindLatestClockActionAsync(Guid vaultId, CancellationToken ct)
     {
         AuditLog? log = await context.Set<AuditLog>()
@@ -171,13 +162,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .ToListAsync(ct);
         AddKeys(keys, fileKeys);
 
-        List<string?> selfieKeys = await context.Set<DeathCaseObjection>()
-            .AsNoTracking()
-            .Where(o => o.VaultId == vaultId)
-            .Select(o => o.SelfieImageStorageKey)
-            .ToListAsync(ct);
-        AddKeys(keys, selfieKeys);
-
         var turnIds = context.Set<HandoverTurn>().Where(t => t.VaultId == vaultId).Select(t => t.Id);
         List<string?> claimImageKeys = await context.Set<EkycVerification>()
             .AsNoTracking()
@@ -212,7 +196,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         await context.Set<DeathCaseFile>().Where(f => versionIds.Contains(f.VersionId)).ExecuteDeleteAsync(ct);
         await context.Set<DeathCaseVersion>().Where(v => caseIds.Contains(v.CaseId)).ExecuteDeleteAsync(ct);
         await context.Set<DeathCaseNotice>().Where(n => caseIds.Contains(n.CaseId)).ExecuteDeleteAsync(ct);
-        await context.Set<DeathCaseObjection>().Where(o => o.VaultId == vaultId).ExecuteDeleteAsync(ct);
         // Hồ sơ trỏ vào hồ sơ trước của cùng kho: gỡ liên kết rồi mới xóa được.
         await context.Set<DeathCase>()
             .Where(c => c.VaultId == vaultId && c.PreviousCaseId != null)

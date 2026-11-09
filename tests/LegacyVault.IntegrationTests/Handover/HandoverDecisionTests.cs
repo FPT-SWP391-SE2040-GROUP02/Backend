@@ -189,6 +189,30 @@ public sealed class HandoverDecisionTests
     }
 
     [Fact]
+    public async Task Decline_QueuesTheTurnDataForImmediateDeletion()
+    {
+        HandoverTurn turn = AddReadyTurn("t1");
+
+        await service.DeclineAsync(turn.Id, CancellationToken.None);
+
+        Assert.Equal(RetentionStatus.RetentionActive, turn.RetentionStatus);
+        Assert.Equal(Now, turn.RetentionDeadline);
+        // Job lưu giữ coi lượt này đã tới hạn dọn ngay ở vòng quét kế tiếp.
+        Assert.True(RetentionRules.Advance(turn, null, Now));
+    }
+
+    [Fact]
+    public async Task Accept_DoesNotQueueDeletion()
+    {
+        HandoverTurn turn = AddReadyTurn("t1");
+
+        await service.AcceptAsync(turn.Id, CancellationToken.None);
+
+        Assert.Equal(RetentionStatus.NotStarted, turn.RetentionStatus);
+        Assert.Null(turn.RetentionDeadline);
+    }
+
+    [Fact]
     public async Task Decline_NotReady_ThrowsNotAllowed()
     {
         HandoverTurn turn = AddReadyTurn("t1");

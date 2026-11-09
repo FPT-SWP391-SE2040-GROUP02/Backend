@@ -181,10 +181,7 @@ public sealed class HandoverService : IHandoverService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverPlan plan = await EnsureDecidableAsync(turn, now, ct);
-        if (await IsKeyRequiredAsync(turn, ct) && turn.KeyVerifiedAt == null)
-        {
-            throw NotAllowed("KEY_REQUIRED", "Cần nhập khóa mở gói do Người thực hiện đưa trước khi đồng ý nhận.");
-        }
+        // Khóa mở gói chỉ cần khi tải (HandoverDownloadService), không chặn việc đồng ý nhận.
         plan.UpdatedAt = now;
 
         HandoverGrant grant = new HandoverGrant();
@@ -236,6 +233,14 @@ public sealed class HandoverService : IHandoverService
         turn.DecidedAt = now;
         turn.EndedAt = now;
         turn.UpdatedAt = now;
+
+        // Người nhận từ chối thì nội dung của lượt này bị xóa luôn thay vì chờ hết thời hạn lưu: hạn xóa đặt đúng lúc này,
+        // job lưu giữ (RetentionJob) xóa ở vòng quét kế tiếp. Tài sản còn lượt khác tham chiếu thì giữ lại (RETENTION-02).
+        // Chỉ còn trạng thái và thời điểm quyết định của lượt.
+        turn.RetentionStatus = RetentionStatus.RetentionActive;
+        turn.RetentionStartedAt = now;
+        turn.RetentionDeadline = now;
+        turn.RetentionRemainingSeconds = null;
 
         await CloseDecidedPlanAsync(plan, now, ct);
 
@@ -461,14 +466,14 @@ public sealed class HandoverService : IHandoverService
         {
             return await BuildTurnResponseAsync(turn, ct);
         }
-        if (turn.Status != HandoverTurnStatus.ReadyToAccept)
+        if (turn.Status != HandoverTurnStatus.ReadyToAccept && turn.Status != HandoverTurnStatus.HandoverCommitted)
         {
             throw NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để nhập khóa.");
         }
         if (turn.KeyFailedCount >= MaxKeyFailures)
         {
             throw new AppException(AppErrorType.Locked, ErrorCode.HandoverKeyLocked,
-                "Đã nhập sai khóa quá nhiều lần. Hãy liên hệ Người thực hiện hoặc quản trị viên.");
+                "Đã nhập sai khóa quá nhiều lần. Hãy liên hệ Người thực thi hoặc quản trị viên.");
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();

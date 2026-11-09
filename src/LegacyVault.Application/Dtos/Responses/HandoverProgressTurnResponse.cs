@@ -42,6 +42,9 @@ public class HandoverProgressTurnResponse
 
     public DateTimeOffset ResponseDeadline { get; set; }
 
+    /// <summary>Lúc thư mời được gửi; null khi Người thực thi chưa gửi lần nào.</summary>
+    public DateTimeOffset? InvitationSentAt { get; set; }
+
     /// <summary>Lúc người nhận nhận lượt; null khi chưa ai nhận.</summary>
     public DateTimeOffset? ClaimedAt { get; set; }
 

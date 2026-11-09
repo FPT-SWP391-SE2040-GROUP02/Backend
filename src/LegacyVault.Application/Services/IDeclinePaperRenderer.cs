@@ -1,8 +1,11 @@
 namespace LegacyVault.Application.Services;
 
-/// <summary>Dữ liệu in lên văn bản từ chối; chỉ gồm thông tin hệ thống đã giữ, không có số căn cước đầy đủ.</summary>
+/// <summary>Dữ liệu in lên văn bản từ chối hoặc biên bản đồng ý nhận (IsAcceptance); chỉ gồm thông tin hệ thống đã giữ, không có số căn cước đầy đủ.</summary>
 public sealed class DeclinePaperData
 {
+    /// <summary>true: biên bản đồng ý nhận phần di sản; false: văn bản từ chối.</summary>
+    public bool IsAcceptance { get; set; }
+
     public string TurnCode { get; set; } = string.Empty;
 
     public string ContainerName { get; set; } = string.Empty;
@@ -27,6 +30,12 @@ public sealed class DeclinePaperData
     public string? ReviewerLawyerCardNumber { get; set; }
 
     public DateTimeOffset ReviewedAt { get; set; }
+
+    /// <summary>Ngày mất ghi trên giấy chứng tử mà Người thực thi đã nộp; null khi không đọc được.</summary>
+    public DateOnly? DateOfDeath { get; set; }
+
+    /// <summary>Ngày cấp giấy chứng tử (ngày đăng ký khai tử); null khi không đọc được.</summary>
+    public DateOnly? DeathCertificateIssuedOn { get; set; }
 }
 
 /// <summary>Dựng ảnh PNG "Văn bản từ chối nhận di sản" (một trang); cài đặt cụ thể nằm ở Infrastructure.</summary>

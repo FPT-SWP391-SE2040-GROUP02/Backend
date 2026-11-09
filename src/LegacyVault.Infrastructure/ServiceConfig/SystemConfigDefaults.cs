@@ -10,7 +10,6 @@ namespace LegacyVault.Infrastructure.ServiceConfig;
 
 /// <summary>
 /// Giá trị mặc định của dịch vụ ngoài đọc từ cấu hình máy chủ (appsettings, user-secrets, biến môi trường).
-/// Gemini: Gemini:ApiKey, Gemini:Model (tùy chọn), Gemini:TimeoutSeconds (tùy chọn).
 /// </summary>
 public sealed class SystemConfigDefaults : ISystemConfigDefaults
 {

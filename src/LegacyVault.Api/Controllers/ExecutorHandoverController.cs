@@ -21,14 +21,12 @@ public sealed class ExecutorHandoverController : ControllerBase
 {
     private readonly IHandoverProgressService handoverProgressService;
     private readonly IHandoverInvitationService handoverInvitationService;
-    private readonly IExecutorIdentityConfirmationService identityConfirmationService;
     private readonly IHandoverKeyMailService handoverKeyMailService;
     private readonly IExecutorDeclinePaperService declinePaperService;
 
     public ExecutorHandoverController(
         IHandoverProgressService handoverProgressService,
         IHandoverInvitationService handoverInvitationService,
-        IExecutorIdentityConfirmationService identityConfirmationService,
         IHandoverKeyMailService handoverKeyMailService,
         IExecutorDeclinePaperService declinePaperService)
     {
@@ -36,7 +34,6 @@ public sealed class ExecutorHandoverController : ControllerBase
         this.handoverKeyMailService = handoverKeyMailService;
         this.handoverProgressService = handoverProgressService;
         this.handoverInvitationService = handoverInvitationService;
-        this.identityConfirmationService = identityConfirmationService;
     }
 
     /// <summary>
@@ -56,8 +53,9 @@ public sealed class ExecutorHandoverController : ControllerBase
     /// Gửi lại lời mời nhận tài sản cho một lượt chưa ai nhận (INVITE-02, INVITE-04). Link cũ hết dùng, hạn phản hồi không đặt lại
     /// (trừ khi lời mời chưa từng được giao). Giãn cách tối thiểu 15 phút giữa hai lần gửi.
     /// </summary>
-    /// <summary>Ảnh văn bản từ chối của một lượt người nhận đã từ chối. Trả ảnh PNG, không phải JSON.</summary>
+    /// <summary>Ảnh văn bản từ chối hoặc biên bản đồng ý nhận của một lượt đã có quyết định. Trả ảnh PNG, không phải JSON.</summary>
     [HttpGet("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/decline-paper")]
+    [HttpGet("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/paper")]
     [Produces("image/png", "application/json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -93,19 +91,5 @@ public sealed class ExecutorHandoverController : ControllerBase
     public Task<SendHandoverKeyResponse> SendKey(Guid caseId, Guid turnId, [FromBody] SendHandoverKeyRequest request, CancellationToken ct)
     {
         return handoverKeyMailService.SendAsync(caseId, turnId, request.Key, ct);
-    }
-
-    /// <summary>
-    /// Executor xác nhận đúng người bằng tay khi người nhận không qua được eKYC (BR-122). Lượt sang READY_TO_ACCEPT và
-    /// người nhận có 7 ngày để đồng ý hoặc từ chối. Không dùng được cho lượt do chính tài khoản này nhận.
-    /// </summary>
-    [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/confirm-identity")]
-    [ProducesResponseType<ConfirmHandoverIdentityResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<ConfirmHandoverIdentityResponse> ConfirmIdentity(Guid caseId, Guid turnId, CancellationToken ct)
-    {
-        return identityConfirmationService.ConfirmAsync(caseId, turnId, ct);
     }
 }

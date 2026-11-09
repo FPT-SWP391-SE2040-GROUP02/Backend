@@ -7,7 +7,7 @@ public class SystemConfigListResponse
 
 public class SystemConfigServiceResponse
 {
-    /// <summary>GEMINI, EKYC, SMTP, SEPAY hoặc R2 (chỉ những dịch vụ đã nối).</summary>
+    /// <summary>EKYC, SMTP, SEPAY hoặc R2 (chỉ những dịch vụ đã nối).</summary>
     public string ServiceKey { get; set; } = string.Empty;
 
     public bool SupportsFallback { get; set; }
