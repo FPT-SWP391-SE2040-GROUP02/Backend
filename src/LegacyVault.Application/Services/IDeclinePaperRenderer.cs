@@ -30,6 +30,12 @@ public sealed class DeclinePaperData
     public string? ReviewerLawyerCardNumber { get; set; }
 
     public DateTimeOffset ReviewedAt { get; set; }
+
+    /// <summary>Ngày mất ghi trên giấy chứng tử mà Người thực thi đã nộp; null khi không đọc được.</summary>
+    public DateOnly? DateOfDeath { get; set; }
+
+    /// <summary>Ngày cấp giấy chứng tử (ngày đăng ký khai tử); null khi không đọc được.</summary>
+    public DateOnly? DeathCertificateIssuedOn { get; set; }
 }
 
 /// <summary>Dựng ảnh PNG "Văn bản từ chối nhận di sản" (một trang); cài đặt cụ thể nằm ở Infrastructure.</summary>

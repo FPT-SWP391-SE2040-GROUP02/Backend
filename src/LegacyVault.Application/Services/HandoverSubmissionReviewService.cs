@@ -42,6 +42,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     private readonly IBeneficiaryRepository? beneficiaries;
     private readonly IBeneficiaryDataProtector? protector;
     private readonly IDeclinePaperRenderer? paperRenderer;
+    private readonly IDeathCaseRepository? deathCases;
 
     public HandoverSubmissionReviewService(
         ICurrentUser currentUser,
@@ -55,7 +56,8 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         TimeProvider timeProvider,
         IBeneficiaryRepository? beneficiaries = null,
         IBeneficiaryDataProtector? protector = null,
-        IDeclinePaperRenderer? paperRenderer = null)
+        IDeclinePaperRenderer? paperRenderer = null,
+        IDeathCaseRepository? deathCases = null)
     {
         this.currentUser = currentUser;
         this.users = users;
@@ -69,6 +71,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         this.beneficiaries = beneficiaries;
         this.protector = protector;
         this.paperRenderer = paperRenderer;
+        this.deathCases = deathCases;
     }
 
     public async Task<List<VerifierHandoverSubmissionSummaryResponse>> ListPendingAsync(CancellationToken ct)
@@ -201,6 +204,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         data.ReviewerFullName = reviewer.FullName;
         data.ReviewerLawyerCardNumber = reviewer.LawyerCardNumber;
         data.ReviewedAt = now;
+        await FillDeathDatesAsync(data, vault.Id, ct);
 
         byte[] image = paperRenderer.Render(data);
         StoredContent stored = await IdentityImageStorage.SaveAsync(contentStore, image, ct);
@@ -209,6 +213,23 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         submission.PaperEncryptionKeyId = stored.EncryptionKeyId;
         submission.PaperWrappedDataKey = stored.WrappedDataKey;
         return stored.StorageKey;
+    }
+
+    /// <summary>Ngày mất và ngày cấp giấy chứng tử in lên văn bản; không có hồ sơ hoặc chưa đủ dữ liệu thì để trống.</summary>
+    private async Task FillDeathDatesAsync(DeclinePaperData data, Guid vaultId, CancellationToken ct)
+    {
+        if (deathCases == null)
+        {
+            return;
+        }
+        DeathCase? deathCase = await deathCases.FindOpenByVaultIdAsync(vaultId, ct);
+        if (deathCase == null || deathCase.ReviewVersionNo == null)
+        {
+            return;
+        }
+        DeathCaseVersion version = DeathCaseReviewRules.FindReviewVersion(deathCase);
+        data.DateOfDeath = version.DateOfDeath;
+        data.DeathCertificateIssuedOn = version.IssuedOn;
     }
 
     public async Task<VerifierHandoverSubmissionResponse> RequestSupplementAsync(
