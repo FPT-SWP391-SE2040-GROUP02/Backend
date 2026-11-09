@@ -70,9 +70,8 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
             $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại (1) hệ thống LegacyVault, chúng tôi gồm: (2)");
         Para(column, $"1. Ông/bà: {data.DeclinerFullName} Sinh năm : ...................................................", justify: true);
         Para(column,
-            $"CMND số: ............. (kết thúc bằng {data.CitizenIdLast4}) do Công an ............... cấp ngày ..................",
+            "CMND số: ............. do Công an ............... cấp ngày .................................................",
             justify: true);
-        Para(column, "Hộ khẩu thường trú: …………………………………………………………………", justify: true);
         Para(column, "(Là (3) người được chỉ định nhận của người để lại di sản thừa kế)", justify: true);
         Para(column, $"{nbsp3} Chúng tôi là những người thừa kế của ông/bà {data.OwnerFullName}", justify: true);
         Para(column,
@@ -100,35 +99,34 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM", center: true, bold: true);
         Para(column, "Độc lập - Tự do - Hạnh phúc", center: true, bold: true);
         Para(column, "-----------------", center: true);
-        Para(column, "VĂN BẢN KHAI NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
+        Para(column, "BIÊN BẢN ĐỒNG Ý NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
         Para(column, $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault.");
-        Para(column,
-            $"Tôi là: {data.DeclinerFullName}, số căn cước kết thúc bằng {data.CitizenIdLast4}.", justify: true);
-        Para(column, "Bằng văn bản này, tôi xin khai đúng sự thật rằng:", justify: true);
+        Para(column, $"Tôi là: {data.DeclinerFullName}.", justify: true);
+        Para(column, "Bằng biên bản này, tôi xin khai đúng sự thật rằng:", justify: true);
         Para(column,
             $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, chết ngày {Date(data.DateOfDeath, "……………")} theo giấy "
             + $"chứng tử đã được Người xét duyệt duyệt trong hệ thống, đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………")}.",
             justify: true);
         Para(column, "2. Tôi là người được Chủ kho chỉ định nhận phần di sản nêu tại mục 4.", justify: true);
         Para(column,
-            "3. Tôi không thuộc các trường hợp không được quyền hưởng di sản theo Điều 621 Bộ luật Dân sự 2015, và trước khi lập "
-            + "văn bản này tôi chưa lập văn bản từ chối nhận di sản đối với phần này.",
+            "3. Tôi không thuộc các trường hợp không được quyền hưởng di sản, và trước khi lập biên bản này tôi chưa lập văn bản "
+            + "từ chối nhận di sản đối với phần này.",
             justify: true);
         Para(column, $"4. Di sản khai nhận: {data.ContainerName}.", justify: true);
         Para(column,
-            "5. Tôi xin cam đoan những điều khai trong văn bản này là đúng sự thật, không khai thiếu, không giấu thông tin. "
+            "5. Tôi xin cam đoan những điều khai trong biên bản này là đúng sự thật, không khai thiếu, không giấu thông tin. "
             + "Nếu sai, tôi hoàn toàn chịu trách nhiệm trước pháp luật.",
             justify: true);
         Para(column,
-            "6. Nay, bằng văn bản này tôi đồng ý nhận phần di sản nêu tại mục 4. Tôi hiểu rằng người thừa kế chỉ phải thực hiện "
-            + "nghĩa vụ tài sản của người chết trong phạm vi di sản được nhận (Điều 615 Bộ luật Dân sự 2015), tự chịu trách nhiệm "
-            + "về việc quản lý, sử dụng tài sản đã nhận và giữ kín khóa mở gói.",
+            "6. Nay, bằng biên bản này tôi đồng ý nhận phần di sản nêu tại mục 4. Tôi hiểu rằng người thừa kế chỉ phải thực hiện "
+            + "nghĩa vụ tài sản của người chết trong phạm vi di sản được nhận, tự chịu trách nhiệm về việc quản lý, sử dụng tài sản "
+            + "đã nhận và giữ kín khóa mở gói.",
             justify: true);
         Para(column,
             "7. Tôi đã đọc lại toàn bộ nội dung, hiểu rõ, chấp nhận và nhận thức đầy đủ trách nhiệm pháp lý của mình khi lập và "
-            + "xác nhận văn bản này.",
+            + "xác nhận biên bản này.",
             justify: true);
-        Para(column, "Người khai nhận di sản thừa kế", center: true, bold: true);
+        Para(column, "Người lập Biên bản đồng ý nhận di sản thừa kế", center: true, bold: true);
         Para(column, "(Ký/điểm chỉ và ghi rõ họ tên)", center: true);
     }
 
