@@ -25,7 +25,7 @@ public sealed class HandoverStarterTests
     public HandoverStarterTests()
     {
         sender = new FakeInvitationSender(unitOfWork);
-        starter = new HandoverStarter(vaults, repository, protector, tokens, sender, unitOfWork, new FixedTimeProvider(Now));
+        starter = new HandoverStarter(vaults, repository, tokens, unitOfWork, new FixedTimeProvider(Now));
         vaults.Vaults.Add(data.Vault);
     }
 
@@ -64,9 +64,8 @@ public sealed class HandoverStarterTests
             Assert.Equal(container.Assets[0].Asset.Name, turn.Items[0].Name);
             Assert.Equal(1000, turn.Items[0].SizeBytes);
 
-            string rawToken = sender.Sent[i].Token;
-            Assert.NotEqual(rawToken, turn.InvitationTokenHash);
-            Assert.Equal(tokens.HashOpaqueToken(rawToken), turn.InvitationTokenHash);
+            Assert.False(string.IsNullOrEmpty(turn.InvitationTokenHash));
+            Assert.Null(turn.InvitationSentAt);
         }
     }
 
@@ -128,52 +127,18 @@ public sealed class HandoverStarterTests
     }
 
     [Fact]
-    public async Task Start_SendsInvitationsOnlyAfterSaving()
-    {
-        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
-        data.Designate(container, "Nguyễn Văn A", "a@example.com");
-        Publish();
-
-        await starter.StartAsync(data.Vault.Id, CancellationToken.None);
-
-        Assert.Single(sender.Sent);
-        Assert.True(sender.SaveCountsAtSend[0] >= 1);
-        Assert.Equal("a@example.com", sender.Sent[0].ToEmail);
-        Assert.Equal("Nguyễn Văn A", sender.Sent[0].FullName);
-        Assert.Equal(repository.Turns[0].ResponseDeadline, sender.Sent[0].ResponseDeadline);
-        Assert.Equal(repository.Turns[0].Id, sender.Sent[0].TurnId);
-    }
-
-    [Fact]
-    public async Task Start_SenderFailure_KeepsTurnsAndLeavesInvitationSentAtNull()
+    public async Task Start_DoesNotSendAnyInvitation_LeavesInvitationSentAtNull()
     {
         Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
         data.Designate(container, "Người A", "a@example.com");
-        data.Designate(container, "Người B", "b@example.com");
-        Publish();
-        sender.FailNext = true;
-
-        HandoverStartResult result = await starter.StartAsync(data.Vault.Id, CancellationToken.None);
-
-        Assert.Equal(2, repository.Turns.Count);
-        Assert.Equal(1, result.InvitationsFailed);
-        Assert.Equal(1, result.InvitationsSent);
-        Assert.Null(repository.Turns[0].InvitationSentAt);
-        Assert.Equal(Now, repository.Turns[1].InvitationSentAt);
-    }
-
-    [Fact]
-    public async Task Start_BeneficiaryWithoutEmail_CreatesTurnButSendsNothing()
-    {
-        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
-        data.Designate(container, "Người A", null);
+        data.Designate(container, "Người B", null);
         Publish();
 
         HandoverStartResult result = await starter.StartAsync(data.Vault.Id, CancellationToken.None);
 
-        Assert.Equal(1, result.TurnCount);
+        Assert.Equal(2, result.TurnCount);
         Assert.Empty(sender.Sent);
-        Assert.Null(repository.Turns[0].InvitationSentAt);
+        Assert.All(repository.Turns, t => Assert.Null(t.InvitationSentAt));
     }
 
     [Fact]
@@ -223,7 +188,7 @@ public sealed class HandoverStarterTests
         Assert.Equal(HandoverTurnStatus.Invited, newTurn.Status);
         Assert.Equal(designation.Id, newTurn.DesignationId);
         Assert.NotEqual(oldTurn.InvitationTokenHash, newTurn.InvitationTokenHash);
-        Assert.Single(sender.Sent);
+        Assert.Empty(sender.Sent);
     }
 
     [Fact]

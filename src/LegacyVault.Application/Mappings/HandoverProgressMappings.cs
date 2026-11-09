@@ -17,6 +17,7 @@ public static class HandoverProgressMappings
         response.Status = turn.Status.ToApiString();
         response.InvitedAt = turn.InvitedAt;
         response.ResponseDeadline = turn.ResponseDeadline;
+        response.InvitationSentAt = turn.InvitationSentAt;
         response.ClaimedAt = turn.ClaimedAt;
         response.IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null;
         response.DecisionDeadline = turn.DecisionDeadline;

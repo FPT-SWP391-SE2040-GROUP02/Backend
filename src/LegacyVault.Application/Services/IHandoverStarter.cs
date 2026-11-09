@@ -10,13 +10,10 @@ public sealed class HandoverStartResult
     /// <summary>true: kế hoạch đã mở bàn giao từ trước, lần gọi này không tạo gì mới.</summary>
     public bool AlreadyStarted { get; set; }
 
-    public int InvitationsSent { get; set; }
-
-    public int InvitationsFailed { get; set; }
 }
 
 /// <summary>
-/// Mở giai đoạn nhận tài sản cho một kho: tạo mỗi chỉ định một lượt, ghim snapshot và gửi lời mời.
+/// Mở giai đoạn nhận tài sản cho một kho: tạo mỗi chỉ định một lượt, ghim snapshot (không tự gửi thư mời).
 /// Chưa có endpoint gọi nó; luồng F2B (xác nhận qua đời) sau này sẽ gọi.
 /// </summary>
 public interface IHandoverStarter
