@@ -237,6 +237,14 @@ public sealed class HandoverService : IHandoverService
         turn.EndedAt = now;
         turn.UpdatedAt = now;
 
+        // Người nhận từ chối thì nội dung của lượt này bị xóa luôn thay vì chờ hết thời hạn lưu: hạn xóa đặt đúng lúc này,
+        // job lưu giữ (RetentionJob) xóa ở vòng quét kế tiếp. Tài sản còn lượt khác tham chiếu thì giữ lại (RETENTION-02).
+        // Chỉ còn trạng thái và thời điểm quyết định của lượt.
+        turn.RetentionStatus = RetentionStatus.RetentionActive;
+        turn.RetentionStartedAt = now;
+        turn.RetentionDeadline = now;
+        turn.RetentionRemainingSeconds = null;
+
         await CloseDecidedPlanAsync(plan, now, ct);
 
         await unitOfWork.SaveChangesAsync(ct);
