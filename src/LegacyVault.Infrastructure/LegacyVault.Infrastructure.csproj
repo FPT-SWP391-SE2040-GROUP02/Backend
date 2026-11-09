@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="QuestPDF" />
     <ProjectReference Include="..\LegacyVault.Application\LegacyVault.Application.csproj" />
     <ProjectReference Include="..\LegacyVault.Domain\LegacyVault.Domain.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

@@ -59,7 +59,7 @@ public static class IdentityImageStorage
     /// <summary>Xóa object SAU khi bản ghi đã lưu, hoặc bù trừ khi lưu thất bại. Lỗi thì để lại object mồ côi (đã mã hóa).</summary>
     public static async Task TryDeleteAsync(IAssetContentStore contentStore, string? storageKey)
     {
-        if (storageKey == null)
+        if (string.IsNullOrEmpty(storageKey))
         {
             return;
         }

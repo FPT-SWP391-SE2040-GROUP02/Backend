@@ -35,6 +35,9 @@ public class HandoverProgressTurnResponse
     /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC (BR-122).</summary>
     public bool IdentityConfirmedByExecutor { get; set; }
 
+    /// <summary>Lúc người nhận xác nhận đã nhận đủ tài sản; null khi chưa.</summary>
+    public DateTimeOffset? ReceivedAllAt { get; set; }
+
     public DateTimeOffset InvitedAt { get; set; }
 
     public DateTimeOffset ResponseDeadline { get; set; }

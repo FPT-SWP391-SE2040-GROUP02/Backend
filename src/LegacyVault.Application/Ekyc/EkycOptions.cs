@@ -46,13 +46,19 @@ public sealed class EkycOptions : IEkycOptions
     }
 
     /// <inheritdoc/>
-    private volatile bool _paused;
+    private bool? _pausedOverride;
 
-    public bool Paused => _paused;
+    /// <summary>
+    /// Ekyc:PausedOnStartup: khởi động ở trạng thái tạm ngừng eKYC để chạy thử, khỏi bấm nút sau mỗi lần chạy lại API.
+    /// Chỉ có tác dụng ở Development hoặc Staging (môi trường khác bị ép về false lúc cấu hình).
+    /// </summary>
+    public bool PausedOnStartup { get; set; }
+
+    public bool Paused => _pausedOverride ?? PausedOnStartup;
 
     public void SetPaused(bool paused)
     {
-        _paused = paused;
+        _pausedOverride = paused;
     }
 
     public void ResetDefault()

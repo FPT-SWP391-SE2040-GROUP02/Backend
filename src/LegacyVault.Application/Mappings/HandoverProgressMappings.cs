@@ -21,6 +21,7 @@ public static class HandoverProgressMappings
         response.IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null;
         response.DecisionDeadline = turn.DecisionDeadline;
         response.DecidedAt = turn.DecidedAt;
+        response.ReceivedAllAt = turn.ReceivedAllAt;
         if (turn.Grant != null)
         {
             response.GrantStatus = turn.Grant.Status.ToApiString();

@@ -84,6 +84,9 @@ public class HandoverTurn
 
     public DateTimeOffset? DecidedAt { get; set; }
 
+    /// <summary>Lúc người nhận bấm "Tôi đã nhận đủ" sau khi tải tài sản; Người thực thi thấy để biết lượt xong.</summary>
+    public DateTimeOffset? ReceivedAllAt { get; set; }
+
     /// <summary>Lúc lượt kết thúc (đã nhận, từ chối hoặc hết hạn quyết định).</summary>
     public DateTimeOffset? EndedAt { get; set; }
 

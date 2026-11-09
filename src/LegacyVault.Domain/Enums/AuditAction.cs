@@ -128,4 +128,8 @@ public enum AuditAction
     ExecutorKeyReissued = 57,
     /// <summary>Admin giao hoặc đổi Người thực thi của một kho, kèm lý do (người được giao phải chấp nhận lời mời).</summary>
     ExecutorAssignedByAdmin = 58,
+    /// <summary>Người xét duyệt duyệt hồ sơ người nhận (Chấp nhận hoặc Từ chối); lượt sang bước quyết định.</summary>
+    HandoverSubmissionApproved = 60,
+    /// <summary>Người xét duyệt yêu cầu người nhận bổ sung hồ sơ.</summary>
+    HandoverSubmissionSupplementRequested = 61,
 }

@@ -1,4 +1,5 @@
 using LegacyVault.Application.Notifications;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
@@ -41,6 +42,27 @@ public sealed class HandoverContactReader : IHandoverContactReader
             info.ExecutorFullName = executor.FullName;
             info.ExecutorPhone = executor.Phone;
             info.ExecutorEmail = executor.Email;
+        }
+        DeathCase? deathCase = await context.Set<DeathCase>()
+            .AsNoTracking()
+            .Where(c => c.VaultId == vaultId && c.Status == DeathCaseStatus.ApprovedForHandover)
+            .OrderByDescending(c => c.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+        if (deathCase != null)
+        {
+            info.CaseCode = DeathCaseRules.CaseCode(deathCase.Id);
+            var verifier = await context.Set<DeathCaseDecision>()
+                .AsNoTracking()
+                .Where(d => d.CaseId == deathCase.Id && d.Kind == DeathCaseDecisionKind.Approved)
+                .OrderByDescending(d => d.DecidedAt)
+                .Join(context.Set<User>(), d => d.VerifierUserId, u => u.Id,
+                    (d, u) => new { u.FullName, u.LawyerCardNumber })
+                .FirstOrDefaultAsync(ct);
+            if (verifier != null)
+            {
+                info.VerifierFullName = verifier.FullName;
+                info.VerifierLawyerCardNumber = verifier.LawyerCardNumber;
+            }
         }
         return info;
     }

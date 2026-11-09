@@ -9,6 +9,9 @@ public static class HandoverApplicationConfig
     {
         services.AddScoped<IHandoverStarter, HandoverStarter>();
         services.AddScoped<IHandoverService, HandoverService>();
+        services.AddScoped<IInvitationMailCheckService, InvitationMailCheckService>();
+        services.AddScoped<IHandoverSubmissionService, HandoverSubmissionService>();
+        services.AddScoped<IHandoverSubmissionReviewService, HandoverSubmissionReviewService>();
         services.AddScoped<IHandoverDownloadService, HandoverDownloadService>();
         services.AddScoped<IHandoverJob, HandoverJob>();
         services.AddScoped<IHandoverInvitationRetryJob, HandoverInvitationRetryJob>();
@@ -16,6 +19,7 @@ public static class HandoverApplicationConfig
         services.AddScoped<IHandoverInvitationService, HandoverInvitationService>();
         services.AddScoped<IHandoverKeyMailService, HandoverKeyMailService>();
         services.AddScoped<IExecutorIdentityConfirmationService, ExecutorIdentityConfirmationService>();
+        services.AddScoped<IExecutorDeclinePaperService, ExecutorDeclinePaperService>();
         return services;
     }
 }

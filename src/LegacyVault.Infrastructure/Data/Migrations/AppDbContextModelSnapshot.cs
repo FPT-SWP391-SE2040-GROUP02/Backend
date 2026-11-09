@@ -1513,6 +1513,143 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("HandoverSnapshotItems", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Acknowledged")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("BackImageContentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("BackImageEncryptionKeyId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("BackImageSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("BackImageStorageKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<byte[]>("BackImageWrappedDataKey")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("CitizenIdLast4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.Property<bool>("CitizenIdMatches")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("DateOfBirthMatches")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("FrontImageContentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("FrontImageEncryptionKeyId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("FrontImageSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FrontImageStorageKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<byte[]>("FrontImageWrappedDataKey")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<bool>("NameMatches")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PaperEncryptionKeyId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasDefaultValue("");
+
+                    b.Property<long>("PaperSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PaperStorageKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasDefaultValue("");
+
+                    b.Property<byte[]>("PaperWrappedDataKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varbinary(max)")
+                        .HasDefaultValue(new byte[0]);
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("SupplementReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("TurnId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("VoluntaryDecline")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TurnId", "CreatedAt");
+
+                    b.ToTable("HandoverSubmissions", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverTurn", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1592,6 +1729,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("ReadyAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ReceivedAllAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<DateTimeOffset>("ResponseDeadline")
@@ -3121,6 +3261,17 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .WithMany("Items")
                         .HasForeignKey("TurnId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Turn");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverSubmission", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.HandoverTurn", "Turn")
+                        .WithMany()
+                        .HasForeignKey("TurnId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Turn");

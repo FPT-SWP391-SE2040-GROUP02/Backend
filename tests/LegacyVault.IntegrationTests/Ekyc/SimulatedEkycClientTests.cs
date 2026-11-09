@@ -94,4 +94,18 @@ public sealed class SimulatedEkycClientTests
         // Kiểm tra
         Assert.True(options.Paused);
     }
+
+    [Fact]
+    public void Options_PausedOnStartupIsHonoredUntilAdminToggles()
+    {
+        // Chuẩn bị: cấu hình khởi động ở trạng thái tạm ngừng
+        EkycOptions options = new EkycOptions { PausedOnStartup = true };
+        Assert.True(options.Paused);
+
+        // Hành động: Admin bật lại eKYC thật bằng công cụ thử nghiệm
+        options.SetPaused(false);
+
+        // Kiểm tra: lựa chọn của Admin thắng cấu hình khởi động
+        Assert.False(options.Paused);
+    }
 }

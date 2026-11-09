@@ -18,6 +18,7 @@ public static class HandoverConfig
     public static IServiceCollection AddHandover(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IHandoverRepository, HandoverRepository>();
+        services.AddScoped<IHandoverSubmissionRepository, HandoverSubmissionRepository>();
         services.AddScoped<IHandoverContactReader, HandoverContactReader>();
 
         // Công tắc bỏ qua xác minh: sai môi trường thì API không khởi động (HandoverSettingsValidator).
@@ -33,6 +34,7 @@ public static class HandoverConfig
 
         // Lưu và xóa dữ liệu sau bàn giao (§7.7).
         services.AddScoped<IRetentionRepository, RetentionRepository>();
+        services.AddSingleton<IDeclinePaperRenderer, QuestPdfDeclinePaperRenderer>();
         services.Configure<RetentionJobSettings>(configuration.GetSection(RetentionJobSettings.SectionName));
         services.AddHostedService<RetentionMonitor>();
         services.AddSingleton<IRetentionNoticeSender>(provider => ChooseRetentionSender(provider));

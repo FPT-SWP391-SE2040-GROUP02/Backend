@@ -1248,6 +1248,30 @@ Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem
 - `recipients[].fullName` là null khi không giải mã được; FE hiện 4 số cuối CCCD thay thế.
 - Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`.
 
+### 6.21b. Hồ sơ người nhận (thay eKYC camera ở bước danh tính)
+
+Theo prototype: người nhận chọn **Chấp nhận** hoặc **Từ chối**, điền văn bản mẫu, tải ảnh căn cước hai mặt rồi nộp cho Người xét duyệt; Người xét duyệt duyệt thì lượt sang bước quyết định (`READY_TO_ACCEPT`). Bước nộp chỉ khi lượt ở `IDENTITY_IN_PROGRESS`.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| POST | `/api/v1/handover/invitations/{token}/check-mail` | Công khai | `{ caseCode, citizenIdLast4 }` | 200 `{ verified, attemptsLeft, containerName?, ownerFullName? }` | 400, 404 `HANDOVER_INVITATION_INVALID`, 423 `HANDOVER_MAIL_CHECK_LOCKED` (quá 5 lần thử cho một lượt mời) |
+| POST | `/api/v1/handover/turns/{turnId}/submission` | Người nhận của lượt | multipart: `Kind` (`ACCEPT`/`DECLINE`), `FullName`, `CitizenId` (12 số), `DateOfBirth` (yyyy-MM-dd), `Acknowledged` (phải true), `VoluntaryDecline` (phải true khi `DECLINE`), `FrontImage`, `BackImage` (JPEG/PNG/WEBP, mỗi ảnh tối đa 8 MiB) | 200 `HandoverSubmissionResponse` | 400, 404 `HANDOVER_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `ALREADY_APPROVED`), 413 |
+| GET | `/api/v1/handover/turns/{turnId}/submission` | Người nhận của lượt | — | 200 hồ sơ mới nhất hoặc 204 khi chưa nộp | 404 |
+| GET | `/api/v1/executor/death-cases/{caseId}/handover-turns/{turnId}/decline-paper` | Người thực thi đang hiệu lực của kho | — | 200 ảnh `image/png` một trang (văn bản từ chối, dựng lúc Người xét duyệt duyệt hồ sơ Từ chối; chỉ gồm tên gói, tên Chủ kho, họ tên người được chỉ định, 4 số cuối căn cước, 3 cờ đối chiếu, Người xét duyệt và thời điểm) | 404 khi lượt chưa bị từ chối hoặc không có văn bản |
+| POST | `/api/v1/handover/turns/{turnId}/received-all` | Người nhận của lượt | — | 200 `HandoverTurnResponse` có `receivedAllAt` (gọi lại không đổi gì) | 404, 409 `HANDOVER_NOT_ALLOWED` (`NOT_COMMITTED`) |
+| GET | `/api/v1/verifier/handover-submissions` | Người xét duyệt | — | 200 danh sách hồ sơ chờ duyệt, cũ nhất trước | 403 |
+| GET | `/api/v1/verifier/handover-submissions/{id}` | Người xét duyệt | — | 200 chi tiết kèm `nameMatches`, `citizenIdMatches`, `dateOfBirthMatches`, `canApprove`, `canRequestSupplement` | 404 |
+| GET | `/api/v1/verifier/handover-submissions/{id}/images/{front\|back}` | Người xét duyệt | — | 200 nội dung ảnh (không phải JSON) | 404, 500 `CONTENT_INTEGRITY_FAILED` |
+| POST | `/api/v1/verifier/handover-submissions/{id}/approve` | Người xét duyệt | — | 200 | 404, 409 (`FIELDS_MISMATCH`, `WRONG_STATE`, `HOLD_ACTIVE`, `PLAN_NOT_IN_HANDOVER`) |
+| POST | `/api/v1/verifier/handover-submissions/{id}/request-supplement` | Người xét duyệt | `{ reason }` | 200 | 400, 404, 409 |
+
+- **Mã hồ sơ** trong thư là `DeathCaseRules.CaseCode` (8 ký tự cuối id hồ sơ chứng tử, in hoa), cùng mã Người xét duyệt đang thấy.
+- **Không lưu họ tên, ngày sinh hay số căn cước đầy đủ.** Backend đối chiếu bản khai với thông tin Chủ kho đã khai cho người nhận lúc nộp, chỉ giữ ba cờ khớp/không khớp và 4 số cuối. Họ tên so không phân biệt dấu và hoa thường. Ảnh lưu mã hóa (cùng cơ chế ảnh căn cước Chủ kho), mỗi lần xem có log; bản bị thay thế thì xóa ảnh.
+- **Ai duyệt được:** chỉ Người xét duyệt đã duyệt hồ sơ chứng tử của kho đó. Người khác nhận 404.
+- **Duyệt** chỉ khi cả ba trường khớp; lệch thì chỉ yêu cầu bổ sung được. Duyệt đặt `identityConfirmedByUserId`, mở hạn quyết định như khi Executor xác nhận danh tính; sau đó người nhận vẫn nhập khóa mở gói (nếu có) và bấm Đồng ý hoặc Từ chối ở bước quyết định.
+- Nhật ký: `HANDOVER_SUBMISSION_APPROVED`, `HANDOVER_SUBMISSION_SUPPLEMENT_REQUESTED` (đối tượng `HANDOVER_TURN`).
+- Chưa làm: dọn ảnh khi lượt bị xóa theo thời hạn lưu (ảnh của hồ sơ đã duyệt còn tới khi có job dọn).
+
 ### 6.22. Cấu hình dịch vụ ngoài (Admin)
 
 Admin sửa model, khóa và dịch vụ dự phòng của dịch vụ ngoài ngay trên web, không cần sửa appsettings hay deploy lại. Tất cả cần Bearer; không phải Admin đang hoạt động → `404` (SEC-04). Đã nối năm dịch vụ: `GEMINI` (AI nhận diện giấy chứng tử), `EKYC`, `SMTP` (email), `SEPAY` (nhận tiền) và `R2` (lưu nội dung đã mã hóa). Mọi giá trị trong `settings` và `secrets` là chuỗi, số cũng vậy.

@@ -20,15 +20,18 @@ public sealed class HandoverController : ControllerBase
 {
     private readonly IHandoverService handoverService;
     private readonly IHandoverDownloadService downloadService;
+    private readonly IInvitationMailCheckService mailCheckService;
     private readonly ILogger<HandoverController> logger;
 
     public HandoverController(
         IHandoverService handoverService,
         IHandoverDownloadService downloadService,
+        IInvitationMailCheckService mailCheckService,
         ILogger<HandoverController> logger)
     {
         this.handoverService = handoverService;
         this.downloadService = downloadService;
+        this.mailCheckService = mailCheckService;
         this.logger = logger;
     }
 
@@ -40,6 +43,23 @@ public sealed class HandoverController : ControllerBase
     public Task<InvitationStatusResponse> GetInvitation(string token, CancellationToken ct)
     {
         return handoverService.GetInvitationAsync(token, ct);
+    }
+
+    /// <summary>
+    /// Công khai: người nhận nhập mã hồ sơ và 4 số cuối căn cước ghi trong thư để biết thư có thật không.
+    /// Có giới hạn số lần thử theo lượt mời; hết lượt thì 423.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("invitations/{token}/check-mail")]
+    [Consumes("application/json")]
+    [ProducesResponseType<InvitationMailCheckResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status423Locked)]
+    public Task<InvitationMailCheckResponse> CheckMail(
+        string token, InvitationMailCheckRequest request, CancellationToken ct)
+    {
+        return mailCheckService.CheckAsync(token, request.CaseCode, request.CitizenIdLast4, ct);
     }
 
     /// <summary>Gắn tài khoản đang đăng nhập vào lượt. Gọi lặp bởi cùng người là an toàn.</summary>
@@ -69,6 +89,16 @@ public sealed class HandoverController : ControllerBase
     public Task<HandoverTurnResponse> GetTurn(Guid turnId, CancellationToken ct)
     {
         return handoverService.GetTurnAsync(turnId, ct);
+    }
+
+    /// <summary>Người nhận xác nhận đã nhận đủ tài sản.</summary>
+    [HttpPost("turns/{turnId:guid}/received-all")]
+    [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverTurnResponse> ConfirmReceivedAll(Guid turnId, CancellationToken ct)
+    {
+        return handoverService.ConfirmReceivedAllAsync(turnId, ct);
     }
 
     /// <summary>Đồng ý nhận: mở quyền xem và tải 30 ngày.</summary>

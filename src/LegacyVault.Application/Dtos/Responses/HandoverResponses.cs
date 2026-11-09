@@ -1,5 +1,21 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
+/// <summary>Kết quả kiểm thư mời bằng mã hồ sơ và 4 số cuối căn cước (công khai).</summary>
+public class InvitationMailCheckResponse
+{
+    /// <summary>true khi mã hồ sơ và 4 số cuối căn cước khớp lượt mời này.</summary>
+    public bool Verified { get; set; }
+
+    /// <summary>Số lần thử còn lại; về 0 thì lần sau nhận 423.</summary>
+    public int AttemptsLeft { get; set; }
+
+    /// <summary>Tên gói được chỉ định; chỉ có khi Verified.</summary>
+    public string? ContainerName { get; set; }
+
+    /// <summary>Họ tên Chủ kho; chỉ có khi Verified.</summary>
+    public string? OwnerFullName { get; set; }
+}
+
 /// <summary>Kết quả kiểm link mời (công khai): chỉ hai cờ, không lộ thêm dữ liệu nào (SEC-04).</summary>
 public class InvitationStatusResponse
 {
@@ -74,4 +90,17 @@ public class HandoverTurnResponse
     public List<HandoverItemResponse> Items { get; set; } = new List<HandoverItemResponse>();
 
     public HandoverGrantResponse? Grant { get; set; }
+
+    /// <summary>Người xét duyệt đã duyệt hồ sơ chứng tử của kho; người nhận thấy tên và số thẻ luật sư để tự kiểm chứng.</summary>
+    public HandoverReviewerResponse? Reviewer { get; set; }
+
+    /// <summary>Lúc người nhận xác nhận đã nhận đủ tài sản; null khi chưa.</summary>
+    public DateTimeOffset? ReceivedAllAt { get; set; }
+}
+
+public class HandoverReviewerResponse
+{
+    public string FullName { get; set; } = string.Empty;
+
+    public string? LawyerCardNumber { get; set; }
 }

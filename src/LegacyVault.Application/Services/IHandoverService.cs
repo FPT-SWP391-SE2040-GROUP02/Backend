@@ -21,6 +21,9 @@ public interface IHandoverService
     /// <summary>Đồng ý nhận: tạo grant 30 ngày. Gọi lặp trả lại cùng grant.</summary>
     Task<HandoverTurnResponse> AcceptAsync(Guid turnId, CancellationToken ct);
 
+    /// <summary>Người nhận xác nhận đã nhận đủ tài sản sau khi tải.</summary>
+    Task<HandoverTurnResponse> ConfirmReceivedAllAsync(Guid turnId, CancellationToken ct);
+
     Task<HandoverTurnResponse> DeclineAsync(Guid turnId, CancellationToken ct);
 
     /// <summary>

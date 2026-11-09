@@ -1,5 +1,6 @@
 using System.Globalization;
 using LegacyVault.Application.Notifications;
+using LegacyVault.Application.Services;
 using LegacyVault.Infrastructure.Notifications;
 
 namespace LegacyVault.Infrastructure.Handover;
@@ -65,6 +66,18 @@ public static class HandoverInvitationEmail
                 + "Bên mình cũng đã kiểm tra và xác nhận đầy đủ thông tin.");
         }
         lines.Add(ContactLine(invitation, executorLabel, hasExecutor));
+        if (invitation.VerifierFullName.Trim().Length > 0)
+        {
+            string card = string.IsNullOrWhiteSpace(invitation.VerifierLawyerCardNumber)
+                ? string.Empty
+                : $" (thẻ luật sư {invitation.VerifierLawyerCardNumber!.Trim()})";
+            lines.Add($"Hồ sơ đã được Người xét duyệt {invitation.VerifierFullName.Trim()}{card} kiểm tra.");
+        }
+        if (invitation.CaseCode.Trim().Length > 0)
+        {
+            lines.Add($"Mã hồ sơ: {invitation.CaseCode.Trim()}. Bạn có thể nhập mã này cùng 4 số cuối căn cước vào trang lời mời "
+                + "để kiểm tra thư có thật không trước khi làm bất cứ việc gì.");
+        }
 
         string message = (invitation.OwnerMessage ?? string.Empty).Trim();
         if (message.Length > 0)
@@ -75,7 +88,8 @@ public static class HandoverInvitationEmail
 
         lines.Add("Bạn chỉ cần làm theo bốn bước sau:");
         lines.Add($"1. Bấm nút “Nhận tài sản” bên dưới. Bạn cần bấm trước {deadline}.");
-        lines.Add("2. Đăng nhập bằng đúng email này và xác minh danh tính, để bên mình biết đúng là bạn.");
+        lines.Add("2. Đăng nhập bằng đúng email này, chọn Chấp nhận hoặc Từ chối rồi nộp hồ sơ kèm ảnh căn cước hai mặt. "
+            + "Người xét duyệt sẽ đối chiếu để biết đúng là bạn.");
         lines.Add($"3. Nhắn {executorLabel} xin khóa mở gói. Họ sẽ gửi bạn một thư riêng chỉ có khóa.");
         lines.Add("4. Nhập khóa, bấm “Đồng ý nhận” rồi tải tài sản về máy.");
 
@@ -88,7 +102,7 @@ public static class HandoverInvitationEmail
             + "Nếu bạn không muốn nhận, cứ đăng nhập rồi bấm “Từ chối”. "
             + "Thư này không có nội dung tài sản. "
             + $"Nếu bạn không quen {ownerLabel} hoặc thấy thư có gì lạ, đừng bấm nút mà {support}. "
-            + "Trân trọng, Đội ngũ LegacyVault.";
+            + "Trân trọng, Đội ngũ LegacyVault. " + ScamWarning();
 
         string leadText = string.Join("\n", lines);
         string text = $"Xin chào {invitation.FullName},\n\n{leadText}\n\nNhận tài sản: {link}\n\n{note}\n";
@@ -101,6 +115,25 @@ public static class HandoverInvitationEmail
             note,
             "Thông báo bàn giao");
         return new EmailContent(subject, text, html);
+    }
+
+    /// <summary>Cảnh báo lừa đảo kèm thông tin công ty (do Admin đặt) để người nhận tự gọi xác minh.</summary>
+    private static string ScamWarning()
+    {
+        string name = RuntimeSettings.Text("Company.Name", "LegacyVault");
+        string phone = RuntimeSettings.Text("Company.Phone", string.Empty);
+        List<string> company = new List<string> { name };
+        foreach (string key in new[] { "Company.Website", "Company.Email", "Company.Phone", "Company.Address" })
+        {
+            string value = RuntimeSettings.Text(key, string.Empty);
+            if (value.Length > 0)
+            {
+                company.Add(value);
+            }
+        }
+        string call = phone.Length > 0 ? $" Hãy gọi số {phone} của công ty để xác minh." : string.Empty;
+        return "Cảnh báo lừa đảo: LegacyVault không bao giờ hỏi mật khẩu của bạn và không thu tiền qua thư." + call
+            + " " + string.Join(" · ", company) + ".";
     }
 
     private static string ContactLine(HandoverInvitation invitation, string executorLabel, bool hasExecutor)
