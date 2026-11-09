@@ -3,14 +3,14 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Cấu hình của một dịch vụ ngoài (Gemini, eKYC, SMTP, SePay, R2) do Admin sửa trên web, mỗi cặp (ServiceKey, Slot) một dòng.
+/// Cấu hình của một dịch vụ ngoài (eKYC, SMTP, SePay, R2) do Admin sửa trên web, mỗi cặp (ServiceKey, Slot) một dòng.
 /// Có dòng thì đè giá trị trong appsettings. Giá trị thường nằm trong SettingsJson; giá trị bí mật chỉ lưu dạng mã hóa envelope.
 /// </summary>
 public class SystemConfig
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
-    /// <summary>Mã dịch vụ: GEMINI, EKYC, SMTP, SEPAY, R2.</summary>
+    /// <summary>Mã dịch vụ: EKYC, SMTP, SEPAY, R2.</summary>
     public string ServiceKey { get; set; } = string.Empty;
 
     public SystemConfigSlot Slot { get; set; }

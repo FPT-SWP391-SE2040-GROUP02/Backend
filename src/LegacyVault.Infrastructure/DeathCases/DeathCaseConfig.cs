@@ -24,7 +24,6 @@ public static class DeathCaseConfig
     {
         services.AddScoped<IDeathCaseRepository, DeathCaseRepository>();
         services.AddScoped<IDeathCaseReviewRepository, DeathCaseReviewRepository>();
-        services.AddScoped<IObjectionRepository, ObjectionRepository>();
         services.AddScoped<IOwnerFaceVerifier, OwnerFaceVerifier>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
         // AI nhận diện trang giấy có phải giấy chứng tử khi Executor gửi hồ sơ.

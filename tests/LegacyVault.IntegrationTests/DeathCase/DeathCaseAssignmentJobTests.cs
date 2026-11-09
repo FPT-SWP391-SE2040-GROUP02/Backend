@@ -650,7 +650,6 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
                 sender,
                 provider.GetRequiredService<IUnitOfWork>(),
                 provider.GetRequiredService<TimeProvider>(),
-                provider.GetRequiredService<IObjectionRepository>(),
                 provider.GetRequiredService<IIncidentService>());
             return await job.ProcessCaseAsync(caseId, CancellationToken.None);
         }
