@@ -9,7 +9,7 @@ namespace LegacyVault.Application.Services;
 
 public interface IExecutorDeclinePaperService
 {
-    /// <summary>Người thực thi xem ảnh văn bản từ chối của một lượt đã bị người nhận từ chối.</summary>
+    /// <summary>Người thực thi xem ảnh văn bản từ chối (lượt bị từ chối) hoặc biên bản đồng ý (lượt đã đồng ý nhận).</summary>
     Task<PreparedDownload> PrepareAsync(Guid caseId, Guid turnId, CancellationToken ct);
 }
 
@@ -53,13 +53,16 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
 
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
         if (turn == null || turn.PlanId != deathCase.PlanId || turn.VaultId != vault.Id
-            || turn.Status != HandoverTurnStatus.Declined)
+            || (turn.Status != HandoverTurnStatus.Declined && turn.Status != HandoverTurnStatus.HandoverCommitted))
         {
             throw PaperNotFound();
         }
 
         HandoverSubmission? submission = await submissions.FindLatestByTurnAsync(turn.Id, ct);
-        if (submission == null || submission.Kind != HandoverSubmissionKind.Decline
+        HandoverSubmissionKind expected = turn.Status == HandoverTurnStatus.Declined
+            ? HandoverSubmissionKind.Decline
+            : HandoverSubmissionKind.Accept;
+        if (submission == null || submission.Kind != expected
             || submission.Status != HandoverSubmissionStatus.Approved || submission.PaperStorageKey.Length == 0)
         {
             throw PaperNotFound();
@@ -70,7 +73,7 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
         stored.SizeBytes = submission.PaperSizeBytes;
         stored.EncryptionKeyId = submission.PaperEncryptionKeyId;
         stored.WrappedDataKey = submission.PaperWrappedDataKey;
-        return await IdentityImageStorage.PrepareAsync(contentStore, stored, "image/png", "van-ban-tu-choi.png", ct);
+        return await IdentityImageStorage.PrepareAsync(contentStore, stored, "image/png", expected == HandoverSubmissionKind.Decline ? "van-ban-tu-choi.png" : "bien-ban-dong-y.png", ct);
     }
 
     private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
@@ -92,6 +95,6 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
 
     private static AppException PaperNotFound()
     {
-        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không có văn bản từ chối cho lượt này.");
+        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không có văn bản hoặc biên bản cho lượt này.");
     }
 }

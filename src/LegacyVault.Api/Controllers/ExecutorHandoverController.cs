@@ -53,8 +53,9 @@ public sealed class ExecutorHandoverController : ControllerBase
     /// Gửi lại lời mời nhận tài sản cho một lượt chưa ai nhận (INVITE-02, INVITE-04). Link cũ hết dùng, hạn phản hồi không đặt lại
     /// (trừ khi lời mời chưa từng được giao). Giãn cách tối thiểu 15 phút giữa hai lần gửi.
     /// </summary>
-    /// <summary>Ảnh văn bản từ chối của một lượt người nhận đã từ chối. Trả ảnh PNG, không phải JSON.</summary>
+    /// <summary>Ảnh văn bản từ chối hoặc biên bản đồng ý nhận của một lượt đã có quyết định. Trả ảnh PNG, không phải JSON.</summary>
     [HttpGet("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/decline-paper")]
+    [HttpGet("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/paper")]
     [Produces("image/png", "application/json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

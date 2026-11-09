@@ -1,8 +1,11 @@
 namespace LegacyVault.Application.Services;
 
-/// <summary>Dữ liệu in lên văn bản từ chối; chỉ gồm thông tin hệ thống đã giữ, không có số căn cước đầy đủ.</summary>
+/// <summary>Dữ liệu in lên văn bản từ chối hoặc biên bản đồng ý nhận (IsAcceptance); chỉ gồm thông tin hệ thống đã giữ, không có số căn cước đầy đủ.</summary>
 public sealed class DeclinePaperData
 {
+    /// <summary>true: biên bản đồng ý nhận phần di sản; false: văn bản từ chối.</summary>
+    public bool IsAcceptance { get; set; }
+
     public string TurnCode { get; set; } = string.Empty;
 
     public string ContainerName { get; set; } = string.Empty;

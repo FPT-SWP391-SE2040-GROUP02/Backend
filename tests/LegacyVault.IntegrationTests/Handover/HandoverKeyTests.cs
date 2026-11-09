@@ -65,18 +65,27 @@ public sealed class HandoverKeyTests
     }
 
     [Fact]
-    public async Task VaultWithAKey_AcceptWithoutTheKeyIsBlocked()
+    public async Task VaultWithAKey_AcceptDoesNotNeedTheKey_OnlyDownloadDoes()
     {
         IssueKey();
 
         HandoverTurnResponse view = await service.GetTurnAsync(turn.Id, CancellationToken.None);
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.AcceptAsync(turn.Id, CancellationToken.None));
+        await service.AcceptAsync(turn.Id, CancellationToken.None);
 
         Assert.True(view.KeyRequired);
         Assert.False(view.KeyVerified);
-        Assert.Equal(ErrorCode.HandoverNotAllowed, error.Code);
-        Assert.Equal("KEY_REQUIRED", error.Extensions["reason"]);
-        Assert.Empty(repository.Grants);
+        Assert.Single(repository.Grants);
+    }
+
+    [Fact]
+    public async Task VerifyKey_AfterAccepting_IsAllowed()
+    {
+        IssueKey();
+        await service.AcceptAsync(turn.Id, CancellationToken.None);
+
+        HandoverTurnResponse verified = await service.VerifyKeyAsync(turn.Id, shardText, CancellationToken.None);
+
+        Assert.True(verified.KeyVerified);
     }
 
     [Fact]
@@ -138,7 +147,7 @@ public sealed class HandoverKeyTests
         Assert.Equal(ErrorCode.HandoverNotFound, error.Code);
     }
 
-    private sealed class FakeKeyShards : IExecutorKeyShardRepository
+    internal sealed class FakeKeyShards : IExecutorKeyShardRepository
     {
         public ExecutorKeyShard? Shard { get; set; }
 
@@ -162,7 +171,7 @@ public sealed class HandoverKeyTests
         }
     }
 
-    private sealed class NoHoldReaderForTests : IHoldReader
+    internal sealed class NoHoldReaderForTests : IHoldReader
     {
         public Task<bool> HasActiveHoldAsync(Guid vaultId, CancellationToken ct)
         {

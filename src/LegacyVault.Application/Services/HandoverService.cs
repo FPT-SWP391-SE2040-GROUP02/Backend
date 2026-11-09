@@ -181,10 +181,7 @@ public sealed class HandoverService : IHandoverService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverPlan plan = await EnsureDecidableAsync(turn, now, ct);
-        if (await IsKeyRequiredAsync(turn, ct) && turn.KeyVerifiedAt == null)
-        {
-            throw NotAllowed("KEY_REQUIRED", "Cần nhập khóa mở gói do Người thực hiện đưa trước khi đồng ý nhận.");
-        }
+        // Khóa mở gói chỉ cần khi tải (HandoverDownloadService), không chặn việc đồng ý nhận.
         plan.UpdatedAt = now;
 
         HandoverGrant grant = new HandoverGrant();
@@ -469,14 +466,14 @@ public sealed class HandoverService : IHandoverService
         {
             return await BuildTurnResponseAsync(turn, ct);
         }
-        if (turn.Status != HandoverTurnStatus.ReadyToAccept)
+        if (turn.Status != HandoverTurnStatus.ReadyToAccept && turn.Status != HandoverTurnStatus.HandoverCommitted)
         {
             throw NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để nhập khóa.");
         }
         if (turn.KeyFailedCount >= MaxKeyFailures)
         {
             throw new AppException(AppErrorType.Locked, ErrorCode.HandoverKeyLocked,
-                "Đã nhập sai khóa quá nhiều lần. Hãy liên hệ Người thực hiện hoặc quản trị viên.");
+                "Đã nhập sai khóa quá nhiều lần. Hãy liên hệ Người thực thi hoặc quản trị viên.");
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();

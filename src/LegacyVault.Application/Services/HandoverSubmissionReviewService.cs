@@ -153,11 +153,8 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống.
         vault.Plan.UpdatedAt = now;
 
-        string? paperKey = null;
-        if (submission.Kind == HandoverSubmissionKind.Decline)
-        {
-            paperKey = await StoreDeclinePaperAsync(submission, vault, userId, now, ct);
-        }
+        // Cả văn bản từ chối lẫn biên bản đồng ý nhận đều được dựng và lưu làm bằng chứng.
+        string? paperKey = await StoreDeclinePaperAsync(submission, vault, userId, now, ct);
 
         auditLogs.Add(AuditRules.Create(
             turn.VaultId, userId, AuditActorRole.Verifier, AuditAction.HandoverSubmissionApproved,
@@ -191,6 +188,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
 
         DeclinePaperData data = new DeclinePaperData();
+        data.IsAcceptance = submission.Kind == HandoverSubmissionKind.Accept;
         data.TurnCode = submission.TurnId.ToString("N").Substring(24).ToUpperInvariant();
         data.ContainerName = submission.Turn.ContainerName;
         data.OwnerFullName = owner?.FullName ?? string.Empty;

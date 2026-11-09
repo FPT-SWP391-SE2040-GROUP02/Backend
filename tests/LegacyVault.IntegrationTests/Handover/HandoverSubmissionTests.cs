@@ -386,10 +386,11 @@ public sealed class HandoverSubmissionTests
         Assert.Equal("1234", renderer.Last.CitizenIdLast4);
         Assert.Equal("Luật sư Dũng", renderer.Last.ReviewerFullName);
         Assert.Equal("Gói gia đình", renderer.Last.ContainerName);
+        Assert.False(renderer.Last.IsAcceptance);
     }
 
     [Fact]
-    public async Task Approve_Accept_DoesNotCreateAPaper()
+    public async Task Approve_Accept_StoresAcceptancePaper()
     {
         HandoverSubmission submission = await SubmitAndAttach(Request());
         FakePaperRenderer renderer = new FakePaperRenderer();
@@ -397,8 +398,8 @@ public sealed class HandoverSubmissionTests
 
         await ReviewWithPaper(renderer).ApproveAsync(submission.Id, CancellationToken.None);
 
-        Assert.Equal(string.Empty, submission.PaperStorageKey);
-        Assert.Null(renderer.Last);
+        Assert.NotEmpty(submission.PaperStorageKey);
+        Assert.True(renderer.Last!.IsAcceptance);
     }
 
     [Fact]

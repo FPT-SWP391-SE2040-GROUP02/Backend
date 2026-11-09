@@ -22,6 +22,7 @@ public sealed class HandoverDownloadTests
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
     private readonly HandoverDownloadService service;
+    private readonly HandoverKeyTests.FakeKeyShards keyShards = new HandoverKeyTests.FakeKeyShards();
     private readonly Guid claimantId = Guid.NewGuid();
     private readonly byte[] content = new byte[ContentLength];
     private readonly HandoverTurn turn;
@@ -58,7 +59,24 @@ public sealed class HandoverDownloadTests
         turn.Grant = grant;
         repository.Grants.Add(grant);
 
-        service = new HandoverDownloadService(currentUser, vaults, repository, store, unitOfWork, time);
+        service = new HandoverDownloadService(currentUser, vaults, repository, store, new HandoverKeyTests.NoHoldReaderForTests(), unitOfWork, time, keyShards);
+    }
+
+    [Fact]
+    public async Task Prepare_VaultWithKey_BlocksUntilKeyVerified()
+    {
+        ExecutorKeyShard shard = new ExecutorKeyShard();
+        shard.VaultId = turn.VaultId;
+        shard.Version = 1;
+        keyShards.Shard = shard;
+
+        AppException blocked = await Assert.ThrowsAsync<AppException>(
+            () => service.PrepareAsync(grant.Id, item.Id, CancellationToken.None));
+        Assert.Equal("KEY_REQUIRED", blocked.Extensions["reason"]);
+
+        turn.KeyVerifiedAt = Now;
+        PreparedDownload download = await service.PrepareAsync(grant.Id, item.Id, CancellationToken.None);
+        Assert.Equal(item.FileName, download.FileName);
     }
 
     [Fact]
