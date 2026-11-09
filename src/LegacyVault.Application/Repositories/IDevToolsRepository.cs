@@ -21,9 +21,6 @@ public interface IDevToolsRepository
     /// <summary>Hồ sơ chứng tử mới nhất chưa đóng của kho, có theo dõi thay đổi.</summary>
     Task<DeathCase?> FindOpenDeathCaseAsync(Guid vaultId, CancellationToken ct);
 
-    /// <summary>Lời báo còn sống mới nhất của kho, có theo dõi thay đổi.</summary>
-    Task<DeathCaseObjection?> FindLatestObjectionAsync(Guid vaultId, CancellationToken ct);
-
     /// <summary>Thao tác đồng hồ gần nhất của kho trong nhật ký: tua hoặc về thời gian hiện tại; null khi chưa từng có.</summary>
     Task<AuditAction?> FindLatestClockActionAsync(Guid vaultId, CancellationToken ct);
 
