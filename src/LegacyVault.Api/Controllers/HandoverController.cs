@@ -1,5 +1,6 @@
 using LegacyVault.Api.Exceptions;
 using LegacyVault.Api.Handover;
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
@@ -78,6 +79,17 @@ public sealed class HandoverController : ControllerBase
     public Task<HandoverTurnResponse> Accept(Guid turnId, CancellationToken ct)
     {
         return handoverService.AcceptAsync(turnId, ct);
+    }
+
+    /// <summary>Nhập khóa mở gói do Người thực hiện đưa. Sai thì 403 HANDOVER_KEY_INVALID, quá giới hạn thì 423.</summary>
+    [HttpPost("turns/{turnId:guid}/verify-key")]
+    [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status423Locked)]
+    public Task<HandoverTurnResponse> VerifyKey(Guid turnId, VerifyHandoverKeyRequest request, CancellationToken ct)
+    {
+        return handoverService.VerifyKeyAsync(turnId, request.Key, ct);
     }
 
     [HttpPost("turns/{turnId:guid}/decline")]

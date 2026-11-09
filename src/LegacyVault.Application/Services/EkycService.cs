@@ -118,7 +118,7 @@ public sealed class EkycService : IEkycService
         byte[] image = await ReadImageAsync(content, contentType, ct);
 
         // Đọc trước, hủy lượt cũ sau: ảnh lỗi thì lượt Pending đang có vẫn giữ nguyên.
-        EkycDocumentReading reading = await ekycClient.ReadFrontAsync(image, fileName, contentType, ct);
+        EkycDocumentReading reading = await ActiveClient(expected).ReadFrontAsync(image, fileName, contentType, ct);
 
         // EKYC-24, EKYC-27: Owner đăng ký phải đọc được đủ CCCD, họ tên, ngày sinh, và đã gắn danh tính thì phải ra đúng danh tính đó.
         OwnerIdentityData? enrollmentIdentity = null;
@@ -273,7 +273,7 @@ public sealed class EkycService : IEkycService
         }
 
         byte[] image = await ReadImageAsync(content, contentType, ct);
-        EkycBackReading reading = await ekycClient.ReadBackAsync(image, fileName, contentType, ct);
+        EkycBackReading reading = await ActiveClient().ReadBackAsync(image, fileName, contentType, ct);
 
         if (reading.IdNumber.Length > 0 && !EkycRules.IsSameCard(reading.IdNumber, verification.CitizenIdLast4))
         {
@@ -320,7 +320,7 @@ public sealed class EkycService : IEkycService
         byte[] selfie = await ReadImageAsync(content, contentType, ct);
         double threshold = ekycOptions.CurrentThreshold;
 
-        EkycSpoofCheck spoofCheck = await ekycClient.CheckSpoofAsync(selfie, fileName, contentType, ct);
+        EkycSpoofCheck spoofCheck = await ActiveClient().CheckSpoofAsync(selfie, fileName, contentType, ct);
         verification.SpoofCheckPassed = spoofCheck.Passed;
         if (!spoofCheck.Passed)
         {
@@ -328,7 +328,7 @@ public sealed class EkycService : IEkycService
             return verification.ToResponse(threshold);
         }
 
-        EkycFaceComparison comparison = await ekycClient.CompareFaceAsync(
+        EkycFaceComparison comparison = await ActiveClient().CompareFaceAsync(
             documentToken, selfie, fileName, contentType, threshold, ct);
         verification.FaceMatchScore = comparison.Score;
 
@@ -355,7 +355,7 @@ public sealed class EkycService : IEkycService
 
         // Gọi lại thì hủy phiên cũ, lỗi hủy bỏ qua vì dịch vụ tự dọn phiên hết hạn.
         string? previousSession = verification.LivenessSessionId;
-        EkycLivenessState state = await ekycClient.StartLivenessAsync(ct);
+        EkycLivenessState state = await ActiveClient().StartLivenessAsync(ct);
         verification.LivenessSessionId = state.SessionId;
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -374,7 +374,7 @@ public sealed class EkycService : IEkycService
         string sessionId = RequireLivenessSession(verification);
 
         byte[] frame = await ReadImageAsync(content, contentType, ct);
-        EkycLivenessState state = await ekycClient.SendLivenessFrameAsync(sessionId, frame, fileName, contentType, ct);
+        EkycLivenessState state = await ActiveClient().SendLivenessFrameAsync(sessionId, frame, fileName, contentType, ct);
 
         // Ghi nhớ lúc phiên đạt cả động tác và chống giả mạo để đường ảnh selfie tĩnh cũng dùng được (EKYC-14).
         if (state.Passed && !verification.LivenessPassed)
@@ -395,14 +395,14 @@ public sealed class EkycService : IEkycService
         string documentToken = verification.DocumentToken!;
 
         // EKYC-13: selfie lấy từ chính phiên đã đạt. Phiên chưa đạt thì dịch vụ từ chối (EKYC_LIVENESS_NOT_PASSED).
-        byte[] selfie = await ekycClient.GetLivenessSelfieAsync(sessionId, ct);
+        byte[] selfie = await ActiveClient().GetLivenessSelfieAsync(sessionId, ct);
 
         // Dịch vụ chỉ trả selfie khi cả động tác và chống giả mạo trong phiên đều đạt (EKYC-14).
         verification.SpoofCheckPassed = true;
         verification.LivenessPassed = true;
         double threshold = ekycOptions.CurrentThreshold;
 
-        EkycFaceComparison comparison = await ekycClient.CompareFaceAsync(
+        EkycFaceComparison comparison = await ActiveClient().CompareFaceAsync(
             documentToken, selfie, "liveness.jpg", "image/jpeg", threshold, ct);
         verification.FaceMatchScore = comparison.Score;
         verification.LivenessSessionId = null;
@@ -442,7 +442,7 @@ public sealed class EkycService : IEkycService
             return;
         }
 
-        EkycFaceEmbedding embedding = await ekycClient.GetFaceEmbeddingAsync(selfie, "liveness.jpg", "image/jpeg", ct);
+        EkycFaceEmbedding embedding = await ActiveClient().GetFaceEmbeddingAsync(selfie, "liveness.jpg", "image/jpeg", ct);
 
         OwnerFaceTemplate template = new OwnerFaceTemplate();
         template.UserId = userId;
@@ -510,7 +510,7 @@ public sealed class EkycService : IEkycService
     {
         try
         {
-            await ekycClient.DeleteLivenessAsync(sessionId, ct);
+            await ActiveClient().DeleteLivenessAsync(sessionId, ct);
         }
         catch (AppException)
         {
@@ -550,6 +550,19 @@ public sealed class EkycService : IEkycService
             return EkycMappings.NotStarted(ekycOptions.CurrentThreshold);
         }
         return verification.ToResponse(ekycOptions.CurrentThreshold);
+    }
+
+    /// <summary>
+    /// Dịch vụ eKYC đang dùng: bình thường là dịch vụ Python; khi Admin "tạm ngừng eKYC" (công cụ thử nghiệm) thì là bản giả,
+    /// luôn đạt, đọc giấy tờ ra đúng người được chỉ định nên đối chiếu danh tính vẫn khớp.
+    /// </summary>
+    private IEkycClient ActiveClient(BeneficiaryPersonalData? expected = null)
+    {
+        if (!ekycOptions.Paused)
+        {
+            return ekycClient;
+        }
+        return new SimulatedEkycClient(expected, currentUser.RequireUserId());
     }
 
     /// <summary>
@@ -829,7 +842,7 @@ public sealed class EkycService : IEkycService
     {
         try
         {
-            await ekycClient.DeleteDocumentAsync(documentToken, ct);
+            await ActiveClient().DeleteDocumentAsync(documentToken, ct);
         }
         catch (AppException)
         {

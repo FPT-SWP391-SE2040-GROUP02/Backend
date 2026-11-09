@@ -43,6 +43,7 @@ public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
         ContactPayload contact = new ContactPayload();
         contact.Email = data.Email;
         contact.Phone = data.Phone;
+        contact.Message = data.Message;
 
         byte[] dataKey = dataKeyProtector.CreateDataKey();
         byte[] identityPlain = Array.Empty<byte>();
@@ -91,6 +92,7 @@ public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
             data.DateOfBirth = identity.DateOfBirth;
             data.Email = contact.Email;
             data.Phone = contact.Phone;
+            data.Message = contact.Message;
             return data;
         }
         finally
@@ -118,5 +120,7 @@ public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
         public string? Email { get; set; }
 
         public string? Phone { get; set; }
+
+        public string? Message { get; set; }
     }
 }

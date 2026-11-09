@@ -130,4 +130,31 @@ public sealed class DevToolsController(IDevToolsService devToolsService, IWebHos
         }
         return await devToolsService.UpdateEkycThresholdAsync(request, ct);
     }
+
+    /// <summary>Đọc trạng thái tạm ngừng eKYC.</summary>
+    [HttpGet("ekyc-pause")]
+    [ProducesResponseType<DevEkycPauseResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DevEkycPauseResponse>> GetEkycPause(CancellationToken ct)
+    {
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
+        {
+            return NotFound();
+        }
+        return await devToolsService.GetEkycPauseAsync(ct);
+    }
+
+    /// <summary>Bật hoặc tắt tạm ngừng eKYC để chạy thử cả luồng không cần chụp giấy tờ thật (ở bộ nhớ, không lưu DB).</summary>
+    [HttpPut("ekyc-pause")]
+    [Consumes("application/json")]
+    [ProducesResponseType<DevEkycPauseResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DevEkycPauseResponse>> UpdateEkycPause(DevEkycPauseRequest request, CancellationToken ct)
+    {
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Staging"))
+        {
+            return NotFound();
+        }
+        return await devToolsService.UpdateEkycPauseAsync(request, ct);
+    }
 }

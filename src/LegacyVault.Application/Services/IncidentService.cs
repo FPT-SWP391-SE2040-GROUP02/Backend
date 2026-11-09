@@ -11,6 +11,28 @@ namespace LegacyVault.Application.Services;
 /// <summary>Luật thuần của sự cố (SRS §6.4, ASSIGN-04, AC-40).</summary>
 public static class IncidentRules
 {
+    /// <summary>
+    /// Vai trò chịu trách nhiệm xử lý theo loại sự cố: ADMIN tự xử lý, EXECUTOR hoặc VERIFIER là người liên quan
+    /// đến kho hoặc hồ sơ, Admin chỉ theo dõi và nhận báo khi quá hạn.
+    /// </summary>
+    public static string ResponsibleRole(IncidentType type)
+    {
+        switch (type)
+        {
+            case IncidentType.CheckInOverdue:
+            case IncidentType.NotificationFailed:
+            case IncidentType.SupplementLoop:
+            case IncidentType.PlanExpiring:
+            case IncidentType.ProxyLimit:
+                return "EXECUTOR";
+            case IncidentType.StaleCase:
+            case IncidentType.OwnerAlive:
+                return "VERIFIER";
+            default:
+                return "ADMIN";
+        }
+    }
+
     /// <summary>Hạn xử lý mặc định và mốc nhắc người phụ trách (bảng thời hạn: việc thủ công nhắc sau 48 giờ).</summary>
     public static TimeSpan ReminderAfter => RuntimeSettings.Hours("Incident.ReminderAfterHours", 48);
 
@@ -60,8 +82,13 @@ public interface IIncidentService
     Task ReassignByTargetAsync(
         IncidentType type, string targetType, Guid? targetId, Guid newAssigneeUserId, string note, CancellationToken ct);
 
+    /// <summary>Số sự cố theo trạng thái để hiện trên các thẻ lọc; cùng bộ lọc với danh sách nhưng bỏ qua trạng thái.</summary>
+    Task<CountsResponse> CountsAsync(
+        string? type, Guid? assigneeUserId, string? search, bool overdueOnly, bool mine, CancellationToken ct);
+
     Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
-        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct);
+        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct,
+        bool mine = false);
 
     Task<IncidentDetailResponse> GetAsync(Guid incidentId, CancellationToken ct);
 
@@ -188,10 +215,37 @@ public sealed class IncidentService : IIncidentService
         AddEvent(open, IncidentEventKind.Assigned, null, note, now);
     }
 
-    public async Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
-        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
+    public async Task<CountsResponse> CountsAsync(
+        string? type, Guid? assigneeUserId, string? search, bool overdueOnly, bool mine, CancellationToken ct)
     {
         await RequireAdminAsync(ct);
+        IncidentType? typeFilter = ParseEnum<IncidentType>(type, "type");
+        if (mine)
+        {
+            assigneeUserId = currentUser.RequireUserId();
+        }
+        Dictionary<IncidentStatus, int> byStatus = await incidents.CountByStatusAsync(
+            typeFilter, assigneeUserId, search, overdueOnly, timeProvider.GetUtcNow(), ct);
+        CountsResponse response = new CountsResponse();
+        foreach (IncidentStatus status in Enum.GetValues<IncidentStatus>())
+        {
+            int count = byStatus.TryGetValue(status, out int found) ? found : 0;
+            response.Counts[status.ToApiString()] = count;
+            response.Total += count;
+        }
+        return response;
+    }
+
+    public async Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
+        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct,
+        bool mine = false)
+    {
+        await RequireAdminAsync(ct);
+        if (mine)
+        {
+            // "Của tôi": chỉ sự cố đang giao cho chính Admin đang đăng nhập, bỏ qua assigneeUserId từ client.
+            assigneeUserId = currentUser.RequireUserId();
+        }
         IncidentStatus? statusFilter = ParseEnum<IncidentStatus>(status, "status");
         IncidentType? typeFilter = ParseEnum<IncidentType>(type, "type");
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -203,6 +257,7 @@ public sealed class IncidentService : IIncidentService
         {
             page.Items.Add(OperationsMapper.ToSummary(incident, now));
         }
+        await FillAssigneesAsync(page.Items, ct);
         page.TotalCount = total;
         page.PageIndex = pageIndex;
         page.PageSize = pageSize;
@@ -216,7 +271,33 @@ public sealed class IncidentService : IIncidentService
     {
         await RequireAdminAsync(ct);
         Incident incident = await LoadAsync(incidentId, ct);
-        return OperationsMapper.ToDetail(incident, timeProvider.GetUtcNow());
+        IncidentDetailResponse detail = OperationsMapper.ToDetail(incident, timeProvider.GetUtcNow());
+        await FillAssigneesAsync(new List<IncidentSummaryResponse> { detail }, ct);
+        return detail;
+    }
+
+    /// <summary>Điền họ tên và vai trò người phụ trách; mỗi tài khoản chỉ tra một lần dù có nhiều sự cố.</summary>
+    private async Task FillAssigneesAsync(List<IncidentSummaryResponse> items, CancellationToken ct)
+    {
+        Dictionary<Guid, User?> found = new Dictionary<Guid, User?>();
+        foreach (IncidentSummaryResponse item in items)
+        {
+            if (item.AssigneeUserId == null)
+            {
+                continue;
+            }
+            Guid id = item.AssigneeUserId.Value;
+            if (!found.ContainsKey(id))
+            {
+                found[id] = await users.FindByIdAsync(id, ct);
+            }
+            User? user = found[id];
+            if (user != null)
+            {
+                item.AssigneeFullName = user.FullName;
+                item.AssigneeRole = user.Role.ToApiString();
+            }
+        }
     }
 
     public async Task<IncidentDetailResponse> AssignAsync(
@@ -225,7 +306,6 @@ public sealed class IncidentService : IIncidentService
         Guid adminId = await RequireAdminAsync(ct);
         string note = RequireNote(reason, "reason");
         Incident incident = await LoadOpenAsync(incidentId, etag, ct);
-        EnsureNotFollowingCase(incident);
 
         User? assignee = await users.FindByIdAsync(assigneeUserId, ct);
         if (!IncidentRules.IsStaff(assignee))
@@ -294,7 +374,6 @@ public sealed class IncidentService : IIncidentService
         {
             throw Conflict();
         }
-        EnsureNotFollowingCase(incident);
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         incident.Status = IncidentStatus.Resolved;
@@ -402,22 +481,6 @@ public sealed class IncidentService : IIncidentService
             }
         }
         throw ValidationErrors.For(field, "Giá trị lọc không hợp lệ.");
-    }
-
-    /// <summary>
-    /// ALIVE-08: sự cố OWNER_ALIVE đi theo hồ sơ. Người phụ trách luôn là Verifier giữ hồ sơ và sự cố tự đóng khi Verifier
-    /// kết luận. Giao hay đóng tay sẽ lệch với hồ sơ (người được giao mở hồ sơ nhận 404, kho vẫn bị chặn), nên Admin
-    /// đổi người bằng POST /admin/death-cases/{caseId}/reassign-verifier.
-    /// </summary>
-    private static void EnsureNotFollowingCase(Incident incident)
-    {
-        if (incident.Type == IncidentType.OwnerAlive)
-        {
-            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-            extensions["reason"] = "INCIDENT_FOLLOWS_CASE";
-            throw new AppException(AppErrorType.Conflict, ErrorCode.AdminActionNotAllowed,
-                "Sự cố này đi theo hồ sơ chứng tử. Hãy giao lại người xét duyệt của hồ sơ.", extensions);
-        }
     }
 
     private static AppException Conflict()

@@ -128,18 +128,9 @@ public sealed class DevToolsService(
             targetId = vault.Id;
             runEntitlementExpiry = true;
         }
-        else if (key == DevToolsRules.ObjectionWindowEnded)
+        else
         {
-            DeathCase? openCase = await repository.FindOpenDeathCaseAsync(vault.Id, ct);
-            EnsureAvailable(DevToolsRules.EvaluateObjectionWindow(openCase, now));
-            openCase!.ObjectionEndsAt = past;
-            openCase.ObjectionStartsAt = past.AddHours(-DeathCaseRules.ObjectionHours);
-            openCase.UpdatedAt = now;
-            targetType = AuditTargetType.DeathCase;
-            targetId = openCase.Id;
-        }
-        else if (key == DevToolsRules.RecipientDecisionEnded)
-        {
+            // Mốc cuối: key đã được kiểm là mốc hợp lệ nên chỉ còn RecipientDecisionEnded.
             // Dời hạn quyết định (7 ngày sau khi xác nhận danh tính) của mọi lượt đang chờ về quá khứ;
             // job hết hạn quyết định của hệ thống chuyển lượt sang DECISION_EXPIRED và đóng kế hoạch nếu mọi lượt đã xong.
             List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
@@ -159,16 +150,6 @@ public sealed class DevToolsService(
             targetType = AuditTargetType.Vault;
             targetId = vault.Id;
         }
-        else
-        {
-            DeathCaseObjection? objection = await repository.FindLatestObjectionAsync(vault.Id, ct);
-            EnsureAvailable(DevToolsRules.EvaluateSelfieDeadline(objection, now));
-            objection!.SelfieDeadlineAt = past;
-            objection.UpdatedAt = now;
-            targetType = AuditTargetType.DeathCase;
-            targetId = objection.CaseId;
-        }
-
         auditLogs.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.DevTimeTravel,
             targetType, targetId, null, AuditOutcome.Succeeded, key, now));
         await unitOfWork.SaveChangesAsync(ct);
@@ -314,6 +295,26 @@ public sealed class DevToolsService(
         return BuildThresholdResponse();
     }
 
+    public async Task<DevEkycPauseResponse> GetEkycPauseAsync(CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        return new DevEkycPauseResponse { Paused = ekycOptions.Paused };
+    }
+
+    public async Task<DevEkycPauseResponse> UpdateEkycPauseAsync(DevEkycPauseRequest request, CancellationToken ct)
+    {
+        Guid adminId = await RequireAdminAsync(ct);
+        bool previous = ekycOptions.Paused;
+        ekycOptions.SetPaused(request.Paused);
+
+        // Sự kiện toàn cục: ghi rõ trạng thái cũ và mới để biết lúc nào eKYC bị ngừng.
+        string reason = $"paused {previous} -> {request.Paused}";
+        auditLogs.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.DevToggleEkycPause,
+            AuditTargetType.Configuration, null, null, AuditOutcome.Succeeded, reason, timeProvider.GetUtcNow()));
+        await unitOfWork.SaveChangesAsync(ct);
+        return new DevEkycPauseResponse { Paused = ekycOptions.Paused };
+    }
+
     private DevEkycThresholdResponse BuildThresholdResponse()
     {
         return new DevEkycThresholdResponse
@@ -454,8 +455,6 @@ public sealed class DevToolsService(
         DateTimeOffset now = timeProvider.GetUtcNow();
         PlanStatus status = vault.Plan.Status;
         CheckInPeriod? period = await repository.FindOpenPeriodAsync(vault.Plan.Id, ct);
-        DeathCase? openCase = await repository.FindOpenDeathCaseAsync(vault.Id, ct);
-        DeathCaseObjection? objection = await repository.FindLatestObjectionAsync(vault.Id, ct);
         AuditAction? latestClockAction = await repository.FindLatestClockActionAsync(vault.Id, ct);
 
         DevClockResponse response = new DevClockResponse();
@@ -465,8 +464,6 @@ public sealed class DevToolsService(
         response.ClockState = DevToolsRules.GetClockState(latestClockAction);
         response.Milestones.Add(DevToolsRules.EvaluateCheckInOverdue(status, period, now));
         response.Milestones.Add(DevToolsRules.EvaluateGraceEnded(status, period, now));
-        response.Milestones.Add(DevToolsRules.EvaluateObjectionWindow(openCase, now));
-        response.Milestones.Add(DevToolsRules.EvaluateSelfieDeadline(objection, now));
         response.Milestones.Add(DevToolsRules.EvaluateServiceExpired(vault.Entitlement));
         List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
         response.Milestones.Add(DevToolsRules.EvaluateRecipientDecision(turns, now));

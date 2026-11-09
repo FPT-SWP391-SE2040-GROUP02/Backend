@@ -11,13 +11,15 @@ public interface IHoldRepository
     Task<Hold?> FindByIdAsync(Guid holdId, CancellationToken ct);
 
     /// <summary>Hold F2C đang hiệu lực của kho (nếu có).</summary>
-    Task<Hold?> FindActiveOwnerAliveAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>Kho có hold nào đang hiệu lực không (mọi phạm vi) — chặn phát hành, kích hoạt và dọn dữ liệu.</summary>
     Task<bool> HasActiveHoldAsync(Guid vaultId, CancellationToken ct);
 
     Task<(List<Hold> Items, int TotalCount)> ListAsync(
         HoldStatus? status, Guid? vaultId, int pageIndex, int pageSize, CancellationToken ct);
+
+    /// <summary>Số hold theo trạng thái (tuỳ chọn trong một kho).</summary>
+    Task<Dictionary<HoldStatus, int>> CountByStatusAsync(Guid? vaultId, CancellationToken ct);
 
     Task<int> CountActiveAsync(CancellationToken ct);
 

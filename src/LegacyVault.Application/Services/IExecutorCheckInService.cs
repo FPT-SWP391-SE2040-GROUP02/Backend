@@ -1,3 +1,4 @@
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 
 namespace LegacyVault.Application.Services;
@@ -19,7 +20,9 @@ public interface IExecutorCheckInService
     /// Lỗi: 404 VAULT_NOT_FOUND;
     /// 409 CHECKIN_NOT_ALLOWED kèm planStatus và reason = PLAN_NOT_OVERDUE (kế hoạch không ở CHECKIN_OVERDUE
     /// hoặc AWAITING_CHECK) hoặc DEATH_CASE_OPEN (kho đã có hồ sơ chứng tử đang mở);
-    /// 409 EDIT_CONFLICT khi có người khác điểm danh cùng lúc.
+    /// 409 EDIT_CONFLICT khi có người khác điểm danh cùng lúc;
+    /// 409 CHECKIN_NOT_ALLOWED với reason = PROXY_LIMIT_REACHED khi đã điểm danh thay đủ số lần liên tiếp cho phép;
+    /// 400 VALIDATION_ERROR khi thiếu thông tin liên lạc hoặc lúc liên lạc ở tương lai.
     /// </summary>
-    Task<ExecutorCheckInResponse> CheckInForOwnerAsync(Guid vaultId, CancellationToken ct);
+    Task<ExecutorCheckInResponse> CheckInForOwnerAsync(Guid vaultId, ExecutorCheckInRequest request, CancellationToken ct);
 }

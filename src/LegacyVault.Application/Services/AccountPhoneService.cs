@@ -23,7 +23,7 @@ public sealed class AccountPhoneService(
 {
     public async Task<UserResponse> SetMyPhoneAsync(SetPhoneRequest request, CancellationToken ct)
     {
-        string phone = PhoneRules.NormalizeVietnamPhone(request.Phone, "phone");
+        string phone = PhoneRules.NormalizeContactPhone(request.Phone, "phone");
 
         Guid? userId = currentUser.UserId;
         if (userId == null)

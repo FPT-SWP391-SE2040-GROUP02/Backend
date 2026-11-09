@@ -85,7 +85,6 @@ public static class InfrastructureConfig
         services.AddSingleton<IServiceStatusTracker, ServiceStatusTracker>();
         // Đọc đồng bộ cho các lớp singleton có thuộc tính đồng bộ (tài khoản nhận tiền, khóa webhook SePay).
         services.AddSingleton<ISyncConfigReader, SyncConfigReader>();
-        services.AddScoped<IServiceConnectionTester, GeminiConnectionTester>();
         services.AddScoped<IServiceConnectionTester, EkycConnectionTester>();
         services.AddScoped<IServiceConnectionTester, SmtpConnectionTester>();
         services.AddScoped<IServiceConnectionTester, R2ConnectionTester>();
@@ -95,12 +94,14 @@ public static class InfrastructureConfig
         services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
         services.AddScoped<IVaultPinRepository, VaultPinRepository>();
+        services.AddScoped<IExecutorKeyShardRepository, ExecutorKeyShardRepository>();
         services.AddScoped<ICheckInRepository, CheckInRepository>();
         services.AddScoped<IEntitlementExpiryRepository, EntitlementExpiryRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IHoldRepository, HoldRepository>();
         services.AddScoped<IIncidentRepository, IncidentRepository>();
         services.AddScoped<IAdminUserRepository, AdminUserRepository>();
+        services.AddScoped<IOperationsScanRepository, OperationsScanRepository>();
         services.AddHostedService<IncidentMonitor>();
         services.AddSingleton<IIncidentNoticeSender>(provider =>
         {
@@ -128,6 +129,7 @@ public static class InfrastructureConfig
 
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();
+        services.AddScoped<IExecutorAssetReader, ExecutorAssetReader>();
         services.AddScoped<IExecutorInvitationRepository, ExecutorInvitationRepository>();
         services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
         services.AddScoped<IExecutorReminderSender, ExecutorReminderSender>();

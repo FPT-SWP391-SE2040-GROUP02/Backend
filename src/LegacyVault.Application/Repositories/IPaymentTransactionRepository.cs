@@ -20,5 +20,22 @@ public interface IPaymentTransactionRepository
     /// thay đổi. pageIndex bắt đầu từ 1. Trả (các dòng của trang, tổng số dòng sau khi lọc).
     /// </summary>
     Task<(List<PaymentTransaction> Items, int Total)> ListAsync(
-        PaymentTransactionStatus? status, string? search, int pageIndex, int pageSize, CancellationToken ct);
+        PaymentTransactionStatus? status, string? search, int pageIndex, int pageSize, CancellationToken ct,
+        PaymentTransactionFilter? filter = null);
+}
+
+/// <summary>Bộ lọc thêm của danh sách giao dịch cho Admin. Mốc thời gian lọc theo cột "Nhận lúc" (ReceivedAt).</summary>
+public sealed class PaymentTransactionFilter
+{
+    /// <summary>true: chỉ giao dịch thành công, gồm Matched và Resolved; khi bật thì bỏ qua tham số status.</summary>
+    public bool SuccessOnly { get; set; }
+
+    /// <summary>"Live" hoặc "Test"; null là mọi môi trường.</summary>
+    public string? Environment { get; set; }
+
+    /// <summary>Từ thời điểm này, tính cả mốc.</summary>
+    public DateTimeOffset? From { get; set; }
+
+    /// <summary>Trước thời điểm này, không tính mốc.</summary>
+    public DateTimeOffset? ToExclusive { get; set; }
 }

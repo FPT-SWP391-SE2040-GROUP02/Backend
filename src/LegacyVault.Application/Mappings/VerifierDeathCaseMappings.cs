@@ -120,6 +120,7 @@ public static class VerifierDeathCaseMappings
             DeathCaseFileResponse fileResponse = new DeathCaseFileResponse();
             fileResponse.Id = file.Id;
             fileResponse.Position = file.Position;
+            fileResponse.Kind = file.Kind;
             fileResponse.FileName = file.FileName;
             fileResponse.ContentType = file.ContentType;
             fileResponse.SizeBytes = file.SizeBytes;
@@ -179,6 +180,7 @@ public static class VerifierDeathCaseMappings
             decisionResponse.Reason = decision.Reason;
             decisionResponse.RequestedParts = DeathCaseReviewRules.SplitRequestedParts(decision.RequestedParts);
             decisionResponse.DecidedAt = decision.DecidedAt;
+            decisionResponse.RecordCode = DeathCaseReviewRules.RecordCode(decision);
             responses.Add(decisionResponse);
         }
         return responses;

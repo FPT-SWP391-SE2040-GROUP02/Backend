@@ -216,12 +216,12 @@ public sealed class VerifierReadFlowTests : IAsyncLifetime
         Assert.DoesNotContain("executor", raw, StringComparison.OrdinalIgnoreCase);
         JsonElement detail = JsonSerializer.Deserialize<JsonElement>(raw);
         Assert.Equal("UNDER_REVIEW", detail.GetProperty("status").GetString());
-        Assert.False(detail.GetProperty("canApprove").GetBoolean());
-        Assert.Contains("OWNER_NOT_NOTIFIED", DeathCaseApi.ReadStrings(detail.GetProperty("approveBlockers")));
+        Assert.True(detail.GetProperty("canApprove").GetBoolean());
+        Assert.Empty(DeathCaseApi.ReadStrings(detail.GetProperty("approveBlockers")));
         Assert.Equal(0, detail.GetProperty("decisions").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("previousCase").ValueKind);
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("handover").ValueKind);
-        Assert.Equal("PENDING", detail.GetProperty("ownerNotice").GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("ownerNotice").ValueKind);
         Assert.NotEqual(JsonValueKind.Null, detail.GetProperty("assignment").GetProperty("dueAt").ValueKind);
     }
 

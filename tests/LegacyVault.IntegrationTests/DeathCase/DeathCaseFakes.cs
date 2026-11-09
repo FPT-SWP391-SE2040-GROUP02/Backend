@@ -101,11 +101,6 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         return Task.FromResult(Files.Count(f => f.StorageKey == storageKey));
     }
 
-    public Task<bool> HasCheckInAtOrAfterAsync(Guid planId, DateTimeOffset cutoffUtc, CancellationToken ct)
-    {
-        return Task.FromResult(false);
-    }
-
     public Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, List<string> excludedEmails, CancellationToken ct)
     {
         return Task.FromResult<Guid?>(null);
@@ -204,8 +199,14 @@ public sealed class FakeIncidentService : IIncidentService
         return Task.CompletedTask;
     }
 
+    public Task<CountsResponse> CountsAsync(
+        string? type, Guid? assigneeUserId, string? search, bool overdueOnly, bool mine, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
     public Task<PaginatedList<IncidentSummaryResponse>> ListAsync(
-        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct)
+        string? status, string? type, Guid? assigneeUserId, string? search, bool overdueOnly, int pageIndex, int pageSize, CancellationToken ct, bool mine = false)
     {
         throw new NotSupportedException();
     }

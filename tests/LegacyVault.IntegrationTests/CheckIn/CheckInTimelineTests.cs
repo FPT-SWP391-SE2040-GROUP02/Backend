@@ -7,10 +7,12 @@ namespace LegacyVault.IntegrationTests.CheckIn;
 /// <summary>Luật thời gian điểm danh (SRS DMS-01, DMS-06): không cần DB.</summary>
 public sealed class CheckInTimelineTests
 {
-    // Kỳ mẫu: chu kỳ 30 ngày, chờ 7 ngày.
+    // Kỳ mẫu: chu kỳ 30 ngày, 3 thư nhắc trễ cách nhau 3 ngày (thư gửi ngày 30, 33, 36; báo Người thực thi ngày 39).
+    private const int MaxLate = 3;
+    private const int Gap = 3;
     private static readonly DateTimeOffset Start = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Due = new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 7, 8, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset NotifyAt = new DateTimeOffset(2026, 11, 9, 8, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public void ComputeDueAt_AddsCycleDays()
@@ -19,52 +21,94 @@ public sealed class CheckInTimelineTests
     }
 
     [Fact]
-    public void ComputeGraceEndsAt_AddsGraceDays()
+    public void ComputeNotifyExecutorAt_AddsLateReminderSpan()
     {
-        Assert.Equal(GraceEnds, CheckInTimeline.ComputeGraceEndsAt(Due, 7));
+        Assert.Equal(NotifyAt, CheckInTimeline.ComputeNotifyExecutorAt(Due, MaxLate, Gap));
+        Assert.Equal(Due.AddDays(5), CheckInTimeline.ComputeNotifyExecutorAt(Due, 5, 1));
     }
 
     [Fact]
     public void EffectiveStatus_BoundariesUseGreaterOrEqual()
     {
         Assert.Equal(PlanStatus.Active,
-            CheckInTimeline.EffectiveStatus(Due, GraceEnds, Due.AddSeconds(-1)));
+            CheckInTimeline.EffectiveStatus(Due, NotifyAt, Due.AddSeconds(-1)));
         Assert.Equal(PlanStatus.CheckinOverdue,
-            CheckInTimeline.EffectiveStatus(Due, GraceEnds, Due));
+            CheckInTimeline.EffectiveStatus(Due, NotifyAt, Due));
         Assert.Equal(PlanStatus.CheckinOverdue,
-            CheckInTimeline.EffectiveStatus(Due, GraceEnds, GraceEnds.AddSeconds(-1)));
+            CheckInTimeline.EffectiveStatus(Due, NotifyAt, NotifyAt.AddSeconds(-1)));
         Assert.Equal(PlanStatus.AwaitingCheck,
-            CheckInTimeline.EffectiveStatus(Due, GraceEnds, GraceEnds));
+            CheckInTimeline.EffectiveStatus(Due, NotifyAt, NotifyAt));
     }
 
     [Fact]
-    public void MilestoneAt_ReturnsFourSpecMilestones()
+    public void MilestoneAt_ReturnsBeforeDueAndLateReminders()
     {
-        Assert.Equal(Due.AddDays(-7), CheckInTimeline.MilestoneAt(CheckInReminderKind.DueInSevenDays, Due, GraceEnds));
-        Assert.Equal(Due.AddDays(-1), CheckInTimeline.MilestoneAt(CheckInReminderKind.DueInOneDay, Due, GraceEnds));
-        Assert.Equal(Due, CheckInTimeline.MilestoneAt(CheckInReminderKind.GraceStarted, Due, GraceEnds));
-        Assert.Equal(GraceEnds.AddDays(-2), CheckInTimeline.MilestoneAt(CheckInReminderKind.GraceTwoDaysLeft, Due, GraceEnds));
+        Assert.Equal(Due.AddDays(-7), CheckInTimeline.MilestoneAt(CheckInReminderKind.DueInSevenDays, Due, Gap));
+        Assert.Equal(Due.AddDays(-1), CheckInTimeline.MilestoneAt(CheckInReminderKind.DueInOneDay, Due, Gap));
+        Assert.Equal(Due, CheckInTimeline.MilestoneAt(CheckInReminderKind.LateReminder1, Due, Gap));
+        Assert.Equal(Due.AddDays(3), CheckInTimeline.MilestoneAt(CheckInReminderKind.LateReminder2, Due, Gap));
+        Assert.Equal(Due.AddDays(6), CheckInTimeline.MilestoneAt(CheckInReminderKind.LateReminder3, Due, Gap));
+    }
+
+    [Theory]
+    [InlineData(CheckInReminderKind.GraceStarted)]
+    [InlineData(CheckInReminderKind.GraceTwoDaysLeft)]
+    public void MilestoneAt_LegacyKindsAreRejected(CheckInReminderKind kind)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => CheckInTimeline.MilestoneAt(kind, Due, Gap));
+    }
+
+    [Fact]
+    public void ActiveKinds_FollowsMaxLateReminders()
+    {
+        Assert.Equal(
+            new[]
+            {
+                CheckInReminderKind.DueInSevenDays, CheckInReminderKind.DueInOneDay,
+                CheckInReminderKind.LateReminder1, CheckInReminderKind.LateReminder2, CheckInReminderKind.LateReminder3,
+            },
+            CheckInTimeline.ActiveKinds(3).ToArray());
+        Assert.Equal(4, CheckInTimeline.ActiveKinds(2).Count);
+        Assert.Equal(7, CheckInTimeline.ActiveKinds(5).Count);
+    }
+
+    [Fact]
+    public void LateReminderKind_MapsBothWays()
+    {
+        for (int i = 1; i <= CheckInRules.MaxLateRemindersLimit; i++)
+        {
+            Assert.Equal(i, CheckInTimeline.LateReminderIndex(CheckInTimeline.LateReminderKind(i)));
+        }
+        Assert.Equal(0, CheckInTimeline.LateReminderIndex(CheckInReminderKind.DueInOneDay));
+        Assert.Equal(0, CheckInTimeline.LateReminderIndex(CheckInReminderKind.GraceStarted));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CheckInTimeline.LateReminderKind(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CheckInTimeline.LateReminderKind(6));
     }
 
     [Fact]
     public void LatestReachedMilestone_ReturnsNullBeforeFirst()
     {
-        Assert.Null(CheckInTimeline.LatestReachedMilestone(Due, GraceEnds, Due.AddDays(-7).AddSeconds(-1)));
+        Assert.Null(CheckInTimeline.LatestReachedMilestone(Due, MaxLate, Gap, Due.AddDays(-7).AddSeconds(-1)));
     }
 
     [Fact]
     public void LatestReachedMilestone_PicksNewestReached()
     {
         Assert.Equal(CheckInReminderKind.DueInSevenDays,
-            CheckInTimeline.LatestReachedMilestone(Due, GraceEnds, Due.AddDays(-7)));
+            CheckInTimeline.LatestReachedMilestone(Due, MaxLate, Gap, Due.AddDays(-7)));
         Assert.Equal(CheckInReminderKind.DueInOneDay,
-            CheckInTimeline.LatestReachedMilestone(Due, GraceEnds, Due.AddDays(-1)));
-        Assert.Equal(CheckInReminderKind.GraceStarted,
-            CheckInTimeline.LatestReachedMilestone(Due, GraceEnds, Due));
-        Assert.Equal(CheckInReminderKind.GraceTwoDaysLeft,
-            CheckInTimeline.LatestReachedMilestone(Due, GraceEnds, GraceEnds.AddDays(-2)));
-        Assert.Equal(CheckInReminderKind.GraceTwoDaysLeft,
-            CheckInTimeline.LatestReachedMilestone(Due, GraceEnds, GraceEnds.AddDays(30)));
+            CheckInTimeline.LatestReachedMilestone(Due, MaxLate, Gap, Due.AddDays(-1)));
+        Assert.Equal(CheckInReminderKind.LateReminder1,
+            CheckInTimeline.LatestReachedMilestone(Due, MaxLate, Gap, Due));
+        Assert.Equal(CheckInReminderKind.LateReminder2,
+            CheckInTimeline.LatestReachedMilestone(Due, MaxLate, Gap, Due.AddDays(3)));
+        Assert.Equal(CheckInReminderKind.LateReminder3,
+            CheckInTimeline.LatestReachedMilestone(Due, MaxLate, Gap, Due.AddDays(6)));
+        // Không bao giờ vượt quá số thư Admin đặt, dù đã qua rất lâu.
+        Assert.Equal(CheckInReminderKind.LateReminder3,
+            CheckInTimeline.LatestReachedMilestone(Due, MaxLate, Gap, Due.AddDays(60)));
+        Assert.Equal(CheckInReminderKind.LateReminder1,
+            CheckInTimeline.LatestReachedMilestone(Due, 1, Gap, Due.AddDays(60)));
     }
 
     [Theory]
@@ -79,20 +123,6 @@ public sealed class CheckInTimelineTests
     public void Rules_AcceptOnlySpecCycleDays(int days, bool expected)
     {
         Assert.Equal(expected, CheckInRules.IsAllowedCycleDays(days));
-    }
-
-    [Theory]
-    [InlineData(7, true)]
-    [InlineData(14, true)]
-    [InlineData(30, true)]
-    [InlineData(0, false)]
-    [InlineData(-7, false)]
-    [InlineData(8, false)]
-    [InlineData(21, false)]
-    [InlineData(60, false)]
-    public void Rules_AcceptOnlySpecGraceDays(int days, bool expected)
-    {
-        Assert.Equal(expected, CheckInRules.IsAllowedGraceDays(days));
     }
 
     [Fact]

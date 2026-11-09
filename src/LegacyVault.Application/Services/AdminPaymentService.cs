@@ -16,7 +16,8 @@ public interface IAdminPaymentService
     /// Không phải Admin đang hoạt động → 404; status lạ → 400.
     /// </summary>
     Task<PaginatedList<AdminPaymentTransactionResponse>> ListAsync(
-        string? status, string? search, int pageIndex, int pageSize, CancellationToken ct);
+        string? status, string? search, int pageIndex, int pageSize, CancellationToken ct,
+        string? environment = null, string? from = null, string? to = null);
 }
 
 /// <remarks>
@@ -41,13 +42,29 @@ public sealed class AdminPaymentService : IAdminPaymentService
     }
 
     public async Task<PaginatedList<AdminPaymentTransactionResponse>> ListAsync(
-        string? status, string? search, int pageIndex, int pageSize, CancellationToken ct)
+        string? status, string? search, int pageIndex, int pageSize, CancellationToken ct,
+        string? environment = null, string? from = null, string? to = null)
     {
         await RequireAdminAsync(ct);
+        PaymentTransactionFilter filter = new PaymentTransactionFilter();
+        // "SUCCESS" gộp Đã khớp đơn và Đã xử lý thành một nhóm "Thành công".
+        if (string.Equals(status?.Trim(), "SUCCESS", StringComparison.Ordinal))
+        {
+            filter.SuccessOnly = true;
+            status = null;
+        }
         PaymentTransactionStatus? statusFilter = ParseStatus(status);
+        filter.Environment = ParseEnvironment(environment);
+        filter.From = ParseDayStart(from, "from");
+        DateTimeOffset? lastDay = ParseDayStart(to, "to");
+        filter.ToExclusive = lastDay?.AddDays(1);
+        if (filter.From != null && lastDay != null && filter.From > lastDay)
+        {
+            throw ValidationErrors.For("from", "Ngày bắt đầu phải trước hoặc cùng ngày kết thúc.");
+        }
 
         (List<PaymentTransaction> items, int total) = await transactionRepository.ListAsync(
-            statusFilter, search, pageIndex, pageSize, ct);
+            statusFilter, search, pageIndex, pageSize, ct, filter);
 
         PaginatedList<AdminPaymentTransactionResponse> page = new PaginatedList<AdminPaymentTransactionResponse>();
         foreach (PaymentTransaction transaction in items)
@@ -72,6 +89,35 @@ public sealed class AdminPaymentService : IAdminPaymentService
             // Không lộ sự tồn tại của khu vực Admin (SEC-04), cùng mã lỗi với AdminService.
             throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Không tìm thấy tài khoản.");
         }
+    }
+
+    private static string? ParseEnvironment(string? environment)
+    {
+        if (string.IsNullOrWhiteSpace(environment))
+        {
+            return null;
+        }
+        string wanted = environment.Trim();
+        if (wanted == "Live" || wanted == "Test")
+        {
+            return wanted;
+        }
+        throw ValidationErrors.For("environment", "Giá trị lọc không hợp lệ.");
+    }
+
+    /// <summary>Ngày yyyy-MM-dd tính theo giờ Việt Nam (UTC+7); trả 00:00 của ngày đó.</summary>
+    private static DateTimeOffset? ParseDayStart(string? value, string field)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+        if (!DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out DateOnly day))
+        {
+            throw ValidationErrors.For(field, "Ngày không hợp lệ, cần dạng yyyy-MM-dd.");
+        }
+        return new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7));
     }
 
     private static PaymentTransactionStatus? ParseStatus(string? status)

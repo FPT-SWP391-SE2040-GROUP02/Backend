@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Net;
 using System.Text.Json;
 using LegacyVault.Domain.Entities;
@@ -60,7 +61,7 @@ public sealed class ExecutorCheckInFlowTests : IAsyncLifetime
         (DeathCaseTestData.OwnerVault vault, DeathCaseTestData.ExecutorClient executor) =
             await CreateOverdueVaultAsync(PlanStatus.AwaitingCheck);
 
-        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), null);
+        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), ApiTestHelpers.ProxyCheckInBody());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(response);
@@ -103,7 +104,7 @@ public sealed class ExecutorCheckInFlowTests : IAsyncLifetime
         (DeathCaseTestData.OwnerVault vault, DeathCaseTestData.ExecutorClient executor) =
             await CreateOverdueVaultAsync(PlanStatus.CheckinOverdue);
 
-        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), null);
+        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), ApiTestHelpers.ProxyCheckInBody());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -119,7 +120,7 @@ public sealed class ExecutorCheckInFlowTests : IAsyncLifetime
         (DeathCaseTestData.OwnerVault vault, DeathCaseTestData.ExecutorClient executor) =
             await CreateOverdueVaultAsync(PlanStatus.Active);
 
-        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), null);
+        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), ApiTestHelpers.ProxyCheckInBody());
 
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
             response, HttpStatusCode.Conflict, "CHECKIN_NOT_ALLOWED");
@@ -136,7 +137,7 @@ public sealed class ExecutorCheckInFlowTests : IAsyncLifetime
             "/api/v1/executor/vaults/" + vault.VaultId + "/death-case", null);
         Assert.Equal(HttpStatusCode.Created, opened.StatusCode);
 
-        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), null);
+        HttpResponseMessage response = await executor.Client.PostAsync(CheckInUrl(vault.VaultId), ApiTestHelpers.ProxyCheckInBody());
 
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
             response, HttpStatusCode.Conflict, "CHECKIN_NOT_ALLOWED");
@@ -156,8 +157,8 @@ public sealed class ExecutorCheckInFlowTests : IAsyncLifetime
         HttpClient strangerClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(strangerClient, factory.Services, stranger);
 
-        HttpResponseMessage byOwner = await vault.Client.PostAsync(CheckInUrl(vault.VaultId), null);
-        HttpResponseMessage byStranger = await strangerClient.PostAsync(CheckInUrl(vault.VaultId), null);
+        HttpResponseMessage byOwner = await vault.Client.PostAsync(CheckInUrl(vault.VaultId), ApiTestHelpers.ProxyCheckInBody());
+        HttpResponseMessage byStranger = await strangerClient.PostAsync(CheckInUrl(vault.VaultId), ApiTestHelpers.ProxyCheckInBody());
 
         await ApiTestHelpers.AssertProblemAsync(byOwner, HttpStatusCode.NotFound, "VAULT_NOT_FOUND");
         await ApiTestHelpers.AssertProblemAsync(byStranger, HttpStatusCode.NotFound, "VAULT_NOT_FOUND");
@@ -174,7 +175,7 @@ public sealed class ExecutorCheckInFlowTests : IAsyncLifetime
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, revoked);
 
-        HttpResponseMessage response = await client.PostAsync(CheckInUrl(vault.VaultId), null);
+        HttpResponseMessage response = await client.PostAsync(CheckInUrl(vault.VaultId), ApiTestHelpers.ProxyCheckInBody());
 
         await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.NotFound, "VAULT_NOT_FOUND");
     }

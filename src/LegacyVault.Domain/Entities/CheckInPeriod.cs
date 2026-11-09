@@ -4,7 +4,8 @@ namespace LegacyVault.Domain.Entities;
 /// Một kỳ điểm danh của kế hoạch (bảng CheckInPeriods). Danh sách các kỳ cũng là lịch sử điểm danh.
 /// </summary>
 /// <remarks>
-/// - DueAt và GraceEndsAt được chốt cứng lúc mở kỳ, nên đổi cấu hình sau đó không làm đổi kỳ đang chạy (DMS-01).
+/// - DueAt, GraceEndsAt, LateReminderGapDays và MaxLateReminders được chốt cứng lúc mở kỳ, nên đổi cấu hình sau đó không
+///   làm đổi kỳ đang chạy (DMS-01).
 /// - Mỗi kế hoạch chỉ có tối đa một kỳ đang mở (ClosedAt = null) — ràng buộc unique có lọc ở DB.
 /// - OverdueAt và AwaitingCheckAt chỉ được ghi một lần cho mỗi kỳ (DMS-02). AwaitingCheckAt là dấu để
 ///   module Executor biết cần giao việc kiểm tra.
@@ -27,8 +28,17 @@ public class CheckInPeriod
     /// <summary>Hạn điểm danh: quá hạn này kế hoạch sang CHECKIN_OVERDUE.</summary>
     public DateTimeOffset DueAt { get; set; }
 
-    /// <summary>Hết thời gian chờ: quá mốc này kế hoạch sang AWAITING_CHECK.</summary>
+    /// <summary>
+    /// Mốc báo Người thực thi: hạn điểm danh + số thư nhắc trễ × khoảng cách giữa các thư. Quá mốc này mà chủ kho
+    /// vẫn chưa điểm danh thì kế hoạch sang AWAITING_CHECK. Tên cột giữ nguyên từ cách làm cũ (thời gian chờ cố định).
+    /// </summary>
     public DateTimeOffset GraceEndsAt { get; set; }
+
+    /// <summary>Khoảng cách giữa hai thư nhắc trễ (ngày), lấy từ cấu hình Admin lúc mở kỳ.</summary>
+    public int LateReminderGapDays { get; set; } = 3;
+
+    /// <summary>Số thư nhắc trễ gửi cho chủ kho trước khi báo Người thực thi, lấy từ cấu hình Admin lúc mở kỳ.</summary>
+    public int MaxLateReminders { get; set; } = 3;
 
     /// <summary>Có giá trị nghĩa là Owner đã điểm danh và kỳ này đã đóng.</summary>
     public DateTimeOffset? CheckedInAt { get; set; }
@@ -42,6 +52,15 @@ public class CheckInPeriod
     /// thì false. Chỉ dùng để khóa nút điểm danh của chủ kho trong ngày Executor bấm; không ảnh hưởng CheckedInAt.
     /// </summary>
     public bool StartedByExecutor { get; set; }
+
+    /// <summary>Người Executor đã liên lạc trước khi điểm danh thay; chỉ có khi StartedByExecutor = true.</summary>
+    public string? ProxyContactedWho { get; set; }
+
+    /// <summary>Lúc Executor liên lạc (do Executor khai, không phải giờ server).</summary>
+    public DateTimeOffset? ProxyContactedAt { get; set; }
+
+    /// <summary>Cách liên lạc: PHONE, IN_PERSON, MESSAGE hoặc EMAIL.</summary>
+    public string? ProxyContactMethod { get; set; }
 
     /// <summary>Kỳ đóng vì điểm danh hoặc vì dừng lịch; null khi kỳ còn mở.</summary>
     public DateTimeOffset? ClosedAt { get; set; }

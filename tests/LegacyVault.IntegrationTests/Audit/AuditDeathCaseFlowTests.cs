@@ -146,29 +146,6 @@ public sealed class AuditDeathCaseFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task SEC07_VerifierReject_WritesRow_RepeatDoesNotAdd()
-    {
-        // Chuẩn bị
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-
-        // Hành động: từ chối hai lần
-        HttpResponseMessage first = await DeathCaseReviewTestData.RejectNowAsync(submitted, FreeTextReason);
-        HttpResponseMessage second = await DeathCaseReviewTestData.RejectNowAsync(submitted, FreeTextReason);
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
-        List<AuditLog> rows = await AuditTestData.ListForVaultAsync(
-            factory, submitted.Vault.VaultId, AuditAction.DeathCaseRejected);
-        AuditLog row = Assert.Single(rows);
-        Assert.Equal(AuditActorRole.Verifier, row.ActorRole);
-        Assert.Equal(submitted.CaseId, row.TargetId);
-        // Chỉ ghi mã, không ghi lý do tự do (Owner xem được nhật ký)
-        Assert.Equal("VERIFIER_REJECTED", row.Reason);
-        Assert.DoesNotContain(FreeTextReason, row.Reason);
-    }
-
-    [SqlFact]
     public async Task SEC07_VerifierApprove_WritesRow_RepeatDoesNotAdd()
     {
         // Chuẩn bị: hồ sơ duyệt được

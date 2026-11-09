@@ -237,11 +237,32 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("GraceEndsAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<int>("LateReminderGapDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(3);
+
+                    b.Property<int>("MaxLateReminders")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(3);
+
                     b.Property<DateTimeOffset?>("OverdueAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ProxyContactMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset?>("ProxyContactedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ProxyContactedWho")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -604,6 +625,14 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("DEATH_CERTIFICATE");
 
                     b.Property<int>("Position")
                         .HasColumnType("int");
@@ -1200,6 +1229,37 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("Executors", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.ExecutorKeyShard", b =>
+                {
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ReissuedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ShardHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("VaultId");
+
+                    b.ToTable("ExecutorKeyShards", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.ExternalLogin", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1520,6 +1580,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsFixedLength();
 
                     b.Property<DateTimeOffset>("InvitedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("KeyFailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("KeyVerifiedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("PlanId")
@@ -2468,6 +2534,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("LastLoginAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("LawyerCardNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -2475,6 +2545,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<string>("Phone")
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("PracticeCertificateNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -2986,6 +3060,15 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("User");
 
                     b.Navigation("Vault");
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.ExecutorKeyShard", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Vault", null)
+                        .WithOne()
+                        .HasForeignKey("LegacyVault.Domain.Entities.ExecutorKeyShard", "VaultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.ExternalLogin", b =>

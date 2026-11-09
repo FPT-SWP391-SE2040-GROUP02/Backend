@@ -96,6 +96,8 @@ public enum AuditAction
     DevRewindBeforeEkyc = 42,
     /// <summary>Admin đổi ngưỡng so khớp khuôn mặt eKYC bằng công cụ thử nghiệm (chỉ có ở Development/Staging).</summary>
     DevUpdateEkycThreshold = 43,
+    /// <summary>Admin bật hoặc tắt chế độ tạm ngừng eKYC bằng công cụ thử nghiệm (chỉ có ở Development/Staging).</summary>
+    DevToggleEkycPause = 59,
     /// <summary>Admin tạo tài khoản hệ thống mới (Verifier hoặc Executor).</summary>
     AdminCreatedUser = 44,
     /// <summary>Owner đặt mã PIN của kho lần đầu.</summary>
@@ -120,4 +122,10 @@ public enum AuditAction
     SystemConfigUpdated = 54,
     /// <summary>Admin khôi phục cấu hình một dịch vụ ngoài về giá trị mặc định trong appsettings.</summary>
     SystemConfigReset = 55,
+    /// <summary>Owner cấp mảnh khóa lần đầu cho Người thực thi.</summary>
+    ExecutorKeyIssued = 56,
+    /// <summary>Owner cấp lại mảnh khóa vì Người thực thi quên hoặc mất; mảnh cũ hết hiệu lực.</summary>
+    ExecutorKeyReissued = 57,
+    /// <summary>Admin giao hoặc đổi Người thực thi của một kho, kèm lý do (người được giao phải chấp nhận lời mời).</summary>
+    ExecutorAssignedByAdmin = 58,
 }

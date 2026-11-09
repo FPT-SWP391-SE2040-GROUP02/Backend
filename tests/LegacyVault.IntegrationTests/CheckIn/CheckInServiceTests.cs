@@ -16,7 +16,7 @@ public sealed class CheckInServiceTests
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 14, 8, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset PeriodStart = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Due = new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 7, 8, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 9, 8, 0, 0, TimeSpan.Zero);
 
     private readonly FakeCurrentUser currentUser = new FakeCurrentUser();
     private readonly FakeVaultRepository vaults = new FakeVaultRepository();
@@ -39,7 +39,7 @@ public sealed class CheckInServiceTests
         vaults.Vaults.Add(vault);
         if (withOpenPeriod)
         {
-            repository.Periods.Add(CheckInTestData.CreateOpenPeriod(vault.Plan, 1, PeriodStart, 30, 7));
+            repository.Periods.Add(CheckInTestData.CreateOpenPeriod(vault.Plan, 1, PeriodStart, 30));
         }
         return vault;
     }
@@ -59,7 +59,8 @@ public sealed class CheckInServiceTests
         Assert.Null(response.LastCheckInAt);
         Assert.Empty(response.History.Items);
         Assert.Equal(30, response.Settings.CycleDays);
-        Assert.Equal(7, response.Settings.GraceDays);
+        Assert.Equal(3, response.Settings.LateReminderGapDays);
+        Assert.Equal(3, response.Settings.MaxLateReminders);
         Assert.Equal("\"0\"", response.Settings.Etag);
     }
 
@@ -97,7 +98,7 @@ public sealed class CheckInServiceTests
         Vault vault = SeedVault(PlanStatus.Active, withOpenPeriod: false);
         for (int sequence = 1; sequence <= 3; sequence++)
         {
-            CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, sequence, PeriodStart, 30, 7);
+            CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, sequence, PeriodStart, 30);
             if (sequence < 3)
             {
                 period.CheckedInAt = PeriodStart;
@@ -150,7 +151,9 @@ public sealed class CheckInServiceTests
         Assert.Equal(2, newPeriod.Sequence);
         Assert.Equal(Now, newPeriod.StartedAt);
         Assert.Equal(Now.AddDays(30), newPeriod.DueAt);
-        Assert.Equal(Now.AddDays(37), newPeriod.GraceEndsAt);
+        Assert.Equal(Now.AddDays(39), newPeriod.GraceEndsAt);
+        Assert.Equal(3, newPeriod.MaxLateReminders);
+        Assert.Equal(3, newPeriod.LateReminderGapDays);
         Assert.Equal(PlanStatus.Active, vault.Plan.Status);
         Assert.Equal(Now, Assert.Single(repository.Schedules).LastCheckInAt);
         Assert.Equal(1, unitOfWork.SaveCount);
@@ -166,18 +169,15 @@ public sealed class CheckInServiceTests
         CheckInSchedule schedule = new CheckInSchedule();
         schedule.PlanId = vault.Plan.Id;
         schedule.PendingCycleDays = 60;
-        schedule.PendingGraceDays = 14;
         repository.Schedules.Add(schedule);
 
         await service.CheckInAsync(CancellationToken.None);
 
         CheckInPeriod newPeriod = Assert.Single(repository.Periods, p => p.ClosedAt == null);
         Assert.Equal(Now.AddDays(60), newPeriod.DueAt);
-        Assert.Equal(Now.AddDays(74), newPeriod.GraceEndsAt);
+        Assert.Equal(Now.AddDays(69), newPeriod.GraceEndsAt);
         Assert.Equal(60, schedule.CycleDays);
-        Assert.Equal(14, schedule.GraceDays);
         Assert.Null(schedule.PendingCycleDays);
-        Assert.Null(schedule.PendingGraceDays);
     }
 
     [Fact]
@@ -261,7 +261,7 @@ public sealed class CheckInServiceTests
     private void SeedExecutorStartedPeriod(DateTimeOffset startedAt)
     {
         Vault vault = SeedVault(PlanStatus.Active, withOpenPeriod: false);
-        CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, 2, startedAt, 30, 7);
+        CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, 2, startedAt, 30);
         period.StartedByExecutor = true;
         repository.Periods.Add(period);
     }

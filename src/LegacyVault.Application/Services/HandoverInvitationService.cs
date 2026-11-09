@@ -35,6 +35,8 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
+    private readonly IHandoverContactReader? contactReader;
+
     public HandoverInvitationService(
         ICurrentUser currentUser,
         IVaultRepository vaults,
@@ -47,8 +49,10 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
         IHandoverInvitationSender sender,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverContactReader? contactReader = null)
     {
+        this.contactReader = contactReader;
         this.currentUser = currentUser;
         this.vaults = vaults;
         this.executorReader = executorReader;
@@ -106,11 +110,13 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, turn.BeneficiaryId, ct);
         string? email = null;
         string fullName = string.Empty;
+        string? ownerMessage = null;
         if (beneficiary != null)
         {
             BeneficiaryPersonalData data = protector.Unprotect(beneficiary);
             email = data.Email;
             fullName = data.FullName;
+            ownerMessage = data.Message;
         }
         if (string.IsNullOrWhiteSpace(email))
         {
@@ -132,6 +138,11 @@ public sealed class HandoverInvitationService : IHandoverInvitationService
         invitation.FullName = fullName;
         invitation.Token = token.Value;
         invitation.ResponseDeadline = responseDeadline;
+        invitation.OwnerMessage = ownerMessage;
+        if (contactReader != null)
+        {
+            invitation.ApplyContacts(await contactReader.FindAsync(vault.Id, ct));
+        }
         try
         {
             await sender.SendAsync(invitation, ct);

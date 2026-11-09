@@ -18,6 +18,7 @@ public static class HandoverConfig
     public static IServiceCollection AddHandover(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IHandoverRepository, HandoverRepository>();
+        services.AddScoped<IHandoverContactReader, HandoverContactReader>();
 
         // Công tắc bỏ qua xác minh: sai môi trường thì API không khởi động (HandoverSettingsValidator).
         services.AddOptions<HandoverSettings>()
@@ -39,7 +40,18 @@ public static class HandoverConfig
         // Chọn bộ gửi lúc cần dùng: có Email:Smtp đầy đủ thì gửi thật, không thì chỉ ghi log (như EmailConfig).
         services.AddSingleton<IHandoverInvitationSender>(provider => ChooseSender(provider));
         services.AddSingleton<IPlanActivatedNoticeSender>(provider => ChooseActivatedNoticeSender(provider));
+        services.AddSingleton<IHandoverKeySender>(provider => ChooseKeySender(provider));
         return services;
+    }
+
+    private static IHandoverKeySender ChooseKeySender(IServiceProvider provider)
+    {
+        SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
+        if (smtp.IsConfigured)
+        {
+            return ActivatorUtilities.CreateInstance<SmtpHandoverKeySender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LogHandoverKeySender>(provider);
     }
 
     private static IPlanActivatedNoticeSender ChooseActivatedNoticeSender(IServiceProvider provider)

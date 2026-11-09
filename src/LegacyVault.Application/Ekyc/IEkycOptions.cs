@@ -23,4 +23,13 @@ public interface IEkycOptions
 
     /// <summary>Bỏ override, đưa CurrentThreshold về DefaultThreshold.</summary>
     void ResetDefault();
+
+    /// <summary>
+    /// true khi Admin đã "tạm ngừng eKYC" bằng công cụ thử nghiệm: mọi bước eKYC dùng dịch vụ giả và luôn đạt.
+    /// Chỉ ở bộ nhớ; khởi động lại là về false.
+    /// </summary>
+    bool Paused { get; }
+
+    /// <summary>Bật hoặc tắt chế độ tạm ngừng eKYC (chỉ DevTools).</summary>
+    void SetPaused(bool paused);
 }

@@ -61,6 +61,12 @@ public class HandoverTurnResponse
     /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC (BR-122).</summary>
     public bool IdentityConfirmedByExecutor { get; set; }
 
+    /// <summary>true: kho đã cấp khóa mở gói, người nhận phải nhập khóa do Người thực hiện đưa trước khi đồng ý.</summary>
+    public bool KeyRequired { get; set; }
+
+    /// <summary>true: người nhận đã nhập đúng khóa (hoặc không cần khóa).</summary>
+    public bool KeyVerified { get; set; }
+
     /// <summary>Chỉ có khi lượt ở READY_TO_ACCEPT hoặc HANDOVER_COMMITTED.</summary>
     public HandoverContainerResponse? Container { get; set; }
 

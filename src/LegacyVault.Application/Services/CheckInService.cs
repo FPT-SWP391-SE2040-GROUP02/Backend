@@ -86,9 +86,7 @@ public sealed class CheckInService : ICheckInService
         CheckInPeriod next = new CheckInPeriod();
         next.PlanId = plan.Id;
         next.Sequence = lastSequence + 1;
-        next.StartedAt = now;
-        next.DueAt = CheckInTimeline.ComputeDueAt(now, schedule.CycleDays);
-        next.GraceEndsAt = CheckInTimeline.ComputeGraceEndsAt(next.DueAt, schedule.GraceDays);
+        CheckInRules.StartPeriodTimeline(next, now, schedule.CycleDays);
         checkInRepository.AddPeriod(next);
 
         plan.Status = PlanStatus.Active;
@@ -171,10 +169,6 @@ public sealed class CheckInService : ICheckInService
             {
                 schedule.PendingCycleDays = request.CycleDays;
             }
-            if (request.GraceDays != null)
-            {
-                schedule.PendingGraceDays = request.GraceDays;
-            }
         }
         else
         {
@@ -182,12 +176,7 @@ public sealed class CheckInService : ICheckInService
             {
                 schedule.CycleDays = request.CycleDays.Value;
             }
-            if (request.GraceDays != null)
-            {
-                schedule.GraceDays = request.GraceDays.Value;
-            }
             schedule.PendingCycleDays = null;
-            schedule.PendingGraceDays = null;
         }
         schedule.UpdatedAt = now;
 
@@ -201,17 +190,13 @@ public sealed class CheckInService : ICheckInService
         return await BuildResponseAsync(plan, new PaginationRequest(), ct);
     }
 
-    /// <summary>Mô tả ngắn lựa chọn mới cho nhật ký, ví dụ "Chu kỳ 60 ngày, chờ 14 ngày; áp dụng từ kỳ sau".</summary>
+    /// <summary>Mô tả ngắn lựa chọn mới cho nhật ký, ví dụ "Chu kỳ 60 ngày; áp dụng từ kỳ sau".</summary>
     private static string DescribeSettings(UpdateCheckInSettingsRequest request, bool appliesNextPeriod)
     {
         List<string> parts = new List<string>();
         if (request.CycleDays != null)
         {
             parts.Add("Chu kỳ " + request.CycleDays.Value + " ngày");
-        }
-        if (request.GraceDays != null)
-        {
-            parts.Add("chờ " + request.GraceDays.Value + " ngày");
         }
         string text = string.Join(", ", parts);
         if (appliesNextPeriod)
@@ -223,17 +208,13 @@ public sealed class CheckInService : ICheckInService
 
     private static void ValidateSettings(UpdateCheckInSettingsRequest request)
     {
-        if (request.CycleDays == null && request.GraceDays == null)
+        if (request.CycleDays == null)
         {
-            throw ValidationErrors.For("cycleDays", "Cần chọn chu kỳ hoặc thời gian chờ.");
+            throw ValidationErrors.For("cycleDays", "Cần chọn chu kỳ điểm danh.");
         }
         if (request.CycleDays != null && !CheckInRules.IsAllowedCycleDays(request.CycleDays.Value))
         {
             throw ValidationErrors.For("cycleDays", "Chu kỳ điểm danh chỉ nhận 30, 60 hoặc 90 ngày.");
-        }
-        if (request.GraceDays != null && !CheckInRules.IsAllowedGraceDays(request.GraceDays.Value))
-        {
-            throw ValidationErrors.For("graceDays", "Thời gian chờ chỉ nhận 7, 14 hoặc 30 ngày.");
         }
     }
 
@@ -309,17 +290,16 @@ public sealed class CheckInService : ICheckInService
     private static CheckInSettingsResponse BuildSettings(CheckInSchedule? schedule)
     {
         CheckInSettingsResponse settings = new CheckInSettingsResponse();
+        settings.LateReminderGapDays = CheckInRules.LateReminderGapDays;
+        settings.MaxLateReminders = CheckInRules.MaxLateReminders;
         if (schedule == null)
         {
             settings.CycleDays = CheckInRules.DefaultCycleDays;
-            settings.GraceDays = CheckInRules.DefaultGraceDays;
             settings.Etag = Etag.From(null);
             return settings;
         }
         settings.CycleDays = schedule.CycleDays;
-        settings.GraceDays = schedule.GraceDays;
         settings.PendingCycleDays = schedule.PendingCycleDays;
-        settings.PendingGraceDays = schedule.PendingGraceDays;
         settings.Etag = Etag.From(schedule.UpdatedAt);
         return settings;
     }

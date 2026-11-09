@@ -17,6 +17,8 @@ public sealed class HandoverStarter : IHandoverStarter
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
+    private readonly IHandoverContactReader? contactReader;
+
     public HandoverStarter(
         IVaultRepository vaults,
         IHandoverRepository handover,
@@ -24,8 +26,10 @@ public sealed class HandoverStarter : IHandoverStarter
         ITokenService tokens,
         IHandoverInvitationSender sender,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverContactReader? contactReader = null)
     {
+        this.contactReader = contactReader;
         this.vaults = vaults;
         this.handover = handover;
         this.protector = protector;
@@ -81,6 +85,11 @@ public sealed class HandoverStarter : IHandoverStarter
 
         List<HandoverInvitation> invitations = new List<HandoverInvitation>();
         List<HandoverTurn> turns = new List<HandoverTurn>();
+        HandoverContactInfo? contacts = null;
+        if (contactReader != null)
+        {
+            contacts = await contactReader.FindAsync(vaultId, ct);
+        }
 
         foreach (Designation designation in designations)
         {
@@ -112,6 +121,8 @@ public sealed class HandoverStarter : IHandoverStarter
                 invitation.FullName = data.FullName;
                 invitation.Token = token.Value;
                 invitation.ResponseDeadline = turn.ResponseDeadline;
+                invitation.ApplyContacts(contacts);
+                invitation.OwnerMessage = data.Message;
                 invitations.Add(invitation);
             }
         }

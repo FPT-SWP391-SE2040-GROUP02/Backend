@@ -23,16 +23,21 @@ public sealed class AdminPaymentsController : ControllerBase
         this.adminPaymentService = adminPaymentService;
     }
 
-    /// <summary>Giao dịch tiền vào, mới nhất trước. status: RECEIVED, MATCHED, RECONCILIATION_REQUIRED, RESOLVED.</summary>
+    /// <summary>
+    /// Giao dịch tiền vào, mới nhất trước. status: SUCCESS (Matched và Resolved), RECEIVED, MATCHED, RECONCILIATION_REQUIRED,
+    /// RESOLVED. environment: Live hoặc Test. from, to: ngày yyyy-MM-dd giờ Việt Nam, tính cả hai đầu, lọc theo thời điểm nhận.
+    /// </summary>
     [HttpGet]
     [ProducesResponseType<PaginatedList<AdminPaymentTransactionResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public Task<PaginatedList<AdminPaymentTransactionResponse>> List(
         [FromQuery] string? status, [FromQuery] string? search, CancellationToken ct,
-        [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
+        [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20,
+        [FromQuery] string? environment = null, [FromQuery] string? from = null, [FromQuery] string? to = null)
     {
-        return adminPaymentService.ListAsync(status, search, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
+        return adminPaymentService.ListAsync(
+            status, search, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct, environment, from, to);
     }
 
     private static int Clamp(int value, int min, int max)

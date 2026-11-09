@@ -1,3 +1,4 @@
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -28,7 +29,8 @@ public sealed class ExecutorCheckInsController : ControllerBase
 
     /// <summary>
     /// "Điểm danh thay chủ kho": chỉ khi kế hoạch đang CHECKIN_OVERDUE hoặc AWAITING_CHECK và kho chưa có hồ sơ
-    /// chứng tử đang mở. Đóng kỳ quá hạn, mở kỳ mới, đưa kế hoạch về ACTIVE.
+    /// chứng tử đang mở. Đóng kỳ quá hạn, mở kỳ mới, đưa kế hoạch về ACTIVE. Body khai đã liên lạc với ai, lúc nào, cách nào;
+    /// tối đa theo tham số CheckIn.ProxyMaxConsecutive lần liên tiếp, chủ kho tự điểm danh thì đếm lại từ 0.
     /// </summary>
     [HttpPost("vaults/{vaultId:guid}/check-in")]
     [EnableRateLimiting(CheckInRateLimitPolicy)]
@@ -37,8 +39,9 @@ public sealed class ExecutorCheckInsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests)]
-    public Task<ExecutorCheckInResponse> CheckInForOwner(Guid vaultId, CancellationToken ct)
+    public Task<ExecutorCheckInResponse> CheckInForOwner(
+        Guid vaultId, [FromBody] ExecutorCheckInRequest request, CancellationToken ct)
     {
-        return executorCheckInService.CheckInForOwnerAsync(vaultId, ct);
+        return executorCheckInService.CheckInForOwnerAsync(vaultId, request, ct);
     }
 }

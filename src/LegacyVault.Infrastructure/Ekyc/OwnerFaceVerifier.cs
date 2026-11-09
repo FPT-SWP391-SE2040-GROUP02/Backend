@@ -45,6 +45,12 @@ public sealed class OwnerFaceVerifier : IOwnerFaceVerifier
             return OwnerFaceOutcome.NoTemplate;
         }
 
+        // eKYC đang tạm ngừng (công cụ thử nghiệm): có mẫu khuôn mặt rồi thì coi như khớp.
+        if (ekycOptions.Paused)
+        {
+            return OwnerFaceOutcome.Matched;
+        }
+
         EkycFaceEmbedding probe;
         try
         {

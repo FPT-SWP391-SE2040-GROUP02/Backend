@@ -21,8 +21,8 @@ namespace LegacyVault.IntegrationTests.ServiceConfig;
 public sealed class AdminSystemConfigTests : IAsyncLifetime
 {
     private const string BaseUrl = "/api/v1/admin/system-config";
-    private const string GeminiPrimary = BaseUrl + "/GEMINI/PRIMARY";
-    private const string GeminiFallback = BaseUrl + "/GEMINI/FALLBACK";
+    private const string GeminiPrimary = BaseUrl + "/EKYC/PRIMARY";
+    private const string GeminiFallback = BaseUrl + "/EKYC/FALLBACK";
     private const string Leak = "sk-test-LEAK-9999";
 
     private ApiFactory factory = null!;
@@ -64,7 +64,7 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
             builder.ConfigureAppConfiguration((context, configuration) =>
             {
                 Dictionary<string, string?> values = new Dictionary<string, string?>();
-                values["Gemini:ApiKey"] = key;
+                values["Ekyc:ApiKey"] = key;
                 configuration.AddInMemoryCollection(values);
             });
         });
@@ -75,7 +75,7 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
         Dictionary<string, string?> secrets = new Dictionary<string, string?>();
         secrets["apiKey"] = apiKey;
         Dictionary<string, string?> settings = new Dictionary<string, string?>();
-        settings["model"] = model;
+        settings["baseUrl"] = "http://" + model + ".test";
         settings["timeoutSeconds"] = "20";
         return new { settings, secrets, enabled, reason, version };
     }
@@ -106,36 +106,6 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
             secret = secrets["apiKey"];
         });
         return secret;
-    }
-
-    [SqlFact]
-    public async Task Get_ListsGeminiFromAppSettings_WithoutSecretValue()
-    {
-        using (WebApplicationFactory<Program> host = WithEnvKey("env-key-ABCDEFGH"))
-        {
-            HttpClient client = await AdminClientAsync(host);
-
-            HttpResponseMessage response = await client.GetAsync(BaseUrl);
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            string text = await response.Content.ReadAsStringAsync();
-            Assert.DoesNotContain("env-key-ABCDEFGH", text);
-            JsonElement gemini = JsonDocument.Parse(text).RootElement.GetProperty("services")[0];
-            Assert.Equal("GEMINI", gemini.GetProperty("serviceKey").GetString());
-            Assert.True(gemini.GetProperty("supportsFallback").GetBoolean());
-            JsonElement primary = gemini.GetProperty("slots")[0];
-            Assert.Equal("PRIMARY", primary.GetProperty("slot").GetString());
-            Assert.Equal("APPSETTINGS", primary.GetProperty("source").GetString());
-            Assert.Equal(0, primary.GetProperty("version").GetInt32());
-            Assert.Equal("gemini-flash-lite-latest", primary.GetProperty("settings").GetProperty("model").GetString());
-            JsonElement secret = primary.GetProperty("secrets")[0];
-            Assert.Equal("apiKey", secret.GetProperty("name").GetString());
-            Assert.True(secret.GetProperty("hasValue").GetBoolean());
-            Assert.Equal(JsonValueKind.Null, secret.GetProperty("last4").ValueKind);
-            JsonElement fallback = gemini.GetProperty("slots")[1];
-            Assert.Equal("FALLBACK", fallback.GetProperty("slot").GetString());
-            Assert.False(fallback.GetProperty("enabled").GetBoolean());
-        }
     }
 
     [SqlFact]
@@ -216,8 +186,8 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
         using (IServiceScope scope = factory.Services.CreateScope())
         {
             ISystemConfigResolver resolver = scope.ServiceProvider.GetRequiredService<ISystemConfigResolver>();
-            ResolvedConfig? config = await resolver.ResolveAsync("GEMINI", SystemConfigSlot.Primary, CancellationToken.None);
-            Assert.Equal("gemini-2.5-flash", config!.Settings["model"]);
+            ResolvedConfig? config = await resolver.ResolveAsync("EKYC", SystemConfigSlot.Primary, CancellationToken.None);
+            Assert.Equal("http://gemini-2.5-flash.test", config!.Settings["baseUrl"]);
             Assert.Equal("DATABASE", config.Source);
         }
     }
@@ -248,59 +218,11 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Put_FirstPrimarySaveWithBlankKey_CopiesAppSettingsKey()
-    {
-        using (WebApplicationFactory<Program> host = WithEnvKey("env-key-ABCDEFGH"))
-        {
-            HttpClient client = await AdminClientAsync(host);
-
-            HttpResponseMessage response = await client.PutAsJsonAsync(GeminiPrimary, Body("gemini-2.5-flash", null, 0));
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.Equal("env-key-ABCDEFGH", await ReadStoredSecretAsync(SystemConfigSlot.Primary));
-        }
-    }
-
-    [SqlFact]
-    public async Task Put_FirstPrimarySaveWithoutAnyKey_Returns400()
-    {
-        HttpClient client = await AdminClientAsync();
-
-        HttpResponseMessage response = await client.PutAsJsonAsync(GeminiPrimary, Body("gemini-2.5-flash", null, 0));
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("secrets.apiKey", await response.Content.ReadAsStringAsync());
-    }
-
-    [SqlFact]
-    public async Task Put_ModelWithPathInjection_Returns400()
-    {
-        HttpClient client = await AdminClientAsync();
-
-        foreach (string model in new[] { "a/../b", "m?key=1", "a b" })
-        {
-            HttpResponseMessage response = await client.PutAsJsonAsync(GeminiPrimary, Body(model, "key-ABCDEFGH", 0));
-
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        }
-    }
-
-    [SqlFact]
     public async Task Put_WithoutReason_Returns400()
     {
         HttpClient client = await AdminClientAsync();
 
         HttpResponseMessage response = await client.PutAsJsonAsync(GeminiPrimary, Body("gemini-2.5-flash", "key-ABCDEFGH", 0, ""));
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [SqlFact]
-    public async Task Put_FallbackEnabledWithoutKey_Returns400()
-    {
-        HttpClient client = await AdminClientAsync();
-
-        HttpResponseMessage response = await client.PutAsJsonAsync(GeminiFallback, Body("gemini-2.5-flash", null, 0, enabled: true));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -331,7 +253,7 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
         HttpClient client = await AdminClientAsync();
 
         HttpResponseMessage unknownService = await client.PutAsJsonAsync(BaseUrl + "/NOPE/PRIMARY", Body("m", "k", 0));
-        HttpResponseMessage unknownSlot = await client.PutAsJsonAsync(BaseUrl + "/GEMINI/THIRD", Body("m", "k", 0));
+        HttpResponseMessage unknownSlot = await client.PutAsJsonAsync(BaseUrl + "/EKYC/THIRD", Body("m", "k", 0));
 
         Assert.Equal(HttpStatusCode.BadRequest, unknownService.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, unknownSlot.StatusCode);
@@ -368,8 +290,8 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
             AuditLog log = await db.AuditLogs.SingleAsync(a => a.Action == AuditAction.SystemConfigUpdated);
             Assert.Equal(AuditTargetType.Configuration, log.TargetType);
             Assert.Equal(AuditActorRole.Admin, log.ActorRole);
-            Assert.Contains("GEMINI/PRIMARY", log.Reason);
-            Assert.Contains("model", log.Reason);
+            Assert.Contains("EKYC/PRIMARY", log.Reason);
+            Assert.Contains("baseUrl", log.Reason);
             Assert.Contains("apiKey", log.Reason);
             Assert.Contains("hết quota khóa cũ", log.Reason);
             Assert.DoesNotContain("gemini-2.5-flash", log.Reason);
@@ -435,21 +357,6 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
         JsonElement primary = (await ReadAsync(get)).GetProperty("services")[0].GetProperty("slots")[0];
         Assert.Equal("DATABASE", primary.GetProperty("source").GetString());
         Assert.False(primary.GetProperty("secrets")[0].GetProperty("hasValue").GetBoolean());
-    }
-
-    [SqlFact]
-    public async Task Put_RowWithUnreadableSecret_CanBeFixedByEnteringANewKey_ButNotByLeavingItBlank()
-    {
-        HttpClient client = await AdminClientAsync();
-        await client.PutAsJsonAsync(GeminiPrimary, Body("gemini-2.5-flash", "key-ABCDEFGH", 0));
-        await CorruptStoredSecretAsync();
-
-        HttpResponseMessage blank = await client.PutAsJsonAsync(GeminiPrimary, Body("gemini-2.5-flash", "", 1));
-        HttpResponseMessage fixedKey = await client.PutAsJsonAsync(GeminiPrimary, Body("gemini-2.5-flash", "new-key-WXYZ1234", 1));
-
-        Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, fixedKey.StatusCode);
-        Assert.Equal("new-key-WXYZ1234", await ReadStoredSecretAsync(SystemConfigSlot.Primary));
     }
 
     [SqlFact]

@@ -224,14 +224,15 @@ public sealed class DeathCaseReviewRulesTests
     }
 
     [Fact]
-    public void Death01_MissingRequirementsMatchAllRequirementCodes()
+    public void Death01_EveryMissingRequirementIsAnAllowedSupplementCode()
     {
-        // Chuẩn bị: bản nháp rỗng thiếu đủ mọi phần
-        // Hành động
-        List<string> allMissing = DeathCaseRules.GetMissingRequirements(null, null, null, null, null, null, 0);
+        // Hồ sơ chưa có giấy nào thiếu mã FILES; mã đó vẫn nằm trong danh sách Người xét duyệt được yêu cầu bổ sung.
+        List<string> allMissing = DeathCaseRules.GetMissingRequirements(0);
 
-        // Kiểm tra: danh sách mã cho phép khớp từng phần tử, đúng thứ tự
-        Assert.Equal(new List<string>(DeathCaseRules.AllRequirementCodes), allMissing);
+        foreach (string code in allMissing)
+        {
+            Assert.Contains(code, DeathCaseRules.AllRequirementCodes);
+        }
     }
 
     [Fact]
@@ -292,5 +293,28 @@ public sealed class DeathCaseReviewRulesTests
         // Kiểm tra
         Assert.Equal(1, review.VersionNo);
         Assert.Throws<InvalidOperationException>(() => DeathCaseReviewRules.FindReviewVersion(draft));
+    }
+
+    [Fact]
+    public void RecordCode_ForFinalDecisionsOnlyAndUsesVietnamDate()
+    {
+        // 23:40 UTC ngày 07/11 là 06:40 ngày 08/11 giờ Việt Nam.
+        DeathCaseDecision approved = new DeathCaseDecision();
+        approved.Kind = DeathCaseDecisionKind.Approved;
+        approved.DecidedAt = new DateTimeOffset(2026, 11, 7, 23, 40, 0, TimeSpan.Zero);
+        DeathCaseDecision rejected = new DeathCaseDecision();
+        rejected.Kind = DeathCaseDecisionKind.Rejected;
+        rejected.DecidedAt = approved.DecidedAt;
+
+        string? code = DeathCaseReviewRules.RecordCode(approved);
+
+        Assert.NotNull(code);
+        Assert.Matches("^BB-20261108-[0-9A-F]{6}$", code);
+        Assert.Equal(code, DeathCaseReviewRules.RecordCode(approved));
+        Assert.Matches("^BB-20261108-[0-9A-F]{6}$", DeathCaseReviewRules.RecordCode(rejected));
+        DeathCaseDecision supplement = new DeathCaseDecision();
+        supplement.Kind = DeathCaseDecisionKind.SupplementRequested;
+        supplement.DecidedAt = approved.DecidedAt;
+        Assert.Null(DeathCaseReviewRules.RecordCode(supplement));
     }
 }

@@ -1,4 +1,5 @@
 using LegacyVault.Application.Dtos;
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
@@ -28,6 +29,12 @@ public interface IPlanSetupService
     Task<ExecutorInvitationResponse> RespondByIdAsync(Guid invitationId, RespondMyExecutorInvitationRequest request, CancellationToken ct);
     Task<PlanSetupResponse> ActivateAsync(Guid vaultId, ActivatePlanRequest request, CancellationToken ct);
     Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct);
+
+    /// <summary>
+    /// Admin giao hoặc đổi Người thực thi của kho (lý do bắt buộc, có nhật ký). Người được giao nhận lời mời qua email và phải
+    /// chấp nhận; người cũ (nếu kế hoạch đang chạy) giữ vai trò tới khi người mới chấp nhận. Không phải Admin → 404.
+    /// </summary>
+    Task<ExecutorInvitationResponse> AssignByAdminAsync(Guid vaultId, AssignExecutorRequest request, CancellationToken ct);
 }
 
 /// <summary>Owner setup and explicit recipient acceptance. No identity/payment bypass and no implicit activation.</summary>
@@ -35,7 +42,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
-    TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier) : IPlanSetupService
+    TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-30";
     public const string ScopeVersion = "executor-2026-10-15";
@@ -91,7 +98,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 VaultId = vault.Id, Status = ExecutorStatus.Invited,
                 InviteeEmail = email, InvitationTokenHash = token.Hash,
                 IsBeneficiary = request.BeneficiaryId.HasValue, BeneficiaryId = request.BeneficiaryId,
-                InvitedAt = now, ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7)),
+                InvitedAt = now, ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7),
                 ReplacesExecutorId = replaces,
             };
             invitations.Add(item);
@@ -100,6 +107,55 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             return item;
         }, ct);
         return await DeliverAsync(executor, token.Value, accountExists, ct);
+    }
+
+    public async Task<ExecutorInvitationResponse> AssignByAdminAsync(Guid vaultId, AssignExecutorRequest request, CancellationToken ct)
+    {
+        Guid adminId = currentUser.RequireUserId();
+        User? admin = await users.FindByIdAsync(adminId, ct);
+        if (admin == null || admin.Role != UserRole.Admin || admin.Status != UserStatus.Active)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
+        }
+        string? reason = AuditRules.NormalizeReason(request.Reason);
+        if (reason == null)
+        {
+            throw ValidationErrors.For("reason", "Vui lòng ghi lý do.");
+        }
+
+        var token = tokens.CreateOpaqueToken();
+        bool accountExists = true;
+        var executor = await unitOfWork.ExecuteSerializableAsync(async () =>
+        {
+            Vault vault = await vaults.FindByIdAsync(vaultId, ct)
+                ?? throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
+            if (!ExecutorAssignRules.PlanAllowsAssign(vault.Status, vault.Plan.Status)) throw NotAllowed("PLAN_LOCKED");
+            User target = await users.FindByIdAsync(request.UserId!.Value, ct)
+                ?? throw ValidationErrors.For("userId", "Không tìm thấy tài khoản được giao.");
+            if (target.Status != UserStatus.Active || target.EmailVerifiedAt == null)
+                throw ValidationErrors.For("userId", "Chỉ giao cho tài khoản đang hoạt động và đã xác minh email.");
+            if (target.Id == vault.OwnerId) throw NotAllowed("OWNER_CANNOT_ACCEPT");
+            if (target.Role == UserRole.Admin || target.Role == UserRole.Verifier)
+                throw NotAllowed("ROLE_CONFLICT");
+
+            var now = time.GetUtcNow();
+            Guid? replaces = ExecutorAssignRules.PrepareForAssign(vault.Executors, vault.Plan.Status, now);
+            var item = new Executor
+            {
+                VaultId = vault.Id, Status = ExecutorStatus.Invited,
+                InviteeEmail = target.Email.Trim().ToLowerInvariant(), InvitationTokenHash = token.Hash,
+                InvitedAt = now, ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7)),
+                ReplacesExecutorId = replaces,
+            };
+            invitations.Add(item);
+            PlanRules.BumpConfigVersion(vault.Plan, now);
+            audit.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.ExecutorAssignedByAdmin,
+                AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, reason, now));
+            await unitOfWork.SaveChangesAsync(ct);
+            return item;
+        }, ct);
+        // Thư do quản trị viên giao, lời thư không nói "Chủ kho mời".
+        return await DeliverAsync(executor, token.Value, accountExists, ct, assignedByAdmin: true);
     }
 
     public async Task<ExecutorInvitationResponse> ResendAsync(Guid vaultId, Guid executorId, ResendExecutorRequest request, CancellationToken ct)
@@ -120,7 +176,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             item.Status = ExecutorStatus.Invited;
             item.InvitationTokenHash = token.Hash;
             item.InvitedAt = now;
-            item.ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7));
+            item.ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7);
             item.InvitationSentAt = null;
             item.AcceptedAt = null;
             item.AcceptedScopeVersion = null;
@@ -381,10 +437,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return await invitations.FindByTokenHashAsync(tokens.HashOpaqueToken(token), ct) ?? throw InvalidInvitation();
     }
 
-    private async Task<ExecutorInvitationResponse> DeliverAsync(Executor executor, string token, bool accountExists, CancellationToken ct)
+    private async Task<ExecutorInvitationResponse> DeliverAsync(
+        Executor executor, string token, bool accountExists, CancellationToken ct, bool assignedByAdmin = false)
     {
         // External delivery follows the committed invitation. Failed delivery never grants access.
-        if (await sender.SendAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct))
+        bool delivered = assignedByAdmin
+            ? await sender.SendAssignedByAdminAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct)
+            : await sender.SendAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct);
+        if (delivered)
         {
             executor.InvitationSentAt = time.GetUtcNow();
             executor.UpdatedAt = time.GetUtcNow();

@@ -10,4 +10,8 @@ public sealed class DeathCaseFileForm
 {
     [Required(ErrorMessage = "Vui lòng chọn tệp.")]
     public IFormFile? File { get; set; }
+
+    /// <summary>DEATH_CERTIFICATE hoặc DEATH_NOTICE; bỏ trống là thêm một trang giấy chứng tử.</summary>
+    [StringLength(20)]
+    public string? Kind { get; set; }
 }

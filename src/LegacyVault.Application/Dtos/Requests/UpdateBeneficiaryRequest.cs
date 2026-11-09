@@ -27,4 +27,8 @@ public class UpdateBeneficiaryRequest
 
     [MaxLength(20, ErrorMessage = "Số điện thoại tối đa 20 ký tự.")]
     public string? Phone { get; set; }
+
+    /// <summary>Lời nhắn gửi kèm thư mời. Null = giữ nguyên, "" = xóa.</summary>
+    [MaxLength(300, ErrorMessage = "Lời nhắn tối đa 300 ký tự.")]
+    public string? Message { get; set; }
 }

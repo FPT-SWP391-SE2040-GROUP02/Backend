@@ -10,7 +10,7 @@ public sealed class SystemConfigValidatorTests
     private static Dictionary<string, string?> ValidSettings()
     {
         Dictionary<string, string?> settings = new Dictionary<string, string?>();
-        settings["model"] = "gemini-flash-lite-latest";
+        settings["baseUrl"] = "http://localhost:8001";
         settings["timeoutSeconds"] = "20";
         return settings;
     }
@@ -22,87 +22,53 @@ public sealed class SystemConfigValidatorTests
     }
 
     [Fact]
-    public void Catalog_GeminiIsWiredAndSupportsFallback_OthersAreNotYet()
+    public void Catalog_EkycIsWiredAndSupportsFallback_OthersAreNot()
     {
-        Assert.True(SystemConfigCatalog.IsWired(SystemConfigServices.Gemini));
-        Assert.True(SystemConfigCatalog.SupportsFallback(SystemConfigServices.Gemini));
+        Assert.True(SystemConfigCatalog.IsWired(SystemConfigServices.Ekyc));
+        Assert.True(SystemConfigCatalog.SupportsFallback(SystemConfigServices.Ekyc));
         Assert.False(SystemConfigCatalog.IsWired("NOPE"));
-        Assert.Equal(new[] { "model", "timeoutSeconds", "apiKey" },
-            SystemConfigCatalog.Fields(SystemConfigServices.Gemini).Select(f => f.Name).ToArray());
+        Assert.Equal(new[] { "baseUrl", "timeoutSeconds", "apiKey" },
+            SystemConfigCatalog.Fields(SystemConfigServices.Ekyc).Select(f => f.Name).ToArray());
     }
 
     [Fact]
     public void ValidSettings_AreAccepted()
     {
-        SystemConfigValidator.ValidateSettings(SystemConfigServices.Gemini, ValidSettings());
-    }
-
-    [Theory]
-    [InlineData("a/../b")]
-    [InlineData("m?key=1")]
-    [InlineData("a b")]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Model_RejectsPathInjectionAndBlank(string model)
-    {
-        Dictionary<string, string?> settings = ValidSettings();
-        settings["model"] = model;
-
-        AssertValidationError(() => SystemConfigValidator.ValidateSettings(SystemConfigServices.Gemini, settings));
-    }
-
-    [Fact]
-    public void Model_Over100Characters_IsRejected()
-    {
-        Dictionary<string, string?> settings = ValidSettings();
-        settings["model"] = new string('a', 101);
-
-        AssertValidationError(() => SystemConfigValidator.ValidateSettings(SystemConfigServices.Gemini, settings));
-    }
-
-    [Theory]
-    [InlineData("gemini-flash-lite-latest")]
-    [InlineData("gemini-2.5-flash")]
-    public void Model_AcceptsRealModelNames(string model)
-    {
-        Dictionary<string, string?> settings = ValidSettings();
-        settings["model"] = model;
-
-        SystemConfigValidator.ValidateSettings(SystemConfigServices.Gemini, settings);
+        SystemConfigValidator.ValidateSettings(SystemConfigServices.Ekyc, ValidSettings());
     }
 
     [Theory]
     [InlineData("4")]
-    [InlineData("61")]
+    [InlineData("301")]
     [InlineData("abc")]
     [InlineData("")]
     [InlineData("20.5")]
-    public void TimeoutSeconds_MustBeIntegerFiveToSixty(string value)
+    public void TimeoutSeconds_MustBeIntegerFiveToThreeHundred(string value)
     {
         Dictionary<string, string?> settings = ValidSettings();
         settings["timeoutSeconds"] = value;
 
-        AssertValidationError(() => SystemConfigValidator.ValidateSettings(SystemConfigServices.Gemini, settings));
+        AssertValidationError(() => SystemConfigValidator.ValidateSettings(SystemConfigServices.Ekyc, settings));
     }
 
     [Theory]
     [InlineData("5")]
-    [InlineData("60")]
+    [InlineData("300")]
     public void TimeoutSeconds_AcceptsTheBounds(string value)
     {
         Dictionary<string, string?> settings = ValidSettings();
         settings["timeoutSeconds"] = value;
 
-        SystemConfigValidator.ValidateSettings(SystemConfigServices.Gemini, settings);
+        SystemConfigValidator.ValidateSettings(SystemConfigServices.Ekyc, settings);
     }
 
     [Fact]
     public void UnknownSettingField_IsRejected()
     {
         Dictionary<string, string?> settings = ValidSettings();
-        settings["baseUrl"] = "http://x";
+        settings["unknownField"] = "x";
 
-        AssertValidationError(() => SystemConfigValidator.ValidateSettings(SystemConfigServices.Gemini, settings));
+        AssertValidationError(() => SystemConfigValidator.ValidateSettings(SystemConfigServices.Ekyc, settings));
     }
 
     [Fact]
@@ -110,15 +76,15 @@ public sealed class SystemConfigValidatorTests
     {
         Dictionary<string, string?> blank = new Dictionary<string, string?>();
         blank["apiKey"] = "";
-        SystemConfigValidator.ValidateSecrets(SystemConfigServices.Gemini, blank);
+        SystemConfigValidator.ValidateSecrets(SystemConfigServices.Ekyc, blank);
 
         Dictionary<string, string?> unknown = new Dictionary<string, string?>();
         unknown["password"] = "x";
-        AssertValidationError(() => SystemConfigValidator.ValidateSecrets(SystemConfigServices.Gemini, unknown));
+        AssertValidationError(() => SystemConfigValidator.ValidateSecrets(SystemConfigServices.Ekyc, unknown));
 
         Dictionary<string, string?> tooLong = new Dictionary<string, string?>();
         tooLong["apiKey"] = new string('k', 513);
-        AssertValidationError(() => SystemConfigValidator.ValidateSecrets(SystemConfigServices.Gemini, tooLong));
+        AssertValidationError(() => SystemConfigValidator.ValidateSecrets(SystemConfigServices.Ekyc, tooLong));
     }
 
     private static ConfigFieldSpec UrlField()
@@ -209,7 +175,7 @@ public sealed class SystemConfigValidatorTests
     [Fact]
     public void RequiresConfirm_OtherServices_NeverRequire()
     {
-        Assert.False(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.Gemini,
+        Assert.False(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.Ekyc,
             Values("model", "a"), Values("model", "b")));
         Assert.False(SystemConfigCatalog.RequiresConfirm(SystemConfigServices.Smtp,
             Values("host", "a"), Values("host", "b")));

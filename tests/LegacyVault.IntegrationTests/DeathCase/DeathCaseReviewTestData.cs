@@ -140,16 +140,22 @@ public static class DeathCaseReviewTestData
     {
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            DeathCaseNotice notice = await db.Set<DeathCaseNotice>()
+            // Nộp hồ sơ không còn xếp thông báo cho Owner; nếu test tự tạo thông báo thì vẫn đánh dấu đã gửi.
+            DeathCaseNotice? notice = await db.Set<DeathCaseNotice>()
                 .Where(n => n.CaseId == caseId)
                 .OrderByDescending(n => n.CreatedAt)
-                .FirstAsync();
-            int noticeVersionNo = notice.VersionNo;
-            await db.Set<DeathCaseNotice>().Where(n => n.Id == notice.Id)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(n => n.Status, DeathCaseNoticeStatus.Delivered)
-                    .SetProperty(n => n.DeliveredAt, deliveredAt)
-                    .SetProperty(n => n.AttemptCount, 1));
+                .FirstOrDefaultAsync();
+            int noticeVersionNo = await db.Set<DeathCase>().Where(c => c.Id == caseId)
+                .Select(c => c.CurrentVersionNo).FirstAsync();
+            if (notice != null)
+            {
+                noticeVersionNo = notice.VersionNo;
+                await db.Set<DeathCaseNotice>().Where(n => n.Id == notice.Id)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(n => n.Status, DeathCaseNoticeStatus.Delivered)
+                        .SetProperty(n => n.DeliveredAt, deliveredAt)
+                        .SetProperty(n => n.AttemptCount, 1));
+            }
             await db.Set<DeathCase>().Where(c => c.Id == caseId)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(c => c.NotifiedVersionNo, noticeVersionNo)

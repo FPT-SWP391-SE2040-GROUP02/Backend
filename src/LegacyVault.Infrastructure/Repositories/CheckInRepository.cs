@@ -1,4 +1,5 @@
 using LegacyVault.Application.Repositories;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
@@ -9,7 +10,7 @@ namespace LegacyVault.Infrastructure.Repositories;
 public sealed class CheckInRepository : ICheckInRepository
 {
     /// <summary>Mốc nhắc sớm nhất là 7 ngày trước hạn: kỳ có hạn xa hơn chưa cần job xử lý.</summary>
-    private static readonly TimeSpan EarliestReminderLead = TimeSpan.FromDays(7);
+    private static TimeSpan EarliestReminderLead => TimeUnits.Days(7);
 
     private readonly AppDbContext context;
 
@@ -27,6 +28,27 @@ public sealed class CheckInRepository : ICheckInRepository
     {
         return context.CheckInPeriods
             .FirstOrDefaultAsync(p => p.PlanId == planId && p.ClosedAt == null, ct);
+    }
+
+    public async Task<int> CountConsecutiveExecutorPeriodsAsync(Guid planId, CancellationToken ct)
+    {
+        List<bool> startedByExecutor = await context.CheckInPeriods
+            .AsNoTracking()
+            .Where(p => p.PlanId == planId)
+            .OrderByDescending(p => p.Sequence)
+            .Select(p => p.StartedByExecutor)
+            .Take(100)
+            .ToListAsync(ct);
+        int count = 0;
+        foreach (bool flag in startedByExecutor)
+        {
+            if (!flag)
+            {
+                break;
+            }
+            count++;
+        }
+        return count;
     }
 
     public async Task<int> GetMaxSequenceAsync(Guid planId, CancellationToken ct)

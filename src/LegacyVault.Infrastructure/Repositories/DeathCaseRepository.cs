@@ -50,6 +50,11 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
             .Select(e => new ExecutorVaultRow
             {
                 VaultId = e.VaultId,
+                PlanId = e.Vault.Plan.Id,
+                LastOwnerCheckInAt = context.Set<CheckInSchedule>()
+                    .Where(s => s.PlanId == e.Vault.Plan.Id)
+                    .Select(s => s.LastCheckInAt)
+                    .FirstOrDefault(),
                 OwnerFullName = e.Vault.Owner.FullName,
                 PlanStatus = e.Vault.Plan.Status,
                 ExecutorNote = e.Vault.ExecutorNote,
@@ -142,12 +147,6 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
     public Task<int> CountFilesUsingStorageKeyAsync(string storageKey, CancellationToken ct)
     {
         return context.Set<DeathCaseFile>().CountAsync(f => f.StorageKey == storageKey, ct);
-    }
-
-    public Task<bool> HasCheckInAtOrAfterAsync(Guid planId, DateTimeOffset cutoffUtc, CancellationToken ct)
-    {
-        return context.Set<CheckInPeriod>()
-            .AnyAsync(p => p.PlanId == planId && p.CheckedInAt != null && p.CheckedInAt >= cutoffUtc, ct);
     }
 
     public async Task<Guid?> FindVerifierCandidateAsync(

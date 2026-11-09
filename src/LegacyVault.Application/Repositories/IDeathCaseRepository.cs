@@ -8,6 +8,9 @@ public sealed class ExecutorVaultRow
 {
     public Guid VaultId { get; set; }
 
+    /// <summary>Kế hoạch của kho, để đếm các lần điểm danh thay.</summary>
+    public Guid PlanId { get; set; }
+
     /// <summary>Họ tên tài khoản Owner (dùng để Executor nhận ra kho; không phải dữ liệu trong hồ sơ chứng tử).</summary>
     public string OwnerFullName { get; set; } = string.Empty;
 
@@ -23,6 +26,9 @@ public sealed class ExecutorVaultRow
 
     /// <summary>Hồ sơ bị từ chối gần nhất của kho, để Executor mở lại xem lý do; null khi chưa có.</summary>
     public Guid? LastRejectedDeathCaseId { get; set; }
+
+    /// <summary>Lần chủ kho TỰ điểm danh gần nhất (điểm danh thay của Executor không tính); null khi chưa từng.</summary>
+    public DateTimeOffset? LastOwnerCheckInAt { get; set; }
 }
 
 /// <summary>
@@ -85,9 +91,6 @@ public interface IDeathCaseRepository
 
     /// <summary>D8: số dòng file (mọi phiên bản, mọi hồ sơ) đang dùng StorageKey này, đã lưu trong DB.</summary>
     Task<int> CountFilesUsingStorageKeyAsync(string storageKey, CancellationToken ct);
-
-    /// <summary>DEATH-10: kế hoạch có lần điểm danh nào lúc cutoffUtc hoặc sau đó không.</summary>
-    Task<bool> HasCheckInAtOrAfterAsync(Guid planId, DateTimeOffset cutoffUtc, CancellationToken ct);
 
     /// <summary>
     /// ASSIGN-01, ROLE-03 (D4): Id Verifier Active có lần được giao gần nhất cũ nhất (chưa từng giao đứng trước),

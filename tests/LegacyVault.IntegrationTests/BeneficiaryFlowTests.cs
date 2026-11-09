@@ -323,6 +323,42 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Message_IsStoredReadBackKeptOnOtherEditsAndClearedByEmptyText()
+    {
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = "1990-05-20", email = Email, message = "  Con ơi,\nbố để lại phần này cho con.  " });
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        JsonElement created = await ApiTestHelpers.ReadJsonAsync(create);
+        Assert.Equal("Con ơi, bố để lại phần này cho con.", created.GetProperty("message").GetString());
+        string url = $"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}";
+
+        // Sửa trường khác không đụng tới lời nhắn
+        HttpResponseMessage rename = await client.PutAsJsonAsync(url,
+            new { etag = created.GetProperty("etag").GetString(), fullName = "Nguyễn Văn Bình" });
+        JsonElement renamed = await ApiTestHelpers.ReadJsonAsync(rename);
+        Assert.Equal("Con ơi, bố để lại phần này cho con.", renamed.GetProperty("message").GetString());
+
+        // Chuỗi rỗng thì xóa lời nhắn
+        HttpResponseMessage clear = await client.PutAsJsonAsync(url,
+            new { etag = renamed.GetProperty("etag").GetString(), message = "" });
+        JsonElement cleared = await ApiTestHelpers.ReadJsonAsync(clear);
+        Assert.Equal(JsonValueKind.Null, cleared.GetProperty("message").ValueKind);
+    }
+
+    [SqlFact]
+    public async Task Message_LongerThan300CharactersIsRejected()
+    {
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = "1990-05-20", email = Email, message = new string('a', 301) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, await CountBeneficiariesAsync(vaultId));
+    }
+
+    [SqlFact]
     public async Task Edit_RenameChangesEtagAndIsReadBack()
     {
         // Chuẩn bị

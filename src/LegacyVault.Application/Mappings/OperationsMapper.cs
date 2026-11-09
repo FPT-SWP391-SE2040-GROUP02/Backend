@@ -46,6 +46,7 @@ public static class OperationsMapper
         response.TargetId = incident.TargetId;
         response.Summary = incident.Summary;
         response.AssigneeUserId = incident.AssigneeUserId;
+        response.ResponsibleRole = IncidentRules.ResponsibleRole(incident.Type);
         response.DueAt = incident.DueAt;
         response.Overdue = incident.Status != IncidentStatus.Resolved && now >= incident.DueAt;
         response.NextReviewAt = incident.NextReviewAt;

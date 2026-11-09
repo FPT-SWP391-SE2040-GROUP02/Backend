@@ -21,6 +21,15 @@ public class IncidentSummaryResponse
     /// <summary>null = chưa có ai nhận ("bị kẹt"), luôn kèm nextReviewAt.</summary>
     public Guid? AssigneeUserId { get; set; }
 
+    /// <summary>Họ tên người phụ trách để hiện thẳng trên danh sách; null khi chưa có người nhận hoặc tài khoản không còn.</summary>
+    public string? AssigneeFullName { get; set; }
+
+    /// <summary>Vai trò tài khoản người phụ trách (USER | VERIFIER | ADMIN); null khi chưa có người nhận hoặc tài khoản không còn.</summary>
+    public string? AssigneeRole { get; set; }
+
+    /// <summary>ADMIN | EXECUTOR | VERIFIER: ai chịu trách nhiệm xử lý loại sự cố này; Admin chỉ theo dõi khi không phải ADMIN.</summary>
+    public string ResponsibleRole { get; set; } = string.Empty;
+
     public DateTimeOffset DueAt { get; set; }
 
     public bool Overdue { get; set; }
@@ -118,6 +127,52 @@ public class AdminUserResponse
     public string Etag { get; set; } = string.Empty;
 }
 
+/// <summary>Chi tiết một tài khoản cho Admin: thông tin tài khoản cộng việc đang giữ, quyết định và hoạt động gần đây.</summary>
+public class AdminUserDetailResponse : AdminUserResponse
+{
+    /// <summary>Hồ sơ chứng tử đang xét mà Verifier này được giao; rỗng với vai trò khác.</summary>
+    public List<AdminUserCaseResponse> AssignedCases { get; set; } = new List<AdminUserCaseResponse>();
+
+    /// <summary>Mười quyết định gần nhất của Verifier này (không kèm lý do hay nội dung hồ sơ).</summary>
+    public List<AdminUserDecisionResponse> RecentDecisions { get; set; } = new List<AdminUserDecisionResponse>();
+
+    /// <summary>Mười thao tác gần nhất do tài khoản này thực hiện (từ nhật ký, không kèm lý do).</summary>
+    public List<AdminUserActivityResponse> RecentActivity { get; set; } = new List<AdminUserActivityResponse>();
+}
+
+public class AdminUserCaseResponse
+{
+    public Guid CaseId { get; set; }
+
+    /// <summary>DeathCaseStatus dạng API.</summary>
+    public string Status { get; set; } = string.Empty;
+
+    public DateTimeOffset DueAt { get; set; }
+
+    public bool Overdue { get; set; }
+}
+
+public class AdminUserDecisionResponse
+{
+    public Guid CaseId { get; set; }
+
+    /// <summary>DeathCaseDecisionKind dạng API.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    public DateTimeOffset DecidedAt { get; set; }
+}
+
+public class AdminUserActivityResponse
+{
+    public DateTimeOffset At { get; set; }
+
+    /// <summary>AuditAction dạng API.</summary>
+    public string Action { get; set; } = string.Empty;
+
+    /// <summary>AuditOutcome dạng API.</summary>
+    public string Outcome { get; set; } = string.Empty;
+}
+
 public class AdminDashboardResponse
 {
     public int OpenIncidents { get; set; }
@@ -139,4 +194,48 @@ public class AdminDashboardResponse
     public int CasesWithoutVerifier { get; set; }
 
     public DateTimeOffset ServerTime { get; set; }
+
+    /// <summary>Số kế hoạch theo giai đoạn (PlanStatus dạng API), chỉ giai đoạn có kế hoạch; không tính kho đã đóng.</summary>
+    public List<DashboardPlanStageResponse> PlanStages { get; set; } = new List<DashboardPlanStageResponse>();
+
+    /// <summary>Số kế hoạch đã đóng, không nằm trong PlanStages.</summary>
+    public int ClosedPlans { get; set; }
+
+    /// <summary>Tải việc của từng người xét duyệt đang hoạt động, nhiều hồ sơ nhất trước.</summary>
+    public List<DashboardVerifierLoadResponse> VerifierLoad { get; set; } = new List<DashboardVerifierLoadResponse>();
+
+    /// <summary>Năm hoạt động gần nhất trên toàn hệ thống (từ nhật ký), mới nhất trước.</summary>
+    public List<DashboardRecentActivityResponse> RecentActivity { get; set; } = new List<DashboardRecentActivityResponse>();
+}
+
+public class DashboardPlanStageResponse
+{
+    /// <summary>PlanStatus dạng API, ví dụ ACTIVE, CHECKIN_OVERDUE.</summary>
+    public string Stage { get; set; } = string.Empty;
+
+    public int Count { get; set; }
+}
+
+public class DashboardVerifierLoadResponse
+{
+    public Guid UserId { get; set; }
+
+    public string FullName { get; set; } = string.Empty;
+
+    /// <summary>Hồ sơ đang xét hoặc cần bổ sung mà người này đang được giao.</summary>
+    public int OpenCases { get; set; }
+
+    /// <summary>Trong số đó, hồ sơ đã quá hạn xét duyệt.</summary>
+    public int OverdueCases { get; set; }
+}
+
+public class DashboardRecentActivityResponse
+{
+    public DateTimeOffset At { get; set; }
+
+    /// <summary>Họ tên người thực hiện; null khi job nền thực hiện hoặc tài khoản không còn.</summary>
+    public string? ActorFullName { get; set; }
+
+    /// <summary>AuditAction dạng API.</summary>
+    public string Action { get; set; } = string.Empty;
 }

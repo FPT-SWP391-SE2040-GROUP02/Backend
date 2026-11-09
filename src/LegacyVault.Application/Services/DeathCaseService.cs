@@ -28,7 +28,7 @@ public sealed class DeathCaseService : IDeathCaseService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IAuditLogRepository auditLogRepository;
-    private readonly DeathCertificateChecker certificateChecker;
+    private readonly ICheckInRepository checkInRepository;
 
     public DeathCaseService(
         ICurrentUser currentUser,
@@ -42,7 +42,7 @@ public sealed class DeathCaseService : IDeathCaseService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IAuditLogRepository auditLogRepository,
-        DeathCertificateChecker certificateChecker)
+        ICheckInRepository checkInRepository)
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
@@ -55,7 +55,7 @@ public sealed class DeathCaseService : IDeathCaseService
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
         this.auditLogRepository = auditLogRepository;
-        this.certificateChecker = certificateChecker;
+        this.checkInRepository = checkInRepository;
     }
 
     public async Task<List<ExecutorVaultResponse>> GetMyVaultsAsync(CancellationToken ct)
@@ -63,9 +63,15 @@ public sealed class DeathCaseService : IDeathCaseService
         Guid userId = currentUser.RequireUserId();
         List<ExecutorVaultRow> rows = await deathCaseRepository.FindExecutorVaultsAsync(userId, ct);
         List<ExecutorVaultResponse> responses = new List<ExecutorVaultResponse>();
+        int limit = ProxyCheckInRules.Limit();
         foreach (ExecutorVaultRow row in rows)
         {
-            responses.Add(row.ToResponse());
+            ExecutorVaultResponse response = row.ToResponse();
+            int used = await checkInRepository.CountConsecutiveExecutorPeriodsAsync(row.PlanId, ct);
+            response.ProxyCheckInLimit = limit;
+            response.ProxyCheckInsUsed = used;
+            response.ProxyCheckInsLeft = ProxyCheckInRules.Left(used);
+            responses.Add(response);
         }
         return responses;
     }
@@ -222,8 +228,32 @@ public sealed class DeathCaseService : IDeathCaseService
         DeathCaseVersion version = DeathCaseMappings.FindVersion(deathCase, deathCase.CurrentVersionNo);
         EnsureVersionEditable(deathCase, version);
 
-        // NFR-09: tối đa 10 tệp mỗi phiên bản.
-        if (version.Files.Count >= DeathCaseRules.MaxFilesPerVersion)
+        // Có kind rõ ràng thì mỗi loại giấy chỉ giữ một tệp: tệp mới thay tệp cũ cùng loại (xóa tệp cũ sau khi lưu được tệp mới).
+        string kind = DeathCaseFileKind.DeathCertificate;
+        DeathCaseFile? replaced = null;
+        if (!string.IsNullOrWhiteSpace(request.Kind))
+        {
+            kind = request.Kind.Trim().ToUpperInvariant();
+            if (!DeathCaseFileKind.IsValid(kind))
+            {
+                throw ValidationErrors.For("kind", "Loại giấy không hợp lệ.");
+            }
+            foreach (DeathCaseFile existingFile in version.Files)
+            {
+                if (existingFile.Kind == kind)
+                {
+                    replaced = existingFile;
+                }
+            }
+        }
+
+        // NFR-09: tối đa 10 tệp mỗi phiên bản (tệp sắp bị thay không tính).
+        int fileCountAfterReplace = version.Files.Count;
+        if (replaced != null)
+        {
+            fileCountAfterReplace--;
+        }
+        if (fileCountAfterReplace >= DeathCaseRules.MaxFilesPerVersion)
         {
             Dictionary<string, object?> limitExtensions = new Dictionary<string, object?>();
             limitExtensions["maxFiles"] = DeathCaseRules.MaxFilesPerVersion;
@@ -263,6 +293,7 @@ public sealed class DeathCaseService : IDeathCaseService
         DeathCaseFile file = new DeathCaseFile();
         file.VersionId = version.Id;
         file.Position = nextPosition;
+        file.Kind = kind;
         file.FileName = DeathCaseFileRules.SanitizeFileName(request.FileName);
         file.ContentType = contentType;
         file.SizeBytes = stored.SizeBytes;
@@ -273,6 +304,13 @@ public sealed class DeathCaseService : IDeathCaseService
         file.UploadedAt = now;
         version.Files.Add(file);
         deathCaseRepository.AddFile(file);
+        string? replacedStorageKey = null;
+        if (replaced != null)
+        {
+            replacedStorageKey = replaced.StorageKey;
+            version.Files.Remove(replaced);
+            deathCaseRepository.RemoveFile(replaced);
+        }
         version.UpdatedAt = now;
         deathCase.UpdatedAt = now;
         try
@@ -285,7 +323,68 @@ public sealed class DeathCaseService : IDeathCaseService
             await contentStore.DeleteAsync(stored.StorageKey, CancellationToken.None);
             throw;
         }
+
+        // D8: nội dung của tệp bị thay có thể dùng chung với phiên bản khác; chỉ xóa khi không còn dòng nào dùng.
+        if (replacedStorageKey != null)
+        {
+            int stillUsed = await deathCaseRepository.CountFilesUsingStorageKeyAsync(replacedStorageKey, ct);
+            if (stillUsed == 0)
+            {
+                await contentStore.DeleteAsync(replacedStorageKey, CancellationToken.None);
+            }
+        }
         return BuildResponse(deathCase);
+    }
+
+    public async Task<PreparedDeathCaseFile> PrepareFileAsync(Guid caseId, Guid fileId, CancellationToken ct)
+    {
+        CaseContext context = await LoadCaseForExecutorAsync(caseId, ct);
+        DeathCaseFile? file = null;
+        foreach (DeathCaseVersion version in context.DeathCase.Versions)
+        {
+            foreach (DeathCaseFile candidate in version.Files)
+            {
+                if (candidate.Id == fileId)
+                {
+                    file = candidate;
+                }
+            }
+        }
+        if (file == null)
+        {
+            throw CaseNotFound();
+        }
+
+        StoredContent stored = new StoredContent();
+        stored.StorageKey = file.StorageKey;
+        stored.SizeBytes = file.SizeBytes;
+        stored.EncryptionKeyId = file.EncryptionKeyId;
+        stored.WrappedDataKey = file.WrappedDataKey;
+
+        // DATA-06: giải mã một lượt vào Stream.Null để kiểm toàn vẹn trước khi gửi byte đầu tiên.
+        try
+        {
+            await contentStore.CopyToAsync(stored, Stream.Null, ct);
+        }
+        catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException || ex is IOException)
+        {
+            throw new ContentIntegrityException("Nội dung trang giấy chứng tử không vượt qua kiểm tra toàn vẹn.", ex);
+        }
+
+        string fileName = file.FileName;
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            fileName = DeathCaseFileRules.DefaultFileName;
+        }
+        PreparedDeathCaseFile prepared = new PreparedDeathCaseFile();
+        prepared.CaseId = caseId;
+        prepared.FileId = fileId;
+        prepared.ViewerUserId = context.UserId;
+        prepared.FileName = fileName;
+        prepared.ContentType = file.ContentType;
+        prepared.Length = file.SizeBytes;
+        prepared.WriteToAsync = (destination, token) => contentStore.CopyToAsync(stored, destination, token);
+        return prepared;
     }
 
     public async Task<DeathCaseResponse> RemoveFileAsync(Guid caseId, Guid fileId, CancellationToken ct)
@@ -398,37 +497,20 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         EnsureVersionEditable(deathCase, version);
 
-        // DEATH-01: đủ 6 trường và ít nhất một trang giấy.
+        // Chỉ cần ít nhất một giấy chứng tử hoặc trích lục khai tử; các trường nhập tay không còn bắt buộc.
         DeathCaseIdentityData? identity = dataProtector.Unprotect(version);
         DeathCaseIdentityData data = new DeathCaseIdentityData();
         if (identity != null)
         {
             data = identity;
         }
-        List<string> missing = DeathCaseRules.GetMissingRequirements(
-            data.OwnerFullName, data.OwnerCitizenId, version.DateOfDeath,
-            data.CertificateNumber, version.IssuedOn, data.IssuedBy, version.Files.Count);
+        List<string> missing = DeathCaseRules.GetMissingRequirements(DeathCaseRules.CountCertificateFiles(version.Files));
         if (missing.Count > 0)
         {
             Dictionary<string, object?> incompleteExtensions = new Dictionary<string, object?>();
             incompleteExtensions["missingRequirements"] = missing;
             throw new AppException(AppErrorType.Conflict, ErrorCode.DeathCaseIncomplete,
-                "Hồ sơ chứng tử chưa đủ thông tin hoặc chưa có trang giấy nào.", incompleteExtensions);
-        }
-
-        // AI xem các trang giấy: không trang nào là giấy chứng tử → chặn gửi để Verifier không phải xét hồ sơ rác.
-        // AI không kiểm tra được → vẫn cho gửi, đặt cờ CertificateUnverified bên dưới để Verifier tự xem kỹ.
-        DeathCertificateCheckResult certificateCheck = await certificateChecker.CheckAsync(version, ct);
-        if (certificateCheck.Status == DeathCertificateCheckStatus.NotRecognized)
-        {
-            List<string> notRecognized = new List<string>();
-            notRecognized.Add(DeathCertificateCheckRules.NotRecognizedCode);
-            Dictionary<string, object?> certificateExtensions = new Dictionary<string, object?>();
-            certificateExtensions["missingRequirements"] = notRecognized;
-            certificateExtensions["fileChecks"] = certificateCheck.Files;
-            throw new AppException(AppErrorType.Conflict, ErrorCode.DeathCaseIncomplete,
-                "Không tìm thấy trang nào là giấy chứng tử hoặc trích lục khai tử. Vui lòng tải lên ảnh chụp rõ giấy chứng tử.",
-                certificateExtensions);
+                "Hồ sơ chưa có giấy chứng tử hoặc trích lục khai tử.", incompleteExtensions);
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -458,22 +540,6 @@ public sealed class DeathCaseService : IDeathCaseService
         deathCase.ReviewVersionNo = version.VersionNo;
         deathCase.Status = DeathCaseStatus.UnderReview;
 
-        // DEATH-10: có điểm danh sau ngày mất ghi trên giấy → đặt cờ, chặn duyệt tới khi Verifier xem xét.
-        // version.DateOfDeath chắc chắn có giá trị vì hồ sơ đã đủ trường.
-        DateTimeOffset cutoff = DeathCaseRules.CheckInCutoffUtc(version.DateOfDeath!.Value);
-        bool checkedInAfterDeath = await deathCaseRepository.HasCheckInAtOrAfterAsync(plan.Id, cutoff, ct);
-        if (checkedInAfterDeath)
-        {
-            DeathCaseFlag flag = new DeathCaseFlag();
-            flag.CaseId = deathCase.Id;
-            flag.VersionId = version.Id;
-            flag.Kind = DeathCaseFlagKind.CheckinAfterDeath;
-            flag.Detail = "Owner có điểm danh sau ngày mất ghi trên giấy chứng tử.";
-            flag.CreatedAt = now;
-            deathCase.Flags.Add(flag);
-            deathCaseRepository.AddFlag(flag);
-        }
-
         // DEATH-13: số CCCD trên hồ sơ khác CCCD đã xác minh của Owner → đặt cờ, chặn duyệt tới khi Verifier xem xét.
         // Có danh tính đã gắn (EKYC-27) thì so đủ 12 số; chưa có (Owner đăng ký trước đó) thì chỉ so 4 số cuối của lượt đạt.
         string? boundCitizenId = await identityReader.FindBoundCitizenIdAsync(vault.OwnerId, ct);
@@ -499,37 +565,16 @@ public sealed class DeathCaseService : IDeathCaseService
             deathCaseRepository.AddFlag(mismatch);
         }
 
-        if (certificateCheck.Status == DeathCertificateCheckStatus.Unavailable)
-        {
-            DeathCaseFlag unverified = new DeathCaseFlag();
-            unverified.CaseId = deathCase.Id;
-            unverified.VersionId = version.Id;
-            unverified.Kind = DeathCaseFlagKind.CertificateUnverified;
-            unverified.Detail = "AI chưa kiểm tra được các trang giấy có phải giấy chứng tử. Verifier cần tự xem kỹ.";
-            unverified.CreatedAt = now;
-            deathCase.Flags.Add(unverified);
-            deathCaseRepository.AddFlag(unverified);
-        }
-
         // Bản bổ sung mới: hết trạng thái quá hạn bổ sung.
         deathCase.SupplementOverdueAt = null;
 
-        // DEATH-08, DEATH-11: lần đầu, hoặc đổi trọng yếu so với bản đã báo → xếp thông báo Pending (outbox, D3)
-        // và dừng đồng hồ 72 giờ cho tới khi job gửi được thư. Đổi không trọng yếu thì giữ nguyên đồng hồ.
-        if (NeedsOwnerNotice(deathCase, data, version))
+        // Không còn cửa sổ phản đối: Chủ kho không được báo và không có "Tôi còn sống". Kho và tài khoản bị khóa ngay khi nộp,
+        // nên hồ sơ vào xét luôn. Ghi mốc phản đối bằng đúng lúc nộp để các luật cũ (OwnerNotNotified, ObjectionPeriodNotOver) tự qua.
+        if (deathCase.NotifiedVersionNo == null || deathCase.ObjectionStartsAt == null)
         {
-            DeathCaseNotice notice = new DeathCaseNotice();
-            notice.CaseId = deathCase.Id;
-            notice.VersionNo = version.VersionNo;
-            notice.Channel = DeathCaseNoticeChannel.Email;
-            notice.RecipientUserId = vault.OwnerId;
-            notice.Status = DeathCaseNoticeStatus.Pending;
-            notice.CreatedAt = now;
-            deathCase.Notices.Add(notice);
-            deathCaseRepository.AddNotice(notice);
             deathCase.NotifiedVersionNo = version.VersionNo;
-            deathCase.ObjectionStartsAt = null;
-            deathCase.ObjectionEndsAt = null;
+            deathCase.ObjectionStartsAt = now;
+            deathCase.ObjectionEndsAt = now;
         }
 
         // ASSIGN-01, ROLE-03 (D4): chưa có phân công còn hiệu lực thì chọn Verifier xoay vòng, loại Owner,
@@ -616,6 +661,7 @@ public sealed class DeathCaseService : IDeathCaseService
             DeathCaseFile copy = new DeathCaseFile();
             copy.VersionId = next.Id;
             copy.Position = source.Position;
+            copy.Kind = source.Kind;
             copy.FileName = source.FileName;
             copy.ContentType = source.ContentType;
             copy.SizeBytes = source.SizeBytes;

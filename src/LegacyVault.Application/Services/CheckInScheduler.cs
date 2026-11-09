@@ -30,7 +30,6 @@ public sealed class CheckInScheduler : ICheckInScheduler
             schedule = new CheckInSchedule();
             schedule.PlanId = plan.Id;
             schedule.CycleDays = CheckInRules.DefaultCycleDays;
-            schedule.GraceDays = CheckInRules.DefaultGraceDays;
             schedule.CreatedAt = now;
             repository.AddSchedule(schedule);
         }
@@ -40,9 +39,7 @@ public sealed class CheckInScheduler : ICheckInScheduler
         CheckInPeriod period = new CheckInPeriod();
         period.PlanId = plan.Id;
         period.Sequence = lastSequence + 1;
-        period.StartedAt = now;
-        period.DueAt = CheckInTimeline.ComputeDueAt(now, schedule.CycleDays);
-        period.GraceEndsAt = CheckInTimeline.ComputeGraceEndsAt(period.DueAt, schedule.GraceDays);
+        CheckInRules.StartPeriodTimeline(period, now, schedule.CycleDays);
         repository.AddPeriod(period);
     }
 

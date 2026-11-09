@@ -16,6 +16,9 @@ public class BeneficiaryResponse
 
     public string? Phone { get; set; }
 
+    /// <summary>Lời nhắn Chủ kho để lại cho người nhận; null khi chưa viết.</summary>
+    public string? Message { get; set; }
+
     /// <summary>Không còn dùng từ khi bỏ SETUP-19: hồ sơ mới luôn null. Giữ lại để FE cũ không vỡ.</summary>
     public DateTimeOffset? MinorAcknowledgedAt { get; set; }
 

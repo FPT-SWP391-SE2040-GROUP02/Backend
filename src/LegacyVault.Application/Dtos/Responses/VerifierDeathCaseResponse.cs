@@ -168,6 +168,9 @@ public class VerifierDecisionResponse
     public List<string> RequestedParts { get; set; } = new List<string>();
 
     public DateTimeOffset DecidedAt { get; set; }
+
+    /// <summary>Mã biên bản thẩm định, có với quyết định APPROVED và REJECTED (dạng BB-20261107-9F2C71); null với yêu cầu bổ sung.</summary>
+    public string? RecordCode { get; set; }
 }
 
 public class VerifierAssignmentResponse

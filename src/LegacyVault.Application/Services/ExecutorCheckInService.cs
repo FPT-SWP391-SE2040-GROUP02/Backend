@@ -1,3 +1,4 @@
+using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
@@ -12,7 +13,11 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
 {
     private const string ReasonPlanNotOverdue = "PLAN_NOT_OVERDUE";
     private const string ReasonDeathCaseOpen = "DEATH_CASE_OPEN";
-    private const string AuditReason = "Executor điểm danh thay chủ kho khi chủ kho quá hạn điểm danh.";
+    private const string ReasonProxyLimitReached = "PROXY_LIMIT_REACHED";
+    private const string AuditReasonPrefix = "Executor điểm danh thay chủ kho. Cách liên lạc: ";
+
+    /// <summary>Cho phép đồng hồ máy Executor lệch nhẹ so với server khi khai lúc liên lạc.</summary>
+    private static readonly TimeSpan ContactedAtTolerance = TimeSpan.FromMinutes(5);
 
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
@@ -43,7 +48,8 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         this.timeProvider = timeProvider;
     }
 
-    public async Task<ExecutorCheckInResponse> CheckInForOwnerAsync(Guid vaultId, CancellationToken ct)
+    public async Task<ExecutorCheckInResponse> CheckInForOwnerAsync(
+        Guid vaultId, ExecutorCheckInRequest request, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
         Vault? vault = await vaultRepository.FindByIdAsync(vaultId, ct);
@@ -66,6 +72,19 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
+        if (request.ContactedAt!.Value > now.Add(ContactedAtTolerance))
+        {
+            throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                "Lúc liên lạc không được ở tương lai.");
+        }
+
+        // Giới hạn số lần điểm danh thay liên tiếp; chủ kho tự điểm danh thì bộ đếm về 0.
+        int usedBefore = await checkInRepository.CountConsecutiveExecutorPeriodsAsync(plan.Id, ct);
+        if (usedBefore >= ProxyCheckInRules.Limit())
+        {
+            throw NotAllowed(plan.Status, ReasonProxyLimitReached);
+        }
+
         CheckInSchedule? schedule = await checkInRepository.FindScheduleByPlanIdAsync(plan.Id, ct);
         if (schedule == null)
         {
@@ -90,10 +109,11 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         CheckInPeriod next = new CheckInPeriod();
         next.PlanId = plan.Id;
         next.Sequence = lastSequence + 1;
-        next.StartedAt = now;
         next.StartedByExecutor = true;
-        next.DueAt = CheckInTimeline.ComputeDueAt(now, schedule.CycleDays);
-        next.GraceEndsAt = CheckInTimeline.ComputeGraceEndsAt(next.DueAt, schedule.GraceDays);
+        next.ProxyContactedWho = request.ContactedWho.Trim();
+        next.ProxyContactedAt = request.ContactedAt.Value;
+        next.ProxyContactMethod = request.ContactMethod;
+        CheckInRules.StartPeriodTimeline(next, now, schedule.CycleDays);
         checkInRepository.AddPeriod(next);
 
         plan.Status = PlanStatus.Active;
@@ -101,7 +121,7 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
 
         auditLogRepository.Add(AuditRules.Create(
             vault.Id, userId, AuditActorRole.Executor, AuditAction.CheckedIn, AuditTargetType.CheckIn,
-            next.Id, next.Sequence, AuditOutcome.Succeeded, AuditReason, now));
+            next.Id, next.Sequence, AuditOutcome.Succeeded, AuditReasonPrefix + request.ContactMethod, now));
 
         // Một lần lưu cho kỳ cũ, kỳ mới, lịch và kế hoạch. Hai người cùng điểm danh: RowVersion của kỳ cũ lệch
         // nên bên thua nhận 409 EDIT_CONFLICT.
@@ -113,6 +133,8 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         response.CheckedInAt = now;
         response.NextCheckInDueAt = next.DueAt;
         response.GraceEndsAt = next.GraceEndsAt;
+        response.ProxyCheckInLimit = ProxyCheckInRules.Limit();
+        response.ProxyCheckInsLeft = ProxyCheckInRules.Left(usedBefore + 1);
         return response;
     }
 

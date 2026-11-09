@@ -12,8 +12,6 @@ public static class DevToolsRules
 {
     public const string CheckInOverdue = "CHECKIN_OVERDUE";
     public const string GraceEnded = "GRACE_ENDED";
-    public const string ObjectionWindowEnded = "OBJECTION_WINDOW_ENDED";
-    public const string SelfieDeadlinePassed = "SELFIE_DEADLINE_PASSED";
     public const string ServiceExpired = "SERVICE_EXPIRED";
     public const string RecipientDecisionEnded = "RECIPIENT_DECISION_ENDED";
 
@@ -69,8 +67,6 @@ public static class DevToolsRules
         List<string> keys = new List<string>();
         keys.Add(CheckInOverdue);
         keys.Add(GraceEnded);
-        keys.Add(ObjectionWindowEnded);
-        keys.Add(SelfieDeadlinePassed);
         keys.Add(ServiceExpired);
         keys.Add(RecipientDecisionEnded);
         return keys;
@@ -159,46 +155,6 @@ public static class DevToolsRules
             return Build(GraceEnded, Passed, string.Empty);
         }
         return Build(GraceEnded, Available, string.Empty);
-    }
-
-    /// <summary>Mốc 3: hết 72 giờ phản đối của hồ sơ chứng tử đã báo Owner.</summary>
-    public static DevMilestoneResponse EvaluateObjectionWindow(DeathCase? openCase, DateTimeOffset now)
-    {
-        if (openCase == null)
-        {
-            return Build(ObjectionWindowEnded, NotApplicable, "Chưa có hồ sơ chứng tử đang mở.");
-        }
-        if (openCase.Status == DeathCaseStatus.ApprovedForHandover)
-        {
-            return Build(ObjectionWindowEnded, Passed, string.Empty);
-        }
-        if (openCase.ObjectionEndsAt == null)
-        {
-            return Build(ObjectionWindowEnded, NotApplicable, "Hồ sơ chưa gửi hoặc chưa báo được Chủ kho.");
-        }
-        if (openCase.ObjectionEndsAt.Value <= now)
-        {
-            return Build(ObjectionWindowEnded, Passed, string.Empty);
-        }
-        return Build(ObjectionWindowEnded, Available, string.Empty);
-    }
-
-    /// <summary>Mốc 4: hết 7 ngày gửi selfie của lời báo còn sống đang mở.</summary>
-    public static DevMilestoneResponse EvaluateSelfieDeadline(DeathCaseObjection? latestObjection, DateTimeOffset now)
-    {
-        if (latestObjection == null || latestObjection.Status != ObjectionStatus.Open)
-        {
-            return Build(SelfieDeadlinePassed, NotApplicable, "Chưa có lời báo còn sống đang mở.");
-        }
-        if (latestObjection.SelfiePassedAt != null)
-        {
-            return Build(SelfieDeadlinePassed, NotApplicable, "Selfie đã đạt, không cần tua.");
-        }
-        if (latestObjection.SelfieDeadlineAt <= now)
-        {
-            return Build(SelfieDeadlinePassed, Passed, string.Empty);
-        }
-        return Build(SelfieDeadlinePassed, Available, string.Empty);
     }
 
     /// <summary>

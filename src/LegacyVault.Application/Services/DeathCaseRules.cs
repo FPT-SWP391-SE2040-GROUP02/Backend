@@ -105,43 +105,32 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-01: các phần còn thiếu để gửi được: đủ 6 trường và ít nhất một trang giấy.
-    /// Chuỗi null hoặc chỉ khoảng trắng tính là thiếu.
+    /// Các phần còn thiếu để gửi được: chỉ cần ít nhất một giấy chứng tử hoặc trích lục khai tử (mã FILES).
+    /// Họ tên, số giấy, ngày mất, ngày cấp, nơi cấp không còn do Executor nhập; Người xét duyệt đọc trên giấy.
+    /// Số CCCD của Chủ kho lấy từ danh tính đã xác minh.
     /// </summary>
-    public static List<string> GetMissingRequirements(
-        string? ownerFullName, string? ownerCitizenId, DateOnly? dateOfDeath,
-        string? certificateNumber, DateOnly? issuedOn, string? issuedBy, int fileCount)
+    public static List<string> GetMissingRequirements(int certificateFileCount)
     {
         List<string> missing = new List<string>();
-        if (TextInput.NullIfBlank(ownerFullName) == null)
-        {
-            missing.Add(MissingOwnerFullName);
-        }
-        if (TextInput.NullIfBlank(ownerCitizenId) == null)
-        {
-            missing.Add(MissingOwnerCitizenId);
-        }
-        if (dateOfDeath == null)
-        {
-            missing.Add(MissingDateOfDeath);
-        }
-        if (TextInput.NullIfBlank(certificateNumber) == null)
-        {
-            missing.Add(MissingCertificateNumber);
-        }
-        if (issuedOn == null)
-        {
-            missing.Add(MissingIssuedOn);
-        }
-        if (TextInput.NullIfBlank(issuedBy) == null)
-        {
-            missing.Add(MissingIssuedBy);
-        }
-        if (fileCount <= 0)
+        if (certificateFileCount <= 0)
         {
             missing.Add(MissingFiles);
         }
         return missing;
+    }
+
+    /// <summary>Số tệp loại giấy chứng tử / trích lục khai tử trong một bản hồ sơ.</summary>
+    public static int CountCertificateFiles(IEnumerable<DeathCaseFile> files)
+    {
+        int count = 0;
+        foreach (DeathCaseFile file in files)
+        {
+            if (file.Kind == DeathCaseFileKind.DeathCertificate)
+            {
+                count++;
+            }
+        }
+        return count;
     }
 
     /// <summary>
@@ -193,10 +182,6 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-10, D7: điểm danh "sau ngày mất" là điểm danh từ 00:00 giờ Việt Nam của ngày kế tiếp ngày mất.
-    /// Trả mốc đó theo UTC.
-    /// </summary>
-    /// <summary>
     /// DEATH-13: CCCD khai trên hồ sơ khác CCCD đã xác minh của Owner. Owner chưa xác minh (verifiedLast4 null)
     /// hoặc hồ sơ chưa có số thì không kết luận được, trả false.
     /// </summary>
@@ -221,13 +206,6 @@ public static class DeathCaseRules
             return false;
         }
         return !string.Equals(boundCitizenId, caseCitizenId, StringComparison.Ordinal);
-    }
-
-    public static DateTimeOffset CheckInCutoffUtc(DateOnly dateOfDeath)
-    {
-        DateTime nextDayStart = dateOfDeath.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        DateTimeOffset cutoffInVietnam = new DateTimeOffset(nextDayStart, VietnamOffset);
-        return cutoffInVietnam.ToUniversalTime();
     }
 
     /// <summary>DEATH-08: hạn phản đối = lúc thông báo được giao + 72 giờ.</summary>
