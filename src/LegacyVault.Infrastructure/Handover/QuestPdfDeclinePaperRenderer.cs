@@ -8,8 +8,8 @@ namespace LegacyVault.Infrastructure.Handover;
 /// <summary>
 /// Dựng ảnh PNG văn bản từ chối nhận di sản thừa kế và văn bản khai nhận di sản thừa kế bằng QuestPDF (giấy phép Community).
 /// Văn bản từ chối viết đúng từng câu theo mẫu Word của nhóm (van-ban-tu-choi-nhan-di-san-thua-ke.docx): khổ Letter, lề 1 inch,
-/// font Calibri 13pt, màu chữ #222222, khoảng cách đoạn 9pt trước và 6pt sau, căn đều. Máy chủ không có Calibri thì dùng
-/// Carlito (cùng kích thước chữ), cuối cùng là Lato đi kèm gói.
+/// font Times New Roman 13pt, màu chữ #222222, khoảng cách đoạn 9pt trước và 6pt sau, căn đều. Máy chủ không có Times New Roman thì dùng
+/// Liberation Serif (cùng kích thước chữ), cuối cùng là Lato đi kèm gói.
 /// </summary>
 public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
 {
@@ -18,7 +18,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     static QuestPdfDeclinePaperRenderer()
     {
         QuestPDF.Settings.License = LicenseType.Community;
-        // Calibri là font của Windows nên không nhúng vào gói: dùng font hệ thống nếu máy có (Calibri, hoặc Carlito trên Linux),
+        // Times New Roman là font của Windows nên không nhúng vào gói: dùng font hệ thống nếu máy có (hoặc Liberation Serif trên Linux),
         // không có thì QuestPDF dùng Lato đi kèm thay vì dừng dựng văn bản.
         QuestPDF.Settings.UseSystemFonts = true;
         QuestPDF.Settings.ThrowOnMissingFontFamilies = false;
@@ -33,7 +33,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
                 page.Size(PageSizes.Letter);
                 page.Margin(72);
                 page.DefaultTextStyle(style => style
-                    .FontFamily("Calibri", "Carlito", "Lato")
+                    .FontFamily("Times New Roman", "Liberation Serif", "Lato")
                     .FontSize(13)
                     .FontColor(Ink)
                     .LineHeight(1.0f));
@@ -67,18 +67,18 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "-----------------", center: true);
         Para(column, "VĂN BẢN TỪ CHỐI NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
         Para(column,
-            $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại (1) hệ thống LegacyVault, chúng tôi gồm: (2)");
+            $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault, chúng tôi gồm:");
         Para(column, $"1. Ông/bà: {data.DeclinerFullName} Sinh năm : ...................................................", justify: true);
         Para(column,
             "CMND số: ............. do Công an ............... cấp ngày .................................................",
             justify: true);
-        Para(column, "(Là (3) người được chỉ định nhận của người để lại di sản thừa kế)", justify: true);
+        Para(column, "(Là người được chỉ định nhận của người để lại di sản thừa kế)", justify: true);
         Para(column, $"{nbsp3} Chúng tôi là những người thừa kế của ông/bà {data.OwnerFullName}", justify: true);
         Para(column,
-            $"{nbsp3}  Ông/bà (4) {data.OwnerFullName} chết ngày {Date(data.DateOfDeath, "……………")} theo giấy chứng tử "
+            $"{nbsp3}  Ông/bà {data.OwnerFullName} chết ngày {Date(data.DateOfDeath, "……………")} theo giấy chứng tử "
             + $"do UBND ………………… đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………………")}.",
             justify: true);
-        Para(column, $"{nbsp3} Di sản mà ông/bà {data.OwnerFullName} để lại là: (5) {data.ContainerName}", justify: true);
+        Para(column, $"{nbsp3} Di sản mà ông/bà {data.OwnerFullName} để lại là: {data.ContainerName}", justify: true);
         Para(column,
             "Nay bằng Văn bản này chúng tôi tự nguyện từ chối nhận kỷ phần thừa kế di sản nêu trên mà chúng tôi được hưởng.",
             justify: true);
