@@ -161,6 +161,22 @@ public sealed class VerifierHandoverSubmissionsController : ControllerBase
         return reviewService.ApproveAsync(submissionId, ct);
     }
 
+    /// <summary>
+    /// Luồng Biên Bản: kiểm tra thủ công (tick đủ bốn mục và xác nhận trách nhiệm) rồi gửi.
+    /// Hoàn tất biên bản: Chấp nhận thì mở quyền tải tài sản, Từ chối thì ghi nhận từ chối.
+    /// </summary>
+    [HttpPost("{submissionId:guid}/complete")]
+    [Consumes("application/json")]
+    [ProducesResponseType<VerifierHandoverSubmissionResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<VerifierHandoverSubmissionResponse> Complete(
+        Guid submissionId, ApproveHandoverDocumentRequest request, CancellationToken ct)
+    {
+        return reviewService.CompleteAsync(submissionId, request, ct);
+    }
+
     /// <summary>Yêu cầu người nhận bổ sung, kèm lý do.</summary>
     [HttpPost("{submissionId:guid}/request-supplement")]
     [Consumes("application/json")]
