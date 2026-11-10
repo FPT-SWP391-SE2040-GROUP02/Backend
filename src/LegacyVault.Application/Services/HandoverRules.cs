@@ -64,6 +64,45 @@ public static class HandoverRules
     }
 
     /// <summary>
+    /// Kết thúc lượt bằng việc nhận: tạo quyền tải cho người nhận và đặt lượt thành đã nhận.
+    /// Dùng chung cho nút Đồng ý nhận (luồng cũ) và lúc Người xét duyệt gửi biên bản (luồng Biên Bản).
+    /// Người gọi tự thêm grant vào repository.
+    /// </summary>
+    public static HandoverGrant CommitAccept(HandoverTurn turn, Guid recipientUserId, DateTimeOffset now)
+    {
+        HandoverGrant grant = new HandoverGrant();
+        grant.TurnId = turn.Id;
+        grant.Turn = turn;
+        grant.UserId = recipientUserId;
+        grant.Status = HandoverGrantStatus.Active;
+        grant.GrantedAt = now;
+        grant.ExpiresAt = now + GrantWindow;
+        turn.Grant = grant;
+
+        turn.Status = HandoverTurnStatus.HandoverCommitted;
+        turn.DecidedAt = now;
+        turn.EndedAt = now;
+        turn.UpdatedAt = now;
+        return grant;
+    }
+
+    /// <summary>
+    /// Kết thúc lượt bằng việc từ chối. Nội dung của lượt bị xóa ngay thay vì chờ hết thời hạn lưu: hạn xóa đặt đúng lúc này,
+    /// job lưu giữ xóa ở vòng quét kế tiếp. Tài sản còn lượt khác tham chiếu thì giữ lại (RETENTION-02).
+    /// </summary>
+    public static void MarkDeclined(HandoverTurn turn, DateTimeOffset now)
+    {
+        turn.Status = HandoverTurnStatus.Declined;
+        turn.DecidedAt = now;
+        turn.EndedAt = now;
+        turn.UpdatedAt = now;
+        turn.RetentionStatus = RetentionStatus.RetentionActive;
+        turn.RetentionStartedAt = now;
+        turn.RetentionDeadline = now;
+        turn.RetentionRemainingSeconds = null;
+    }
+
+    /// <summary>
     /// Lý do grant không dùng được tại thời điểm now (EXPIRED, BLOCKED, REVOKED, PLAN_NOT_ACTIVE);
     /// null nghĩa là dùng được. Kế hoạch đã Closed (mọi lượt xong) vẫn cho tải đến hết hạn grant.
     /// </summary>
