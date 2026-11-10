@@ -26,6 +26,7 @@ Tài liệu này mô tả **đúng những gì code hiện làm**, đọc từ n
 - Chu kỳ: Chủ kho chỉ chọn **30, 60 hoặc 90 ngày**. Đổi chu kỳ khi đang có kỳ chạy thì áp dụng từ kỳ sau.
 - Mỗi ngày (giờ Việt Nam) chỉ ghi nhận một lần điểm danh. Đăng nhập hay thanh toán không phải điểm danh.
 - Không còn "ân hạn cố định". Thay vào đó Admin đặt hai tham số, được **chốt vào từng kỳ lúc mở kỳ**:
+  - `CheckIn.FirstReminderDaysBeforeDue` (mặc định 7, tối đa 60) và `CheckIn.SecondReminderDaysBeforeDue` (mặc định 1, từ 1 đến 30): số ngày trước hạn của hai thư nhắc trước hạn; thư thứ nhất luôn xa hạn hơn thư thứ hai. Áp dụng ngay, kể cả kỳ đang chạy.
   - `CheckIn.MaxLateReminders` (mặc định 3, từ 1 đến 5): số thư nhắc trễ gửi Chủ kho.
   - `CheckIn.LateReminderGapDays` (mặc định 3, từ 1 đến 30): khoảng cách giữa hai thư.
 - Mốc thư: trước hạn 7 ngày, trước hạn 1 ngày, rồi thư nhắc trễ thứ nhất đúng lúc tới hạn, các thư sau cách nhau `LateReminderGapDays`.
@@ -117,6 +118,8 @@ Các bước:
 | Nhóm | Khóa | Mặc định |
 |---|---|---|
 | Điểm danh | `CheckIn.DefaultCycleDays` | 30 |
+| | `CheckIn.FirstReminderDaysBeforeDue` | 7 |
+| | `CheckIn.SecondReminderDaysBeforeDue` | 1 |
 | | `CheckIn.LateReminderGapDays` | 3 |
 | | `CheckIn.MaxLateReminders` | 3 |
 | | `CheckIn.ExecutorProxyLimit` | 3 |

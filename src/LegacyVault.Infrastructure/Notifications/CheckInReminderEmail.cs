@@ -27,12 +27,24 @@ public static class CheckInReminderEmail
         switch (kind)
         {
             case CheckInReminderKind.DueInSevenDays:
-                subject = "Còn 7 ngày nữa là tới hạn điểm danh LegacyVault";
+                // Số ngày do Admin đặt (CheckIn.FirstReminderDaysBeforeDue), không còn cố định 7.
+                int firstDays = CheckInRules.FirstReminderDaysBeforeDue;
+                subject = $"Còn {firstDays} ngày nữa là tới hạn điểm danh LegacyVault";
                 paragraph = $"Hạn điểm danh tiếp theo của bạn là {due}. Hãy đăng nhập và bấm \"Điểm danh\" trước thời điểm này.";
                 break;
             case CheckInReminderKind.DueInOneDay:
-                subject = "Ngày mai là hạn điểm danh LegacyVault";
-                paragraph = $"Hạn điểm danh của bạn là {due}, chỉ còn khoảng một ngày. Hãy đăng nhập và bấm \"Điểm danh\".";
+                // Số ngày do Admin đặt (CheckIn.SecondReminderDaysBeforeDue); mặc định 1 ngày giữ nguyên câu cũ.
+                int secondDays = CheckInRules.SecondReminderDaysBeforeDue;
+                if (secondDays == 1)
+                {
+                    subject = "Ngày mai là hạn điểm danh LegacyVault";
+                    paragraph = $"Hạn điểm danh của bạn là {due}, chỉ còn khoảng một ngày. Hãy đăng nhập và bấm \"Điểm danh\".";
+                }
+                else
+                {
+                    subject = $"Còn {secondDays} ngày nữa là tới hạn điểm danh LegacyVault";
+                    paragraph = $"Hạn điểm danh của bạn là {due}, chỉ còn khoảng {secondDays} ngày. Hãy đăng nhập và bấm \"Điểm danh\".";
+                }
                 break;
             case CheckInReminderKind.GraceStarted:
                 subject = "Bạn đã quá hạn điểm danh LegacyVault";

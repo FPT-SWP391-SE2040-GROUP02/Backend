@@ -92,7 +92,8 @@ public sealed class CheckInJob : ICheckInJob
     private async Task SendLatestReminderAsync(CheckInPeriod period, DateTimeOffset now, CancellationToken ct)
     {
         CheckInReminderKind? latest = CheckInTimeline.LatestReachedMilestone(
-            period.DueAt, period.MaxLateReminders, period.LateReminderGapDays, now);
+            period.DueAt, period.MaxLateReminders, period.LateReminderGapDays, now,
+            CheckInRules.FirstReminderDaysBeforeDue, CheckInRules.SecondReminderDaysBeforeDue);
         if (latest == null)
         {
             return;

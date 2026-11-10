@@ -73,15 +73,28 @@ public static class CheckInTimeline
         return kinds;
     }
 
-    /// <summary>Thời điểm tới mốc nhắc (DMS-06). Thư nhắc trễ lần n gửi lúc hạn + (n - 1) × khoảng cách.</summary>
+    /// <summary>
+    /// Thời điểm tới mốc nhắc (DMS-06) với hai mốc trước hạn ở mức mặc định (7 ngày và 1 ngày).
+    /// Thư nhắc trễ lần n gửi lúc hạn + (n - 1) × khoảng cách.
+    /// </summary>
     public static DateTimeOffset MilestoneAt(CheckInReminderKind kind, DateTimeOffset dueAt, int gapDays)
+    {
+        return MilestoneAt(kind, dueAt, gapDays, CheckInRules.DefaultFirstReminderDays, CheckInRules.DefaultSecondReminderDays);
+    }
+
+    /// <summary>
+    /// Như bản trên nhưng hai thư trước hạn gửi trước hạn firstDaysBeforeDue và secondDaysBeforeDue ngày
+    /// (Admin đặt, xem CheckInRules). Tên mốc DueInSevenDays và DueInOneDay chỉ là tên cũ của hai mốc này.
+    /// </summary>
+    public static DateTimeOffset MilestoneAt(
+        CheckInReminderKind kind, DateTimeOffset dueAt, int gapDays, int firstDaysBeforeDue, int secondDaysBeforeDue)
     {
         switch (kind)
         {
             case CheckInReminderKind.DueInSevenDays:
-                return dueAt - TimeUnits.Days(7);
+                return dueAt - TimeUnits.Days(firstDaysBeforeDue);
             case CheckInReminderKind.DueInOneDay:
-                return dueAt - TimeUnits.Days(1);
+                return dueAt - TimeUnits.Days(secondDaysBeforeDue);
             default:
                 int late = LateReminderIndex(kind);
                 if (late == 0)
@@ -96,10 +109,19 @@ public static class CheckInTimeline
     public static CheckInReminderKind? LatestReachedMilestone(
         DateTimeOffset dueAt, int maxLateReminders, int gapDays, DateTimeOffset now)
     {
+        return LatestReachedMilestone(
+            dueAt, maxLateReminders, gapDays, now, CheckInRules.DefaultFirstReminderDays, CheckInRules.DefaultSecondReminderDays);
+    }
+
+    /// <summary>Như bản trên nhưng với số ngày của hai thư trước hạn do Admin đặt.</summary>
+    public static CheckInReminderKind? LatestReachedMilestone(
+        DateTimeOffset dueAt, int maxLateReminders, int gapDays, DateTimeOffset now,
+        int firstDaysBeforeDue, int secondDaysBeforeDue)
+    {
         IReadOnlyList<CheckInReminderKind> kinds = ActiveKinds(maxLateReminders);
         for (int i = kinds.Count - 1; i >= 0; i--)
         {
-            if (now >= MilestoneAt(kinds[i], dueAt, gapDays))
+            if (now >= MilestoneAt(kinds[i], dueAt, gapDays, firstDaysBeforeDue, secondDaysBeforeDue))
             {
                 return kinds[i];
             }
