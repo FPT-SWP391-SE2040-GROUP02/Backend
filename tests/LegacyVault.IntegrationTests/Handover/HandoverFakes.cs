@@ -63,10 +63,25 @@ public sealed class FakeHandoverRepository : IHandoverRepository
         return Task.FromResult(Assets.FirstOrDefault(a => a.Id == assetId));
     }
 
+    public Task<IReadOnlyList<Guid>> FindUndeliveredInvitationTurnIdsAsync(
+        DateTimeOffset createdBefore, int maxAttempts, CancellationToken ct)
+    {
+        IReadOnlyList<Guid> ids = Turns
+            .Where(t => t.Status == HandoverTurnStatus.Invited
+                && t.InvitationSentAt == null
+                && t.ClaimantUserId == null
+                && t.CreatedAt <= createdBefore
+                && t.InvitationAttempts < maxAttempts)
+            .OrderBy(t => t.CreatedAt)
+            .Select(t => t.Id)
+            .ToList();
+        return Task.FromResult(ids);
+    }
+
     public Task<IReadOnlyList<Guid>> FindExpiredResponseTurnIdsAsync(DateTimeOffset now, CancellationToken ct)
     {
         IReadOnlyList<Guid> ids = Turns
-            .Where(t => t.Status == HandoverTurnStatus.Invited && t.InvitationSentAt != null && t.ResponseDeadline <= now)
+            .Where(t => t.Status == HandoverTurnStatus.Invited && t.ResponseDeadline <= now)
             .OrderBy(t => t.ResponseDeadline)
             .Select(t => t.Id)
             .ToList();
