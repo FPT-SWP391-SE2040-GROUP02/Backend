@@ -3484,3 +3484,7 @@ namespace LegacyVault.Infrastructure.Data.Migrations
         }
     }
 }
+                    b.HasIndex("Phone")
+                        .IsUnique()
+                        .HasFilter("[Phone] IS NOT NULL");
+

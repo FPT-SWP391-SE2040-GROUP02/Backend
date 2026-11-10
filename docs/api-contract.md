@@ -76,6 +76,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
 | 404 | `AVATAR_NOT_FOUND` | Tài khoản chưa có ảnh đại diện | |
 | 404 | `IDENTITY_IMAGE_NOT_FOUND` | Verifier xem ảnh CCCD lúc eKYC mà Owner xác minh trước khi có chức năng lưu ảnh, hoặc xem selfie báo còn sống khi chưa có lần thử nào được so khớp | |
+| 409 | `PHONE_ALREADY_EXISTS` | Số điện thoại (sau khi bỏ dấu cách, chấm, gạch, ngoặc) đã thuộc một tài khoản khác, mọi vai trò: đăng ký, `PUT /v1/me/phone`, Admin tạo tài khoản. Mỗi số chỉ thuộc một tài khoản (index unique `IX_Users_Phone`, bỏ qua tài khoản chưa có số) | `field` |
 | 409 | `ASSET_IN_USE` | Tài sản còn trong gói hoặc đã ghim vào bàn giao nên không xóa được (+`reason`) | |
 | 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
@@ -858,7 +859,7 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 | GET | `/v1/admin/users/{userId}` | — | 200 `AdminUserDetailResponse` (thông tin tài khoản; `assignedCases` hồ sơ đang xét của Verifier, `recentDecisions` 10 quyết định gần nhất, `recentActivity` 10 thao tác gần nhất, không kèm lý do hay nội dung hồ sơ) | 404 (không phải Admin hoặc không có tài khoản) |
 | GET | `/v1/admin/audit-logs?pageIndex=&pageSize=&sortBy=at&isAscending=&action=&from=&to=` | — | 200 `PaginatedList<AdminAuditLogResponse>` (`AuditLogResponse` kèm `vaultId`, `actorFullName`, `actorEmail`; `isAscending=false` = mới nhất trước; `action` UPPER_SNAKE_CASE; `from` tính cả mốc, `to` không tính mốc) | 400 `VALIDATION_ERROR`, 404 |
 | GET | `/v1/admin/users?search=&role=&status=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminUserResponse>` (không có mật khẩu) | 400, 404 |
-| POST | `/v1/admin/users` | `{ fullName, email, password, role: VERIFIER/ADMIN, phone? }` | 201 `AdminUserResponse` | 400 (`role` = `EXECUTOR` hoặc `USER` bị từ chối), 404, 409 `EMAIL_ALREADY_EXISTS` |
+| POST | `/v1/admin/users` | `{ fullName, email, password, role: VERIFIER/ADMIN, phone? }` | 201 `AdminUserResponse` | 400 (`role` = `EXECUTOR` hoặc `USER` bị từ chối), 404, 409 `EMAIL_ALREADY_EXISTS`, 409 `PHONE_ALREADY_EXISTS` |
 | PUT | `/v1/admin/users/{userId}/role` | `{ role: USER/VERIFIER/ADMIN, reason }` | 200 | 400 (`role` = `EXECUTOR` bị từ chối), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CANNOT_CHANGE_SELF`, `LAST_ADMIN`) |
 | PUT | `/v1/admin/users/{userId}/status` | `{ status: ACTIVE/LOCKED/DISABLED, reason }` | 200 | như trên |
 | POST | `/v1/admin/death-cases/{caseId}/reassign-verifier` | `{ verifierUserId, reason }` | 204 (gọi lặp cùng người: 204) | 400 (không phải Verifier hợp lệ / là chủ kho, Executor, người gửi), 404, 409 `ADMIN_ACTION_NOT_ALLOWED` (`CASE_NOT_PENDING`) / `EDIT_CONFLICT`. Nhận cả hồ sơ `SUSPENDED` có lời báo còn sống đang mở: lời báo và sự cố `OWNER_ALIVE` chuyển theo Verifier mới, hạn kết luận tính lại |

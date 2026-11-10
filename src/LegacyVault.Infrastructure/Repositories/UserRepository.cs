@@ -34,9 +34,19 @@ public sealed class UserRepository : IUserRepository
         }
         catch (DbUpdateException)
         {
-            // Trùng email do hai request đăng ký cùng lúc: tháo entity khỏi DbContext để không làm bẩn phiên
+            // Trùng email hoặc số điện thoại do hai request ghi cùng lúc: tháo entity khỏi DbContext để không làm bẩn phiên
             _db.Entry(user).State = EntityState.Detached;
             return false;
         }
+    }
+
+    public Task<bool> PhoneExistsAsync(string normalizedPhone, Guid? exceptUserId, CancellationToken ct)
+    {
+        return _db.Users.AnyAsync(u => u.Phone == normalizedPhone && (exceptUserId == null || u.Id != exceptUserId), ct);
+    }
+
+    public bool IsUniqueViolation(Exception exception)
+    {
+        return exception is DbUpdateException update && DbExceptions.IsUniqueViolation(update);
     }
 }
