@@ -97,12 +97,22 @@ public sealed class FakeUserRepository : IUserRepository
 
     public Task<bool> TryAddAsync(User user, CancellationToken ct)
     {
-        if (Users.Any(u => u.Email == user.Email))
+        if (Users.Any(u => u.Email == user.Email || (user.Phone != null && u.Phone == user.Phone)))
         {
             return Task.FromResult(false);
         }
         Users.Add(user);
         return Task.FromResult(true);
+    }
+
+    public Task<bool> PhoneExistsAsync(string normalizedPhone, Guid? exceptUserId, CancellationToken ct)
+    {
+        return Task.FromResult(Users.Any(u => u.Phone == normalizedPhone && u.Id != exceptUserId));
+    }
+
+    public bool IsUniqueViolation(Exception exception)
+    {
+        return false;
     }
 }
 

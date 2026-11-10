@@ -47,6 +47,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IHandoverDocumentNotifier? notifier;
+    private readonly IOwnerIdentityReader? ownerIdentities;
 
     public HandoverDocumentService(
         ICurrentUser currentUser,
@@ -59,7 +60,8 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         IDeathCaseDataProtector deathCaseProtector,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        IHandoverDocumentNotifier? notifier = null)
+        IHandoverDocumentNotifier? notifier = null,
+        IOwnerIdentityReader? ownerIdentities = null)
     {
         this.currentUser = currentUser;
         this.handover = handover;
@@ -72,6 +74,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
         this.notifier = notifier;
+        this.ownerIdentities = ownerIdentities;
     }
 
     public async Task<HandoverDocumentResponse> CreateAsync(Guid turnId, CreateHandoverDocumentRequest request, CancellationToken ct)
@@ -226,10 +229,12 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         response.Owner.DateOfDeath = document.DateOfDeath;
         response.Owner.CertificateNumber = document.CertificateNumber;
         response.Owner.CertificateIssuedOn = document.CertificateIssuedOn;
+        response.Owner.ResidenceAddress = document.OwnerResidenceAddress;
 
         response.Recipient.FullName = document.RecipientFullName;
         response.Recipient.BirthYear = document.RecipientBirthYear;
         response.Recipient.CitizenIdLast4 = document.RecipientCitizenIdLast4;
+        response.Recipient.ResidenceAddress = document.RecipientResidenceAddress;
         response.Recipient.SignedAt = document.RecipientSignedAt;
 
         response.Verifier.SignedByName = await NameOfAsync(document.VerifierUserId, names, ct);
@@ -254,6 +259,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
             {
                 accountName = owner.FullName;
             }
+            document.OwnerResidenceAddress = await FindOwnerAddressAsync(vault.OwnerId, ct);
         }
         document.OwnerFullName = Cut(accountName, 200);
 
@@ -277,6 +283,26 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         if (!string.IsNullOrWhiteSpace(identity.CertificateNumber))
         {
             document.CertificateNumber = Cut(identity.CertificateNumber, 100);
+        }
+    }
+
+    /// <summary>
+    /// Nơi thường trú của Chủ kho theo danh tính đã xác minh bằng eKYC. Chưa có danh tính hoặc không giải mã được
+    /// (thiếu KEK, dữ liệu hỏng) thì để trống thay vì chặn người nhận lập biên bản: biên bản in dòng chấm.
+    /// </summary>
+    private async Task<string> FindOwnerAddressAsync(Guid ownerId, CancellationToken ct)
+    {
+        if (ownerIdentities == null)
+        {
+            return string.Empty;
+        }
+        try
+        {
+            return HandoverDocumentRules.CleanAddress(await ownerIdentities.FindBoundResidenceAddressAsync(ownerId, ct));
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return string.Empty;
         }
     }
 

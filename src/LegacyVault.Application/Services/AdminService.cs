@@ -511,12 +511,19 @@ public sealed class AdminService : IAdminService
                 "Địa chỉ email này đã được sử dụng.");
         }
 
+        // Số không bắt buộc ở đây; có thì chuẩn hóa giống đăng ký để so trùng đúng, và mỗi số chỉ thuộc một tài khoản.
+        string? phone = string.IsNullOrWhiteSpace(request.Phone) ? null : PhoneRules.NormalizeContactPhone(request.Phone, "phone");
+        if (phone != null && await users.PhoneExistsAsync(phone, null, ct))
+        {
+            throw PhoneRules.AlreadyUsed("phone");
+        }
+
         DateTimeOffset now = timeProvider.GetUtcNow();
         User newUser = new User
         {
             Email = email,
             FullName = fullName,
-            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            Phone = phone,
             PracticeCertificateNumber = TrimOrNull(request.PracticeCertificateNumber, targetRole),
             LawyerCardNumber = TrimOrNull(request.LawyerCardNumber, targetRole),
             PasswordHash = passwordHasher.Hash(request.Password),
@@ -528,6 +535,10 @@ public sealed class AdminService : IAdminService
 
         if (!await users.TryAddAsync(newUser, ct))
         {
+            if (phone != null && await users.PhoneExistsAsync(phone, null, ct))
+            {
+                throw PhoneRules.AlreadyUsed("phone");
+            }
             throw new AppException(
                 AppErrorType.Conflict,
                 ErrorCode.EmailAlreadyExists,

@@ -183,6 +183,32 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task CreateUser_PhoneAlreadyUsedByAnotherRole_Returns409AndCreatesNothing()
+    {
+        // Chuẩn bị: một tài khoản User đã giữ số này
+        (User _, HttpClient client) = await AddAdminAsync();
+        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        string phone = "09" + Random.Shared.Next(10_000_000, 99_999_999);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Users.Where(u => u.Id == owner.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.Phone, phone));
+        });
+        string email = "verifier-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
+
+        // Hành động: Admin tạo Verifier với cùng số nhưng gõ có dấu cách
+        string spaced = phone.Substring(0, 4) + " " + phone.Substring(4, 3) + " " + phone.Substring(7);
+        HttpResponseMessage create = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Người Xét Duyệt", email = email, password = "MatKhauThu123!", role = "VERIFIER", phone = spaced });
+
+        // Kiểm tra: 409 PHONE_ALREADY_EXISTS, không tạo tài khoản
+        await ApiTestHelpers.AssertProblemAsync(create, HttpStatusCode.Conflict, "PHONE_ALREADY_EXISTS");
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.False(await db.Users.AnyAsync(u => u.Email == email));
+        });
+    }
+
+    [SqlFact]
     public async Task Users_ChangeRole_Rules_AndAuditTrail()
     {
         (User admin, HttpClient client) = await AddAdminAsync();

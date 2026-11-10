@@ -38,9 +38,22 @@ public sealed class AccountPhoneService(
 
         if (user.Phone != phone)
         {
+            // Mỗi số chỉ thuộc một tài khoản, mọi vai trò.
+            if (await userRepository.PhoneExistsAsync(phone, user.Id, ct))
+            {
+                throw PhoneRules.AlreadyUsed("phone");
+            }
             user.Phone = phone;
             user.UpdatedAt = timeProvider.GetUtcNow();
-            await unitOfWork.SaveChangesAsync(ct);
+            try
+            {
+                await unitOfWork.SaveChangesAsync(ct);
+            }
+            catch (Exception ex) when (userRepository.IsUniqueViolation(ex))
+            {
+                // Request khác vừa lấy đúng số này giữa lúc kiểm tra và lúc lưu.
+                throw PhoneRules.AlreadyUsed("phone");
+            }
         }
         return LoginSessionIssuer.ToUserResponse(user);
     }

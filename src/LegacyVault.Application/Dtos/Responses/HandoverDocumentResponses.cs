@@ -13,6 +13,9 @@ public class HandoverDocumentOwnerPart
     public string CertificateNumber { get; set; } = string.Empty;
 
     public DateOnly? CertificateIssuedOn { get; set; }
+
+    /// <summary>Nơi thường trú theo danh tính eKYC đã xác minh của Chủ kho; rỗng khi không có.</summary>
+    public string ResidenceAddress { get; set; } = string.Empty;
 }
 
 /// <summary>Phần 2 của biên bản, do người nhận điền và ký. Không có số căn cước hay ngày sinh đầy đủ.</summary>
@@ -23,6 +26,9 @@ public class HandoverDocumentRecipientPart
     public int? BirthYear { get; set; }
 
     public string CitizenIdLast4 { get; set; } = string.Empty;
+
+    /// <summary>Nơi thường trú người nhận khai; rỗng khi chưa ký.</summary>
+    public string ResidenceAddress { get; set; } = string.Empty;
 
     public DateTimeOffset? SignedAt { get; set; }
 }

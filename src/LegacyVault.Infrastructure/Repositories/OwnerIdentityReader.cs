@@ -20,15 +20,30 @@ public sealed class OwnerIdentityReader : IOwnerIdentityReader
 
     public async Task<string?> FindBoundCitizenIdAsync(Guid userId, CancellationToken ct)
     {
-        OwnerIdentity? identity = await context.OwnerIdentities
-            .AsNoTracking()
-            .Where(i => i.UserId == userId)
-            .FirstOrDefaultAsync(ct);
+        OwnerIdentity? identity = await FindBoundAsync(userId, ct);
         if (identity == null)
         {
             return null;
         }
         return identityProtector.Unprotect(identity).CitizenId;
+    }
+
+    public async Task<string?> FindBoundResidenceAddressAsync(Guid userId, CancellationToken ct)
+    {
+        OwnerIdentity? identity = await FindBoundAsync(userId, ct);
+        if (identity == null)
+        {
+            return null;
+        }
+        return identityProtector.Unprotect(identity).ResidenceAddress;
+    }
+
+    private Task<OwnerIdentity?> FindBoundAsync(Guid userId, CancellationToken ct)
+    {
+        return context.OwnerIdentities
+            .AsNoTracking()
+            .Where(i => i.UserId == userId)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<string?> FindVerifiedCitizenIdLast4Async(Guid userId, CancellationToken ct)

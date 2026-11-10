@@ -15,6 +15,20 @@ public static class HandoverDocumentRules
     /// <summary>Số mục Người xét duyệt phải kiểm tra thủ công và tick đủ.</summary>
     public const int VerifierCheckCount = 4;
 
+    /// <summary>Độ dài tối đa của nơi thường trú lưu trong biên bản (cột OwnerResidenceAddress, RecipientResidenceAddress).</summary>
+    public const int ResidenceAddressMaxLength = 500;
+
+    /// <summary>Nơi thường trú in vào biên bản: gộp khoảng trắng và xuống dòng thành một dấu cách, cắt theo độ dài cột.</summary>
+    public static string CleanAddress(string? address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return string.Empty;
+        }
+        string joined = string.Join(' ', address.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return joined.Length <= ResidenceAddressMaxLength ? joined : joined.Substring(0, ResidenceAddressMaxLength);
+    }
+
     /// <summary>Mã ngắn của biên bản: 8 ký tự cuối id, in hoa.</summary>
     public static string Code(Guid documentId)
     {
