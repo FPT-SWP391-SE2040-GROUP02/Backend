@@ -31,7 +31,21 @@ public sealed class DeclinePaperData
 
     public DateTimeOffset ReviewedAt { get; set; }
 
-    /// <summary>Ngày mất ghi trên giấy chứng tử mà Người thực thi đã nộp; null khi không đọc được.</summary>
+    /// <summary>Số giấy chứng tử chép từ hồ sơ chứng tử đã duyệt vào biên bản; rỗng với hồ sơ chưa có biên bản.</summary>
+    public string CertificateNumber { get; set; } = string.Empty;
+
+    /// <summary>Năm sinh người nhận khai trong biên bản; null thì để dòng chấm.</summary>
+    public int? RecipientBirthYear { get; set; }
+
+    /// <summary>Số tài sản trong gói để in "(gồm N mục)"; 0 thì không in.</summary>
+    public int ItemCount { get; set; }
+
+    /// <summary>true khi dựng cho một biên bản đã đủ chữ ký người nhận và Người xét duyệt: có thêm câu gửi Người thực thi và khối chữ ký.</summary>
+    public bool HasSignatures { get; set; }
+
+    public DateTimeOffset? RecipientSignedAt { get; set; }
+
+    /// <summary>Ngày mất ghi trong hồ sơ chứng tử đã duyệt; null khi hồ sơ không ghi.</summary>
     public DateOnly? DateOfDeath { get; set; }
 
     /// <summary>Ngày cấp giấy chứng tử (ngày đăng ký khai tử); null khi không đọc được.</summary>
