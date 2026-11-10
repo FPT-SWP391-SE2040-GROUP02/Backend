@@ -33,9 +33,12 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         return Task.FromResult(Cases.FirstOrDefault(c => c.VaultId == vaultId && c.Status != DeathCaseStatus.Rejected));
     }
 
+    /// <summary>Các kho mà người gọi làm Người thực thi, đặt sẵn trong test; mặc định rỗng.</summary>
+    public List<ExecutorVaultRow> ExecutorRows { get; } = new List<ExecutorVaultRow>();
+
     public Task<List<ExecutorVaultRow>> FindExecutorVaultsAsync(Guid userId, CancellationToken ct)
     {
-        return Task.FromResult(new List<ExecutorVaultRow>());
+        return Task.FromResult(new List<ExecutorVaultRow>(ExecutorRows));
     }
 
     public Task<DeathCase?> FindLatestRejectedByVaultIdAsync(Guid vaultId, CancellationToken ct)
