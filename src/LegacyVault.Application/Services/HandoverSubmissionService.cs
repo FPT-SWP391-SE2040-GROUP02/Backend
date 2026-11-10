@@ -174,6 +174,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
                 document.RecipientFullName = request.FullName.Trim();
                 document.RecipientBirthYear = request.DateOfBirth!.Value.Year;
                 document.RecipientCitizenIdLast4 = submission.CitizenIdLast4;
+                document.RecipientResidenceAddress = HandoverDocumentRules.CleanAddress(request.ResidenceAddress);
                 document.RecipientSignedAt = now;
                 document.RecipientTermsVersion = HandoverDocumentRules.TermsVersion;
                 document.SubmissionId = submission.Id;

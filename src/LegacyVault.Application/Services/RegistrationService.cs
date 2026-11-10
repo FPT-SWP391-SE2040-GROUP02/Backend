@@ -56,6 +56,10 @@ public sealed class RegistrationService : IRegistrationService
                 ErrorCode.EmailAlreadyExists,
                 "Địa chỉ email này đã được sử dụng. Vui lòng đăng nhập hoặc dùng tính năng Quên mật khẩu.");
         }
+        if (await _userRepository.PhoneExistsAsync(phone, null, ct))
+        {
+            throw PhoneRules.AlreadyUsed("phone");
+        }
 
         // 2. Tạo tài khoản User mới: Role = User (ROLE-01), Status = Active, EmailVerifiedAt = null
         var user = new User
@@ -72,7 +76,11 @@ public sealed class RegistrationService : IRegistrationService
 
         if (!await _userRepository.TryAddAsync(user, ct))
         {
-            // Race condition: request khác vừa thêm cùng email
+            // Race condition: request khác vừa thêm cùng số điện thoại → báo trùng số; cùng email → im lặng như cũ.
+            if (await _userRepository.PhoneExistsAsync(phone, null, ct))
+            {
+                throw PhoneRules.AlreadyUsed("phone");
+            }
             return;
         }
 

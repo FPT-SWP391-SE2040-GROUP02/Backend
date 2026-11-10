@@ -84,15 +84,17 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         data.TurnCode = submission.TurnId.ToString("N").Substring(24).ToUpperInvariant();
         data.ContainerName = turn.ContainerName;
         data.OwnerFullName = owner?.FullName ?? string.Empty;
+        BeneficiaryPersonalData? personal = beneficiary != null ? protector.Unprotect(beneficiary) : null;
         if (document != null)
         {
             data.OwnerFullName = document.OwnerFullName;
             data.DeclinerFullName = document.RecipientFullName;
         }
-        else
+        else if (personal != null)
         {
-            data.DeclinerFullName = protector.Unprotect(beneficiary!).FullName;
+            data.DeclinerFullName = personal.FullName;
         }
+        data.CitizenId = personal?.CitizenId;
         data.CitizenIdLast4 = submission.CitizenIdLast4;
         data.SubmittedAt = submission.CreatedAt;
         data.NameMatches = submission.NameMatches;
@@ -114,6 +116,8 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
             data.CertificateNumber = document.CertificateNumber;
             data.ItemCount = document.ItemCount;
             data.RecipientBirthYear = document.RecipientBirthYear;
+            data.RecipientResidenceAddress = document.RecipientResidenceAddress;
+            data.OwnerResidenceAddress = document.OwnerResidenceAddress;
             data.HasSignatures = true;
             data.RecipientSignedAt = document.RecipientSignedAt;
         }

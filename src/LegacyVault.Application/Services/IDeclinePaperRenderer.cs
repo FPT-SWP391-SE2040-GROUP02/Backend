@@ -15,6 +15,9 @@ public sealed class DeclinePaperData
     /// <summary>Họ tên người từ chối lấy từ hồ sơ người được chỉ định mà Chủ kho đã khai.</summary>
     public string DeclinerFullName { get; set; } = string.Empty;
 
+    /// <summary>Số căn cước công dân 12 số (giải mã trong RAM từ hồ sơ người nhận để in biên bản); null khi không có.</summary>
+    public string? CitizenId { get; set; }
+
     public string CitizenIdLast4 { get; set; } = string.Empty;
 
     public DateTimeOffset SubmittedAt { get; set; }
@@ -36,6 +39,12 @@ public sealed class DeclinePaperData
 
     /// <summary>Năm sinh người nhận khai trong biên bản; null thì để dòng chấm.</summary>
     public int? RecipientBirthYear { get; set; }
+
+    /// <summary>Nơi thường trú người nhận khai trong biên bản. Tạm thời chỉ lưu xuống, chưa in lên văn bản.</summary>
+    public string RecipientResidenceAddress { get; set; } = string.Empty;
+
+    /// <summary>Nơi thường trú của Chủ kho theo danh tính eKYC đã xác minh. Tạm thời chỉ lưu xuống, chưa in lên văn bản.</summary>
+    public string OwnerResidenceAddress { get; set; } = string.Empty;
 
     /// <summary>Số tài sản trong gói để in "(gồm N mục)"; 0 thì không in.</summary>
     public int ItemCount { get; set; }

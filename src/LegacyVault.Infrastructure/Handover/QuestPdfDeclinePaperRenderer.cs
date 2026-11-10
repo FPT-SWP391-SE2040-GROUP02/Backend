@@ -57,7 +57,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         return document.GenerateImages(settings).First();
     }
 
-    /// <summary>Văn bản từ chối: giữ nguyên từng câu của mẫu Word, chỗ nào hệ thống có dữ liệu thì điền, còn lại để dấu chấm.</summary>
+    /// <summary>Văn bản từ chối: viết theo thể thức văn bản pháp lý, điền dữ liệu hệ thống đã giữ, đồng nhất xưng Tôi.</summary>
     private static void WriteDecline(ColumnDescriptor column, DeclinePaperData data)
     {
         DateTimeOffset local = data.SubmittedAt.ToOffset(TimeSpan.FromHours(7));
@@ -67,27 +67,27 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "-----------------", center: true);
         Para(column, "VĂN BẢN TỪ CHỐI NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
         Para(column,
-            $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault, chúng tôi gồm:");
-        Para(column, $"1. Ông/bà: {data.DeclinerFullName} Sinh năm : {BirthYearText(data)}", justify: true);
+            $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault, tôi là:");
+        Para(column, $"Ông/bà: {data.DeclinerFullName} Sinh năm : {BirthYearText(data)}", justify: true);
         Para(column,
-            $"CMND số: {CitizenIdText(data)} do Công an ............... cấp ngày .................................................",
+            $"Số Căn cước/CCCD: {CitizenIdText(data)} do Bộ Công an cấp.",
             justify: true);
         Para(column, "(Là người được chỉ định nhận của người để lại di sản thừa kế)", justify: true);
-        Para(column, $"{nbsp3} Chúng tôi là những người thừa kế của ông/bà {data.OwnerFullName}", justify: true);
+        Para(column, $"{nbsp3}Tôi là người thừa kế của ông/bà {data.OwnerFullName}", justify: true);
         Para(column,
-            $"{nbsp3}  Ông/bà {data.OwnerFullName} chết ngày {Date(data.DateOfDeath, "……………")} theo giấy chứng tử "
+            $"{nbsp3} Ông/bà {data.OwnerFullName} chết ngày {Date(data.DateOfDeath, "……………")} theo giấy chứng tử "
             + CertificateText(data, "do UBND ………………… ") + $"đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………………")}.",
             justify: true);
-        Para(column, $"{nbsp3} Di sản mà ông/bà {data.OwnerFullName} để lại là: {ContainerText(data)}", justify: true);
+        Para(column, $"{nbsp3}Di sản mà ông/bà {data.OwnerFullName} để lại là: {ContainerText(data)}.", justify: true);
         Para(column,
-            "Nay bằng Văn bản này chúng tôi tự nguyện từ chối nhận kỷ phần thừa kế di sản nêu trên mà chúng tôi được hưởng.",
+            "Nay bằng Văn bản này tôi tự nguyện từ chối nhận kỷ phần thừa kế di sản nêu trên mà tôi được hưởng.",
             justify: true);
-        Para(column, "          Chúng tôi xin cam đoan:", bold: true);
+        Para(column, "          Tôi xin cam đoan:", bold: true);
         Para(column, "- Những thông tin về nhân thân, về tài sản đã ghi trong văn bản này là đúng sự thật.");
         Para(column,
-            "- Việc từ chối nhận tài sản thừa kế này không nhằm trốn tránh việc thực hiện nghĩa vụ tài sản của mình đối với người khác.");
+            "- Việc từ chối nhận tài sản thừa kế này không nhằm trốn tránh việc thực hiện nghĩa vụ tài sản của mình đối với người khác theo Điều 620 Bộ luật Dân sự 2015.");
         Para(column,
-            "- Chúng tôi đã đọc nội dung Văn bản này, đã hiểu rõ trách nhiệm pháp lý của mình khi lập và ký/điểm chỉ vào Văn bản này.");
+            "- Tôi đã đọc nội dung Văn bản này, đã hiểu rõ trách nhiệm pháp lý của mình khi lập và ký/điểm chỉ vào Văn bản này.");
         if (data.HasSignatures)
         {
             Para(column, "Văn bản này được gửi đến Người thực thi của kho, là người quản lý di sản, để biết.", justify: true);
@@ -109,15 +109,15 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "-----------------", center: true);
         Para(column, "BIÊN BẢN ĐỒNG Ý NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
         Para(column, $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault.");
-        Para(column, $"Tôi là: {data.DeclinerFullName}.", justify: true);
+        Para(column, $"Tôi là: {data.DeclinerFullName}; sinh năm: {BirthYearText(data)}; Số Căn cước/CCCD: {CitizenIdText(data)}.", justify: true);
         Para(column, "Bằng biên bản này, tôi xin khai đúng sự thật rằng:", justify: true);
         Para(column,
             $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, chết ngày {Date(data.DateOfDeath, "……………")} theo giấy "
-            + "chứng tử " + CertificateText(data, string.Empty) + $"đã được Người xét duyệt trong hệ thống, đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………")}.",
+            + "chứng tử " + CertificateText(data, string.Empty) + $"đã được Người xét duyệt thẩm định trên hệ thống, đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………")}.",
             justify: true);
         Para(column, "2. Tôi là người được Chủ kho chỉ định nhận phần di sản nêu tại mục 4.", justify: true);
         Para(column,
-            "3. Tôi không thuộc các trường hợp không được quyền hưởng di sản, và trước khi lập biên bản này tôi chưa lập văn bản "
+            "3. Tôi không thuộc các trường hợp không được quyền hưởng di sản theo Điều 621 Bộ luật Dân sự 2015, và trước khi lập biên bản này tôi chưa lập văn bản "
             + "từ chối nhận di sản đối với phần này.",
             justify: true);
         Para(column, $"4. Di sản khai nhận: {ContainerText(data)}.", justify: true);
@@ -127,8 +127,8 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
             justify: true);
         Para(column,
             "6. Nay, bằng biên bản này tôi đồng ý nhận phần di sản nêu tại mục 4. Tôi hiểu rằng người thừa kế chỉ phải thực hiện "
-            + "nghĩa vụ tài sản của người chết trong phạm vi di sản được nhận, tự chịu trách nhiệm về việc quản lý, sử dụng tài sản "
-            + "đã nhận và giữ kín khóa mở gói.",
+            + "nghĩa vụ tài sản của người chết trong phạm vi di sản được nhận theo Điều 615 Bộ luật Dân sự 2015, tự chịu trách nhiệm "
+            + "về việc quản lý, sử dụng tài sản đã nhận và bảo mật mã khóa giải mã dữ liệu được bàn giao.",
             justify: true);
         Para(column,
             "7. Tôi đã đọc lại toàn bộ nội dung, hiểu rõ, chấp nhận và nhận thức đầy đủ trách nhiệm pháp lý của mình khi lập và "
@@ -165,14 +165,18 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         return "...................................................";
     }
 
-    /// <summary>Chỉ in 4 số cuối căn cước khi có; không lưu và không in số đầy đủ.</summary>
+    /// <summary>In số căn cước 12 số khi có trong hồ sơ người nhận, hoặc số đã lưu khi chỉ còn hậu tố.</summary>
     private static string CitizenIdText(DeclinePaperData data)
     {
-        if (data.CitizenIdLast4.Length == 4 && data.HasSignatures)
+        if (!string.IsNullOrWhiteSpace(data.CitizenId))
         {
-            return "********" + data.CitizenIdLast4;
+            return data.CitizenId;
         }
-        return ".............";
+        if (!string.IsNullOrWhiteSpace(data.CitizenIdLast4))
+        {
+            return data.CitizenIdLast4;
+        }
+        return "............";
     }
 
     private static string ContainerText(DeclinePaperData data)

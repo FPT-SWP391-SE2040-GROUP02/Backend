@@ -26,6 +26,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Phone)
             .HasMaxLength(32);
 
+        // Mỗi số chỉ thuộc một tài khoản, mọi vai trò; tài khoản chưa có số (đăng nhập Google) được để trống nhiều dòng.
+        builder.HasIndex(u => u.Phone)
+            .IsUnique()
+            .HasFilter("[Phone] IS NOT NULL");
+
         builder.Property(u => u.PracticeCertificateNumber)
             .HasMaxLength(64);
 

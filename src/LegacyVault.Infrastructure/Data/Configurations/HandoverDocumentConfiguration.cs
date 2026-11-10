@@ -19,6 +19,9 @@ public sealed class HandoverDocumentConfiguration : IEntityTypeConfiguration<Han
         builder.Property(d => d.CertificateNumber).IsRequired().HasMaxLength(100);
         builder.Property(d => d.RecipientFullName).IsRequired().HasMaxLength(200);
         builder.Property(d => d.RecipientCitizenIdLast4).IsRequired().HasMaxLength(4);
+        // Biên bản tạo trước khi có cột này mang giá trị rỗng, in thành dòng chấm.
+        builder.Property(d => d.OwnerResidenceAddress).IsRequired().HasMaxLength(500).HasDefaultValue(string.Empty);
+        builder.Property(d => d.RecipientResidenceAddress).IsRequired().HasMaxLength(500).HasDefaultValue(string.Empty);
         builder.Property(d => d.RecipientTermsVersion).IsRequired().HasMaxLength(32);
         builder.Property(d => d.SupplementReason).HasMaxLength(1000);
         builder.Property(d => d.VerifierChecks).IsRequired().HasMaxLength(8);
