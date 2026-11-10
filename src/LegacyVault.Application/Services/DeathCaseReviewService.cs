@@ -373,6 +373,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
 
         VerifierHandoverResponse handover = new VerifierHandoverResponse();
         handover.TurnCount = result.TurnCount;
+        handover.InvitationsSent = result.InvitationsSent;
+        handover.InvitationsFailed = result.InvitationsFailed;
         return await BuildResponseAsync(context, handover, ct);
     }
 

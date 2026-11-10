@@ -17,9 +17,11 @@ public static class HandoverApplicationConfig
         services.AddScoped<IHandoverSubmissionReviewService, HandoverSubmissionReviewService>();
         services.AddScoped<IHandoverDownloadService, HandoverDownloadService>();
         services.AddScoped<IHandoverJob, HandoverJob>();
+        services.AddScoped<IHandoverInvitationRetryJob, HandoverInvitationRetryJob>();
         services.AddScoped<IHandoverIdentityService, HandoverIdentityService>();
         services.AddScoped<IHandoverInvitationService, HandoverInvitationService>();
         services.AddScoped<IHandoverKeyMailService, HandoverKeyMailService>();
+        services.AddScoped<IExecutorIdentityConfirmationService, ExecutorIdentityConfirmationService>();
         services.AddScoped<IExecutorDeclinePaperService, ExecutorDeclinePaperService>();
         return services;
     }

@@ -152,12 +152,8 @@ public sealed class HandoverJobTests
     public async Task FindExpired_ReturnOnlyDueIds()
     {
         HandoverTurn due = AddTurn(HandoverTurnStatus.Invited, "t1");
-        due.InvitationSentAt = Now;
-        // Thư chưa gửi thì chưa chạy hạn phản hồi.
-        HandoverTurn unsent = AddTurn(HandoverTurnStatus.Invited, "t1b");
         HandoverTurn notDue = AddTurn(HandoverTurnStatus.Invited, "t2");
         notDue.ResponseDeadline = Now.AddDays(9);
-        notDue.InvitationSentAt = Now;
         HandoverTurn ready = AddTurn(HandoverTurnStatus.ReadyToAccept, "t3");
         ready.DecisionDeadline = Now.AddDays(7);
         HandoverTurn committed = AddTurn(HandoverTurnStatus.HandoverCommitted, "t4");

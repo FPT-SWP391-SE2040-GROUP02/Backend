@@ -59,7 +59,7 @@ public sealed class VerifierApproveTests : IAsyncLifetime
         Assert.False(body.GetProperty("canApprove").GetBoolean());
         JsonElement handover = body.GetProperty("handover");
         Assert.Equal(1, handover.GetProperty("turnCount").GetInt32());
-        Assert.False(handover.TryGetProperty("invitationsSent", out _));
+        Assert.Equal(1, handover.GetProperty("invitationsSent").GetInt32() + handover.GetProperty("invitationsFailed").GetInt32());
         Assert.Equal("APPROVED", body.GetProperty("decisions")[0].GetProperty("kind").GetString());
 
         HandoverPlan plan = await DeathCaseReviewTestData.LoadPlanAsync(factory, submitted.Vault.VaultId);

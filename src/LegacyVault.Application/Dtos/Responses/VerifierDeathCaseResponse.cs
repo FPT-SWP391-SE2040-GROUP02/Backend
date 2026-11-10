@@ -193,4 +193,8 @@ public class VerifierPreviousCaseResponse
 public class VerifierHandoverResponse
 {
     public int TurnCount { get; set; }
+
+    public int InvitationsSent { get; set; }
+
+    public int InvitationsFailed { get; set; }
 }

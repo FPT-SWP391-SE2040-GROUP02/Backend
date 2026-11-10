@@ -21,12 +21,14 @@ public sealed class ExecutorHandoverController : ControllerBase
 {
     private readonly IHandoverProgressService handoverProgressService;
     private readonly IHandoverInvitationService handoverInvitationService;
+    private readonly IExecutorIdentityConfirmationService identityConfirmationService;
     private readonly IHandoverKeyMailService handoverKeyMailService;
     private readonly IExecutorDeclinePaperService declinePaperService;
 
     public ExecutorHandoverController(
         IHandoverProgressService handoverProgressService,
         IHandoverInvitationService handoverInvitationService,
+        IExecutorIdentityConfirmationService identityConfirmationService,
         IHandoverKeyMailService handoverKeyMailService,
         IExecutorDeclinePaperService declinePaperService)
     {
@@ -34,6 +36,7 @@ public sealed class ExecutorHandoverController : ControllerBase
         this.handoverKeyMailService = handoverKeyMailService;
         this.handoverProgressService = handoverProgressService;
         this.handoverInvitationService = handoverInvitationService;
+        this.identityConfirmationService = identityConfirmationService;
     }
 
     /// <summary>
@@ -91,5 +94,19 @@ public sealed class ExecutorHandoverController : ControllerBase
     public Task<SendHandoverKeyResponse> SendKey(Guid caseId, Guid turnId, [FromBody] SendHandoverKeyRequest request, CancellationToken ct)
     {
         return handoverKeyMailService.SendAsync(caseId, turnId, request.Key, ct);
+    }
+
+    /// <summary>
+    /// Executor xác nhận đúng người bằng tay khi người nhận không qua được eKYC (BR-122). Lượt sang READY_TO_ACCEPT và
+    /// người nhận có 7 ngày để đồng ý hoặc từ chối. Không dùng được cho lượt do chính tài khoản này nhận.
+    /// </summary>
+    [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/confirm-identity")]
+    [ProducesResponseType<ConfirmHandoverIdentityResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ConfirmHandoverIdentityResponse> ConfirmIdentity(Guid caseId, Guid turnId, CancellationToken ct)
+    {
+        return identityConfirmationService.ConfirmAsync(caseId, turnId, ct);
     }
 }

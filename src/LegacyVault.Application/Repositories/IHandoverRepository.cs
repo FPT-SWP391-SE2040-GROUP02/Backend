@@ -38,6 +38,13 @@ public interface IHandoverRepository
     /// <summary>Id các lượt Invited đã quá hạn phản hồi (ResponseDeadline &lt;= now), hạn sớm nhất trước.</summary>
     Task<IReadOnlyList<Guid>> FindExpiredResponseTurnIdsAsync(DateTimeOffset now, CancellationToken ct);
 
+    /// <summary>
+    /// Lượt đang chờ phản hồi mà lời mời chưa từng được giao (InvitationSentAt null), tạo trước createdBefore
+    /// và chưa đủ maxAttempts lần thử. Dùng để gửi lại tự động khi lần gửi đầu lỗi hoặc tiến trình dừng giữa chừng.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> FindUndeliveredInvitationTurnIdsAsync(
+        DateTimeOffset createdBefore, int maxAttempts, CancellationToken ct);
+
     /// <summary>Id các lượt ReadyToAccept đã quá hạn quyết định (DecisionDeadline &lt;= now).</summary>
     Task<IReadOnlyList<Guid>> FindExpiredDecisionTurnIdsAsync(DateTimeOffset now, CancellationToken ct);
 

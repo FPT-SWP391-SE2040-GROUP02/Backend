@@ -137,14 +137,6 @@ public sealed class RetentionFlowTests : IAsyncLifetime
             verifierClient, caseId, detail.GetProperty("etag").GetString(), "Đã đối chiếu hồ sơ.");
         Assert.Equal(HttpStatusCode.OK, approve.StatusCode);
 
-        // Hệ thống không tự gửi thư mời: Người thực thi bấm gửi từng lượt.
-        foreach (HandoverTurn turn in await TurnsAsync(owner.PlanId))
-        {
-            HttpResponseMessage sent = await ClientFor(executor.User).PostAsync(
-                $"/api/v1/executor/death-cases/{caseId}/handover-turns/{turn.Id}/resend-invitation", null);
-            Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
-        }
-
         Scenario scenario = new Scenario();
         scenario.VaultId = vaultId;
         scenario.PlanId = owner.PlanId;
@@ -218,7 +210,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Retention04_ClaimPausesClock_DeclineDeletesImmediately()
+    public async Task Retention04_ClaimPausesClock_DeclineResumesRemainingTime()
     {
         Scenario s = await BuildHandoverAsync(1);
         await PassResponseDeadlineAsync(s.PlanId);
@@ -240,11 +232,13 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         Assert.Equal(RetentionStatus.DeletionHeld, held.RetentionStatus);
         Assert.InRange(held.RetentionRemainingSeconds!.Value, (long)TimeSpan.FromDays(10).TotalSeconds - 120, (long)TimeSpan.FromDays(10).TotalSeconds);
 
-        // Từ chối: nội dung của lượt bị xóa ngay ở vòng quét kế tiếp để giải phóng bộ nhớ, không chờ hết thời hạn lưu
+        // Từ chối: chạy tiếp phần còn lại, không cộng thêm 30 ngày
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/api/v1/handover/turns/{turnId}/decline", null)).StatusCode);
         await RunAsync(s.PlanId);
-        HandoverTurn deleted = Assert.Single(await TurnsAsync(s.PlanId));
-        Assert.Equal(RetentionStatus.Deleted, deleted.RetentionStatus);
+        HandoverTurn resumed = Assert.Single(await TurnsAsync(s.PlanId));
+        Assert.Equal(RetentionStatus.RetentionActive, resumed.RetentionStatus);
+        Assert.True(resumed.RetentionDeadline < DateTimeOffset.UtcNow.AddDays(10).AddMinutes(1));
+        Assert.True(resumed.RetentionDeadline > DateTimeOffset.UtcNow.AddDays(9));
     }
 
     [SqlFact]
