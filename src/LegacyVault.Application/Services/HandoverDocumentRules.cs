@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Services;
 public static class HandoverDocumentRules
 {
     /// <summary>Phiên bản mẫu chữ của biên bản; đổi khi sửa chữ trong văn bản.</summary>
-    public const string TemplateVersion = "bb-2026-11-2";
+    public const string TemplateVersion = "bb-2026-11";
 
     /// <summary>Phiên bản điều khoản mà người ký tick đồng ý; đổi khi sửa chữ điều khoản.</summary>
     public const string TermsVersion = "terms-2026-11";

@@ -12,7 +12,7 @@ namespace LegacyVault.Domain.Entities;
 /// - Phần 1 là bản chụp lúc tạo, để biên bản xem lại được kể cả khi hồ sơ chứng tử hay tài khoản Chủ kho bị dọn sau này.
 ///   Hồ sơ chứng tử chỉ bắt buộc có tệp giấy chứng tử nên ngày mất, số giấy, ngày cấp có thể trống; chỗ trống in thành dòng chấm.
 /// - Chỉ lưu thông tin cần cho biên bản: không có số căn cước hay ngày sinh đầy đủ (chỉ 4 số cuối và năm sinh).
-///   Nơi thường trú của hai bên được ghi vì biên bản giao nhận cần nó để xác định đúng người.
+///   Nơi thường trú của hai bên được lưu để xác định đúng người; tạm thời chỉ lưu, chưa hiển thị trên giao diện hay in lên văn bản.
 ///   Ảnh căn cước nằm ở HandoverSubmission và bị xóa khi biên bản hoàn tất.
 /// - Biên bản không bị xóa khi lượt bị dọn theo thời hạn lưu: lưu không giới hạn để xem lại.
 /// - Không có cột hạn chót nào: mỗi bước chờ tới khi người của bước đó làm xong.
@@ -62,7 +62,7 @@ public class HandoverDocument
 
     public string RecipientCitizenIdLast4 { get; set; } = string.Empty;
 
-    /// <summary>Nơi thường trú người nhận khai trên biên bản; Người xét duyệt đối chiếu với ảnh căn cước.</summary>
+    /// <summary>Nơi thường trú người nhận khai trên biên bản. Tạm thời chỉ lưu, chưa hiển thị.</summary>
     public string RecipientResidenceAddress { get; set; } = string.Empty;
 
     public DateTimeOffset? RecipientSignedAt { get; set; }

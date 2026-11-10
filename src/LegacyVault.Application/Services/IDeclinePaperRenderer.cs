@@ -37,10 +37,10 @@ public sealed class DeclinePaperData
     /// <summary>Năm sinh người nhận khai trong biên bản; null thì để dòng chấm.</summary>
     public int? RecipientBirthYear { get; set; }
 
-    /// <summary>Nơi thường trú người nhận khai trong biên bản; rỗng thì để dòng chấm.</summary>
+    /// <summary>Nơi thường trú người nhận khai trong biên bản. Tạm thời chỉ lưu xuống, chưa in lên văn bản.</summary>
     public string RecipientResidenceAddress { get; set; } = string.Empty;
 
-    /// <summary>Nơi thường trú của Chủ kho theo danh tính eKYC đã xác minh; rỗng thì để dòng chấm.</summary>
+    /// <summary>Nơi thường trú của Chủ kho theo danh tính eKYC đã xác minh. Tạm thời chỉ lưu xuống, chưa in lên văn bản.</summary>
     public string OwnerResidenceAddress { get; set; } = string.Empty;
 
     /// <summary>Số tài sản trong gói để in "(gồm N mục)"; 0 thì không in.</summary>

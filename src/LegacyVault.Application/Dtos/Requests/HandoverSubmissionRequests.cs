@@ -21,7 +21,7 @@ public class SubmitHandoverSubmissionRequest
     [Required(ErrorMessage = "Vui lòng nhập ngày sinh.")]
     public DateOnly? DateOfBirth { get; set; }
 
-    /// <summary>Nơi thường trú ghi trên căn cước; in vào biên bản và Người xét duyệt đối chiếu với ảnh căn cước.</summary>
+    /// <summary>Nơi thường trú ghi trên căn cước. Tạm thời chỉ lưu xuống, chưa hiển thị hay in lên biên bản.</summary>
     [Required(ErrorMessage = "Vui lòng nhập nơi thường trú.")]
     [MaxLength(500, ErrorMessage = "Nơi thường trú tối đa 500 ký tự.")]
     public string ResidenceAddress { get; set; } = string.Empty;
