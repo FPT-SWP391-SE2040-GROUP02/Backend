@@ -1137,6 +1137,24 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 - **Tạm ngừng eKYC** (`GET` và `PUT /api/v1/admin/dev-tools/ekyc-pause`, body PUT `{ paused }`, trả `{ paused }`): bật thì mọi bước eKYC (giấy tờ, mặt sau, thử thách camera, so khớp khuôn mặt) dùng dịch vụ giả và luôn đạt để chạy thử cả luồng không cần giấy tờ thật. Người nhận được đọc ra đúng họ tên, CCCD và ngày sinh Chủ kho đã khai; Chủ kho nhận một số CCCD thử riêng theo tài khoản. Chỉ ở bộ nhớ máy chủ (khởi động lại là về tắt), chỉ Admin, chỉ Development hoặc Staging (môi trường khác 404), mỗi lần đổi ghi nhật ký `DEV_TOGGLE_EKYC_PAUSE`.
 - FE chỉ hiện mục "Công cụ thử nghiệm" trong khu Admin khi chạy `npm run dev`.
 
+### 6.19a. Nút "Tua thời gian" để demo (chỉ Development hoặc Staging)
+
+Đổi "hôm nay" của **cả hệ thống** sang một ngày khác (đồng hồ DEMO = giờ thật + độ lệch) và chạy việc nền ở từng mốc để mọi email nhắc (còn 7 ngày, còn 1 ngày, đến hạn, nhắc trễ, báo Người thực thi, hết hạn lời mời...) được gửi như thật. Khác với 6.19 (dời dữ liệu của một kho về quá khứ), đây là dời đồng hồ nên áp dụng cho mọi kho. **Chỉ chạy ở Development hoặc Staging**; môi trường khác dùng giờ thật và cả ba API trả 404.
+
+| Method | URL | Body | Thành công | Lỗi |
+|---|---|---|---|---|
+| GET | `/api/v1/dev/clock` | — | 200 `DemoClockStatusResponse` `{ nowUtc, realNowUtc, offsetSeconds, isSimulated }` | 404 (môi trường khác) |
+| POST | `/api/v1/dev/clock/travel` | `{ targetDate: "yyyy-MM-dd" }` | 200 `DemoClockTravelResponse` `{ clock, steps: [{ at, kind, itemsProcessed, emailsSent, failures }] }` | 400 `VALIDATION_ERROR` (`errors.targetDate`), 401, 404 `USER_NOT_FOUND` (không phải Admin), 409 `DEMO_CLOCK_BUSY` |
+| POST | `/api/v1/dev/clock/reset` | — | 200 `DemoClockStatusResponse` | 401, 404 |
+
+- `GET` **không cần đăng nhập** để giao diện hiện dải "Đang giả lập ngày ..." ở mọi trang. `travel` và `reset` cần Admin đang hoạt động (đọc từ DB).
+- `targetDate`: chỉ tua **tới**, ngày đích phải sau giờ hệ thống hiện tại; tối đa 400 ngày mỗi lần; sai định dạng → 400. Giờ đích là 9:00 sáng giờ Việt Nam của ngày chọn.
+- Cách tua: lặp "tìm mốc kế tiếp → đặt giờ hệ thống ngay sau mốc (+1 giây) → chạy một lượt việc nền" tới hết các mốc, rồi đặt đúng 9:00 ngày đích và chạy lượt cuối. Mốc điểm danh tính bằng `CheckInTimeline` nên khớp job nền; ngoài ra có hạn lời mời Người thực thi (hạn 7 ngày, nhắc giờ thứ 48), hạn dịch vụ, hạn phản hồi/quyết định/tải của bàn giao và giờ nhắc/báo lên của sự cố. Mốc mới do việc nền sinh ra được tìm lại sau mỗi bước.
+- `steps[].kind`: `CHECK_IN_REMINDER` | `CHECK_IN_DUE` | `CHECK_IN_GRACE_END` | `EXECUTOR_INVITATION` | `SERVICE_EXPIRY` | `HANDOVER_DEADLINE` | `INCIDENT` | `TARGET_DAY` (bước cuối). `emailsSent` đếm được thư nhắc điểm danh và thư nhắc lời mời; `failures` là số mục lỗi (không dừng lần tua).
+- Một lúc chỉ có một lần tua chạy; lần thứ hai gặp `409 DEMO_CLOCK_BUSY`.
+- Độ lệch lưu trong bảng `SystemSettings` (khóa `Dev.DemoClock.OffsetSeconds`, không cần migration) nên khởi động lại máy chủ vẫn giữ ngày đang giả lập. Token và phiên được kiểm hạn theo cùng đồng hồ: sau khi tua xa, token cũ hết hạn (đăng nhập lại), token mới tạo vẫn hợp lệ.
+- `reset` đưa độ lệch về 0. Dữ liệu sinh ra trong lúc tua (thư đã gửi, kế hoạch đã sang quá hạn, sự cố) giữ nguyên; muốn làm lại từ đầu phải đặt lại dữ liệu trong DB.
+
 ### 6.20. Mã PIN của kho
 
 Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Owner thật) khỏi các thao tác nhạy cảm. Chỉ Owner của kho gọi được; kho của người khác → `404 VAULT_NOT_FOUND`.

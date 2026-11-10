@@ -1,0 +1,23 @@
+### Nút "Tua thời gian" để demo (docs/api-contract.md mục 6.19a) — chỉ Development hoặc Staging.
+# 1. Đăng nhập bằng tài khoản Admin (auth.http), chép accessToken vào @token.
+# 2. Xem giờ hệ thống, tua tới một ngày, rồi về ngày thật.
+# Lưu ý: tua xa (hơn 15 phút kể từ khi đăng nhập) thì token cũ hết hạn theo giờ mới; đăng nhập lại rồi gọi tiếp.
+
+@baseUrl = http://localhost:5000
+@token = dan-access-token-admin-vao-day
+
+### 1. Giờ hệ thống và giờ thật (không cần đăng nhập)
+GET {{baseUrl}}/api/v1/dev/clock
+
+### 2. Tua tới 9:00 sáng (giờ Việt Nam) của ngày chọn; chạy việc nền ở từng mốc, trả danh sách bước
+POST {{baseUrl}}/api/v1/dev/clock/travel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "targetDate": "2026-12-31"
+}
+
+### 3. Về ngày thật (dữ liệu đã sinh ra trong lúc tua vẫn giữ)
+POST {{baseUrl}}/api/v1/dev/clock/reset
+Authorization: Bearer {{token}}

@@ -55,19 +55,22 @@ public sealed class SmartwatchController : ControllerBase
     private readonly IVaultRepository vaultRepository;
     private readonly IUserRepository userRepository;
     private readonly ITokenService tokenService;
+    private readonly TimeProvider timeProvider;
 
     public SmartwatchController(
         ISmartwatchPairingStore pairingStore,
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
         IUserRepository userRepository,
-        ITokenService tokenService)
+        ITokenService tokenService,
+        TimeProvider timeProvider)
     {
         this.pairingStore = pairingStore;
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.userRepository = userRepository;
         this.tokenService = tokenService;
+        this.timeProvider = timeProvider;
     }
 
     /// <summary>
@@ -196,7 +199,7 @@ public sealed class SmartwatchController : ControllerBase
         {
             Success = true,
             AccessToken = token.Value,
-            ExpiresIn = (int)Math.Max(0, (token.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds),
+            ExpiresIn = (int)Math.Max(0, (token.ExpiresAt - timeProvider.GetUtcNow()).TotalSeconds),
             OwnerEmail = user.Email,
             VaultId = session.VaultId
         });

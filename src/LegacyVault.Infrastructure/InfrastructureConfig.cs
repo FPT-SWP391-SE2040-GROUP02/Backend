@@ -33,7 +33,13 @@ public static class InfrastructureConfig
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddSingleton(TimeProvider.System);
+        // Đồng hồ: Development/Staging dùng DemoClock (nút "Tua thời gian" để demo), môi trường khác giữ TimeProvider.System.
+        services.AddSingleton<DemoClock>();
+        services.AddSingleton<TimeProvider>(provider => ChooseTimeProvider(provider));
+        services.AddSingleton<IDemoClock>(provider => ChooseDemoClock(provider));
+        services.AddHostedService<DemoClockLoader>();
+        services.AddScoped<IDemoClockRepository, DemoClockRepository>();
+        services.AddScoped<IDemoJobRunner, DemoJobRunner>();
 
         services.AddOptions<DatabaseSettings>()
             .Bind(configuration.GetSection("ConnectionStrings"))
@@ -286,6 +292,14 @@ public static class InfrastructureConfig
                 };
             });
 
+        // Kiểm hạn token theo cùng đồng hồ với lúc tạo token: tua tới tương lai xong, token mới tạo vẫn hợp lệ (không bị 401).
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<TimeProvider>((options, timeProvider) =>
+            {
+                options.TokenValidationParameters.LifetimeValidator =
+                    (notBefore, expires, token, parameters) => ValidateTokenLifetime(timeProvider, notBefore, expires, parameters);
+            });
+
         services.AddAuthorization();
 
         // Đăng nhập Google: Client ID đọc từ cấu hình GoogleAuth:ClientId, không viết cứng trong code.
@@ -353,6 +367,62 @@ public static class InfrastructureConfig
     }
 
     /// <summary>Chọn nơi lưu nội dung tài sản theo AssetStorage:Provider: "R2" dùng Cloudflare R2, còn lại dùng đĩa server.</summary>
+    /// <summary>
+    /// Kiểm hạn token theo TimeProvider thay vì giờ thật của máy (thư viện chưa cho gắn TimeProvider trực tiếp).
+    /// Cùng luật mặc định: phải có hạn, chưa tới giờ bắt đầu hoặc đã quá hạn (cộng ClockSkew) thì từ chối.
+    /// </summary>
+    private static bool ValidateTokenLifetime(
+        TimeProvider timeProvider, DateTime? notBefore, DateTime? expires, TokenValidationParameters parameters)
+    {
+        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
+        if (expires == null)
+        {
+            throw new SecurityTokenNoExpirationException("Token không có thời hạn.");
+        }
+        if (notBefore != null && notBefore.Value > now + parameters.ClockSkew)
+        {
+            SecurityTokenNotYetValidException notYetValid = new SecurityTokenNotYetValidException("Token chưa có hiệu lực.");
+            notYetValid.NotBefore = notBefore.Value;
+            throw notYetValid;
+        }
+        if (expires.Value < now - parameters.ClockSkew)
+        {
+            SecurityTokenExpiredException expired = new SecurityTokenExpiredException("Token đã hết hạn.");
+            expired.Expires = expires.Value;
+            throw expired;
+        }
+        return true;
+    }
+
+    /// <summary>Chỉ Development và Staging được dùng đồng hồ DEMO; Production luôn dùng giờ thật.</summary>
+    private static bool IsDemoClockEnvironment(IServiceProvider provider)
+    {
+        IHostEnvironment environment = provider.GetRequiredService<IHostEnvironment>();
+        if (environment.IsDevelopment() || environment.IsEnvironment("Staging"))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private static TimeProvider ChooseTimeProvider(IServiceProvider provider)
+    {
+        if (IsDemoClockEnvironment(provider))
+        {
+            return provider.GetRequiredService<DemoClock>();
+        }
+        return TimeProvider.System;
+    }
+
+    private static IDemoClock ChooseDemoClock(IServiceProvider provider)
+    {
+        if (IsDemoClockEnvironment(provider))
+        {
+            return provider.GetRequiredService<DemoClock>();
+        }
+        return new DisabledDemoClock();
+    }
+
     private static IAssetContentStore ChooseAssetContentStore(IServiceProvider provider)
     {
         AssetStorageSettings settings = provider.GetRequiredService<IOptions<AssetStorageSettings>>().Value;
