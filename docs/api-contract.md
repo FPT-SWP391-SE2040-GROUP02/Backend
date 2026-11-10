@@ -1269,7 +1269,7 @@ Theo prototype: người nhận chọn **Chấp nhận** hoặc **Từ chối**,
 - **Không lưu họ tên, ngày sinh hay số căn cước đầy đủ.** Backend đối chiếu bản khai với thông tin Chủ kho đã khai cho người nhận lúc nộp, chỉ giữ ba cờ khớp/không khớp và 4 số cuối. Họ tên so không phân biệt dấu và hoa thường. Ảnh lưu mã hóa (cùng cơ chế ảnh căn cước Chủ kho), mỗi lần xem có log; bản bị thay thế thì xóa ảnh.
 - **Ai duyệt được:** chỉ Người xét duyệt đã duyệt hồ sơ chứng tử của kho đó. Người khác nhận 404.
 - **Duyệt** chỉ khi cả ba trường khớp; lệch thì chỉ yêu cầu bổ sung được. Duyệt đặt `identityConfirmedByUserId`, mở hạn quyết định như khi Executor xác nhận danh tính; sau đó người nhận vẫn nhập khóa mở gói (nếu có) và bấm Đồng ý hoặc Từ chối ở bước quyết định.
-- **Biên bản** (cả văn bản từ chối lẫn văn bản khai nhận di sản thừa kế) được dựng lúc duyệt theo mẫu pháp lý Việt Nam (Điều 620 BLDS 2015 cho từ chối; Điều 613, 614, 615, 621 cho khai nhận), lưu mã hóa làm bằng chứng và **không bị xóa** khi lượt bị dọn (chỉ có họ tên và 4 số cuối căn cước).
+- **Biên bản** (cả văn bản từ chối lẫn văn bản khai nhận di sản thừa kế) được dựng **ngay lúc người nhận nộp hồ sơ** theo mẫu pháp lý Việt Nam (Điều 620 BLDS 2015 cho từ chối; Điều 613, 614, 615, 621 cho khai nhận), lưu mã hóa làm bằng chứng và **không bị xóa** khi lượt bị dọn (chỉ có họ tên và 4 số cuối căn cước). Ngày lập là ngày nộp. Nộp lại sau khi được yêu cầu bổ sung thì dựng bản mới; ảnh văn bản của bản bị thay thế vẫn được giữ (khác với ảnh căn cước bị xóa). Dựng lỗi lúc nộp không chặn việc nộp: lúc Người xét duyệt duyệt, Backend dựng bù nếu hồ sơ chưa có ảnh, còn đã có thì giữ nguyên, không dựng lại.
 - **Khóa mở gói** chỉ cần khi **tải** tài sản (sau khi đồng ý nhận), không chặn việc đồng ý. `verify-key` dùng được ở `READY_TO_ACCEPT` và `HANDOVER_COMMITTED`; tải khi chưa nhập khóa trả 403 `GRANT_NOT_ACTIVE` với `reason = KEY_REQUIRED`.
 - Nhật ký: `HANDOVER_SUBMISSION_APPROVED`, `HANDOVER_SUBMISSION_SUPPLEMENT_REQUESTED` (đối tượng `HANDOVER_TURN`).
 - Chưa làm: dọn ảnh khi lượt bị xóa theo thời hạn lưu (ảnh của hồ sơ đã duyệt còn tới khi có job dọn).
@@ -1299,6 +1299,32 @@ Admin sửa model, khóa và dịch vụ dự phòng của dịch vụ ngoài ng
 - **`confirmText`**: bắt buộc (gõ lại đúng tên dịch vụ, không phân biệt hoa thường) khi chuyển `SEPAY` sang `Live`, hoặc khi đổi `accountId` hay `bucketName` của `R2`; thiếu hoặc sai → `400` ở `confirmText`.
 - **Thử kết nối** (`/test`) thử giá trị Admin đang nhập mà không lưu và không ghi nhật ký; khóa để trống thì dùng khóa đang lưu (hoặc khóa của appsettings với ô chính chưa có dòng). Chờ tối đa 10 giây, giới hạn 10 lần/phút theo địa chỉ IP (vượt → `429`). Dịch vụ hỏng vẫn trả `200` với `ok = false` và `errorCode` ngắn (`HTTP_401`, `TIMEOUT`, `NETWORK`, `ERROR`); kết quả không bao giờ chứa khóa.
 - `status` là lần gọi gần nhất kể từ lúc máy chủ khởi động (giữ trong bộ nhớ): `activeSlot` (ô trả lời thành công), `lastOutcome` (`SUCCEEDED` | `FAILED`), `lastAt`, `lastErrorCode` (`HTTP_503`, `TIMEOUT`, `NETWORK`...).
+
+### 6.20. Biên Bản (biên bản đồng ý nhận và văn bản từ chối)
+
+Mỗi lượt bàn giao có **một biên bản** đi qua hai người ký theo thứ tự: **người nhận** chọn Chấp nhận hoặc Từ chối (Phần 1 về Chủ kho được **chép sẵn** từ phiên bản hồ sơ chứng tử mà Người xét duyệt đã duyệt, không ai nhập lại), điền Phần 2 (nộp hồ sơ như cũ kèm ảnh căn cước) và ký, rồi **Người xét duyệt** kiểm tra thủ công và gửi. Người thực thi không ký biên bản, chỉ xem lại và nhận thư khi hoàn tất. Gửi xong lượt kết thúc ngay: Chấp nhận thì mở quyền tải tài sản (`GrantWindowDays`, Admin chỉnh được), Từ chối thì ghi nhận từ chối. Không còn bước Đồng ý hay Từ chối riêng sau khi duyệt với lượt có biên bản; lượt cũ chưa có biên bản vẫn đi đường cũ.
+
+**Không có hạn chót nào** cho các bước ký, và không có job nhắc: mỗi bước chờ tới khi người của bước đó làm xong. Lượt ở bước danh tính vốn không có hạn trong hệ thống, nên không thêm cấu hình thời gian mới.
+
+| Method | Path | Ai | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| POST | `/api/v1/handover/turns/{turnId}/document` | Người nhận của lượt | `{ kind: "ACCEPT" \| "DECLINE" }` | 200 `HandoverDocumentResponse` (`WAIT_RECIPIENT`, Phần 1 đã điền; gọi lại với lựa chọn khác thì đổi được khi người nhận chưa nộp hồ sơ) | 400, 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE` / `DOCUMENT_STARTED`) |
+| GET | `/api/v1/handover/turns/{turnId}/document` | Người nhận của lượt | — | 200 hoặc 204 khi chưa bắt đầu | 404 |
+| GET | `/api/v1/handover/documents` | Người nhận | — | 200 `HandoverDocumentResponse[]`, mới nhất trước, không giới hạn thời gian | 401 |
+| GET | `/api/v1/executor/handover-documents` | Người thực thi đang hiệu lực | — | 200 `HandoverDocumentResponse[]` của mọi kho mình làm Người thực thi (chỉ xem lại) | 401 |
+| GET | `/api/v1/executor/handover-documents/{id}` | Người thực thi đang hiệu lực của kho (không phải Owner) | — | 200 | 404 |
+| POST | `/api/v1/handover/turns/{turnId}/submission` | Người nhận | như cũ (multipart) | 200; biên bản sang `WAIT_VERIFIER` | thêm 409 `DOCUMENT_NOT_READY` khi biên bản không còn chờ người nhận (đã gửi Người xét duyệt hoặc đã hoàn tất), 400 khi `kind` khác biên bản |
+| GET | `/api/v1/verifier/handover-documents` | Người xét duyệt đã duyệt chứng tử của kho | — | 200; có `submissionId` để xem ảnh căn cước; `WAIT_VERIFIER` là biên bản chờ mình | 403 |
+| POST | `/api/v1/verifier/handover-submissions/{id}/complete` | như trên | `{ checks: [bool x4], acknowledged }` | 200 `VerifierHandoverSubmissionResponse`; biên bản `COMPLETED`, lượt kết thúc | 400 (chưa tick đủ bốn mục hoặc ô xác nhận), 404, 409 (`WRONG_STATE`, `NO_DOCUMENT`, `HOLD_ACTIVE`, `PLAN_NOT_IN_HANDOVER`) |
+| POST | `/api/v1/verifier/handover-submissions/{id}/request-supplement` | như trên | `{ reason }` | 200; biên bản về `WAIT_RECIPIENT`, Phần 1 giữ nguyên, người nhận ký lại | như cũ |
+
+- `POST .../approve` (cũ) với hồ sơ thuộc biên bản trả `409 HANDOVER_NOT_ALLOWED` (`USE_DOCUMENT`).
+- `HandoverDocumentResponse`: `id`, `turnId`, `vaultId`, `code`, `kind`, `status` (`WAIT_RECIPIENT` \| `WAIT_VERIFIER` \| `COMPLETED`), `templateVersion`, `containerName`, `itemCount`, `owner { fullName, dateOfDeath, certificateNumber, certificateIssuedOn }` (Phần 1; hồ sơ chứng tử chỉ bắt buộc có tệp giấy chứng tử nên ngày mất, số giấy, ngày cấp có thể trống, giao diện in thành dòng chấm), `recipient { fullName, birthYear, citizenIdLast4, signedAt }`, `verifier { signedByName, checks[], signedAt }`, `supplementReason`, `submissionId` (chỉ Người xét duyệt), `createdAt`, `completedAt`.
+- **Phần 1 là bản chụp lúc tạo biên bản** (họ tên Chủ kho theo hồ sơ chứng tử, nếu hồ sơ không ghi thì theo tên tài khoản; ngày mất; số giấy; ngày cấp), để xem lại được kể cả khi hồ sơ chứng tử hay tài khoản Chủ kho bị dọn sau này.
+- **Chỉ lưu thông tin cần cho biên bản:** họ tên và năm sinh người nhận, 4 số cuối căn cước, Phần 1, ai ký lúc nào kèm phiên bản điều khoản đã tick (`terms-2026-11`), bốn mục kiểm tra của Người xét duyệt. Không lưu số căn cước hay ngày sinh đầy đủ; ảnh căn cước bị xóa ngay khi biên bản hoàn tất.
+- Biên bản lưu **không giới hạn thời gian** và không bị xóa khi lượt bị dọn theo thời hạn lưu. Lúc hoàn tất Backend dựng ảnh PNG văn bản (hai chữ ký: người lập và Người xét duyệt) lưu mã hóa.
+- Thư báo (email, chỉ ghi log khi chưa cấu hình SMTP) gửi sau khi lưu: Người xét duyệt khi người nhận đã ký; người nhận khi bị trả về và khi hoàn tất; Người thực thi khi hoàn tất. Gửi lỗi không làm hỏng bước đã lưu.
+- Nhật ký: hoàn tất dùng `HANDOVER_SUBMISSION_APPROVED`; không thêm hành động nhật ký mới.
 
 ## 7. Tóm tắt thay đổi FE cần làm
 
