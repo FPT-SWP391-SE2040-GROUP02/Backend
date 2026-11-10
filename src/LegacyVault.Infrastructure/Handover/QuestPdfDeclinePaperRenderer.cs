@@ -109,7 +109,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "-----------------", center: true);
         Para(column, "BIÊN BẢN ĐỒNG Ý NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
         Para(column, $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault.");
-        Para(column, $"Tôi là: {data.DeclinerFullName}, số Căn cước/CCCD: {CitizenIdText(data)}.", justify: true);
+        Para(column, $"Tôi là: {data.DeclinerFullName}; sinh năm: {BirthYearText(data)}; Số Căn cước/CCCD: {CitizenIdText(data)}.", justify: true);
         Para(column, "Bằng biên bản này, tôi xin khai đúng sự thật rằng:", justify: true);
         Para(column,
             $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, chết ngày {Date(data.DateOfDeath, "……………")} theo giấy "
@@ -165,22 +165,18 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         return "...................................................";
     }
 
-    /// <summary>In số căn cước 12 số khi có trong hồ sơ người nhận, hoặc 4 số cuối khi chỉ có 4 số cuối.</summary>
+    /// <summary>In số căn cước 12 số khi có trong hồ sơ người nhận, hoặc số đã lưu khi chỉ còn hậu tố.</summary>
     private static string CitizenIdText(DeclinePaperData data)
     {
         if (!string.IsNullOrWhiteSpace(data.CitizenId))
         {
             return data.CitizenId;
         }
-        if (data.CitizenIdLast4.Length == 4 && data.HasSignatures)
-        {
-            return "********" + data.CitizenIdLast4;
-        }
         if (!string.IsNullOrWhiteSpace(data.CitizenIdLast4))
         {
-            return $"............{data.CitizenIdLast4}";
+            return data.CitizenIdLast4;
         }
-        return ".............";
+        return "............";
     }
 
     private static string ContainerText(DeclinePaperData data)

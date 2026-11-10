@@ -18,12 +18,15 @@ public class HandoverDocumentOwnerPart
     public string ResidenceAddress { get; set; } = string.Empty;
 }
 
-/// <summary>Phần 2 của biên bản, do người nhận điền và ký. Không có số căn cước hay ngày sinh đầy đủ.</summary>
+/// <summary>Phần 2 của biên bản, do người nhận điền và ký.</summary>
 public class HandoverDocumentRecipientPart
 {
     public string FullName { get; set; } = string.Empty;
 
     public int? BirthYear { get; set; }
+
+    /// <summary>Số Căn cước/CCCD 12 số của người nhận (giải mã trong RAM từ hồ sơ người được chỉ định để hiển thị trên biên bản).</summary>
+    public string CitizenId { get; set; } = string.Empty;
 
     public string CitizenIdLast4 { get; set; } = string.Empty;
 

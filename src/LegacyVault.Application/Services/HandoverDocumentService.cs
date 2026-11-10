@@ -48,6 +48,8 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
     private readonly TimeProvider timeProvider;
     private readonly IHandoverDocumentNotifier? notifier;
     private readonly IOwnerIdentityReader? ownerIdentities;
+    private readonly IBeneficiaryRepository? beneficiaries;
+    private readonly IBeneficiaryDataProtector? beneficiaryProtector;
 
     public HandoverDocumentService(
         ICurrentUser currentUser,
@@ -61,7 +63,9 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IHandoverDocumentNotifier? notifier = null,
-        IOwnerIdentityReader? ownerIdentities = null)
+        IOwnerIdentityReader? ownerIdentities = null,
+        IBeneficiaryRepository? beneficiaries = null,
+        IBeneficiaryDataProtector? beneficiaryProtector = null)
     {
         this.currentUser = currentUser;
         this.handover = handover;
@@ -75,6 +79,8 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         this.timeProvider = timeProvider;
         this.notifier = notifier;
         this.ownerIdentities = ownerIdentities;
+        this.beneficiaries = beneficiaries;
+        this.beneficiaryProtector = beneficiaryProtector;
     }
 
     public async Task<HandoverDocumentResponse> CreateAsync(Guid turnId, CreateHandoverDocumentRequest request, CancellationToken ct)
@@ -234,6 +240,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         response.Recipient.FullName = document.RecipientFullName;
         response.Recipient.BirthYear = document.RecipientBirthYear;
         response.Recipient.CitizenIdLast4 = document.RecipientCitizenIdLast4;
+        response.Recipient.CitizenId = await FindRecipientCitizenIdAsync(document, ct);
         response.Recipient.ResidenceAddress = document.RecipientResidenceAddress;
         response.Recipient.SignedAt = document.RecipientSignedAt;
 
@@ -303,6 +310,32 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         catch (System.Security.Cryptography.CryptographicException)
         {
             return string.Empty;
+        }
+    }
+
+    private async Task<string> FindRecipientCitizenIdAsync(HandoverDocument document, CancellationToken ct)
+    {
+        if (document.RecipientSignedAt == null && string.IsNullOrWhiteSpace(document.RecipientCitizenIdLast4))
+        {
+            return string.Empty;
+        }
+        if (beneficiaries == null || beneficiaryProtector == null)
+        {
+            return document.RecipientCitizenIdLast4;
+        }
+        try
+        {
+            Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(document.VaultId, document.Turn.BeneficiaryId, ct);
+            if (beneficiary == null)
+            {
+                return document.RecipientCitizenIdLast4;
+            }
+            BeneficiaryPersonalData personal = beneficiaryProtector.Unprotect(beneficiary);
+            return !string.IsNullOrWhiteSpace(personal.CitizenId) ? personal.CitizenId : document.RecipientCitizenIdLast4;
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return document.RecipientCitizenIdLast4;
         }
     }
 
