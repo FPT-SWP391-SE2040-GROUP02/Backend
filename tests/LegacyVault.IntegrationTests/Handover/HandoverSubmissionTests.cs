@@ -8,6 +8,7 @@ using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.Audit;
 using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
@@ -94,6 +95,18 @@ public sealed class FakeHandoverSubmissionRepository : IHandoverSubmissionReposi
         return Task.FromResult<(string FullName, string? LawyerCardNumber)?>(null);
     }
 
+    public Task<Guid?> FindApprovingVerifierUserIdAsync(Guid vaultId, CancellationToken ct)
+    {
+        foreach ((Guid verifierId, Guid approvedVaultId) in Approvers)
+        {
+            if (approvedVaultId == vaultId)
+            {
+                return Task.FromResult<Guid?>(verifierId);
+            }
+        }
+        return Task.FromResult<Guid?>(null);
+    }
+
     public Task<bool> IsApprovingVerifierAsync(Guid verifierUserId, Guid vaultId, CancellationToken ct)
     {
         return Task.FromResult(Approvers.Contains((verifierUserId, vaultId)));
@@ -118,6 +131,7 @@ public sealed class HandoverSubmissionTests
     private readonly InMemoryContentStore store = new InMemoryContentStore();
     private readonly FakeAuditLogRepository audit = new FakeAuditLogRepository();
     private readonly FakeHoldReader holds = new FakeHoldReader();
+    private readonly FakeDeathCaseRepository deathCases = new FakeDeathCaseRepository();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
     private readonly User recipient;
@@ -364,11 +378,29 @@ public sealed class HandoverSubmissionTests
         }
     }
 
+    private HandoverPaperWriter WriterFor(IDeclinePaperRenderer renderer)
+    {
+        return new HandoverPaperWriter(users, vaults, beneficiaries, protector, renderer, deathCases, store);
+    }
+
     private HandoverSubmissionReviewService ReviewWithPaper(FakePaperRenderer renderer)
     {
         return new HandoverSubmissionReviewService(
-            currentUser, users, vaults, submissions, holds, store, audit, unitOfWork, time,
-            beneficiaries, protector, renderer);
+            currentUser, users, vaults, submissions, holds, store, audit, unitOfWork, time, WriterFor(renderer));
+    }
+
+    private HandoverSubmissionService SubmitWithPaper(IDeclinePaperRenderer renderer)
+    {
+        return new HandoverSubmissionService(
+            currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time, WriterFor(renderer));
+    }
+
+    private sealed class ThrowingPaperRenderer : IDeclinePaperRenderer
+    {
+        public byte[] Render(DeclinePaperData data)
+        {
+            throw new InvalidOperationException("Không dựng được văn bản.");
+        }
     }
 
     [Fact]
@@ -400,6 +432,79 @@ public sealed class HandoverSubmissionTests
 
         Assert.NotEmpty(submission.PaperStorageKey);
         Assert.True(renderer.Last!.IsAcceptance);
+    }
+
+    [Fact]
+    public async Task Submit_StoresEncryptedPaperRightAwayWithDeathDatesAndNoReviewer()
+    {
+        deathCases.Cases.Add(new DeathCase
+        {
+            VaultId = data.Vault.Id,
+            Status = DeathCaseStatus.ApprovedForHandover,
+            ReviewVersionNo = 1,
+            Versions = { new DeathCaseVersion { VersionNo = 1, DateOfDeath = new DateOnly(2026, 10, 5), IssuedOn = new DateOnly(2026, 10, 7) } },
+        });
+        FakePaperRenderer renderer = new FakePaperRenderer();
+
+        await SubmitWithPaper(renderer).SubmitAsync(turn.Id, Request("DECLINE", voluntary: true), Png, Jpeg, CancellationToken.None);
+
+        HandoverSubmission saved = Stored();
+        Assert.NotEmpty(saved.PaperStorageKey);
+        Assert.True(store.Contents.ContainsKey(saved.PaperStorageKey));
+        Assert.Equal(3, store.Contents.Count);
+        Assert.False(renderer.Last!.IsAcceptance);
+        Assert.Equal("Trần Minh Anh", renderer.Last.DeclinerFullName);
+        Assert.Equal("Gói gia đình", renderer.Last.ContainerName);
+        Assert.Equal(new DateOnly(2026, 10, 5), renderer.Last.DateOfDeath);
+        Assert.Equal(new DateOnly(2026, 10, 7), renderer.Last.DeathCertificateIssuedOn);
+        Assert.Equal(Now, renderer.Last.SubmittedAt);
+        Assert.Equal(string.Empty, renderer.Last.ReviewerFullName);
+    }
+
+    [Fact]
+    public async Task Submit_WhenPaperRenderFails_StillStoresSubmissionWithoutPaper()
+    {
+        await SubmitWithPaper(new ThrowingPaperRenderer()).SubmitAsync(turn.Id, Request(), Png, Jpeg, CancellationToken.None);
+
+        HandoverSubmission saved = Stored();
+        Assert.Equal(HandoverSubmissionStatus.Submitted, saved.Status);
+        Assert.Empty(saved.PaperStorageKey);
+        Assert.Equal(2, store.Contents.Count);
+    }
+
+    [Fact]
+    public async Task Approve_KeepsPaperStoredAtSubmitWithoutRenderingAgain()
+    {
+        FakePaperRenderer atSubmit = new FakePaperRenderer();
+        await SubmitWithPaper(atSubmit).SubmitAsync(turn.Id, Request(), Png, Jpeg, CancellationToken.None);
+        HandoverSubmission submission = Stored();
+        submission.Turn = turn;
+        string keyAtSubmit = submission.PaperStorageKey;
+        FakePaperRenderer atApprove = new FakePaperRenderer();
+        currentUser.UserId = verifier.Id;
+
+        await ReviewWithPaper(atApprove).ApproveAsync(submission.Id, CancellationToken.None);
+
+        Assert.Equal(keyAtSubmit, submission.PaperStorageKey);
+        Assert.Null(atApprove.Last);
+        Assert.Equal(3, store.Contents.Count);
+    }
+
+    [Fact]
+    public async Task Resubmit_KeepsThePaperOfTheReplacedSubmissionAndStoresANewOne()
+    {
+        HandoverSubmissionService service = SubmitWithPaper(new FakePaperRenderer());
+        await service.SubmitAsync(turn.Id, Request(name: "Người Khác"), Png, Jpeg, CancellationToken.None);
+        HandoverSubmission first = Stored();
+
+        await service.SubmitAsync(turn.Id, Request(), Png, Jpeg, CancellationToken.None);
+
+        HandoverSubmission second = Stored();
+        Assert.Equal(HandoverSubmissionStatus.Superseded, first.Status);
+        Assert.NotEmpty(first.PaperStorageKey);
+        Assert.True(store.Contents.ContainsKey(first.PaperStorageKey));
+        Assert.NotEmpty(second.PaperStorageKey);
+        Assert.NotEqual(first.PaperStorageKey, second.PaperStorageKey);
     }
 
     [Fact]

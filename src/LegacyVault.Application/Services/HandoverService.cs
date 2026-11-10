@@ -184,20 +184,8 @@ public sealed class HandoverService : IHandoverService
         // Khóa mở gói chỉ cần khi tải (HandoverDownloadService), không chặn việc đồng ý nhận.
         plan.UpdatedAt = now;
 
-        HandoverGrant grant = new HandoverGrant();
-        grant.TurnId = turn.Id;
-        grant.Turn = turn;
-        grant.UserId = userId;
-        grant.Status = HandoverGrantStatus.Active;
-        grant.GrantedAt = now;
-        grant.ExpiresAt = now + HandoverRules.GrantWindow;
+        HandoverGrant grant = HandoverRules.CommitAccept(turn, userId, now);
         handover.AddGrant(grant);
-        turn.Grant = grant;
-
-        turn.Status = HandoverTurnStatus.HandoverCommitted;
-        turn.DecidedAt = now;
-        turn.EndedAt = now;
-        turn.UpdatedAt = now;
 
         await CloseDecidedPlanAsync(plan, now, ct);
 
@@ -229,18 +217,8 @@ public sealed class HandoverService : IHandoverService
         HandoverPlan plan = await EnsureDecidableAsync(turn, now, ct);
         plan.UpdatedAt = now;
 
-        turn.Status = HandoverTurnStatus.Declined;
-        turn.DecidedAt = now;
-        turn.EndedAt = now;
-        turn.UpdatedAt = now;
-
-        // Người nhận từ chối thì nội dung của lượt này bị xóa luôn thay vì chờ hết thời hạn lưu: hạn xóa đặt đúng lúc này,
-        // job lưu giữ (RetentionJob) xóa ở vòng quét kế tiếp. Tài sản còn lượt khác tham chiếu thì giữ lại (RETENTION-02).
-        // Chỉ còn trạng thái và thời điểm quyết định của lượt.
-        turn.RetentionStatus = RetentionStatus.RetentionActive;
-        turn.RetentionStartedAt = now;
-        turn.RetentionDeadline = now;
-        turn.RetentionRemainingSeconds = null;
+        // Người nhận từ chối thì nội dung của lượt này bị xóa luôn thay vì chờ hết thời hạn lưu (xem MarkDeclined).
+        HandoverRules.MarkDeclined(turn, now);
 
         await CloseDecidedPlanAsync(plan, now, ct);
 

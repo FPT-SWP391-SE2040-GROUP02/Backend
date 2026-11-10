@@ -69,6 +69,18 @@ public sealed class HandoverSubmissionRepository : IHandoverSubmissionRepository
         return (row.FullName, row.LawyerCardNumber);
     }
 
+    public async Task<Guid?> FindApprovingVerifierUserIdAsync(Guid vaultId, CancellationToken ct)
+    {
+        Guid? verifierId = await context.Set<DeathCaseDecision>()
+            .AsNoTracking()
+            .Where(d => d.Kind == DeathCaseDecisionKind.Approved
+                && context.Set<DeathCase>().Any(c => c.Id == d.CaseId && c.VaultId == vaultId))
+            .OrderByDescending(d => d.DecidedAt)
+            .Select(d => (Guid?)d.VerifierUserId)
+            .FirstOrDefaultAsync(ct);
+        return verifierId;
+    }
+
     public Task<bool> IsApprovingVerifierAsync(Guid verifierUserId, Guid vaultId, CancellationToken ct)
     {
         return context.Set<DeathCaseDecision>()

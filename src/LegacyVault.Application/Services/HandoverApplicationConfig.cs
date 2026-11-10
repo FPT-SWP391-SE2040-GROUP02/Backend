@@ -10,6 +10,9 @@ public static class HandoverApplicationConfig
         services.AddScoped<IHandoverStarter, HandoverStarter>();
         services.AddScoped<IHandoverService, HandoverService>();
         services.AddScoped<IInvitationMailCheckService, InvitationMailCheckService>();
+        services.AddScoped<IHandoverPaperWriter, HandoverPaperWriter>();
+        services.AddScoped<IHandoverDocumentNotifier, HandoverDocumentNotifier>();
+        services.AddScoped<IHandoverDocumentService, HandoverDocumentService>();
         services.AddScoped<IHandoverSubmissionService, HandoverSubmissionService>();
         services.AddScoped<IHandoverSubmissionReviewService, HandoverSubmissionReviewService>();
         services.AddScoped<IHandoverDownloadService, HandoverDownloadService>();
