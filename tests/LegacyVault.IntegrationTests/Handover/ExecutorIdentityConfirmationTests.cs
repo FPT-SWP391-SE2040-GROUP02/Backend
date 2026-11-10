@@ -24,6 +24,7 @@ public sealed class ExecutorIdentityConfirmationTests
     private readonly FakeHoldReader holds = new FakeHoldReader();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
+    private readonly FakeHandoverDocumentRepository documents = new FakeHandoverDocumentRepository();
     private readonly ExecutorIdentityConfirmationService service;
     private readonly Guid executorUserId = Guid.NewGuid();
     private readonly Guid recipientUserId = Guid.NewGuid();
@@ -52,7 +53,7 @@ public sealed class ExecutorIdentityConfirmationTests
         reader.Cases.Add(deathCase);
 
         service = new ExecutorIdentityConfirmationService(
-            currentUser, vaults, executors, reader, repository, holds, unitOfWork, time);
+            currentUser, vaults, executors, reader, repository, holds, unitOfWork, time, documents);
     }
 
     private HandoverTurn AddTurn(HandoverTurnStatus status, Guid? claimant)
@@ -84,6 +85,30 @@ public sealed class ExecutorIdentityConfirmationTests
         Assert.Equal(Now.AddDays(7), result.DecisionDeadline);
         Assert.Equal("READY_TO_ACCEPT", result.Status);
         Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Confirm_TurnThatAlreadyHasADocument_RejectedSoTheDocumentIsNotSkipped()
+    {
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, recipientUserId);
+        documents.Items.Add(new HandoverDocument { TurnId = turn.Id, Turn = turn, VaultId = data.Vault.Id });
+
+        Assert.Equal("USE_DOCUMENT", await ReasonOfRejectionAsync(turn.Id));
+        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
+        Assert.Null(turn.IdentityConfirmedByUserId);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Confirm_TurnWithoutADocument_StillWorksWhenOtherTurnsHaveOne()
+    {
+        HandoverTurn withDocument = AddTurn(HandoverTurnStatus.IdentityInProgress, recipientUserId);
+        documents.Items.Add(new HandoverDocument { TurnId = withDocument.Id, Turn = withDocument, VaultId = data.Vault.Id });
+        HandoverTurn legacy = AddTurn(HandoverTurnStatus.IdentityInProgress, recipientUserId);
+
+        await service.ConfirmAsync(deathCase.Id, legacy.Id, CancellationToken.None);
+
+        Assert.Equal(HandoverTurnStatus.ReadyToAccept, legacy.Status);
     }
 
     [Fact]

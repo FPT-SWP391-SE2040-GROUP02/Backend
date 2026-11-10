@@ -13,6 +13,7 @@ namespace LegacyVault.Application.Services;
 /// - Executor không tự xác nhận cho lượt do chính tài khoản của mình nhận, nếu không Executor kiêm người nhận sẽ tự mở gói mà không qua eKYC.
 /// - Lượt chỉ sang READY_TO_ACCEPT khi đang IDENTITY_IN_PROGRESS, cùng luật chặn (kế hoạch, hold) với bước hoàn tất xác minh của người nhận.
 /// - Lưu Executor nào xác nhận và lúc nào để truy lại khi có tranh chấp.
+/// - Lượt đã có biên bản (luồng Biên Bản) thì không xác nhận bằng tay được, để biên bản không bị bỏ qua; lượt cũ chưa có biên bản vẫn dùng được.
 /// </remarks>
 public sealed class ExecutorIdentityConfirmationService : IExecutorIdentityConfirmationService
 {
@@ -24,6 +25,7 @@ public sealed class ExecutorIdentityConfirmationService : IExecutorIdentityConfi
     private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IHandoverDocumentRepository? documents;
 
     public ExecutorIdentityConfirmationService(
         ICurrentUser currentUser,
@@ -33,7 +35,8 @@ public sealed class ExecutorIdentityConfirmationService : IExecutorIdentityConfi
         IHandoverRepository handover,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverDocumentRepository? documents = null)
     {
         this.currentUser = currentUser;
         this.vaults = vaults;
@@ -43,6 +46,7 @@ public sealed class ExecutorIdentityConfirmationService : IExecutorIdentityConfi
         this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.documents = documents;
     }
 
     public async Task<ConfirmHandoverIdentityResponse> ConfirmAsync(Guid caseId, Guid turnId, CancellationToken ct)
@@ -83,6 +87,10 @@ public sealed class ExecutorIdentityConfirmationService : IExecutorIdentityConfi
         if (turn.Status != HandoverTurnStatus.IdentityInProgress)
         {
             throw NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
+        }
+        if (documents != null && await documents.FindByTurnIdAsync(turn.Id, ct) != null)
+        {
+            throw NotAllowed("USE_DOCUMENT", "Lượt này đã có biên bản nên không xác nhận danh tính bằng tay được.");
         }
         if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
         {
