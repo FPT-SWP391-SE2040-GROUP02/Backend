@@ -15,6 +15,9 @@ public sealed class DeclinePaperData
     /// <summary>Họ tên người từ chối lấy từ hồ sơ người được chỉ định mà Chủ kho đã khai.</summary>
     public string DeclinerFullName { get; set; } = string.Empty;
 
+    /// <summary>Số căn cước công dân 12 số (giải mã trong RAM từ hồ sơ người nhận để in biên bản); null khi không có.</summary>
+    public string? CitizenId { get; set; }
+
     public string CitizenIdLast4 { get; set; } = string.Empty;
 
     public DateTimeOffset SubmittedAt { get; set; }
