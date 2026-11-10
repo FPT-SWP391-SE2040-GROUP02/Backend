@@ -113,18 +113,6 @@ public sealed class OwnerFaceTemplateEnrollmentTests
     }
 
     [Fact]
-    public async Task OtherPurpose_CreatesNoTemplate()
-    {
-        await StartedAsync(EkycPurpose.OwnerAlive);
-
-        EkycStatusResponse response = await service.CompleteLivenessAsync(CancellationToken.None);
-
-        Assert.Equal("PASSED", response.Status);
-        Assert.Empty(templates.Templates);
-        Assert.Equal(0, client.EmbeddingCalls);
-    }
-
-    [Fact]
     public async Task EmbeddingServiceDown_KeepsVerificationPending_ForRetry()
     {
         EkycVerification verification = await StartedAsync(EkycPurpose.OwnerEnrollment);

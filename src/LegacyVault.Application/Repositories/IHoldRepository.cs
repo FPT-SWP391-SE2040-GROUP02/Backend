@@ -10,8 +10,6 @@ public interface IHoldRepository
 
     Task<Hold?> FindByIdAsync(Guid holdId, CancellationToken ct);
 
-    /// <summary>Hold F2C đang hiệu lực của kho (nếu có).</summary>
-
     /// <summary>Kho có hold nào đang hiệu lực không (mọi phạm vi) — chặn phát hành, kích hoạt và dọn dữ liệu.</summary>
     Task<bool> HasActiveHoldAsync(Guid vaultId, CancellationToken ct);
 

@@ -11,8 +11,6 @@ public enum IncidentType
     CheckInOverdue = 2,
     /// <summary>Thông báo quan trọng gửi lỗi đủ số lần (DEATH-08, RETENTION-05).</summary>
     NotificationFailed = 3,
-    /// <summary>Owner báo còn sống, chờ Verifier kết luận (ALIVE-01).</summary>
-    OwnerAlive = 4,
     /// <summary>Lỗi kỹ thuật eKYC hoặc dịch vụ ngoài.</summary>
     Integration = 5,
     /// <summary>Admin hoặc nhân viên tạo thủ công.</summary>

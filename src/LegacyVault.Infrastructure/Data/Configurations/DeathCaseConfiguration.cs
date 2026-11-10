@@ -65,11 +65,6 @@ public sealed class DeathCaseConfiguration : IEntityTypeConfiguration<DeathCase>
             .HasForeignKey(f => f.CaseId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasMany(c => c.Notices)
-            .WithOne()
-            .HasForeignKey(n => n.CaseId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasMany(c => c.Assignments)
             .WithOne()
             .HasForeignKey(a => a.CaseId)

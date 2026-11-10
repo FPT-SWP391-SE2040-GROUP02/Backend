@@ -212,20 +212,6 @@ public sealed class DeathCaseVersionFlowTests : IAsyncLifetime
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
-    /// <summary>Chạy job gửi mọi thông báo đang chờ (bộ gửi chỉ ghi log nên coi là đã giao).</summary>
-    private async Task RunNoticeJobAsync()
-    {
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IDeathCaseNoticeJob job = scope.ServiceProvider.GetRequiredService<IDeathCaseNoticeJob>();
-            List<Guid> pending = await job.FindPendingNoticeIdsAsync(CancellationToken.None);
-            foreach (Guid noticeId in pending)
-            {
-                await job.ProcessNoticeAsync(noticeId, CancellationToken.None);
-            }
-        }
-    }
-
     private async Task<DeathCase> LoadCaseAsync(Guid caseId)
     {
         DeathCase? result = null;
@@ -253,16 +239,6 @@ public sealed class DeathCaseVersionFlowTests : IAsyncLifetime
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             result = await db.Set<DeathCaseFile>().AsNoTracking().Where(f => f.VersionId == versionId).ToListAsync();
-        });
-        return result;
-    }
-
-    private async Task<List<DeathCaseNotice>> LoadNoticesAsync(Guid caseId)
-    {
-        List<DeathCaseNotice> result = new List<DeathCaseNotice>();
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            result = await db.Set<DeathCaseNotice>().AsNoTracking().Where(n => n.CaseId == caseId).ToListAsync();
         });
         return result;
     }

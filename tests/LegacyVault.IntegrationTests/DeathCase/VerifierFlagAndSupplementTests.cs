@@ -40,9 +40,8 @@ public sealed class VerifierFlagAndSupplementTests : IAsyncLifetime
     [SqlFact]
     public async Task Death10_ReviewFlagUnblocksApprove()
     {
-        // Chuẩn bị: Owner đã nhận thư và hết 72 giờ; còn một cờ chưa xem xét
+        // Chuẩn bị: còn một cờ chưa xem xét
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        await DeathCaseReviewTestData.MarkOwnerNotifiedAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow.AddHours(-80));
         Guid flagId = await DeathCaseReviewTestData.AddFlagAsync(factory, submitted.CaseId);
         JsonElement before = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
         Assert.Equal(new List<string> { "FLAGS_NOT_REVIEWED" }, DeathCaseApi.ReadStrings(before.GetProperty("approveBlockers")));
@@ -142,10 +141,8 @@ public sealed class VerifierFlagAndSupplementTests : IAsyncLifetime
     [SqlFact]
     public async Task Ac08_Death01_SupplementRequestMovesCaseAndKeepsAssignment()
     {
-        // Chuẩn bị: Owner đã nhận thư (đồng hồ 72 giờ đang chạy)
+        // Chuẩn bị: hồ sơ đã gửi và đang được xét
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        DateTimeOffset deliveredAt = DateTimeOffset.UtcNow.AddHours(-10);
-        await DeathCaseReviewTestData.MarkOwnerNotifiedAsync(factory, submitted.CaseId, deliveredAt);
         JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
         DeathCaseAssignment? assignmentBefore = await DeathCaseReviewTestData.LoadActiveAssignmentAsync(factory, submitted.CaseId);
         Assert.NotNull(assignmentBefore);
@@ -177,7 +174,6 @@ public sealed class VerifierFlagAndSupplementTests : IAsyncLifetime
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             DeathCase deathCase = await db.Set<DeathCase>().AsNoTracking().SingleAsync(c => c.Id == submitted.CaseId);
-            Assert.Equal(deliveredAt.AddHours(72), deathCase.ObjectionEndsAt);
             Assert.Equal(1, deathCase.ReviewVersionNo);
             HandoverPlan plan = await db.HandoverPlans.AsNoTracking().SingleAsync(p => p.Id == deathCase.PlanId);
             Assert.Equal(PlanStatus.DeathCaseOpen, plan.Status);

@@ -131,39 +131,6 @@ public static class DeathCaseReviewTestData
         return result;
     }
 
-    /// <summary>
-    /// DEATH-08: coi như Owner đã nhận thư lúc deliveredAt: thông báo Delivered, NotifiedVersionNo theo thông báo,
-    /// ObjectionStartsAt = deliveredAt, ObjectionEndsAt = deliveredAt + 72 giờ. Đặt deliveredAt lùi quá 72 giờ
-    /// để hết thời gian phản đối. Không đổi UpdatedAt của hồ sơ nên etag không đổi.
-    /// </summary>
-    public static async Task MarkOwnerNotifiedAsync(ApiFactory factory, Guid caseId, DateTimeOffset deliveredAt)
-    {
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            // Nộp hồ sơ không còn xếp thông báo cho Owner; nếu test tự tạo thông báo thì vẫn đánh dấu đã gửi.
-            DeathCaseNotice? notice = await db.Set<DeathCaseNotice>()
-                .Where(n => n.CaseId == caseId)
-                .OrderByDescending(n => n.CreatedAt)
-                .FirstOrDefaultAsync();
-            int noticeVersionNo = await db.Set<DeathCase>().Where(c => c.Id == caseId)
-                .Select(c => c.CurrentVersionNo).FirstAsync();
-            if (notice != null)
-            {
-                noticeVersionNo = notice.VersionNo;
-                await db.Set<DeathCaseNotice>().Where(n => n.Id == notice.Id)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(n => n.Status, DeathCaseNoticeStatus.Delivered)
-                        .SetProperty(n => n.DeliveredAt, deliveredAt)
-                        .SetProperty(n => n.AttemptCount, 1));
-            }
-            await db.Set<DeathCase>().Where(c => c.Id == caseId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(c => c.NotifiedVersionNo, noticeVersionNo)
-                    .SetProperty(c => c.ObjectionStartsAt, deliveredAt)
-                    .SetProperty(c => c.ObjectionEndsAt, deliveredAt.AddHours(72)));
-        });
-    }
-
     /// <summary>Kết thúc phân công đang hiệu lực của hồ sơ (giả lập nhánh C giao lại).</summary>
     public static async Task EndAssignmentAsync(ApiFactory factory, Guid caseId, DateTimeOffset endedAt)
     {
@@ -402,11 +369,10 @@ public static class DeathCaseReviewTestData
         return await ApproveAsync(submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(), reason);
     }
 
-    /// <summary>Hồ sơ đã gửi và Owner đã nhận thư cách đây 80 giờ (hết 72 giờ phản đối): sẵn sàng để duyệt.</summary>
+    /// <summary>Hồ sơ đã gửi, sẵn sàng để duyệt (không còn cửa sổ phản đối, duyệt được ngay khi không có cờ).</summary>
     public static async Task<SubmittedCase> CreateReadyToApproveCaseAsync(ApiFactory factory)
     {
         SubmittedCase submitted = await CreateSubmittedCaseAsync(factory);
-        await MarkOwnerNotifiedAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow.AddHours(-80));
         return submitted;
     }
 

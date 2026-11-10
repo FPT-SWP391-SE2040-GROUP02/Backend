@@ -51,7 +51,7 @@ public interface IDevToolsRepository
     Task<Guid?> FindVaultIdByOwnerAsync(Guid ownerId, CancellationToken ct);
 
     /// <summary>
-    /// Khóa lưu trữ của mọi tệp mã hóa gắn với kho: tài sản, trang giấy chứng tử, ảnh selfie báo còn sống,
+    /// Khóa lưu trữ của mọi tệp mã hóa gắn với kho: tài sản, trang giấy chứng tử,
     /// ảnh CCCD tạm của người nhận trong các lượt bàn giao. Không trùng lặp.
     /// </summary>
     Task<List<string>> ListVaultStorageKeysAsync(Guid vaultId, Guid ownerId, CancellationToken ct);

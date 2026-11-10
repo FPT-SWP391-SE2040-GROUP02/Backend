@@ -38,12 +38,6 @@ public class DeathCaseResponse
     /// </summary>
     public string? RejectReason { get; set; }
 
-    /// <summary>Thông báo gần nhất cho Owner (DEATH-08); null khi chưa gửi hồ sơ lần nào.</summary>
-    public DeathCaseNoticeResponse? OwnerNotice { get; set; }
-
-    /// <summary>DEATH-08: hết 72 giờ phản đối; null khi đồng hồ chưa chạy (thông báo chưa được giao).</summary>
-    public DateTimeOffset? ObjectionEndsAt { get; set; }
-
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }
@@ -94,15 +88,6 @@ public class DeathCaseFileResponse
     public long SizeBytes { get; set; }
 
     public DateTimeOffset UploadedAt { get; set; }
-}
-
-/// <summary>Trạng thái thông báo cho Owner.</summary>
-public class DeathCaseNoticeResponse
-{
-    /// <summary>PENDING | DELIVERED | FAILED | CANCELLED (hồ sơ bị từ chối trước khi gửi được thư).</summary>
-    public string Status { get; set; } = string.Empty;
-
-    public DateTimeOffset? DeliveredAt { get; set; }
 }
 
 /// <summary>DEATH-01: Verifier yêu cầu Executor bổ sung những gì.</summary>

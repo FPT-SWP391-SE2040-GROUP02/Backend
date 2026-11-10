@@ -63,7 +63,7 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
         Assert.Equal(DeathCaseAssignmentOutcome.NoCandidate, withoutCandidate);
         Assert.Equal(DeathCaseAssignmentOutcome.Assigned, outcome);
         Assert.Equal(newVerifier.User.Id, active.VerifierUserId);
-        Assert.Equal(DeathCaseAssignmentRules.ComputeDueAt(active.AssignedAt, after.ObjectionEndsAt), active.DueAt);
+        Assert.Equal(DeathCaseAssignmentRules.ComputeDueAt(active.AssignedAt), active.DueAt);
         Assert.Equal(before.UpdatedAt, after.UpdatedAt);
         Assert.Equal(2, rows.Count);
     }
@@ -113,7 +113,7 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
         Assert.NotNull(ended.EndedAt);
         Assert.Equal(DeathCaseAssignmentRules.EndReasonOverdue, ended.EndReason);
         Assert.Equal(otherId, active.VerifierUserId);
-        Assert.Equal(DeathCaseAssignmentRules.ComputeDueAt(active.AssignedAt, after.ObjectionEndsAt), active.DueAt);
+        Assert.Equal(DeathCaseAssignmentRules.ComputeDueAt(active.AssignedAt), active.DueAt);
         Assert.NotEqual(before.UpdatedAt, after.UpdatedAt);
         Assert.Equal(DeathCaseStatus.UnderReview, after.Status);
     }

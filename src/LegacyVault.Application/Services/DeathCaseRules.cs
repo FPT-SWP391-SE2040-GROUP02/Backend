@@ -8,9 +8,6 @@ namespace LegacyVault.Application.Services;
 /// <summary>Hằng số và luật thuần của hồ sơ chứng tử (SRS §6.2 F2B), dùng chung cho service và job.</summary>
 public static class DeathCaseRules
 {
-    /// <summary>DEATH-08: Owner có 72 giờ phản đối, tính từ lúc thông báo được giao.</summary>
-    public static int ObjectionHours => RuntimeSettings.Int("DeathCase.ObjectionHours", 72);
-
     /// <summary>ASSIGN-01: Verifier có 48 giờ để xét hồ sơ được giao.</summary>
     public static int ReviewDueHours => RuntimeSettings.Int("DeathCase.ReviewDueHours", 48);
 
@@ -19,9 +16,6 @@ public static class DeathCaseRules
 
     /// <summary>NFR-09: mỗi tệp tối đa 20 MiB.</summary>
     public static long MaxFileBytes => RuntimeSettings.Int("DeathCase.MaxFileSizeMb", 20) * 1024L * 1024;
-
-    /// <summary>D3: thử gửi thông báo tối đa 5 lần rồi đánh dấu Failed.</summary>
-    public static int MaxNoticeAttempts => RuntimeSettings.Int("DeathCase.MaxNoticeAttempts", 5);
 
     /// <summary>Số ký tự của Id hồ sơ dùng làm mã rút gọn trong thư.</summary>
     public const int CaseCodeLength = 8;
@@ -157,31 +151,6 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-11: thay đổi trọng yếu = đổi danh tính Owner (họ tên, CCCD) hoặc ngày mất.
-    /// Họ tên so sau khi bỏ khoảng trắng thừa, không phân biệt hoa thường. Số giấy, nơi cấp, ngày cấp không tính.
-    /// </summary>
-    public static bool IsCriticalChange(
-        string? oldOwnerFullName, string? oldOwnerCitizenId, DateOnly? oldDateOfDeath,
-        string? newOwnerFullName, string? newOwnerCitizenId, DateOnly? newDateOfDeath)
-    {
-        string oldName = NormalizeNameForCompare(oldOwnerFullName);
-        string newName = NormalizeNameForCompare(newOwnerFullName);
-        if (!string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-        if (!string.Equals(oldOwnerCitizenId, newOwnerCitizenId, StringComparison.Ordinal))
-        {
-            return true;
-        }
-        if (oldDateOfDeath != newDateOfDeath)
-        {
-            return true;
-        }
-        return false;
-    }
-
-    /// <summary>
     /// DEATH-13: CCCD khai trên hồ sơ khác CCCD đã xác minh của Owner. Owner chưa xác minh (verifiedLast4 null)
     /// hoặc hồ sơ chưa có số thì không kết luận được, trả false.
     /// </summary>
@@ -208,15 +177,9 @@ public static class DeathCaseRules
         return !string.Equals(boundCitizenId, caseCitizenId, StringComparison.Ordinal);
     }
 
-    /// <summary>DEATH-08: hạn phản đối = lúc thông báo được giao + 72 giờ.</summary>
-    public static DateTimeOffset ObjectionEndsAt(DateTimeOffset deliveredAt)
-    {
-        return deliveredAt.AddHours(ObjectionHours);
-    }
-
     /// <summary>
     /// Mã hồ sơ rút gọn trong thư: 8 ký tự hex CUỐI của Id, chữ hoa. Không lấy phần đầu vì Guid v7 bắt đầu bằng
-    /// mốc thời gian, các hồ sơ tạo gần nhau sẽ trùng mã. Dùng chung cho thư báo Owner và thư nhắc Verifier.
+    /// mốc thời gian, các hồ sơ tạo gần nhau sẽ trùng mã. Dùng chung cho các thư nhắc Verifier và thư báo Executor.
     /// </summary>
     public static string CaseCode(Guid caseId)
     {

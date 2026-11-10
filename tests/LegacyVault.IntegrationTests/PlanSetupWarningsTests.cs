@@ -91,13 +91,13 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task EKYC01_NewerOwnerAliveFailed_DoesNotHideOwnerEnrollment()
+    public async Task EKYC01_NewerOtherPurposeFailed_DoesNotHideOwnerEnrollment()
     {
         // Chuẩn bị
         (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
         DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
         await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Passed, createdAt);
-        await AddVerificationAsync(ownerId, EkycPurpose.OwnerAlive, EkycStatus.Failed, createdAt.AddMinutes(1));
+        await AddVerificationAsync(ownerId, EkycPurpose.BeneficiaryClaim, EkycStatus.Failed, createdAt.AddMinutes(1));
 
         // Hành động
         HttpResponseMessage response = await owner.GetAsync($"/api/v1/vaults/{vaultId}/plan-setup");

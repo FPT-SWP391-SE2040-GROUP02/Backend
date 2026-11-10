@@ -33,7 +33,7 @@ public sealed class ExecutorVaultRow
 
 /// <summary>
 /// Truy cập các bảng hồ sơ chứng tử: DeathCases, DeathCaseVersions, DeathCaseFiles, DeathCaseFlags,
-/// DeathCaseNotices, DeathCaseAssignments.
+/// DeathCaseAssignments.
 /// </summary>
 /// <remarks>
 /// Repository chỉ đánh dấu Add/Remove/sửa; service gọi IUnitOfWork.SaveChangesAsync một lần ở cuối use case (STATE-02).
@@ -42,19 +42,13 @@ public sealed class ExecutorVaultRow
 public interface IDeathCaseRepository
 {
     /// <summary>
-    /// Hồ sơ theo Id (có theo dõi), kèm Versions.Files, Flags, Notices và phân công CÒN HIỆU LỰC
+    /// Hồ sơ theo Id (có theo dõi), kèm Versions.Files, Flags và phân công CÒN HIỆU LỰC
     /// (Assignments chỉ chứa dòng EndedAt null). Không có → null.
     /// </summary>
     Task<DeathCase?> FindByIdAsync(Guid caseId, CancellationToken ct);
 
     /// <summary>DEATH-05: hồ sơ đang mở (chưa bị từ chối) của kho, cùng phần nạp kèm như FindByIdAsync. Không có → null.</summary>
     Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct);
-
-    /// <summary>
-    /// Phân công của chính Verifier này đã kết thúc vì họ kết luận Owner còn sống (ALIVE_CONFIRMED). FindByIdAsync chỉ nạp
-    /// phân công còn hiệu lực nên cần truy vấn riêng. Dùng để Verifier xem lại hồ sơ đã đóng; không có → null. Không theo dõi.
-    /// </summary>
-    Task<DeathCaseAssignment?> FindAliveConfirmedAssignmentAsync(Guid caseId, Guid verifierUserId, CancellationToken ct);
 
     /// <summary>
     /// D12, DMS-05: các kho mà tài khoản là Executor đang hiệu lực (Status Accepted), chấp nhận sớm nhất trước.
@@ -85,8 +79,6 @@ public interface IDeathCaseRepository
 
     void AddFlag(DeathCaseFlag flag);
 
-    void AddNotice(DeathCaseNotice notice);
-
     void AddAssignment(DeathCaseAssignment assignment);
 
     /// <summary>D8: số dòng file (mọi phiên bản, mọi hồ sơ) đang dùng StorageKey này, đã lưu trong DB.</summary>
@@ -98,12 +90,6 @@ public interface IDeathCaseRepository
     /// (ROLE-03: người nhận của kho, email đã chuẩn hóa chữ thường). Không ai phù hợp → null.
     /// </summary>
     Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, List<string> excludedEmails, CancellationToken ct);
-
-    /// <summary>D3: Id các thông báo Pending, tạo sớm nhất trước, tối đa maxCount dòng.</summary>
-    Task<List<Guid>> FindPendingNoticeIdsAsync(int maxCount, CancellationToken ct);
-
-    /// <summary>Thông báo theo Id (có theo dõi) để job xử lý. Không có → null.</summary>
-    Task<DeathCaseNotice?> FindNoticeForJobAsync(Guid noticeId, CancellationToken ct);
 
     /// <summary>
     /// true nếu lỗi lưu là do vi phạm chỉ mục unique (ví dụ hai Executor gửi cùng lúc cùng tạo phân công hoặc cờ).

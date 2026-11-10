@@ -12,7 +12,6 @@ namespace LegacyVault.IntegrationTests.DeathCases;
 public sealed class FakeDeathCaseRepository : IDeathCaseRepository
 {
     public List<DeathCase> Cases { get; } = new List<DeathCase>();
-    public List<DeathCaseNotice> Notices { get; } = new List<DeathCaseNotice>();
     public List<DeathCaseFile> Files { get; } = new List<DeathCaseFile>();
     public List<DeathCaseFlag> Flags { get; } = new List<DeathCaseFlag>();
     public List<DeathCaseAssignment> Assignments { get; } = new List<DeathCaseAssignment>();
@@ -21,11 +20,6 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
     public Task<DeathCase?> FindByIdAsync(Guid caseId, CancellationToken ct)
     {
         return Task.FromResult(Cases.FirstOrDefault(c => c.Id == caseId));
-    }
-
-    public Task<DeathCaseAssignment?> FindAliveConfirmedAssignmentAsync(Guid caseId, Guid verifierUserId, CancellationToken ct)
-    {
-        return Task.FromResult<DeathCaseAssignment?>(null);
     }
 
     public Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct)
@@ -89,11 +83,6 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         Flags.Add(flag);
     }
 
-    public void AddNotice(DeathCaseNotice notice)
-    {
-        Notices.Add(notice);
-    }
-
     public void AddAssignment(DeathCaseAssignment assignment)
     {
         Assignments.Add(assignment);
@@ -107,21 +96,6 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
     public Task<Guid?> FindVerifierCandidateAsync(List<Guid> excludedUserIds, List<string> excludedEmails, CancellationToken ct)
     {
         return Task.FromResult<Guid?>(null);
-    }
-
-    public Task<List<Guid>> FindPendingNoticeIdsAsync(int maxCount, CancellationToken ct)
-    {
-        return Task.FromResult(Notices
-            .Where(n => n.Status == DeathCaseNoticeStatus.Pending)
-            .OrderBy(n => n.CreatedAt)
-            .Select(n => n.Id)
-            .Take(maxCount)
-            .ToList());
-    }
-
-    public Task<DeathCaseNotice?> FindNoticeForJobAsync(Guid noticeId, CancellationToken ct)
-    {
-        return Task.FromResult(Notices.FirstOrDefault(n => n.Id == noticeId));
     }
 
     public bool IsUniqueViolation(Exception exception)
@@ -152,27 +126,6 @@ public sealed class FakeDeathCaseVerifierReminderSender : IDeathCaseVerifierRemi
             throw new InvalidOperationException("SMTP giả không nhận thư.");
         }
         Sent.Add(reminder);
-        return Task.CompletedTask;
-    }
-}
-
-/// <summary>Bộ gửi giả: ghi lại thông báo đã gửi; Fail = true thì ném lỗi như SMTP không nhận thư.</summary>
-public sealed class FakeDeathCaseNoticeSender : IDeathCaseNoticeSender
-{
-    public List<DeathCaseOwnerNotice> Sent { get; } = new List<DeathCaseOwnerNotice>();
-
-    public bool Fail { get; set; }
-
-    public int CallCount { get; private set; }
-
-    public Task SendAsync(DeathCaseOwnerNotice notice, CancellationToken ct)
-    {
-        CallCount++;
-        if (Fail)
-        {
-            throw new InvalidOperationException("SMTP giả không nhận thư.");
-        }
-        Sent.Add(notice);
         return Task.CompletedTask;
     }
 }

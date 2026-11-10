@@ -371,9 +371,9 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Death08_SubmitDoesNotNotifyOwnerAndOpensReviewImmediately()
+    public async Task Death08_SubmitOpensReviewImmediately()
     {
-        // Chuẩn bị: Chủ kho không còn cửa sổ phản đối, kho khóa ngay khi nộp
+        // Chuẩn bị: giấy chứng tử nhà nước là căn cứ cuối cùng, không còn cửa sổ phản đối; kho khóa ngay khi nộp
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
@@ -382,13 +382,11 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
         // Hành động
         JsonElement submitted = await DeathCaseApi.SubmitOkAsync(executor.Client, prepared);
 
-        // Kiểm tra: không có thông báo cho Owner; mốc phản đối trùng lúc nộp nên Người xét duyệt duyệt được ngay
+        // Kiểm tra: hồ sơ vào xét ngay, không chờ ai phản đối
         Guid caseId = submitted.GetProperty("id").GetGuid();
-        Assert.Empty(await LoadNoticesAsync(caseId));
         DeathCase deathCase = await LoadCaseAsync(caseId);
-        Assert.NotNull(deathCase.ObjectionStartsAt);
-        Assert.Equal(deathCase.ObjectionStartsAt, deathCase.ObjectionEndsAt);
-        Assert.Equal(1, deathCase.NotifiedVersionNo);
+        Assert.Equal(DeathCaseStatus.UnderReview, deathCase.Status);
+        Assert.Equal(1, deathCase.ReviewVersionNo);
     }
 
     [SqlFact]
@@ -420,7 +418,6 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
         }
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);
         Assert.Equal(1, await CountSubmittedVersionsAsync(caseId));
-        Assert.Empty(await LoadNoticesAsync(caseId));
         Assert.Single(await LoadAssignmentsAsync(caseId));
         Assert.Equal(PlanStatus.DeathCaseOpen, await LoadPlanStatusAsync(vault.VaultId));
         DeathCase deathCase = await LoadCaseAsync(caseId);
@@ -465,16 +462,6 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             result = await db.Set<DeathCaseFlag>().AsNoTracking().Where(f => f.CaseId == caseId).ToListAsync();
-        });
-        return result;
-    }
-
-    private async Task<List<DeathCaseNotice>> LoadNoticesAsync(Guid caseId)
-    {
-        List<DeathCaseNotice> result = new List<DeathCaseNotice>();
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            result = await db.Set<DeathCaseNotice>().AsNoTracking().Where(n => n.CaseId == caseId).ToListAsync();
         });
         return result;
     }

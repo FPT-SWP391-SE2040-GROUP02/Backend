@@ -5,7 +5,7 @@ namespace LegacyVault.Application.Services;
 
 /// <summary>
 /// Luật thuần về phân công Verifier cho hồ sơ chứng tử (SRS §6.4 ASSIGN-01..04, §10.2 TIME-01, TIME-07),
-/// dùng chung cho service gửi hồ sơ, job báo Owner và job phân công.
+/// dùng chung cho service gửi hồ sơ và job phân công.
 /// </summary>
 public static class DeathCaseAssignmentRules
 {
@@ -18,57 +18,12 @@ public static class DeathCaseAssignmentRules
     /// <summary>D5, ASSIGN-02, ADMIN-05: giao lại vì Verifier không còn Active hoặc không còn vai trò Verifier.</summary>
     public const string EndReasonVerifierUnavailable = "VERIFIER_UNAVAILABLE";
 
-    /// <summary>ALIVE-06: phân công kết thúc vì chính Verifier này kết luận Owner còn sống (hồ sơ bị từ chối).</summary>
-    public const string EndReasonAliveConfirmed = "ALIVE_CONFIRMED";
-
     /// <summary>
-    /// Verifier được ĐỌC hồ sơ khi phân công còn hiệu lực, hoặc khi chính họ đã kết luận Owner còn sống và hồ sơ đã đóng
-    /// (để xem lại ở lịch sử). Mọi thao tác ghi vẫn chỉ nhận phân công còn hiệu lực (V1).
+    /// D1, ASSIGN-04, TIME-07: hạn Verifier phải ra quyết định = start + 48 giờ. start là lúc giao hoặc lúc Executor gửi bản mới gần nhất.
     /// </summary>
-    public static bool CanRead(DeathCaseAssignment assignment, Guid verifierUserId, DeathCaseStatus caseStatus)
+    public static DateTimeOffset ComputeDueAt(DateTimeOffset start)
     {
-        if (assignment.VerifierUserId != verifierUserId)
-        {
-            return false;
-        }
-        if (assignment.EndedAt == null)
-        {
-            return true;
-        }
-        return assignment.EndReason == EndReasonAliveConfirmed && caseStatus == DeathCaseStatus.Rejected;
-    }
-
-    /// <summary>
-    /// D1, ASSIGN-04, TIME-07: hạn Verifier phải ra quyết định = mốc muộn hơn giữa (start + 48 giờ)
-    /// và (hết phản đối + 48 giờ). start là lúc giao hoặc lúc Executor gửi bản mới gần nhất.
-    /// Các đồng hồ không đặt lại hay tạm dừng nhau; hạn Verifier chỉ có mức sàn "sau khi hồ sơ duyệt được".
-    /// </summary>
-    public static DateTimeOffset ComputeDueAt(DateTimeOffset start, DateTimeOffset? objectionEndsAt = null)
-    {
-        DateTimeOffset dueAt = start + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
-        if (objectionEndsAt != null)
-        {
-            DateTimeOffset afterObjection = objectionEndsAt.Value + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
-            if (afterObjection > dueAt)
-            {
-                dueAt = afterObjection;
-            }
-        }
-        return dueAt;
-    }
-
-    /// <summary>
-    /// D1, TIME-07: khi Owner nhận thư và đồng hồ 72 giờ bắt đầu, dời hạn của phân công đang hiệu lực
-    /// nếu hạn hiện tại sớm hơn (hết phản đối + 48 giờ). Không bao giờ rút ngắn hạn.
-    /// </summary>
-    public static DateTimeOffset ExtendForObjection(DateTimeOffset dueAt, DateTimeOffset objectionEndsAt)
-    {
-        DateTimeOffset afterObjection = objectionEndsAt + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
-        if (afterObjection > dueAt)
-        {
-            return afterObjection;
-        }
-        return dueAt;
+        return start + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
     }
 
     /// <summary>TIME-01: đúng lúc hết hạn là quá hạn.</summary>

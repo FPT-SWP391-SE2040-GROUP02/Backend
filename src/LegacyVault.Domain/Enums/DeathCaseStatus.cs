@@ -18,6 +18,6 @@ public enum DeathCaseStatus
     ApprovedForHandover = 3,
     /// <summary>Bị từ chối; hồ sơ đóng, kho được mở hồ sơ mới. Đặt ở nhánh B.</summary>
     Rejected = 4,
-    /// <summary>Tạm dừng (Owner báo còn sống / tranh chấp). Chỉ khai báo, F2C/F4 làm sau.</summary>
+    /// <summary>Tạm dừng (tranh chấp). Chỉ khai báo, F4 làm sau.</summary>
     Suspended = 5,
 }

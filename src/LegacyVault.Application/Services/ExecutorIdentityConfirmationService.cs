@@ -101,7 +101,7 @@ public sealed class ExecutorIdentityConfirmationService : IExecutorIdentityConfi
         HandoverRules.MarkReadyToAccept(turn, now);
         turn.IdentityConfirmedByUserId = userId;
         turn.IdentityConfirmedAt = now;
-        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống (ALIVE-01).
+        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold.
         vault.Plan.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
 

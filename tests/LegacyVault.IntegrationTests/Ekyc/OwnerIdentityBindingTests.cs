@@ -313,19 +313,6 @@ public sealed class OwnerIdentityBindingTests
         Assert.Empty(repository.Verifications);
     }
 
-    [Fact]
-    public async Task OtherPurpose_DoesNotNeedOrKeepIdentity()
-    {
-        AddConsent(EkycPurpose.OwnerAlive);
-        consentRepository.Consents[1].ConsentedAt = Now.AddSeconds(1);
-        client.Reading = Reading(string.Empty, string.Empty, string.Empty, "token-5");
-
-        await SubmitDocumentAsync();
-
-        EkycVerification verification = Assert.Single(repository.Verifications);
-        Assert.Null(verification.EnrollmentIdentityEncrypted);
-    }
-
     /// <summary>Ảnh có chữ ký JPEG thật (BR-48 sửa: chỉ lưu ảnh JPEG/PNG/WebP theo nội dung).</summary>
     private static byte[] JpegBytes()
     {
@@ -396,19 +383,6 @@ public sealed class OwnerIdentityBindingTests
     public async Task Document_NotAnImageByContent_KeepsNoImage()
     {
         await SubmitDocumentAsync();
-
-        Assert.Null(Assert.Single(repository.Verifications).PendingDocumentImageStorageKey);
-        Assert.Empty(contentStore.Contents);
-    }
-
-    [Fact]
-    public async Task OtherPurpose_DoesNotKeepDocumentImage()
-    {
-        AddConsent(EkycPurpose.OwnerAlive);
-        consentRepository.Consents[1].ConsentedAt = Now.AddSeconds(1);
-        client.Reading = Reading(string.Empty, string.Empty, string.Empty, "token-5");
-
-        await SubmitJpegDocumentAsync();
 
         Assert.Null(Assert.Single(repository.Verifications).PendingDocumentImageStorageKey);
         Assert.Empty(contentStore.Contents);

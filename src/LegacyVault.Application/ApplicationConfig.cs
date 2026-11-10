@@ -40,7 +40,6 @@ public static class ApplicationConfig
         services.AddScoped<ISystemConfigService, SystemConfigService>();
         services.AddScoped<IOperationsRecorder, OperationsRecorder>();
         services.AddScoped<IIncidentJob, IncidentJob>();
-        services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
         services.AddScoped<IOperationsScanner, OperationsScanner>();
         services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
         services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();

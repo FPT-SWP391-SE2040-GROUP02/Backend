@@ -11,7 +11,7 @@ namespace LegacyVault.Infrastructure.Jobs;
 /// nhắc Verifier sắp quá hạn và giao lại khi quá hạn hoặc Verifier mất quyền (ASSIGN-04, TIME-05, NFR-03, D6).
 /// </summary>
 /// <remarks>
-/// Cùng mẫu với DeathCaseNoticeMonitor: chờ hết một chu kỳ rồi mới quét; mỗi hồ sơ một DI scope
+/// Cùng mẫu với DeathCaseSupplementMonitor: chờ hết một chu kỳ rồi mới quét; mỗi hồ sơ một DI scope
 /// và try/catch riêng; chỉ log kiểu exception và id (OPS-04). Chỉ Reassigned và ReminderFailed được log;
 /// NoCandidate, Conflict, None không log để tránh đầy log mỗi phút.
 /// </remarks>

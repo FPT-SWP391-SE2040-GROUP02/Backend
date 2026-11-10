@@ -21,10 +21,6 @@ public sealed class HoldConfiguration : IEntityTypeConfiguration<Hold>
         // Kiểm hold đang hiệu lực của kho ở mọi thao tác phát hành.
         builder.HasIndex(h => new { h.VaultId, h.Status });
         builder.HasIndex(h => new { h.Status, h.ReviewAt });
-        // Mỗi hold F2C một dòng đang mở cho mỗi (kho, loại, đối tượng): đặt hai lần cùng lúc không tạo trùng.
-        builder.HasIndex(h => new { h.VaultId, h.Type, h.Scope, h.TargetId })
-            .IsUnique()
-            .HasFilter("[Status] = 'Active' AND [Type] = 'OwnerAlive'");
 
         builder.HasOne<Vault>()
             .WithMany()

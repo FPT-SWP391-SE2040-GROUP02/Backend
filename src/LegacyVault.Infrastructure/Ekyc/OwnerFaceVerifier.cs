@@ -8,7 +8,7 @@ using LegacyVault.Domain.Entities;
 namespace LegacyVault.Infrastructure.Ekyc;
 
 /// <summary>
-/// So selfie của Owner với mẫu khuôn mặt đã lưu (ALIVE-02, EKYC-26): lấy vector của selfie từ dịch vụ eKYC,
+/// So selfie của Owner với mẫu khuôn mặt đã lưu (EKYC-26): lấy vector của selfie từ dịch vụ eKYC,
 /// giải mã mẫu rồi tự tính cosine với ngưỡng của server.
 /// </summary>
 /// <remarks>

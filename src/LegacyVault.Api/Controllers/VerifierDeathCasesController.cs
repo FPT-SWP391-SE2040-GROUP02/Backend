@@ -97,7 +97,7 @@ public sealed class VerifierDeathCasesController : ControllerBase
     }
 
     /// <summary>
-    /// Ảnh mặt trước CCCD Owner chụp lúc eKYC, để đối chiếu với giấy chứng tử và selfie báo còn sống (BR-48 sửa).
+    /// Ảnh mặt trước CCCD Owner chụp lúc eKYC, để đối chiếu với giấy chứng tử (BR-48 sửa).
     /// Trả nội dung ảnh (không phải JSON). 404 IDENTITY_IMAGE_NOT_FOUND khi Owner xác minh trước khi có chức năng lưu ảnh.
     /// </summary>
     [HttpGet("death-cases/{caseId:guid}/owner-identity/document-image")]

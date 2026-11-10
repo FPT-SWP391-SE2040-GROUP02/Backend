@@ -22,13 +22,10 @@ public sealed class DeathCaseReviewRepository : IDeathCaseReviewRepository
     public async Task<(List<VerifierCaseRow> Items, int TotalCount)> FindAssignedPageAsync(
         Guid verifierUserId, string sortBy, bool isAscending, int pageIndex, int pageSize, CancellationToken ct)
     {
-        // V1: phân công đang hiệu lực (EndedAt null) của chính Verifier này, cộng hồ sơ họ đã tự kết luận Owner còn sống
-        // (phân công kết thúc ALIVE_CONFIRMED, hồ sơ Rejected) để xem lại ở lịch sử. Xem DeathCaseAssignmentRules.CanRead.
-        string aliveConfirmed = DeathCaseAssignmentRules.EndReasonAliveConfirmed;
+        // V1: chỉ phân công đang hiệu lực (EndedAt null) của chính Verifier này.
         IQueryable<VerifierCaseRow> query = context.Set<DeathCase>()
             .AsNoTracking()
-            .Where(c => c.Assignments.Any(a => a.VerifierUserId == verifierUserId
-                && (a.EndedAt == null || (a.EndReason == aliveConfirmed && c.Status == DeathCaseStatus.Rejected))))
+            .Where(c => c.Assignments.Any(a => a.VerifierUserId == verifierUserId && a.EndedAt == null))
             .Select(c => new VerifierCaseRow
             {
                 Id = c.Id,
@@ -47,15 +44,13 @@ public sealed class DeathCaseReviewRepository : IDeathCaseReviewRepository
                     .Select(v => v.SubmittedAt)
                     .FirstOrDefault(),
                 AssignedAt = c.Assignments
-                    .Where(a => a.VerifierUserId == verifierUserId
-                        && (a.EndedAt == null || (a.EndReason == aliveConfirmed && c.Status == DeathCaseStatus.Rejected)))
+                    .Where(a => a.VerifierUserId == verifierUserId && a.EndedAt == null)
                     .OrderByDescending(a => a.EndedAt == null)
                     .ThenByDescending(a => a.AssignedAt)
                     .Select(a => a.AssignedAt)
                     .First(),
                 DueAt = c.Assignments
-                    .Where(a => a.VerifierUserId == verifierUserId
-                        && (a.EndedAt == null || (a.EndReason == aliveConfirmed && c.Status == DeathCaseStatus.Rejected)))
+                    .Where(a => a.VerifierUserId == verifierUserId && a.EndedAt == null)
                     .OrderByDescending(a => a.EndedAt == null)
                     .ThenByDescending(a => a.AssignedAt)
                     .Select(a => a.DueAt)

@@ -124,13 +124,13 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
 
     public async Task<VerifierDeathCaseResponse> GetAsync(Guid caseId, CancellationToken ct)
     {
-        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct, true);
+        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
         return await BuildResponseAsync(context, null, ct);
     }
 
     public async Task<PreparedDeathCaseFile> PrepareFileAsync(Guid caseId, Guid fileId, CancellationToken ct)
     {
-        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct, true);
+        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
 
         // DEATH-04: chỉ trang của bản đã gửi của đúng hồ sơ này; bản nháp hoặc hồ sơ khác → 404.
         DeathCaseFile? file = await reviewRepository.FindSubmittedFileAsync(caseId, fileId, ct);
@@ -176,7 +176,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
 
     public async Task<PreparedDownload> PrepareOwnerDocumentImageAsync(Guid caseId, CancellationToken ct)
     {
-        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct, true);
+        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
         OwnerIdentity? identity = await FindOwnerIdentityAsync(context.DeathCase, ct);
         if (identity == null || identity.DocumentImageStorageKey == null || identity.DocumentImageWrappedDataKey == null)
         {
@@ -405,9 +405,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     /// <summary>
     /// V3, V1: Verifier hợp lệ + hồ sơ mà tôi có phân công ĐANG HIỆU LỰC. Không có hồ sơ, hoặc không giao cho tôi,
     /// hoặc phân công đã kết thúc → 404 DEATH_CASE_NOT_FOUND (SEC-04, SEC-05).
-    /// forRead = true (chỉ các lần đọc): cho phép thêm hồ sơ mà chính tôi đã kết luận Owner còn sống, để xem lại ở lịch sử.
     /// </summary>
-    private async Task<ReviewContext> LoadCaseForVerifierAsync(Guid caseId, CancellationToken ct, bool forRead = false)
+    private async Task<ReviewContext> LoadCaseForVerifierAsync(Guid caseId, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
         await EnsureActiveVerifierAsync(userId, ct);
@@ -424,15 +423,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
             if (assignment.VerifierUserId == userId && assignment.EndedAt == null)
             {
                 mine = assignment;
-            }
-        }
-        if (mine == null && forRead && deathCase.Status == DeathCaseStatus.Rejected)
-        {
-            // FindByIdAsync chỉ nạp phân công còn hiệu lực: tìm riêng phân công mà chính tôi đã kết thúc bằng kết luận "còn sống".
-            DeathCaseAssignment? concluded = await deathCaseRepository.FindAliveConfirmedAssignmentAsync(caseId, userId, ct);
-            if (concluded != null && DeathCaseAssignmentRules.CanRead(concluded, userId, deathCase.Status))
-            {
-                mine = concluded;
             }
         }
         if (mine == null)

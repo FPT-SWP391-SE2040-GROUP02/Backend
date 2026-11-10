@@ -85,7 +85,6 @@ public sealed class VerifierApproveTests : IAsyncLifetime
         // Chuẩn bị: Executor gửi tiếp bản 2 nên Verifier xét và duyệt bản 2
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
         await DeathCaseReviewTestData.ResubmitAsync(submitted);
-        await DeathCaseReviewTestData.MarkOwnerNotifiedAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow.AddHours(-80));
 
         // Hành động
         HttpResponseMessage response = await DeathCaseReviewTestData.ApproveNowAsync(submitted, "  " + ApproveReason + "  ");
@@ -107,21 +106,6 @@ public sealed class VerifierApproveTests : IAsyncLifetime
             Assert.Equal(DeathCaseStatus.ApprovedForHandover, stored.Status);
             Assert.NotNull(stored.ClosedAt);
         });
-    }
-
-    [SqlFact]
-    public async Task Death09_ApproveBeforeObjectionEndsIsBlocked()
-    {
-        // Chuẩn bị: Owner mới nhận thư cách đây 10 giờ
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        await DeathCaseReviewTestData.MarkOwnerNotifiedAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow.AddHours(-10));
-
-        // Hành động
-        HttpResponseMessage response = await DeathCaseReviewTestData.ApproveNowAsync(submitted, ApproveReason);
-
-        // Kiểm tra
-        await AssertBlockedAsync(response, "OBJECTION_PERIOD_NOT_OVER", new List<string> { "OBJECTION_PERIOD_NOT_OVER" });
-        await AssertNothingChangedAsync(submitted);
     }
 
     [SqlFact]

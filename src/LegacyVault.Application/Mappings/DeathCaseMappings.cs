@@ -10,7 +10,7 @@ namespace LegacyVault.Application.Mappings;
 public static class DeathCaseMappings
 {
     /// <summary>
-    /// Cần hồ sơ đã nạp Versions.Files và Notices. identity là dữ liệu đã giải mã của phiên bản hiện tại
+    /// Cần hồ sơ đã nạp Versions.Files. identity là dữ liệu đã giải mã của phiên bản hiện tại
     /// (null khi chưa nhập gì). Không đưa CCCD đầy đủ vào response (DATA-02).
     /// </summary>
     public static DeathCaseResponse ToResponse(this DeathCase deathCase, DeathCaseIdentityData? identity)
@@ -154,27 +154,4 @@ public static class DeathCaseMappings
         return null;
     }
 
-    /// <summary>Thông báo của bản mới nhất; cùng bản thì lấy thông báo tạo sau. Chưa có → null.</summary>
-    private static DeathCaseNoticeResponse? ToNoticeResponse(DeathCase deathCase)
-    {
-        DeathCaseNotice? latest = null;
-        foreach (DeathCaseNotice notice in deathCase.Notices)
-        {
-            if (latest == null
-                || notice.VersionNo > latest.VersionNo
-                || (notice.VersionNo == latest.VersionNo && notice.CreatedAt > latest.CreatedAt))
-            {
-                latest = notice;
-            }
-        }
-        if (latest == null)
-        {
-            return null;
-        }
-
-        DeathCaseNoticeResponse response = new DeathCaseNoticeResponse();
-        response.Status = latest.Status.ToApiString();
-        response.DeliveredAt = latest.DeliveredAt;
-        return response;
-    }
 }

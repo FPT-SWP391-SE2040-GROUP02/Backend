@@ -24,8 +24,6 @@ public sealed class VerifierCaseRow
 
     public DateTimeOffset DueAt { get; set; }
 
-    public DateTimeOffset? ObjectionEndsAt { get; set; }
-
     /// <summary>DEATH-01: lúc job đánh dấu Executor bổ sung quá hạn 7 ngày; null = chưa quá hạn hoặc đã gửi lại.</summary>
     public DateTimeOffset? SupplementOverdueAt { get; set; }
 
@@ -56,8 +54,7 @@ public sealed class PreviousCaseRow
 public interface IDeathCaseReviewRepository
 {
     /// <summary>
-    /// SEC-05, ASSIGN-01: các hồ sơ có phân công ĐANG HIỆU LỰC (EndedAt null) của Verifier, cộng hồ sơ họ đã tự kết luận
-    /// Owner còn sống (ALIVE_CONFIRMED, hồ sơ Rejected) để xem lại ở lịch sử, một trang.
+    /// SEC-05, ASSIGN-01: các hồ sơ có phân công ĐANG HIỆU LỰC (EndedAt null) của Verifier, một trang.
     /// Hồ sơ còn mở (ClosedAt null) trước, rồi theo hạn xét (sortBy "dueAt") hoặc lúc được giao ("assignedAt"),
     /// rồi theo Id. sortBy đã được service kiểm tra. pageIndex bắt đầu từ 1.
     /// </summary>

@@ -75,7 +75,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
 | 404 | `AVATAR_NOT_FOUND` | Tài khoản chưa có ảnh đại diện | |
-| 404 | `IDENTITY_IMAGE_NOT_FOUND` | Verifier xem ảnh CCCD lúc eKYC mà Owner xác minh trước khi có chức năng lưu ảnh, hoặc xem selfie báo còn sống khi chưa có lần thử nào được so khớp | |
+| 404 | `IDENTITY_IMAGE_NOT_FOUND` | Verifier xem ảnh CCCD lúc eKYC mà Owner xác minh trước khi có chức năng lưu ảnh | |
 | 409 | `ASSET_IN_USE` | Tài sản còn trong gói hoặc đã ghim vào bàn giao nên không xóa được (+`reason`) | |
 | 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
@@ -91,7 +91,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `EKYC_LIVENESS_NOT_PASSED` | Chốt thử thách, hoặc gửi ảnh selfie tĩnh, khi chưa làm xong các động tác hoặc chống giả mạo chưa đạt (EKYC-14); tiếp tục gửi khung hình | |
 | 409 | `EKYC_IDENTITY_MISMATCH` | Owner đã gắn danh tính (EKYC-27) nhưng giấy tờ đăng ký lại (`OWNER_ENROLLMENT`) có số CCCD khác rõ ràng với danh tính đã gắn (EKYC-24); không có cách bỏ qua | |
 | 404 | `DEATH_CASE_NOT_FOUND` | Không có hồ sơ chứng tử, hoặc người gọi không phải Executor đang hiệu lực của kho, hoặc là Owner của kho | |
-| 409 | `DEATH_CASE_NOT_ALLOWED` | Thao tác hồ sơ chứng tử không được lúc này | `reason`: `PLAN_NOT_RUNNING` (kèm `planStatus`) / `VERSION_LOCKED` / `CASE_CLOSED` / `CASE_NOT_REVISABLE`; phía Verifier (mục 6.12): `NOT_UNDER_REVIEW` / `NEWER_VERSION_PENDING` / `OWNER_NOT_NOTIFIED` / `OBJECTION_PERIOD_NOT_OVER` / `FLAGS_NOT_REVIEWED` / `VERIFIER_CONFLICT` / `PLAN_STATE_INVALID` | `approveBlockers` (khi duyệt bị chặn) |
+| 409 | `DEATH_CASE_NOT_ALLOWED` | Thao tác hồ sơ chứng tử không được lúc này | `reason`: `PLAN_NOT_RUNNING` (kèm `planStatus`) / `VERSION_LOCKED` / `CASE_CLOSED` / `CASE_NOT_REVISABLE`; phía Verifier (mục 6.12): `NOT_UNDER_REVIEW` / `NEWER_VERSION_PENDING` / `FLAGS_NOT_REVIEWED` / `VERIFIER_CONFLICT` / `PLAN_STATE_INVALID` | `approveBlockers` (khi duyệt bị chặn) |
 | 409 | `HANDOVER_NOT_ALLOWED` | Duyệt hồ sơ chứng tử nhưng không mở được bàn giao (không có gói `READY`, hoặc kế hoạch chưa sẵn sàng); hồ sơ vẫn đang xét | `reason`: `NOTHING_TO_HAND_OVER` / `PLAN_NOT_READY` |
 | 409 | `DEATH_CASE_INCOMPLETE` | Gửi hồ sơ khi còn thiếu trường hoặc chưa có trang giấy nào, hoặc AI không thấy trang nào là giấy chứng tử | `missingRequirements`, `fileChecks` (chỉ khi `DEATH_CERTIFICATE_NOT_RECOGNIZED`) |
 | 409 | `DEATH_CASE_FILE_LIMIT_EXCEEDED` | Bản hồ sơ đã đủ 10 trang giấy | `maxFiles` |
@@ -723,7 +723,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
   "ownerNotice": { "status": "DELIVERED", "deliveredAt": "..." },
   "supplementOverdueAt": null,
   "assignment": { "assignedAt": "...", "dueAt": "..." },
-  "canApprove": false, "approveBlockers": ["OBJECTION_PERIOD_NOT_OVER"],
+  "canApprove": false, "approveBlockers": ["FLAGS_NOT_REVIEWED"],
   "previousCase": null, "handover": null,
   "ownerIdentity": { "verified": true, "citizenId": "012345678901", "fullName": "NGUYỄN VĂN AN",
     "dateOfBirth": "1950-03-04", "verifiedAt": "...", "citizenIdMatches": true, "fullNameMatches": true,
@@ -736,7 +736,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 - **Ảnh CCCD lúc eKYC** (`owner-identity/document-image`): cùng cách bảo vệ với trang giấy chứng tử (Bearer, chỉ Verifier đang được giao, giải mã hai lượt, hỏng thì `500 CONTENT_INTEGRITY_FAILED` không kèm byte nào), nhưng trả `inline` với kiểu ảnh thật để FE hiển thị (`X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`). Máy chủ ghi log "đã xem ảnh CCCD" (chỉ Id hồ sơ).
 
 - **Dữ liệu trả (DATA-02, cách hiểu):** `reviewVersion` (bản Executor gửi gần nhất, `reviewVersionNo`) có đủ họ tên, **CCCD 12 số**, số giấy, nơi cấp, vì Verifier được giao là "người cần" (SEC-05) và ảnh giấy chứng tử vốn có số đầy đủ. Câu "không trả CCCD đầy đủ trước khi xác minh xong" áp cho **người nhận ở F3**, không áp cho CCCD của Owner trong hồ sơ chứng tử. `versions[]` (các bản đã gửi khác) chỉ có cột không mã hóa (4 số cuối, ngày mất, `submittedAt`, metadata trang). Danh sách chỉ có 4 số cuối. Verifier **không bao giờ** thấy bản nháp. Không trả thông tin Executor, email Owner, khóa lưu trữ, SHA-256, Id người quyết định.
-- **`approveBlockers`** (cộng dồn, theo thứ tự): `NOT_UNDER_REVIEW` (hồ sơ không ở `UNDER_REVIEW`), `NEWER_VERSION_PENDING` (Executor đang có bản nháp mới hơn bản đang xét), `OWNER_NOT_NOTIFIED` (đồng hồ 72 giờ chưa chạy), `OBJECTION_PERIOD_NOT_OVER` (DEATH-09), `FLAGS_NOT_REVIEWED` (DEATH-10, chỉ cờ của bản đang xét). `VERIFIER_CONFLICT` (ROLE-03: Verifier là Owner, Executor đang hiệu lực của kho, người gửi bản đang xét hoặc người nhận của kho) được thêm vào **cuối** danh sách ở response chi tiết và response ghi, để FE không hiện nút duyệt với người sẽ bị chặn. `canApprove` = danh sách rỗng. Chưa có hold/phản đối F2C.
+- **`approveBlockers`** (cộng dồn, theo thứ tự): `NOT_UNDER_REVIEW` (hồ sơ không ở `UNDER_REVIEW`), `NEWER_VERSION_PENDING` (Executor đang có bản nháp mới hơn bản đang xét), `FLAGS_NOT_REVIEWED` (DEATH-10, chỉ cờ của bản đang xét). `VERIFIER_CONFLICT` (ROLE-03: Verifier là Owner, Executor đang hiệu lực của kho, người gửi bản đang xét hoặc người nhận của kho) được thêm vào **cuối** danh sách ở response chi tiết và response ghi, để FE không hiện nút duyệt với người sẽ bị chặn. `canApprove` = danh sách rỗng. Không còn cửa sổ phản đối: hồ sơ duyệt được ngay khi các mục đều khớp.
 - **`ownerNotice.status`**: `PENDING` | `DELIVERED` | `FAILED` | `CANCELLED`.
 - **`supplementOverdueAt`** (DEATH-01, có ở danh sách và chi tiết): lúc job nền đánh dấu Executor bổ sung quá hạn 7 ngày kể từ khi Verifier yêu cầu bổ sung; `null` khi chưa quá hạn. Về `null` khi Executor gửi lại bản mới. Chỉ để hiển thị (FE hiện nhãn "Bổ sung quá hạn"); hồ sơ vẫn `SUPPLEMENT_REQUIRED`, Verifier tự quyết định từ chối hay chờ tiếp.
 - **`previousCase`** (DEATH-12): hồ sơ bị từ chối trước đó của cùng kho (`id`, `closedAt`, `rejectReason`), hoặc `null`.
@@ -759,7 +759,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 - **ROLE-03 (`VERIFIER_CONFLICT`)**: Verifier là Owner của kho, Executor đang hiệu lực của kho, người gửi bản đang xét, hoặc người nhận của kho thì không được ghi (xem thì vẫn được). "Người nhận của kho" là người có chỉ định trong gói `READY` (đúng tập vào snapshot lúc duyệt), nhận ra bằng **email** người nhận khớp email tài khoản Verifier (đã chuẩn hóa chữ thường); lúc chọn Verifier cũng loại những tài khoản này. Giới hạn: người nhận không khai email, hoặc tạo tài khoản bằng email khác, thì chưa bắt được trước F3.
 
 **Phân công Verifier (job nền, ASSIGN-02, ASSIGN-03, ASSIGN-04, TIME-02, NFR-03).** Không có API mới; job `DeathCaseAssignmentMonitor` quét mỗi 60 giây (`DeathCase:AssignmentPollSeconds`, tắt bằng `DeathCase:AssignmentJobEnabled = false`) và chỉ ảnh hưởng tới những gì FE đã đọc như sau:
-- **`dueAt` = hạn Verifier phải ra quyết định**, không sớm hơn 48 giờ sau khi hồ sơ duyệt được: mốc muộn hơn giữa (lúc giao hoặc lúc Executor gửi bản mới gần nhất + 48 giờ) và (`objectionEndsAt` + 48 giờ). Danh sách Verifier xếp theo `dueAt` nên hồ sơ còn trong 72 giờ phản đối sẽ có `dueAt` xa hơn (D1). Hạn Verifier, 72 giờ phản đối và 7 ngày báo còn sống là các đồng hồ độc lập (TIME-07).
+- **`dueAt` = hạn Verifier phải ra quyết định**, = lúc giao hoặc lúc Executor gửi bản mới gần nhất + 48 giờ (D1, TIME-01). Không còn mốc phản đối nào làm hạn muộn hơn.
 - **Hồ sơ `SUPPLEMENT_REQUIRED`** đang chờ Executor có thể hiện `dueAt` đã qua; job không nhắc và không giao lại vì quá hạn trong lúc chờ (khi Executor gửi lại, `dueAt` được tính lại).
 - **Nhắc:** khi hồ sơ `UNDER_REVIEW` và còn không quá 12 giờ tới `dueAt`, Verifier đang giữ hồ sơ nhận một email nhắc (chỉ có mã hồ sơ rút gọn và hạn). Mỗi hạn chỉ nhắc thành công một lần; hạn bị dời thì nhắc lại cho hạn mới; gửi lỗi thì vòng sau thử lại. Hồ sơ quá hạn mà chưa có người thay thì người đang giữ vẫn nhận cảnh báo quá hạn.
 - **Giao người:** hồ sơ `UNDER_REVIEW` hoặc `SUPPLEMENT_REQUIRED` chưa có Verifier đang giữ sẽ được giao khi có Verifier phù hợp (xoay vòng, loại Owner, Executor đang hiệu lực, người gửi bản đang xét).
@@ -1111,7 +1111,7 @@ dotnet user-secrets set "Billing:SePay:WebhookApiKey" "<key>" --project src/Lega
 
 ### 6.19. Công cụ thử nghiệm của Admin (chỉ Development)
 
-Tua thời gian của một kho thử để chạy hết luồng điểm danh, chứng tử và báo còn sống mà không phải chờ ngày thật. **Chỉ chạy ở môi trường Development**; môi trường khác trả 404 như không tồn tại. Chỉ Admin đang hoạt động (đọc từ DB), người khác 404 `USER_NOT_FOUND`.
+Tua thời gian của một kho thử để chạy hết luồng điểm danh và chứng tử mà không phải chờ ngày thật. **Chỉ chạy ở môi trường Development**; môi trường khác trả 404 như không tồn tại. Chỉ Admin đang hoạt động (đọc từ DB), người khác 404 `USER_NOT_FOUND`.
 
 | Method | URL | Body | Thành công | Lỗi |
 |---|---|---|---|---|
@@ -1126,8 +1126,6 @@ Tua thời gian của một kho thử để chạy hết luồng điểm danh, c
 - `milestone` (theo thứ tự hiển thị):
   - `CHECKIN_OVERDUE`: kỳ điểm danh đang mở qua hạn, vẫn còn thời gian chờ → kế hoạch `CHECKIN_OVERDUE`. Cần kế hoạch `ACTIVE`.
   - `GRACE_ENDED`: hết thời gian chờ → kế hoạch `AWAITING_CHECK`, mở sự cố cho Executor (hoặc `NO_EXECUTOR`). Cần kế hoạch `ACTIVE` hoặc `CHECKIN_OVERDUE`.
-  - `OBJECTION_WINDOW_ENDED`: hết 72 giờ phản đối của hồ sơ chứng tử đang mở → Verifier duyệt được ngay. Cần hồ sơ đã báo Owner.
-  - `SELFIE_DEADLINE_PASSED`: hết hạn selfie 7 ngày của lời báo còn sống đang mở → Verifier kết luận "còn sống" được khi không có eKYC thật. Không áp dụng khi selfie đã đạt.
   - `SERVICE_EXPIRED`: hạn dịch vụ của kho trả phí về quá khứ → job hết hạn chuyển kho sang ân hạn chỉ đọc `GRACE_READ_ONLY` ngay (OPLAN-01). Cần kho `PAID_ACTIVE`; gói Free không áp dụng; đã ở ân hạn là đã qua.
 - Tua chỉ dời hạn tương ứng về quá khứ; trạng thái mới do luật và job sẵn có quyết định. Với hai mốc điểm danh, API chạy luôn vòng xử lý của job điểm danh nên kết quả có ngay trong response.
 - `reset-clock` chỉ ghi nhận đồng hồ về thời gian thực (`clockState = REAL_TIME`); trạng thái đã phát sinh khi tua (kế hoạch, sự cố) giữ nguyên, không hoàn tác.
@@ -1354,7 +1352,7 @@ Màn kích hoạt (SETUP-01, SETUP-10, ASSET-03/AC-68): xem [PLAN-SETUP-API.md](
 - **Hạn bổ sung** (DEATH-01): yêu cầu bổ sung của Verifier có `dueAt` = lúc yêu cầu + 7 ngày (`supplementRequest.dueAt` trong response Executor). Job nền (`DeathCase:SupplementJobEnabled`, `DeathCase:SupplementPollSeconds`, mặc định 300 giây) ghi `supplementOverdueAt` khi hết hạn mà Executor chưa nộp bản mới; `supplementRequest.overdue = true`. Quá hạn **không tự quyết định**: hồ sơ vẫn `SUPPLEMENT_REQUIRED`, Verifier tự từ chối hoặc yêu cầu lại. Executor nộp bản mới thì mốc này bị xóa.
 - **Cờ `CERTIFICATE_UNVERIFIED`**: đặt khi Executor gửi mà AI không kiểm tra được trang nào là giấy chứng tử (xem "AI nhận diện giấy chứng tử khi gửi" ở mục 6.11). Verifier tự mở các trang giấy và xem xét cờ trước khi duyệt.
 - **DEATH-13**: khi Executor gửi, 4 số cuối CCCD trên hồ sơ khác 4 số cuối của lượt eKYC đạt gần nhất của Owner thì đặt cờ `IDENTITY_MISMATCH` (chặn duyệt tới khi Verifier xem xét). Owner chưa có eKYC đạt thì không kết luận. Owner đã có danh tính đã gắn (mục 6.10) thì so **đủ 12 số**; Owner đăng ký trước khi có danh tính đã gắn thì vẫn so 4 số cuối của lượt eKYC đạt gần nhất.
-- Phân công và giao lại Verifier quá 48 giờ do `DeathCaseAssignmentJob` có sẵn xử lý (mục 6.12); hồ sơ `SUSPENDED` (Owner báo còn sống) chưa được job này giao lại, chờ LV-07.
+- Phân công và giao lại Verifier quá 48 giờ do `DeathCaseAssignmentJob` có sẵn xử lý (mục 6.12); hồ sơ `SUSPENDED` (tranh chấp) chưa được job này giao lại, chờ LV-07.
 
 ## 10. Lưu và xóa dữ liệu sau bàn giao (SRS §7.7)
 

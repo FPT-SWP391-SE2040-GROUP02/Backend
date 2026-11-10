@@ -26,7 +26,6 @@ public static class IncidentRules
             case IncidentType.ProxyLimit:
                 return "EXECUTOR";
             case IncidentType.StaleCase:
-            case IncidentType.OwnerAlive:
                 return "VERIFIER";
             default:
                 return "ADMIN";
@@ -75,7 +74,7 @@ public interface IIncidentService
     Task ResolveByTargetAsync(IncidentType type, string targetType, Guid? targetId, string note, CancellationToken ct);
 
     /// <summary>
-    /// Nội bộ: đổi người phụ trách sự cố đang mở của (loại, đối tượng) khi việc được giao cho người khác (ALIVE-08).
+    /// Nội bộ: đổi người phụ trách sự cố đang mở của (loại, đối tượng) khi việc được giao cho người khác.
     /// Hạn nhắc tính lại từ bây giờ (ReminderAfter), RemindedCount về 0, ghi sự kiện Assigned. Không có sự cố mở hoặc
     /// đã đúng người thì không làm gì. KHÔNG SaveChanges.
     /// </summary>

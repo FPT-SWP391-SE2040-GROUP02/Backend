@@ -47,7 +47,7 @@ Tài liệu này mô tả **đúng những gì code hiện làm**, đọc từ n
 2. Khai thông tin trên giấy (họ tên, CCCD 12 số, ngày mất, số giấy, ngày cấp, nơi cấp) và tải trang giấy: PDF, JPEG, PNG, WEBP, tối đa 20 MiB mỗi tệp, tối đa 10 tệp mỗi bản; loại tệp xác định theo nội dung thật.
 3. Mỗi loại giấy một tệp; gửi hồ sơ chỉ cần giấy chứng tử.
 4. Gửi (`submit`, cần `confirm = true`): hồ sơ thành `UNDER_REVIEW`, kế hoạch thành `DEATH_CASE_OPEN`, **kho và tài khoản Chủ kho bị khóa ngay**. Không còn AI đọc giấy (đã gỡ Gemini), chỉ kiểm đủ trường, loại tệp, số tệp, dung lượng.
-5. Hệ thống ghi mốc phản đối bằng đúng lúc nộp để các luật cũ (`OwnerNotNotified`, `ObjectionPeriodNotOver`) tự qua. Không còn cửa sổ phản đối 72 giờ và không còn "Tôi còn sống".
+5. Không còn cửa sổ phản đối 72 giờ và không còn "Tôi còn sống": giấy chứng tử nhà nước là căn cứ cuối cùng, hồ sơ vào xét ngay khi nộp.
 5b. Không còn cờ "điểm danh sau ngày mất": gửi hồ sơ không so ngày mất với lần điểm danh của Chủ kho.
 6. Hồ sơ được giao cho một Người xét duyệt theo vòng xoay (loại Chủ kho, Người thực thi của kho, người gửi). Hạn xét `DeathCase.ReviewDueHours` (mặc định 48 giờ).
 
@@ -100,7 +100,7 @@ Các bước:
 
 - Dịch vụ eKYC là chương trình Python riêng; backend chỉ lưu kết quả, không lưu ảnh giấy tờ thô.
 - Chuỗi bước: đồng ý (`consent`, phiên bản thông báo `2026-10-v1`) → chụp mặt trước (`document`) → xác nhận bản khai (`document/confirm`) → chụp mặt sau (`document-back`) → thử thách camera (`liveness/start`, `liveness/frame`, `liveness/complete`) hoặc ảnh selfie tĩnh (`face-match`) → kết quả `PASSED` hoặc `FAILED`. Mỗi lượt so khớp một lần.
-- Ba mục đích: `OWNER_ENROLLMENT` (Chủ kho, một lần, gắn danh tính đã mã hóa và mẫu khuôn mặt), `BENEFICIARY_CLAIM` (người nhận, đối chiếu với người được chỉ định), `OWNER_ALIVE` (còn trong enum nhưng luồng "Tôi còn sống" đã gỡ).
+- Hai mục đích: `OWNER_ENROLLMENT` (Chủ kho, một lần, gắn danh tính đã mã hóa và mẫu khuôn mặt), `BENEFICIARY_CLAIM` (người nhận, đối chiếu với người được chỉ định).
 - Số CCCD không được trùng giữa các tài khoản Chủ kho và không được trùng người nhận của chính Chủ kho đó.
 
 ### Tạm ngừng eKYC (mới, để chạy thử)
@@ -151,7 +151,7 @@ Các bước:
 
 ## 12. Chỗ code và tài liệu cũ chưa khớp
 
-- Luật thông báo và phản đối vẫn còn nguyên bộ khung ở backend (mốc phản đối đặt bằng lúc nộp để tự qua). Cờ "điểm danh sau ngày mất" đã gỡ.
-- Bảng `DeathCaseObjection` và các enum phản đối vẫn còn; chưa có migration xóa. Cài đặt `DeathCase.MaxNoticeAttempts` và `DeathCase.ObjectionHours` còn trong dữ liệu mặc định phía backend.
+- Luồng "Chủ kho báo còn sống" và cửa sổ phản đối 72 giờ đã gỡ hẳn khỏi backend (migration `RemoveOwnerAliveFlow`): bảng `DeathCaseNotices`, các cột `NotifiedVersionNo`, `ObjectionStartsAt`, `ObjectionEndsAt`, job thư báo Chủ kho, giá trị `OwnerAlive` của loại sự cố, loại tạm giữ và mục đích eKYC, cùng cài đặt `DeathCase.ObjectionHours`, `DeathCase.MaxNoticeAttempts`. Hạn Verifier chỉ còn là lúc giao hoặc lúc Executor gửi bản mới + 48 giờ. Cờ "điểm danh sau ngày mất" đã gỡ.
+- Giữ lại để đọc nhật ký cũ: các giá trị hành động nhật ký `ObjectionReported`, `ObjectionConcluded` (nhật ký không bị xóa).
 - Hạn xử lý sự cố của Admin tính bằng ngày/giờ thật, chưa đi qua chế độ demo.
 - `Pay11` (tạo đơn thanh toán trả 201) fail trên máy dev vì thiếu cấu hình tài khoản ngân hàng thử; không liên quan phần gộp.

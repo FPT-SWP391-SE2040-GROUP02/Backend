@@ -21,7 +21,7 @@ public class DeathCaseAssignment
 
     /// <summary>
     /// D1, ASSIGN-04: hạn Verifier phải ra quyết định = mốc muộn hơn giữa (lúc giao hoặc lúc Executor gửi bản mới
-    /// gần nhất + ReviewDueHours) và (ObjectionEndsAt + ReviewDueHours). Tính bằng DeathCaseAssignmentRules.
+    /// gần nhất + ReviewDueHours) = start + ReviewDueHours. Tính bằng DeathCaseAssignmentRules.
     /// </summary>
     public DateTimeOffset DueAt { get; set; }
 

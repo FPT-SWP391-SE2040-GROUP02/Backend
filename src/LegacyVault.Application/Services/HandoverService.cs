@@ -130,7 +130,7 @@ public sealed class HandoverService : IHandoverService
         turn.ClaimantUserId = userId;
         turn.ClaimedAt = now;
         turn.UpdatedAt = now;
-        // Chạm kế hoạch để RowVersion của nó chặn nhận lượt chạy cùng lúc với báo còn sống (ALIVE-01).
+        // Chạm kế hoạch để RowVersion của nó chặn nhận lượt chạy cùng lúc với đặt hold.
         vault.Plan.UpdatedAt = now;
 
         if (policy.RequireIdentityVerification)

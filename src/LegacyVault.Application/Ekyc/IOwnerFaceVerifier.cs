@@ -14,7 +14,7 @@ public enum OwnerFaceOutcome
 }
 
 /// <summary>
-/// So selfie trực tiếp của Owner với MẪU KHUÔN MẶT đã tạo từ phiên đăng ký đạt (ALIVE-02, EKYC-22, EKYC-26).
+/// So selfie trực tiếp của Owner với MẪU KHUÔN MẶT đã tạo từ phiên đăng ký đạt (EKYC-22, EKYC-26).
 /// Không so với ảnh tải lên hay ảnh giấy tờ cũ. Cài đặt ở Infrastructure.
 /// </summary>
 /// <remarks>

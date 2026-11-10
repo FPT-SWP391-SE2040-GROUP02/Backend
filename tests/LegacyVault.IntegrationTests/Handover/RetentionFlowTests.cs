@@ -125,12 +125,6 @@ public sealed class RetentionFlowTests : IAsyncLifetime
             ClientFor(executor.User), vaultId, DeathCaseApi.Today().AddDays(-3));
         JsonElement submitted = await DeathCaseApi.SubmitOkAsync(ClientFor(executor.User), prepared);
         Guid caseId = submitted.GetProperty("id").GetGuid();
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            await db.Set<DeathCase>().Where(c => c.Id == caseId).ExecuteUpdateAsync(s => s
-                .SetProperty(c => c.ObjectionStartsAt, DateTimeOffset.UtcNow.AddHours(-80))
-                .SetProperty(c => c.ObjectionEndsAt, DateTimeOffset.UtcNow.AddHours(-8)));
-        });
         HttpClient verifierClient = ClientFor(verifier);
         JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(verifierClient, caseId);
         HttpResponseMessage approve = await DeathCaseReviewTestData.ApproveAsync(
@@ -331,7 +325,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task OwnerAlivePlan_IsNeverCleaned()
+    public async Task ActivePlan_IsNeverCleaned()
     {
         Scenario s = await BuildHandoverAsync(1);
         await PassResponseDeadlineAsync(s.PlanId);

@@ -568,15 +568,6 @@ public sealed class DeathCaseService : IDeathCaseService
         // Bản bổ sung mới: hết trạng thái quá hạn bổ sung.
         deathCase.SupplementOverdueAt = null;
 
-        // Không còn cửa sổ phản đối: Chủ kho không được báo và không có "Tôi còn sống". Kho và tài khoản bị khóa ngay khi nộp,
-        // nên hồ sơ vào xét luôn. Ghi mốc phản đối bằng đúng lúc nộp để các luật cũ (OwnerNotNotified, ObjectionPeriodNotOver) tự qua.
-        if (deathCase.NotifiedVersionNo == null || deathCase.ObjectionStartsAt == null)
-        {
-            deathCase.NotifiedVersionNo = version.VersionNo;
-            deathCase.ObjectionStartsAt = now;
-            deathCase.ObjectionEndsAt = now;
-        }
-
         // ASSIGN-01, ROLE-03 (D4): chưa có phân công còn hiệu lực thì chọn Verifier xoay vòng, loại Owner,
         // Executor đang hiệu lực của kho và người gửi. Không ai phù hợp → để trống.
         if (deathCase.Assignments.Count == 0)
@@ -585,14 +576,12 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         else if (!isFirstSubmit)
         {
-            // ASSIGN-04, D1, TIME-07: Executor gửi bản mới thì hạn xét của phân công đang hiệu lực tính lại từ lúc gửi
-            // (giữ AssignedAt), nhưng không sớm hơn 48 giờ sau khi hết phản đối. Chạy sau đoạn xếp thông báo ở trên:
-            // đổi trọng yếu đã đặt ObjectionEndsAt = null nên hạn = lúc gửi + 48 giờ.
+            // ASSIGN-04, D1: Executor gửi bản mới thì hạn xét của phân công đang hiệu lực tính lại từ lúc gửi (giữ AssignedAt).
             foreach (DeathCaseAssignment assignment in deathCase.Assignments)
             {
                 if (assignment.EndedAt == null)
                 {
-                    assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now, deathCase.ObjectionEndsAt);
+                    assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now);
                 }
             }
         }
@@ -716,28 +705,6 @@ public sealed class DeathCaseService : IDeathCaseService
         return deathCaseRepository.IsUniqueViolation(exception);
     }
 
-    /// <summary>
-    /// true khi cần báo Owner: chưa báo lần nào, hoặc bản đang gửi đổi danh tính Owner/ngày mất so với bản đã báo (DEATH-11).
-    /// </summary>
-    private bool NeedsOwnerNotice(DeathCase deathCase, DeathCaseIdentityData newData, DeathCaseVersion newVersion)
-    {
-        if (deathCase.NotifiedVersionNo == null)
-        {
-            return true;
-        }
-
-        DeathCaseVersion notifiedVersion = DeathCaseMappings.FindVersion(deathCase, deathCase.NotifiedVersionNo.Value);
-        DeathCaseIdentityData oldData = new DeathCaseIdentityData();
-        DeathCaseIdentityData? stored = dataProtector.Unprotect(notifiedVersion);
-        if (stored != null)
-        {
-            oldData = stored;
-        }
-        return DeathCaseRules.IsCriticalChange(
-            oldData.OwnerFullName, oldData.OwnerCitizenId, notifiedVersion.DateOfDeath,
-            newData.OwnerFullName, newData.OwnerCitizenId, newVersion.DateOfDeath);
-    }
-
     private async Task AssignVerifierAsync(
         DeathCase deathCase, Vault vault, Guid submitterUserId, DateTimeOffset now, CancellationToken ct)
     {
@@ -753,7 +720,7 @@ public sealed class DeathCaseService : IDeathCaseService
         assignment.CaseId = deathCase.Id;
         assignment.VerifierUserId = verifierId.Value;
         assignment.AssignedAt = now;
-        assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now, deathCase.ObjectionEndsAt);
+        assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now);
         deathCase.Assignments.Add(assignment);
         deathCaseRepository.AddAssignment(assignment);
     }

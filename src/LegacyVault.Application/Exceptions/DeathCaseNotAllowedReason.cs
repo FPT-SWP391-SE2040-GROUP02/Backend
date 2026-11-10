@@ -15,10 +15,6 @@ public enum DeathCaseNotAllowedReason
     NotUnderReview,
     /// <summary>DEATH-04: Executor đang có bản nháp mới hơn bản đang xét, chưa duyệt được.</summary>
     NewerVersionPending,
-    /// <summary>DEATH-08: chưa báo được Owner nên đồng hồ 72 giờ chưa chạy.</summary>
-    OwnerNotNotified,
-    /// <summary>DEATH-09: chưa hết 72 giờ phản đối của Owner.</summary>
-    ObjectionPeriodNotOver,
     /// <summary>DEATH-10: còn cờ của bản đang xét chưa được Verifier xem xét.</summary>
     FlagsNotReviewed,
     /// <summary>ROLE-03, AC-67: Verifier là Owner, Executor đang hiệu lực hoặc người gửi bản đang xét.</summary>
@@ -26,24 +22,6 @@ public enum DeathCaseNotAllowedReason
     /// <summary>Kế hoạch không ở DeathCaseOpen, thiếu StatusBeforeCase, hoặc đã có lượt bàn giao.</summary>
     PlanStateInvalid,
 
-    /// <summary>F2C: báo còn sống trước đó đã bị bác, muốn mở lại phải có bằng chứng mới (ALIVE-09).</summary>
-    ObjectionAlreadyRejected,
-
-    /// <summary>F2C: đã quá 7 ngày kể từ lần báo đầu, không chụp selfie nữa (ALIVE-03).</summary>
-    ObjectionWindowClosed,
-
-    /// <summary>F2C: đã thất bại 3 lần trong 24 giờ (EKYC-20).</summary>
-    SelfieAttemptsExceeded,
-
-    /// <summary>F2C: báo không còn mở để kết luận.</summary>
-    ObjectionNotOpen,
-
-    /// <summary>F2C: kết luận còn sống nhưng chưa có selfie đạt và chưa hết hạn 7 ngày (ALIVE-02, ALIVE-04).</summary>
-    AliveEvidenceRequired,
-
-    /// <summary>Kho đang có hold (Admin hoặc báo còn sống) nên chưa duyệt được.</summary>
+    /// <summary>Kho đang có hold (Admin hoặc tranh chấp) nên chưa duyệt được.</summary>
     HoldActive,
-
-    /// <summary>F2C: lời báo đã có selfie khớp mẫu khuôn mặt, Verifier không được bác phản đối (ALIVE-05).</summary>
-    OwnerSelfiePassed,
 }

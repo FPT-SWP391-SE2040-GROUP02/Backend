@@ -36,11 +36,6 @@ public class VerifierDeathCaseResponse
     /// <summary>Các quyết định đã có, cũ → mới.</summary>
     public List<VerifierDecisionResponse> Decisions { get; set; } = new List<VerifierDecisionResponse>();
 
-    /// <summary>Thông báo của bản đã báo Owner gần nhất; null khi chưa có.</summary>
-    public DeathCaseNoticeResponse? OwnerNotice { get; set; }
-
-    public DateTimeOffset? ObjectionEndsAt { get; set; }
-
     /// <summary>
     /// DEATH-01: lúc job đánh dấu Executor bổ sung quá hạn 7 ngày; null = chưa quá hạn hoặc đã gửi lại.
     /// Chỉ để hiển thị, không tự từ chối.
@@ -53,8 +48,8 @@ public class VerifierDeathCaseResponse
     public bool CanApprove { get; set; }
 
     /// <summary>
-    /// Lý do chưa duyệt được (UPPER_SNAKE_CASE): NOT_UNDER_REVIEW, NEWER_VERSION_PENDING, OWNER_NOT_NOTIFIED,
-    /// OBJECTION_PERIOD_NOT_OVER, FLAGS_NOT_REVIEWED.
+    /// Lý do chưa duyệt được (UPPER_SNAKE_CASE): NOT_UNDER_REVIEW, NEWER_VERSION_PENDING,
+    /// FLAGS_NOT_REVIEWED.
     /// </summary>
     public List<string> ApproveBlockers { get; set; } = new List<string>();
 

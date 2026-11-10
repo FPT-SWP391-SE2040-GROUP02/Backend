@@ -187,7 +187,7 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .ExecuteDeleteAsync(ct);
         await context.Set<HandoverTurn>().Where(t => t.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
-        // Hồ sơ chứng tử: quyết định → phân công → cờ → trang giấy → bản khai → thông báo → lời báo còn sống → hồ sơ.
+        // Hồ sơ chứng tử: quyết định → phân công → cờ → trang giấy → bản khai → hồ sơ.
         var caseIds = context.Set<DeathCase>().Where(c => c.VaultId == vaultId).Select(c => c.Id);
         var versionIds = context.Set<DeathCaseVersion>().Where(v => caseIds.Contains(v.CaseId)).Select(v => v.Id);
         await context.Set<DeathCaseDecision>().Where(d => caseIds.Contains(d.CaseId)).ExecuteDeleteAsync(ct);
@@ -195,7 +195,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         await context.Set<DeathCaseFlag>().Where(f => caseIds.Contains(f.CaseId)).ExecuteDeleteAsync(ct);
         await context.Set<DeathCaseFile>().Where(f => versionIds.Contains(f.VersionId)).ExecuteDeleteAsync(ct);
         await context.Set<DeathCaseVersion>().Where(v => caseIds.Contains(v.CaseId)).ExecuteDeleteAsync(ct);
-        await context.Set<DeathCaseNotice>().Where(n => caseIds.Contains(n.CaseId)).ExecuteDeleteAsync(ct);
         // Hồ sơ trỏ vào hồ sơ trước của cùng kho: gỡ liên kết rồi mới xóa được.
         await context.Set<DeathCase>()
             .Where(c => c.VaultId == vaultId && c.PreviousCaseId != null)

@@ -96,7 +96,7 @@ public sealed class HandoverIdentityService : IHandoverIdentityService
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverRules.MarkReadyToAccept(turn, now);
-        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống (ALIVE-01).
+        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold.
         vault.Plan.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
         return await handoverService.GetTurnAsync(turnId, ct);

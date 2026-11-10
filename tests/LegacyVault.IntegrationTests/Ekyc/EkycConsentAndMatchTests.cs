@@ -209,6 +209,9 @@ public sealed class EkycConsentAndMatchTests
         Assert.Equal(EkycPurpose.BeneficiaryClaim, saved.Purpose);
         Assert.Equal(turn.Id, saved.HandoverTurnId);
         Assert.Equal(EkycIdentityMatch.Matched, saved.IdentityMatch);
+        // Chỉ Chủ kho đăng ký mới gắn danh tính; người nhận không để lại danh tính hay ảnh giấy tờ chờ xác nhận.
+        Assert.Null(saved.EnrollmentIdentityEncrypted);
+        Assert.Null(saved.PendingDocumentImageStorageKey);
     }
 
     [Fact]
@@ -473,7 +476,7 @@ public sealed class EkycConsentAndMatchTests
         EkycDocumentConfirmationRequest request = Confirmation(front.VerificationId!.Value);
         EkycVerification verification = Assert.Single(repository.Verifications);
         if (scenario == "stale") request.VerificationId = Guid.NewGuid();
-        if (scenario == "purpose") request.Purpose = "OWNER_ALIVE";
+        if (scenario == "purpose") request.Purpose = "BENEFICIARY_CLAIM";
         if (scenario == "turn") request.HandoverTurnId = Guid.NewGuid();
         if (scenario == "other-user") verification.UserId = Guid.NewGuid();
         if (scenario == "expired") verification.DocumentTokenExpiresAt = Now;

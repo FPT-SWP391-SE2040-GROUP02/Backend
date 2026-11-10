@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Infrastructure.Jobs;
 
-/// <summary>Vòng lặp nền gọi IDeathCaseSupplementJob (cùng mẫu với DeathCaseNoticeMonitor).</summary>
+/// <summary>Vòng lặp nền gọi IDeathCaseSupplementJob (vòng lặp nền kiểu monitor).</summary>
 public sealed class DeathCaseSupplementMonitor : BackgroundService
 {
     private readonly IServiceScopeFactory scopeFactory;

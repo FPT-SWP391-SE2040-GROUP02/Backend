@@ -34,15 +34,6 @@ public class DeathCase
     /// <summary>D5: Verifier luôn xét bản gửi gần nhất; null khi chưa gửi lần nào.</summary>
     public int? ReviewVersionNo { get; set; }
 
-    /// <summary>DEATH-08, DEATH-11: bản đã báo Owner gần nhất; đổi trọng yếu so với bản này thì báo lại.</summary>
-    public int? NotifiedVersionNo { get; set; }
-
-    /// <summary>DEATH-08: mốc bắt đầu 72 giờ phản đối = lúc thông báo bản NotifiedVersionNo được SMTP nhận.</summary>
-    public DateTimeOffset? ObjectionStartsAt { get; set; }
-
-    /// <summary>DEATH-08: ObjectionStartsAt + 72 giờ; null khi đồng hồ chưa chạy.</summary>
-    public DateTimeOffset? ObjectionEndsAt { get; set; }
-
     /// <summary>Hồ sơ bị từ chối gần nhất của cùng kho (nếu có), để Verifier xem lịch sử.</summary>
     public Guid? PreviousCaseId { get; set; }
 
@@ -69,8 +60,6 @@ public class DeathCase
     public List<DeathCaseVersion> Versions { get; set; } = new List<DeathCaseVersion>();
 
     public List<DeathCaseFlag> Flags { get; set; } = new List<DeathCaseFlag>();
-
-    public List<DeathCaseNotice> Notices { get; set; } = new List<DeathCaseNotice>();
 
     public List<DeathCaseAssignment> Assignments { get; set; } = new List<DeathCaseAssignment>();
 

@@ -16,7 +16,7 @@
 --      (dòng EndedAt = NULL, lệnh bên dưới) để biết ĐÚNG tài khoản được giao; tài khoản khác nhận 404.
 --      Vai trò Verifier được service đọc từ DB nên đổi Role xong không cần đăng nhập lại để gọi API; FE vẫn đọc claim trong
 --      token nên cần đăng nhập lại nếu FE phân trang theo vai trò.
---   4. Dùng lệnh "Cho phép duyệt" ở cuối file để coi như Owner đã nhận thư và hết 72 giờ phản đối.
+--   4. Hồ sơ vào xét ngay khi Executor gửi (giấy chứng tử nhà nước là căn cứ cuối cùng, không còn thời gian phản đối); không cần bước chờ.
 --   5. Muốn thử NHẮC hoặc GIAO LẠI Verifier (job phân công, ASSIGN-04): xem mục "Cho phép nhắc / giao lại" ở cuối file.
 --
 -- Lưu ý: nếu chạy bằng sqlcmd phải thêm cờ -I (QUOTED_IDENTIFIER ON), vì bảng có index lọc; SSMS đã bật sẵn.
@@ -56,7 +56,6 @@ UPDATE DeathCases SET PreviousCaseId = NULL WHERE VaultId = @vaultId;
 DELETE d FROM DeathCaseDecisions d JOIN DeathCases c ON c.Id = d.CaseId WHERE c.VaultId = @vaultId;
 DELETE f FROM DeathCaseFiles f JOIN DeathCaseVersions v ON v.Id = f.VersionId JOIN DeathCases c ON c.Id = v.CaseId WHERE c.VaultId = @vaultId;
 DELETE fl FROM DeathCaseFlags fl JOIN DeathCases c ON c.Id = fl.CaseId WHERE c.VaultId = @vaultId;
-DELETE n FROM DeathCaseNotices n JOIN DeathCases c ON c.Id = n.CaseId WHERE c.VaultId = @vaultId;
 DELETE a FROM DeathCaseAssignments a JOIN DeathCases c ON c.Id = a.CaseId WHERE c.VaultId = @vaultId;
 DELETE v FROM DeathCaseVersions v JOIN DeathCases c ON c.Id = v.CaseId WHERE c.VaultId = @vaultId;
 DELETE FROM DeathCases WHERE VaultId = @vaultId;
@@ -79,23 +78,13 @@ UPDATE Users SET Role = 'Verifier' WHERE Id = @verifierId;
 SELECT @vaultId AS VaultId, @ownerEmail AS Owner, @executorEmail AS Executor, @verifierEmail AS Verifier;
 
 -- Các lệnh hay dùng khi thử (bỏ comment để chạy). Thay @vaultId bằng id kho ở kết quả trên:
--- Xem hồ sơ, thông báo Owner, cờ và phân công:
---   SELECT c.Status, c.StatusBeforeCase, c.CurrentVersionNo, c.ReviewVersionNo, c.NotifiedVersionNo, c.ObjectionStartsAt, c.ObjectionEndsAt FROM DeathCases c WHERE c.VaultId = @vaultId;
---   SELECT n.VersionNo, n.Status, n.AttemptCount, n.DeliveredAt FROM DeathCaseNotices n JOIN DeathCases c ON c.Id = n.CaseId WHERE c.VaultId = @vaultId;
+-- Xem hồ sơ, cờ và phân công:
+--   SELECT c.Status, c.StatusBeforeCase, c.CurrentVersionNo, c.ReviewVersionNo FROM DeathCases c WHERE c.VaultId = @vaultId;
 --   SELECT f.Kind, f.Detail, f.ReviewedAt FROM DeathCaseFlags f JOIN DeathCases c ON c.Id = f.CaseId WHERE c.VaultId = @vaultId;
 --   SELECT a.VerifierUserId, a.AssignedAt, a.DueAt FROM DeathCaseAssignments a JOIN DeathCases c ON c.Id = a.CaseId WHERE c.VaultId = @vaultId AND a.EndedAt IS NULL;
--- Job gửi thông báo Owner quét mỗi 60 giây (DeathCase:NoticePollSeconds); chưa cấu hình email thì chỉ ghi log "[THÔNG BÁO HỒ SƠ CHỨNG TỬ]"
--- và coi là đã giao, nên DeliveredAt được đặt và đồng hồ 72 giờ bắt đầu chạy.
--- Kéo lùi mốc giao thư để thử "hết 72 giờ phản đối" (DEATH-08):
---   UPDATE n SET DeliveredAt = DATEADD(HOUR, -73, SYSDATETIMEOFFSET()) FROM DeathCaseNotices n JOIN DeathCases c ON c.Id = n.CaseId WHERE c.VaultId = @vaultId AND n.Status = 'Delivered';
---   UPDATE DeathCases SET ObjectionStartsAt = DATEADD(HOUR, -73, SYSDATETIMEOFFSET()), ObjectionEndsAt = DATEADD(HOUR, -1, SYSDATETIMEOFFSET()) WHERE VaultId = @vaultId AND ObjectionStartsAt IS NOT NULL;
 -- Xem quyết định của Verifier (yêu cầu bổ sung, từ chối, duyệt) và xem ai đang được giao (EndedAt = NULL):
 --   SELECT d.Kind, d.VersionNo, d.Reason, d.RequestedParts, d.DecidedAt FROM DeathCaseDecisions d JOIN DeathCases c ON c.Id = d.CaseId WHERE c.VaultId = @vaultId ORDER BY d.DecidedAt;
 --   SELECT u.Email, a.AssignedAt, a.DueAt, a.EndedAt FROM DeathCaseAssignments a JOIN DeathCases c ON c.Id = a.CaseId JOIN Users u ON u.Id = a.VerifierUserId WHERE c.VaultId = @vaultId ORDER BY a.AssignedAt;
--- Cho phép duyệt: coi như Owner đã nhận thư cách đây 80 giờ (DEATH-08, DEATH-09). Chạy SAU khi Executor gửi hồ sơ.
--- Không đổi DeathCases.UpdatedAt nên etag không đổi. Hai lệnh UPDATE ở mục "Kéo lùi mốc giao thư" phía trên là bản từng phần của lệnh này.
---   UPDATE n SET Status = 'Delivered', DeliveredAt = DATEADD(HOUR, -80, SYSDATETIMEOFFSET()), AttemptCount = CASE WHEN n.AttemptCount = 0 THEN 1 ELSE n.AttemptCount END FROM DeathCaseNotices n JOIN DeathCases c ON c.Id = n.CaseId WHERE c.VaultId = @vaultId AND n.VersionNo = c.NotifiedVersionNo;
---   UPDATE DeathCases SET ObjectionStartsAt = DATEADD(HOUR, -80, SYSDATETIMEOFFSET()), ObjectionEndsAt = DATEADD(HOUR, -8, SYSDATETIMEOFFSET()) WHERE VaultId = @vaultId AND NotifiedVersionNo IS NOT NULL;
 -- Verifier yêu cầu bổ sung / từ chối / duyệt đã có API (http/verifier-death-cases.http); không cần giả lập trạng thái bằng SQL.
 -- Sau khi TỪ CHỐI, kế hoạch về trạng thái trước khi gửi nhưng job điểm danh có thể tính lại trong 60 giây (NFR-03).
 -- Sau khi DUYỆT, kế hoạch sang HANDOVER_IN_PROGRESS và có lượt bàn giao; muốn thử lại từ đầu thì chạy lại cả file này (dọn lượt cũ).
@@ -103,8 +92,7 @@ SELECT @vaultId AS VaultId, @ownerEmail AS Owner, @executorEmail AS Executor, @v
 --   SELECT t.Status, t.ContainerName, t.InvitedAt FROM HandoverTurns t WHERE t.VaultId = @vaultId;
 -- Cho phép nhắc / giao lại Verifier (job phân công, ASSIGN-04, TIME-02; chạy SAU khi Executor gửi hồ sơ).
 -- Job DeathCaseAssignmentMonitor quét mỗi 60 giây (DeathCase:AssignmentPollSeconds): bật API rồi chờ tối đa khoảng 60 giây.
--- LƯU Ý: lệnh "Cho phép duyệt" ở trên chỉ lùi ObjectionEndsAt, KHÔNG dời DueAt của phân công (D1: DueAt chỉ được dời khi
--- job báo Owner giao thư thành công), nên muốn thử nhắc hoặc giao lại hãy dùng các lệnh lùi DueAt RIÊNG dưới đây.
+-- LƯU Ý: muốn thử nhắc hoặc giao lại hãy dùng các lệnh lùi DueAt RIÊNG dưới đây (hạn xét = lúc giao hoặc lúc Executor gửi bản mới + 48 giờ).
 -- Muốn thấy giao lại cần ít nhất 2 tài khoản Verifier Active (không phải Owner/Executor của kho); chỉ có 1 người thì hồ sơ giữ
 -- nguyên người cũ và (khi quá hạn) chỉ nhắc người đó. Chưa cấu hình email thì thư nhắc chỉ ghi log "[NHẮC VERIFIER HỒ SƠ CHỨNG TỬ]".
 -- Giao lại làm đổi etag của hồ sơ: Verifier cũ gọi lại sẽ nhận 404 (đang thao tác giữa chừng thì có thể nhận 409 EDIT_CONFLICT).

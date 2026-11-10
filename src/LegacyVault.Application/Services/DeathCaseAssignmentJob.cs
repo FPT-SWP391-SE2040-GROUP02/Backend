@@ -215,14 +215,14 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         return DeathCaseAssignmentOutcome.Reminded;
     }
 
-    /// <summary>ASSIGN-04, D1: thêm phân công mới, hạn = ComputeDueAt(lúc giao, ObjectionEndsAt).</summary>
+    /// <summary>ASSIGN-04, D1: thêm phân công mới, hạn = ComputeDueAt(lúc giao).</summary>
     private void AddAssignment(DeathCase deathCase, Guid verifierUserId, DateTimeOffset now)
     {
         DeathCaseAssignment assignment = new DeathCaseAssignment();
         assignment.CaseId = deathCase.Id;
         assignment.VerifierUserId = verifierUserId;
         assignment.AssignedAt = now;
-        assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now, deathCase.ObjectionEndsAt);
+        assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now);
         deathCase.Assignments.Add(assignment);
         deathCaseRepository.AddAssignment(assignment);
     }

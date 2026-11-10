@@ -14,7 +14,7 @@ Authorization: Bearer {{token}}
 GET {{baseUrl}}/api/v1/admin/dev-tools/vaults/{{vaultId}}/clock
 Authorization: Bearer {{token}}
 
-### Tua tới mốc: CHECKIN_OVERDUE | GRACE_ENDED | OBJECTION_WINDOW_ENDED | SELFIE_DEADLINE_PASSED
+### Tua tới mốc: CHECKIN_OVERDUE | GRACE_ENDED | SERVICE_EXPIRED | RECIPIENT_DECISION_ENDED
 POST {{baseUrl}}/api/v1/admin/dev-tools/vaults/{{vaultId}}/time-travel
 Authorization: Bearer {{token}}
 Content-Type: application/json

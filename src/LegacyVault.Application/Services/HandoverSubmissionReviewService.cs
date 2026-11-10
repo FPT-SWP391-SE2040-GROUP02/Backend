@@ -165,7 +165,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         HandoverRules.MarkReadyToAccept(turn, now);
         turn.IdentityConfirmedByUserId = userId;
         turn.IdentityConfirmedAt = now;
-        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống.
+        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold.
         vault.Plan.UpdatedAt = now;
 
         // Văn bản đã được dựng lúc người nhận nộp; chỉ dựng bù cho hồ sơ cũ nộp trước khi có bước đó.
@@ -244,7 +244,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
 
         turn.IdentityConfirmedByUserId = userId;
         turn.IdentityConfirmedAt = now;
-        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống.
+        // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold.
         vault.Plan.UpdatedAt = now;
 
         // Kết thúc lượt ngay: không còn bước đồng ý hay từ chối riêng sau khi Người xét duyệt gửi.

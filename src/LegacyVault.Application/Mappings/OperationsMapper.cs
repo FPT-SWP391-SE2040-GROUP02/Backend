@@ -51,7 +51,7 @@ public static class OperationsMapper
         response.Overdue = incident.Status != IncidentStatus.Resolved && now >= incident.DueAt;
         response.NextReviewAt = incident.NextReviewAt;
         response.CreatedAt = incident.CreatedAt;
-        response.HasActiveHold = (incident.TargetType == "HOLD" || incident.Type == IncidentType.OwnerAlive) && incident.Status != IncidentStatus.Resolved;
+        response.HasActiveHold = incident.TargetType == "HOLD" && incident.Status != IncidentStatus.Resolved;
         if (incident.TargetType == "HOLD")
         {
             response.HoldId = incident.TargetId;

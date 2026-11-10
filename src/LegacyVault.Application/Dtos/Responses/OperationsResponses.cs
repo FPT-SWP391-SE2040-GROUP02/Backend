@@ -4,7 +4,7 @@ public class IncidentSummaryResponse
 {
     public Guid Id { get; set; }
 
-    /// <summary>NO_VERIFIER | NO_EXECUTOR | CHECK_IN_OVERDUE | NOTIFICATION_FAILED | OWNER_ALIVE | INTEGRATION | MANUAL.</summary>
+    /// <summary>NO_VERIFIER | NO_EXECUTOR | CHECK_IN_OVERDUE | NOTIFICATION_FAILED | INTEGRATION | MANUAL.</summary>
     public string Type { get; set; } = string.Empty;
 
     /// <summary>OPEN | IN_PROGRESS | RESOLVED.</summary>
@@ -80,7 +80,7 @@ public class HoldResponse
 
     public Guid? TargetId { get; set; }
 
-    /// <summary>OWNER_ALIVE | DISPUTE | ADMIN.</summary>
+    /// <summary>DISPUTE | ADMIN.</summary>
     public string Type { get; set; } = string.Empty;
 
     /// <summary>ACTIVE | RELEASED.</summary>

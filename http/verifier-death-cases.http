@@ -7,9 +7,9 @@
 #      của http/death-cases.http (Executor gửi hồ sơ).
 #   3. Hồ sơ được giao cho MỘT Verifier xoay vòng: xem bảng DeathCaseAssignments (dòng EndedAt = NULL; lệnh có sẵn ở cuối
 #      http/death-case-dev.sql) để biết ĐÚNG tài khoản được giao. Đăng nhập tài khoản đó ở bước dưới.
-#   4. Muốn thử DUYỆT: chạy lệnh "Cho phép duyệt" ở cuối http/death-case-dev.sql (coi như Owner đã nhận thư cách đây 80 giờ).
-#   5. Phân công do job nền (F2B nhánh C) quản lý, không có API riêng. dueAt = hạn ra quyết định, không sớm hơn 48 giờ sau
-#      khi hết phản đối nên hồ sơ còn trong 72 giờ phản đối có dueAt xa hơn (D1). Hồ sơ SUPPLEMENT_REQUIRED có thể hiện dueAt
+#   4. Muốn thử DUYỆT: hồ sơ duyệt được ngay khi các mục đều khớp (không còn thời gian phản đối), không cần lệnh SQL.
+#   5. Phân công do job nền (F2B nhánh C) quản lý, không có API riêng. dueAt = hạn ra quyết định, = lúc giao hoặc lúc Executor gửi bản mới
+#      gần nhất + 48 giờ (D1). Hồ sơ SUPPLEMENT_REQUIRED có thể hiện dueAt
 #      đã qua vì đang chờ Executor (D2). Job nhắc email trước hạn 12 giờ; quá hạn hoặc Verifier mất quyền thì giao người khác,
 #      lúc đó hồ sơ biến mất khỏi danh sách của bạn (404). Thử nhắc/giao lại: mục "Cho phép nhắc / giao lại" ở http/death-case-dev.sql.
 #
@@ -41,8 +41,8 @@ Authorization: Bearer {{token}}
 @caseId = 00000000-0000-0000-0000-000000000000
 
 ### 2) Chi tiết (no-store). reviewVersion có CCCD 12 số; versions[] (bản cũ) chỉ có 4 số cuối.
-# approveBlockers cho biết vì sao chưa duyệt được: NOT_UNDER_REVIEW, NEWER_VERSION_PENDING, OWNER_NOT_NOTIFIED,
-# OBJECTION_PERIOD_NOT_OVER, FLAGS_NOT_REVIEWED, và VERIFIER_CONFLICT (cuối danh sách) nếu bạn là Owner/Executor/người gửi.
+# approveBlockers cho biết vì sao chưa duyệt được: NOT_UNDER_REVIEW, NEWER_VERSION_PENDING,
+# FLAGS_NOT_REVIEWED, và VERIFIER_CONFLICT (cuối danh sách) nếu bạn là Owner/Executor/người gửi.
 # @name detail
 GET {{baseUrl}}/verifier/death-cases/{{caseId}}
 Authorization: Bearer {{token}}
@@ -99,8 +99,7 @@ Content-Type: application/json
 
 { "etag": "{{etag}}", "reason": "Giấy chứng tử không khớp thông tin Owner.", "password": "{{confirmPassword}}" }
 
-### 6b) DUYỆT hồ sơ và mở bàn giao F3 (DEATH-06). Cần: Owner đã nhận thư và hết 72 giờ (lệnh "Cho phép duyệt" trong
-# http/death-case-dev.sql), hết cờ chưa xem xét, Executor không có bản nháp mới hơn, có gói READY. Dùng etag MỚI NHẤT.
+### 6b) DUYỆT hồ sơ và mở bàn giao F3 (DEATH-06). Cần: hết cờ chưa xem xét, Executor không có bản nháp mới hơn, có gói READY. Dùng etag MỚI NHẤT.
 # Chưa duyệt được → 409 DEATH_CASE_NOT_ALLOWED kèm reason và approveBlockers; không có gói READY → 409 HANDOVER_NOT_ALLOWED.
 # Response lần đầu có handover { turnCount, invitationsSent, invitationsFailed }; kế hoạch sang HANDOVER_IN_PROGRESS,
 # KHÔNG cấp quyền tải (người nhận phải nhận lời mời ở F3). Gọi lặp trên hồ sơ đã duyệt: 200, handover = null.

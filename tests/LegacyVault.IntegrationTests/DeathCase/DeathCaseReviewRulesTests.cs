@@ -11,16 +11,13 @@ public sealed class DeathCaseReviewRulesTests
 {
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 15, 8, 0, 0, TimeSpan.Zero);
 
-    /// <summary>Hồ sơ đang xét bản 1, Owner đã được báo, hết 72 giờ phản đối, không có cờ: duyệt được.</summary>
+    /// <summary>Hồ sơ đang xét bản 1, không có cờ: duyệt được.</summary>
     private static DeathCase NewReadyCase()
     {
         DeathCase deathCase = new DeathCase();
         deathCase.Status = DeathCaseStatus.UnderReview;
         deathCase.CurrentVersionNo = 1;
         deathCase.ReviewVersionNo = 1;
-        deathCase.NotifiedVersionNo = 1;
-        deathCase.ObjectionStartsAt = Now.AddHours(-80);
-        deathCase.ObjectionEndsAt = Now.AddHours(-8);
         DeathCaseVersion version = new DeathCaseVersion();
         version.CaseId = deathCase.Id;
         version.VersionNo = 1;
@@ -47,36 +44,6 @@ public sealed class DeathCaseReviewRulesTests
         flag.ReviewedAt = reviewedAt;
         deathCase.Flags.Add(flag);
         return flag;
-    }
-
-    [Fact]
-    public void Death09_ApproveBlockedBeforeObjectionEnds()
-    {
-        // Chuẩn bị: còn 1 giờ nữa mới hết 72 giờ phản đối
-        DeathCase deathCase = NewReadyCase();
-        deathCase.ObjectionEndsAt = Now.AddHours(1);
-
-        // Hành động
-        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase, Now);
-
-        // Kiểm tra
-        Assert.Equal(new List<string> { "OBJECTION_PERIOD_NOT_OVER" }, blockers);
-    }
-
-    [Fact]
-    public void Death08_ApproveBlockedWhenOwnerNotNotified()
-    {
-        // Chuẩn bị: đồng hồ 72 giờ chưa chạy vì Owner chưa nhận được thư
-        DeathCase deathCase = NewReadyCase();
-        deathCase.NotifiedVersionNo = null;
-        deathCase.ObjectionStartsAt = null;
-        deathCase.ObjectionEndsAt = null;
-
-        // Hành động
-        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase, Now);
-
-        // Kiểm tra
-        Assert.Equal(new List<string> { "OWNER_NOT_NOTIFIED" }, blockers);
     }
 
     [Fact]
@@ -143,9 +110,8 @@ public sealed class DeathCaseReviewRulesTests
     [Fact]
     public void Death09_AllConditionsMetGivesNoBlockers()
     {
-        // Chuẩn bị: có cờ nhưng đã xem xét, đúng lúc hết hạn phản đối
+        // Chuẩn bị: có cờ nhưng đã xem xét
         DeathCase deathCase = NewReadyCase();
-        deathCase.ObjectionEndsAt = Now;
         AddFlag(deathCase, deathCase.Versions[0], Now.AddHours(-1));
 
         // Hành động
@@ -158,10 +124,9 @@ public sealed class DeathCaseReviewRulesTests
     [Fact]
     public void Death09_BlockersAccumulateInFixedOrder()
     {
-        // Chuẩn bị: SupplementRequired + bản nháp mới + Owner chưa được báo + cờ chưa xem xét
+        // Chuẩn bị: SupplementRequired + bản nháp mới + cờ chưa xem xét
         DeathCase deathCase = NewReadyCase();
         deathCase.Status = DeathCaseStatus.SupplementRequired;
-        deathCase.ObjectionEndsAt = null;
         AddFlag(deathCase, deathCase.Versions[0], null);
         AddVersion(deathCase, 2);
         deathCase.CurrentVersionNo = 2;
@@ -172,7 +137,7 @@ public sealed class DeathCaseReviewRulesTests
         // Kiểm tra
         Assert.Equal(new List<string>
         {
-            "NOT_UNDER_REVIEW", "NEWER_VERSION_PENDING", "OWNER_NOT_NOTIFIED", "FLAGS_NOT_REVIEWED",
+            "NOT_UNDER_REVIEW", "NEWER_VERSION_PENDING", "FLAGS_NOT_REVIEWED",
         }, blockers);
     }
 

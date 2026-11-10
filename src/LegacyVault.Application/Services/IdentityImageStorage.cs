@@ -4,7 +4,7 @@ using LegacyVault.Application.Storage;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Lưu, đọc và xóa ảnh danh tính (mặt trước CCCD lúc eKYC, selfie lúc báo còn sống) qua cùng kho lưu trữ mã hóa
+/// Lưu, đọc và xóa ảnh danh tính (mặt trước CCCD lúc eKYC) qua cùng kho lưu trữ mã hóa
 /// envelope với tài sản (BR-48, BR-50 sửa 25/10/2026). Ảnh không có link công khai; chỉ Verifier được giao hồ sơ
 /// chứng tử của kho đọc được qua API.
 /// </summary>

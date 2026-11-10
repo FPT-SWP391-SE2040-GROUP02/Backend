@@ -150,7 +150,7 @@ public sealed class IncidentJob : IIncidentJob
 
     /// <summary>
     /// Link trong thư phải tới trang người nhận vào được: Executor của kho (sự cố quá hạn điểm danh) về trang Executor,
-    /// Verifier (sự cố báo còn sống) về trang Verifier, còn lại về khu quản trị. Executor xét theo kho vì tài khoản
+    /// Verifier (sự cố hồ sơ chứng tử quá hạn xét) về trang Verifier, còn lại về khu quản trị. Executor xét theo kho vì tài khoản
     /// Executor thường mang vai trò USER.
     /// </summary>
     private async Task<IncidentRecipientArea> FindAreaAsync(Incident incident, User user, CancellationToken ct)
