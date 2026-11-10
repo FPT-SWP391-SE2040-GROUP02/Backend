@@ -20,14 +20,12 @@ namespace LegacyVault.Api.Controllers;
 public sealed class ExecutorHandoverController : ControllerBase
 {
     private readonly IHandoverProgressService handoverProgressService;
-    private readonly IHandoverInvitationService handoverInvitationService;
     private readonly IExecutorIdentityConfirmationService identityConfirmationService;
     private readonly IHandoverKeyMailService handoverKeyMailService;
     private readonly IExecutorDeclinePaperService declinePaperService;
 
     public ExecutorHandoverController(
         IHandoverProgressService handoverProgressService,
-        IHandoverInvitationService handoverInvitationService,
         IExecutorIdentityConfirmationService identityConfirmationService,
         IHandoverKeyMailService handoverKeyMailService,
         IExecutorDeclinePaperService declinePaperService)
@@ -35,7 +33,6 @@ public sealed class ExecutorHandoverController : ControllerBase
         this.declinePaperService = declinePaperService;
         this.handoverKeyMailService = handoverKeyMailService;
         this.handoverProgressService = handoverProgressService;
-        this.handoverInvitationService = handoverInvitationService;
         this.identityConfirmationService = identityConfirmationService;
     }
 
@@ -66,17 +63,6 @@ public sealed class ExecutorHandoverController : ControllerBase
     {
         PreparedDownload download = await declinePaperService.PrepareAsync(caseId, turnId, ct);
         return new IdentityImageResult(download);
-    }
-
-    [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/resend-invitation")]
-    [ProducesResponseType<ResendHandoverInvitationResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
-    public Task<ResendHandoverInvitationResponse> ResendInvitation(Guid caseId, Guid turnId, CancellationToken ct)
-    {
-        return handoverInvitationService.ResendAsync(caseId, turnId, ct);
     }
 
     /// <summary>
