@@ -430,6 +430,8 @@ public sealed class SystemSettingService : ISystemSettingService
         {
             // Điểm danh (Check-in)
             new() { Key = "CheckIn.DefaultCycleDays", Value = "30", DataType = "NUMBER", Category = "CheckIn", Description = "Chu kỳ điểm danh mặc định của chủ kho (ngày)" },
+            new() { Key = "CheckIn.FirstReminderDaysBeforeDue", Value = "7", DataType = "NUMBER", Category = "CheckIn", Description = "Thư nhắc trước hạn thứ nhất: gửi trước hạn điểm danh bao nhiêu ngày (lớn hơn thư thứ hai, tối đa 60)" },
+            new() { Key = "CheckIn.SecondReminderDaysBeforeDue", Value = "1", DataType = "NUMBER", Category = "CheckIn", Description = "Thư nhắc trước hạn thứ hai: gửi trước hạn điểm danh bao nhiêu ngày (từ 1 đến 30)" },
             new() { Key = "CheckIn.LateReminderGapDays", Value = "3", DataType = "NUMBER", Category = "CheckIn", Description = "Khoảng cách giữa hai thư nhắc trễ điểm danh (ngày)" },
             new() { Key = "CheckIn.MaxLateReminders", Value = "3", DataType = "NUMBER", Category = "CheckIn", Description = "Số thư nhắc trễ gửi chủ kho trước khi báo Người thực thi (1 đến 5)" },
             new() { Key = "CheckIn.ExecutorProxyLimit", Value = "3", DataType = "NUMBER", Category = "CheckIn", Description = "Số lần Người thực thi được điểm danh thay liên tiếp; về 0 khi Chủ kho tự điểm danh" },

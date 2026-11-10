@@ -12,6 +12,34 @@ public static class CheckInRules
     /// <summary>Số thư nhắc trễ tối đa mà Admin được đặt (khớp các mốc LateReminder1 đến LateReminder5).</summary>
     public const int MaxLateRemindersLimit = 5;
 
+    /// <summary>Mặc định: thư nhắc trước hạn thứ nhất gửi trước hạn 7 ngày.</summary>
+    public const int DefaultFirstReminderDays = 7;
+
+    /// <summary>Mặc định: thư nhắc trước hạn thứ hai gửi trước hạn 1 ngày.</summary>
+    public const int DefaultSecondReminderDays = 1;
+
+    /// <summary>Số ngày trước hạn của thư nhắc thứ hai (thư gần hạn hơn), Admin đặt, từ 1 đến 30.</summary>
+    public static int SecondReminderDaysBeforeDue
+    {
+        get
+        {
+            return Math.Clamp(RuntimeSettings.Int("CheckIn.SecondReminderDaysBeforeDue", DefaultSecondReminderDays), 1, 30);
+        }
+    }
+
+    /// <summary>
+    /// Số ngày trước hạn của thư nhắc thứ nhất (thư xa hạn hơn), Admin đặt, tối đa 60. Luôn lớn hơn số ngày của thư thứ hai
+    /// để hai thư không trùng nhau hay sai thứ tự: Admin đặt nhỏ hơn hoặc bằng thì được nâng lên bằng thư thứ hai cộng 1.
+    /// </summary>
+    public static int FirstReminderDaysBeforeDue
+    {
+        get
+        {
+            int second = SecondReminderDaysBeforeDue;
+            return Math.Clamp(RuntimeSettings.Int("CheckIn.FirstReminderDaysBeforeDue", DefaultFirstReminderDays), second + 1, 60);
+        }
+    }
+
     /// <summary>Khoảng cách giữa hai thư nhắc trễ (ngày), Admin đặt, từ 1 đến 30.</summary>
     public static int LateReminderGapDays => Math.Clamp(RuntimeSettings.Int("CheckIn.LateReminderGapDays", 3), 1, 30);
 

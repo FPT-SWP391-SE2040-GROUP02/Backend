@@ -69,7 +69,9 @@ public static class DemoClockRules
         {
             foreach (CheckInReminderKind kind in CheckInTimeline.ActiveKinds(period.MaxLateReminders))
             {
-                DateTimeOffset at = CheckInTimeline.MilestoneAt(kind, period.DueAt, period.LateReminderGapDays);
+                DateTimeOffset at = CheckInTimeline.MilestoneAt(
+                    kind, period.DueAt, period.LateReminderGapDays,
+                    CheckInRules.FirstReminderDaysBeforeDue, CheckInRules.SecondReminderDaysBeforeDue);
                 if (at == period.DueAt)
                 {
                     // Thư nhắc trễ đầu tiên gửi đúng lúc đến hạn: gộp vào mốc "đến hạn" để một lần dừng chỉ có một bước.

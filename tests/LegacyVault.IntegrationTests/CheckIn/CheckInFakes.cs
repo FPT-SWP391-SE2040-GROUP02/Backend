@@ -1,6 +1,7 @@
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
@@ -46,7 +47,11 @@ public sealed class FakeVaultRepository : IVaultRepository
 
 public sealed class FakeCheckInRepository : ICheckInRepository
 {
-    private static readonly TimeSpan EarliestReminderLead = TimeSpan.FromDays(7);
+    // Giống repository thật: chỉ xét kỳ còn không quá số ngày của thư nhắc trước hạn thứ nhất (Admin đặt, mặc định 7).
+    private static TimeSpan EarliestReminderLead
+    {
+        get { return TimeSpan.FromDays(CheckInRules.FirstReminderDaysBeforeDue); }
+    }
 
     public List<CheckInSchedule> Schedules { get; } = new List<CheckInSchedule>();
     public List<CheckInPeriod> Periods { get; } = new List<CheckInPeriod>();
