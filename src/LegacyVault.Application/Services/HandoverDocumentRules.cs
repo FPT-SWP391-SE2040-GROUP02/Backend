@@ -7,13 +7,27 @@ namespace LegacyVault.Application.Services;
 public static class HandoverDocumentRules
 {
     /// <summary>Phiên bản mẫu chữ của biên bản; đổi khi sửa chữ trong văn bản.</summary>
-    public const string TemplateVersion = "bb-2026-11";
+    public const string TemplateVersion = "bb-2026-11-2";
 
     /// <summary>Phiên bản điều khoản mà người ký tick đồng ý; đổi khi sửa chữ điều khoản.</summary>
     public const string TermsVersion = "terms-2026-11";
 
     /// <summary>Số mục Người xét duyệt phải kiểm tra thủ công và tick đủ.</summary>
     public const int VerifierCheckCount = 4;
+
+    /// <summary>Độ dài tối đa của nơi thường trú lưu trong biên bản (cột OwnerResidenceAddress, RecipientResidenceAddress).</summary>
+    public const int ResidenceAddressMaxLength = 500;
+
+    /// <summary>Nơi thường trú in vào biên bản: gộp khoảng trắng và xuống dòng thành một dấu cách, cắt theo độ dài cột.</summary>
+    public static string CleanAddress(string? address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return string.Empty;
+        }
+        string joined = string.Join(' ', address.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return joined.Length <= ResidenceAddressMaxLength ? joined : joined.Substring(0, ResidenceAddressMaxLength);
+    }
 
     /// <summary>Mã ngắn của biên bản: 8 ký tự cuối id, in hoa.</summary>
     public static string Code(Guid documentId)

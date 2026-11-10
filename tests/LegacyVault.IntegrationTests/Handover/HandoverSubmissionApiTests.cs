@@ -44,6 +44,7 @@ public sealed class HandoverSubmissionApiTests : IAsyncLifetime
         form.Add(new StringContent("Trần Minh Anh"), "FullName");
         form.Add(new StringContent("012345671234"), "CitizenId");
         form.Add(new StringContent("1990-01-01"), "DateOfBirth");
+        form.Add(new StringContent("34 Trần Hưng Đạo, Hà Nội"), "ResidenceAddress");
         form.Add(new StringContent("true"), "Acknowledged");
         form.Add(new StringContent("false"), "VoluntaryDecline");
         foreach (string name in new[] { "FrontImage", "BackImage" })

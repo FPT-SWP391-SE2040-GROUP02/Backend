@@ -24,7 +24,34 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         QuestPDF.Settings.ThrowOnMissingFontFamilies = false;
     }
 
+    /// <summary>
+    /// Cỡ chữ thử lần lượt: văn bản phải nằm trong một trang (chỉ trang đầu thành ảnh), nên khi nội dung dài
+    /// (ví dụ nơi thường trú dài) thì thu nhỏ chữ dần thay vì để khối chữ ký rơi sang trang bị bỏ.
+    /// </summary>
+    private static readonly float[] FontSizes = { 11.5f, 10.5f, 9.5f, 8.5f };
+
     public byte[] Render(DeclinePaperData data)
+    {
+        List<byte[]> pages = new List<byte[]>();
+        foreach (float size in FontSizes)
+        {
+            pages = RenderPages(data, size);
+            if (pages.Count == 1)
+            {
+                break;
+            }
+        }
+        // Văn bản chỉ một trang: lấy trang đầu làm ảnh PNG, xem như ảnh giấy chứng tử mà Người xét duyệt đọc.
+        return pages[0];
+    }
+
+    /// <summary>Số trang ở cỡ chữ nhỏ nhất vẫn cần: 1 nghĩa là Render cho ra đủ nội dung trong một ảnh.</summary>
+    public static int PageCountAtSmallestFont(DeclinePaperData data)
+    {
+        return RenderPages(data, FontSizes[FontSizes.Length - 1]).Count;
+    }
+
+    private static List<byte[]> RenderPages(DeclinePaperData data, float fontSize)
     {
         Document document = Document.Create(container =>
         {
@@ -34,7 +61,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
                 page.Margin(54);
                 page.DefaultTextStyle(style => style
                     .FontFamily("Times New Roman", "Liberation Serif", "Lato")
-                    .FontSize(11.5f)
+                    .FontSize(fontSize)
                     .FontColor(Ink)
                     .LineHeight(1.0f));
                 page.Content().Column(column =>
@@ -53,8 +80,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         ImageGenerationSettings settings = new ImageGenerationSettings();
         settings.ImageFormat = ImageFormat.Png;
         settings.RasterDpi = 150;
-        // Văn bản chỉ một trang: lấy trang đầu làm ảnh PNG, xem như ảnh giấy chứng tử mà Người xét duyệt đọc.
-        return document.GenerateImages(settings).First();
+        return document.GenerateImages(settings).ToList();
     }
 
     /// <summary>Văn bản từ chối: giữ nguyên từng câu của mẫu Word, chỗ nào hệ thống có dữ liệu thì điền, còn lại để dấu chấm.</summary>
@@ -72,8 +98,12 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column,
             $"CMND số: {CitizenIdText(data)} do Công an ............... cấp ngày .................................................",
             justify: true);
+        Para(column, $"Nơi thường trú: {AddressText(data.RecipientResidenceAddress)}", justify: true);
         Para(column, "(Là người được chỉ định nhận của người để lại di sản thừa kế)", justify: true);
-        Para(column, $"{nbsp3} Chúng tôi là những người thừa kế của ông/bà {data.OwnerFullName}", justify: true);
+        Para(column,
+            $"{nbsp3} Chúng tôi là những người thừa kế của ông/bà {data.OwnerFullName}, "
+            + $"nơi thường trú: {AddressText(data.OwnerResidenceAddress)}",
+            justify: true);
         Para(column,
             $"{nbsp3}  Ông/bà {data.OwnerFullName} chết ngày {Date(data.DateOfDeath, "……………")} theo giấy chứng tử "
             + CertificateText(data, "do UBND ………………… ") + $"đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………………")}.",
@@ -109,10 +139,14 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "-----------------", center: true);
         Para(column, "BIÊN BẢN ĐỒNG Ý NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
         Para(column, $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault.");
-        Para(column, $"Tôi là: {data.DeclinerFullName}.", justify: true);
+        Para(column,
+            $"Tôi là: {data.DeclinerFullName}, sinh năm {BirthYearText(data)}, "
+            + $"nơi thường trú: {AddressText(data.RecipientResidenceAddress)}.",
+            justify: true);
         Para(column, "Bằng biên bản này, tôi xin khai đúng sự thật rằng:", justify: true);
         Para(column,
-            $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, chết ngày {Date(data.DateOfDeath, "……………")} theo giấy "
+            $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, "
+            + $"nơi thường trú: {AddressText(data.OwnerResidenceAddress)}, chết ngày {Date(data.DateOfDeath, "……………")} theo giấy "
             + "chứng tử " + CertificateText(data, string.Empty) + $"đã được Người xét duyệt trong hệ thống, đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………")}.",
             justify: true);
         Para(column, "2. Tôi là người được Chủ kho chỉ định nhận phần di sản nêu tại mục 4.", justify: true);
@@ -161,6 +195,16 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         if (data.RecipientBirthYear != null)
         {
             return data.RecipientBirthYear.Value.ToString();
+        }
+        return "...................................................";
+    }
+
+    /// <summary>Có nơi thường trú thì in; không thì để dòng chấm như các chỗ trống khác của mẫu.</summary>
+    private static string AddressText(string address)
+    {
+        if (address.Length > 0)
+        {
+            return address;
         }
         return "...................................................";
     }

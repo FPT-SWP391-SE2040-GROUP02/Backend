@@ -175,6 +175,7 @@ public sealed class HandoverSubmissionTests
             FullName = name,
             CitizenId = citizenId,
             DateOfBirth = dob ?? new DateOnly(1990, 1, 1),
+            ResidenceAddress = "34 Trần Hưng Đạo, Hà Nội",
             Acknowledged = acknowledged,
             VoluntaryDecline = voluntary,
         };

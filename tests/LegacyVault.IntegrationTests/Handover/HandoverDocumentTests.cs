@@ -96,6 +96,33 @@ public sealed class FakeDeathCaseIdentityProtector : IDeathCaseDataProtector
 }
 
 /// <summary>Luồng Biên Bản: người nhận chọn (Phần 1 chép sẵn từ hồ sơ chứng tử), người nhận ký, Người xét duyệt kiểm tra và gửi.</summary>
+/// <summary>Danh tính đã gắn của Owner, chỉ phần nơi thường trú; Failing giả lập dữ liệu hỏng hoặc thiếu KEK.</summary>
+public sealed class FakeOwnerAddressReader : IOwnerIdentityReader
+{
+    public string? Address { get; set; }
+
+    public bool Failing { get; set; }
+
+    public Task<string?> FindVerifiedCitizenIdLast4Async(Guid userId, CancellationToken ct)
+    {
+        return Task.FromResult<string?>(null);
+    }
+
+    public Task<string?> FindBoundCitizenIdAsync(Guid userId, CancellationToken ct)
+    {
+        return Task.FromResult<string?>(null);
+    }
+
+    public Task<string?> FindBoundResidenceAddressAsync(Guid userId, CancellationToken ct)
+    {
+        if (Failing)
+        {
+            throw new System.Security.Cryptography.CryptographicException("hỏng");
+        }
+        return Task.FromResult(Address);
+    }
+}
+
 public sealed class HandoverDocumentTests
 {
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 11, 10, 8, 0, 0, TimeSpan.Zero);
@@ -121,6 +148,7 @@ public sealed class HandoverDocumentTests
     private readonly FakeProgressExecutorReader executorReader = new FakeProgressExecutorReader();
     private readonly FakeDocumentNotifier notifier = new FakeDocumentNotifier();
     private readonly FakePaperRenderer renderer = new FakePaperRenderer();
+    private readonly FakeOwnerAddressReader ownerAddresses = new FakeOwnerAddressReader { Address = "12 Lê Lợi, Phường Bến Thành, TP. Hồ Chí Minh" };
     private readonly User recipient;
     private readonly User executor;
     private readonly User verifier;
@@ -181,7 +209,8 @@ public sealed class HandoverDocumentTests
 
         HandoverPaperWriter writer = new HandoverPaperWriter(users, vaults, beneficiaries, protector, renderer, deathCases, store);
         documentService = new HandoverDocumentService(
-            currentUser, handover, documents, vaults, users, executorReader, deathCases, deathCaseProtector, unitOfWork, time, notifier);
+            currentUser, handover, documents, vaults, users, executorReader, deathCases, deathCaseProtector, unitOfWork, time, notifier,
+            ownerAddresses);
         submitService = new HandoverSubmissionService(
             currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time, writer, documents, notifier);
         reviewService = new HandoverSubmissionReviewService(
@@ -212,6 +241,7 @@ public sealed class HandoverDocumentTests
             FullName = "Trần Minh Anh",
             CitizenId = "012345671234",
             DateOfBirth = new DateOnly(1990, 1, 1),
+            ResidenceAddress = "  34  Trần Hưng Đạo,\n Phường Hoàn Kiếm, Hà Nội ",
             Acknowledged = true,
             VoluntaryDecline = kind == "DECLINE",
         };
@@ -252,7 +282,10 @@ public sealed class HandoverDocumentTests
         Assert.Equal(new DateOnly(2026, 11, 5), response.Owner.DateOfDeath);
         Assert.Equal("0456/2026", response.Owner.CertificateNumber);
         Assert.Equal(new DateOnly(2026, 11, 7), response.Owner.CertificateIssuedOn);
+        Assert.Equal("12 Lê Lợi, Phường Bến Thành, TP. Hồ Chí Minh", response.Owner.ResidenceAddress);
+        Assert.Equal(HandoverDocumentRules.TemplateVersion, response.TemplateVersion);
         Assert.Equal("Trần Minh Anh", response.Recipient.FullName);
+        Assert.Equal(string.Empty, response.Recipient.ResidenceAddress);
         Assert.Null(response.Recipient.SignedAt);
         Assert.Single(documents.Items);
         Assert.Empty(notifier.Events);
@@ -271,6 +304,21 @@ public sealed class HandoverDocumentTests
         Assert.Null(response.Owner.DateOfDeath);
         Assert.Null(response.Owner.CertificateIssuedOn);
         Assert.Equal(string.Empty, response.Owner.CertificateNumber);
+        Assert.Equal("WAIT_RECIPIENT", response.Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Create_OwnerWithoutUsableIdentity_LeavesTheAddressBlankInsteadOfFailing(bool corrupted)
+    {
+        // Chủ kho chưa gắn danh tính eKYC, hoặc dữ liệu hỏng/thiếu KEK: biên bản vẫn lập được, nơi thường trú in dòng chấm.
+        ownerAddresses.Address = null;
+        ownerAddresses.Failing = corrupted;
+
+        HandoverDocumentResponse response = await Create("ACCEPT");
+
+        Assert.Equal(string.Empty, response.Owner.ResidenceAddress);
         Assert.Equal("WAIT_RECIPIENT", response.Status);
     }
 
@@ -353,6 +401,8 @@ public sealed class HandoverDocumentTests
         Assert.Equal("Trần Minh Anh", document.RecipientFullName);
         Assert.Equal(1990, document.RecipientBirthYear);
         Assert.Equal("1234", document.RecipientCitizenIdLast4);
+        // Khoảng trắng thừa và xuống dòng gộp thành một dấu cách để in gọn trên biên bản.
+        Assert.Equal("34 Trần Hưng Đạo, Phường Hoàn Kiếm, Hà Nội", document.RecipientResidenceAddress);
         Assert.Equal(submission.Id, document.SubmissionId);
         Assert.Equal(Now, document.RecipientSignedAt);
         Assert.Contains("verifier-turn", notifier.Events);
@@ -430,6 +480,8 @@ public sealed class HandoverDocumentTests
         Assert.Equal(new DateOnly(2026, 11, 7), paper.DeathCertificateIssuedOn);
         Assert.Equal("Trần Minh Anh", paper.DeclinerFullName);
         Assert.Equal(1990, paper.RecipientBirthYear);
+        Assert.Equal("34 Trần Hưng Đạo, Phường Hoàn Kiếm, Hà Nội", paper.RecipientResidenceAddress);
+        Assert.Equal("12 Lê Lợi, Phường Bến Thành, TP. Hồ Chí Minh", paper.OwnerResidenceAddress);
         Assert.Equal(3, paper.ItemCount);
         Assert.True(paper.HasSignatures);
         Assert.Equal(Now, paper.RecipientSignedAt);

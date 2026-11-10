@@ -114,6 +114,8 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
             data.CertificateNumber = document.CertificateNumber;
             data.ItemCount = document.ItemCount;
             data.RecipientBirthYear = document.RecipientBirthYear;
+            data.RecipientResidenceAddress = document.RecipientResidenceAddress;
+            data.OwnerResidenceAddress = document.OwnerResidenceAddress;
             data.HasSignatures = true;
             data.RecipientSignedAt = document.RecipientSignedAt;
         }
