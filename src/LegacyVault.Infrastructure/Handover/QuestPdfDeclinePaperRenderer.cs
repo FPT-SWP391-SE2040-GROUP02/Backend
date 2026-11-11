@@ -75,8 +75,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "(Là người được chỉ định nhận của người để lại di sản thừa kế)", justify: true);
         Para(column, $"{nbsp3}Tôi là người thừa kế của ông/bà {data.OwnerFullName}", justify: true);
         Para(column,
-            $"{nbsp3} Ông/bà {data.OwnerFullName} chết ngày {Date(data.DateOfDeath, "……………")} theo giấy chứng tử "
-            + CertificateText(data, "do UBND ………………… ") + $"đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………………")}.",
+            $"{nbsp3} Ông/bà {data.OwnerFullName} {DeathSentence(data)}",
             justify: true);
         Para(column, $"{nbsp3}Di sản mà ông/bà {data.OwnerFullName} để lại là: {ContainerText(data)}.", justify: true);
         Para(column,
@@ -112,8 +111,8 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, $"Tôi là: {data.DeclinerFullName}; sinh năm: {BirthYearText(data)}; Số Căn cước/CCCD: {CitizenIdText(data)}.", justify: true);
         Para(column, "Bằng biên bản này, tôi xin khai đúng sự thật rằng:", justify: true);
         Para(column,
-            $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, chết ngày {Date(data.DateOfDeath, "……………")} theo giấy "
-            + "chứng tử " + CertificateText(data, string.Empty) + $"đã được Người xét duyệt thẩm định trên hệ thống, đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………")}.",
+            $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, {DeathSentence(data)} "
+            + "Thông tin này đã được Người xét duyệt thẩm định trên hệ thống.",
             justify: true);
         Para(column, "2. Tôi là người được Chủ kho chỉ định nhận phần di sản nêu tại mục 4.", justify: true);
         Para(column,
@@ -145,14 +144,20 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         }
     }
 
-    /// <summary>Có số giấy chứng tử trong hồ sơ chứng tử thì in "số X, "; không thì in chữ mặc định của mẫu cũ.</summary>
-    private static string CertificateText(DeclinePaperData data, string fallback)
+    /// <summary>
+    /// Câu về người mất, dùng chung cho văn bản từ chối và biên bản đồng ý:
+    /// "chết ngày {ngày mất} theo giấy chứng tử do {nơi đăng ký} đăng ký khai tử ngày {ngày đăng ký}."
+    /// Thiếu dữ liệu nào thì in dòng chấm ở chỗ đó. Không in số giấy chứng tử.
+    /// </summary>
+    public static string DeathSentence(DeclinePaperData data)
     {
-        if (data.CertificateNumber.Length == 0)
+        string place = "UBND …………………";
+        if (!string.IsNullOrWhiteSpace(data.DeathRegistrationPlace))
         {
-            return fallback;
+            place = data.DeathRegistrationPlace;
         }
-        return $"số {data.CertificateNumber}, ";
+        return $"chết ngày {Date(data.DateOfDeath, "……………")} theo giấy chứng tử do {place} "
+            + $"đăng ký khai tử ngày {Date(data.DeathCertificateIssuedOn, "…………………………")}.";
     }
 
     /// <summary>Có năm sinh người nhận khai thì in năm; không thì để dòng chấm như mẫu cũ.</summary>

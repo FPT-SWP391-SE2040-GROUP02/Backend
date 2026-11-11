@@ -14,6 +14,9 @@ public class HandoverDocumentOwnerPart
 
     public DateOnly? CertificateIssuedOn { get; set; }
 
+    /// <summary>Nơi đăng ký khai tử dạng câu, ví dụ "UBND phường Bến Thành, Thành phố Hồ Chí Minh"; rỗng khi hồ sơ không ghi.</summary>
+    public string DeathRegistrationPlace { get; set; } = string.Empty;
+
     /// <summary>Nơi thường trú theo danh tính eKYC đã xác minh của Chủ kho; rỗng khi không có.</summary>
     public string ResidenceAddress { get; set; } = string.Empty;
 }

@@ -160,12 +160,14 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
         Guid caseId = opened.GetProperty("id").GetGuid();
+        JsonElement filled = await DeathCaseApi.FillCertificateInfoAsync(
+            executor.Client, opened, DeathCaseApi.Today().AddDays(-3));
 
         // Hành động
         HttpResponseMessage response = await DeathCaseApi.SubmitAsync(
-            executor.Client, caseId, opened.GetProperty("etag").GetString());
+            executor.Client, caseId, filled.GetProperty("etag").GetString());
 
-        // Kiểm tra: chỉ thiếu giấy chứng tử, không khóa gì cả
+        // Kiểm tra: đã đủ 3 thông tin nên chỉ thiếu giấy chứng tử, không khóa gì cả
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "DEATH_CASE_INCOMPLETE");
         Assert.Equal(new List<string> { "FILES" }, DeathCaseApi.ReadStrings(problem.GetProperty("missingRequirements")));
         Assert.Equal(PlanStatus.Active, await LoadPlanStatusAsync(vault.VaultId));
@@ -177,11 +179,13 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Death01_SubmitsWithOnlyTheCertificateFileAndNoTypedFields()
     {
-        // Chuẩn bị: không khai họ tên, số giấy, ngày mất, ngày cấp, nơi cấp; chỉ tải một giấy chứng tử
+        // Chuẩn bị: không khai họ tên, CCCD, số giấy, nơi cấp (các trường cũ); chỉ khai 3 thông tin trên giấy và tải một giấy chứng tử
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
         Guid caseId = opened.GetProperty("id").GetGuid();
+        JsonElement filled = await DeathCaseApi.FillCertificateInfoAsync(
+            executor.Client, opened, DeathCaseApi.Today().AddDays(-3));
         JsonElement withFile = await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "giay chung tu", "DEATH_CERTIFICATE");
         Assert.Empty(DeathCaseApi.ReadStrings(withFile.GetProperty("missingRequirements")));
 
@@ -204,6 +208,7 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
         Guid caseId = opened.GetProperty("id").GetGuid();
+        await DeathCaseApi.FillCertificateInfoAsync(executor.Client, opened, DeathCaseApi.Today().AddDays(-3));
         JsonElement withNotice = await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "giay bao tu", "DEATH_NOTICE");
 
         HttpResponseMessage response = await DeathCaseApi.SubmitAsync(

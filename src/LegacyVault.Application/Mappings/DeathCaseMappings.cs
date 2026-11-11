@@ -12,8 +12,10 @@ public static class DeathCaseMappings
     /// <summary>
     /// Cần hồ sơ đã nạp Versions.Files và Notices. identity là dữ liệu đã giải mã của phiên bản hiện tại
     /// (null khi chưa nhập gì). Không đưa CCCD đầy đủ vào response (DATA-02).
+    /// catalog dùng ghép câu nơi đăng ký khai tử từ mã tỉnh và mã phường/xã.
     /// </summary>
-    public static DeathCaseResponse ToResponse(this DeathCase deathCase, DeathCaseIdentityData? identity)
+    public static DeathCaseResponse ToResponse(
+        this DeathCase deathCase, DeathCaseIdentityData? identity, IAdministrativeUnitCatalog catalog)
     {
         DeathCaseVersion current = FindVersion(deathCase, deathCase.CurrentVersionNo);
 
@@ -23,6 +25,10 @@ public static class DeathCaseMappings
         version.OwnerCitizenIdLast4 = current.OwnerCitizenIdLast4;
         version.DateOfDeath = current.DateOfDeath;
         version.IssuedOn = current.IssuedOn;
+        version.DeathRegistrationProvinceCode = current.DeathRegistrationProvinceCode;
+        version.DeathRegistrationWardCode = current.DeathRegistrationWardCode;
+        version.DeathRegistrationPlace = catalog.BuildRegistrationPlace(
+            current.DeathRegistrationProvinceCode, current.DeathRegistrationWardCode);
         version.SubmittedAt = current.SubmittedAt;
 
         string? ownerFullName = null;
@@ -62,7 +68,8 @@ public static class DeathCaseMappings
         response.CurrentVersion = version;
         response.ReviewVersionNo = deathCase.ReviewVersionNo;
         response.MissingRequirements = DeathCaseRules.GetMissingRequirements(
-            DeathCaseRules.CountCertificateFiles(current.Files));
+            current.DateOfDeath, current.IssuedOn, current.DeathRegistrationProvinceCode,
+            current.DeathRegistrationWardCode, DeathCaseRules.CountCertificateFiles(current.Files));
         response.SupplementRequest = ToSupplementRequestResponse(deathCase);
         response.RejectReason = ToRejectReason(deathCase);
         response.CreatedAt = deathCase.CreatedAt;

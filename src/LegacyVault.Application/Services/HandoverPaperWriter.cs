@@ -35,6 +35,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
     private readonly IDeclinePaperRenderer renderer;
     private readonly IDeathCaseRepository deathCases;
     private readonly IAssetContentStore contentStore;
+    private readonly IAdministrativeUnitCatalog administrativeUnits;
 
     public HandoverPaperWriter(
         IUserRepository users,
@@ -43,7 +44,8 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         IBeneficiaryDataProtector protector,
         IDeclinePaperRenderer renderer,
         IDeathCaseRepository deathCases,
-        IAssetContentStore contentStore)
+        IAssetContentStore contentStore,
+        IAdministrativeUnitCatalog administrativeUnits)
     {
         this.users = users;
         this.vaults = vaults;
@@ -52,6 +54,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         this.renderer = renderer;
         this.deathCases = deathCases;
         this.contentStore = contentStore;
+        this.administrativeUnits = administrativeUnits;
     }
 
     public async Task<string?> WriteAsync(
@@ -113,6 +116,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         {
             data.DateOfDeath = document.DateOfDeath;
             data.DeathCertificateIssuedOn = document.CertificateIssuedOn;
+            data.DeathRegistrationPlace = document.DeathRegistrationPlace;
             data.CertificateNumber = document.CertificateNumber;
             data.ItemCount = document.ItemCount;
             data.RecipientBirthYear = document.RecipientBirthYear;
@@ -135,7 +139,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         return stored.StorageKey;
     }
 
-    /// <summary>Ngày mất và ngày cấp giấy chứng tử in lên văn bản; không có hồ sơ hoặc chưa đủ dữ liệu thì để trống.</summary>
+    /// <summary>Ngày mất, ngày đăng ký khai tử và nơi đăng ký in lên văn bản; không có hồ sơ hoặc chưa đủ dữ liệu thì để trống.</summary>
     private async Task FillDeathDatesAsync(DeclinePaperData data, Guid vaultId, CancellationToken ct)
     {
         DeathCase? deathCase = await deathCases.FindOpenByVaultIdAsync(vaultId, ct);
@@ -146,5 +150,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         DeathCaseVersion version = DeathCaseReviewRules.FindReviewVersion(deathCase);
         data.DateOfDeath = version.DateOfDeath;
         data.DeathCertificateIssuedOn = version.IssuedOn;
+        data.DeathRegistrationPlace = administrativeUnits.BuildRegistrationPlace(
+            version.DeathRegistrationProvinceCode, version.DeathRegistrationWardCode);
     }
 }

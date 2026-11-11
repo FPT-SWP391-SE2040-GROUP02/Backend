@@ -76,6 +76,9 @@ public static class InfrastructureConfig
         // IUnitOfWork chính là AppDbContext của request: repository và service dùng chung một instance.
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<AppDbContext>());
 
+        // Danh mục tỉnh/phường: đọc tệp nhúng một lần, dùng chung cho cả ứng dụng (không có trạng thái thay đổi).
+        services.AddSingleton<IAdministrativeUnitCatalog, LegacyVault.Infrastructure.Reference.AdministrativeUnitCatalog>();
+
         // Repositories
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ILoginThrottleRepository, LoginThrottleRepository>();

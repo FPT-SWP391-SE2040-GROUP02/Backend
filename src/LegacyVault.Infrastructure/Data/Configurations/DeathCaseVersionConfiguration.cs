@@ -30,6 +30,15 @@ public sealed class DeathCaseVersionConfiguration : IEntityTypeConfiguration<Dea
             .IsUnicode(false)
             .IsFixedLength();
 
+        // Mã nơi đăng ký khai tử: tối đa 10 ký tự, chữ/số, không mã hóa.
+        builder.Property(v => v.DeathRegistrationProvinceCode)
+            .HasMaxLength(10)
+            .IsUnicode(false);
+
+        builder.Property(v => v.DeathRegistrationWardCode)
+            .HasMaxLength(10)
+            .IsUnicode(false);
+
         builder.HasMany(v => v.Files)
             .WithOne()
             .HasForeignKey(f => f.VersionId)

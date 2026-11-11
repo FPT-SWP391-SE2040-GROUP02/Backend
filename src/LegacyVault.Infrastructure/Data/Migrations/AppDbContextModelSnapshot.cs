@@ -785,6 +785,16 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateOnly?>("DateOfDeath")
                         .HasColumnType("date");
 
+                    b.Property<string>("DeathRegistrationProvinceCode")
+                        .HasMaxLength(10)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(10)");
+
+                    b.Property<string>("DeathRegistrationWardCode")
+                        .HasMaxLength(10)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(10)");
+
                     b.Property<string>("EncryptionKeyId")
                         .HasMaxLength(64)
                         .IsUnicode(false)
@@ -1280,6 +1290,13 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<DateOnly?>("DateOfDeath")
                         .HasColumnType("date");
+
+                    b.Property<string>("DeathRegistrationPlace")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)")
+                        .HasDefaultValue("");
 
                     b.Property<int>("ItemCount")
                         .HasColumnType("int");

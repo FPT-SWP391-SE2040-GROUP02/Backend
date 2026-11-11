@@ -11,6 +11,7 @@ using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
+using LegacyVault.Infrastructure.Reference;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
@@ -198,6 +199,8 @@ public sealed class HandoverDocumentTests
             VersionNo = 1,
             DateOfDeath = new DateOnly(2026, 11, 5),
             IssuedOn = new DateOnly(2026, 11, 7),
+            DeathRegistrationProvinceCode = "79",
+            DeathRegistrationWardCode = "26743",
             SubmittedAt = Now.AddDays(-4),
         });
         deathCases.Cases.Add(deathCase);
@@ -207,10 +210,11 @@ public sealed class HandoverDocumentTests
             CertificateNumber = "0456/2026",
         };
 
-        HandoverPaperWriter writer = new HandoverPaperWriter(users, vaults, beneficiaries, protector, renderer, deathCases, store);
+        HandoverPaperWriter writer = new HandoverPaperWriter(
+            users, vaults, beneficiaries, protector, renderer, deathCases, store, new AdministrativeUnitCatalog());
         documentService = new HandoverDocumentService(
-            currentUser, handover, documents, vaults, users, executorReader, deathCases, deathCaseProtector, unitOfWork, time, notifier,
-            ownerAddresses);
+            currentUser, handover, documents, vaults, users, executorReader, deathCases, deathCaseProtector, unitOfWork, time,
+            new AdministrativeUnitCatalog(), notifier, ownerAddresses);
         submitService = new HandoverSubmissionService(
             currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time, writer, documents, notifier);
         reviewService = new HandoverSubmissionReviewService(
@@ -282,6 +286,8 @@ public sealed class HandoverDocumentTests
         Assert.Equal(new DateOnly(2026, 11, 5), response.Owner.DateOfDeath);
         Assert.Equal("0456/2026", response.Owner.CertificateNumber);
         Assert.Equal(new DateOnly(2026, 11, 7), response.Owner.CertificateIssuedOn);
+        // D8: nơi đăng ký khai tử được chụp lại dạng câu từ hồ sơ chứng tử đã duyệt.
+        Assert.Equal("UBND phường Bến Thành, Thành phố Hồ Chí Minh", response.Owner.DeathRegistrationPlace);
         Assert.Equal("12 Lê Lợi, Phường Bến Thành, TP. Hồ Chí Minh", response.Owner.ResidenceAddress);
         Assert.Equal(HandoverDocumentRules.TemplateVersion, response.TemplateVersion);
         Assert.Equal("Trần Minh Anh", response.Recipient.FullName);
@@ -297,6 +303,8 @@ public sealed class HandoverDocumentTests
         deathCaseProtector.Identity = null;
         deathCase.Versions[0].DateOfDeath = null;
         deathCase.Versions[0].IssuedOn = null;
+        deathCase.Versions[0].DeathRegistrationProvinceCode = null;
+        deathCase.Versions[0].DeathRegistrationWardCode = null;
 
         HandoverDocumentResponse response = await Create("ACCEPT");
 
@@ -304,6 +312,7 @@ public sealed class HandoverDocumentTests
         Assert.Null(response.Owner.DateOfDeath);
         Assert.Null(response.Owner.CertificateIssuedOn);
         Assert.Equal(string.Empty, response.Owner.CertificateNumber);
+        Assert.Equal(string.Empty, response.Owner.DeathRegistrationPlace);
         Assert.Equal("WAIT_RECIPIENT", response.Status);
     }
 
@@ -478,6 +487,7 @@ public sealed class HandoverDocumentTests
         Assert.Equal("0456/2026", paper.CertificateNumber);
         Assert.Equal(new DateOnly(2026, 11, 5), paper.DateOfDeath);
         Assert.Equal(new DateOnly(2026, 11, 7), paper.DeathCertificateIssuedOn);
+        Assert.Equal("UBND phường Bến Thành, Thành phố Hồ Chí Minh", paper.DeathRegistrationPlace);
         Assert.Equal("Trần Minh Anh", paper.DeclinerFullName);
         Assert.Equal(1990, paper.RecipientBirthYear);
         Assert.Equal("34 Trần Hưng Đạo, Phường Hoàn Kiếm, Hà Nội", paper.RecipientResidenceAddress);

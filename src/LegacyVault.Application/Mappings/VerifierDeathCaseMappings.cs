@@ -30,6 +30,7 @@ public static class VerifierDeathCaseMappings
     /// <summary>
     /// Cần hồ sơ đã nạp Versions.Files, Flags, Notices, Decisions. identity là dữ liệu đã giải mã CỦA BẢN ĐANG XÉT
     /// (null nếu không có). Các bản cũ không giải mã (DATA-02). approveBlockers lấy từ DeathCaseReviewRules.
+    /// catalog ghép nơi đăng ký khai tử; lastCheckInAt là lần Chủ kho tự điểm danh cuối (null nếu chưa), dùng tính cảnh báo (D7).
     /// </summary>
     public static VerifierDeathCaseResponse ToVerifierResponse(
         this DeathCase deathCase,
@@ -37,7 +38,9 @@ public static class VerifierDeathCaseMappings
         DeathCaseIdentityData? identity,
         PreviousCaseRow? previous,
         List<string> approveBlockers,
-        VerifierHandoverResponse? handover)
+        VerifierHandoverResponse? handover,
+        IAdministrativeUnitCatalog catalog,
+        DateTimeOffset? lastCheckInAt)
     {
         DeathCaseVersion reviewVersion = DeathCaseReviewRules.FindReviewVersion(deathCase);
 
@@ -46,6 +49,10 @@ public static class VerifierDeathCaseMappings
         review.OwnerCitizenIdLast4 = reviewVersion.OwnerCitizenIdLast4;
         review.DateOfDeath = reviewVersion.DateOfDeath;
         review.IssuedOn = reviewVersion.IssuedOn;
+        review.DeathRegistrationProvinceCode = reviewVersion.DeathRegistrationProvinceCode;
+        review.DeathRegistrationWardCode = reviewVersion.DeathRegistrationWardCode;
+        review.DeathRegistrationPlace = catalog.BuildRegistrationPlace(
+            reviewVersion.DeathRegistrationProvinceCode, reviewVersion.DeathRegistrationWardCode);
         review.SubmittedAt = reviewVersion.SubmittedAt;
         if (identity != null)
         {
@@ -107,6 +114,14 @@ public static class VerifierDeathCaseMappings
             response.PreviousCase = previousResponse;
         }
         response.Handover = handover;
+
+        // D7: cảnh báo tính lúc đọc, không chặn duyệt.
+        response.Warnings = DeathCaseReviewRules.BuildWarnings(
+            reviewVersion.DateOfDeath, reviewVersion.IssuedOn, lastCheckInAt);
+        if (lastCheckInAt != null)
+        {
+            response.LastCheckInOn = DeathCaseRules.TodayInVietnam(lastCheckInAt.Value);
+        }
         return response;
     }
 

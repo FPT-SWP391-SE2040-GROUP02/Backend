@@ -46,6 +46,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
     private readonly IDeathCaseDataProtector deathCaseProtector;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IAdministrativeUnitCatalog administrativeUnits;
     private readonly IHandoverDocumentNotifier? notifier;
     private readonly IOwnerIdentityReader? ownerIdentities;
     private readonly IBeneficiaryRepository? beneficiaries;
@@ -62,6 +63,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         IDeathCaseDataProtector deathCaseProtector,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
+        IAdministrativeUnitCatalog administrativeUnits,
         IHandoverDocumentNotifier? notifier = null,
         IOwnerIdentityReader? ownerIdentities = null,
         IBeneficiaryRepository? beneficiaries = null,
@@ -77,6 +79,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         this.deathCaseProtector = deathCaseProtector;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.administrativeUnits = administrativeUnits;
         this.notifier = notifier;
         this.ownerIdentities = ownerIdentities;
         this.beneficiaries = beneficiaries;
@@ -235,6 +238,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         response.Owner.DateOfDeath = document.DateOfDeath;
         response.Owner.CertificateNumber = document.CertificateNumber;
         response.Owner.CertificateIssuedOn = document.CertificateIssuedOn;
+        response.Owner.DeathRegistrationPlace = document.DeathRegistrationPlace;
         response.Owner.ResidenceAddress = document.OwnerResidenceAddress;
 
         response.Recipient.FullName = document.RecipientFullName;
@@ -278,6 +282,9 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         DeathCaseVersion version = DeathCaseReviewRules.FindReviewVersion(deathCase);
         document.DateOfDeath = version.DateOfDeath;
         document.CertificateIssuedOn = version.IssuedOn;
+        // D8: chụp nơi đăng ký khai tử dạng câu từ danh mục, để biên bản xem lại được kể cả khi hồ sơ bị dọn.
+        document.DeathRegistrationPlace = Cut(
+            administrativeUnits.BuildRegistrationPlace(version.DeathRegistrationProvinceCode, version.DeathRegistrationWardCode), 300);
         DeathCaseIdentityData? identity = deathCaseProtector.Unprotect(version);
         if (identity == null)
         {

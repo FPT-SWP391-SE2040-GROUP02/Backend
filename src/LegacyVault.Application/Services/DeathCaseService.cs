@@ -29,6 +29,7 @@ public sealed class DeathCaseService : IDeathCaseService
     private readonly TimeProvider timeProvider;
     private readonly IAuditLogRepository auditLogRepository;
     private readonly ICheckInRepository checkInRepository;
+    private readonly IAdministrativeUnitCatalog administrativeUnits;
 
     public DeathCaseService(
         ICurrentUser currentUser,
@@ -42,7 +43,8 @@ public sealed class DeathCaseService : IDeathCaseService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IAuditLogRepository auditLogRepository,
-        ICheckInRepository checkInRepository)
+        ICheckInRepository checkInRepository,
+        IAdministrativeUnitCatalog administrativeUnits)
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
@@ -56,6 +58,7 @@ public sealed class DeathCaseService : IDeathCaseService
         this.timeProvider = timeProvider;
         this.auditLogRepository = auditLogRepository;
         this.checkInRepository = checkInRepository;
+        this.administrativeUnits = administrativeUnits;
     }
 
     public async Task<List<ExecutorVaultResponse>> GetMyVaultsAsync(CancellationToken ct)
@@ -195,16 +198,28 @@ public sealed class DeathCaseService : IDeathCaseService
             issuedOn = request.IssuedOn;
         }
 
-        // DEATH-01: ngày mất ≤ hôm nay; ngày cấp ≥ ngày mất và ≤ hôm nay (theo giờ Việt Nam).
+        // DEATH-01 (D6): nơi đăng ký khai tử. null = giữ nguyên, "" = xóa. Đổi tỉnh mà không gửi phường thì xóa phường.
+        string? provinceCode = ApplyText(version.DeathRegistrationProvinceCode, request.DeathRegistrationProvinceCode);
+        string? wardCode = ApplyText(version.DeathRegistrationWardCode, request.DeathRegistrationWardCode);
+        bool provinceChanged = !string.Equals(provinceCode, version.DeathRegistrationProvinceCode, StringComparison.Ordinal);
+        if (provinceChanged && request.DeathRegistrationWardCode == null)
+        {
+            wardCode = null;
+        }
+
+        // DEATH-01 (D5): luật kiểm 3 thông tin trên giấy, dùng chung với lúc gửi hồ sơ (theo giờ Việt Nam).
         DateTimeOffset now = timeProvider.GetUtcNow();
-        DeathCaseRules.ValidateDates(dateOfDeath, issuedOn, DeathCaseRules.TodayInVietnam(now));
+        DeathCaseRules.ValidateCertificateInfo(
+            dateOfDeath, issuedOn, provinceCode, wardCode, context.Vault.Plan.ActivatedAt, now, administrativeUnits);
 
         bool changed = !string.Equals(current.OwnerFullName, updated.OwnerFullName, StringComparison.Ordinal)
             || !string.Equals(current.OwnerCitizenId, updated.OwnerCitizenId, StringComparison.Ordinal)
             || !string.Equals(current.CertificateNumber, updated.CertificateNumber, StringComparison.Ordinal)
             || !string.Equals(current.IssuedBy, updated.IssuedBy, StringComparison.Ordinal)
             || dateOfDeath != version.DateOfDeath
-            || issuedOn != version.IssuedOn;
+            || issuedOn != version.IssuedOn
+            || !string.Equals(provinceCode, version.DeathRegistrationProvinceCode, StringComparison.Ordinal)
+            || !string.Equals(wardCode, version.DeathRegistrationWardCode, StringComparison.Ordinal);
         // Không có gì đổi: không mã hóa lại, không lưu, etag giữ nguyên.
         if (!changed)
         {
@@ -215,6 +230,8 @@ public sealed class DeathCaseService : IDeathCaseService
         dataProtector.Protect(version, updated);
         version.DateOfDeath = dateOfDeath;
         version.IssuedOn = issuedOn;
+        version.DeathRegistrationProvinceCode = provinceCode;
+        version.DeathRegistrationWardCode = wardCode;
         version.UpdatedAt = now;
         deathCase.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
@@ -497,23 +514,30 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         EnsureVersionEditable(deathCase, version);
 
-        // Chỉ cần ít nhất một giấy chứng tử hoặc trích lục khai tử; các trường nhập tay không còn bắt buộc.
+        // DEATH-01: cần đủ 3 thông tin trên giấy (ngày mất, ngày đăng ký khai tử, nơi đăng ký) và ít nhất một giấy chứng tử
+        // hoặc trích lục khai tử. Họ tên và CCCD của Chủ kho không còn do Executor nhập.
         DeathCaseIdentityData? identity = dataProtector.Unprotect(version);
         DeathCaseIdentityData data = new DeathCaseIdentityData();
         if (identity != null)
         {
             data = identity;
         }
-        List<string> missing = DeathCaseRules.GetMissingRequirements(DeathCaseRules.CountCertificateFiles(version.Files));
+        List<string> missing = DeathCaseRules.GetMissingRequirements(
+            version.DateOfDeath, version.IssuedOn, version.DeathRegistrationProvinceCode,
+            version.DeathRegistrationWardCode, DeathCaseRules.CountCertificateFiles(version.Files));
         if (missing.Count > 0)
         {
             Dictionary<string, object?> incompleteExtensions = new Dictionary<string, object?>();
             incompleteExtensions["missingRequirements"] = missing;
             throw new AppException(AppErrorType.Conflict, ErrorCode.DeathCaseIncomplete,
-                "Hồ sơ chưa có giấy chứng tử hoặc trích lục khai tử.", incompleteExtensions);
+                "Hồ sơ chưa đủ thông tin trên giấy chứng tử hoặc chưa có giấy chứng tử.", incompleteExtensions);
         }
 
+        // DEATH-01 (D5): chạy lại luật kiểm khi gửi, vì "hôm nay" và ngày kích hoạt có thể đã đổi từ lúc lưu nháp (kể cả tua thời gian).
         DateTimeOffset now = timeProvider.GetUtcNow();
+        DeathCaseRules.ValidateCertificateInfo(
+            version.DateOfDeath, version.IssuedOn, version.DeathRegistrationProvinceCode,
+            version.DeathRegistrationWardCode, plan.ActivatedAt, now, administrativeUnits);
         int submittingVersionNo = version.VersionNo;
 
         // DEATH-05, DEATH-12 (phần mở), SETUP-05: lần gửi đầu mới khóa kế hoạch và ghim trạng thái trước đó (D1, D2).
@@ -645,6 +669,8 @@ public sealed class DeathCaseService : IDeathCaseService
         next.VersionNo = current.VersionNo + 1;
         next.DateOfDeath = current.DateOfDeath;
         next.IssuedOn = current.IssuedOn;
+        next.DeathRegistrationProvinceCode = current.DeathRegistrationProvinceCode;
+        next.DeathRegistrationWardCode = current.DeathRegistrationWardCode;
         next.CreatedByUserId = context.UserId;
         next.CreatedAt = now;
 
@@ -876,7 +902,7 @@ public sealed class DeathCaseService : IDeathCaseService
     {
         DeathCaseVersion current = DeathCaseMappings.FindVersion(deathCase, deathCase.CurrentVersionNo);
         DeathCaseIdentityData? identity = dataProtector.Unprotect(current);
-        return deathCase.ToResponse(identity);
+        return deathCase.ToResponse(identity, administrativeUnits);
     }
 
     private static AppException CaseNotFound()

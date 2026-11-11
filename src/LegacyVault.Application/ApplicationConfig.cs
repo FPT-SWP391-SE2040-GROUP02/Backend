@@ -29,6 +29,7 @@ public static class ApplicationConfig
         // Hồ sơ chứng tử (F2B)
         services.AddScoped<IDeathCaseService, DeathCaseService>();
         services.AddScoped<IDeathCaseReviewService, DeathCaseReviewService>();
+        services.AddScoped<IAdministrativeUnitService, AdministrativeUnitService>();
         services.AddScoped<ISigningPasswordChecker, SigningPasswordChecker>();
         services.AddScoped<IRetentionJob, RetentionJob>();
         services.AddScoped<IExecutorManagementService, ExecutorManagementService>();

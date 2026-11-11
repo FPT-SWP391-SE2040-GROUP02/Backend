@@ -43,6 +43,8 @@ public sealed class DeathCaseExecutorFileViewTests : IAsyncLifetime
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
         Guid caseId = opened.GetProperty("id").GetGuid();
+        // Nộp được cần đủ 3 thông tin trên giấy và một tệp.
+        await DeathCaseApi.FillCertificateInfoAsync(executor.Client, opened, DeathCaseApi.Today().AddDays(-3));
         JsonElement uploaded = await DeathCaseApi.UploadPdfAsync(executor.Client, caseId, "giay cua toi", "DEATH_CERTIFICATE");
         Guid fileId = uploaded.GetProperty("currentVersion").GetProperty("files")[0].GetProperty("id").GetGuid();
 

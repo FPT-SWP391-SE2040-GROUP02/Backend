@@ -5,7 +5,7 @@
 #   2. Chạy http/death-case-dev.sql (thay 3 email): kế hoạch sang ACTIVE, Executor được chấp nhận, một tài khoản thành Verifier.
 #   3. Đăng nhập bằng tài khoản EXECUTOR bên dưới.
 #
-# Luồng: mở hồ sơ → khai 6 trường → tải trang giấy (PDF/JPEG/PNG/WEBP ≤ 20 MiB, tối đa 10 tệp) → gửi.
+# Luồng: mở hồ sơ → khai 3 thông tin trên giấy (ngày mất, ngày đăng ký khai tử, nơi đăng ký) → tải trang giấy (PDF/JPEG/PNG/WEBP ≤ 20 MiB, tối đa 10 tệp) → gửi.
 # Gửi lần đầu khóa kế hoạch của kho (Owner không sửa kho/điểm danh được nữa). Thông báo Owner do job nền gửi mỗi 60 giây.
 
 @baseUrl = http://localhost:5000/api/v1
@@ -36,12 +36,23 @@ Authorization: Bearer {{token}}
 @caseId = {{open.response.body.$.id}}
 @etag = {{open.response.body.$.etag}}
 
-### 3) Xem hồ sơ (missingRequirements cho biết còn thiếu gì)
+### 2a) Danh mục tỉnh/thành phố (34) và phường/xã của một tỉnh — mã là CHUỖI (giữ số 0 đứng đầu). Mã tỉnh lạ → 404 ADMINISTRATIVE_UNIT_NOT_FOUND.
+GET {{baseUrl}}/administrative-units/provinces
+Authorization: Bearer {{token}}
+
+###
+GET {{baseUrl}}/administrative-units/provinces/79/wards
+Authorization: Bearer {{token}}
+
+### 3) Xem hồ sơ (missingRequirements cho biết còn thiếu gì: DATE_OF_DEATH, ISSUED_ON, DEATH_REGISTRATION_PLACE, FILES)
 GET {{baseUrl}}/executor/death-cases/{{caseId}}
 Authorization: Bearer {{token}}
 
-### 4) Khai bản nháp — etag lấy từ response gần nhất. Chuỗi "" = xóa, không gửi = giữ nguyên. CCCD gõ có khoảng trắng cũng được.
-# Response chỉ có 4 số cuối CCCD. Ngày mất không được ở tương lai; ngày cấp ≥ ngày mất.
+### 4) Khai bản nháp — etag lấy từ response gần nhất. Chuỗi "" = xóa, không gửi = giữ nguyên.
+# Chỉ cần 3 thông tin trên giấy: dateOfDeath, issuedOn (ngày đăng ký khai tử), nơi đăng ký = mã tỉnh + mã phường/xã.
+# Luật kiểm (400 theo từng trường): ngày mất không sau hôm nay và không trước ngày Chủ kho kích hoạt kế hoạch;
+# ngày đăng ký từ ngày mất trở đi và không sau hôm nay; phường phải thuộc đúng tỉnh. Đổi tỉnh mà không gửi phường thì phường bị xóa.
+# Các trường cũ (ownerFullName, ownerCitizenId, certificateNumber, issuedBy) vẫn nhận nhưng không còn bắt buộc, FE không gửi.
 # @name draft
 PUT {{baseUrl}}/executor/death-cases/{{caseId}}/draft
 Authorization: Bearer {{token}}
@@ -49,12 +60,10 @@ Content-Type: application/json
 
 {
   "etag": "{{etag}}",
-  "ownerFullName": "Nguyễn Văn An",
-  "ownerCitizenId": "012345678901",
   "dateOfDeath": "2026-10-10",
-  "certificateNumber": "123/2026/TT",
   "issuedOn": "2026-10-11",
-  "issuedBy": "UBND phường Bến Nghé"
+  "deathRegistrationProvinceCode": "79",
+  "deathRegistrationWardCode": "26743"
 }
 
 ### 5) Tải một trang giấy chứng tử (multipart, field "file"). Loại tệp xác định theo NỘI DUNG, đổi đuôi .exe thành .pdf vẫn bị từ chối (400).
