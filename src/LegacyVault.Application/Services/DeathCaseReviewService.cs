@@ -300,6 +300,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         // DEATH-03: nhập lại mật khẩu để xác nhận; đặt trước nhánh gọi lặp nên gọi lặp cũng phải đúng mật khẩu.
         await CheckSigningPasswordAsync(context, request.Password, ct);
 
+        // Chưa nộp ảnh thẻ công chứng viên thì không duyệt được (409, reason NOTARY_CARD_REQUIRED).
+        await EnsureNotaryCardAsync(context, ct);
+
         // 2) AC-71: hồ sơ đã đóng (kiểm TRƯỚC etag). Đã duyệt rồi thì gọi lặp trả trạng thái hiện tại
         //    (không thêm dòng, không gọi lại StartAsync); đã bị từ chối thì 409 CASE_CLOSED.
         if (deathCase.Status == DeathCaseStatus.ApprovedForHandover)
@@ -616,6 +619,17 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     /// DEATH-03: đọc tài khoản Verifier rồi kiểm mật khẩu xác nhận duyệt/từ chối (khóa lũy tiến). Gọi SAU khi đã chắc là
     /// Verifier được giao hồ sơ, để người không được giao (hoặc đã bị giao lại) không tốn lần đoán.
     /// </summary>
+    private async Task EnsureNotaryCardAsync(ReviewContext context, CancellationToken ct)
+    {
+        User? user = await userRepository.FindByIdAsync(context.UserId, ct);
+        if (user == null)
+        {
+            throw new AppException(AppErrorType.Unauthorized, ErrorCode.SessionExpired,
+                "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        }
+        NotaryCardRules.EnsureHasCard(user, ErrorCode.DeathCaseNotAllowed);
+    }
+
     private async Task CheckSigningPasswordAsync(ReviewContext context, string password, CancellationToken ct)
     {
         User? user = await userRepository.FindByIdAsync(context.UserId, ct);

@@ -1,3 +1,4 @@
+using LegacyVault.Api.Handover;
 using LegacyVault.Api.Models;
 using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Dtos.Requests;
@@ -70,6 +71,17 @@ public sealed class AdminController : ControllerBase
         await using Stream content = file.OpenReadStream();
         await notaryCardService.UploadAsync(userId, content, file.Length, ct);
         return NoContent();
+    }
+
+    /// <summary>Xem ảnh thẻ công chứng viên của một Người xét duyệt (nội dung ảnh, không phải JSON). 404 khi chưa có ảnh.</summary>
+    [HttpGet("users/{userId:guid}/notary-card")]
+    [Produces("image/jpeg", "image/png", "image/webp", "application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetNotaryCard(Guid userId, CancellationToken ct)
+    {
+        PreparedDownload download = await notaryCardService.PrepareForAdminAsync(userId, ct);
+        return new AvatarFileResult(download);
     }
 
     [HttpGet("users")]

@@ -142,6 +142,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = submission.Turn;
+        await EnsureNotaryCardAsync(userId, ct);
 
         // Bấm lặp: đã duyệt rồi thì trả lại kết quả cũ.
         if (submission.Status == HandoverSubmissionStatus.Approved)
@@ -202,6 +203,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = submission.Turn;
+        await EnsureNotaryCardAsync(userId, ct);
 
         HandoverDocument? document = null;
         if (documents != null)
@@ -465,6 +467,18 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     private static AppException SubmissionNotFound()
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy hồ sơ người nhận.");
+    }
+
+    /// <summary>Chưa nộp ảnh thẻ công chứng viên thì không duyệt hồ sơ người nhận, không gửi biên bản (409, reason NOTARY_CARD_REQUIRED).</summary>
+    private async Task EnsureNotaryCardAsync(Guid userId, CancellationToken ct)
+    {
+        User? user = await users.FindByIdAsync(userId, ct);
+        if (user == null)
+        {
+            throw new AppException(AppErrorType.Unauthorized, ErrorCode.SessionExpired,
+                "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        }
+        NotaryCardRules.EnsureHasCard(user, ErrorCode.HandoverNotAllowed);
     }
 
     private static AppException NotAllowed(string reason, string message)
