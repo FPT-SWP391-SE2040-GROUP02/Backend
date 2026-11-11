@@ -5,6 +5,9 @@ public class HandoverProgressItemResponse
 {
     public Guid ItemId { get; set; }
 
+    /// <summary>Mã tài sản gốc trong kho (không phải mã bản ghim), để gắn dòng tải với đúng tài sản trong danh sách gói.</summary>
+    public Guid AssetId { get; set; }
+
     public string Name { get; set; } = string.Empty;
 
     /// <summary>FILE hoặc TEXT.</summary>

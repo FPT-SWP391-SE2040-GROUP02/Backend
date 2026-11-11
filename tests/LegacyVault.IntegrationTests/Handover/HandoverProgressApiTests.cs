@@ -74,9 +74,14 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         Assert.NotNull(turn.Items[0].FirstDownloadedAt);
         Assert.True(Math.Abs((turn.Items[0].FirstDownloadedAt!.Value - firstAt).TotalSeconds) < 1);
         Assert.False(turn.Items[1].Downloaded);
+        Assert.NotNull(turn.KeyVerifiedAt);
+        Assert.NotNull(turn.RecipientSignedAt);
+        Assert.NotNull(turn.DocumentApprovedAt);
+        Assert.True(turn.RecipientSignedAt!.Value < turn.DocumentApprovedAt!.Value);
 
         string json = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("email", json, StringComparison.OrdinalIgnoreCase);
+        // Email người nhận chỉ trả qua beneficiaryEmail (lượt còn hiệu lực/đã bàn giao); không có khóa "email" trần hay CCCD đầy đủ.
+        Assert.DoesNotContain("\"email\"", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("storageKey", json, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -183,6 +188,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         turn.ClaimedAt = now.AddDays(-1);
         turn.DecisionDeadline = now.AddDays(6);
         turn.DecidedAt = now.AddHours(-2);
+        turn.KeyVerifiedAt = now.AddHours(-1);
         turn.CreatedAt = now.AddDays(-2);
 
         HandoverSnapshotItem first = NewItem(turn, "Tài sản một", 0);
@@ -198,9 +204,21 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         grant.ExpiresAt = now.AddDays(30);
         turn.Grant = grant;
 
+        // Biên bản đã được cả hai bên ký, để kiểm tra hai mốc ký trả về cho Người thực thi.
+        HandoverDocument document = new HandoverDocument();
+        document.TurnId = turn.Id;
+        document.VaultId = vault.VaultId;
+        document.Kind = HandoverSubmissionKind.Accept;
+        document.Status = HandoverDocumentStatus.Completed;
+        document.RecipientSignedAt = now.AddHours(-3);
+        document.VerifierSignedAt = now.AddHours(-2);
+        document.CreatedAt = now.AddHours(-4);
+
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             db.Set<HandoverTurn>().Add(turn);
+            await db.SaveChangesAsync();
+            db.Set<HandoverDocument>().Add(document);
             await db.SaveChangesAsync();
         });
 

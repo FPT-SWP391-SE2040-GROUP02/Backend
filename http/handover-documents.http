@@ -1,7 +1,7 @@
 # Thử luồng Biên Bản (biên bản đồng ý nhận và văn bản từ chối) — người nhận và Người xét duyệt; Người thực thi chỉ xem lại.
 #
 # Chuẩn bị: lượt đang ở bước xác minh danh tính (IDENTITY_IN_PROGRESS), Người xét duyệt đã duyệt hồ sơ chứng tử của kho
-# (Phần 1 của biên bản chép từ hồ sơ này). Cần ba tài khoản; dán ba access token vào @recipientToken, @executorToken, @verifierToken.
+# (Phần 1 của biên bản chép từ hồ sơ này, gồm owner.deathRegistrationPlace, ngày mất, ngày đăng ký khai tử). Cần ba tài khoản; dán ba access token vào @recipientToken, @executorToken, @verifierToken.
 # Không có hạn chót nào cho các bước: mỗi bước chờ tới khi người của bước đó làm xong.
 
 @baseUrl = http://localhost:5000/api/v1

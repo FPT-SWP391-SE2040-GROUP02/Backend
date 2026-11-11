@@ -66,8 +66,10 @@ public sealed class HandoverProgressService : IHandoverProgressService
         List<HandoverTurn> turns = await progressReader.FindTurnsWithItemsAsync(deathCase.PlanId, ct);
         List<Guid> grantIds = new List<Guid>();
         List<Guid> beneficiaryIds = new List<Guid>();
+        List<Guid> turnIds = new List<Guid>();
         foreach (HandoverTurn turn in turns)
         {
+            turnIds.Add(turn.Id);
             if (turn.Grant != null)
             {
                 grantIds.Add(turn.Grant.Id);
@@ -79,6 +81,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
         }
         Dictionary<Guid, DateTimeOffset> firstDownloads = await progressReader.FindFirstDownloadTimesAsync(grantIds, ct);
         Dictionary<Guid, string> citizenIdLast4 = await progressReader.FindCitizenIdLast4Async(beneficiaryIds, ct);
+        Dictionary<Guid, HandoverDocumentTimes> documentTimes = await progressReader.FindDocumentTimesAsync(turnIds, ct);
 
         foreach (HandoverTurn turn in turns)
         {
@@ -89,6 +92,11 @@ public sealed class HandoverProgressService : IHandoverProgressService
             }
             HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(last4, firstDownloads);
             turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
+            if (documentTimes.ContainsKey(turn.Id))
+            {
+                turnResponse.RecipientSignedAt = documentTimes[turn.Id].RecipientSignedAt;
+                turnResponse.DocumentApprovedAt = documentTimes[turn.Id].VerifierSignedAt;
+            }
             if (ShowsBeneficiaryContact(turn.Status))
             {
                 await FillBeneficiaryContactAsync(turnResponse, vault.Id, turn.BeneficiaryId, ct);
@@ -113,7 +121,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
     }
 
     /// <summary>
-    /// Giải mã họ tên và số điện thoại người nhận cho Executor. Không giải mã được (thiếu KEK, dữ liệu hỏng)
+    /// Giải mã họ tên, số điện thoại và email người nhận cho Executor. Không giải mã được (thiếu KEK, dữ liệu hỏng)
     /// thì để trống thay vì làm hỏng cả màn hình tiến độ.
     /// </summary>
     private async Task FillBeneficiaryContactAsync(
@@ -129,6 +137,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
             BeneficiaryPersonalData personal = beneficiaryProtector.Unprotect(beneficiary);
             turnResponse.BeneficiaryFullName = personal.FullName;
             turnResponse.BeneficiaryPhone = personal.Phone;
+            turnResponse.BeneficiaryEmail = personal.Email;
         }
         catch (CryptographicException)
         {

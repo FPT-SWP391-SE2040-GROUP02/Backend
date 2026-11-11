@@ -5,6 +5,9 @@ public class HandoverProgressTurnResponse
 {
     public Guid TurnId { get; set; }
 
+    /// <summary>Mã gói, để màn hình Tài sản gắn lượt vào đúng gói (hai gói có thể trùng tên).</summary>
+    public Guid ContainerId { get; set; }
+
     /// <summary>Tên gói lúc mở bàn giao.</summary>
     public string ContainerName { get; set; } = string.Empty;
 
@@ -26,6 +29,12 @@ public class HandoverProgressTurnResponse
     /// <summary>Số điện thoại liên hệ của người nhận. Cùng điều kiện với BeneficiaryFullName; null khi người nhận không có số hoặc không giải mã được.</summary>
     public string? BeneficiaryPhone { get; set; }
 
+    /// <summary>
+    /// Email người nhận để Executor biết lời mời gửi đi đâu. Cùng điều kiện với BeneficiaryPhone: chỉ có ở lượt còn hiệu lực
+    /// hoặc đã bàn giao; null khi người nhận không có email hoặc không giải mã được.
+    /// </summary>
+    public string? BeneficiaryEmail { get; set; }
+
     /// <summary>Trạng thái lượt dạng UPPER_SNAKE_CASE, ví dụ INVITED, HANDOVER_COMMITTED.</summary>
     public string Status { get; set; } = string.Empty;
 
@@ -39,6 +48,18 @@ public class HandoverProgressTurnResponse
     public DateTimeOffset? ReceivedAllAt { get; set; }
 
     public DateTimeOffset InvitedAt { get; set; }
+
+    /// <summary>Lúc máy chủ email nhận thư mời; null nghĩa là lời mời chưa gửi được (INVITE-04).</summary>
+    public DateTimeOffset? InvitationSentAt { get; set; }
+
+    /// <summary>Lúc người nhận ký biên bản (đồng ý hoặc từ chối) của lượt; null khi chưa có biên bản hoặc chưa ký.</summary>
+    public DateTimeOffset? RecipientSignedAt { get; set; }
+
+    /// <summary>Lúc Người xét duyệt ký biên bản (đồng ý hoặc từ chối) của lượt; null khi chưa có biên bản hoặc chưa ký.</summary>
+    public DateTimeOffset? DocumentApprovedAt { get; set; }
+
+    /// <summary>Lúc người nhận nhập đúng mã mở gói; null khi chưa nhập hoặc kho không dùng mã.</summary>
+    public DateTimeOffset? KeyVerifiedAt { get; set; }
 
     public DateTimeOffset ResponseDeadline { get; set; }
 

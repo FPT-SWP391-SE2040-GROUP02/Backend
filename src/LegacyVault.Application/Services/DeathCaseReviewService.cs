@@ -45,6 +45,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     private readonly IOwnerIdentityRepository ownerIdentityRepository;
     private readonly IOwnerIdentityProtector ownerIdentityProtector;
     private readonly ISigningPasswordChecker signingPasswordChecker;
+    private readonly ICheckInRepository checkInRepository;
+    private readonly IAdministrativeUnitCatalog administrativeUnits;
 
     public DeathCaseReviewService(
         ICurrentUser currentUser,
@@ -64,7 +66,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         IDeathCaseExecutorNoticeSender executorNoticeSender,
         IOwnerIdentityRepository ownerIdentityRepository,
         IOwnerIdentityProtector ownerIdentityProtector,
-        ISigningPasswordChecker signingPasswordChecker)
+        ISigningPasswordChecker signingPasswordChecker,
+        ICheckInRepository checkInRepository,
+        IAdministrativeUnitCatalog administrativeUnits)
     {
         this.currentUser = currentUser;
         this.userRepository = userRepository;
@@ -84,6 +88,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         this.ownerIdentityRepository = ownerIdentityRepository;
         this.ownerIdentityProtector = ownerIdentityProtector;
         this.signingPasswordChecker = signingPasswordChecker;
+        this.checkInRepository = checkInRepository;
+        this.administrativeUnits = administrativeUnits;
     }
 
     public async Task<PaginatedList<VerifierDeathCaseSummaryResponse>> ListAsync(PaginationRequest pagination, CancellationToken ct)
@@ -469,7 +475,15 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         {
             blockers.Add(DeathCaseNotAllowedReason.VerifierConflict.ToApiString());
         }
-        VerifierDeathCaseResponse response = deathCase.ToVerifierResponse(context.Assignment, identity, previous, blockers, handover);
+        // D7: lần Chủ kho tự điểm danh cuối, để tính cảnh báo DEATH_BEFORE_LAST_CHECKIN lúc đọc (không lưu cờ).
+        DateTimeOffset? lastCheckInAt = null;
+        CheckInSchedule? schedule = await checkInRepository.FindScheduleByPlanIdAsync(deathCase.PlanId, ct);
+        if (schedule != null)
+        {
+            lastCheckInAt = schedule.LastCheckInAt;
+        }
+        VerifierDeathCaseResponse response = deathCase.ToVerifierResponse(
+            context.Assignment, identity, previous, blockers, handover, administrativeUnits, lastCheckInAt);
         response.OwnerIdentity = await BuildOwnerIdentityAsync(deathCase, identity, ct);
         return response;
     }

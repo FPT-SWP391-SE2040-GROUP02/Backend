@@ -228,6 +228,7 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
         Assert.Equal(PlanStatus.Active, row.PlanStatus);
         Assert.Equal(deathCase.Id, row.OpenDeathCaseId);
         Assert.Equal(vault1.Owner.FullName, row.OwnerFullName);
+        Assert.NotNull(row.ExecutorAcceptedAt);
     }
 
     private async Task<bool> TryAddAsync(DeathCase deathCase)

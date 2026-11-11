@@ -49,6 +49,12 @@ public class HandoverDocument
     public DateOnly? CertificateIssuedOn { get; set; }
 
     /// <summary>
+    /// Nơi đăng ký khai tử dạng câu đã ghép, ví dụ "UBND phường Bến Thành, Thành phố Hồ Chí Minh". Chụp lúc tạo biên bản
+    /// từ hồ sơ chứng tử đã duyệt; rỗng khi hồ sơ không ghi (in thành dòng chấm).
+    /// </summary>
+    public string DeathRegistrationPlace { get; set; } = string.Empty;
+
+    /// <summary>
     /// Nơi thường trú của Chủ kho theo danh tính đã xác minh bằng eKYC (đọc từ căn cước, Chủ kho xác nhận).
     /// Rỗng khi Chủ kho chưa có danh tính đã gắn hoặc không giải mã được; in thành dòng chấm.
     /// </summary>
@@ -81,7 +87,7 @@ public class HandoverDocument
 
     public DateTimeOffset? VerifierSignedAt { get; set; }
 
-    /// <summary>Bốn mục kiểm tra thủ công đã tick, dạng chuỗi "1111" (mục nào tick thì "1").</summary>
+    /// <summary>Các mục kiểm tra thủ công đã tick, dạng chuỗi "11" (mục nào tick thì "1"); biên bản cũ có thể là "1111".</summary>
     public string VerifierChecks { get; set; } = string.Empty;
 
     public string VerifierTermsVersion { get; set; } = string.Empty;

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Domain.Entities;
@@ -33,15 +34,26 @@ public static class DeathCaseRules
     public const string MissingIssuedOn = "ISSUED_ON";
     public const string MissingIssuedBy = "ISSUED_BY";
     public const string MissingFiles = "FILES";
+    public const string MissingDeathRegistrationPlace = "DEATH_REGISTRATION_PLACE";
+
+    /// <summary>D7: mã cảnh báo Người xét duyệt khi chủ kho còn điểm danh sau ngày mất ghi trên giấy.</summary>
+    public const string WarningDeathBeforeLastCheckIn = "DEATH_BEFORE_LAST_CHECKIN";
+
+    /// <summary>D7: mã cảnh báo khi đăng ký khai tử trễ hơn số ngày cho phép so với ngày mất.</summary>
+    public const string WarningLateRegistration = "LATE_REGISTRATION";
+
+    /// <summary>D7: đăng ký khai tử sau ngày mất quá số ngày này thì cảnh báo (không chặn duyệt).</summary>
+    public const int LateRegistrationDays = 15;
 
     /// <summary>
-    /// DEATH-01: mọi mã phần hồ sơ có thể thiếu, đúng thứ tự GetMissingRequirements trả về.
-    /// Verifier chỉ được yêu cầu bổ sung các mã này.
+    /// DEATH-01: mọi mã phần hồ sơ có thể thiếu. Verifier chỉ được yêu cầu bổ sung các mã này.
+    /// Mã mới luôn thêm CUỐI mảng; GetMissingRequirements trả theo thứ tự riêng của nó.
     /// </summary>
     public static readonly string[] AllRequirementCodes =
     {
         MissingOwnerFullName, MissingOwnerCitizenId, MissingDateOfDeath,
         MissingCertificateNumber, MissingIssuedOn, MissingIssuedBy, MissingFiles,
+        MissingDeathRegistrationPlace,
     };
 
     /// <summary>Ngày trên giấy tờ tính theo giờ Việt Nam (UTC+07:00).</summary>
@@ -105,13 +117,27 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// Các phần còn thiếu để gửi được: chỉ cần ít nhất một giấy chứng tử hoặc trích lục khai tử (mã FILES).
-    /// Họ tên, số giấy, ngày mất, ngày cấp, nơi cấp không còn do Executor nhập; Người xét duyệt đọc trên giấy.
-    /// Số CCCD của Chủ kho lấy từ danh tính đã xác minh.
+    /// DEATH-01: các phần còn thiếu để gửi được. Executor phải điền 3 thông tin trên giấy chứng tử (ngày mất, ngày đăng ký
+    /// khai tử, nơi đăng ký khai tử gồm tỉnh và phường/xã) và tải ít nhất một giấy chứng tử hoặc trích lục khai tử (FILES).
+    /// Họ tên và ngày sinh của Chủ kho lấy từ danh tính đã xác minh nên Executor không phải nhập.
+    /// Chỉ xét có hay chưa; đúng/sai của giá trị do ValidateCertificateInfo kiểm.
     /// </summary>
-    public static List<string> GetMissingRequirements(int certificateFileCount)
+    public static List<string> GetMissingRequirements(
+        DateOnly? dateOfDeath, DateOnly? issuedOn, string? provinceCode, string? wardCode, int certificateFileCount)
     {
         List<string> missing = new List<string>();
+        if (dateOfDeath == null)
+        {
+            missing.Add(MissingDateOfDeath);
+        }
+        if (issuedOn == null)
+        {
+            missing.Add(MissingIssuedOn);
+        }
+        if (string.IsNullOrWhiteSpace(provinceCode) || string.IsNullOrWhiteSpace(wardCode))
+        {
+            missing.Add(MissingDeathRegistrationPlace);
+        }
         if (certificateFileCount <= 0)
         {
             missing.Add(MissingFiles);
@@ -134,26 +160,94 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-01: ngày mất không ở tương lai; ngày cấp không trước ngày mất và không ở tương lai.
-    /// todayInVietnam là ngày hiện tại theo giờ Việt Nam. Trường null thì bỏ qua (bản nháp chưa nhập).
+    /// DEATH-01: luật kiểm 3 thông tin trên giấy chứng tử, dùng chung cho sửa nháp và gửi hồ sơ. Thiếu giá trị (null) thì bỏ qua
+    /// (bản nháp chưa nhập, việc thiếu do GetMissingRequirements báo). "Hôm nay" là ngày Việt Nam của utcNow
+    /// (TimeProvider, đúng cả khi tua thời gian). planActivatedAt là lúc Chủ kho kích hoạt kế hoạch; null thì bỏ qua luật đó.
+    /// Lỗi 400 VALIDATION_ERROR theo tên trường: dateOfDeath, issuedOn, deathRegistrationProvinceCode, deathRegistrationWardCode.
     /// </summary>
-    public static void ValidateDates(DateOnly? dateOfDeath, DateOnly? issuedOn, DateOnly todayInVietnam)
+    public static void ValidateCertificateInfo(
+        DateOnly? dateOfDeath,
+        DateOnly? issuedOn,
+        string? provinceCode,
+        string? wardCode,
+        DateTimeOffset? planActivatedAt,
+        DateTimeOffset utcNow,
+        IAdministrativeUnitCatalog catalog)
     {
-        if (dateOfDeath != null && dateOfDeath.Value > todayInVietnam)
+        DateOnly today = TodayInVietnam(utcNow);
+        if (dateOfDeath != null)
         {
-            throw ValidationErrors.For("dateOfDeath", "Ngày mất không được ở tương lai.");
+            if (dateOfDeath.Value > today)
+            {
+                throw ValidationErrors.For("dateOfDeath", "Ngày mất không được sau hôm nay.");
+            }
+            if (planActivatedAt != null)
+            {
+                DateOnly activatedDay = TodayInVietnam(planActivatedAt.Value);
+                if (dateOfDeath.Value < activatedDay)
+                {
+                    string activatedText = activatedDay.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+                    throw ValidationErrors.For("dateOfDeath",
+                        "Ngày mất phải sau ngày Chủ kho kích hoạt kế hoạch (" + activatedText + ").");
+                }
+            }
         }
         if (issuedOn != null)
         {
-            if (issuedOn.Value > todayInVietnam)
+            if (issuedOn.Value > today)
             {
-                throw ValidationErrors.For("issuedOn", "Ngày cấp không được ở tương lai.");
+                throw ValidationErrors.For("issuedOn", "Ngày đăng ký khai tử không được sau hôm nay.");
             }
             if (dateOfDeath != null && issuedOn.Value < dateOfDeath.Value)
             {
-                throw ValidationErrors.For("issuedOn", "Ngày cấp không được trước ngày mất.");
+                throw ValidationErrors.For("issuedOn", "Ngày đăng ký khai tử phải từ ngày mất trở đi.");
             }
         }
+
+        bool hasProvince = !string.IsNullOrWhiteSpace(provinceCode);
+        bool hasWard = !string.IsNullOrWhiteSpace(wardCode);
+        if (hasProvince && catalog.FindProvince(provinceCode!) == null)
+        {
+            throw ValidationErrors.For("deathRegistrationProvinceCode", "Tỉnh/thành phố không hợp lệ.");
+        }
+        if (hasWard)
+        {
+            // Phường/xã phải thuộc đúng tỉnh đã chọn; chưa chọn tỉnh thì cũng coi là không thuộc.
+            bool wardBelongs = false;
+            if (hasProvince && catalog.FindWard(provinceCode!, wardCode!) != null)
+            {
+                wardBelongs = true;
+            }
+            if (!wardBelongs)
+            {
+                throw ValidationErrors.For("deathRegistrationWardCode", "Phường/xã không thuộc tỉnh/thành phố đã chọn.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// D7: ngày Việt Nam của lần điểm danh cuối của Chủ kho. Chủ kho còn điểm danh SAU ngày mất ghi trên giấy
+    /// (lần điểm danh cuối &gt; ngày mất) là dấu hiệu bất thường. Thiếu ngày mất hoặc chưa từng điểm danh thì không cảnh báo.
+    /// </summary>
+    public static bool IsDeathBeforeLastCheckIn(DateOnly? dateOfDeath, DateTimeOffset? lastCheckInAt)
+    {
+        if (dateOfDeath == null || lastCheckInAt == null)
+        {
+            return false;
+        }
+        DateOnly lastCheckInDay = TodayInVietnam(lastCheckInAt.Value);
+        return lastCheckInDay > dateOfDeath.Value;
+    }
+
+    /// <summary>D7: đăng ký khai tử cách ngày mất hơn 15 ngày. Thiếu một trong hai ngày thì không cảnh báo.</summary>
+    public static bool IsLateRegistration(DateOnly? dateOfDeath, DateOnly? issuedOn)
+    {
+        if (dateOfDeath == null || issuedOn == null)
+        {
+            return false;
+        }
+        int days = issuedOn.Value.DayNumber - dateOfDeath.Value.DayNumber;
+        return days > LateRegistrationDays;
     }
 
     /// <summary>

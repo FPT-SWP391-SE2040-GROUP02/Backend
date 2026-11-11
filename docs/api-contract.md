@@ -125,6 +125,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `VAULT_PIN_RESET_NEEDS_PASSWORD` | Quên PIN nhưng tài khoản không có mật khẩu (chỉ đăng nhập bằng Google) | |
 | 403 | `SIGNING_PASSWORD_INVALID` | Verifier Duyệt/Từ chối hồ sơ chứng tử nhập sai mật khẩu xác nhận, hoặc tài khoản chưa có mật khẩu (mục 6.12, DEATH-03) | `attemptsRemaining` (không có khi tài khoản chưa có mật khẩu) |
 | 423 | `SIGNING_LOCKED` | Chức năng Duyệt/Từ chối của Verifier bị khóa tạm vì sai mật khẩu 5 lần liên tiếp; đang khóa thì mật khẩu đúng cũng bị từ chối | `lockedUntil` |
+| 404 | `ADMINISTRATIVE_UNIT_NOT_FOUND` | Mã tỉnh/thành phố không có trong danh mục đơn vị hành chính (mục 6.10a) | |
 | 503 | `MAINTENANCE_MODE` | Hệ thống đang bảo trì (Admin bật `Features.MaintenanceMode`): chỉ tài khoản Quản trị viên đăng nhập và gọi API được. Tài khoản khác bị chặn khi đăng nhập email (sau khi mật khẩu đúng), làm mới phiên (refresh token cũ được giữ, hết bảo trì dùng tiếp) và mọi API còn lại; đăng nhập Google đóng hẳn. Luôn mở: `GET /settings/public`, `/auth/csrf`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/2fa/verify`, webhook SePay, health. Khác `EKYC_SERVICE_UNAVAILABLE`/`STORAGE_UNAVAILABLE` cùng 503: FE so theo `code` để hiện màn hình bảo trì | |
 
 ---
@@ -629,6 +630,25 @@ Người dùng đọc mặt trước CCCD rồi gửi selfie để so khớp khu
 - eKYC chỉ là bằng chứng hỗ trợ. Luồng nhận tài sản dùng kết quả này qua `POST /handover/turns/{turnId}/identity/complete` (xem `docs/HANDOVER-RECEIVE-API.md`): chỉ khi lượt eKYC `BENEFICIARY_CLAIM` ghim đúng lượt, `PASSED` và `identityMatch = MATCHED` thì lượt mới sang `READY_TO_ACCEPT`. Nhóm đã bỏ bước gọi video: xác minh eKYC ở bước nhận thay cho việc gọi video và Executor kết luận "đúng người".
 - Chưa có kiểm tra liveness theo động tác (chớp mắt, quay đầu); chỉ có kiểm tra giả mạo trên một ảnh selfie.
 
+### 6.10a. Danh mục tỉnh/thành phố và phường/xã
+
+Dữ liệu tĩnh theo nghị quyết 388/NQ-UBTVQH16 (34 tỉnh/thành phố, 3321 phường/xã/đặc khu), nguồn GitHub `thanglequoc/vietnamese-provinces-database`, nhúng trong Backend (`Data/Reference/vn-administrative-units.json`). Đọc tệp một lần khi chạy, **không gọi dịch vụ ngoài**. Dùng cho ô "Nơi đăng ký khai tử" của Executor (mục 6.11). Cần đăng nhập (Bearer), không phân vai.
+
+| Method | URL | Thành công | Lỗi |
+|---|---|---|---|
+| GET | `/v1/administrative-units/provinces` | 200 `[{ code, name }]` (34 phần tử, theo thứ tự trong tệp) | 401 |
+| GET | `/v1/administrative-units/provinces/{code}/wards` | 200 `[{ code, name }]` các phường/xã của tỉnh | 401, 404 `ADMINISTRATIVE_UNIT_NOT_FOUND` (mã tỉnh lạ) |
+
+```jsonc
+// GET /v1/administrative-units/provinces
+[ { "code": "01", "name": "Thành phố Hà Nội" }, { "code": "79", "name": "Thành phố Hồ Chí Minh" } ]
+// GET /v1/administrative-units/provinces/79/wards
+[ { "code": "26743", "name": "Phường Bến Thành" } ]
+```
+
+- `code` là **chuỗi** (giữ số 0 đứng đầu: tỉnh 2 ký tự, phường/xã 5 ký tự). Tên phường/xã luôn viết hoa chữ đầu ("Xã ...", "Phường ...", "Đặc khu ..."); một xã viết thường trong tệp gốc đã được chuẩn hóa.
+- Danh sách phường/xã dài (có tỉnh hơn 100 phường/xã); FE nên cho gõ để lọc.
+
 ### 6.11. Executor nộp hồ sơ chứng tử
 
 Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, khai thông tin trên giấy, tải các trang giấy rồi xác nhận gửi (SRS §6.2 F2B). Cần đăng nhập (Bearer); người dùng lấy từ token. **Người gọi phải là Executor đang hiệu lực (`Accepted`) của kho và không phải Owner của kho đó**; không đủ điều kiện thì `404` (`VAULT_NOT_FOUND` / `DEATH_CASE_NOT_FOUND`) để không lộ kho hay hồ sơ có tồn tại hay không. Phần Verifier xét hồ sơ nằm ở mục 6.12; Owner phản đối chưa có.
@@ -638,7 +658,7 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
 | GET | `/v1/executor/vaults` | — | 200 `ExecutorVaultResponse[]` | 401 |
 | POST | `/v1/executor/vaults/{vaultId}/death-case` | — | **201** vừa tạo / **200** kho đã có hồ sơ mở; `DeathCaseResponse` | 404, 409 `DEATH_CASE_NOT_ALLOWED` (`PLAN_NOT_RUNNING`) |
 | GET | `/v1/executor/death-cases/{caseId}` | — | 200 `DeathCaseResponse` | 404 |
-| PUT | `/v1/executor/death-cases/{caseId}/draft` | `{ etag, ownerFullName?, ownerCitizenId?, dateOfDeath?, certificateNumber?, issuedOn?, issuedBy? }` | 200 | 400, 404, 409 `EDIT_CONFLICT` / `DEATH_CASE_NOT_ALLOWED` (`VERSION_LOCKED`, `CASE_CLOSED`) |
+| PUT | `/v1/executor/death-cases/{caseId}/draft` | `{ etag, dateOfDeath?, issuedOn?, deathRegistrationProvinceCode?, deathRegistrationWardCode?, ownerFullName?, ownerCitizenId?, certificateNumber?, issuedBy? }` (FE chỉ gửi 4 trường đầu; 4 trường cũ giữ cho tương thích, không còn bắt buộc) | 200 | 400 `VALIDATION_ERROR` (theo từng trường, xem "Sửa bản nháp"), 404, 409 `EDIT_CONFLICT` / `DEATH_CASE_NOT_ALLOWED` (`VERSION_LOCKED`, `CASE_CLOSED`) |
 | POST | `/v1/executor/death-cases/{caseId}/files` | `multipart/form-data`, field `file` | **201** `DeathCaseResponse` | 400 `VALIDATION_ERROR` (loại tệp sai), 404, 409 `DEATH_CASE_FILE_LIMIT_EXCEEDED` / `DEATH_CASE_NOT_ALLOWED`, 413 `FILE_TOO_LARGE` |
 | DELETE | `/v1/executor/death-cases/{caseId}/files/{fileId}` | — | 200 `DeathCaseResponse` | 404, 409 `DEATH_CASE_NOT_ALLOWED` (`VERSION_LOCKED`) |
 | DELETE | `/v1/executor/death-cases/{caseId}/draft` | — | **204** (đã hủy hồ sơ nháp) | 404, 409 `DEATH_CASE_NOT_ALLOWED` (`VERSION_LOCKED`, `CASE_CLOSED`) / `EDIT_CONFLICT` |
@@ -648,7 +668,9 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
 ```jsonc
 // ExecutorVaultResponse
 { "vaultId": "0199...", "ownerFullName": "Nguyễn Văn Chủ", "role": "PRIMARY", "planStatus": "CHECKIN_OVERDUE",
-  "checkInOverdue": true, "openDeathCaseId": null, "lastRejectedDeathCaseId": null }
+  "checkInOverdue": true, "openDeathCaseId": null, "lastRejectedDeathCaseId": null,
+  "acceptedAt": "2026-10-01T03:00:00+00:00" }
+// acceptedAt: lúc tài khoản chấp nhận lời mời làm Người thực thi của kho (null với dữ liệu cũ không có); FE hiện "Bạn nhận vai ngày ..."
 // lastRejectedDeathCaseId: hồ sơ bị từ chối gần nhất của kho (null khi chưa có); mở bằng GET /v1/executor/death-cases/{caseId} để xem rejectReason
 
 // DeathCaseResponse — KHÔNG có CCCD đầy đủ, KHÔNG có thông tin Verifier
@@ -658,6 +680,8 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
     "versionNo": 1, "isDraft": false,
     "ownerFullName": "Nguyễn Văn An", "ownerCitizenIdLast4": "8901", "dateOfDeath": "2026-10-10",
     "certificateNumber": "123/2026/TT", "issuedOn": "2026-10-11", "issuedBy": "UBND phường Bến Nghé",
+    "deathRegistrationProvinceCode": "79", "deathRegistrationWardCode": "26743",
+    "deathRegistrationPlace": "UBND phường Bến Thành, Thành phố Hồ Chí Minh",   // rỗng khi chưa chọn
     "files": [ { "id": "0199...", "position": 1, "fileName": "giay-chung-tu.pdf", "contentType": "application/pdf",
                  "sizeBytes": 1048576, "uploadedAt": "2026-10-15T03:00:00+00:00" } ],
     "submittedAt": "2026-10-15T03:05:00+00:00"
@@ -673,9 +697,9 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
 
 - `status`: `DRAFT` (mới mở, chưa gửi lần nào) | `UNDER_REVIEW` | `SUPPLEMENT_REQUIRED` | `APPROVED_FOR_HANDOVER` | `REJECTED` | `SUSPENDED`. Bốn trạng thái sau `UNDER_REVIEW` do phần Verifier/Owner đặt; mục này chỉ trả về chúng.
 - **Mở hồ sơ**: mỗi kho chỉ có một hồ sơ đang mở (mọi trạng thái trừ `REJECTED`, kể cả `DRAFT`). Hai Executor mở cùng lúc vẫn ra một hồ sơ: một bên nhận 201, bên kia 200 cùng `id`. Chỉ mở được khi kế hoạch đang chạy (`ACTIVE`/`CHECKIN_OVERDUE`/`AWAITING_CHECK`); dịch vụ đang ân hạn (chỉ đọc) **vẫn mở được**. Mở hồ sơ nháp **chưa** khóa kế hoạch.
-- **Sửa bản nháp**: chuỗi `null`/không gửi = giữ nguyên, `""` = xóa; ngày `null` = giữ nguyên. `ownerCitizenId` được bỏ khoảng trắng và phải đủ 12 chữ số. Ngày mất không được ở tương lai; ngày cấp không được trước ngày mất và không được ở tương lai (theo giờ Việt Nam). `etag` lấy từ response gần nhất; lệch → `409 EDIT_CONFLICT`. Họ tên Owner, CCCD Owner, số giấy và nơi cấp được mã hóa; response chỉ có `ownerCitizenIdLast4`.
+- **Sửa bản nháp**: chuỗi (kể cả `deathRegistrationProvinceCode`, `deathRegistrationWardCode`) `null`/không gửi = giữ nguyên, `""` = xóa; ngày `null` = giữ nguyên. **Đổi tỉnh mà không gửi phường thì phường bị xóa.** Executor chỉ cần điền 3 thông tin trên giấy chứng tử: ngày mất (`dateOfDeath`), ngày đăng ký khai tử (`issuedOn`, cột ngày cấp cũ) và nơi đăng ký khai tử (tỉnh + phường/xã chọn từ mục 6.10a; không có ô tự gõ, chỉ trong Việt Nam). Họ tên và ngày sinh Chủ kho lấy từ danh tính đã xác minh. `ownerFullName`, `ownerCitizenId`, `certificateNumber`, `issuedBy` giữ trong API cho tương thích nhưng FE không gửi; `ownerCitizenId` được bỏ khoảng trắng và phải đủ 12 chữ số. **Luật kiểm** (một chỗ, dùng chung khi sửa nháp và khi gửi; "hôm nay" và ngày kích hoạt tính theo giờ Việt Nam của giờ server, đúng cả khi tua thời gian), lỗi `400 VALIDATION_ERROR` có `errors.<tên trường>`: `dateOfDeath` không sau hôm nay ("Ngày mất không được sau hôm nay.") và không trước ngày kích hoạt kế hoạch ("Ngày mất phải sau ngày Chủ kho kích hoạt kế hoạch (dd/MM/yyyy)."; ngày mất đúng bằng ngày kích hoạt vẫn hợp lệ); `issuedOn` không trước ngày mất ("Ngày đăng ký khai tử phải từ ngày mất trở đi.") và không sau hôm nay ("Ngày đăng ký khai tử không được sau hôm nay."); `deathRegistrationProvinceCode` phải có trong danh mục ("Tỉnh/thành phố không hợp lệ."); `deathRegistrationWardCode` phải thuộc đúng tỉnh ("Phường/xã không thuộc tỉnh/thành phố đã chọn."). Trường chưa nhập thì bỏ qua. `etag` lấy từ response gần nhất; lệch → `409 EDIT_CONFLICT`; đổi nơi đăng ký cũng làm đổi `etag`. Họ tên Owner, CCCD Owner, số giấy và nơi cấp (cũ) được mã hóa; response chỉ có `ownerCitizenIdLast4`. Mã tỉnh, mã phường để rõ (không mã hóa). Response có thêm `deathRegistrationPlace`: câu đã ghép "UBND phường Bến Thành, Thành phố Hồ Chí Minh" (rỗng khi chưa chọn); bản mới tạo từ bản cũ chép cả hai mã.
 - **Trang giấy**: PDF, JPEG, PNG hoặc WEBP, tối đa 20 MiB mỗi tệp, tối đa 10 tệp mỗi bản. Loại tệp xác định theo **nội dung thật**, không theo đuôi hay Content-Type: tệp đổi đuôi (ví dụ `.exe` thành `.pdf`) bị `400`. Nội dung được mã hóa khi lưu và **không tính vào dung lượng kho**. Response chỉ có metadata, chưa có API tải trang về.
-- **Gửi hồ sơ** (`submit`): cần `confirm = true` (Executor xác nhận thông tin đúng), đủ 6 trường và ít nhất một trang, nếu không `409 DEATH_CASE_INCOMPLETE` kèm `missingRequirements` (`OWNER_FULL_NAME`, `OWNER_CITIZEN_ID`, `DATE_OF_DEATH`, `CERTIFICATE_NUMBER`, `ISSUED_ON`, `ISSUED_BY`, `FILES`). Trong **một lần lưu**: khóa bản vừa gửi (không bao giờ sửa lại), chuyển kế hoạch sang `DEATH_CASE_OPEN` (lần gửi đầu; từ đó Owner không sửa kho được: `VAULT_NOT_EDITABLE` / `PLAN_LOCKED`, không điểm danh được: `CHECKIN_NOT_ALLOWED`), đặt cờ nếu Owner có điểm danh sau ngày mất, xếp thông báo cho Owner và phân công Verifier. Kế hoạch bị đổi ở nơi khác đúng lúc đó (Owner điểm danh, job quá hạn) → `409 EDIT_CONFLICT`, không ghi đè. Gửi lặp bản đã gửi trả trạng thái hiện tại.
+- **Gửi hồ sơ** (`submit`): cần `confirm = true` (Executor xác nhận thông tin đúng), đủ 3 thông tin trên giấy và ít nhất một trang, nếu không `409 DEATH_CASE_INCOMPLETE` kèm `missingRequirements`. Mã bắt buộc, theo thứ tự trả về: `DATE_OF_DEATH`, `ISSUED_ON`, `DEATH_REGISTRATION_PLACE` (thiếu tỉnh hoặc thiếu phường/xã), `FILES`. Các mã cũ `OWNER_FULL_NAME`, `OWNER_CITIZEN_ID`, `CERTIFICATE_NUMBER`, `ISSUED_BY` không còn bắt buộc nhưng Người xét duyệt vẫn có thể yêu cầu bổ sung. Khi gửi **chạy lại luật kiểm ở "Sửa bản nháp"** (lỗi `400` theo trường). Trong **một lần lưu**: khóa bản vừa gửi (không bao giờ sửa lại), chuyển kế hoạch sang `DEATH_CASE_OPEN` (lần gửi đầu; từ đó Owner không sửa kho được: `VAULT_NOT_EDITABLE` / `PLAN_LOCKED`, không điểm danh được: `CHECKIN_NOT_ALLOWED`), đặt cờ nếu Owner có điểm danh sau ngày mất, xếp thông báo cho Owner và phân công Verifier. Kế hoạch bị đổi ở nơi khác đúng lúc đó (Owner điểm danh, job quá hạn) → `409 EDIT_CONFLICT`, không ghi đè. Gửi lặp bản đã gửi trả trạng thái hiện tại.
 - **Không còn AI đọc giấy chứng tử khi gửi** (đã gỡ Gemini): chỉ kiểm đủ trường, loại tệp thật, số tệp và dung lượng.
 - **Hủy hồ sơ nháp** (`DELETE .../draft`): chỉ khi hồ sơ còn `DRAFT` (chưa gửi lần nào, Owner chưa được báo, kế hoạch chưa khóa). Xóa hẳn hồ sơ, bản nháp và các trang đã tải (cả nội dung đã lưu); kho trở lại như chưa báo tin: `openDeathCaseId = null`, mở lại hồ sơ mới được, và Executor điểm danh thay chủ kho được nếu chủ kho đang quá hạn. Hồ sơ đã gửi → `409 DEATH_CASE_NOT_ALLOWED` (`VERSION_LOCKED`); Executor kia vừa gửi đúng lúc đó → `409 EDIT_CONFLICT`. Nhật ký kho ghi `DEATH_CASE_DRAFT_CANCELLED`.
 - **Phiên bản bổ sung** (`versions`): khi hồ sơ `UNDER_REVIEW` hoặc `SUPPLEMENT_REQUIRED`, tạo bản `versionNo + 1` chép dữ liệu và các trang của bản đã gửi (dùng chung nội dung đã lưu). Mỗi hồ sơ chỉ có một bản nháp (`CASE_NOT_REVISABLE` nếu đã có hoặc chưa có bản nào được gửi). Verifier vẫn xét bản gửi gần nhất (`reviewVersionNo`) cho tới khi bản mới được gửi và xác nhận lại. Bản đã gửi không đổi.
@@ -716,7 +740,9 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
   "createdAt": "...", "firstSubmittedAt": "...", "closedAt": null,
   "reviewVersion": { "versionNo": 2, "ownerFullName": "Nguyễn Văn An", "ownerCitizenId": "012345678901",
     "ownerCitizenIdLast4": "8901", "dateOfDeath": "2026-10-10", "certificateNumber": "123/2026/TT",
-    "issuedOn": "2026-10-11", "issuedBy": "UBND phường Bến Nghé", "submittedAt": "...",
+    "issuedOn": "2026-10-11", "issuedBy": "UBND phường Bến Nghé",
+    "deathRegistrationProvinceCode": "79", "deathRegistrationWardCode": "26743",
+    "deathRegistrationPlace": "UBND phường Bến Thành, Thành phố Hồ Chí Minh", "submittedAt": "...",
     "files": [ { "id": "0199...", "position": 1, "fileName": "trang.pdf", "contentType": "application/pdf", "sizeBytes": 531, "uploadedAt": "..." } ] },
   "versions": [ { "versionNo": 1, "ownerCitizenIdLast4": "8901", "dateOfDeath": "2026-10-10", "submittedAt": "...", "files": [] } ],
   "flags": [ { "id": "0199...", "kind": "CHECKIN_AFTER_DEATH", "detail": "...", "createdAt": "...", "reviewedAt": null, "reviewNote": null } ],
@@ -726,6 +752,8 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
   "assignment": { "assignedAt": "...", "dueAt": "..." },
   "canApprove": false, "approveBlockers": ["OBJECTION_PERIOD_NOT_OVER"],
   "previousCase": null, "handover": null,
+  "warnings": [ { "code": "DEATH_BEFORE_LAST_CHECKIN", "message": "Ngày mất trước lần điểm danh cuối (12/10/2026). Kiểm tra kỹ giấy trước khi duyệt." } ],
+  "lastCheckInOn": "2026-10-12",
   "ownerIdentity": { "verified": true, "citizenId": "012345678901", "fullName": "NGUYỄN VĂN AN",
     "dateOfBirth": "1950-03-04", "verifiedAt": "...", "citizenIdMatches": true, "fullNameMatches": true,
     "hasDocumentImage": true, "documentImageCapturedAt": "..." }
@@ -734,6 +762,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 ```
 
 - **`ownerIdentity`** (BR-48 sửa 25/10/2026): danh tính Owner đã gắn qua eKYC (`OWNER_ENROLLMENT` đạt), giải mã để Verifier được giao đối chiếu với bản Executor khai, gồm **đủ 12 số CCCD**, họ tên, ngày sinh. Luôn có object; Owner chưa xác minh thì `verified = false` và các trường còn lại `null`/`false`. `citizenIdMatches` so đủ 12 số; `fullNameMatches` so họ tên theo cách chuẩn hóa của eKYC (NFC, bỏ khoảng trắng thừa, không phân biệt hoa thường, **giữ dấu**); `null` khi bản đang xét chưa có trường đó. Ngày sinh không có trong bản Executor khai nên không so. `hasDocumentImage` cho biết có ảnh mặt trước CCCD lúc eKYC để xem qua `GET .../owner-identity/document-image` (Owner xác minh trước khi có chức năng này thì `false`).
+- **`warnings` và `lastCheckInOn`** (DEATH-10, **không chặn duyệt**, tính lúc đọc, không lưu cờ, không dùng lại cờ `CHECKIN_AFTER_DEATH`): `DEATH_BEFORE_LAST_CHECKIN` khi ngày Việt Nam của lần Chủ kho tự điểm danh cuối **sau** ngày mất ghi trên giấy ("Ngày mất trước lần điểm danh cuối (dd/MM/yyyy). Kiểm tra kỹ giấy trước khi duyệt."); `LATE_REGISTRATION` khi ngày đăng ký khai tử cách ngày mất **hơn 15 ngày** (đúng 15 ngày chưa cảnh báo). `message` là câu tiếng Việt hiển thị thẳng. `lastCheckInOn` là ngày (giờ Việt Nam) điểm danh cuối của Chủ kho, `null` khi chưa từng điểm danh. Executor điểm danh thay không tính. `reviewVersion` có thêm `deathRegistrationProvinceCode`, `deathRegistrationWardCode`, `deathRegistrationPlace` (như mục 6.11). Giao diện cho Người xét duyệt đánh dấu 3 dòng (ngày mất, ngày đăng ký, nơi đăng ký) khớp với ảnh giấy mới bật nút Duyệt; việc này chỉ ở FE, server vẫn dựa vào `approveBlockers`.
 - **Ảnh CCCD lúc eKYC** (`owner-identity/document-image`): cùng cách bảo vệ với trang giấy chứng tử (Bearer, chỉ Verifier đang được giao, giải mã hai lượt, hỏng thì `500 CONTENT_INTEGRITY_FAILED` không kèm byte nào), nhưng trả `inline` với kiểu ảnh thật để FE hiển thị (`X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`). Máy chủ ghi log "đã xem ảnh CCCD" (chỉ Id hồ sơ).
 
 - **Dữ liệu trả (DATA-02, cách hiểu):** `reviewVersion` (bản Executor gửi gần nhất, `reviewVersionNo`) có đủ họ tên, **CCCD 12 số**, số giấy, nơi cấp, vì Verifier được giao là "người cần" (SEC-05) và ảnh giấy chứng tử vốn có số đầy đủ. Câu "không trả CCCD đầy đủ trước khi xác minh xong" áp cho **người nhận ở F3**, không áp cho CCCD của Owner trong hồ sơ chứng tử. `versions[]` (các bản đã gửi khác) chỉ có cột không mã hóa (4 số cuối, ngày mất, `submittedAt`, metadata trang). Danh sách chỉ có 4 số cuối. Verifier **không bao giờ** thấy bản nháp. Không trả thông tin Executor, email Owner, khóa lưu trữ, SHA-256, Id người quyết định.
@@ -745,7 +774,7 @@ Verifier được giao hồ sơ xem danh sách, chi tiết và các trang giấy
 
 - **Thao tác ghi của Verifier** (xem xét cờ, yêu cầu bổ sung, từ chối, duyệt) đều bắt buộc `etag`, kiểm theo thứ tự: chuẩn hóa input (400) → tài khoản Verifier và phân công đang hiệu lực (401/403/404) → [xem xét cờ: tìm cờ của bản đang xét, không thấy 404] → [từ chối, duyệt: mật khẩu xác nhận `403 SIGNING_PASSWORD_INVALID` / `423 SIGNING_LOCKED`, xem "Xác nhận bằng mật khẩu" bên dưới] → gọi lặp → hồ sơ đã đóng (`CASE_CLOSED`) → `etag` (`EDIT_CONFLICT`) → trạng thái (`NOT_UNDER_REVIEW`) → `VERIFIER_CONFLICT` → ghi một lần. Mọi thao tác ghi làm đổi `etag` hồ sơ; FE dùng `etag` trong response cho thao tác kế tiếp (ví dụ xem xét cờ xong thì lấy `etag` mới để bấm duyệt).
 - **Xem xét cờ** (`flags/{flagId}/review`): chỉ cờ của bản đang xét (cờ của bản cũ hoặc hồ sơ khác: `404`). `note` bắt buộc, ≤ 1000 ký tự. Gọi lặp trên cờ đã xem xét trả `200` và **giữ ghi chú đầu**, không kiểm `etag`. Hết cờ chưa xem xét thì `FLAGS_NOT_REVIEWED` biến mất khỏi `approveBlockers`.
-- **Yêu cầu bổ sung** (`request-supplement`): `reason` bắt buộc ≤ 1000 ký tự; `requestedParts` bắt buộc có ít nhất một phần, **mỗi phần phải là mã viết hoa đúng như `missingRequirements`** (`OWNER_FULL_NAME`, `OWNER_CITIZEN_ID`, `DATE_OF_DEATH`, `CERTIFICATE_NUMBER`, `ISSUED_ON`, `ISSUED_BY`, `FILES`; chữ thường hoặc mã lạ là `400`). Server bỏ trùng, sắp xếp rồi lưu. Hồ sơ → `SUPPLEMENT_REQUIRED`; **phân công, kế hoạch và đồng hồ 72 giờ giữ nguyên**. Làm được cả khi Executor đang soạn bản nháp. Gọi lặp cùng nội dung khi hồ sơ đang `SUPPLEMENT_REQUIRED` trả `200`, không thêm dòng (kiểm trước `etag`). Sau khi lưu, gửi thư cho mọi Executor còn nhận việc được của kho (mã hồ sơ và hạn bổ sung, không có lý do); gửi lỗi chỉ ghi log, không ảnh hưởng quyết định; gọi lặp không gửi lại. Mỗi lần Executor gửi bản mới **không phải lần đầu**, hạn xét (`assignment.dueAt`) của phân công đang hiệu lực được tính lại = lúc gửi + 48 giờ, nhưng không sớm hơn 48 giờ sau khi hết phản đối (`assignedAt` giữ nguyên; xem "Phân công Verifier (job nền)").
+- **Yêu cầu bổ sung** (`request-supplement`): `reason` bắt buộc ≤ 1000 ký tự; `requestedParts` bắt buộc có ít nhất một phần, **mỗi phần phải là mã viết hoa đúng như `missingRequirements`** (`OWNER_FULL_NAME`, `OWNER_CITIZEN_ID`, `DATE_OF_DEATH`, `CERTIFICATE_NUMBER`, `ISSUED_ON`, `ISSUED_BY`, `FILES`, `DEATH_REGISTRATION_PLACE`; chữ thường hoặc mã lạ là `400`). Server bỏ trùng, sắp xếp rồi lưu. Hồ sơ → `SUPPLEMENT_REQUIRED`; **phân công, kế hoạch và đồng hồ 72 giờ giữ nguyên**. Làm được cả khi Executor đang soạn bản nháp. Gọi lặp cùng nội dung khi hồ sơ đang `SUPPLEMENT_REQUIRED` trả `200`, không thêm dòng (kiểm trước `etag`). Sau khi lưu, gửi thư cho mọi Executor còn nhận việc được của kho (mã hồ sơ và hạn bổ sung, không có lý do); gửi lỗi chỉ ghi log, không ảnh hưởng quyết định; gọi lặp không gửi lại. Mỗi lần Executor gửi bản mới **không phải lần đầu**, hạn xét (`assignment.dueAt`) của phân công đang hiệu lực được tính lại = lúc gửi + 48 giờ, nhưng không sớm hơn 48 giờ sau khi hết phản đối (`assignedAt` giữ nguyên; xem "Phân công Verifier (job nền)").
 - **Không còn nút Từ chối** (đã gỡ cùng luồng giả mạo giấy chứng tử): hồ sơ không đạt thì Verifier chỉ Yêu cầu bổ sung. Bản đã từ chối cũ vẫn đọc được ở lịch sử.
 - **Trễ tối đa 60 giây sau khi từ chối (NFR-03)**: kế hoạch chỉ được trả về trạng thái trước đó; kỳ điểm danh không bị sửa. Job điểm danh tính lại theo kỳ (ví dụ `ACTIVE` → `CHECKIN_OVERDUE` nếu kỳ đã quá hạn trong lúc xét) trong vòng 60 giây, nên trạng thái kế hoạch có thể trễ tối đa 60 giây so với lịch. API điểm danh trả trạng thái hiệu lực theo giờ server nên FE không sai.
 - **"Nhả snapshot" (SRS §11.2)**: snapshot bàn giao chỉ được ghim lúc **duyệt**, nên khi từ chối chưa có snapshot nào để nhả.
@@ -915,18 +944,21 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
   "turns": [
     {
       "turnId": "0199...",
+      "containerId": "0199...",
       "containerName": "Tài liệu gia đình",
       "beneficiaryId": "0199...",
       "beneficiaryCitizenIdLast4": "8901",
       "beneficiaryFullName": "Nguyễn Văn An",
       "beneficiaryPhone": "0901234567",
+      "beneficiaryEmail": "an@example.com",
       "status": "HANDOVER_COMMITTED",
-      "invitedAt": "...", "responseDeadline": "...", "claimedAt": "...", "decisionDeadline": "...", "decidedAt": "...",
+      "invitedAt": "...", "invitationSentAt": "...", "recipientSignedAt": "...", "documentApprovedAt": "...", "keyVerifiedAt": "...", "receivedAllAt": "...",
+      "responseDeadline": "...", "claimedAt": "...", "decisionDeadline": "...", "decidedAt": "...",
       "grantStatus": "ACTIVE", "grantExpiresAt": "2026-11-19T08:00:00+00:00",
       "totalItems": 2, "downloadedItems": 1,
       "items": [
-        { "itemId": "0199...", "name": "Giấy tờ nhà", "kind": "FILE", "downloaded": true, "firstDownloadedAt": "..." },
-        { "itemId": "0199...", "name": "Tài khoản ngân hàng", "kind": "TEXT", "downloaded": false, "firstDownloadedAt": null }
+        { "itemId": "0199...", "assetId": "0199...", "name": "Giấy tờ nhà", "kind": "FILE", "downloaded": true, "firstDownloadedAt": "..." },
+        { "itemId": "0199...", "assetId": "0199...", "name": "Tài khoản ngân hàng", "kind": "TEXT", "downloaded": false, "firstDownloadedAt": null }
       ]
     }
   ]
@@ -935,9 +967,11 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 
 - **Chưa duyệt:** hồ sơ chưa ở `APPROVED_FOR_HANDOVER` thì `handoverStarted = false`, `turns` rỗng, `summary` toàn 0.
 - **Nhóm trạng thái trong `summary`:** `waitingResponse` = `INVITED`, `INITIAL_RESPONSE_EXPIRED`; `inVerification` = `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`; `accepted` = `HANDOVER_COMMITTED`; `declined` = `DECLINED`; `ended` = `DECISION_EXPIRED`, `CANCELLED`, `LAPSED`.
+- **Gắn với danh sách gói:** `containerId` (mã gói) và `items[].assetId` (mã tài sản gốc, không phải `itemId` của bản ghim) để FE nối lượt với gói và tài sản trong `GET /executor/vaults/{vaultId}/assets`.
 - **Đã tải:** tài sản có ít nhất một lần tải thành công. Lần tải bị từ chối hoặc lỗi toàn vẹn không tính. `firstDownloadedAt` là lần tải thành công đầu tiên.
 - **Dữ liệu nhạy cảm:** tài sản chỉ có tên và loại; không có nội dung tài sản hay số CCCD đầy đủ. Người nhận được phân biệt bằng 4 số cuối CCCD.
-- **Liên hệ người nhận:** `beneficiaryFullName` và `beneficiaryPhone` để Executor liên hệ, chỉ có ở lượt `INVITED`, `INITIAL_RESPONSE_EXPIRED`, `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`, `HANDOVER_COMMITTED`. Lượt `DECLINED`, `DECISION_EXPIRED`, `CANCELLED`, `LAPSED` trả `null`. Không giải mã được hoặc người nhận không có số thì trường tương ứng cũng `null` (không lỗi cả màn). Không có email hay ngày sinh.
+- **Liên hệ người nhận:** `beneficiaryFullName`, `beneficiaryPhone` và `beneficiaryEmail` để Executor liên hệ, chỉ có ở lượt `INVITED`, `INITIAL_RESPONSE_EXPIRED`, `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`, `HANDOVER_COMMITTED`. Lượt `DECLINED`, `DECISION_EXPIRED`, `CANCELLED`, `LAPSED` trả `null`. Không giải mã được hoặc người nhận không có số/email thì trường tương ứng cũng `null` (không lỗi cả màn). Không có ngày sinh.
+- **Giờ từng bước của lượt** (để FE vẽ 5 bước Đã mời, Đồng ý nhận, Người xét duyệt duyệt biên bản, Nhập mã mở gói, Tải xong): `invitationSentAt` (lúc máy chủ email nhận thư mời, `null` = lời mời chưa gửi được), `recipientSignedAt` (lúc người nhận ký biên bản đồng ý hoặc văn bản từ chối, `null` khi chưa có biên bản hoặc chưa ký), `decidedAt` (lúc lượt có quyết định cuối: Người xét duyệt gửi biên bản), `documentApprovedAt` (lúc Người xét duyệt ký biên bản của lượt, `null` khi chưa có biên bản hoặc chưa ký), `keyVerifiedAt` (lúc người nhận nhập đúng mã mở gói, `null` khi chưa nhập hoặc kho không dùng mã), `receivedAllAt` (lúc người nhận bấm đã nhận đủ). Chỉ là mốc thời gian, không có hạn chót.
 - **Thứ tự:** lượt xếp theo tên gói rồi theo lúc mời; tài sản xếp theo thứ tự đã ghim.
 - FE đếm thời gian còn lại theo `serverTime`.
 
@@ -971,6 +1005,11 @@ Mua dịch vụ, mua thêm suất người nhận, giả lập trả tiền và 
 | POST | `/api/v1/billing/orders/{orderId}/dev-pay` | — | 200 `PaymentOrderResponse` (đơn `PAID`) | 404, 409 `PAYMENT_ORDER_NOT_PAYABLE`, 409 `EDIT_CONFLICT` |
 | POST | `/api/v1/billing/sepay/webhook` | JSON của SePay (xem dưới) + header `Authorization: Apikey <key>` | 200 đúng `{"success":true}` | 400 `VALIDATION_ERROR`, 401 `WEBHOOK_UNAUTHORIZED`, 409 `EDIT_CONFLICT`, 500 |
 | GET | `/api/v1/admin/payment-transactions?status=&search=&environment=&from=&to=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminPaymentTransactionResponse>` (Admin, chỉ đọc) | 400 `VALIDATION_ERROR`, 401, 404 (không phải Admin) |
+| GET | `/api/v1/admin/payment-transactions/revenue?groupBy=&environment=&from=&to=` | — | 200 `AdminRevenueResponse` (Admin, chỉ đọc) | 400 `VALIDATION_ERROR`, 401, 404 (không phải Admin) |
+| GET | `/api/v1/admin/handover-templates/current` | — | 200 `AdminHandoverTemplateResponse` (mẫu đang dùng; mẫu gốc khi chưa lưu bản nào) | 401, 404 (không phải Admin) |
+| GET | `/api/v1/admin/handover-templates` | — | 200 `HandoverTemplateVersionResponse[]` (lịch sử, mới nhất trước, tối đa 50) | 401, 404 |
+| GET | `/api/v1/admin/handover-templates/{version}` | — | 200 `AdminHandoverTemplateResponse` của phiên bản cũ | 401, 404 |
+| POST | `/api/v1/admin/handover-templates` | `SaveHandoverTemplateRequest { accept[], decline[], declineNotice, note? }` | 200 `AdminHandoverTemplateResponse` (phiên bản mới) | 400 `VALIDATION_ERROR`, 401, 404 |
 
 **Body `quote` / `orders`:** `tier` là `"XS"` hoặc `"XS_MAX"`, `years` là `1`, `3` hoặc `5` (bắt buộc khi mua mới); `extraSlots` là số suất người nhận mua thêm; `renew` (bool, mặc định `false`) = true để **gia hạn** khi kho còn hạn. Backend tự xác định loại đơn từ quyền dịch vụ của kho, client không gửi:
 
@@ -1107,6 +1146,8 @@ dotnet user-secrets set "Billing:SePay:WebhookApiKey" "<key>" --project src/Lega
 
   Giao dịch lệch (trừ `NOT_INCOMING`) gắn `paymentOrderId` khi đã xác định được đơn, và mở một sự cố loại `PAYMENT` (xem 6.15) với `targetType = PaymentTransaction`, `targetId` = Id giao dịch; nội dung sự cố chỉ có mã lý do, không có số tiền, mã đơn hay số tài khoản (SEC-07).
 - **Trạng thái giao dịch** (`status`): `RECEIVED` (đã lưu, chưa đối chiếu xong), `MATCHED`, `RECONCILIATION_REQUIRED`, `RESOLVED` (chưa dùng). Một đơn có tối đa một giao dịch `MATCHED`.
+- **Admin sửa mẫu biên bản** (`/api/v1/admin/handover-templates`): mẫu gồm danh sách đoạn của biên bản đồng ý (`accept`), của văn bản từ chối (`decline`) và câu báo khi có người nhận từ chối (`declineNotice`, 1 đến 500 ký tự). Mỗi đoạn `{ text, align, bold }`: `align` là `left`, `center` hoặc `justify`; `text` tối đa 2000 ký tự, không trống, có thể chứa các trường `{NGAY}`, `{THANG}`, `{NAM}` (ngày ký), `{HO_TEN_NGUOI_NHAN}`, `{NAM_SINH}`, `{SO_CCCD}`, `{HO_TEN_CHU_KHO}`, `{NGAY_MAT}`, `{NGAY_DANG_KY}`, `{NOI_DANG_KY}`, `{DI_SAN}`, `{CAU_NGUOI_MAT}`, `{CAU_BAO_TU_CHOI}`; trường lạ → 400. Mỗi danh sách 1 đến 60 đoạn; `note` tối đa 300 ký tự. Mỗi lần lưu tạo một phiên bản mới (số tăng dần), không sửa hay xóa bản cũ, và ghi nhật ký; biên bản đã tạo giữ nguyên phiên bản lúc tạo (`templateVersion`), biên bản mới dùng phiên bản mới nhất. Chưa có bản nào được lưu thì dùng mẫu gốc trong mã (`version` null, `isDefault` true). `GET .../current` trả thêm `tokens[]` (trường, nhãn, ví dụ) và `default` (mẫu gốc để khôi phục). Khối chữ ký và dòng ký tên ở cuối biên bản là phần cố định, không nằm trong mẫu. Người không phải Admin đang hoạt động nhận 404 (SEC-04).
+- **Admin xem doanh thu** (`GET /api/v1/admin/payment-transactions/revenue`): doanh thu là tổng `transferAmount` của giao dịch **đã khớp đơn hoặc đã xử lý** (`MATCHED`, `RESOLVED`); giao dịch lệch chờ đối chiếu và giao dịch mới nhận chưa tính. `groupBy` là `day`, `month` (mặc định) hoặc `quarter`, gom theo giờ Việt Nam (UTC+7), giá trị khác → 400. `environment` là `Live` (mặc định, chỉ tiền thật), `Test` hoặc `ALL`; giá trị khác → 400. `from`, `to` như danh sách giao dịch (lọc theo `receivedAt`, tính cả hai đầu). Trả `{ groupBy, environment, totalAmount, transactionCount, currency, buckets[] }`, mỗi kỳ `{ key, label, amount, count }` (`key` như `2026-11-05`, `2026-11`, `2026-Q4`; cũ trước mới sau; kỳ không có giao dịch không xuất hiện). Người không phải Admin đang hoạt động nhận 404 (SEC-04).
 - **Admin xem giao dịch** (`GET /api/v1/admin/payment-transactions`, ADMIN-09): chỉ đọc, mới nhất trước, `status` lọc theo bốn giá trị trên (giá trị khác → 400). Thêm `status=SUCCESS` (gộp `MATCHED` và `RESOLVED`), `search` (mã thanh toán, mã tham chiếu hoặc mã giao dịch), `environment` (`Live` hoặc `Test`), `from` và `to` (ngày `yyyy-MM-dd` theo giờ Việt Nam, tính cả hai đầu, lọc theo `receivedAt`; sai định dạng hoặc `from` sau `to` → 400). Mỗi phần tử: `id`, `provider`, `environment`, `providerTransactionId`, `status`, `reconciliationReason`, `transferType` (`IN` / `OUT`), `transferAmount`, `currency`, `paymentOrderId`, `paymentCode`, `gateway`, `referenceCode`, `transactionAt`, `receivedAt`, `processedAt`. **Không có** nội dung chuyển khoản, số tài khoản, key hay `rowVersion`. Người không phải Admin đang hoạt động nhận 404 (SEC-04); không có API nào sửa hay ghi `PAID` cho giao dịch.
 
 ### 6.19. Công cụ thử nghiệm của Admin (chỉ Development)
@@ -1333,14 +1374,14 @@ Mỗi lượt bàn giao có **một biên bản** đi qua hai người ký theo 
 | GET | `/api/v1/executor/handover-documents/{id}` | Người thực thi đang hiệu lực của kho (không phải Owner) | — | 200 | 404 |
 | POST | `/api/v1/handover/turns/{turnId}/submission` | Người nhận | như cũ (multipart) | 200; biên bản sang `WAIT_VERIFIER` | thêm 409 `DOCUMENT_NOT_READY` khi biên bản không còn chờ người nhận (đã gửi Người xét duyệt hoặc đã hoàn tất), 400 khi `kind` khác biên bản |
 | GET | `/api/v1/verifier/handover-documents` | Người xét duyệt đã duyệt chứng tử của kho | — | 200; có `submissionId` để xem ảnh căn cước; `WAIT_VERIFIER` là biên bản chờ mình | 403 |
-| POST | `/api/v1/verifier/handover-submissions/{id}/complete` | như trên | `{ checks: [bool x4], acknowledged }` | 200 `VerifierHandoverSubmissionResponse`; biên bản `COMPLETED`, lượt kết thúc | 400 (chưa tick đủ bốn mục hoặc ô xác nhận), 404, 409 (`WRONG_STATE`, `NO_DOCUMENT`, `HOLD_ACTIVE`, `PLAN_NOT_IN_HANDOVER`) |
+| POST | `/api/v1/verifier/handover-submissions/{id}/complete` | như trên | `{ checks: [bool x2], acknowledged }` (hai mục: người nhận đúng là người Chủ kho đã chọn; biên bản đúng và đủ chữ ký) | 200 `VerifierHandoverSubmissionResponse`; biên bản `COMPLETED`, lượt kết thúc | 400 (không đúng 2 mục hoặc có mục chưa tick, hoặc chưa tick ô xác nhận), 404, 409 (`WRONG_STATE`, `NO_DOCUMENT`, `HOLD_ACTIVE`, `PLAN_NOT_IN_HANDOVER`) |
 | POST | `/api/v1/verifier/handover-submissions/{id}/request-supplement` | như trên | `{ reason }` | 200; biên bản về `WAIT_RECIPIENT`, Phần 1 giữ nguyên, người nhận ký lại | như cũ |
 
 - `POST .../approve` (cũ) với hồ sơ thuộc biên bản trả `409 HANDOVER_NOT_ALLOWED` (`USE_DOCUMENT`).
-- `HandoverDocumentResponse`: `id`, `turnId`, `vaultId`, `code`, `kind`, `status` (`WAIT_RECIPIENT` \| `WAIT_VERIFIER` \| `COMPLETED`), `templateVersion`, `containerName`, `itemCount`, `owner { fullName, dateOfDeath, certificateNumber, certificateIssuedOn, residenceAddress }` (Phần 1; hồ sơ chứng tử chỉ bắt buộc có tệp giấy chứng tử nên ngày mất, số giấy, ngày cấp có thể trống, giao diện in thành dòng chấm; `residenceAddress` lấy từ danh tính eKYC đã xác minh của Chủ kho lúc tạo biên bản, rỗng khi Chủ kho chưa gắn danh tính), `recipient { fullName, birthYear, citizenIdLast4, residenceAddress, signedAt }` (`residenceAddress` người nhận khai lúc ký). Hai nơi thường trú hiện **chỉ lưu và trả về**, chưa hiển thị trên giao diện và chưa in lên văn bản; Người xét duyệt chưa có bước đối chiếu riêng cho nó, `verifier { signedByName, checks[], signedAt }`, `supplementReason`, `submissionId` (chỉ Người xét duyệt), `createdAt`, `completedAt`.
-- **Phần 1 là bản chụp lúc tạo biên bản** (họ tên Chủ kho theo hồ sơ chứng tử, nếu hồ sơ không ghi thì theo tên tài khoản; ngày mất; số giấy; ngày cấp), để xem lại được kể cả khi hồ sơ chứng tử hay tài khoản Chủ kho bị dọn sau này.
-- **Chỉ lưu thông tin cần cho biên bản:** họ tên và năm sinh người nhận, 4 số cuối căn cước, Phần 1, ai ký lúc nào kèm phiên bản điều khoản đã tick (`terms-2026-11`), bốn mục kiểm tra của Người xét duyệt. Không lưu số căn cước hay ngày sinh đầy đủ; ảnh căn cước bị xóa ngay khi biên bản hoàn tất.
-- Biên bản lưu **không giới hạn thời gian** và không bị xóa khi lượt bị dọn theo thời hạn lưu. Lúc hoàn tất Backend dựng ảnh PNG văn bản (hai chữ ký: người lập và Người xét duyệt) lưu mã hóa.
+- `HandoverDocumentResponse`: `id`, `turnId`, `vaultId`, `code`, `kind`, `status` (`WAIT_RECIPIENT` \| `WAIT_VERIFIER` \| `COMPLETED`), `templateVersion` ("bb-2026-11-b" là mẫu gốc trong mã; "set-N" là phiên bản N Admin đã lưu, ghi lúc tạo biên bản và không đổi), `declineNotice` (câu báo khi có người nhận từ chối, hiện cho người nhận trước khi chọn), `templateParagraphs[]` (các đoạn chữ `{ text, align, bold }` của biên bản này theo mẫu đã ghi lúc tạo, đúng loại ACCEPT hoặc DECLINE; chữ chứa trường như `{HO_TEN_NGUOI_NHAN}` để giao diện điền từ dữ liệu biên bản), `containerName`, `itemCount`, `owner { fullName, dateOfDeath, certificateNumber, certificateIssuedOn, deathRegistrationPlace, residenceAddress }` (Phần 1; `deathRegistrationPlace` là câu nơi đăng ký khai tử chụp lúc tạo biên bản, ví dụ "UBND phường Bến Thành, Thành phố Hồ Chí Minh"; hồ sơ cũ có thể thiếu ngày mất, ngày cấp, nơi đăng ký thì giao diện in thành dòng chấm; `certificateNumber` giữ cho tương thích nhưng **không còn in** lên văn bản; `residenceAddress` lấy từ danh tính eKYC đã xác minh của Chủ kho lúc tạo biên bản, rỗng khi Chủ kho chưa gắn danh tính), `recipient { fullName, birthYear, citizenIdLast4, residenceAddress, signedAt }` (`residenceAddress` người nhận khai lúc ký). Hai nơi thường trú hiện **chỉ lưu và trả về**, chưa hiển thị trên giao diện và chưa in lên văn bản; Người xét duyệt chưa có bước đối chiếu riêng cho nó, `verifier { signedByName, checks[], signedAt }` (`checks` có 2 phần tử với biên bản mới, biên bản cũ đã lưu có thể có 4), `supplementReason`, `submissionId` (chỉ Người xét duyệt), `createdAt`, `completedAt`. Bốn trường sau **chỉ có ở `GET /api/v1/verifier/handover-documents`** (nơi khác là `null`, `false` hoặc `0`): `submittedAt` (lúc người nhận nộp hoặc nộp lại hồ sơ mới nhất), `resubmitted` (`true` khi đây là lần nộp lại sau yêu cầu bổ sung), `caseApprovedAt` (lúc chính Người xét duyệt này duyệt hồ sơ báo tin của kho), `vaultRecipientTotal` (tổng số người nhận của kho; mỗi chỉ định gói + người nhận tính một, không tính lượt đã hủy hoặc đã dọn). Chỉ thêm field đọc, không đổi bảng.
+- **Phần 1 là bản chụp lúc tạo biên bản** (họ tên Chủ kho theo hồ sơ chứng tử, nếu hồ sơ không ghi thì theo tên tài khoản; ngày mất; ngày đăng ký khai tử; nơi đăng ký khai tử; số giấy nếu có), để xem lại được kể cả khi hồ sơ chứng tử hay tài khoản Chủ kho bị dọn sau này.
+- **Chỉ lưu thông tin cần cho biên bản:** họ tên và năm sinh người nhận, 4 số cuối căn cước, Phần 1, ai ký lúc nào kèm phiên bản điều khoản đã tick (`terms-2026-11`), hai mục kiểm tra của Người xét duyệt (biên bản cũ có thể đã lưu bốn mục, vẫn đọc được). Không lưu số căn cước hay ngày sinh đầy đủ; ảnh căn cước bị xóa ngay khi biên bản hoàn tất.
+- Biên bản lưu **không giới hạn thời gian** và không bị xóa khi lượt bị dọn theo thời hạn lưu. Lúc hoàn tất Backend dựng ảnh PNG văn bản (hai chữ ký: người lập và Người xét duyệt) lưu mã hóa. Cả văn bản từ chối và biên bản đồng ý in câu về người mất: "chết ngày {ngày mất} theo giấy chứng tử do {nơi đăng ký} đăng ký khai tử ngày {ngày đăng ký}." (thiếu dữ liệu nào thì in dòng chấm chỗ đó; không in số giấy chứng tử). Văn bản từ chối của hồ sơ cũ chưa có biên bản lấy ba thông tin này từ hồ sơ chứng tử đang mở của kho.
 - Thư báo (email, chỉ ghi log khi chưa cấu hình SMTP) gửi sau khi lưu: Người xét duyệt khi người nhận đã ký; người nhận khi bị trả về và khi hoàn tất; Người thực thi khi hoàn tất. Gửi lỗi không làm hỏng bước đã lưu.
 - Nhật ký: hoàn tất dùng `HANDOVER_SUBMISSION_APPROVED`; không thêm hành động nhật ký mới.
 

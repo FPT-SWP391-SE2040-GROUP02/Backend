@@ -21,8 +21,8 @@ public class DeathCaseResponse
     public int? ReviewVersionNo { get; set; }
 
     /// <summary>
-    /// DEATH-01: các phần còn thiếu của bản hiện tại: OWNER_FULL_NAME, OWNER_CITIZEN_ID, DATE_OF_DEATH,
-    /// CERTIFICATE_NUMBER, ISSUED_ON, ISSUED_BY, FILES. Rỗng khi đủ.
+    /// DEATH-01: các phần còn thiếu của bản hiện tại để gửi được: DATE_OF_DEATH, ISSUED_ON, DEATH_REGISTRATION_PLACE, FILES.
+    /// Rỗng khi đủ. (Các mã OWNER_*, CERTIFICATE_NUMBER, ISSUED_BY không còn bắt buộc nhưng Verifier vẫn có thể yêu cầu bổ sung.)
     /// </summary>
     public List<string> MissingRequirements { get; set; } = new List<string>();
 
@@ -68,9 +68,19 @@ public class DeathCaseVersionResponse
 
     public string? CertificateNumber { get; set; }
 
+    /// <summary>Ngày đăng ký khai tử ghi trên giấy chứng tử.</summary>
     public DateOnly? IssuedOn { get; set; }
 
     public string? IssuedBy { get; set; }
+
+    /// <summary>Mã tỉnh/thành phố nơi đăng ký khai tử; null khi chưa chọn.</summary>
+    public string? DeathRegistrationProvinceCode { get; set; }
+
+    /// <summary>Mã phường/xã nơi đăng ký khai tử; null khi chưa chọn.</summary>
+    public string? DeathRegistrationWardCode { get; set; }
+
+    /// <summary>Nơi đăng ký khai tử đã ghép ("UBND phường X, Tỉnh Y"); rỗng khi chưa chọn.</summary>
+    public string DeathRegistrationPlace { get; set; } = string.Empty;
 
     public List<DeathCaseFileResponse> Files { get; set; } = new List<DeathCaseFileResponse>();
 

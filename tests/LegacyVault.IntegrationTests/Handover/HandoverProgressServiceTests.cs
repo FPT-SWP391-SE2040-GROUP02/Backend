@@ -91,6 +91,8 @@ public sealed class HandoverProgressServiceTests
         Assert.Equal(Now.AddHours(1), acceptedTurn.Items[0].FirstDownloadedAt);
         Assert.False(acceptedTurn.Items[1].Downloaded);
         Assert.Equal("FILE", acceptedTurn.Items[0].Kind);
+        Assert.Equal(container.Id, acceptedTurn.ContainerId);
+        Assert.Equal(accepted.Items[0].AssetId, acceptedTurn.Items[0].AssetId);
 
         HandoverProgressTurnResponse waitingTurn = result.Turns[1];
         Assert.Equal("INVITED", waitingTurn.Status);
@@ -125,6 +127,7 @@ public sealed class HandoverProgressServiceTests
 
         Assert.Equal("Nguyễn Văn Một", result.Turns[0].BeneficiaryFullName);
         Assert.Equal("0901234567", result.Turns[0].BeneficiaryPhone);
+        Assert.Equal("mot@example.com", result.Turns[0].BeneficiaryEmail);
     }
 
     [Theory]
@@ -143,6 +146,7 @@ public sealed class HandoverProgressServiceTests
 
         Assert.Null(result.Turns[0].BeneficiaryFullName);
         Assert.Null(result.Turns[0].BeneficiaryPhone);
+        Assert.Null(result.Turns[0].BeneficiaryEmail);
     }
 
     [Fact]
@@ -159,7 +163,52 @@ public sealed class HandoverProgressServiceTests
 
         Assert.Null(result.Turns[0].BeneficiaryFullName);
         Assert.Null(result.Turns[0].BeneficiaryPhone);
+        Assert.Null(result.Turns[0].BeneficiaryEmail);
         Assert.Equal("INVITED", result.Turns[0].Status);
+    }
+
+    [Fact]
+    public async Task Progress_ReturnsTimesForEachStepOfTheTurn()
+    {
+        // FE vẽ 5 bước có giờ: đã mời, đồng ý, biên bản được duyệt, nhập mã mở gói, nhận xong
+        Container container = data.AddContainer("Gói G", ContainerStatus.Ready, 1);
+        Designation designation = data.Designate(container, "Người Năm", "nam@example.com");
+        HandoverTurn turn = data.BuildTurn(container, designation, HandoverTurnStatus.HandoverCommitted, "g1", Guid.NewGuid());
+        turn.InvitationSentAt = Now.AddDays(-5);
+        turn.DecidedAt = Now.AddDays(-4);
+        turn.KeyVerifiedAt = Now.AddDays(-2);
+        turn.ReceivedAllAt = Now.AddDays(-1);
+        reader.Turns.Add(turn);
+        HandoverDocumentTimes times = new HandoverDocumentTimes();
+        times.RecipientSignedAt = Now.AddDays(-3).AddHours(-1);
+        times.VerifierSignedAt = Now.AddDays(-3);
+        reader.DocumentTimes[turn.Id] = times;
+
+        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+
+        HandoverProgressTurnResponse turnResponse = result.Turns[0];
+        Assert.Equal(Now.AddDays(-5), turnResponse.InvitationSentAt);
+        Assert.Equal(Now.AddDays(-4), turnResponse.DecidedAt);
+        Assert.Equal(Now.AddDays(-3).AddHours(-1), turnResponse.RecipientSignedAt);
+        Assert.Equal(Now.AddDays(-3), turnResponse.DocumentApprovedAt);
+        Assert.Equal(Now.AddDays(-2), turnResponse.KeyVerifiedAt);
+        Assert.Equal(Now.AddDays(-1), turnResponse.ReceivedAllAt);
+    }
+
+    [Fact]
+    public async Task Progress_TurnWithoutDocumentOrKeyHasNullStepTimes()
+    {
+        Container container = data.AddContainer("Gói H", ContainerStatus.Ready, 1);
+        Designation designation = data.Designate(container, "Người Sáu", null);
+        reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "h1", null));
+
+        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+
+        Assert.Null(result.Turns[0].InvitationSentAt);
+        Assert.Null(result.Turns[0].RecipientSignedAt);
+        Assert.Null(result.Turns[0].DocumentApprovedAt);
+        Assert.Null(result.Turns[0].KeyVerifiedAt);
+        Assert.Null(result.Turns[0].ReceivedAllAt);
     }
 
     [Fact]
@@ -320,6 +369,8 @@ public sealed class FakeHandoverProgressReader : IHandoverProgressReader
 
     public Dictionary<Guid, string> CitizenIdLast4 { get; } = new Dictionary<Guid, string>();
 
+    public Dictionary<Guid, HandoverDocumentTimes> DocumentTimes { get; } = new Dictionary<Guid, HandoverDocumentTimes>();
+
     public int TurnQueryCount { get; private set; }
 
     public Task<DeathCase?> FindCaseAsync(Guid caseId, CancellationToken ct)
@@ -351,6 +402,11 @@ public sealed class FakeHandoverProgressReader : IHandoverProgressReader
     public Task<Dictionary<Guid, DateTimeOffset>> FindFirstDownloadTimesAsync(List<Guid> grantIds, CancellationToken ct)
     {
         return Task.FromResult(FirstDownloads);
+    }
+
+    public Task<Dictionary<Guid, HandoverDocumentTimes>> FindDocumentTimesAsync(List<Guid> turnIds, CancellationToken ct)
+    {
+        return Task.FromResult(DocumentTimes);
     }
 
     public Task<Dictionary<Guid, string>> FindCitizenIdLast4Async(List<Guid> beneficiaryIds, CancellationToken ct)

@@ -227,7 +227,7 @@ public sealed class DeathCaseReviewRulesTests
     public void Death01_EveryMissingRequirementIsAnAllowedSupplementCode()
     {
         // Hồ sơ chưa có giấy nào thiếu mã FILES; mã đó vẫn nằm trong danh sách Người xét duyệt được yêu cầu bổ sung.
-        List<string> allMissing = DeathCaseRules.GetMissingRequirements(0);
+        List<string> allMissing = DeathCaseRules.GetMissingRequirements(null, null, null, null, 0);
 
         foreach (string code in allMissing)
         {

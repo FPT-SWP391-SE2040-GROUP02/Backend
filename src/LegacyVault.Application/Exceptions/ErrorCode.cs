@@ -121,6 +121,8 @@ public enum ErrorCode
     MaintenanceMode,
     /// <summary>409: đang có một lần tua thời gian (DEMO) khác chạy, chờ xong rồi thử lại.</summary>
     DemoClockBusy,
+    /// <summary>404: mã tỉnh/thành phố không có trong danh mục đơn vị hành chính.</summary>
+    AdministrativeUnitNotFound,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

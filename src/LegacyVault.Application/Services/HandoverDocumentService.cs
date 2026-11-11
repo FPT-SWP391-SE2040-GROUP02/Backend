@@ -46,10 +46,12 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
     private readonly IDeathCaseDataProtector deathCaseProtector;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IAdministrativeUnitCatalog administrativeUnits;
     private readonly IHandoverDocumentNotifier? notifier;
     private readonly IOwnerIdentityReader? ownerIdentities;
     private readonly IBeneficiaryRepository? beneficiaries;
     private readonly IBeneficiaryDataProtector? beneficiaryProtector;
+    private readonly IHandoverTemplateService? templates;
 
     public HandoverDocumentService(
         ICurrentUser currentUser,
@@ -62,11 +64,14 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         IDeathCaseDataProtector deathCaseProtector,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
+        IAdministrativeUnitCatalog administrativeUnits,
         IHandoverDocumentNotifier? notifier = null,
         IOwnerIdentityReader? ownerIdentities = null,
         IBeneficiaryRepository? beneficiaries = null,
-        IBeneficiaryDataProtector? beneficiaryProtector = null)
+        IBeneficiaryDataProtector? beneficiaryProtector = null,
+        IHandoverTemplateService? templates = null)
     {
+        this.templates = templates;
         this.currentUser = currentUser;
         this.handover = handover;
         this.documents = documents;
@@ -77,6 +82,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         this.deathCaseProtector = deathCaseProtector;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.administrativeUnits = administrativeUnits;
         this.notifier = notifier;
         this.ownerIdentities = ownerIdentities;
         this.beneficiaries = beneficiaries;
@@ -117,7 +123,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         document.Kind = kind;
         document.Status = HandoverDocumentStatus.WaitRecipient;
         document.ItemCount = turn.Items.Count;
-        document.TemplateVersion = HandoverDocumentRules.TemplateVersion;
+        document.TemplateVersion = await ActiveTemplateKeyAsync(ct);
         document.CreatedAt = now;
         await FillOwnerPartAsync(document, turn.VaultId, ct);
         // Điền sẵn tên tài khoản cho người nhận; Phần 2 sẽ ghi lại họ tên người nhận tự khai.
@@ -193,7 +199,57 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
                 "Chỉ Người xét duyệt mới xem được danh sách này.");
         }
         List<HandoverDocument> found = await documents.ListForVerifierAsync(userId, ct);
-        return await ToResponsesAsync(found, true, ct);
+        List<HandoverDocumentResponse> responses = await ToResponsesAsync(found, true, ct);
+
+        // Thêm số liệu để màn Người xét duyệt xếp theo thời điểm nộp và gom theo kho.
+        List<Guid> vaultIds = new List<Guid>();
+        List<Guid> turnIds = new List<Guid>();
+        foreach (HandoverDocument document in found)
+        {
+            if (!vaultIds.Contains(document.VaultId))
+            {
+                vaultIds.Add(document.VaultId);
+            }
+            turnIds.Add(document.TurnId);
+        }
+        VerifierDocumentContext context = await documents.LoadVerifierContextAsync(userId, vaultIds, turnIds, ct);
+        for (int i = 0; i < responses.Count; i++)
+        {
+            FillVerifierContext(responses[i], found[i], context);
+        }
+        return responses;
+    }
+
+    /// <summary>Điền các trường chỉ Người xét duyệt thấy: thời điểm nộp, nộp lại, ngày duyệt hồ sơ báo tin, tổng người nhận của kho.</summary>
+    private static void FillVerifierContext(
+        HandoverDocumentResponse response, HandoverDocument document, VerifierDocumentContext context)
+    {
+        if (document.SubmissionId != null)
+        {
+            DateTimeOffset submittedAt;
+            if (context.SubmittedAtBySubmission.TryGetValue(document.SubmissionId.Value, out submittedAt))
+            {
+                response.SubmittedAt = submittedAt;
+            }
+        }
+
+        int submissionCount;
+        if (context.SubmissionCountByTurn.TryGetValue(document.TurnId, out submissionCount))
+        {
+            response.Resubmitted = submissionCount > 1;
+        }
+
+        DateTimeOffset approvedAt;
+        if (context.CaseApprovedAtByVault.TryGetValue(document.VaultId, out approvedAt))
+        {
+            response.CaseApprovedAt = approvedAt;
+        }
+
+        int recipientTotal;
+        if (context.RecipientTotalByVault.TryGetValue(document.VaultId, out recipientTotal))
+        {
+            response.VaultRecipientTotal = recipientTotal;
+        }
     }
 
     /// <summary>Dựng phản hồi cho nhiều biên bản, tra tên mỗi người một lần.</summary>
@@ -209,6 +265,28 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return list;
     }
 
+    /// <summary>Khóa mẫu đang dùng cho biên bản mới; không có dịch vụ mẫu thì dùng mẫu gốc.</summary>
+    private async Task<string> ActiveTemplateKeyAsync(CancellationToken ct)
+    {
+        if (templates == null)
+        {
+            return HandoverDocumentRules.TemplateVersion;
+        }
+        return await templates.ActiveVersionKeyAsync(ct);
+    }
+
+    private async Task<ResolvedHandoverTemplate> ResolveTemplateAsync(string versionKey, CancellationToken ct)
+    {
+        if (templates == null)
+        {
+            ResolvedHandoverTemplate fallback = new ResolvedHandoverTemplate();
+            fallback.VersionKey = HandoverDocumentRules.TemplateVersion;
+            fallback.Content = HandoverTemplateDefaults.Create();
+            return fallback;
+        }
+        return await templates.ResolveAsync(versionKey, ct);
+    }
+
     private async Task<HandoverDocumentResponse> ToResponseAsync(
         HandoverDocument document, bool forVerifier, CancellationToken ct, Dictionary<Guid, string>? cache = null)
     {
@@ -221,6 +299,16 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         response.Kind = document.Kind == HandoverSubmissionKind.Accept ? "ACCEPT" : "DECLINE";
         response.Status = HandoverDocumentRules.StatusToApi(document.Status);
         response.TemplateVersion = document.TemplateVersion;
+        ResolvedHandoverTemplate template = await ResolveTemplateAsync(document.TemplateVersion, ct);
+        response.DeclineNotice = template.Content.DeclineNotice;
+        if (document.Kind == HandoverSubmissionKind.Accept)
+        {
+            response.TemplateParagraphs = template.Content.Accept;
+        }
+        else
+        {
+            response.TemplateParagraphs = template.Content.Decline;
+        }
         response.ContainerName = document.Turn.ContainerName;
         response.ItemCount = document.ItemCount;
         response.SupplementReason = document.SupplementReason;
@@ -235,6 +323,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         response.Owner.DateOfDeath = document.DateOfDeath;
         response.Owner.CertificateNumber = document.CertificateNumber;
         response.Owner.CertificateIssuedOn = document.CertificateIssuedOn;
+        response.Owner.DeathRegistrationPlace = document.DeathRegistrationPlace;
         response.Owner.ResidenceAddress = document.OwnerResidenceAddress;
 
         response.Recipient.FullName = document.RecipientFullName;
@@ -278,6 +367,9 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         DeathCaseVersion version = DeathCaseReviewRules.FindReviewVersion(deathCase);
         document.DateOfDeath = version.DateOfDeath;
         document.CertificateIssuedOn = version.IssuedOn;
+        // D8: chụp nơi đăng ký khai tử dạng câu từ danh mục, để biên bản xem lại được kể cả khi hồ sơ bị dọn.
+        document.DeathRegistrationPlace = Cut(
+            administrativeUnits.BuildRegistrationPlace(version.DeathRegistrationProvinceCode, version.DeathRegistrationWardCode), 300);
         DeathCaseIdentityData? identity = deathCaseProtector.Unprotect(version);
         if (identity == null)
         {

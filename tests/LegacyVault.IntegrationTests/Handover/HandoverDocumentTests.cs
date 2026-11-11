@@ -11,6 +11,7 @@ using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
+using LegacyVault.Infrastructure.Reference;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
@@ -52,6 +53,15 @@ public sealed class FakeHandoverDocumentRepository : IHandoverDocumentRepository
         return Task.FromResult(Items
             .Where(d => VerifierVaults.Contains((verifierUserId, d.VaultId)))
             .OrderByDescending(d => d.CreatedAt).ToList());
+    }
+
+    /// <summary>Số liệu giả cho danh sách Người xét duyệt: test tự điền vào đây.</summary>
+    public VerifierDocumentContext VerifierContext { get; } = new VerifierDocumentContext();
+
+    public Task<VerifierDocumentContext> LoadVerifierContextAsync(
+        Guid verifierUserId, List<Guid> vaultIds, List<Guid> turnIds, CancellationToken ct)
+    {
+        return Task.FromResult(VerifierContext);
     }
 }
 
@@ -198,6 +208,8 @@ public sealed class HandoverDocumentTests
             VersionNo = 1,
             DateOfDeath = new DateOnly(2026, 11, 5),
             IssuedOn = new DateOnly(2026, 11, 7),
+            DeathRegistrationProvinceCode = "79",
+            DeathRegistrationWardCode = "26743",
             SubmittedAt = Now.AddDays(-4),
         });
         deathCases.Cases.Add(deathCase);
@@ -207,10 +219,11 @@ public sealed class HandoverDocumentTests
             CertificateNumber = "0456/2026",
         };
 
-        HandoverPaperWriter writer = new HandoverPaperWriter(users, vaults, beneficiaries, protector, renderer, deathCases, store);
+        HandoverPaperWriter writer = new HandoverPaperWriter(
+            users, vaults, beneficiaries, protector, renderer, deathCases, store, new AdministrativeUnitCatalog());
         documentService = new HandoverDocumentService(
-            currentUser, handover, documents, vaults, users, executorReader, deathCases, deathCaseProtector, unitOfWork, time, notifier,
-            ownerAddresses);
+            currentUser, handover, documents, vaults, users, executorReader, deathCases, deathCaseProtector, unitOfWork, time,
+            new AdministrativeUnitCatalog(), notifier, ownerAddresses);
         submitService = new HandoverSubmissionService(
             currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time, writer, documents, notifier);
         reviewService = new HandoverSubmissionReviewService(
@@ -249,7 +262,7 @@ public sealed class HandoverDocumentTests
 
     private static ApproveHandoverDocumentRequest AllChecks()
     {
-        return new ApproveHandoverDocumentRequest { Checks = new List<bool> { true, true, true, true }, Acknowledged = true };
+        return new ApproveHandoverDocumentRequest { Checks = new List<bool> { true, true }, Acknowledged = true };
     }
 
     private async Task<HandoverDocumentResponse> Create(string kind)
@@ -282,6 +295,8 @@ public sealed class HandoverDocumentTests
         Assert.Equal(new DateOnly(2026, 11, 5), response.Owner.DateOfDeath);
         Assert.Equal("0456/2026", response.Owner.CertificateNumber);
         Assert.Equal(new DateOnly(2026, 11, 7), response.Owner.CertificateIssuedOn);
+        // D8: nơi đăng ký khai tử được chụp lại dạng câu từ hồ sơ chứng tử đã duyệt.
+        Assert.Equal("UBND phường Bến Thành, Thành phố Hồ Chí Minh", response.Owner.DeathRegistrationPlace);
         Assert.Equal("12 Lê Lợi, Phường Bến Thành, TP. Hồ Chí Minh", response.Owner.ResidenceAddress);
         Assert.Equal(HandoverDocumentRules.TemplateVersion, response.TemplateVersion);
         Assert.Equal("Trần Minh Anh", response.Recipient.FullName);
@@ -297,6 +312,8 @@ public sealed class HandoverDocumentTests
         deathCaseProtector.Identity = null;
         deathCase.Versions[0].DateOfDeath = null;
         deathCase.Versions[0].IssuedOn = null;
+        deathCase.Versions[0].DeathRegistrationProvinceCode = null;
+        deathCase.Versions[0].DeathRegistrationWardCode = null;
 
         HandoverDocumentResponse response = await Create("ACCEPT");
 
@@ -304,6 +321,7 @@ public sealed class HandoverDocumentTests
         Assert.Null(response.Owner.DateOfDeath);
         Assert.Null(response.Owner.CertificateIssuedOn);
         Assert.Equal(string.Empty, response.Owner.CertificateNumber);
+        Assert.Equal(string.Empty, response.Owner.DeathRegistrationPlace);
         Assert.Equal("WAIT_RECIPIENT", response.Status);
     }
 
@@ -439,6 +457,21 @@ public sealed class HandoverDocumentTests
     }
 
     [Fact]
+    public async Task Get_ReturnsTheDocumentIdSoTheVerifierCanSeeTheRecipientInfo()
+    {
+        // Chuẩn bị: người nhận đã ký, đến lượt Người xét duyệt
+        HandoverSubmission submission = await ReadyForVerifier("ACCEPT");
+
+        // Hành động
+        VerifierHandoverSubmissionResponse detail = await reviewService.GetAsync(submission.Id, CancellationToken.None);
+
+        // Kiểm tra: có DocumentId, và đang chờ Người xét duyệt thì duyệt/yêu cầu bổ sung được
+        Assert.NotNull(detail.DocumentId);
+        Assert.Equal(submission.Id, detail.Id);
+        Assert.True(detail.CanRequestSupplement);
+    }
+
+    [Fact]
     public async Task Complete_Accept_OpensTheGrantEndsTheTurnAndDeletesIdentityImages()
     {
         HandoverSubmission submission = await ReadyForVerifier("ACCEPT");
@@ -448,7 +481,7 @@ public sealed class HandoverDocumentTests
 
         HandoverDocument document = documents.Items[0];
         Assert.Equal(HandoverDocumentStatus.Completed, document.Status);
-        Assert.Equal("1111", document.VerifierChecks);
+        Assert.Equal("11", document.VerifierChecks);
         Assert.Equal(verifier.Id, document.VerifierUserId);
         Assert.Equal(Now, document.VerifierSignedAt);
         Assert.Equal(HandoverTurnStatus.HandoverCommitted, turn.Status);
@@ -478,6 +511,7 @@ public sealed class HandoverDocumentTests
         Assert.Equal("0456/2026", paper.CertificateNumber);
         Assert.Equal(new DateOnly(2026, 11, 5), paper.DateOfDeath);
         Assert.Equal(new DateOnly(2026, 11, 7), paper.DeathCertificateIssuedOn);
+        Assert.Equal("UBND phường Bến Thành, Thành phố Hồ Chí Minh", paper.DeathRegistrationPlace);
         Assert.Equal("Trần Minh Anh", paper.DeclinerFullName);
         Assert.Equal(1990, paper.RecipientBirthYear);
         Assert.Equal("34 Trần Hưng Đạo, Phường Hoàn Kiếm, Hà Nội", paper.RecipientResidenceAddress);
@@ -501,18 +535,40 @@ public sealed class HandoverDocumentTests
     }
 
     [Fact]
-    public async Task Complete_NeedsAllFourChecksAndTheResponsibilityBox()
+    public async Task Complete_NeedsBothChecksAndTheResponsibilityBox()
     {
         HandoverSubmission submission = await ReadyForVerifier("ACCEPT");
-        ApproveHandoverDocumentRequest threeChecks = new ApproveHandoverDocumentRequest { Checks = new List<bool> { true, true, false, true }, Acknowledged = true };
-        ApproveHandoverDocumentRequest noAck = new ApproveHandoverDocumentRequest { Checks = new List<bool> { true, true, true, true }, Acknowledged = false };
+        ApproveHandoverDocumentRequest oneCheck = new ApproveHandoverDocumentRequest { Checks = new List<bool> { true, false }, Acknowledged = true };
+        ApproveHandoverDocumentRequest noAck = new ApproveHandoverDocumentRequest { Checks = new List<bool> { true, true }, Acknowledged = false };
 
-        await Assert.ThrowsAsync<AppException>(() => reviewService.CompleteAsync(submission.Id, threeChecks, CancellationToken.None));
+        await Assert.ThrowsAsync<AppException>(() => reviewService.CompleteAsync(submission.Id, oneCheck, CancellationToken.None));
         await Assert.ThrowsAsync<AppException>(() => reviewService.CompleteAsync(submission.Id, noAck, CancellationToken.None));
 
         Assert.Equal(HandoverDocumentStatus.WaitVerifier, documents.Items[0].Status);
         Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
         Assert.Empty(handover.Grants);
+    }
+
+    [Fact]
+    public async Task Complete_WithTheOldFourChecks_IsRejectedAsValidationError()
+    {
+        HandoverSubmission submission = await ReadyForVerifier("ACCEPT");
+        ApproveHandoverDocumentRequest fourChecks = new ApproveHandoverDocumentRequest { Checks = new List<bool> { true, true, true, true }, Acknowledged = true };
+
+        await Assert.ThrowsAsync<AppException>(() => reviewService.CompleteAsync(submission.Id, fourChecks, CancellationToken.None));
+
+        Assert.Equal(HandoverDocumentStatus.WaitVerifier, documents.Items[0].Status);
+        Assert.Empty(handover.Grants);
+    }
+
+    [Fact]
+    public void DecodeChecks_StillReadsAnOldFourCharacterRecord()
+    {
+        List<bool> checks = HandoverDocumentRules.DecodeChecks("1111");
+
+        Assert.Equal(4, checks.Count);
+        Assert.False(HandoverDocumentRules.AllChecked(checks));
+        Assert.True(HandoverDocumentRules.AllChecked(HandoverDocumentRules.DecodeChecks("11")));
     }
 
     [Fact]
@@ -621,6 +677,40 @@ public sealed class HandoverDocumentTests
         Assert.Null(forExecutor[0].SubmissionId);
         Assert.Equal(submission.Id, forVerifier[0].SubmissionId);
         Assert.Equal("WAIT_VERIFIER", forVerifier[0].Status);
+    }
+
+    [Fact]
+    public async Task ListForVerifier_FillsSubmittedTimeResubmittedFlagApprovalDateAndRecipientTotal()
+    {
+        HandoverSubmission submission = await ReadyForVerifier("ACCEPT");
+        DateTimeOffset submittedAt = Now.AddHours(-3);
+        DateTimeOffset approvedAt = Now.AddDays(-2);
+        documents.VerifierContext.SubmittedAtBySubmission[submission.Id] = submittedAt;
+        documents.VerifierContext.SubmissionCountByTurn[turn.Id] = 2;
+        documents.VerifierContext.CaseApprovedAtByVault[turn.VaultId] = approvedAt;
+        documents.VerifierContext.RecipientTotalByVault[turn.VaultId] = 3;
+        currentUser.UserId = verifier.Id;
+
+        List<HandoverDocumentResponse> forVerifier = await documentService.ListForVerifierAsync(CancellationToken.None);
+
+        Assert.Equal(submittedAt, forVerifier[0].SubmittedAt);
+        Assert.True(forVerifier[0].Resubmitted);
+        Assert.Equal(approvedAt, forVerifier[0].CaseApprovedAt);
+        Assert.Equal(3, forVerifier[0].VaultRecipientTotal);
+    }
+
+    [Fact]
+    public async Task ListForVerifier_WithoutExtraData_LeavesTheNewFieldsEmpty()
+    {
+        await ReadyForVerifier("ACCEPT");
+        currentUser.UserId = verifier.Id;
+
+        List<HandoverDocumentResponse> forVerifier = await documentService.ListForVerifierAsync(CancellationToken.None);
+
+        Assert.Null(forVerifier[0].SubmittedAt);
+        Assert.False(forVerifier[0].Resubmitted);
+        Assert.Null(forVerifier[0].CaseApprovedAt);
+        Assert.Equal(0, forVerifier[0].VaultRecipientTotal);
     }
 
     [Fact]

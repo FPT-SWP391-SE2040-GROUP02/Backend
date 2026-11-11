@@ -63,6 +63,32 @@ public sealed class HandoverProgressReader : IHandoverProgressReader
         return result;
     }
 
+    public async Task<Dictionary<Guid, HandoverDocumentTimes>> FindDocumentTimesAsync(
+        List<Guid> turnIds, CancellationToken ct)
+    {
+        Dictionary<Guid, HandoverDocumentTimes> result = new Dictionary<Guid, HandoverDocumentTimes>();
+        if (turnIds.Count == 0)
+        {
+            return result;
+        }
+
+        // Chỉ đọc id lượt và hai giờ ký, không đọc nội dung biên bản.
+        var rows = await context.Set<HandoverDocument>()
+            .AsNoTracking()
+            .Where(d => turnIds.Contains(d.TurnId))
+            .Select(d => new { d.TurnId, d.RecipientSignedAt, d.VerifierSignedAt })
+            .ToListAsync(ct);
+
+        foreach (var row in rows)
+        {
+            HandoverDocumentTimes times = new HandoverDocumentTimes();
+            times.RecipientSignedAt = row.RecipientSignedAt;
+            times.VerifierSignedAt = row.VerifierSignedAt;
+            result[row.TurnId] = times;
+        }
+        return result;
+    }
+
     public async Task<Dictionary<Guid, string>> FindCitizenIdLast4Async(
         List<Guid> beneficiaryIds, CancellationToken ct)
     {

@@ -29,6 +29,7 @@ public static class ApplicationConfig
         // Hồ sơ chứng tử (F2B)
         services.AddScoped<IDeathCaseService, DeathCaseService>();
         services.AddScoped<IDeathCaseReviewService, DeathCaseReviewService>();
+        services.AddScoped<IAdministrativeUnitService, AdministrativeUnitService>();
         services.AddScoped<ISigningPasswordChecker, SigningPasswordChecker>();
         services.AddScoped<IRetentionJob, RetentionJob>();
         services.AddScoped<IExecutorManagementService, ExecutorManagementService>();
@@ -75,6 +76,7 @@ public static class ApplicationConfig
         services.AddScoped<PaymentGranter>();
         services.AddScoped<ISePayWebhookService, SePayWebhookService>();
         services.AddScoped<IAdminPaymentService, AdminPaymentService>();
+        services.AddScoped<IHandoverTemplateService, HandoverTemplateService>();
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsService, DevToolsService>();
         // Nút "Tua thời gian" để demo (controller chỉ mở ở Development/Staging)

@@ -62,8 +62,9 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         Assert.Equal(0, version.GetProperty("files").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("reviewVersionNo").ValueKind);
         List<string> missing = ReadStrings(body.GetProperty("missingRequirements"));
-        // Chỉ còn thiếu giấy chứng tử: các trường nhập tay không còn bắt buộc.
-        Assert.Equal(new List<string> { "FILES" }, missing);
+        // Hồ sơ mới mở còn thiếu 3 thông tin trên giấy và giấy chứng tử; họ tên, số giấy, nơi cấp cũ không còn bắt buộc.
+        Assert.Equal(
+            new List<string> { "DATE_OF_DEATH", "ISSUED_ON", "DEATH_REGISTRATION_PLACE", "FILES" }, missing);
         Assert.False(string.IsNullOrEmpty(body.GetProperty("etag").GetString()));
         // Mở hồ sơ nháp chưa khóa kế hoạch (D1).
         await AssertPlanStatusAsync(vault.VaultId, PlanStatus.Active);
@@ -254,6 +255,8 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
             certificateNumber = "123/2026/TT",
             issuedOn = today.AddDays(-2).ToString("yyyy-MM-dd"),
             issuedBy = "UBND phường Bến Nghé",
+            deathRegistrationProvinceCode = DeathCaseApi.ProvinceCode,
+            deathRegistrationWardCode = DeathCaseApi.WardCode,
         });
 
         // Kiểm tra: response không có CCCD đầy đủ; DB không chứa CCCD dạng rõ
@@ -266,7 +269,7 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         Assert.Equal("Nguyễn Văn An", version.GetProperty("ownerFullName").GetString());
         Assert.Equal("123/2026/TT", version.GetProperty("certificateNumber").GetString());
         Assert.Equal(today.AddDays(-3).ToString("yyyy-MM-dd"), version.GetProperty("dateOfDeath").GetString());
-        // Đủ 6 trường, còn thiếu trang giấy.
+        // Đủ 3 thông tin trên giấy (và các trường cũ), còn thiếu trang giấy.
         Assert.Equal(new List<string> { "FILES" }, ReadStrings(body.GetProperty("missingRequirements")));
         byte[]? encrypted = null;
         await ApiTestHelpers.WithDbAsync(factory, async db =>

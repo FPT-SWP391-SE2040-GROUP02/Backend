@@ -162,7 +162,7 @@ public sealed class VerifierHandoverSubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// Luồng Biên Bản: kiểm tra thủ công (tick đủ bốn mục và xác nhận trách nhiệm) rồi gửi.
+    /// Luồng Biên Bản: kiểm tra thủ công (tick đủ hai mục và xác nhận trách nhiệm) rồi gửi.
     /// Hoàn tất biên bản: Chấp nhận thì mở quyền tải tài sản, Từ chối thì ghi nhận từ chối.
     /// </summary>
     [HttpPost("{submissionId:guid}/complete")]

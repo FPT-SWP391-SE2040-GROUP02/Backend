@@ -1,3 +1,5 @@
+using System.Globalization;
+using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
 using LegacyVault.Domain.Entities;
@@ -177,5 +179,35 @@ public static class DeathCaseReviewRules
             }
         }
         return parts;
+    }
+
+    /// <summary>
+    /// DEATH-10 (D7): cảnh báo cho Verifier, tính lúc đọc, không lưu cờ và KHÔNG chặn duyệt.
+    /// DEATH_BEFORE_LAST_CHECKIN: Chủ kho còn điểm danh sau ngày mất ghi trên giấy. LATE_REGISTRATION: đăng ký khai tử trễ hơn 15 ngày.
+    /// </summary>
+    public static List<VerifierWarningResponse> BuildWarnings(
+        DateOnly? dateOfDeath, DateOnly? issuedOn, DateTimeOffset? lastCheckInAt)
+    {
+        List<VerifierWarningResponse> warnings = new List<VerifierWarningResponse>();
+        if (DeathCaseRules.IsDeathBeforeLastCheckIn(dateOfDeath, lastCheckInAt))
+        {
+            DateOnly lastCheckInDay = DeathCaseRules.TodayInVietnam(lastCheckInAt!.Value);
+            VerifierWarningResponse checkInWarning = new VerifierWarningResponse();
+            checkInWarning.Code = DeathCaseRules.WarningDeathBeforeLastCheckIn;
+            checkInWarning.Message = "Ngày mất trước lần điểm danh cuối ("
+                + lastCheckInDay.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
+                + "). Kiểm tra kỹ giấy trước khi duyệt.";
+            warnings.Add(checkInWarning);
+        }
+        if (DeathCaseRules.IsLateRegistration(dateOfDeath, issuedOn))
+        {
+            VerifierWarningResponse lateWarning = new VerifierWarningResponse();
+            lateWarning.Code = DeathCaseRules.WarningLateRegistration;
+            lateWarning.Message = "Đăng ký khai tử cách ngày mất hơn "
+                + DeathCaseRules.LateRegistrationDays.ToString(CultureInfo.InvariantCulture)
+                + " ngày. Kiểm tra kỹ giấy trước khi duyệt.";
+            warnings.Add(lateWarning);
+        }
+        return warnings;
     }
 }

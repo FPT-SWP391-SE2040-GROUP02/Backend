@@ -1,3 +1,4 @@
+using LegacyVault.Application.Services;
 namespace LegacyVault.Application.Dtos.Responses;
 
 /// <summary>
@@ -13,6 +14,9 @@ public class HandoverDocumentOwnerPart
     public string CertificateNumber { get; set; } = string.Empty;
 
     public DateOnly? CertificateIssuedOn { get; set; }
+
+    /// <summary>Nơi đăng ký khai tử dạng câu, ví dụ "UBND phường Bến Thành, Thành phố Hồ Chí Minh"; rỗng khi hồ sơ không ghi.</summary>
+    public string DeathRegistrationPlace { get; set; } = string.Empty;
 
     /// <summary>Nơi thường trú theo danh tính eKYC đã xác minh của Chủ kho; rỗng khi không có.</summary>
     public string ResidenceAddress { get; set; } = string.Empty;
@@ -41,7 +45,7 @@ public class HandoverDocumentVerifierPart
 {
     public string SignedByName { get; set; } = string.Empty;
 
-    /// <summary>Bốn mục kiểm tra đã tick, rỗng khi chưa kiểm tra.</summary>
+    /// <summary>Các mục kiểm tra đã tick (biên bản mới có 2 mục, biên bản cũ có thể có 4), rỗng khi chưa kiểm tra.</summary>
     public List<bool> Checks { get; set; } = new List<bool>();
 
     public DateTimeOffset? SignedAt { get; set; }
@@ -67,6 +71,18 @@ public class HandoverDocumentResponse
 
     public string TemplateVersion { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Câu báo về việc xử lý phần tài sản khi có người nhận từ chối (Admin sửa ở trang Mẫu biên bản). Hiện cho người nhận trước khi chọn
+    /// và điền vào trường {CAU_BAO_TU_CHOI} của mẫu.
+    /// </summary>
+    public string DeclineNotice { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Các đoạn chữ của biên bản này theo mẫu đã ghi lúc tạo (templateVersion), đúng loại ACCEPT hoặc DECLINE. Chữ có thể chứa trường
+    /// như {HO_TEN_NGUOI_NHAN} để giao diện điền từ dữ liệu của biên bản.
+    /// </summary>
+    public List<TemplateParagraph> TemplateParagraphs { get; set; } = new List<TemplateParagraph>();
+
     public string ContainerName { get; set; } = string.Empty;
 
     public int ItemCount { get; set; }
@@ -82,6 +98,18 @@ public class HandoverDocumentResponse
 
     /// <summary>Id hồ sơ nộp mới nhất của người nhận; Người xét duyệt dùng để xem ảnh căn cước. Null với người nhận và Người thực thi.</summary>
     public Guid? SubmissionId { get; set; }
+
+    /// <summary>Chỉ Người xét duyệt thấy: thời điểm người nhận nộp (hoặc nộp lại) hồ sơ mới nhất; null khi chưa nộp.</summary>
+    public DateTimeOffset? SubmittedAt { get; set; }
+
+    /// <summary>Chỉ Người xét duyệt thấy: true khi hồ sơ này là lần nộp lại sau khi bị yêu cầu bổ sung.</summary>
+    public bool Resubmitted { get; set; }
+
+    /// <summary>Chỉ Người xét duyệt thấy: ngày bạn duyệt hồ sơ báo tin của kho; null khi không có.</summary>
+    public DateTimeOffset? CaseApprovedAt { get; set; }
+
+    /// <summary>Chỉ Người xét duyệt thấy: tổng số người nhận của kho (mỗi người nhận một gói tính một). 0 khi không có.</summary>
+    public int VaultRecipientTotal { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

@@ -14,6 +14,14 @@ public static class DeathCaseApi
 {
     public const string CitizenId = "012345678901";
 
+    /// <summary>Nơi đăng ký khai tử dùng trong test: Thành phố Hồ Chí Minh, Phường Bến Thành (có trong danh mục).</summary>
+    public const string ProvinceCode = "79";
+
+    public const string WardCode = "26743";
+
+    /// <summary>Câu nơi đăng ký ghép từ hai mã trên.</summary>
+    public const string RegistrationPlace = "UBND phường Bến Thành, Thành phố Hồ Chí Minh";
+
     public static string OpenUrl(Guid vaultId)
     {
         return $"/api/v1/executor/vaults/{vaultId}/death-case";
@@ -43,7 +51,10 @@ public static class DeathCaseApi
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
-    /// <summary>Khai đủ 6 trường vào bản nháp (PUT .../draft, 200), trả JSON hồ sơ mới.</summary>
+    /// <summary>
+    /// Khai đủ 3 thông tin trên giấy (ngày mất, ngày đăng ký = ngày mất + 1, nơi đăng ký) vào bản nháp (PUT .../draft, 200),
+    /// trả JSON hồ sơ mới. Các trường cũ (họ tên, CCCD, số giấy, nơi cấp) vẫn gửi để thử tương thích API.
+    /// </summary>
     public static async Task<JsonElement> FillDraftAsync(
         HttpClient client, JsonElement caseBody, DateOnly dateOfDeath, string ownerFullName = "Nguyễn Văn An")
     {
@@ -57,6 +68,27 @@ public static class DeathCaseApi
             certificateNumber = "123/2026/TT",
             issuedOn = Format(dateOfDeath.AddDays(1)),
             issuedBy = "UBND phường Bến Nghé",
+            deathRegistrationProvinceCode = ProvinceCode,
+            deathRegistrationWardCode = WardCode,
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
+    /// <summary>
+    /// Chỉ khai 3 thông tin trên giấy (ngày mất, ngày đăng ký = ngày mất + 1, nơi đăng ký), không gửi các trường cũ
+    /// (PUT .../draft, 200), trả JSON hồ sơ mới.
+    /// </summary>
+    public static async Task<JsonElement> FillCertificateInfoAsync(HttpClient client, JsonElement caseBody, DateOnly dateOfDeath)
+    {
+        Guid caseId = caseBody.GetProperty("id").GetGuid();
+        HttpResponseMessage response = await client.PutAsJsonAsync(CaseUrl(caseId) + "/draft", new
+        {
+            etag = caseBody.GetProperty("etag").GetString(),
+            dateOfDeath = Format(dateOfDeath),
+            issuedOn = Format(dateOfDeath.AddDays(1)),
+            deathRegistrationProvinceCode = ProvinceCode,
+            deathRegistrationWardCode = WardCode,
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await ApiTestHelpers.ReadJsonAsync(response);

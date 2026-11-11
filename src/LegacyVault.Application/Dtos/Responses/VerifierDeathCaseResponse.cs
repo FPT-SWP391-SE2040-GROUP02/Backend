@@ -69,6 +69,22 @@ public class VerifierDeathCaseResponse
     /// giao xem đủ 12 số CCCD). Luôn có object; Verified = false khi Owner chưa gắn danh tính.
     /// </summary>
     public VerifierOwnerIdentityResponse OwnerIdentity { get; set; } = new VerifierOwnerIdentityResponse();
+
+    /// <summary>
+    /// D7: cảnh báo tính lúc đọc (DEATH_BEFORE_LAST_CHECKIN, LATE_REGISTRATION). Không chặn duyệt, không lưu thành cờ.
+    /// </summary>
+    public List<VerifierWarningResponse> Warnings { get; set; } = new List<VerifierWarningResponse>();
+
+    /// <summary>D7: ngày (giờ Việt Nam) Chủ kho tự điểm danh lần cuối; null khi chưa từng điểm danh.</summary>
+    public DateOnly? LastCheckInOn { get; set; }
+}
+
+/// <summary>Một cảnh báo cho Verifier; message là câu tiếng Việt hiển thị thẳng.</summary>
+public class VerifierWarningResponse
+{
+    public string Code { get; set; } = string.Empty;
+
+    public string Message { get; set; } = string.Empty;
 }
 
 /// <summary>Danh tính đã xác minh của Owner và kết quả so với bản đang xét.</summary>
@@ -116,9 +132,19 @@ public class VerifierReviewVersionResponse
 
     public string? CertificateNumber { get; set; }
 
+    /// <summary>Ngày đăng ký khai tử ghi trên giấy.</summary>
     public DateOnly? IssuedOn { get; set; }
 
     public string? IssuedBy { get; set; }
+
+    /// <summary>Mã tỉnh/thành phố nơi đăng ký khai tử; null khi chưa chọn.</summary>
+    public string? DeathRegistrationProvinceCode { get; set; }
+
+    /// <summary>Mã phường/xã nơi đăng ký khai tử; null khi chưa chọn.</summary>
+    public string? DeathRegistrationWardCode { get; set; }
+
+    /// <summary>Nơi đăng ký khai tử đã ghép ("UBND phường X, Tỉnh Y"); rỗng khi chưa chọn.</summary>
+    public string DeathRegistrationPlace { get; set; } = string.Empty;
 
     public DateTimeOffset? SubmittedAt { get; set; }
 

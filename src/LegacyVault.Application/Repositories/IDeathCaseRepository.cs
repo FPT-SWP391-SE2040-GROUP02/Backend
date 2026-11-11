@@ -29,6 +29,9 @@ public sealed class ExecutorVaultRow
 
     /// <summary>Lần chủ kho TỰ điểm danh gần nhất (điểm danh thay của Executor không tính); null khi chưa từng.</summary>
     public DateTimeOffset? LastOwnerCheckInAt { get; set; }
+
+    /// <summary>Lúc tài khoản chấp nhận lời mời làm Người thực thi của kho này; null khi dữ liệu cũ không có.</summary>
+    public DateTimeOffset? ExecutorAcceptedAt { get; set; }
 }
 
 /// <summary>

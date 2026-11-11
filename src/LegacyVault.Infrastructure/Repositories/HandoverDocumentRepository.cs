@@ -68,4 +68,61 @@ public sealed class HandoverDocumentRepository : IHandoverDocumentRepository
             .ThenBy(d => d.Id)
             .ToListAsync(ct);
     }
+
+    public async Task<VerifierDocumentContext> LoadVerifierContextAsync(
+        Guid verifierUserId, List<Guid> vaultIds, List<Guid> turnIds, CancellationToken ct)
+    {
+        VerifierDocumentContext result = new VerifierDocumentContext();
+        if (vaultIds.Count == 0)
+        {
+            return result;
+        }
+
+        // Ngày Người xét duyệt này duyệt hồ sơ báo tin của từng kho (lấy lần gần nhất).
+        var approvals = await context.Set<DeathCaseDecision>()
+            .AsNoTracking()
+            .Where(x => x.Kind == DeathCaseDecisionKind.Approved && x.VerifierUserId == verifierUserId)
+            .Join(context.Set<DeathCase>().Where(c => vaultIds.Contains(c.VaultId)),
+                x => x.CaseId, c => c.Id, (x, c) => new { c.VaultId, x.DecidedAt })
+            .ToListAsync(ct);
+        foreach (var approval in approvals)
+        {
+            DateTimeOffset existing;
+            if (!result.CaseApprovedAtByVault.TryGetValue(approval.VaultId, out existing) || approval.DecidedAt > existing)
+            {
+                result.CaseApprovedAtByVault[approval.VaultId] = approval.DecidedAt;
+            }
+        }
+
+        // Tổng người nhận của kho: mỗi chỉ định (gói + người nhận) có lượt bàn giao tính một.
+        var turnRows = await context.Set<HandoverTurn>()
+            .AsNoTracking()
+            .Where(t => vaultIds.Contains(t.VaultId)
+                && t.Status != HandoverTurnStatus.Cancelled
+                && t.Status != HandoverTurnStatus.Lapsed)
+            .Select(t => new { t.VaultId, t.DesignationId })
+            .Distinct()
+            .ToListAsync(ct);
+        foreach (var row in turnRows)
+        {
+            int count;
+            result.RecipientTotalByVault.TryGetValue(row.VaultId, out count);
+            result.RecipientTotalByVault[row.VaultId] = count + 1;
+        }
+
+        // Thời điểm nộp và số lần nộp của từng lượt.
+        var submissionRows = await context.Set<HandoverSubmission>()
+            .AsNoTracking()
+            .Where(s => turnIds.Contains(s.TurnId))
+            .Select(s => new { s.Id, s.TurnId, s.CreatedAt })
+            .ToListAsync(ct);
+        foreach (var row in submissionRows)
+        {
+            result.SubmittedAtBySubmission[row.Id] = row.CreatedAt;
+            int count;
+            result.SubmissionCountByTurn.TryGetValue(row.TurnId, out count);
+            result.SubmissionCountByTurn[row.TurnId] = count + 1;
+        }
+        return result;
+    }
 }

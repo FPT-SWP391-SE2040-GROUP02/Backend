@@ -11,6 +11,7 @@ using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
+using LegacyVault.Infrastructure.Reference;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
@@ -381,7 +382,8 @@ public sealed class HandoverSubmissionTests
 
     private HandoverPaperWriter WriterFor(IDeclinePaperRenderer renderer)
     {
-        return new HandoverPaperWriter(users, vaults, beneficiaries, protector, renderer, deathCases, store);
+        return new HandoverPaperWriter(
+            users, vaults, beneficiaries, protector, renderer, deathCases, store, new AdministrativeUnitCatalog());
     }
 
     private HandoverSubmissionReviewService ReviewWithPaper(FakePaperRenderer renderer)

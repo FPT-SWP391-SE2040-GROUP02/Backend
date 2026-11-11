@@ -33,8 +33,16 @@ public class DeathCaseVersion
     /// <summary>Ngày mất ghi trên giấy (theo lịch Việt Nam); dùng cho DEATH-10 (D7).</summary>
     public DateOnly? DateOfDeath { get; set; }
 
-    /// <summary>Ngày cấp giấy chứng tử; phải ≥ ngày mất và ≤ hôm nay.</summary>
+    /// <summary>Ngày đăng ký khai tử ghi trên giấy chứng tử (ngày cấp giấy); phải ≥ ngày mất và ≤ hôm nay.</summary>
     public DateOnly? IssuedOn { get; set; }
+
+    /// <summary>
+    /// Mã tỉnh/thành phố nơi đăng ký khai tử (chọn từ danh mục đơn vị hành chính); null khi chưa chọn. Để rõ, không mã hóa.
+    /// </summary>
+    public string? DeathRegistrationProvinceCode { get; set; }
+
+    /// <summary>Mã phường/xã nơi đăng ký khai tử, phải thuộc tỉnh đã chọn; null khi chưa chọn. Để rõ, không mã hóa.</summary>
+    public string? DeathRegistrationWardCode { get; set; }
 
     /// <summary>ConfigVersion của kế hoạch lúc gửi bản này (tham khảo; snapshot ghim lúc duyệt ở HandoverStarter).</summary>
     public int? PlanConfigVersion { get; set; }
