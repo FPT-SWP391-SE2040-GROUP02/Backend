@@ -59,6 +59,9 @@ public class HandoverTurnResponse
 {
     public Guid Id { get; set; }
 
+    /// <summary>Họ tên người nhận do Chủ kho chỉ định; null khi không đọc được. Chỉ trả cho chính người nhận của lượt.</summary>
+    public string? RecipientFullName { get; set; }
+
     /// <summary>Tên trạng thái UPPER_SNAKE: INVITED, IDENTITY_IN_PROGRESS, READY_TO_ACCEPT, ...</summary>
     public string Status { get; set; } = string.Empty;
 

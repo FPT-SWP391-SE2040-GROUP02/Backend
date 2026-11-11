@@ -13,4 +13,13 @@ public interface IExecutorInvitationSender
     {
         return SendAsync(email, token, expiresAt, ct);
     }
+
+    /// <summary>
+    /// Lời mời do Chủ kho gửi: thư nêu rõ tên Chủ kho để người nhận biết ai mời. Mặc định gửi như lời mời thường để các
+    /// bản cài đặt cũ vẫn chạy; bản gửi thật ghi đè bằng lời thư có tên Chủ kho.
+    /// </summary>
+    Task<bool> SendFromOwnerAsync(string email, string ownerName, string token, DateTimeOffset expiresAt, CancellationToken ct)
+    {
+        return SendAsync(email, token, expiresAt, ct);
+    }
 }

@@ -2687,6 +2687,32 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("NotaryCardContentType")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("NotaryCardEncryptionKeyId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<long?>("NotaryCardSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("NotaryCardStorageKey")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTimeOffset?>("NotaryCardUploadedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("NotaryCardWrappedDataKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("binary(60)")
+                        .IsFixedLength();
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");

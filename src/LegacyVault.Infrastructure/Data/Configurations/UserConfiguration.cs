@@ -44,6 +44,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.AvatarContentType).HasMaxLength(50).IsUnicode(false);
         builder.Property(u => u.AvatarEncryptionKeyId).HasMaxLength(64).IsUnicode(false);
         builder.Property(u => u.AvatarWrappedDataKey).HasMaxLength(60).IsFixedLength();
+        builder.Property(u => u.NotaryCardStorageKey).HasMaxLength(200).IsUnicode(false);
+        builder.Property(u => u.NotaryCardContentType).HasMaxLength(50).IsUnicode(false);
+        builder.Property(u => u.NotaryCardEncryptionKeyId).HasMaxLength(64).IsUnicode(false);
+        builder.Property(u => u.NotaryCardWrappedDataKey).HasMaxLength(60).IsFixedLength();
 
         builder.Property(u => u.Role)
             .IsRequired()

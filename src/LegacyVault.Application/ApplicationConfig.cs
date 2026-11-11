@@ -51,6 +51,7 @@ public static class ApplicationConfig
         services.AddScoped<IPasswordResetService, PasswordResetService>();
         services.AddScoped<ILoginMethodService, LoginMethodService>();
         services.AddScoped<IAvatarService, AvatarService>();
+        services.AddScoped<INotaryCardService, NotaryCardService>();
         services.AddScoped<ITwoFactorService, TwoFactorService>();
         services.AddScoped<IAccountPhoneService, AccountPhoneService>();
         services.AddScoped<IPlanActivatedNotifier, PlanActivatedNotifier>();
