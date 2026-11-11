@@ -22,6 +22,20 @@ public interface IPaymentTransactionRepository
     Task<(List<PaymentTransaction> Items, int Total)> ListAsync(
         PaymentTransactionStatus? status, string? search, int pageIndex, int pageSize, CancellationToken ct,
         PaymentTransactionFilter? filter = null);
+
+    /// <summary>
+    /// Thời điểm nhận và số tiền của các giao dịch thành công (Matched và Resolved), lọc theo môi trường và khoảng thời gian
+    /// của filter (SuccessOnly và status không dùng). Chỉ đọc, không theo dõi thay đổi, không phân trang: dùng để cộng doanh thu.
+    /// </summary>
+    Task<List<RevenueTransaction>> ListSuccessAmountsAsync(PaymentTransactionFilter filter, CancellationToken ct);
+}
+
+/// <summary>Một giao dịch thành công rút gọn cho việc cộng doanh thu.</summary>
+public sealed class RevenueTransaction
+{
+    public DateTimeOffset ReceivedAt { get; set; }
+
+    public long Amount { get; set; }
 }
 
 /// <summary>Bộ lọc thêm của danh sách giao dịch cho Admin. Mốc thời gian lọc theo cột "Nhận lúc" (ReceivedAt).</summary>

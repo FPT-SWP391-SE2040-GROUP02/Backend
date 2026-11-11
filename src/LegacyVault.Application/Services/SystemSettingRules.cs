@@ -106,6 +106,7 @@ public static class SystemSettingRules
     private static Dictionary<string, TextRule> BuildTextRules()
     {
         Dictionary<string, TextRule> rules = new Dictionary<string, TextRule>();
+        AddText(rules, "Handover.DeclineNotice", "Câu báo về việc xử lý tài sản khi người nhận từ chối", 400, false);
         AddText(rules, "Company.Name", "Tên công ty", 100, false);
         AddText(rules, "Company.Website", "Website công ty", 200, false);
         AddText(rules, "Company.Email", "Email công ty", 200, true);

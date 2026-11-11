@@ -6,6 +6,11 @@ public sealed class DeclinePaperData
     /// <summary>true: biên bản đồng ý nhận phần di sản; false: văn bản từ chối.</summary>
     public bool IsAcceptance { get; set; }
 
+    /// <summary>
+    /// Câu báo in cuối biên bản đồng ý: cách xử lý phần tài sản khi có người nhận từ chối. Mặc định lấy theo cấu hình Admin lúc dựng.
+    /// </summary>
+    public string DeclineNotice { get; set; } = HandoverDocumentRules.DeclineNotice;
+
     public string TurnCode { get; set; } = string.Empty;
 
     public string ContainerName { get; set; } = string.Empty;

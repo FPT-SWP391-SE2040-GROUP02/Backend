@@ -40,6 +40,21 @@ public sealed class AdminPaymentsController : ControllerBase
             status, search, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct, environment, from, to);
     }
 
+    /// <summary>
+    /// Doanh thu: tổng tiền giao dịch đã khớp đơn hoặc đã xử lý, gom theo groupBy (day, month, quarter) giờ Việt Nam.
+    /// environment: Live (mặc định), Test hoặc ALL. from, to: yyyy-MM-dd, tính cả hai đầu.
+    /// </summary>
+    [HttpGet("revenue")]
+    [ProducesResponseType<AdminRevenueResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<AdminRevenueResponse> Revenue(
+        [FromQuery] string? groupBy, [FromQuery] string? environment, [FromQuery] string? from, [FromQuery] string? to,
+        CancellationToken ct)
+    {
+        return adminPaymentService.GetRevenueAsync(groupBy, environment, from, to, ct);
+    }
+
     private static int Clamp(int value, int min, int max)
     {
         if (value < min)

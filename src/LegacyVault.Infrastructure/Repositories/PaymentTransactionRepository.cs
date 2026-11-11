@@ -72,6 +72,31 @@ public sealed class PaymentTransactionRepository : IPaymentTransactionRepository
         return (items, total);
     }
 
+    public async Task<List<RevenueTransaction>> ListSuccessAmountsAsync(PaymentTransactionFilter filter, CancellationToken ct)
+    {
+        IQueryable<PaymentTransaction> query = context.PaymentTransactions.AsNoTracking()
+            .Where(t => t.Status == PaymentTransactionStatus.Matched || t.Status == PaymentTransactionStatus.Resolved);
+        if (!string.IsNullOrEmpty(filter.Environment))
+        {
+            string environment = filter.Environment;
+            query = query.Where(t => t.Environment == environment);
+        }
+        if (filter.From != null)
+        {
+            DateTimeOffset from = filter.From.Value;
+            query = query.Where(t => t.ReceivedAt >= from);
+        }
+        if (filter.ToExclusive != null)
+        {
+            DateTimeOffset to = filter.ToExclusive.Value;
+            query = query.Where(t => t.ReceivedAt < to);
+        }
+        return await query
+            .OrderBy(t => t.ReceivedAt)
+            .Select(t => new RevenueTransaction { ReceivedAt = t.ReceivedAt, Amount = t.TransferAmount })
+            .ToListAsync(ct);
+    }
+
     public async Task<bool> TryAddAsync(PaymentTransaction transaction, CancellationToken ct)
     {
         context.PaymentTransactions.Add(transaction);

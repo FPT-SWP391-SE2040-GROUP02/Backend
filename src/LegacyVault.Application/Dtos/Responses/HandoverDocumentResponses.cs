@@ -70,6 +70,12 @@ public class HandoverDocumentResponse
 
     public string TemplateVersion { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Câu báo về việc xử lý phần tài sản khi có người nhận từ chối (Admin sửa được). In ở mục 8 biên bản đồng ý và hiện cho
+    /// người nhận trước khi chọn nhận hay từ chối.
+    /// </summary>
+    public string DeclineNotice { get; set; } = string.Empty;
+
     public string ContainerName { get; set; } = string.Empty;
 
     public int ItemCount { get; set; }

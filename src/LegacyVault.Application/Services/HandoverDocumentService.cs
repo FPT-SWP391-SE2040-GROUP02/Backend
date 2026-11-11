@@ -224,6 +224,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         response.Kind = document.Kind == HandoverSubmissionKind.Accept ? "ACCEPT" : "DECLINE";
         response.Status = HandoverDocumentRules.StatusToApi(document.Status);
         response.TemplateVersion = document.TemplateVersion;
+        response.DeclineNotice = HandoverDocumentRules.DeclineNotice;
         response.ContainerName = document.Turn.ContainerName;
         response.ItemCount = document.ItemCount;
         response.SupplementReason = document.SupplementReason;

@@ -133,6 +133,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
             "7. Tôi đã đọc lại toàn bộ nội dung, hiểu rõ, chấp nhận và nhận thức đầy đủ trách nhiệm pháp lý của mình khi lập và "
             + "xác nhận biên bản này.",
             justify: true);
+        Para(column, $"8. Tôi đã được thông báo: {data.DeclineNotice}", justify: true);
         if (data.HasSignatures)
         {
             WriteSignatures(column, data);

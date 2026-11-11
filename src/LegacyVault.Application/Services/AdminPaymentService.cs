@@ -18,6 +18,14 @@ public interface IAdminPaymentService
     Task<PaginatedList<AdminPaymentTransactionResponse>> ListAsync(
         string? status, string? search, int pageIndex, int pageSize, CancellationToken ct,
         string? environment = null, string? from = null, string? to = null);
+
+    /// <summary>
+    /// Doanh thu = tổng tiền giao dịch thành công (Matched và Resolved), gom theo groupBy (day, month, quarter; mặc định month)
+    /// theo giờ Việt Nam. environment: Live (mặc định, tiền thật), Test hoặc ALL. from, to: yyyy-MM-dd, tính cả hai đầu.
+    /// Không phải Admin đang hoạt động → 404; tham số lạ → 400.
+    /// </summary>
+    Task<AdminRevenueResponse> GetRevenueAsync(
+        string? groupBy, string? environment, string? from, string? to, CancellationToken ct);
 }
 
 /// <remarks>
@@ -78,6 +86,111 @@ public sealed class AdminPaymentService : IAdminPaymentService
         page.HasPreviousPage = pageIndex > 1;
         page.HasNextPage = pageIndex < page.TotalPages;
         return page;
+    }
+
+    public async Task<AdminRevenueResponse> GetRevenueAsync(
+        string? groupBy, string? environment, string? from, string? to, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        string group = ParseGroupBy(groupBy);
+
+        // Mặc định chỉ tính tiền thật; "ALL" mới gộp cả môi trường thử nghiệm.
+        string revenueEnvironment = "Live";
+        PaymentTransactionFilter filter = new PaymentTransactionFilter();
+        if (!string.IsNullOrWhiteSpace(environment))
+        {
+            string wanted = environment.Trim();
+            if (string.Equals(wanted, "ALL", StringComparison.Ordinal))
+            {
+                revenueEnvironment = "ALL";
+            }
+            else
+            {
+                revenueEnvironment = ParseEnvironment(wanted) ?? "Live";
+            }
+        }
+        if (revenueEnvironment != "ALL")
+        {
+            filter.Environment = revenueEnvironment;
+        }
+        filter.From = ParseDayStart(from, "from");
+        DateTimeOffset? lastDay = ParseDayStart(to, "to");
+        filter.ToExclusive = lastDay?.AddDays(1);
+        if (filter.From != null && lastDay != null && filter.From > lastDay)
+        {
+            throw ValidationErrors.For("from", "Ngày bắt đầu phải trước hoặc cùng ngày kết thúc.");
+        }
+
+        List<RevenueTransaction> rows = await transactionRepository.ListSuccessAmountsAsync(filter, ct);
+
+        AdminRevenueResponse response = new AdminRevenueResponse();
+        response.GroupBy = group;
+        response.Environment = revenueEnvironment;
+        // Danh sách đã sắp theo thời điểm nhận tăng dần nên kỳ nào đến trước cũng nằm trước.
+        Dictionary<string, AdminRevenueBucketResponse> byKey = new Dictionary<string, AdminRevenueBucketResponse>();
+        foreach (RevenueTransaction row in rows)
+        {
+            DateTimeOffset vietnamTime = row.ReceivedAt.ToOffset(TimeSpan.FromHours(7));
+            string key = BucketKey(group, vietnamTime);
+            if (!byKey.TryGetValue(key, out AdminRevenueBucketResponse? bucket))
+            {
+                bucket = new AdminRevenueBucketResponse();
+                bucket.Key = key;
+                bucket.Label = BucketLabel(group, vietnamTime);
+                byKey[key] = bucket;
+                response.Buckets.Add(bucket);
+            }
+            bucket.Amount += row.Amount;
+            bucket.Count += 1;
+            response.TotalAmount += row.Amount;
+            response.TransactionCount += 1;
+        }
+        return response;
+    }
+
+    private static string ParseGroupBy(string? groupBy)
+    {
+        if (string.IsNullOrWhiteSpace(groupBy))
+        {
+            return "month";
+        }
+        string wanted = groupBy.Trim();
+        if (wanted == "day" || wanted == "month" || wanted == "quarter")
+        {
+            return wanted;
+        }
+        throw ValidationErrors.For("groupBy", "Giá trị gom nhóm không hợp lệ, cần day, month hoặc quarter.");
+    }
+
+    private static int QuarterOf(DateTimeOffset vietnamTime)
+    {
+        return (vietnamTime.Month - 1) / 3 + 1;
+    }
+
+    private static string BucketKey(string group, DateTimeOffset vietnamTime)
+    {
+        if (group == "day")
+        {
+            return vietnamTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if (group == "quarter")
+        {
+            return vietnamTime.Year + "-Q" + QuarterOf(vietnamTime);
+        }
+        return vietnamTime.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static string BucketLabel(string group, DateTimeOffset vietnamTime)
+    {
+        if (group == "day")
+        {
+            return vietnamTime.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if (group == "quarter")
+        {
+            return "Quý " + QuarterOf(vietnamTime) + "/" + vietnamTime.Year;
+        }
+        return vietnamTime.ToString("MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private async Task RequireAdminAsync(CancellationToken ct)

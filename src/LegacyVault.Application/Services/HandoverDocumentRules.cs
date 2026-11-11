@@ -7,7 +7,26 @@ namespace LegacyVault.Application.Services;
 public static class HandoverDocumentRules
 {
     /// <summary>Phiên bản mẫu chữ của biên bản; đổi khi sửa chữ trong văn bản.</summary>
-    public const string TemplateVersion = "bb-2026-11";
+    public const string TemplateVersion = "bb-2026-11-b";
+
+    /// <summary>Khóa tham số Admin sửa được: câu báo trong biên bản đồng ý về việc xử lý phần tài sản khi có người nhận từ chối.</summary>
+    public const string DeclineNoticeSettingKey = "Handover.DeclineNotice";
+
+    /// <summary>Mức gốc của câu báo khi Admin chưa đặt hoặc để trống.</summary>
+    public const string DefaultDeclineNotice =
+        "Nếu một người nhận từ chối nhận, phần tài sản của gói bàn giao đó sẽ bị xóa hoàn toàn khỏi hệ thống và không thể khôi phục.";
+
+    /// <summary>
+    /// Câu báo trong biên bản đồng ý: cách xử lý phần tài sản khi có người nhận từ chối. Admin sửa ở Cấu hình, thiếu hoặc
+    /// để trống thì dùng <see cref="DefaultDeclineNotice"/>.
+    /// </summary>
+    public static string DeclineNotice
+    {
+        get
+        {
+            return RuntimeSettings.Text(DeclineNoticeSettingKey, DefaultDeclineNotice);
+        }
+    }
 
     /// <summary>Phiên bản điều khoản mà người ký tick đồng ý; đổi khi sửa chữ điều khoản.</summary>
     public const string TermsVersion = "terms-2026-11";
