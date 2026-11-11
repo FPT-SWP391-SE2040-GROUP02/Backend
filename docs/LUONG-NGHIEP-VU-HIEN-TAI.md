@@ -139,6 +139,12 @@ Các bước:
 | | `Incident.MaxReviewIntervalDays` | 7 |
 | Giới hạn | `Limits.*`, `Security.*`, `Features.MaintenanceMode` | xem màn Cấu hình |
 
+**Kiểm giá trị khi lưu** (Backend `SystemSettingRules`, màn Cấu hình báo lỗi ngay trước khi bấm lưu): sai thì trả 400 `VALIDATION_ERROR` và không lưu gì (cả lô bị từ chối).
+- Số nguyên trong khoảng: ví dụ `CheckIn.MaxLateReminders` từ 1 đến 5, `CheckIn.LateReminderGapDays` từ 1 đến 30, `CheckIn.FirstReminderDaysBeforeDue` từ 2 đến 60, `CheckIn.SecondReminderDaysBeforeDue` từ 1 đến 30, `Security.MaxPinAttempts` từ 1 đến 20.
+- `Features.MaintenanceMode` và `Time.DemoSeconds`: chỉ `true` hoặc `false`. `Company.*`: giới hạn độ dài, `Company.Email` đúng dạng email.
+- Các cặp phải đi cùng nhau: thư nhắc trước hạn thứ nhất phải xa hạn hơn thư thứ hai (không được bằng nhau); giờ báo sự cố lên Admin phải sau giờ nhắc người phụ trách; giờ nhắc lời mời Người thực thi phải sớm hơn hạn lời mời.
+- Tham số bị tắt thì không kiểm giá trị (hệ thống dùng mức gốc). Khóa `Plans.*` có bộ kiểm giá riêng.
+
 ## 11. Hai kịch bản chạy thử
 
 **Happy case (một kho từ đầu đến cuối):**
