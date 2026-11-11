@@ -67,11 +67,10 @@ public static class DemoClockRules
         List<DemoDeadline> result = new List<DemoDeadline>();
         foreach (DemoOpenPeriod period in periods)
         {
-            foreach (CheckInReminderKind kind in CheckInTimeline.ActiveKinds(period.MaxLateReminders))
+            IReadOnlyList<int> dueDays = CheckInRules.DueReminderDays;
+            foreach (CheckInReminderKind kind in CheckInTimeline.ActiveKinds(dueDays.Count, period.MaxLateReminders))
             {
-                DateTimeOffset at = CheckInTimeline.MilestoneAt(
-                    kind, period.DueAt, period.LateReminderGapDays,
-                    CheckInRules.FirstReminderDaysBeforeDue, CheckInRules.SecondReminderDaysBeforeDue);
+                DateTimeOffset at = CheckInTimeline.MilestoneAt(kind, period.DueAt, period.LateReminderGapDays, dueDays);
                 if (at == period.DueAt)
                 {
                     // Thư nhắc trễ đầu tiên gửi đúng lúc đến hạn: gộp vào mốc "đến hạn" để một lần dừng chỉ có một bước.

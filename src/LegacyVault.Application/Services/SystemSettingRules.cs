@@ -30,6 +30,7 @@ public static class SystemSettingRules
 
     public const string FirstReminderKey = "CheckIn.FirstReminderDaysBeforeDue";
     public const string SecondReminderKey = "CheckIn.SecondReminderDaysBeforeDue";
+    public const string DueReminderCountKey = "CheckIn.DueReminderCount";
     public const string IncidentReminderKey = "Incident.ReminderAfterHours";
     public const string IncidentEscalateKey = "Incident.EscalateAfterHours";
     public const string ExecutorExpiresKey = "Executor.InvitationExpiresDays";
@@ -49,6 +50,10 @@ public static class SystemSettingRules
     {
         { FirstReminderKey, 7 },
         { SecondReminderKey, 1 },
+        { DueReminderCountKey, 2 },
+        { "CheckIn.ThirdReminderDaysBeforeDue", 1 },
+        { "CheckIn.FourthReminderDaysBeforeDue", 1 },
+        { "CheckIn.FifthReminderDaysBeforeDue", 1 },
         { IncidentReminderKey, 48 },
         { IncidentEscalateKey, 72 },
         { ExecutorExpiresKey, 7 },
@@ -72,6 +77,10 @@ public static class SystemSettingRules
         Add(rules, "CheckIn.DefaultCycleDays", "Chu kỳ điểm danh mặc định (ngày)", 7, 365);
         Add(rules, FirstReminderKey, "Thư nhắc trước hạn thứ nhất (ngày trước hạn)", 2, 60);
         Add(rules, SecondReminderKey, "Thư nhắc trước hạn thứ hai (ngày trước hạn)", 1, 30);
+        Add(rules, "CheckIn.ThirdReminderDaysBeforeDue", "Thư nhắc trước hạn thứ ba (ngày trước hạn)", 1, 30);
+        Add(rules, "CheckIn.FourthReminderDaysBeforeDue", "Thư nhắc trước hạn thứ tư (ngày trước hạn)", 1, 30);
+        Add(rules, "CheckIn.FifthReminderDaysBeforeDue", "Thư nhắc trước hạn thứ năm (ngày trước hạn)", 1, 30);
+        Add(rules, DueReminderCountKey, "Số thư nhắc trước hạn", 1, 5);
         Add(rules, "CheckIn.LateReminderGapDays", "Khoảng cách giữa hai thư nhắc trễ (ngày)", 1, 30);
         Add(rules, "CheckIn.MaxLateReminders", "Số thư nhắc trễ", 1, 5);
         Add(rules, "CheckIn.ExecutorProxyLimit", "Số lần Người thực thi điểm danh thay liên tiếp", 1, 20);
@@ -220,12 +229,18 @@ public static class SystemSettingRules
     /// </summary>
     public static string? FindRelationError(IReadOnlyDictionary<string, long> effective)
     {
-        long first = Pick(effective, FirstReminderKey);
-        long second = Pick(effective, SecondReminderKey);
-        if (first <= second)
+        string[] ordinals = { "nhất", "hai", "ba", "tư", "năm" };
+        long count = Pick(effective, DueReminderCountKey);
+        for (int i = 1; i < count && i < ordinals.Length; i++)
         {
-            return "Thư nhắc trước hạn thứ nhất phải xa hạn hơn thư thứ hai (số ngày lớn hơn). Hiện là "
-                + first.ToString(CultureInfo.InvariantCulture) + " ngày và " + second.ToString(CultureInfo.InvariantCulture) + " ngày.";
+            long farther = Pick(effective, CheckInRules.DueReminderKey(i));
+            long nearer = Pick(effective, CheckInRules.DueReminderKey(i + 1));
+            if (farther <= nearer)
+            {
+                return "Thư nhắc trước hạn thứ " + ordinals[i - 1] + " phải xa hạn hơn thư thứ " + ordinals[i]
+                    + " (số ngày lớn hơn). Hiện là "
+                    + farther.ToString(CultureInfo.InvariantCulture) + " ngày và " + nearer.ToString(CultureInfo.InvariantCulture) + " ngày.";
+            }
         }
 
         long reminder = Pick(effective, IncidentReminderKey);

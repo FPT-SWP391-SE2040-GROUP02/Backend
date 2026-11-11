@@ -49,6 +49,10 @@ public static class CheckInReminderEmail
             case CheckInReminderKind.DueInSevenDays:
                 return EmailTemplateCatalog.CheckInDueFirst;
             case CheckInReminderKind.DueInOneDay:
+            case CheckInReminderKind.DueReminder3:
+            case CheckInReminderKind.DueReminder4:
+            case CheckInReminderKind.DueReminder5:
+                // Từ thư thứ hai trở đi dùng chung một mẫu "sắp tới hạn"; số ngày trong chữ gốc lấy theo từng thư.
                 return EmailTemplateCatalog.CheckInDueSecond;
             default:
                 return EmailTemplateCatalog.CheckInLate;
@@ -63,23 +67,26 @@ public static class CheckInReminderEmail
         switch (kind)
         {
             case CheckInReminderKind.DueInSevenDays:
-                // Số ngày do Admin đặt (CheckIn.FirstReminderDaysBeforeDue), không còn cố định 7.
-                int firstDays = CheckInRules.FirstReminderDaysBeforeDue;
-                subject = $"Còn {firstDays} ngày nữa là tới hạn điểm danh LegacyVault";
-                paragraph = $"Hạn điểm danh tiếp theo của bạn là {due}. Hãy đăng nhập và bấm \"Điểm danh\" trước thời điểm này.";
-                break;
             case CheckInReminderKind.DueInOneDay:
-                // Số ngày do Admin đặt (CheckIn.SecondReminderDaysBeforeDue); mặc định 1 ngày giữ nguyên câu cũ.
-                int secondDays = CheckInRules.SecondReminderDaysBeforeDue;
-                if (secondDays == 1)
+            case CheckInReminderKind.DueReminder3:
+            case CheckInReminderKind.DueReminder4:
+            case CheckInReminderKind.DueReminder5:
+                // Số ngày do Admin đặt cho từng thư (CheckIn.DueReminderCount và các khóa ...ReminderDaysBeforeDue).
+                int days = CheckInRules.DueReminderDaysAt(CheckInTimeline.DueReminderPosition(kind));
+                if (days == 1)
                 {
                     subject = "Ngày mai là hạn điểm danh LegacyVault";
                     paragraph = $"Hạn điểm danh của bạn là {due}, chỉ còn khoảng một ngày. Hãy đăng nhập và bấm \"Điểm danh\".";
                 }
+                else if (CheckInTimeline.DueReminderPosition(kind) == 1)
+                {
+                    subject = $"Còn {days} ngày nữa là tới hạn điểm danh LegacyVault";
+                    paragraph = $"Hạn điểm danh tiếp theo của bạn là {due}. Hãy đăng nhập và bấm \"Điểm danh\" trước thời điểm này.";
+                }
                 else
                 {
-                    subject = $"Còn {secondDays} ngày nữa là tới hạn điểm danh LegacyVault";
-                    paragraph = $"Hạn điểm danh của bạn là {due}, chỉ còn khoảng {secondDays} ngày. Hãy đăng nhập và bấm \"Điểm danh\".";
+                    subject = $"Còn {days} ngày nữa là tới hạn điểm danh LegacyVault";
+                    paragraph = $"Hạn điểm danh của bạn là {due}, chỉ còn khoảng {days} ngày. Hãy đăng nhập và bấm \"Điểm danh\".";
                 }
                 break;
             case CheckInReminderKind.GraceStarted:
