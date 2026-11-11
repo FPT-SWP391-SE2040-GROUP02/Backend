@@ -20,6 +20,13 @@ public interface IHandoverRepository
     /// <summary>Các lượt mà tài khoản đã nhận, kèm Items và Grant, mới nhất (InvitedAt giảm dần) trước.</summary>
     Task<List<HandoverTurn>> FindTurnsByClaimantAsync(Guid userId, CancellationToken ct);
 
+    /// <summary>
+    /// Các lượt chưa ai nhận (ClaimantUserId null), còn nhận được (Invited hoặc InitialResponseExpired) và thuộc kế hoạch
+    /// đang HandoverInProgress, mới nhất (InvitedAt giảm dần) trước. Không kèm Items; không theo dõi.
+    /// Email người nhận nằm trong dữ liệu mã hóa nên không lọc theo email được ở đây; service lọc tiếp.
+    /// </summary>
+    Task<List<HandoverTurn>> FindUnclaimedTurnsInHandoverAsync(CancellationToken ct);
+
     /// <summary>Mọi lượt của một kế hoạch (có theo dõi), để kiểm tra khi nào kế hoạch đóng.</summary>
     Task<List<HandoverTurn>> FindTurnsByPlanAsync(Guid planId, CancellationToken ct);
 

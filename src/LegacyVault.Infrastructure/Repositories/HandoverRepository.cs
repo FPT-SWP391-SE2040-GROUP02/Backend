@@ -47,6 +47,18 @@ public sealed class HandoverRepository : IHandoverRepository
             .ToListAsync(ct);
     }
 
+    public Task<List<HandoverTurn>> FindUnclaimedTurnsInHandoverAsync(CancellationToken ct)
+    {
+        return context.Set<HandoverTurn>()
+            .AsNoTracking()
+            .Where(t => t.ClaimantUserId == null
+                && (t.Status == HandoverTurnStatus.Invited || t.Status == HandoverTurnStatus.InitialResponseExpired)
+                && context.Set<HandoverPlan>().Any(p => p.Id == t.PlanId && p.Status == PlanStatus.HandoverInProgress))
+            .OrderByDescending(t => t.InvitedAt)
+            .ThenByDescending(t => t.Id)
+            .ToListAsync(ct);
+    }
+
     public Task<List<HandoverTurn>> FindTurnsByPlanAsync(Guid planId, CancellationToken ct)
     {
         return context.Set<HandoverTurn>()

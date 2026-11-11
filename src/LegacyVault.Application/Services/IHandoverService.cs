@@ -14,6 +14,15 @@ public interface IHandoverService
     /// <summary>Gắn tài khoản đang đăng nhập vào lượt. Gọi lặp bởi cùng người là an toàn.</summary>
     Task<HandoverTurnResponse> ClaimAsync(string token, CancellationToken ct);
 
+    /// <summary>
+    /// Nhận lượt trong app theo turnId (người nhận bấm Đồng ý/Từ chối nhận ở thẻ thư mời). Cùng các bước kiểm như nhận qua link;
+    /// email tài khoản phải trùng email người nhận, sai thì 403 HANDOVER_EMAIL_MISMATCH. Gọi lặp bởi cùng người là an toàn.
+    /// </summary>
+    Task<HandoverTurnResponse> ClaimByTurnAsync(Guid turnId, CancellationToken ct);
+
+    /// <summary>Lời mời nhận gói đang chờ tài khoản đang đăng nhập (đúng email đã xác minh). Chưa xác minh email thì rỗng.</summary>
+    Task<List<PendingInvitationResponse>> GetMyInvitationsAsync(CancellationToken ct);
+
     Task<List<HandoverTurnResponse>> GetMyTurnsAsync(CancellationToken ct);
 
     Task<HandoverTurnResponse> GetTurnAsync(Guid turnId, CancellationToken ct);

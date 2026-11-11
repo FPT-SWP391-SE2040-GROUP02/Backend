@@ -106,11 +106,16 @@ public static class ApiTestHelpers
     /// Kho phải đang trả phí (UpgradeVaultToXsAsync).
     /// </summary>
     public static async Task<JsonElement> CreateBeneficiaryAsync(
-        HttpClient client, Guid vaultId, string citizenId, string fullName)
+        HttpClient client, Guid vaultId, string citizenId, string fullName, string? recipientEmail = null)
     {
+        string email = BeneficiaryEmail;
+        if (recipientEmail != null)
+        {
+            email = recipientEmail;
+        }
         HttpResponseMessage response = await client.PostAsJsonAsync(
             $"/api/v1/vaults/{vaultId}/beneficiaries",
-            new { citizenId, fullName, dateOfBirth = "1990-05-20", email = BeneficiaryEmail });
+            new { citizenId, fullName, dateOfBirth = "1990-05-20", email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return await ReadJsonAsync(response);
     }

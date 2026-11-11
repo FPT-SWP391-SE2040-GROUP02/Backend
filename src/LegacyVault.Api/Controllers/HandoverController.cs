@@ -35,7 +35,10 @@ public sealed class HandoverController : ControllerBase
         this.logger = logger;
     }
 
-    /// <summary>Công khai: kiểm link mời còn hợp lệ không. Chỉ trả hai cờ, không lộ dữ liệu nào khác.</summary>
+    /// <summary>
+    /// Công khai: kiểm link mời còn hợp lệ không. Trả thêm email được mời đã che bớt và cờ "đã có tài khoản"
+    /// để FE chọn nút Đăng nhập hay Tạo tài khoản.
+    /// </summary>
     [AllowAnonymous]
     [HttpGet("invitations/{token}")]
     [ProducesResponseType<InvitationStatusResponse>(StatusCodes.Status200OK)]
@@ -72,6 +75,29 @@ public sealed class HandoverController : ControllerBase
     public Task<HandoverTurnResponse> Claim(string token, CancellationToken ct)
     {
         return handoverService.ClaimAsync(token, ct);
+    }
+
+    /// <summary>
+    /// Lời mời nhận gói đang chờ tôi (chưa ai nhận, đúng email đã xác minh của tài khoản). Rỗng khi chưa xác minh email.
+    /// </summary>
+    [HttpGet("invitations/mine")]
+    [ProducesResponseType<List<PendingInvitationResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public Task<List<PendingInvitationResponse>> GetMyInvitations(CancellationToken ct)
+    {
+        return handoverService.GetMyInvitationsAsync(ct);
+    }
+
+    /// <summary>Nhận lượt trong app (bấm Đồng ý/Từ chối nhận ở thẻ thư mời). Gọi lặp bởi cùng người là an toàn.</summary>
+    [HttpPost("turns/{turnId:guid}/claim")]
+    [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverTurnResponse> ClaimByTurn(Guid turnId, CancellationToken ct)
+    {
+        return handoverService.ClaimByTurnAsync(turnId, ct);
     }
 
     /// <summary>Các lượt tôi đã nhận, mới nhất trước.</summary>
