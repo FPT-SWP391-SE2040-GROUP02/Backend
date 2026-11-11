@@ -2,6 +2,7 @@ using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
@@ -36,6 +37,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
     private readonly IDeathCaseRepository deathCases;
     private readonly IAssetContentStore contentStore;
     private readonly IAdministrativeUnitCatalog administrativeUnits;
+    private readonly IHandoverTemplateService? templates;
 
     public HandoverPaperWriter(
         IUserRepository users,
@@ -45,8 +47,10 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         IDeclinePaperRenderer renderer,
         IDeathCaseRepository deathCases,
         IAssetContentStore contentStore,
-        IAdministrativeUnitCatalog administrativeUnits)
+        IAdministrativeUnitCatalog administrativeUnits,
+        IHandoverTemplateService? templates = null)
     {
+        this.templates = templates;
         this.users = users;
         this.vaults = vaults;
         this.beneficiaries = beneficiaries;
@@ -130,6 +134,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
             await FillDeathDatesAsync(data, turn.VaultId, ct);
         }
 
+        await FillTemplateAsync(data, submission.Kind == HandoverSubmissionKind.Accept, document, ct);
         byte[] image = renderer.Render(data);
         StoredContent stored = await IdentityImageStorage.SaveAsync(contentStore, image, ct);
         submission.PaperStorageKey = stored.StorageKey;
@@ -137,6 +142,33 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         submission.PaperEncryptionKeyId = stored.EncryptionKeyId;
         submission.PaperWrappedDataKey = stored.WrappedDataKey;
         return stored.StorageKey;
+    }
+
+    /// <summary>
+    /// Điền các đoạn chữ của mẫu vào dữ liệu dựng: biên bản đã tạo dùng đúng mẫu ghi trên biên bản (templateVersion), luồng cũ không có
+    /// biên bản thì dùng mẫu đang áp dụng. Không có dịch vụ mẫu thì để trống để bộ dựng dùng chữ cố định.
+    /// </summary>
+    private async Task FillTemplateAsync(DeclinePaperData data, bool isAcceptance, HandoverDocument? document, CancellationToken ct)
+    {
+        if (templates == null)
+        {
+            return;
+        }
+        string key = await templates.ActiveVersionKeyAsync(ct);
+        if (document != null)
+        {
+            key = document.TemplateVersion;
+        }
+        ResolvedHandoverTemplate template = await templates.ResolveAsync(key, ct);
+        data.DeclineNotice = template.Content.DeclineNotice;
+        if (isAcceptance)
+        {
+            data.Paragraphs = template.Content.Accept;
+        }
+        else
+        {
+            data.Paragraphs = template.Content.Decline;
+        }
     }
 
     /// <summary>Ngày mất, ngày đăng ký khai tử và nơi đăng ký in lên văn bản; không có hồ sơ hoặc chưa đủ dữ liệu thì để trống.</summary>

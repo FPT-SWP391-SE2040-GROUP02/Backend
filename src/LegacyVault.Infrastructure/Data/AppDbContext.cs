@@ -73,6 +73,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     // Thanh toán (SRS §8)
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+    public DbSet<HandoverTemplateSet> HandoverTemplateSets => Set<HandoverTemplateSet>();
 
     // Cấu hình tham số động (CR5)
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();

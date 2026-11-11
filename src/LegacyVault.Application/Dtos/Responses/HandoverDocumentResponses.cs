@@ -1,3 +1,4 @@
+using LegacyVault.Application.Services;
 namespace LegacyVault.Application.Dtos.Responses;
 
 /// <summary>
@@ -71,10 +72,16 @@ public class HandoverDocumentResponse
     public string TemplateVersion { get; set; } = string.Empty;
 
     /// <summary>
-    /// Câu báo về việc xử lý phần tài sản khi có người nhận từ chối (Admin sửa được). In ở mục 8 biên bản đồng ý và hiện cho
-    /// người nhận trước khi chọn nhận hay từ chối.
+    /// Câu báo về việc xử lý phần tài sản khi có người nhận từ chối (Admin sửa ở trang Mẫu biên bản). Hiện cho người nhận trước khi chọn
+    /// và điền vào trường {CAU_BAO_TU_CHOI} của mẫu.
     /// </summary>
     public string DeclineNotice { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Các đoạn chữ của biên bản này theo mẫu đã ghi lúc tạo (templateVersion), đúng loại ACCEPT hoặc DECLINE. Chữ có thể chứa trường
+    /// như {HO_TEN_NGUOI_NHAN} để giao diện điền từ dữ liệu của biên bản.
+    /// </summary>
+    public List<TemplateParagraph> TemplateParagraphs { get; set; } = new List<TemplateParagraph>();
 
     public string ContainerName { get; set; } = string.Empty;
 

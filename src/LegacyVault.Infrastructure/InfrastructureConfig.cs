@@ -137,6 +137,7 @@ public static class InfrastructureConfig
         services.AddSingleton<IBillingDevSettings, BillingDevSettings>();
         // Webhook SePay (SRS §8.5): giao dịch tiền vào và cấu hình nhận webhook.
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddScoped<IHandoverTemplateRepository, HandoverTemplateRepository>();
         services.AddSingleton<IBillingSePaySettings, BillingSePaySettings>();
 
         // Bàn giao: Executor

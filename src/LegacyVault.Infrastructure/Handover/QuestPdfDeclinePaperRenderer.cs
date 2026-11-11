@@ -39,7 +39,11 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
                     .LineHeight(1.0f));
                 page.Content().Column(column =>
                 {
-                    if (data.IsAcceptance)
+                    if (data.Paragraphs != null)
+                    {
+                        WriteFromTemplate(column, data);
+                    }
+                    else if (data.IsAcceptance)
                     {
                         WriteAcceptance(column, data);
                     }
@@ -55,6 +59,65 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         settings.RasterDpi = 150;
         // Văn bản chỉ một trang: lấy trang đầu làm ảnh PNG, xem như ảnh giấy chứng tử mà Người xét duyệt đọc.
         return document.GenerateImages(settings).First();
+    }
+
+    /// <summary>
+    /// Dựng theo mẫu Admin đã lưu (hoặc mẫu gốc): mỗi đoạn điền các trường {…} từ dữ liệu hệ thống. Khối chữ ký hoặc dòng ký tên ở cuối
+    /// là phần cố định, không nằm trong mẫu.
+    /// </summary>
+    private static void WriteFromTemplate(ColumnDescriptor column, DeclinePaperData data)
+    {
+        Dictionary<string, string> values = BuildValues(data);
+        foreach (TemplateParagraph paragraph in data.Paragraphs!)
+        {
+            string text = HandoverTemplateTokens.Fill(paragraph.Text, values);
+            Para(column, text,
+                center: paragraph.Align == TemplateParagraph.AlignCenter,
+                bold: paragraph.Bold,
+                justify: paragraph.Align == TemplateParagraph.AlignJustify);
+        }
+        if (data.HasSignatures)
+        {
+            WriteSignatures(column, data);
+        }
+        else
+        {
+            if (data.IsAcceptance)
+            {
+                Para(column, "Người lập Biên bản đồng ý nhận di sản thừa kế", center: true, bold: true);
+            }
+            else
+            {
+                Para(column, "Người lập Văn bản từ chối nhận di sản thừa kế", center: true, bold: true);
+            }
+            Para(column, "(Ký/điểm chỉ và ghi rõ họ tên)", center: true);
+        }
+    }
+
+    /// <summary>Giá trị cho từng trường của mẫu; thiếu dữ liệu thì in dòng chấm như mẫu giấy.</summary>
+    private static Dictionary<string, string> BuildValues(DeclinePaperData data)
+    {
+        DateTimeOffset local = data.SubmittedAt.ToOffset(TimeSpan.FromHours(7));
+        string place = "UBND …………………";
+        if (!string.IsNullOrWhiteSpace(data.DeathRegistrationPlace))
+        {
+            place = data.DeathRegistrationPlace;
+        }
+        Dictionary<string, string> values = new Dictionary<string, string>();
+        values[HandoverTemplateTokens.Day] = local.Day.ToString("00");
+        values[HandoverTemplateTokens.Month] = local.Month.ToString("00");
+        values[HandoverTemplateTokens.Year] = local.Year.ToString();
+        values[HandoverTemplateTokens.RecipientName] = data.DeclinerFullName;
+        values[HandoverTemplateTokens.RecipientBirthYear] = BirthYearText(data);
+        values[HandoverTemplateTokens.RecipientCitizenId] = CitizenIdText(data);
+        values[HandoverTemplateTokens.OwnerName] = data.OwnerFullName;
+        values[HandoverTemplateTokens.DeathDate] = Date(data.DateOfDeath, "……………");
+        values[HandoverTemplateTokens.RegistrationDate] = Date(data.DeathCertificateIssuedOn, "…………………………");
+        values[HandoverTemplateTokens.RegistrationPlace] = place;
+        values[HandoverTemplateTokens.Inheritance] = ContainerText(data);
+        values[HandoverTemplateTokens.DeathSentence] = DeathSentence(data);
+        values[HandoverTemplateTokens.DeclineNotice] = data.DeclineNotice;
+        return values;
     }
 
     /// <summary>Văn bản từ chối: viết theo thể thức văn bản pháp lý, điền dữ liệu hệ thống đã giữ, đồng nhất xưng Tôi.</summary>

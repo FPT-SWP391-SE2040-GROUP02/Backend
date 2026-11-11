@@ -7,9 +7,14 @@ public sealed class DeclinePaperData
     public bool IsAcceptance { get; set; }
 
     /// <summary>
-    /// Câu báo in cuối biên bản đồng ý: cách xử lý phần tài sản khi có người nhận từ chối. Mặc định lấy theo cấu hình Admin lúc dựng.
+    /// Câu báo về cách xử lý phần tài sản khi có người nhận từ chối (điền vào trường {CAU_BAO_TU_CHOI}). Mặc định là câu của mẫu gốc.
     /// </summary>
-    public string DeclineNotice { get; set; } = HandoverDocumentRules.DeclineNotice;
+    public string DeclineNotice { get; set; } = HandoverTemplateDefaults.DefaultDeclineNotice;
+
+    /// <summary>
+    /// Các đoạn của mẫu Admin đã lưu (hoặc mẫu gốc) cho loại văn bản này. Có thì dựng theo mẫu; null thì dựng theo chữ cố định cũ.
+    /// </summary>
+    public List<TemplateParagraph>? Paragraphs { get; set; }
 
     public string TurnCode { get; set; } = string.Empty;
 

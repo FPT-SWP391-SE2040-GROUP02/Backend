@@ -1676,6 +1676,42 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("HandoverSubmissions", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverTemplateSet", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AcceptJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeclineJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DeclineNotice")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("HandoverTemplateSets", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverTurn", b =>
                 {
                     b.Property<Guid>("Id")

@@ -51,6 +51,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
     private readonly IOwnerIdentityReader? ownerIdentities;
     private readonly IBeneficiaryRepository? beneficiaries;
     private readonly IBeneficiaryDataProtector? beneficiaryProtector;
+    private readonly IHandoverTemplateService? templates;
 
     public HandoverDocumentService(
         ICurrentUser currentUser,
@@ -67,8 +68,10 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         IHandoverDocumentNotifier? notifier = null,
         IOwnerIdentityReader? ownerIdentities = null,
         IBeneficiaryRepository? beneficiaries = null,
-        IBeneficiaryDataProtector? beneficiaryProtector = null)
+        IBeneficiaryDataProtector? beneficiaryProtector = null,
+        IHandoverTemplateService? templates = null)
     {
+        this.templates = templates;
         this.currentUser = currentUser;
         this.handover = handover;
         this.documents = documents;
@@ -120,7 +123,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         document.Kind = kind;
         document.Status = HandoverDocumentStatus.WaitRecipient;
         document.ItemCount = turn.Items.Count;
-        document.TemplateVersion = HandoverDocumentRules.TemplateVersion;
+        document.TemplateVersion = await ActiveTemplateKeyAsync(ct);
         document.CreatedAt = now;
         await FillOwnerPartAsync(document, turn.VaultId, ct);
         // Điền sẵn tên tài khoản cho người nhận; Phần 2 sẽ ghi lại họ tên người nhận tự khai.
@@ -212,6 +215,28 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return list;
     }
 
+    /// <summary>Khóa mẫu đang dùng cho biên bản mới; không có dịch vụ mẫu thì dùng mẫu gốc.</summary>
+    private async Task<string> ActiveTemplateKeyAsync(CancellationToken ct)
+    {
+        if (templates == null)
+        {
+            return HandoverDocumentRules.TemplateVersion;
+        }
+        return await templates.ActiveVersionKeyAsync(ct);
+    }
+
+    private async Task<ResolvedHandoverTemplate> ResolveTemplateAsync(string versionKey, CancellationToken ct)
+    {
+        if (templates == null)
+        {
+            ResolvedHandoverTemplate fallback = new ResolvedHandoverTemplate();
+            fallback.VersionKey = HandoverDocumentRules.TemplateVersion;
+            fallback.Content = HandoverTemplateDefaults.Create();
+            return fallback;
+        }
+        return await templates.ResolveAsync(versionKey, ct);
+    }
+
     private async Task<HandoverDocumentResponse> ToResponseAsync(
         HandoverDocument document, bool forVerifier, CancellationToken ct, Dictionary<Guid, string>? cache = null)
     {
@@ -224,7 +249,16 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         response.Kind = document.Kind == HandoverSubmissionKind.Accept ? "ACCEPT" : "DECLINE";
         response.Status = HandoverDocumentRules.StatusToApi(document.Status);
         response.TemplateVersion = document.TemplateVersion;
-        response.DeclineNotice = HandoverDocumentRules.DeclineNotice;
+        ResolvedHandoverTemplate template = await ResolveTemplateAsync(document.TemplateVersion, ct);
+        response.DeclineNotice = template.Content.DeclineNotice;
+        if (document.Kind == HandoverSubmissionKind.Accept)
+        {
+            response.TemplateParagraphs = template.Content.Accept;
+        }
+        else
+        {
+            response.TemplateParagraphs = template.Content.Decline;
+        }
         response.ContainerName = document.Turn.ContainerName;
         response.ItemCount = document.ItemCount;
         response.SupplementReason = document.SupplementReason;
