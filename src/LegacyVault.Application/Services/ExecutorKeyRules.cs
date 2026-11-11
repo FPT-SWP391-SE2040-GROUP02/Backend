@@ -4,17 +4,20 @@ using System.Text;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Luật thuần của mảnh khóa Người thực thi: sinh mảnh ngẫu nhiên 256 bit, định dạng dễ đọc, băm và kiểm.
+/// Luật thuần của mảnh khóa Người thực thi: sinh mảnh ngẫu nhiên 80 bit (16 ký tự, 4 nhóm), định dạng dễ đọc, băm và kiểm.
 /// Không đọc hay ghi DB, không ghi log mảnh (SEC-07).
 /// </summary>
 public static class ExecutorKeyRules
 {
     /// <summary>Bảng chữ Crockford base32: bỏ I, L, O, U cho khỏi nhầm khi đọc hoặc chép tay.</summary>
     private const string Alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-    private const int ShardBytes = 32;
+    // 10 byte = 80 bit = đúng 16 ký tự base32, không dư bit. Mảnh chỉ để đối chiếu với mã băm đã lưu (không dùng để mã hóa
+    // nội dung) và mỗi lượt chỉ được nhập sai tối đa MaxKeyFailures lần, nên 80 bit là đủ; ngắn hơn để Chủ kho dễ đưa và chép tay.
+    // Mảnh đã cấp trước đây dài 52 ký tự vẫn dùng được vì Normalize và Hash không phụ thuộc độ dài.
+    private const int ShardBytes = 10;
     private const int GroupSize = 4;
 
-    /// <summary>Sinh mảnh mới: 32 byte ngẫu nhiên mật mã, trả dạng "XXXX-XXXX-..." (13 nhóm).</summary>
+    /// <summary>Sinh mảnh mới: 10 byte ngẫu nhiên mật mã, trả dạng "XXXX-XXXX-XXXX-XXXX" (4 nhóm).</summary>
     public static string GenerateShard()
     {
         byte[] bytes = RandomNumberGenerator.GetBytes(ShardBytes);

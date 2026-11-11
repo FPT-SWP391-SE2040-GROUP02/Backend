@@ -17,15 +17,26 @@ namespace LegacyVault.IntegrationTests.ExecutorKey;
 public sealed class ExecutorKeyRulesTests
 {
     [Fact]
-    public void GeneratedShardHas13GroupsOfFourFromTheCrockfordAlphabet()
+    public void GeneratedShardHas4GroupsOfFourFromTheCrockfordAlphabet()
     {
         string shard = ExecutorKeyRules.GenerateShard();
 
         string[] groups = shard.Split('-');
-        Assert.Equal(13, groups.Length);
-        Assert.All(groups, group => Assert.True(group.Length == 4 || group.Length == 0));
-        Assert.Equal(52, ExecutorKeyRules.Normalize(shard).Length);
+        Assert.Equal(4, groups.Length);
+        Assert.All(groups, group => Assert.Equal(4, group.Length));
+        Assert.Equal(16, ExecutorKeyRules.Normalize(shard).Length);
         Assert.Matches("^[0-9A-HJKMNP-TV-Z-]+$", shard);
+    }
+
+    [Fact]
+    public void ShardIssuedBeforeTheShorterFormatStillMatches()
+    {
+        // Mảnh cũ 13 nhóm (52 ký tự) đã cấp cho các kho trước đây vẫn phải được chấp nhận.
+        Guid vaultId = Guid.NewGuid();
+        string oldShard = "THWD-JYZZ-1GGC-JY1K-TYJ1-SDAG-NMTA-3FKB-3S25-4CDV-2ZWQ-JQ6F-SCX0";
+        string hash = ExecutorKeyRules.Hash(vaultId, 1, oldShard);
+
+        Assert.True(ExecutorKeyRules.Matches(vaultId, 1, oldShard.ToLowerInvariant(), hash));
     }
 
     [Fact]

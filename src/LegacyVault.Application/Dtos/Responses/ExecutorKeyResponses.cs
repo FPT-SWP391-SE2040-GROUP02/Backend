@@ -21,6 +21,6 @@ public class ExecutorKeyStatusResponse
 /// <summary>Kết quả cấp mảnh: mảnh gốc chỉ có trong response này, không đọc lại được.</summary>
 public class ExecutorKeyIssuedResponse : ExecutorKeyStatusResponse
 {
-    /// <summary>Mảnh dạng "XXXX-XXXX-..."; Chủ kho đưa trực tiếp cho Người thực thi.</summary>
+    /// <summary>Mảnh dạng "XXXX-XXXX-XXXX-XXXX"; Chủ kho đưa trực tiếp cho Người thực thi.</summary>
     public string Shard { get; set; } = string.Empty;
 }
