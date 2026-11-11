@@ -21,37 +21,69 @@ public static class PlanActivatedNoticeEmail
 
     public static EmailContent Build(PlanActivatedNotice notice, string landingUrl)
     {
-        List<string> lines = new List<string>();
-        lines.Add(notice.OwnerName + " đã chọn bạn làm người nhận trên LegacyVault và vừa kích hoạt kế hoạch bàn giao.");
-        lines.Add("Chủ kho: " + Contact(notice.OwnerName, notice.OwnerEmail, notice.OwnerPhone) + ".");
-        if (!string.IsNullOrWhiteSpace(notice.ExecutorName))
-        {
-            lines.Add("Người thực thi: " + Contact(notice.ExecutorName, notice.ExecutorEmail, notice.ExecutorPhone) + ".");
-        }
-        lines.Add("Bạn chưa cần làm gì lúc này. Khi đến lúc bàn giao, bạn sẽ nhận một email khác kèm liên kết riêng để tiếp nhận.");
-        string paragraph = string.Join("\n", lines);
+        string ownerPhone = PhoneText(notice.OwnerPhone);
+        string executorPhone = PhoneText(notice.ExecutorPhone);
+        EmailParts defaults = Parts(
+            notice.OwnerName, notice.OwnerEmail, ownerPhone, notice.ExecutorName, notice.ExecutorEmail, executorPhone);
 
-        const string note = "Email này chỉ để thông báo và không chứa nội dung tài sản. Nếu bạn không quen biết người gửi, hãy bỏ qua email này.";
-        const string buttonText = "Tìm hiểu về LegacyVault";
+        Dictionary<string, string> tokens = new Dictionary<string, string>();
+        tokens["TEN_NGUOI_NHAN"] = notice.FullName;
+        tokens["TEN_CHU_KHO"] = notice.OwnerName;
+        tokens["EMAIL_CHU_KHO"] = notice.OwnerEmail;
+        tokens["SDT_CHU_KHO"] = ownerPhone;
+        tokens["TEN_NGUOI_THUC_THI"] = notice.ExecutorName ?? string.Empty;
+        tokens["EMAIL_NGUOI_THUC_THI"] = notice.ExecutorEmail ?? string.Empty;
+        tokens["SDT_NGUOI_THUC_THI"] = executorPhone;
+        EmailParts parts = EmailTemplateOverrides.Apply(EmailTemplateCatalog.PlanActivated, defaults, tokens);
 
-        string text = $"Xin chào {notice.FullName},\n\n{Title}\n\n{paragraph}\n\n{buttonText}: {landingUrl}\n\n{note}\n";
+        string text = $"Xin chào {notice.FullName},\n\n{parts.Title}\n\n{parts.Body}\n\n{parts.ButtonText}: {landingUrl}\n\n{parts.Note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(
-            title: Title,
+            title: parts.Title,
             recipientName: notice.FullName,
-            leadText: paragraph,
+            leadText: parts.Body,
             actionUrl: landingUrl,
-            actionButtonText: buttonText,
-            securityNotice: note);
-        return new EmailContent(Subject, text, html);
+            actionButtonText: parts.ButtonText,
+            securityNotice: parts.Note);
+        return new EmailContent(parts.Subject, text, html, EmailTemplateCatalog.PlanActivated);
     }
 
-    private static string Contact(string? name, string? email, string? phone)
+    /// <summary>Chữ gốc với biến {TEN_...} giữ nguyên, để Admin sao chép làm chỗ bắt đầu.</summary>
+    public static EmailParts SampleParts()
     {
-        string phoneText = MissingPhone;
-        if (!string.IsNullOrWhiteSpace(phone))
+        return Parts("{TEN_CHU_KHO}", "{EMAIL_CHU_KHO}", "{SDT_CHU_KHO}", "{TEN_NGUOI_THUC_THI}", "{EMAIL_NGUOI_THUC_THI}", "{SDT_NGUOI_THUC_THI}");
+    }
+
+    private static string PhoneText(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
         {
-            phoneText = phone;
+            return MissingPhone;
         }
+        return phone;
+    }
+
+    private static EmailParts Parts(
+        string ownerName, string? ownerEmail, string ownerPhone,
+        string? executorName, string? executorEmail, string executorPhone)
+    {
+        List<string> lines = new List<string>();
+        lines.Add(ownerName + " đã chọn bạn làm người nhận trên LegacyVault và vừa kích hoạt kế hoạch bàn giao.");
+        lines.Add("Chủ kho: " + Contact(ownerName, ownerEmail, ownerPhone) + ".");
+        if (!string.IsNullOrWhiteSpace(executorName))
+        {
+            lines.Add("Người thực thi: " + Contact(executorName, executorEmail, executorPhone) + ".");
+        }
+        lines.Add("Bạn chưa cần làm gì lúc này. Khi đến lúc bàn giao, bạn sẽ nhận một email khác kèm liên kết riêng để tiếp nhận.");
+        return new EmailParts(
+            Subject,
+            Title,
+            string.Join("\n", lines),
+            "Tìm hiểu về LegacyVault",
+            "Email này chỉ để thông báo và không chứa nội dung tài sản. Nếu bạn không quen biết người gửi, hãy bỏ qua email này.");
+    }
+
+    private static string Contact(string? name, string? email, string phoneText)
+    {
         return name + ", email " + email + ", số điện thoại " + phoneText;
     }
 }

@@ -47,6 +47,6 @@ public sealed class SmtpHandoverInvitationSender : IHandoverInvitationSender
     {
         string link = receiveUrl + "?token=" + Uri.EscapeDataString(invitation.Token);
         EmailContent content = HandoverInvitationEmail.Build(invitation, link, supportContact);
-        return mailSender.SendAsync(invitation.ToEmail, invitation.FullName, content.Subject, content.TextBody, content.HtmlBody, ct);
+        return mailSender.SendAsync(invitation.ToEmail, invitation.FullName, content, ct);
     }
 }

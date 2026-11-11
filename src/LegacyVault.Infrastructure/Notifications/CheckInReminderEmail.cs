@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Enums;
 
@@ -21,7 +22,42 @@ public static class CheckInReminderEmail
     {
         string due = FormatVietnamTime(dueAt);
         string graceEnds = FormatVietnamTime(graceEndsAt);
+        string key = KeyFor(kind);
 
+        Dictionary<string, string> tokens = new Dictionary<string, string>();
+        tokens["TEN_NGUOI_NHAN"] = fullName;
+        tokens["HAN_DIEM_DANH"] = due;
+        tokens["HET_THOI_GIAN_CHO"] = graceEnds;
+        EmailParts parts = EmailTemplateOverrides.Apply(key, DefaultParts(kind, due, graceEnds), tokens);
+
+        string text = $"Xin chào {fullName},\n\n{parts.Body}\n\n{parts.ButtonText}: {checkInUrl}\n\n{parts.Note}\n";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            parts.Title,
+            fullName,
+            parts.Body,
+            checkInUrl,
+            parts.ButtonText,
+            parts.Note,
+            "Nhắc điểm danh");
+        return new EmailContent(parts.Subject, text, html, key);
+    }
+
+    public static string KeyFor(CheckInReminderKind kind)
+    {
+        switch (kind)
+        {
+            case CheckInReminderKind.DueInSevenDays:
+                return EmailTemplateCatalog.CheckInDueFirst;
+            case CheckInReminderKind.DueInOneDay:
+                return EmailTemplateCatalog.CheckInDueSecond;
+            default:
+                return EmailTemplateCatalog.CheckInLate;
+        }
+    }
+
+    /// <summary>Chữ gốc của từng mốc; due và graceEnds là chữ đã định dạng (hoặc biến khi lấy mẫu).</summary>
+    public static EmailParts DefaultParts(CheckInReminderKind kind, string due, string graceEnds)
+    {
         string subject;
         string paragraph;
         switch (kind)
@@ -71,17 +107,12 @@ public static class CheckInReminderEmail
                 break;
         }
 
-        const string note = "Lưu ý: đăng nhập hoặc thanh toán không được tính là điểm danh. Email này không chứa nội dung tài sản của bạn.";
-        string text = $"Xin chào {fullName},\n\n{paragraph}\n\nĐiểm danh tại: {checkInUrl}\n\n{note}\n";
-        string html = LegacyVaultEmailTheme.BuildHtml(
+        return new EmailParts(
             subject,
-            fullName,
+            subject,
             paragraph,
-            checkInUrl,
             "Điểm danh ngay",
-            note,
-            "Nhắc điểm danh");
-        return new EmailContent(subject, text, html);
+            "Lưu ý: đăng nhập hoặc thanh toán không được tính là điểm danh. Email này không chứa nội dung tài sản của bạn.");
     }
 
     private static string FormatVietnamTime(DateTimeOffset value)

@@ -40,6 +40,18 @@ public sealed class DemoJobRunner : IDemoJobRunner
                 await provider.GetRequiredService<IOperationsRecorder>().RecordCheckInPeriodAsync(id, token);
             }, ct);
 
+        // Thư bổ sung do Admin đặt, tính theo ngày từ hạn điểm danh.
+        await RunKindAsync("thư bổ sung", result,
+            async (provider, token) =>
+            {
+                IReadOnlyList<Guid> ids = await provider.GetRequiredService<IExtraMailJob>().FindPeriodIdsAsync(token);
+                return ids;
+            },
+            async (provider, id, token) =>
+            {
+                await provider.GetRequiredService<IExtraMailJob>().ProcessPeriodAsync(id, token);
+            }, ct);
+
         // Lời mời Người thực thi: hết hạn hoặc nhắc ở giờ thứ 48.
         await RunKindAsync("lời mời Người thực thi", result,
             async (provider, token) =>

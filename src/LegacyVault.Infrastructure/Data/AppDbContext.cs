@@ -75,6 +75,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<HandoverTemplateSet> HandoverTemplateSets => Set<HandoverTemplateSet>();
 
+    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
+
+    public DbSet<ExtraMailRule> ExtraMailRules => Set<ExtraMailRule>();
+
+    public DbSet<ExtraMailSend> ExtraMailSends => Set<ExtraMailSend>();
+
     // Cấu hình tham số động (CR5)
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 

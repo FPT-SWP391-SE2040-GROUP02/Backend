@@ -44,8 +44,7 @@ public sealed class SmtpIncidentNoticeSender : IIncidentNoticeSender
             }
             EmailContent overdueEmail = ExecutorOverdueNoticeEmail.Build(
                 notice.FullName, executorLink, notice.Kind == IncidentNoticeKind.Reminder);
-            return mailSender.SendAsync(
-                notice.ToEmail, notice.FullName, overdueEmail.Subject, overdueEmail.TextBody, overdueEmail.HtmlBody, ct);
+            return mailSender.SendAsync(notice.ToEmail, notice.FullName, overdueEmail, ct);
         }
 
         string subject = "LegacyVault: sự cố cần xử lý " + code;
