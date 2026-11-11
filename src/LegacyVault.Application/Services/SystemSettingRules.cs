@@ -25,6 +25,7 @@ public static class SystemSettingRules
         public string Label = string.Empty;
         public int MaxLength;
         public bool IsEmail;
+        public bool IsPhone;
     }
 
     public const string FirstReminderKey = "CheckIn.FirstReminderDaysBeforeDue";
@@ -110,7 +111,7 @@ public static class SystemSettingRules
         AddText(rules, "Company.Name", "Tên công ty", 100, false);
         AddText(rules, "Company.Website", "Website công ty", 200, false);
         AddText(rules, "Company.Email", "Email công ty", 200, true);
-        AddText(rules, "Company.Phone", "Số điện thoại công ty", 50, false);
+        AddText(rules, "Company.Phone", "Số điện thoại công ty", 50, false, true);
         AddText(rules, "Company.Address", "Địa chỉ công ty", 300, false);
         return rules;
     }
@@ -124,12 +125,14 @@ public static class SystemSettingRules
         rules[key] = rule;
     }
 
-    private static void AddText(Dictionary<string, TextRule> rules, string key, string label, int maxLength, bool isEmail)
+    private static void AddText(
+        Dictionary<string, TextRule> rules, string key, string label, int maxLength, bool isEmail, bool isPhone = false)
     {
         TextRule rule = new TextRule();
         rule.Label = label;
         rule.MaxLength = maxLength;
         rule.IsEmail = isEmail;
+        rule.IsPhone = isPhone;
         rules[key] = rule;
     }
 
@@ -175,8 +178,42 @@ public static class SystemSettingRules
             {
                 return textRule.Label + " không đúng dạng email.";
             }
+            if (textRule.IsPhone && text.Length > 0 && !IsValidPhone(text))
+            {
+                return textRule.Label + " không hợp lệ: chỉ gồm số, dấu cách, dấu chấm, gạch ngang, ngoặc, có thể bắt đầu bằng + hoặc (, từ 8 đến 15 chữ số.";
+            }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Số điện thoại hoặc tổng đài: bắt đầu bằng số, dấu + hoặc dấu (, chỉ gồm số, dấu cách, dấu chấm, gạch ngang, ngoặc, và có từ 8 đến 15 chữ số
+    /// (ví dụ "1900 0000", "0901 234 567", "+84 901 234 567").
+    /// </summary>
+    public static bool IsValidPhone(string text)
+    {
+        if (text.Length == 0 || !(char.IsAsciiDigit(text[0]) || text[0] == '+' || text[0] == '('))
+        {
+            return false;
+        }
+        int digits = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (char.IsAsciiDigit(c))
+            {
+                digits++;
+            }
+            else if (c == '+' && i == 0)
+            {
+                continue;
+            }
+            else if (c != ' ' && c != '.' && c != '-' && c != '(' && c != ')')
+            {
+                return false;
+            }
+        }
+        return digits >= 8 && digits <= 15;
     }
 
     /// <summary>
