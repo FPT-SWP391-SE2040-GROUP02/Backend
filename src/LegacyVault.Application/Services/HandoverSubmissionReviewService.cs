@@ -99,6 +99,16 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     public async Task<VerifierHandoverSubmissionResponse> GetAsync(Guid submissionId, CancellationToken ct)
     {
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
+        // Hồ sơ thuộc biên bản thì trả kèm Id biên bản (DocumentId) để FE lấy họ tên, số căn cước, năm sinh, nơi thường trú
+        // của người nhận hiện cho Người xét duyệt đối chiếu với ảnh.
+        if (documents != null)
+        {
+            HandoverDocument? document = await documents.FindByTurnIdAsync(submission.TurnId, ct);
+            if (document != null)
+            {
+                return ToDetail(submission, document);
+            }
+        }
         return ToDetail(submission);
     }
 

@@ -448,6 +448,21 @@ public sealed class HandoverDocumentTests
     }
 
     [Fact]
+    public async Task Get_ReturnsTheDocumentIdSoTheVerifierCanSeeTheRecipientInfo()
+    {
+        // Chuẩn bị: người nhận đã ký, đến lượt Người xét duyệt
+        HandoverSubmission submission = await ReadyForVerifier("ACCEPT");
+
+        // Hành động
+        VerifierHandoverSubmissionResponse detail = await reviewService.GetAsync(submission.Id, CancellationToken.None);
+
+        // Kiểm tra: có DocumentId, và đang chờ Người xét duyệt thì duyệt/yêu cầu bổ sung được
+        Assert.NotNull(detail.DocumentId);
+        Assert.Equal(submission.Id, detail.Id);
+        Assert.True(detail.CanRequestSupplement);
+    }
+
+    [Fact]
     public async Task Complete_Accept_OpensTheGrantEndsTheTurnAndDeletesIdentityImages()
     {
         HandoverSubmission submission = await ReadyForVerifier("ACCEPT");
