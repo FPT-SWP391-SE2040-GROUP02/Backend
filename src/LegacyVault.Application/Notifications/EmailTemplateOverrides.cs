@@ -49,15 +49,18 @@ public static class EmailTemplateOverrides
             Pick(found.Note, defaults.Note, tokens));
     }
 
-    /// <summary>Thay {TEN_BIEN} trong chữ bằng giá trị; biến lạ giữ nguyên.</summary>
+    /// <summary>Thay {TEN_BIEN} trong chữ bằng giá trị trong một lượt (giá trị chèn vào không bị thay tiếp); biến lạ giữ nguyên.</summary>
     public static string Fill(string text, IReadOnlyDictionary<string, string> tokens)
     {
-        string result = text;
-        foreach (KeyValuePair<string, string> pair in tokens)
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\{([A-Z0-9_]+)\}", match =>
         {
-            result = result.Replace("{" + pair.Key + "}", pair.Value, StringComparison.Ordinal);
-        }
-        return result;
+            string? value;
+            if (tokens.TryGetValue(match.Groups[1].Value, out value))
+            {
+                return value;
+            }
+            return match.Value;
+        });
     }
 
     private static string Pick(string? custom, string fallback, IReadOnlyDictionary<string, string> tokens)

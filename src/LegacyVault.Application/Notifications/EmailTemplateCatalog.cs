@@ -10,7 +10,8 @@ public sealed record EmailTemplateDefinition(
     string Description,
     bool CanDisable,
     bool EditableBody,
-    IReadOnlyList<EmailTemplateToken> Tokens);
+    IReadOnlyList<EmailTemplateToken> Tokens,
+    IReadOnlyList<string>? RequiredBodyTokens = null);
 
 /// <summary>Danh sách loại thư Admin chỉnh được. Thêm loại mới: thêm ở đây rồi nối hàm dựng thư với EmailTemplateOverrides.</summary>
 public static class EmailTemplateCatalog
@@ -42,14 +43,21 @@ public static class EmailTemplateCatalog
                 new EmailTemplateToken("SDT_NGUOI_THUC_THI", "Số điện thoại Người thực thi"),
             }),
         new EmailTemplateDefinition(HandoverInvitation, "Thư mời nhận tài sản",
-            "Thư có liên kết riêng để người nhận bắt đầu nhận bàn giao. Phần thân thư theo từng hồ sơ nên chỉ sửa được tiêu đề, nút và ghi chú; không tắt được.",
-            false, false, new[]
+            "Thư có liên kết riêng để người nhận bắt đầu nhận bàn giao; không tắt được. Cảnh báo lừa đảo kèm thông tin công ty luôn được thêm vào cuối ghi chú, không sửa được.",
+            false, true, new[]
             {
                 Recipient,
                 new EmailTemplateToken("TEN_CHU_KHO", "Họ tên Chủ kho"),
+                new EmailTemplateToken("TEN_NGUOI_THUC_THI", "Họ tên Người thực thi (không có thì ghi chữ Người thực thi)"),
                 new EmailTemplateToken("HAN_PHAN_HOI", "Hạn phản hồi đầy đủ, ví dụ 17:00 ngày 20/11/2026"),
                 new EmailTemplateToken("HAN_NGAN", "Hạn phản hồi dạng ngày/tháng, ví dụ 20/11"),
-            }),
+                new EmailTemplateToken("NGUOI_GUI_GIAY_CHUNG_TU", "Câu nói Người thực thi đã thay gửi giấy chứng tử"),
+                new EmailTemplateToken("LIEN_HE_NGUOI_THUC_THI", "Câu cách liên hệ Người thực thi (số điện thoại, email nếu có)"),
+                new EmailTemplateToken("NGUOI_XET_DUYET", "Câu nêu Người xét duyệt và thẻ luật sư; không có dữ liệu thì bỏ"),
+                new EmailTemplateToken("MA_HO_SO", "Dòng Mã hồ sơ: ...; không có mã thì bỏ"),
+                new EmailTemplateToken("LOI_NHAN_CHU_KHO", "Lời nhắn của Chủ kho để lại; không có lời nhắn thì bỏ"),
+            },
+            new[] { "HAN_PHAN_HOI" }),
         DocDefinition(DocVerifierTurn, "Biên bản đã ký, chờ Người xét duyệt kiểm tra",
             "Gửi Người xét duyệt khi người nhận đã ký biên bản."),
         DocDefinition(DocRecipientReturned, "Biên bản được trả về cho người nhận",

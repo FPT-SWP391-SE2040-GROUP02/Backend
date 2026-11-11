@@ -1,4 +1,6 @@
+using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Notifications;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Handover;
 using LegacyVault.Infrastructure.Notifications;
@@ -80,21 +82,107 @@ public sealed class EmailTemplateOverrideTests : IDisposable
         Assert.True(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.PlanActivated));
     }
 
-    [Fact]
-    public void Invitation_OnlySubjectTitleButtonAndNoteCanBeChanged_BodyStays()
+    private static HandoverInvitation FullInvitation()
     {
-        Set(EmailTemplateCatalog.HandoverInvitation,
-            new EmailTemplateOverride(true, "Tiêu đề mới {TEN_CHU_KHO}", null, "Thân thư không được đổi", "Bấm vào đây", null));
         HandoverInvitation invitation = new HandoverInvitation();
         invitation.FullName = "Lê Người Nhận";
         invitation.OwnerFullName = "Nguyễn Chủ Kho";
-        invitation.ResponseDeadline = DateTimeOffset.UtcNow.AddDays(3);
+        invitation.ExecutorFullName = "Trần Thực Thi";
+        invitation.ExecutorEmail = "thucthi@test.local";
+        invitation.CaseCode = "01A16CF1";
+        invitation.VerifierFullName = "Luật sư Dũng";
+        invitation.OwnerMessage = "Giữ gìn sức khỏe.";
+        invitation.ResponseDeadline = new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero);
+        return invitation;
+    }
+
+    [Fact]
+    public void Invitation_SubjectTitleButtonAndNoteCanBeChanged()
+    {
+        Set(EmailTemplateCatalog.HandoverInvitation,
+            new EmailTemplateOverride(true, "Tiêu đề mới {TEN_CHU_KHO}", null, null, "Bấm vào đây", null));
+
+        EmailContent email = HandoverInvitationEmail.Build(FullInvitation(), "https://x/claim", null);
+
+        Assert.Equal("Tiêu đề mới Nguyễn Chủ Kho", email.Subject);
+        Assert.Contains("Bấm vào đây: https://x/claim", email.TextBody);
+    }
+
+    [Fact]
+    public void Invitation_AdminBody_UsesTokensAndKeepsRealValues()
+    {
+        Set(EmailTemplateCatalog.HandoverInvitation, new EmailTemplateOverride(
+            true, null, null,
+            "Chào {TEN_NGUOI_NHAN}, {TEN_CHU_KHO} nhắn bạn.\n{MA_HO_SO}\n{LOI_NHAN_CHU_KHO}\nBấm trước {HAN_PHAN_HOI}.",
+            null, null));
+
+        EmailContent email = HandoverInvitationEmail.Build(FullInvitation(), "https://x/claim", null);
+
+        Assert.Contains("Chào Lê Người Nhận, Nguyễn Chủ Kho nhắn bạn.", email.TextBody);
+        Assert.Contains("Mã hồ sơ: 01A16CF1.", email.TextBody);
+        Assert.Contains("Giữ gìn sức khỏe.", email.TextBody);
+        Assert.Contains("Bấm trước 17:00 ngày 20/11/2026.", email.TextBody);
+        // Chữ gốc không còn khi Admin đã viết thân mới.
+        Assert.DoesNotContain("bốn bước", email.TextBody);
+    }
+
+    [Fact]
+    public void Invitation_SentenceTokensWithoutData_DisappearWithTheirLine()
+    {
+        Set(EmailTemplateCatalog.HandoverInvitation, new EmailTemplateOverride(
+            true, null, null, "Dòng một.\n{MA_HO_SO}\n{NGUOI_XET_DUYET}\n{LOI_NHAN_CHU_KHO}\nDòng cuối {HAN_PHAN_HOI}.", null, null));
+        HandoverInvitation invitation = FullInvitation();
+        invitation.CaseCode = string.Empty;
+        invitation.VerifierFullName = string.Empty;
+        invitation.OwnerMessage = null;
 
         EmailContent email = HandoverInvitationEmail.Build(invitation, "https://x/claim", null);
 
-        Assert.Equal("Tiêu đề mới Nguyễn Chủ Kho", email.Subject);
-        Assert.DoesNotContain("Thân thư không được đổi", email.TextBody);
-        Assert.Contains("Bấm vào đây: https://x/claim", email.TextBody);
+        Assert.Contains("Dòng một.\nDòng cuối 17:00 ngày 20/11/2026.", email.TextBody);
+        Assert.DoesNotContain("Mã hồ sơ", email.TextBody);
+    }
+
+    [Fact]
+    public void Invitation_WithoutOverride_StillHasEveryStepAndNoUnreplacedToken()
+    {
+        EmailContent email = HandoverInvitationEmail.Build(FullInvitation(), "https://x/claim", null);
+
+        Assert.Contains("Bạn chỉ cần làm theo bốn bước sau:", email.TextBody);
+        Assert.Contains("Nhắn Trần Thực Thi xin khóa mở gói", email.TextBody);
+        Assert.DoesNotContain("{", email.TextBody);
+    }
+
+    [Fact]
+    public void Invitation_AdminNote_StillGetsTheScamWarningAppended()
+    {
+        Set(EmailTemplateCatalog.HandoverInvitation,
+            new EmailTemplateOverride(true, null, null, null, null, "Ghi chú riêng của Admin."));
+
+        EmailContent email = HandoverInvitationEmail.Build(FullInvitation(), "https://x/claim", null);
+
+        Assert.Contains("Ghi chú riêng của Admin.", email.TextBody);
+        Assert.Contains("Cảnh báo lừa đảo", email.TextBody);
+    }
+
+    [Fact]
+    public void Invitation_BodyMustKeepTheDeadlineToken()
+    {
+        EmailTemplateDefinition definition = EmailTemplateCatalog.Find(EmailTemplateCatalog.HandoverInvitation)!;
+
+        Assert.True(definition.EditableBody);
+        Assert.Throws<AppException>(() => EmailTemplateService.CheckRequiredBodyTokens(definition, "Bấm nút để nhận."));
+        EmailTemplateService.CheckRequiredBodyTokens(definition, "Bấm trước {HAN_PHAN_HOI}.");
+        EmailTemplateService.CheckRequiredBodyTokens(definition, null);
+    }
+
+    [Fact]
+    public void Invitation_DefaultsShowTheTemplateWithTokensAndNoScamWarning()
+    {
+        EmailParts parts = new EmailTemplateDefaults().Find(EmailTemplateCatalog.HandoverInvitation)!;
+
+        Assert.Contains("{HAN_PHAN_HOI}", parts.Body);
+        Assert.Contains("{MA_HO_SO}", parts.Body);
+        Assert.DoesNotContain("Cảnh báo lừa đảo", parts.Note);
     }
 
     [Fact]

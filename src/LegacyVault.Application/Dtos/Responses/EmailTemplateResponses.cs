@@ -33,6 +33,9 @@ public class EmailTemplateResponse
 
     public bool EditableBody { get; set; }
 
+    /// <summary>Biến phải còn trong nội dung khi Admin sửa, nếu thiếu thì không lưu được.</summary>
+    public List<string> RequiredBodyTokens { get; set; } = new List<string>();
+
     public bool Enabled { get; set; } = true;
 
     public List<EmailTemplateTokenResponse> Tokens { get; set; } = new List<EmailTemplateTokenResponse>();

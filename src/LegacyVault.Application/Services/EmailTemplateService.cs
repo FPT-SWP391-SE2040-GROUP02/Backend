@@ -92,6 +92,7 @@ public sealed class EmailTemplateService : IEmailTemplateService
         Validate("subject", subject, MaxSubjectLength, definition);
         Validate("title", title, MaxTitleLength, definition);
         Validate("body", body, MaxBodyLength, definition);
+        CheckRequiredBodyTokens(definition, body);
         Validate("buttonText", button, MaxButtonLength, definition);
         Validate("note", note, MaxNoteLength, definition);
 
@@ -162,6 +163,10 @@ public sealed class EmailTemplateService : IEmailTemplateService
         response.Description = definition.Description;
         response.CanDisable = definition.CanDisable;
         response.EditableBody = definition.EditableBody;
+        if (definition.RequiredBodyTokens != null)
+        {
+            response.RequiredBodyTokens.AddRange(definition.RequiredBodyTokens);
+        }
         foreach (EmailTemplateToken token in definition.Tokens)
         {
             EmailTemplateTokenResponse item = new EmailTemplateTokenResponse();
@@ -216,6 +221,22 @@ public sealed class EmailTemplateService : IEmailTemplateService
             return null;
         }
         return value.Replace("\r\n", "\n").Trim();
+    }
+
+    /// <summary>Nội dung Admin sửa phải còn các biến bắt buộc của loại thư; không sửa nội dung (null) thì bỏ qua.</summary>
+    public static void CheckRequiredBodyTokens(EmailTemplateDefinition definition, string? body)
+    {
+        if (body == null || definition.RequiredBodyTokens == null)
+        {
+            return;
+        }
+        foreach (string required in definition.RequiredBodyTokens)
+        {
+            if (!body.Contains("{" + required + "}", StringComparison.Ordinal))
+            {
+                throw ValidationErrors.For("body", "Nội dung phải giữ biến {" + required + "}.");
+            }
+        }
     }
 
     private static void Validate(string field, string? value, int max, EmailTemplateDefinition definition)
