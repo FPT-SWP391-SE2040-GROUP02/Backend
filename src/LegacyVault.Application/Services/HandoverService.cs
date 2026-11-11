@@ -19,6 +19,8 @@ public sealed class HandoverService : IHandoverService
     private readonly IHoldReader holdReader;
     private readonly IExecutorKeyShardRepository? keyShards;
     private readonly IHandoverSubmissionRepository? submissions;
+    private readonly IBeneficiaryRepository? beneficiaries;
+    private readonly IBeneficiaryDataProtector? beneficiaryProtector;
 
     /// <summary>Số lần nhập sai khóa mở gói tối đa trước khi khóa lượt.</summary>
     public const int MaxKeyFailures = 5;
@@ -49,8 +51,12 @@ public sealed class HandoverService : IHandoverService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IExecutorKeyShardRepository? keyShards = null,
-        IHandoverSubmissionRepository? submissions = null)
+        IHandoverSubmissionRepository? submissions = null,
+        IBeneficiaryRepository? beneficiaries = null,
+        IBeneficiaryDataProtector? beneficiaryProtector = null)
     {
+        this.beneficiaries = beneficiaries;
+        this.beneficiaryProtector = beneficiaryProtector;
         this.currentUser = currentUser;
         this.users = users;
         this.vaults = vaults;
@@ -349,6 +355,33 @@ public sealed class HandoverService : IHandoverService
         return turn;
     }
 
+    /// <summary>Họ tên người nhận Chủ kho đã nhập, giải mã để chào đúng người; không đọc được thì để trống, không làm hỏng màn hình.</summary>
+    private async Task<string?> FindRecipientFullNameAsync(HandoverTurn turn, CancellationToken ct)
+    {
+        if (beneficiaries == null || beneficiaryProtector == null)
+        {
+            return null;
+        }
+        try
+        {
+            Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
+            if (beneficiary == null)
+            {
+                return null;
+            }
+            string name = beneficiaryProtector.Unprotect(beneficiary).FullName;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+            return name.Trim();
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return null;
+        }
+    }
+
     private async Task<HandoverTurnResponse> BuildTurnResponseAsync(HandoverTurn turn, CancellationToken ct)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -365,6 +398,7 @@ public sealed class HandoverService : IHandoverService
         response.KeyRequired = await IsKeyRequiredAsync(turn, ct);
         response.KeyVerified = !response.KeyRequired || turn.KeyVerifiedAt != null;
         response.ReceivedAllAt = turn.ReceivedAllAt;
+        response.RecipientFullName = await FindRecipientFullNameAsync(turn, ct);
         if (submissions != null)
         {
             var reviewer = await submissions.FindApprovingVerifierAsync(turn.VaultId, ct);

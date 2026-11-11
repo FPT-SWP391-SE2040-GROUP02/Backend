@@ -1,3 +1,4 @@
+using LegacyVault.Api.Models;
 using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
@@ -22,11 +23,13 @@ public sealed class AdminController : ControllerBase
     private readonly IIncidentService incidentService;
     private readonly IHoldService holdService;
     private readonly IPlanSetupService planSetupService;
+    private readonly INotaryCardService notaryCardService;
 
     public AdminController(IAdminService adminService, IIncidentService incidentService, IHoldService holdService,
-        IPlanSetupService planSetupService)
+        IPlanSetupService planSetupService, INotaryCardService notaryCardService)
     {
         this.planSetupService = planSetupService;
+        this.notaryCardService = notaryCardService;
         this.adminService = adminService;
         this.incidentService = incidentService;
         this.holdService = holdService;
@@ -51,6 +54,22 @@ public sealed class AdminController : ControllerBase
     {
         AdminUserResponse response = await adminService.CreateUserAsync(request, ct);
         return Created($"/api/v1/admin/users/{response.Id}", response);
+    }
+
+    /// <summary>Tải ảnh thẻ công chứng viên của một Người xét duyệt (multipart/form-data: file). JPEG, PNG hoặc WebP, tối đa 2 MiB.</summary>
+    [HttpPut("users/{userId:guid}/notary-card")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(AvatarRules.MaxBytes + 64 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = AvatarRules.MaxBytes + 64 * 1024)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadNotaryCard(Guid userId, [FromForm] AvatarForm form, CancellationToken ct)
+    {
+        IFormFile file = form.File!;
+        await using Stream content = file.OpenReadStream();
+        await notaryCardService.UploadAsync(userId, content, file.Length, ct);
+        return NoContent();
     }
 
     [HttpGet("users")]

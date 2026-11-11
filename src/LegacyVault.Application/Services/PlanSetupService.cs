@@ -64,13 +64,15 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     {
         var token = tokens.CreateOpaqueToken();
         bool accountExists = false;
+        string ownerName = string.Empty;
         var executor = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
             var vault = await OwnedAsync(vaultId, ct);
             await EnsureInvitationEditableAsync(vault, ct);
             var email = request.Email.Trim().ToLowerInvariant();
             var owner = await users.FindByIdAsync(vault.OwnerId, ct);
-            if (email == owner!.Email.Trim().ToLowerInvariant()) throw NotAllowed("OWNER_CANNOT_ACCEPT");
+            ownerName = owner!.FullName;
+            if (email == owner.Email.Trim().ToLowerInvariant()) throw NotAllowed("OWNER_CANNOT_ACCEPT");
             var inviteeUser = await users.FindByEmailAsync(email, ct);
             accountExists = inviteeUser is not null;
             var now = time.GetUtcNow();
@@ -106,7 +108,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             await unitOfWork.SaveChangesAsync(ct);
             return item;
         }, ct);
-        return await DeliverAsync(executor, token.Value, accountExists, ct);
+        return await DeliverAsync(executor, token.Value, accountExists, ct, ownerName: ownerName);
     }
 
     public async Task<ExecutorInvitationResponse> AssignByAdminAsync(Guid vaultId, AssignExecutorRequest request, CancellationToken ct)
@@ -162,10 +164,12 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     {
         var token = tokens.CreateOpaqueToken();
         bool accountExists = false;
+        string ownerName = string.Empty;
         var executor = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
             var vault = await OwnedAsync(vaultId, ct);
             await EnsureInvitationEditableAsync(vault, ct);
+            ownerName = (await users.FindByIdAsync(vault.OwnerId, ct))!.FullName;
             var item = vault.Executors.SingleOrDefault(e => e.Id == executorId) ?? throw InvalidInvitation();
             if (!Etag.Matches(request.Etag, item.UpdatedAt)) throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict, "Lời mời đã thay đổi. Tải lại trước khi gửi tiếp.");
             if (item.Status is not (ExecutorStatus.Invited or ExecutorStatus.Expired or ExecutorStatus.Suspended)
@@ -186,7 +190,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             await unitOfWork.SaveChangesAsync(ct);
             return item;
         }, ct);
-        return await DeliverAsync(executor, token.Value, accountExists, ct);
+        return await DeliverAsync(executor, token.Value, accountExists, ct, ownerName: ownerName);
     }
 
     public async Task<ExecutorInvitationInfo> InspectAsync(string token, CancellationToken ct)
@@ -438,12 +442,23 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     }
 
     private async Task<ExecutorInvitationResponse> DeliverAsync(
-        Executor executor, string token, bool accountExists, CancellationToken ct, bool assignedByAdmin = false)
+        Executor executor, string token, bool accountExists, CancellationToken ct,
+        bool assignedByAdmin = false, string? ownerName = null)
     {
         // External delivery follows the committed invitation. Failed delivery never grants access.
-        bool delivered = assignedByAdmin
-            ? await sender.SendAssignedByAdminAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct)
-            : await sender.SendAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct);
+        bool delivered;
+        if (assignedByAdmin)
+        {
+            delivered = await sender.SendAssignedByAdminAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct);
+        }
+        else if (!string.IsNullOrWhiteSpace(ownerName))
+        {
+            delivered = await sender.SendFromOwnerAsync(executor.InviteeEmail, ownerName, token, executor.ExpiresAt, ct);
+        }
+        else
+        {
+            delivered = await sender.SendAsync(executor.InviteeEmail, token, executor.ExpiresAt, ct);
+        }
         if (delivered)
         {
             executor.InvitationSentAt = time.GetUtcNow();

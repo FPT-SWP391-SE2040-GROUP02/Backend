@@ -60,4 +60,21 @@ public class User
 
     /// <summary>Lần đổi ảnh gần nhất; FE dùng làm khóa làm mới ảnh trong bộ nhớ.</summary>
     public DateTimeOffset? AvatarUpdatedAt { get; set; }
+
+    /// <summary>
+    /// Ảnh thẻ công chứng viên của Người xét duyệt, do Admin tải lên khi tạo tài khoản. Lưu mã hóa như ảnh đại diện;
+    /// các cột NotaryCard* chỉ giữ tham chiếu và khóa đã bọc. Null NotaryCardStorageKey = chưa có ảnh.
+    /// </summary>
+    public string? NotaryCardStorageKey { get; set; }
+
+    public string? NotaryCardContentType { get; set; }
+
+    public long? NotaryCardSizeBytes { get; set; }
+
+    public string? NotaryCardEncryptionKeyId { get; set; }
+
+    /// <summary>DEK của ảnh thẻ, đã bọc bằng KEK (60 byte). Không trả cho FE, không log.</summary>
+    public byte[]? NotaryCardWrappedDataKey { get; set; }
+
+    public DateTimeOffset? NotaryCardUploadedAt { get; set; }
 }
