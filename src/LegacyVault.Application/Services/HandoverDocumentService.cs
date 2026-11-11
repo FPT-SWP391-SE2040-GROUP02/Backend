@@ -199,7 +199,57 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
                 "Chỉ Người xét duyệt mới xem được danh sách này.");
         }
         List<HandoverDocument> found = await documents.ListForVerifierAsync(userId, ct);
-        return await ToResponsesAsync(found, true, ct);
+        List<HandoverDocumentResponse> responses = await ToResponsesAsync(found, true, ct);
+
+        // Thêm số liệu để màn Người xét duyệt xếp theo thời điểm nộp và gom theo kho.
+        List<Guid> vaultIds = new List<Guid>();
+        List<Guid> turnIds = new List<Guid>();
+        foreach (HandoverDocument document in found)
+        {
+            if (!vaultIds.Contains(document.VaultId))
+            {
+                vaultIds.Add(document.VaultId);
+            }
+            turnIds.Add(document.TurnId);
+        }
+        VerifierDocumentContext context = await documents.LoadVerifierContextAsync(userId, vaultIds, turnIds, ct);
+        for (int i = 0; i < responses.Count; i++)
+        {
+            FillVerifierContext(responses[i], found[i], context);
+        }
+        return responses;
+    }
+
+    /// <summary>Điền các trường chỉ Người xét duyệt thấy: thời điểm nộp, nộp lại, ngày duyệt hồ sơ báo tin, tổng người nhận của kho.</summary>
+    private static void FillVerifierContext(
+        HandoverDocumentResponse response, HandoverDocument document, VerifierDocumentContext context)
+    {
+        if (document.SubmissionId != null)
+        {
+            DateTimeOffset submittedAt;
+            if (context.SubmittedAtBySubmission.TryGetValue(document.SubmissionId.Value, out submittedAt))
+            {
+                response.SubmittedAt = submittedAt;
+            }
+        }
+
+        int submissionCount;
+        if (context.SubmissionCountByTurn.TryGetValue(document.TurnId, out submissionCount))
+        {
+            response.Resubmitted = submissionCount > 1;
+        }
+
+        DateTimeOffset approvedAt;
+        if (context.CaseApprovedAtByVault.TryGetValue(document.VaultId, out approvedAt))
+        {
+            response.CaseApprovedAt = approvedAt;
+        }
+
+        int recipientTotal;
+        if (context.RecipientTotalByVault.TryGetValue(document.VaultId, out recipientTotal))
+        {
+            response.VaultRecipientTotal = recipientTotal;
+        }
     }
 
     /// <summary>Dựng phản hồi cho nhiều biên bản, tra tên mỗi người một lần.</summary>

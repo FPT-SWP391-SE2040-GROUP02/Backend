@@ -12,8 +12,11 @@ public static class HandoverDocumentRules
     /// <summary>Phiên bản điều khoản mà người ký tick đồng ý; đổi khi sửa chữ điều khoản.</summary>
     public const string TermsVersion = "terms-2026-11";
 
-    /// <summary>Số mục Người xét duyệt phải kiểm tra thủ công và tick đủ.</summary>
-    public const int VerifierCheckCount = 4;
+    /// <summary>
+    /// Số mục Người xét duyệt phải kiểm tra thủ công và tick đủ: (1) người nhận đúng là người Chủ kho đã chọn,
+    /// (2) biên bản đúng và đủ chữ ký. Biên bản cũ đã lưu 4 ký tự vẫn đọc được bằng DecodeChecks.
+    /// </summary>
+    public const int VerifierCheckCount = 2;
 
     /// <summary>Độ dài tối đa của nơi thường trú lưu trong biên bản (cột OwnerResidenceAddress, RecipientResidenceAddress).</summary>
     public const int ResidenceAddressMaxLength = 500;
@@ -35,7 +38,7 @@ public static class HandoverDocumentRules
         return documentId.ToString("N").Substring(24).ToUpperInvariant();
     }
 
-    /// <summary>Chuỗi lưu bốn mục kiểm tra, ví dụ "1111".</summary>
+    /// <summary>Chuỗi lưu các mục kiểm tra, ví dụ "11" (biên bản cũ có thể là "1111").</summary>
     public static string EncodeChecks(List<bool> checks)
     {
         string text = string.Empty;

@@ -45,7 +45,7 @@ public class HandoverDocumentVerifierPart
 {
     public string SignedByName { get; set; } = string.Empty;
 
-    /// <summary>Bốn mục kiểm tra đã tick, rỗng khi chưa kiểm tra.</summary>
+    /// <summary>Các mục kiểm tra đã tick (biên bản mới có 2 mục, biên bản cũ có thể có 4), rỗng khi chưa kiểm tra.</summary>
     public List<bool> Checks { get; set; } = new List<bool>();
 
     public DateTimeOffset? SignedAt { get; set; }
@@ -98,6 +98,18 @@ public class HandoverDocumentResponse
 
     /// <summary>Id hồ sơ nộp mới nhất của người nhận; Người xét duyệt dùng để xem ảnh căn cước. Null với người nhận và Người thực thi.</summary>
     public Guid? SubmissionId { get; set; }
+
+    /// <summary>Chỉ Người xét duyệt thấy: thời điểm người nhận nộp (hoặc nộp lại) hồ sơ mới nhất; null khi chưa nộp.</summary>
+    public DateTimeOffset? SubmittedAt { get; set; }
+
+    /// <summary>Chỉ Người xét duyệt thấy: true khi hồ sơ này là lần nộp lại sau khi bị yêu cầu bổ sung.</summary>
+    public bool Resubmitted { get; set; }
+
+    /// <summary>Chỉ Người xét duyệt thấy: ngày bạn duyệt hồ sơ báo tin của kho; null khi không có.</summary>
+    public DateTimeOffset? CaseApprovedAt { get; set; }
+
+    /// <summary>Chỉ Người xét duyệt thấy: tổng số người nhận của kho (mỗi người nhận một gói tính một). 0 khi không có.</summary>
+    public int VaultRecipientTotal { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

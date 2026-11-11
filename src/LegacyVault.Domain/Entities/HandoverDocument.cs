@@ -87,7 +87,7 @@ public class HandoverDocument
 
     public DateTimeOffset? VerifierSignedAt { get; set; }
 
-    /// <summary>Bốn mục kiểm tra thủ công đã tick, dạng chuỗi "1111" (mục nào tick thì "1").</summary>
+    /// <summary>Các mục kiểm tra thủ công đã tick, dạng chuỗi "11" (mục nào tick thì "1"); biên bản cũ có thể là "1111".</summary>
     public string VerifierChecks { get; set; } = string.Empty;
 
     public string VerifierTermsVersion { get; set; } = string.Empty;

@@ -668,7 +668,9 @@ Executor (đã chấp nhận lời mời) mở hồ sơ chứng tử của kho, 
 ```jsonc
 // ExecutorVaultResponse
 { "vaultId": "0199...", "ownerFullName": "Nguyễn Văn Chủ", "role": "PRIMARY", "planStatus": "CHECKIN_OVERDUE",
-  "checkInOverdue": true, "openDeathCaseId": null, "lastRejectedDeathCaseId": null }
+  "checkInOverdue": true, "openDeathCaseId": null, "lastRejectedDeathCaseId": null,
+  "acceptedAt": "2026-10-01T03:00:00+00:00" }
+// acceptedAt: lúc tài khoản chấp nhận lời mời làm Người thực thi của kho (null với dữ liệu cũ không có); FE hiện "Bạn nhận vai ngày ..."
 // lastRejectedDeathCaseId: hồ sơ bị từ chối gần nhất của kho (null khi chưa có); mở bằng GET /v1/executor/death-cases/{caseId} để xem rejectReason
 
 // DeathCaseResponse — KHÔNG có CCCD đầy đủ, KHÔNG có thông tin Verifier
@@ -942,18 +944,21 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
   "turns": [
     {
       "turnId": "0199...",
+      "containerId": "0199...",
       "containerName": "Tài liệu gia đình",
       "beneficiaryId": "0199...",
       "beneficiaryCitizenIdLast4": "8901",
       "beneficiaryFullName": "Nguyễn Văn An",
       "beneficiaryPhone": "0901234567",
+      "beneficiaryEmail": "an@example.com",
       "status": "HANDOVER_COMMITTED",
-      "invitedAt": "...", "responseDeadline": "...", "claimedAt": "...", "decisionDeadline": "...", "decidedAt": "...",
+      "invitedAt": "...", "invitationSentAt": "...", "recipientSignedAt": "...", "documentApprovedAt": "...", "keyVerifiedAt": "...", "receivedAllAt": "...",
+      "responseDeadline": "...", "claimedAt": "...", "decisionDeadline": "...", "decidedAt": "...",
       "grantStatus": "ACTIVE", "grantExpiresAt": "2026-11-19T08:00:00+00:00",
       "totalItems": 2, "downloadedItems": 1,
       "items": [
-        { "itemId": "0199...", "name": "Giấy tờ nhà", "kind": "FILE", "downloaded": true, "firstDownloadedAt": "..." },
-        { "itemId": "0199...", "name": "Tài khoản ngân hàng", "kind": "TEXT", "downloaded": false, "firstDownloadedAt": null }
+        { "itemId": "0199...", "assetId": "0199...", "name": "Giấy tờ nhà", "kind": "FILE", "downloaded": true, "firstDownloadedAt": "..." },
+        { "itemId": "0199...", "assetId": "0199...", "name": "Tài khoản ngân hàng", "kind": "TEXT", "downloaded": false, "firstDownloadedAt": null }
       ]
     }
   ]
@@ -962,9 +967,11 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 
 - **Chưa duyệt:** hồ sơ chưa ở `APPROVED_FOR_HANDOVER` thì `handoverStarted = false`, `turns` rỗng, `summary` toàn 0.
 - **Nhóm trạng thái trong `summary`:** `waitingResponse` = `INVITED`, `INITIAL_RESPONSE_EXPIRED`; `inVerification` = `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`; `accepted` = `HANDOVER_COMMITTED`; `declined` = `DECLINED`; `ended` = `DECISION_EXPIRED`, `CANCELLED`, `LAPSED`.
+- **Gắn với danh sách gói:** `containerId` (mã gói) và `items[].assetId` (mã tài sản gốc, không phải `itemId` của bản ghim) để FE nối lượt với gói và tài sản trong `GET /executor/vaults/{vaultId}/assets`.
 - **Đã tải:** tài sản có ít nhất một lần tải thành công. Lần tải bị từ chối hoặc lỗi toàn vẹn không tính. `firstDownloadedAt` là lần tải thành công đầu tiên.
 - **Dữ liệu nhạy cảm:** tài sản chỉ có tên và loại; không có nội dung tài sản hay số CCCD đầy đủ. Người nhận được phân biệt bằng 4 số cuối CCCD.
-- **Liên hệ người nhận:** `beneficiaryFullName` và `beneficiaryPhone` để Executor liên hệ, chỉ có ở lượt `INVITED`, `INITIAL_RESPONSE_EXPIRED`, `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`, `HANDOVER_COMMITTED`. Lượt `DECLINED`, `DECISION_EXPIRED`, `CANCELLED`, `LAPSED` trả `null`. Không giải mã được hoặc người nhận không có số thì trường tương ứng cũng `null` (không lỗi cả màn). Không có email hay ngày sinh.
+- **Liên hệ người nhận:** `beneficiaryFullName`, `beneficiaryPhone` và `beneficiaryEmail` để Executor liên hệ, chỉ có ở lượt `INVITED`, `INITIAL_RESPONSE_EXPIRED`, `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`, `HANDOVER_COMMITTED`. Lượt `DECLINED`, `DECISION_EXPIRED`, `CANCELLED`, `LAPSED` trả `null`. Không giải mã được hoặc người nhận không có số/email thì trường tương ứng cũng `null` (không lỗi cả màn). Không có ngày sinh.
+- **Giờ từng bước của lượt** (để FE vẽ 5 bước Đã mời, Đồng ý nhận, Người xét duyệt duyệt biên bản, Nhập mã mở gói, Tải xong): `invitationSentAt` (lúc máy chủ email nhận thư mời, `null` = lời mời chưa gửi được), `recipientSignedAt` (lúc người nhận ký biên bản đồng ý hoặc văn bản từ chối, `null` khi chưa có biên bản hoặc chưa ký), `decidedAt` (lúc lượt có quyết định cuối: Người xét duyệt gửi biên bản), `documentApprovedAt` (lúc Người xét duyệt ký biên bản của lượt, `null` khi chưa có biên bản hoặc chưa ký), `keyVerifiedAt` (lúc người nhận nhập đúng mã mở gói, `null` khi chưa nhập hoặc kho không dùng mã), `receivedAllAt` (lúc người nhận bấm đã nhận đủ). Chỉ là mốc thời gian, không có hạn chót.
 - **Thứ tự:** lượt xếp theo tên gói rồi theo lúc mời; tài sản xếp theo thứ tự đã ghim.
 - FE đếm thời gian còn lại theo `serverTime`.
 
@@ -1367,13 +1374,13 @@ Mỗi lượt bàn giao có **một biên bản** đi qua hai người ký theo 
 | GET | `/api/v1/executor/handover-documents/{id}` | Người thực thi đang hiệu lực của kho (không phải Owner) | — | 200 | 404 |
 | POST | `/api/v1/handover/turns/{turnId}/submission` | Người nhận | như cũ (multipart) | 200; biên bản sang `WAIT_VERIFIER` | thêm 409 `DOCUMENT_NOT_READY` khi biên bản không còn chờ người nhận (đã gửi Người xét duyệt hoặc đã hoàn tất), 400 khi `kind` khác biên bản |
 | GET | `/api/v1/verifier/handover-documents` | Người xét duyệt đã duyệt chứng tử của kho | — | 200; có `submissionId` để xem ảnh căn cước; `WAIT_VERIFIER` là biên bản chờ mình | 403 |
-| POST | `/api/v1/verifier/handover-submissions/{id}/complete` | như trên | `{ checks: [bool x4], acknowledged }` | 200 `VerifierHandoverSubmissionResponse`; biên bản `COMPLETED`, lượt kết thúc | 400 (chưa tick đủ bốn mục hoặc ô xác nhận), 404, 409 (`WRONG_STATE`, `NO_DOCUMENT`, `HOLD_ACTIVE`, `PLAN_NOT_IN_HANDOVER`) |
+| POST | `/api/v1/verifier/handover-submissions/{id}/complete` | như trên | `{ checks: [bool x2], acknowledged }` (hai mục: người nhận đúng là người Chủ kho đã chọn; biên bản đúng và đủ chữ ký) | 200 `VerifierHandoverSubmissionResponse`; biên bản `COMPLETED`, lượt kết thúc | 400 (không đúng 2 mục hoặc có mục chưa tick, hoặc chưa tick ô xác nhận), 404, 409 (`WRONG_STATE`, `NO_DOCUMENT`, `HOLD_ACTIVE`, `PLAN_NOT_IN_HANDOVER`) |
 | POST | `/api/v1/verifier/handover-submissions/{id}/request-supplement` | như trên | `{ reason }` | 200; biên bản về `WAIT_RECIPIENT`, Phần 1 giữ nguyên, người nhận ký lại | như cũ |
 
 - `POST .../approve` (cũ) với hồ sơ thuộc biên bản trả `409 HANDOVER_NOT_ALLOWED` (`USE_DOCUMENT`).
-- `HandoverDocumentResponse`: `id`, `turnId`, `vaultId`, `code`, `kind`, `status` (`WAIT_RECIPIENT` \| `WAIT_VERIFIER` \| `COMPLETED`), `templateVersion` ("bb-2026-11-b" là mẫu gốc trong mã; "set-N" là phiên bản N Admin đã lưu, ghi lúc tạo biên bản và không đổi), `declineNotice` (câu báo khi có người nhận từ chối, hiện cho người nhận trước khi chọn), `templateParagraphs[]` (các đoạn chữ `{ text, align, bold }` của biên bản này theo mẫu đã ghi lúc tạo, đúng loại ACCEPT hoặc DECLINE; chữ chứa trường như `{HO_TEN_NGUOI_NHAN}` để giao diện điền từ dữ liệu biên bản), `containerName`, `itemCount`, `owner { fullName, dateOfDeath, certificateNumber, certificateIssuedOn, deathRegistrationPlace, residenceAddress }` (Phần 1; `deathRegistrationPlace` là câu nơi đăng ký khai tử chụp lúc tạo biên bản, ví dụ "UBND phường Bến Thành, Thành phố Hồ Chí Minh"; hồ sơ cũ có thể thiếu ngày mất, ngày cấp, nơi đăng ký thì giao diện in thành dòng chấm; `certificateNumber` giữ cho tương thích nhưng **không còn in** lên văn bản; `residenceAddress` lấy từ danh tính eKYC đã xác minh của Chủ kho lúc tạo biên bản, rỗng khi Chủ kho chưa gắn danh tính), `recipient { fullName, birthYear, citizenIdLast4, residenceAddress, signedAt }` (`residenceAddress` người nhận khai lúc ký). Hai nơi thường trú hiện **chỉ lưu và trả về**, chưa hiển thị trên giao diện và chưa in lên văn bản; Người xét duyệt chưa có bước đối chiếu riêng cho nó, `verifier { signedByName, checks[], signedAt }`, `supplementReason`, `submissionId` (chỉ Người xét duyệt), `createdAt`, `completedAt`.
+- `HandoverDocumentResponse`: `id`, `turnId`, `vaultId`, `code`, `kind`, `status` (`WAIT_RECIPIENT` \| `WAIT_VERIFIER` \| `COMPLETED`), `templateVersion` ("bb-2026-11-b" là mẫu gốc trong mã; "set-N" là phiên bản N Admin đã lưu, ghi lúc tạo biên bản và không đổi), `declineNotice` (câu báo khi có người nhận từ chối, hiện cho người nhận trước khi chọn), `templateParagraphs[]` (các đoạn chữ `{ text, align, bold }` của biên bản này theo mẫu đã ghi lúc tạo, đúng loại ACCEPT hoặc DECLINE; chữ chứa trường như `{HO_TEN_NGUOI_NHAN}` để giao diện điền từ dữ liệu biên bản), `containerName`, `itemCount`, `owner { fullName, dateOfDeath, certificateNumber, certificateIssuedOn, deathRegistrationPlace, residenceAddress }` (Phần 1; `deathRegistrationPlace` là câu nơi đăng ký khai tử chụp lúc tạo biên bản, ví dụ "UBND phường Bến Thành, Thành phố Hồ Chí Minh"; hồ sơ cũ có thể thiếu ngày mất, ngày cấp, nơi đăng ký thì giao diện in thành dòng chấm; `certificateNumber` giữ cho tương thích nhưng **không còn in** lên văn bản; `residenceAddress` lấy từ danh tính eKYC đã xác minh của Chủ kho lúc tạo biên bản, rỗng khi Chủ kho chưa gắn danh tính), `recipient { fullName, birthYear, citizenIdLast4, residenceAddress, signedAt }` (`residenceAddress` người nhận khai lúc ký). Hai nơi thường trú hiện **chỉ lưu và trả về**, chưa hiển thị trên giao diện và chưa in lên văn bản; Người xét duyệt chưa có bước đối chiếu riêng cho nó, `verifier { signedByName, checks[], signedAt }` (`checks` có 2 phần tử với biên bản mới, biên bản cũ đã lưu có thể có 4), `supplementReason`, `submissionId` (chỉ Người xét duyệt), `createdAt`, `completedAt`. Bốn trường sau **chỉ có ở `GET /api/v1/verifier/handover-documents`** (nơi khác là `null`, `false` hoặc `0`): `submittedAt` (lúc người nhận nộp hoặc nộp lại hồ sơ mới nhất), `resubmitted` (`true` khi đây là lần nộp lại sau yêu cầu bổ sung), `caseApprovedAt` (lúc chính Người xét duyệt này duyệt hồ sơ báo tin của kho), `vaultRecipientTotal` (tổng số người nhận của kho; mỗi chỉ định gói + người nhận tính một, không tính lượt đã hủy hoặc đã dọn). Chỉ thêm field đọc, không đổi bảng.
 - **Phần 1 là bản chụp lúc tạo biên bản** (họ tên Chủ kho theo hồ sơ chứng tử, nếu hồ sơ không ghi thì theo tên tài khoản; ngày mất; ngày đăng ký khai tử; nơi đăng ký khai tử; số giấy nếu có), để xem lại được kể cả khi hồ sơ chứng tử hay tài khoản Chủ kho bị dọn sau này.
-- **Chỉ lưu thông tin cần cho biên bản:** họ tên và năm sinh người nhận, 4 số cuối căn cước, Phần 1, ai ký lúc nào kèm phiên bản điều khoản đã tick (`terms-2026-11`), bốn mục kiểm tra của Người xét duyệt. Không lưu số căn cước hay ngày sinh đầy đủ; ảnh căn cước bị xóa ngay khi biên bản hoàn tất.
+- **Chỉ lưu thông tin cần cho biên bản:** họ tên và năm sinh người nhận, 4 số cuối căn cước, Phần 1, ai ký lúc nào kèm phiên bản điều khoản đã tick (`terms-2026-11`), hai mục kiểm tra của Người xét duyệt (biên bản cũ có thể đã lưu bốn mục, vẫn đọc được). Không lưu số căn cước hay ngày sinh đầy đủ; ảnh căn cước bị xóa ngay khi biên bản hoàn tất.
 - Biên bản lưu **không giới hạn thời gian** và không bị xóa khi lượt bị dọn theo thời hạn lưu. Lúc hoàn tất Backend dựng ảnh PNG văn bản (hai chữ ký: người lập và Người xét duyệt) lưu mã hóa. Cả văn bản từ chối và biên bản đồng ý in câu về người mất: "chết ngày {ngày mất} theo giấy chứng tử do {nơi đăng ký} đăng ký khai tử ngày {ngày đăng ký}." (thiếu dữ liệu nào thì in dòng chấm chỗ đó; không in số giấy chứng tử). Văn bản từ chối của hồ sơ cũ chưa có biên bản lấy ba thông tin này từ hồ sơ chứng tử đang mở của kho.
 - Thư báo (email, chỉ ghi log khi chưa cấu hình SMTP) gửi sau khi lưu: Người xét duyệt khi người nhận đã ký; người nhận khi bị trả về và khi hoàn tất; Người thực thi khi hoàn tất. Gửi lỗi không làm hỏng bước đã lưu.
 - Nhật ký: hoàn tất dùng `HANDOVER_SUBMISSION_APPROVED`; không thêm hành động nhật ký mới.

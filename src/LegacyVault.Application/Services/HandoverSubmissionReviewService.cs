@@ -24,7 +24,7 @@ public interface IHandoverSubmissionReviewService
     Task<VerifierHandoverSubmissionResponse> ApproveAsync(Guid submissionId, CancellationToken ct);
 
     /// <summary>
-    /// Luồng Biên Bản: Người xét duyệt kiểm tra thủ công (tick đủ bốn mục và xác nhận trách nhiệm) rồi gửi.
+    /// Luồng Biên Bản: Người xét duyệt kiểm tra thủ công (tick đủ hai mục và xác nhận trách nhiệm) rồi gửi.
     /// Hoàn tất biên bản và kết thúc lượt: Chấp nhận thì mở quyền tải tài sản, Từ chối thì ghi nhận từ chối.
     /// Lỗi: 400 chưa tick đủ; 404; 409 WRONG_STATE, NO_DOCUMENT, PLAN_NOT_IN_HANDOVER, HOLD_ACTIVE.
     /// </summary>
@@ -226,7 +226,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         if (!HandoverDocumentRules.AllChecked(request.Checks))
         {
-            throw ValidationErrors.For("checks", "Phải tick đủ cả bốn mục kiểm tra thủ công.");
+            throw ValidationErrors.For("checks", "Phải tick đủ cả hai mục kiểm tra thủ công.");
         }
         if (!request.Acknowledged)
         {
