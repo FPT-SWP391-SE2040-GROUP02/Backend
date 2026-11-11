@@ -5,6 +5,7 @@ using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LegacyVault.Application.Services;
 
@@ -39,7 +40,8 @@ public sealed class AuthService : IAuthService
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         ICurrentUser currentUser,
-        TimeProvider timeProvider,
+        // Đồng hồ đăng nhập: mặc định giờ thật, không theo nút Tua thời gian (xem AuthClock).
+        [FromKeyedServices(AuthClock.ServiceKey)] TimeProvider timeProvider,
         ITwoFactorService? twoFactorService = null,
         ISessionRevocationValidator? sessionValidator = null,
         IIncidentService? incidentService = null,

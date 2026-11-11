@@ -23,7 +23,9 @@ namespace LegacyVault.IntegrationTests.DemoClocks;
 /// <summary>
 /// Nút "Tua thời gian" qua HTTP trên SQL Server thật: đồng hồ DEMO, việc nền chạy ở từng mốc, email nhắc được gửi
 /// bằng bộ gửi giả, token vẫn dùng được sau khi tua. Chỉ chạy khi có LEGACYVAULT_TEST_CONNECTION.
+/// Chạy tuần tự cùng nhóm test tham số vì có test bật công tắc Time.AuthFollowsDemoClock (ảnh chụp tham số dùng chung).
 /// </summary>
+[Collection(SettingsCollection.Name)]
 public sealed class DemoClockFlowTests : IAsyncLifetime
 {
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
@@ -49,6 +51,7 @@ public sealed class DemoClockFlowTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        RuntimeSettings.Replace(new Dictionary<string, string>());
         if (factory == null)
         {
             return;
@@ -300,9 +303,9 @@ public sealed class DemoClockFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task AfterTravelingThirtyDays_OldTokenIsExpiredButNewTokenIsAccepted()
+    public async Task AfterTravelingThirtyDays_SwitchOff_OldTokenStillWorks()
     {
-        // Chuẩn bị: Chủ kho đăng nhập (token sống 15 phút) rồi Admin tua 30 ngày.
+        // Chuẩn bị: công tắc mặc định tắt, đăng nhập chạy theo giờ thật. Chủ kho đăng nhập rồi Admin tua 30 ngày.
         User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient oldSession = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(oldSession, factory.Services, owner);
@@ -313,14 +316,41 @@ public sealed class DemoClockFlowTests : IAsyncLifetime
         // Hành động
         HttpResponseMessage travel = await TravelAsync(admin, target);
         HttpResponseMessage oldToken = await oldSession.GetAsync("/api/v1/check-ins/me");
+        HttpResponseMessage adminAgain = await admin.GetAsync("/api/v1/dev/clock");
+
+        // Kiểm tra: tua chỉ dời mốc nghiệp vụ, phiên đăng nhập của cả Chủ kho lẫn Admin vẫn dùng được.
+        Assert.Equal(HttpStatusCode.OK, travel.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, oldToken.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, adminAgain.StatusCode);
+    }
+
+    [SqlFact]
+    public async Task AfterTravelingThirtyDays_SwitchOn_OldTokenIsExpiredButNewTokenIsAccepted()
+    {
+        // Chuẩn bị: Admin bật công tắc cho đăng nhập theo giờ ảo, Chủ kho đăng nhập (token sống 15 phút) rồi Admin tua 30 ngày.
+        HttpClient admin = await AdminClientAsync();
+        // Lần đọc đầu tạo các tham số mặc định (có công tắc, đang tắt).
+        HttpResponseMessage seeded = await admin.GetAsync("/api/v1/admin/settings");
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        HttpResponseMessage switchOn = await admin.PutAsJsonAsync(
+            "/api/v1/admin/settings/" + AuthClock.FollowDemoSettingKey, new { value = "true", isEnabled = true });
+        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        HttpClient oldSession = factory.CreateClient();
+        ApiTestHelpers.AuthorizeAs(oldSession, factory.Services, owner);
+        await ApiTestHelpers.CreateVaultAsync(oldSession);
+        string target = VietnamDate(DateTimeOffset.UtcNow.AddDays(30));
+
+        // Hành động
+        HttpResponseMessage travel = await TravelAsync(admin, target);
+        HttpResponseMessage oldToken = await oldSession.GetAsync("/api/v1/check-ins/me");
         HttpClient newSession = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(newSession, factory.Services, owner);
         HttpResponseMessage newToken = await newSession.GetAsync("/api/v1/check-ins/me");
 
         // Kiểm tra: token cũ hết hạn theo giờ mới, token tạo sau khi tua vẫn hợp lệ (không bị 401).
+        Assert.Equal(HttpStatusCode.OK, switchOn.StatusCode);
         Assert.Equal(HttpStatusCode.OK, travel.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, oldToken.StatusCode);
-        Assert.NotEqual(HttpStatusCode.Unauthorized, newToken.StatusCode);
         Assert.Equal(HttpStatusCode.OK, newToken.StatusCode);
     }
 

@@ -23,6 +23,7 @@ public sealed class SystemSettingRulesTests
     [InlineData("Handover.GrantWindowDays", " 30 ")]
     [InlineData("Features.MaintenanceMode", "true")]
     [InlineData("Time.DemoSeconds", "false")]
+    [InlineData("Time.AuthFollowsDemoClock", "true")]
     [InlineData("Company.Email", "ho-tro@legacyvault.vn")]
     [InlineData("Company.Email", "")]
     [InlineData("Company.Address", "")]
@@ -55,6 +56,7 @@ public sealed class SystemSettingRulesTests
     [InlineData("Limits.MaxUploadsPerHour", "0")]
     [InlineData("Features.MaintenanceMode", "yes")]
     [InlineData("Time.DemoSeconds", "1")]
+    [InlineData("Time.AuthFollowsDemoClock", "co")]
     [InlineData("Company.Email", "khong-co-a-cong")]
     [InlineData("Company.Email", "co khoang@trang.vn")]
     public void FindValueError_BadValue_ReturnsVietnameseMessage(string key, string value)

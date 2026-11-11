@@ -63,7 +63,8 @@ public sealed class SmartwatchController : ControllerBase
         IVaultRepository vaultRepository,
         IUserRepository userRepository,
         ITokenService tokenService,
-        TimeProvider timeProvider)
+        // Cùng đồng hồ với lúc tạo token thiết bị (AuthClock) để số giây còn hạn tính đúng.
+        [FromKeyedServices(AuthClock.ServiceKey)] TimeProvider timeProvider)
     {
         this.pairingStore = pairingStore;
         this.currentUser = currentUser;
