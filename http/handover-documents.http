@@ -1,0 +1,57 @@
+# Thử luồng Biên Bản (biên bản đồng ý nhận và văn bản từ chối) — người nhận và Người xét duyệt; Người thực thi chỉ xem lại.
+#
+# Chuẩn bị: lượt đang ở bước xác minh danh tính (IDENTITY_IN_PROGRESS), Người xét duyệt đã duyệt hồ sơ chứng tử của kho
+# (Phần 1 của biên bản chép từ hồ sơ này). Cần ba tài khoản; dán ba access token vào @recipientToken, @executorToken, @verifierToken.
+# Không có hạn chót nào cho các bước: mỗi bước chờ tới khi người của bước đó làm xong.
+
+@baseUrl = http://localhost:5000/api/v1
+@recipientToken =
+@executorToken =
+@verifierToken =
+@turnId =
+@documentId =
+@submissionId =
+
+### 1) Người nhận chọn Chấp nhận (hoặc DECLINE). Biên bản vào thẳng WAIT_RECIPIENT, Phần 1 đã điền sẵn; chọn lại khác thì đổi được khi chưa nộp hồ sơ
+POST {{baseUrl}}/handover/turns/{{turnId}}/document
+Authorization: Bearer {{recipientToken}}
+Content-Type: application/json
+
+{ "kind": "ACCEPT" }
+
+### 2) Người thực thi xem lại danh sách biên bản của các kho mình làm Người thực thi (chỉ xem)
+GET {{baseUrl}}/executor/handover-documents
+Authorization: Bearer {{executorToken}}
+
+### 3) Người thực thi xem một biên bản
+GET {{baseUrl}}/executor/handover-documents/{{documentId}}
+Authorization: Bearer {{executorToken}}
+
+### 4) Người nhận xem biên bản của lượt (204 khi chưa bắt đầu)
+GET {{baseUrl}}/handover/turns/{{turnId}}/document
+Authorization: Bearer {{recipientToken}}
+
+### 5) Người nhận điền Phần 2 và ký: nộp hồ sơ như cũ (multipart), kind phải trùng biên bản
+# Dùng http/handover-receive.http cho phần nộp ảnh căn cước: POST {{baseUrl}}/handover/turns/{{turnId}}/submission
+
+### 6) Mục Biên Bản của người nhận (mới nhất trước, không giới hạn thời gian)
+GET {{baseUrl}}/handover/documents
+Authorization: Bearer {{recipientToken}}
+
+### 7) Người xét duyệt xem biên bản của các kho mình đã duyệt chứng tử (WAIT_VERIFIER là biên bản chờ mình)
+GET {{baseUrl}}/verifier/handover-documents
+Authorization: Bearer {{verifierToken}}
+
+### 8) Người xét duyệt kiểm tra thủ công: tick đủ bốn mục và xác nhận trách nhiệm rồi gửi
+POST {{baseUrl}}/verifier/handover-submissions/{{submissionId}}/complete
+Authorization: Bearer {{verifierToken}}
+Content-Type: application/json
+
+{ "checks": [true, true, true, true], "acknowledged": true }
+
+### 9) Hoặc trả về người nhận để bổ sung (Phần 1 giữ nguyên, người nhận ký lại)
+POST {{baseUrl}}/verifier/handover-submissions/{{submissionId}}/request-supplement
+Authorization: Bearer {{verifierToken}}
+Content-Type: application/json
+
+{ "reason": "Ảnh căn cước mặt sau bị mờ" }

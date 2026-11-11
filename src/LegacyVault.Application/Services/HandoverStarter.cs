@@ -1,4 +1,5 @@
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
@@ -10,20 +11,30 @@ public sealed class HandoverStarter : IHandoverStarter
 {
     private readonly IVaultRepository vaults;
     private readonly IHandoverRepository handover;
+    private readonly IBeneficiaryDataProtector protector;
     private readonly ITokenService tokens;
+    private readonly IHandoverInvitationSender sender;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+
+    private readonly IHandoverContactReader? contactReader;
 
     public HandoverStarter(
         IVaultRepository vaults,
         IHandoverRepository handover,
+        IBeneficiaryDataProtector protector,
         ITokenService tokens,
+        IHandoverInvitationSender sender,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverContactReader? contactReader = null)
     {
+        this.contactReader = contactReader;
         this.vaults = vaults;
         this.handover = handover;
+        this.protector = protector;
         this.tokens = tokens;
+        this.sender = sender;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -72,7 +83,13 @@ public sealed class HandoverStarter : IHandoverStarter
             throw NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
         }
 
+        List<HandoverInvitation> invitations = new List<HandoverInvitation>();
         List<HandoverTurn> turns = new List<HandoverTurn>();
+        HandoverContactInfo? contacts = null;
+        if (contactReader != null)
+        {
+            contacts = await contactReader.FindAsync(vaultId, ct);
+        }
 
         foreach (Designation designation in designations)
         {
@@ -94,6 +111,20 @@ public sealed class HandoverStarter : IHandoverStarter
 
             handover.AddTurn(turn);
             turns.Add(turn);
+
+            BeneficiaryPersonalData data = protector.Unprotect(designation.Beneficiary);
+            if (!string.IsNullOrWhiteSpace(data.Email))
+            {
+                HandoverInvitation invitation = new HandoverInvitation();
+                invitation.TurnId = turn.Id;
+                invitation.ToEmail = data.Email;
+                invitation.FullName = data.FullName;
+                invitation.Token = token.Value;
+                invitation.ResponseDeadline = turn.ResponseDeadline;
+                invitation.ApplyContacts(contacts);
+                invitation.OwnerMessage = data.Message;
+                invitations.Add(invitation);
+            }
         }
 
         plan.Status = PlanStatus.HandoverInProgress;
@@ -105,8 +136,31 @@ public sealed class HandoverStarter : IHandoverStarter
         result.PlanId = plan.Id;
         result.TurnCount = turns.Count;
 
-        // Không tự gửi thư mời: Người thực thi bấm gửi từng lượt (HandoverInvitationService.ResendAsync).
-        // InvitationSentAt để null cho tới lần gửi đầu tiên.
+        // Gửi sau khi đã lưu: lỗi gửi không làm mất lượt (INVITE-01), chỉ để InvitationSentAt = null.
+        foreach (HandoverInvitation invitation in invitations)
+        {
+            try
+            {
+                await sender.SendAsync(invitation, ct);
+                HandoverTurn sentTurn = turns.First(t => t.Id == invitation.TurnId);
+                sentTurn.InvitationSentAt = timeProvider.GetUtcNow();
+                result.InvitationsSent++;
+            }
+            catch (Exception)
+            {
+                result.InvitationsFailed++;
+                // Ghi nhận lần thử lỗi để job gửi lại (HandoverInvitationRetryJob) biết đã thử và giãn cách đúng.
+                HandoverTurn failedTurn = turns.First(t => t.Id == invitation.TurnId);
+                failedTurn.InvitationAttempts = failedTurn.InvitationAttempts + 1;
+                failedTurn.InvitationLastAttemptAt = timeProvider.GetUtcNow();
+            }
+        }
+
+        if (result.InvitationsSent > 0 || result.InvitationsFailed > 0)
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+
         return result;
     }
 

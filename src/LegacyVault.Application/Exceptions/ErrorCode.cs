@@ -12,6 +12,8 @@ public enum ErrorCode
 {
     ValidationError,
     EmailAlreadyExists,
+    /// <summary>409: số điện thoại đã thuộc một tài khoản khác (mọi vai trò).</summary>
+    PhoneAlreadyExists,
     EmailNotFound,
     SessionExpired,
     AccountNotActive,

@@ -20,20 +20,20 @@ namespace LegacyVault.Api.Controllers;
 public sealed class ExecutorHandoverController : ControllerBase
 {
     private readonly IHandoverProgressService handoverProgressService;
-    private readonly IHandoverInvitationService handoverInvitationService;
+    private readonly IExecutorIdentityConfirmationService identityConfirmationService;
     private readonly IHandoverKeyMailService handoverKeyMailService;
     private readonly IExecutorDeclinePaperService declinePaperService;
 
     public ExecutorHandoverController(
         IHandoverProgressService handoverProgressService,
-        IHandoverInvitationService handoverInvitationService,
+        IExecutorIdentityConfirmationService identityConfirmationService,
         IHandoverKeyMailService handoverKeyMailService,
         IExecutorDeclinePaperService declinePaperService)
     {
         this.declinePaperService = declinePaperService;
         this.handoverKeyMailService = handoverKeyMailService;
         this.handoverProgressService = handoverProgressService;
-        this.handoverInvitationService = handoverInvitationService;
+        this.identityConfirmationService = identityConfirmationService;
     }
 
     /// <summary>
@@ -65,17 +65,6 @@ public sealed class ExecutorHandoverController : ControllerBase
         return new IdentityImageResult(download);
     }
 
-    [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/resend-invitation")]
-    [ProducesResponseType<ResendHandoverInvitationResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
-    public Task<ResendHandoverInvitationResponse> ResendInvitation(Guid caseId, Guid turnId, CancellationToken ct)
-    {
-        return handoverInvitationService.ResendAsync(caseId, turnId, ct);
-    }
-
     /// <summary>
     /// Người thực hiện gửi khóa mở gói cho người nhận của lượt qua email đã lưu. Body là khóa mình đang giữ để Backend kiểm;
     /// khóa sai trả 403 HANDOVER_KEY_INVALID. Khóa không được lưu và không có trong phản hồi.
@@ -91,5 +80,19 @@ public sealed class ExecutorHandoverController : ControllerBase
     public Task<SendHandoverKeyResponse> SendKey(Guid caseId, Guid turnId, [FromBody] SendHandoverKeyRequest request, CancellationToken ct)
     {
         return handoverKeyMailService.SendAsync(caseId, turnId, request.Key, ct);
+    }
+
+    /// <summary>
+    /// Executor xác nhận đúng người bằng tay khi người nhận không qua được eKYC (BR-122). Lượt sang READY_TO_ACCEPT và
+    /// người nhận có 7 ngày để đồng ý hoặc từ chối. Không dùng được cho lượt do chính tài khoản này nhận.
+    /// </summary>
+    [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/confirm-identity")]
+    [ProducesResponseType<ConfirmHandoverIdentityResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ConfirmHandoverIdentityResponse> ConfirmIdentity(Guid caseId, Guid turnId, CancellationToken ct)
+    {
+        return identityConfirmationService.ConfirmAsync(caseId, turnId, ct);
     }
 }

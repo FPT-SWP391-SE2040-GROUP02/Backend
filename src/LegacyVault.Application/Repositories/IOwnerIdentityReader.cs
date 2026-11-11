@@ -14,4 +14,10 @@ public interface IOwnerIdentityReader
     /// Dữ liệu bị sửa hoặc thiếu KEK → CryptographicException.
     /// </summary>
     Task<string?> FindBoundCitizenIdAsync(Guid userId, CancellationToken ct);
+
+    /// <summary>
+    /// Nơi thường trú trong danh tính đã gắn của Owner (đọc từ căn cước lúc eKYC, Owner xác nhận); chưa gắn → null.
+    /// Dữ liệu bị sửa hoặc thiếu KEK → CryptographicException.
+    /// </summary>
+    Task<string?> FindBoundResidenceAddressAsync(Guid userId, CancellationToken ct);
 }

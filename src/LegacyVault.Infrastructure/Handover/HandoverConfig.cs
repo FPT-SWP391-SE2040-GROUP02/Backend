@@ -43,7 +43,19 @@ public static class HandoverConfig
         services.AddSingleton<IHandoverInvitationSender>(provider => ChooseSender(provider));
         services.AddSingleton<IPlanActivatedNoticeSender>(provider => ChooseActivatedNoticeSender(provider));
         services.AddSingleton<IHandoverKeySender>(provider => ChooseKeySender(provider));
+        services.AddSingleton<IHandoverDocumentNoticeSender>(provider => ChooseDocumentNoticeSender(provider));
+        services.AddScoped<IHandoverDocumentRepository, HandoverDocumentRepository>();
         return services;
+    }
+
+    private static IHandoverDocumentNoticeSender ChooseDocumentNoticeSender(IServiceProvider provider)
+    {
+        SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
+        if (smtp.IsConfigured)
+        {
+            return ActivatorUtilities.CreateInstance<SmtpHandoverDocumentNoticeSender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LogHandoverDocumentNoticeSender>(provider);
     }
 
     private static IHandoverKeySender ChooseKeySender(IServiceProvider provider)

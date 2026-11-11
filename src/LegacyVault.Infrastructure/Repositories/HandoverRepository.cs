@@ -77,10 +77,25 @@ public sealed class HandoverRepository : IHandoverRepository
         return context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, ct);
     }
 
+    public async Task<IReadOnlyList<Guid>> FindUndeliveredInvitationTurnIdsAsync(
+        DateTimeOffset createdBefore, int maxAttempts, CancellationToken ct)
+    {
+        List<Guid> ids = await context.Set<HandoverTurn>()
+            .Where(t => t.Status == HandoverTurnStatus.Invited
+                && t.InvitationSentAt == null
+                && t.ClaimantUserId == null
+                && t.CreatedAt <= createdBefore
+                && t.InvitationAttempts < maxAttempts)
+            .OrderBy(t => t.CreatedAt)
+            .Select(t => t.Id)
+            .ToListAsync(ct);
+        return ids;
+    }
+
     public async Task<IReadOnlyList<Guid>> FindExpiredResponseTurnIdsAsync(DateTimeOffset now, CancellationToken ct)
     {
         List<Guid> ids = await context.Set<HandoverTurn>()
-            .Where(t => t.Status == HandoverTurnStatus.Invited && t.InvitationSentAt != null && t.ResponseDeadline <= now)
+            .Where(t => t.Status == HandoverTurnStatus.Invited && t.ResponseDeadline <= now)
             .OrderBy(t => t.ResponseDeadline)
             .Select(t => t.Id)
             .ToListAsync(ct);

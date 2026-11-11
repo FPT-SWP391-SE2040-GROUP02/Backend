@@ -25,5 +25,8 @@ public interface IHandoverSubmissionRepository
     /// <summary>Người xét duyệt đã duyệt hồ sơ chứng tử của kho (họ tên, số thẻ luật sư); null khi chưa có.</summary>
     Task<(string FullName, string? LawyerCardNumber)?> FindApprovingVerifierAsync(Guid vaultId, CancellationToken ct);
 
+    /// <summary>Id Người xét duyệt đã duyệt hồ sơ chứng tử của kho (lần duyệt mới nhất); null khi chưa có.</summary>
+    Task<Guid?> FindApprovingVerifierUserIdAsync(Guid vaultId, CancellationToken ct);
+
     Task<bool> IsApprovingVerifierAsync(Guid verifierUserId, Guid vaultId, CancellationToken ct);
 }

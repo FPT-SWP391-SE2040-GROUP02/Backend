@@ -60,6 +60,9 @@ public class VerifierHandoverSubmissionResponse : VerifierHandoverSubmissionSumm
     /// <summary>Số tài sản trong gói (người nhận chỉ nhận khi chấp nhận).</summary>
     public int ItemCount { get; set; }
 
+    /// <summary>Id biên bản mà hồ sơ này thuộc về; null với hồ sơ của luồng cũ chưa có biên bản.</summary>
+    public Guid? DocumentId { get; set; }
+
     /// <summary>true khi duyệt được: hồ sơ đang chờ, ba trường khớp và lượt còn ở bước danh tính.</summary>
     public bool CanApprove { get; set; }
 

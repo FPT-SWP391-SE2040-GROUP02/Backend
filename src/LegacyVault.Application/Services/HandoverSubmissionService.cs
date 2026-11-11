@@ -33,6 +33,9 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
     private readonly IAssetContentStore contentStore;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IHandoverPaperWriter? paperWriter;
+    private readonly IHandoverDocumentRepository? documents;
+    private readonly IHandoverDocumentNotifier? notifier;
 
     public HandoverSubmissionService(
         ICurrentUser currentUser,
@@ -42,7 +45,10 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         IBeneficiaryDataProtector protector,
         IAssetContentStore contentStore,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverPaperWriter? paperWriter = null,
+        IHandoverDocumentRepository? documents = null,
+        IHandoverDocumentNotifier? notifier = null)
     {
         this.currentUser = currentUser;
         this.handover = handover;
@@ -52,6 +58,9 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         this.contentStore = contentStore;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
+        this.paperWriter = paperWriter;
+        this.documents = documents;
+        this.notifier = notifier;
     }
 
     public async Task<HandoverSubmissionResponse> SubmitAsync(
@@ -80,6 +89,24 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         if (frontType == null || backType == null)
         {
             throw ValidationErrors.For("images", "Cần ảnh căn cước hai mặt dạng JPEG, PNG hoặc WEBP.");
+        }
+
+        // Lượt đã có biên bản thì hồ sơ này là phần ký của người nhận: chỉ nộp được khi biên bản đang chờ người nhận (Phần 1 đã chép sẵn từ hồ sơ chứng tử).
+        HandoverDocument? document = null;
+        if (documents != null)
+        {
+            document = await documents.FindByTurnIdAsync(turn.Id, ct);
+        }
+        if (document != null)
+        {
+            if (document.Status != HandoverDocumentStatus.WaitRecipient)
+            {
+                throw NotAllowed("DOCUMENT_NOT_READY", "Biên bản chưa đến lượt bạn điền và ký.");
+            }
+            if (document.Kind != kind)
+            {
+                throw ValidationErrors.For("kind", "Lựa chọn phải trùng với biên bản đã bắt đầu.");
+            }
         }
 
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
@@ -111,6 +138,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
 
         string? frontKey = null;
         string? backKey = null;
+        string? paperKey = null;
         try
         {
             StoredContent front = await IdentityImageStorage.SaveAsync(contentStore, frontImage, ct);
@@ -129,12 +157,31 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             submission.BackImageEncryptionKeyId = back.EncryptionKeyId;
             submission.BackImageWrappedDataKey = back.WrappedDataKey;
 
+            // Có biên bản thì ảnh văn bản được dựng lúc Người xét duyệt gửi, khi người nhận đã ký và Người xét duyệt đã kiểm tra.
+            if (document == null)
+            {
+                paperKey = await StorePaperAsync(submission, turn, ct);
+            }
+
             if (latest != null)
             {
                 latest.Status = HandoverSubmissionStatus.Superseded;
                 latest.UpdatedAt = now;
             }
             submissions.Add(submission);
+            if (document != null)
+            {
+                document.RecipientFullName = request.FullName.Trim();
+                document.RecipientBirthYear = request.DateOfBirth!.Value.Year;
+                document.RecipientCitizenIdLast4 = submission.CitizenIdLast4;
+                document.RecipientResidenceAddress = HandoverDocumentRules.CleanAddress(request.ResidenceAddress);
+                document.RecipientSignedAt = now;
+                document.RecipientTermsVersion = HandoverDocumentRules.TermsVersion;
+                document.SubmissionId = submission.Id;
+                document.SupplementReason = null;
+                document.Status = HandoverDocumentStatus.WaitVerifier;
+                document.UpdatedAt = now;
+            }
             await unitOfWork.SaveChangesAsync(ct);
         }
         catch
@@ -142,6 +189,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             // Bù trừ: không để lại ảnh không có hồ sơ. Không dùng ct vì request có thể đã bị hủy.
             await IdentityImageStorage.TryDeleteAsync(contentStore, frontKey);
             await IdentityImageStorage.TryDeleteAsync(contentStore, backKey);
+            await IdentityImageStorage.TryDeleteAsync(contentStore, paperKey);
             throw;
         }
 
@@ -151,7 +199,31 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             await IdentityImageStorage.TryDeleteAsync(contentStore, latest.FrontImageStorageKey);
             await IdentityImageStorage.TryDeleteAsync(contentStore, latest.BackImageStorageKey);
         }
+        if (document != null && notifier != null)
+        {
+            await notifier.VerifierTurnAsync(document, ct);
+        }
         return ToResponse(submission);
+    }
+
+    /// <summary>
+    /// Dựng và lưu mã hóa ảnh văn bản ngay lúc nộp, để có bản làm bằng chứng kể cả khi hồ sơ bị thay thế hoặc chưa được duyệt.
+    /// Dựng lỗi thì không chặn người nhận nộp hồ sơ: trả null và bước duyệt sẽ dựng bù.
+    /// </summary>
+    private async Task<string?> StorePaperAsync(HandoverSubmission submission, HandoverTurn turn, CancellationToken ct)
+    {
+        if (paperWriter == null)
+        {
+            return null;
+        }
+        try
+        {
+            return await paperWriter.WriteAsync(submission, turn, null, null, ct);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     public async Task<HandoverSubmissionResponse?> GetLatestAsync(Guid turnId, CancellationToken ct)

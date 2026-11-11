@@ -137,14 +137,6 @@ public sealed class RetentionFlowTests : IAsyncLifetime
             verifierClient, caseId, detail.GetProperty("etag").GetString(), "Đã đối chiếu hồ sơ.");
         Assert.Equal(HttpStatusCode.OK, approve.StatusCode);
 
-        // Hệ thống không tự gửi thư mời: Người thực thi bấm gửi từng lượt.
-        foreach (HandoverTurn turn in await TurnsAsync(owner.PlanId))
-        {
-            HttpResponseMessage sent = await ClientFor(executor.User).PostAsync(
-                $"/api/v1/executor/death-cases/{caseId}/handover-turns/{turn.Id}/resend-invitation", null);
-            Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
-        }
-
         Scenario scenario = new Scenario();
         scenario.VaultId = vaultId;
         scenario.PlanId = owner.PlanId;
