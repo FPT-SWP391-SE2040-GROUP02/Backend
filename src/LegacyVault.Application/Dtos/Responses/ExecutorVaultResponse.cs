@@ -30,6 +30,9 @@ public class ExecutorVaultResponse
     /// </summary>
     public DateTimeOffset? LastOwnerCheckInAt { get; set; }
 
+    /// <summary>Lúc tài khoản chấp nhận lời mời làm Người thực thi của kho; null khi dữ liệu cũ không có. FE hiện "Bạn nhận vai ngày ...".</summary>
+    public DateTimeOffset? AcceptedAt { get; set; }
+
     /// <summary>Số lần điểm danh thay liên tiếp tối đa (Admin đặt, mặc định 3).</summary>
     public int ProxyCheckInLimit { get; set; }
 

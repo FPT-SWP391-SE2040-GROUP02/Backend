@@ -50,6 +50,7 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
             .Select(e => new ExecutorVaultRow
             {
                 VaultId = e.VaultId,
+                ExecutorAcceptedAt = e.AcceptedAt,
                 PlanId = e.Vault.Plan.Id,
                 LastOwnerCheckInAt = context.Set<CheckInSchedule>()
                     .Where(s => s.PlanId == e.Vault.Plan.Id)

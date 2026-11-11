@@ -11,11 +11,14 @@ public static class HandoverProgressMappings
     {
         HandoverProgressTurnResponse response = new HandoverProgressTurnResponse();
         response.TurnId = turn.Id;
+        response.ContainerId = turn.ContainerId;
         response.ContainerName = turn.ContainerName;
         response.BeneficiaryId = turn.BeneficiaryId;
         response.BeneficiaryCitizenIdLast4 = citizenIdLast4;
         response.Status = turn.Status.ToApiString();
         response.InvitedAt = turn.InvitedAt;
+        response.InvitationSentAt = turn.InvitationSentAt;
+        response.KeyVerifiedAt = turn.KeyVerifiedAt;
         response.ResponseDeadline = turn.ResponseDeadline;
         response.ClaimedAt = turn.ClaimedAt;
         response.IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null;
@@ -34,6 +37,7 @@ public static class HandoverProgressMappings
         {
             HandoverProgressItemResponse itemResponse = new HandoverProgressItemResponse();
             itemResponse.ItemId = item.Id;
+            itemResponse.AssetId = item.AssetId;
             itemResponse.Name = item.Name;
             itemResponse.Kind = item.Kind.ToApiString();
             // Chỉ lượt đã có quyền tải mới có thể có lần tải; tra theo id tài sản đã ghim của lượt này.

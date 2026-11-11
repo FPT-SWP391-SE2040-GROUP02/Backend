@@ -91,6 +91,7 @@ public static class DeathCaseMappings
         response.OpenDeathCaseId = row.OpenDeathCaseId;
         response.LastRejectedDeathCaseId = row.LastRejectedDeathCaseId;
         response.LastOwnerCheckInAt = row.LastOwnerCheckInAt;
+        response.AcceptedAt = row.ExecutorAcceptedAt;
         return response;
     }
 
