@@ -512,7 +512,7 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Handover.ResendCooldownMinutes", Value = "15", DataType = "NUMBER", Category = "Handover", Description = "Khoảng cách tối thiểu giữa hai lần gửi lại lời mời (phút)" },
 
             // Người thực thi (Executor)
-            new() { Key = "Executor.InvitationExpiresDays", Value = "7", DataType = "NUMBER", Category = "Executor", Description = "Thời hạn hiệu lực của lời mời Người thực thi (ngày)" },
+            new() { Key = "Executor.InvitationExpiresMinutes", Value = "10", DataType = "NUMBER", Category = "Executor", Description = "Thời hạn hiệu lực của lời mời Người thực thi (phút)" },
             new() { Key = "Executor.ReminderAfterHours", Value = "48", DataType = "NUMBER", Category = "Executor", Description = "Thời gian gửi email nhắc nhở sau khi mời Người thực thi (giờ)" },
 
             // Hồ sơ chứng tử (DeathCase)
