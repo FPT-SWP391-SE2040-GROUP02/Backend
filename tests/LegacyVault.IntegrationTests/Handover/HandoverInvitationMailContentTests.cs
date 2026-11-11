@@ -45,12 +45,12 @@ public sealed class HandoverInvitationMailContentTests
     }
 
     [Fact]
-    public void Mail_ShowsCaseCodeAndTellsRecipientHowToCheckTheMail()
+    public void Mail_ShowsCaseCodeWithoutAskingTheRecipientToCheckIt()
     {
         EmailContent content = HandoverInvitationEmail.Build(Invitation(), Link, null);
 
         Assert.Contains("Mã hồ sơ: 01A16CF1", content.TextBody);
-        Assert.Contains("4 số cuối căn cước", content.TextBody);
+        Assert.DoesNotContain("4 số cuối căn cước", content.TextBody);
     }
 
     [Fact]

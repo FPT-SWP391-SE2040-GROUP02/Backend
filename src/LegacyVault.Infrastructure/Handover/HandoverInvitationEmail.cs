@@ -91,8 +91,7 @@ public static class HandoverInvitationEmail
         }
         if (invitation.CaseCode.Trim().Length > 0)
         {
-            lines.Add($"Mã hồ sơ: {invitation.CaseCode.Trim()}. Bạn có thể nhập mã này cùng 4 số cuối căn cước vào trang lời mời "
-                + "để kiểm tra thư có thật không trước khi làm bất cứ việc gì.");
+            lines.Add($"Mã hồ sơ: {invitation.CaseCode.Trim()}.");
         }
 
         string message = (invitation.OwnerMessage ?? string.Empty).Trim();
