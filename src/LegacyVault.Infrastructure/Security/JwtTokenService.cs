@@ -2,7 +2,9 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -14,7 +16,8 @@ public sealed class JwtTokenService : ITokenService
     private readonly JwtSettings _settings;
     private readonly TimeProvider _timeProvider;
 
-    public JwtTokenService(IOptions<JwtSettings> options, TimeProvider timeProvider)
+    /// <param name="timeProvider">Đồng hồ đăng nhập (AuthClock): mặc định giờ thật, không theo nút Tua thời gian.</param>
+    public JwtTokenService(IOptions<JwtSettings> options, [FromKeyedServices(AuthClock.ServiceKey)] TimeProvider timeProvider)
     {
         _settings = options.Value;
         _timeProvider = timeProvider;

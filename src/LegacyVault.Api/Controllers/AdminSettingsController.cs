@@ -84,6 +84,7 @@ public sealed class AdminSettingsController : ControllerBase
     {
         var admin = await RequireAdminAsync(ct);
         await settingService.ValidatePlanPricesAsync(request.Items, ct);
+        await settingService.ValidateValuesAsync(request.Items, ct);
         var updated = new List<SystemSettingResponse>();
         foreach (var item in request.Items)
         {

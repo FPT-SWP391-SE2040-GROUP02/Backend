@@ -229,6 +229,73 @@ public sealed class SystemSettingService : ISystemSettingService
         }
     }
 
+    public async Task ValidateValuesAsync(List<BatchUpdateSystemSettingItem> items, CancellationToken ct = default)
+    {
+        bool touchesRelation = false;
+        List<string> relationKeys = new List<string>(SystemSettingRules.RelationKeys);
+        foreach (BatchUpdateSystemSettingItem item in items)
+        {
+            string key = item.Key.Trim();
+            if (item.IsEnabled == false)
+            {
+                // Tham số bị tắt thì hệ thống dùng mức gốc, giá trị gõ vào không có tác dụng nên không kiểm.
+                if (relationKeys.Contains(key))
+                {
+                    touchesRelation = true;
+                }
+                continue;
+            }
+            string? valueError = SystemSettingRules.FindValueError(key, item.Value);
+            if (valueError != null)
+            {
+                throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError, valueError);
+            }
+            if (relationKeys.Contains(key))
+            {
+                touchesRelation = true;
+            }
+        }
+        if (!touchesRelation)
+        {
+            return;
+        }
+
+        // Giá trị sau khi lưu = dòng đang bật trong DB, rồi chồng các thay đổi của lần lưu này lên trên.
+        Dictionary<string, long> effective = new Dictionary<string, long>();
+        List<SystemSetting> rows = await db.SystemSettings
+            .AsNoTracking()
+            .Where(s => relationKeys.Contains(s.Key))
+            .ToListAsync(ct);
+        foreach (SystemSetting row in rows)
+        {
+            long stored;
+            if (row.IsEnabled && long.TryParse(row.Value, out stored))
+            {
+                effective[row.Key] = stored;
+            }
+        }
+        foreach (BatchUpdateSystemSettingItem item in items)
+        {
+            string key = item.Key.Trim();
+            if (!relationKeys.Contains(key))
+            {
+                continue;
+            }
+            long changed;
+            if (item.IsEnabled == false || !long.TryParse(item.Value.Trim(), out changed))
+            {
+                effective.Remove(key);
+                continue;
+            }
+            effective[key] = changed;
+        }
+        string? relationError = SystemSettingRules.FindRelationError(effective);
+        if (relationError != null)
+        {
+            throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError, relationError);
+        }
+    }
+
     public async Task<List<SystemSettingResponse>> GetAllAsync(CancellationToken ct = default)
     {
         await EnsureDefaultsSeededAsync(ct);
@@ -275,6 +342,7 @@ public sealed class SystemSettingService : ISystemSettingService
             priceCheck.Value = request.Value;
             priceCheck.IsEnabled = request.IsEnabled;
             await ValidatePlanPricesAsync(new List<BatchUpdateSystemSettingItem> { priceCheck }, ct);
+            await ValidateValuesAsync(new List<BatchUpdateSystemSettingItem> { priceCheck }, ct);
         }
 
         var oldValue = entity.Value;
@@ -502,6 +570,7 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Security.PinLockoutMinutes", Value = "15", DataType = "NUMBER", Category = "Security", Description = "Thời gian tạm khóa mã PIN bảo vệ khi vượt số lần thử (phút)" },
             new() { Key = "Features.MaintenanceMode", Value = "false", DataType = "BOOLEAN", Category = "Features", Description = "Bật chế độ bảo trì toàn hệ thống" },
             new() { Key = "Time.DemoSeconds", Value = "false", DataType = "BOOLEAN", Category = "Features", Description = "Chế độ demo: mọi mốc ngày, giờ, phút của nghiệp vụ (điểm danh, ân hạn, hạn xét duyệt, hạn bổ sung, cửa sổ bàn giao...) tính bằng giây" },
+            new() { Key = "Time.AuthFollowsDemoClock", Value = "false", DataType = "BOOLEAN", Category = "Features", Description = "Phiên đăng nhập chạy theo giờ đã tua (bật để demo việc hết phiên; tắt thì tua thời gian không làm đăng xuất)" },
         };
 
         var existingKeys = await db.SystemSettings.Select(s => s.Key).ToHashSetAsync(ct);

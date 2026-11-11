@@ -37,6 +37,8 @@ public static class InfrastructureConfig
         services.AddSingleton<DemoClock>();
         services.AddSingleton<TimeProvider>(provider => ChooseTimeProvider(provider));
         services.AddSingleton<IDemoClock>(provider => ChooseDemoClock(provider));
+        // Đồng hồ của phần đăng nhập: giờ thật, hoặc giờ ảo khi Admin bật Time.AuthFollowsDemoClock (xem AuthClock).
+        services.AddKeyedSingleton<TimeProvider>(AuthClock.ServiceKey, (provider, key) => CreateAuthClock(provider));
         services.AddHostedService<DemoClockLoader>();
         services.AddScoped<IDemoClockRepository, DemoClockRepository>();
         services.AddScoped<IDemoJobRunner, DemoJobRunner>();
@@ -292,10 +294,11 @@ public static class InfrastructureConfig
                 };
             });
 
-        // Kiểm hạn token theo cùng đồng hồ với lúc tạo token: tua tới tương lai xong, token mới tạo vẫn hợp lệ (không bị 401).
+        // Kiểm hạn token theo cùng đồng hồ với lúc tạo token (AuthClock): mặc định giờ thật nên tua thời gian không làm văng phiên.
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<TimeProvider>((options, timeProvider) =>
+            .Configure<IServiceProvider>((options, provider) =>
             {
+                TimeProvider timeProvider = provider.GetRequiredKeyedService<TimeProvider>(AuthClock.ServiceKey);
                 options.TokenValidationParameters.LifetimeValidator =
                     (notBefore, expires, token, parameters) => ValidateTokenLifetime(timeProvider, notBefore, expires, parameters);
             });
@@ -412,6 +415,12 @@ public static class InfrastructureConfig
             return provider.GetRequiredService<DemoClock>();
         }
         return TimeProvider.System;
+    }
+
+    private static TimeProvider CreateAuthClock(IServiceProvider provider)
+    {
+        TimeProvider systemClock = provider.GetRequiredService<TimeProvider>();
+        return new AuthClock(systemClock);
     }
 
     private static IDemoClock ChooseDemoClock(IServiceProvider provider)

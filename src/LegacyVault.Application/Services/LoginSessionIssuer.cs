@@ -2,6 +2,7 @@ using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LegacyVault.Application.Services;
 
@@ -28,7 +29,8 @@ public sealed class LoginSessionIssuer
         IRefreshTokenRepository refreshTokenRepository,
         ITokenService tokenService,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider,
+        // Đồng hồ đăng nhập: mặc định giờ thật, không theo nút Tua thời gian (xem AuthClock).
+        [FromKeyedServices(AuthClock.ServiceKey)] TimeProvider timeProvider,
         MaintenanceModeGuard? maintenanceGuard = null)
     {
         _refreshTokenRepository = refreshTokenRepository;
