@@ -90,6 +90,7 @@ public sealed class HandoverService : IHandoverService
         if (invitedEmail != null)
         {
             response.InvitedEmailMasked = MaskEmail(invitedEmail);
+            response.InvitedEmail = invitedEmail;
             User? existing = await users.FindByEmailAsync(invitedEmail, ct);
             response.AccountExists = existing != null;
         }

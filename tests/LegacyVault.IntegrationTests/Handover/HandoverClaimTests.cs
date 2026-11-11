@@ -102,7 +102,7 @@ public sealed class HandoverClaimTests
         // "nguoi-nhan" có 10 ký tự: giữ chữ đầu và cuối, che 8 ký tự giữa.
         string expected = "n" + new string('•', 8) + "n@example.com";
         Assert.Equal(expected, response.InvitedEmailMasked);
-        Assert.DoesNotContain("nguoi-nhan", response.InvitedEmailMasked);
+        Assert.Equal("nguoi-nhan@example.com", response.InvitedEmail);
         Assert.True(response.AccountExists);
         Assert.Equal("Chủ Kho", response.OwnerFullName);
     }

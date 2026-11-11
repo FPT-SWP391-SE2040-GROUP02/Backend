@@ -1314,7 +1314,7 @@ Theo prototype: người nhận chọn **Chấp nhận** hoặc **Từ chối**,
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| GET | `/api/v1/handover/invitations/{token}` | Công khai | — | 200 `{ valid, responseExpired, invitedEmailMasked?, accountExists, ownerFullName? }` (email đã che bớt, không lộ email đầy đủ) | 404 `HANDOVER_INVITATION_INVALID` |
+| GET | `/api/v1/handover/invitations/{token}` | Công khai | — | 200 `{ valid, responseExpired, invitedEmailMasked?, invitedEmail?, accountExists, ownerFullName? }` (email người nhận đầy đủ cho người giữ link; nhận lượt vẫn kiểm email ở server) | 404 `HANDOVER_INVITATION_INVALID` |
 | GET | `/api/v1/handover/invitations/mine` | Đăng nhập | — | 200 `[{ turnId, containerName, ownerFullName, invitedAt }]` lời mời nhận gói đang chờ (chưa ai nhận, đúng email đã xác minh của tài khoản, không phải kho của mình, kế hoạch đang bàn giao, kho không bị giữ); chưa xác minh email thì `[]` | 401 |
 | POST | `/api/v1/handover/invitations/{token}/claim` | Đăng nhập | — | 200 `HandoverTurnResponse` (gọi lặp trả trạng thái hiện tại) | 401, 403 `EMAIL_NOT_VERIFIED` / `HANDOVER_EMAIL_MISMATCH`, 404 `HANDOVER_INVITATION_INVALID`, 409 `HANDOVER_ALREADY_CLAIMED` / `HANDOVER_NOT_ALLOWED` |
 | POST | `/api/v1/handover/turns/{turnId}/claim` | Đăng nhập | — | 200 `HandoverTurnResponse`; FE gọi khi người nhận bấm Đồng ý/Từ chối nhận ở thẻ thư mời trong cổng người nhận; chung mọi bước kiểm với nhận qua link | 401, 403 `EMAIL_NOT_VERIFIED` / `HANDOVER_EMAIL_MISMATCH`, 404 `HANDOVER_NOT_FOUND`, 409 `HANDOVER_ALREADY_CLAIMED` / `HANDOVER_NOT_ALLOWED` |

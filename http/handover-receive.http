@@ -20,7 +20,7 @@ Content-Type: application/json
 @token = {{login.response.body.$.accessToken}}
 
 ### 1) Kiểm link mời (công khai, không cần đăng nhập)
-# Trả valid, responseExpired, invitedEmailMasked (email đã che bớt), accountExists và ownerFullName.
+# Trả valid, responseExpired, invitedEmailMasked, invitedEmail, accountExists và ownerFullName.
 GET {{baseUrl}}/handover/invitations/dev-token-1
 
 ### 1a) Lời mời nhận gói đang chờ tài khoản này (cần đăng nhập; chỉ thấy lượt gửi đúng email đã xác minh của tài khoản)

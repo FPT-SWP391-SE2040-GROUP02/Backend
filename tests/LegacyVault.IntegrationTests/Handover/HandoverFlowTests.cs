@@ -245,13 +245,13 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(ok);
         Assert.True(body.GetProperty("valid").GetBoolean());
         Assert.False(body.GetProperty("responseExpired").GetBoolean());
-        // Chỉ 5 trường: hai cờ cũ, email đã che bớt, cờ "đã có tài khoản" và tên Chủ kho. Không có email đầy đủ.
-        Assert.Equal(5, body.EnumerateObject().Count());
+        // 6 trường: hai cờ cũ, email che bớt, email đầy đủ (để đăng ký điền sẵn), cờ "đã có tài khoản" và tên Chủ kho.
+        Assert.Equal(6, body.EnumerateObject().Count());
+        Assert.Equal(ReceiverEmail(0), body.GetProperty("invitedEmail").GetString());
         Assert.False(string.IsNullOrEmpty(body.GetProperty("ownerFullName").GetString()));
         Assert.False(body.GetProperty("accountExists").GetBoolean());
         string masked = body.GetProperty("invitedEmailMasked").GetString()!;
         Assert.EndsWith("@example.com", masked);
-        Assert.DoesNotContain(ReceiverEmail(0), await ok.Content.ReadAsStringAsync());
 
         HttpResponseMessage unknown = await anonymous.GetAsync("/api/v1/handover/invitations/khong-ton-tai");
         await ApiTestHelpers.AssertProblemAsync(unknown, HttpStatusCode.NotFound, "HANDOVER_INVITATION_INVALID");

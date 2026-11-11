@@ -37,7 +37,7 @@ public sealed class HandoverController : ControllerBase
 
     /// <summary>
     /// Công khai: kiểm link mời còn hợp lệ không. Trả thêm email được mời đã che bớt và cờ "đã có tài khoản"
-    /// để FE chọn nút Đăng nhập hay Tạo tài khoản; không lộ email đầy đủ.
+    /// để FE chọn nút Đăng nhập hay Tạo tài khoản.
     /// </summary>
     [AllowAnonymous]
     [HttpGet("invitations/{token}")]
