@@ -22,6 +22,30 @@ public class InvitationStatusResponse
     public bool Valid { get; set; }
 
     public bool ResponseExpired { get; set; }
+
+    /// <summary>Email người nhận đã che bớt (ví dụ m•••••h@example.com); không bao giờ trả email đầy đủ. Null khi không đọc được.</summary>
+    public string? InvitedEmailMasked { get; set; }
+
+    /// <summary>Email được mời đã có tài khoản hay chưa; FE dùng để chọn nút "Đăng nhập" hoặc "Tạo tài khoản".</summary>
+    public bool AccountExists { get; set; }
+
+    /// <summary>
+    /// Tên Chủ kho để trang cửa vào ghi "{Chủ kho} đã để lại cho bạn một gói". Thư mời gửi tới người nhận đã nêu tên này nên
+    /// người giữ link không biết thêm điều gì mới. Null khi không đọc được.
+    /// </summary>
+    public string? OwnerFullName { get; set; }
+}
+
+/// <summary>Một lời mời nhận gói đang chờ tài khoản đang đăng nhập (chưa ai nhận, đúng email đã xác minh).</summary>
+public class PendingInvitationResponse
+{
+    public Guid TurnId { get; set; }
+
+    public string ContainerName { get; set; } = string.Empty;
+
+    public string OwnerFullName { get; set; } = string.Empty;
+
+    public DateTimeOffset InvitedAt { get; set; }
 }
 
 public class HandoverItemResponse

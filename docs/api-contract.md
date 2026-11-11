@@ -126,6 +126,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 403 | `SIGNING_PASSWORD_INVALID` | Verifier Duyệt/Từ chối hồ sơ chứng tử nhập sai mật khẩu xác nhận, hoặc tài khoản chưa có mật khẩu (mục 6.12, DEATH-03) | `attemptsRemaining` (không có khi tài khoản chưa có mật khẩu) |
 | 423 | `SIGNING_LOCKED` | Chức năng Duyệt/Từ chối của Verifier bị khóa tạm vì sai mật khẩu 5 lần liên tiếp; đang khóa thì mật khẩu đúng cũng bị từ chối | `lockedUntil` |
 | 404 | `ADMINISTRATIVE_UNIT_NOT_FOUND` | Mã tỉnh/thành phố không có trong danh mục đơn vị hành chính (mục 6.10a) | |
+| 403 | `HANDOVER_EMAIL_MISMATCH` | Nhận lượt bàn giao bằng tài khoản có email khác email người nhận (mục 6.21b) | `invitedEmailMasked` (email được mời đã che bớt) |
 | 503 | `MAINTENANCE_MODE` | Hệ thống đang bảo trì (Admin bật `Features.MaintenanceMode`): chỉ tài khoản Quản trị viên đăng nhập và gọi API được. Tài khoản khác bị chặn khi đăng nhập email (sau khi mật khẩu đúng), làm mới phiên (refresh token cũ được giữ, hết bảo trì dùng tiếp) và mọi API còn lại; đăng nhập Google đóng hẳn. Luôn mở: `GET /settings/public`, `/auth/csrf`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/2fa/verify`, webhook SePay, health. Khác `EKYC_SERVICE_UNAVAILABLE`/`STORAGE_UNAVAILABLE` cùng 503: FE so theo `code` để hiện màn hình bảo trì | |
 
 ---
@@ -1313,6 +1314,10 @@ Theo prototype: người nhận chọn **Chấp nhận** hoặc **Từ chối**,
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
+| GET | `/api/v1/handover/invitations/{token}` | Công khai | — | 200 `{ valid, responseExpired, invitedEmailMasked?, accountExists, ownerFullName? }` (email đã che bớt, không lộ email đầy đủ) | 404 `HANDOVER_INVITATION_INVALID` |
+| GET | `/api/v1/handover/invitations/mine` | Đăng nhập | — | 200 `[{ turnId, containerName, ownerFullName, invitedAt }]` lời mời nhận gói đang chờ (chưa ai nhận, đúng email đã xác minh của tài khoản, không phải kho của mình, kế hoạch đang bàn giao, kho không bị giữ); chưa xác minh email thì `[]` | 401 |
+| POST | `/api/v1/handover/invitations/{token}/claim` | Đăng nhập | — | 200 `HandoverTurnResponse` (gọi lặp trả trạng thái hiện tại) | 401, 403 `EMAIL_NOT_VERIFIED` / `HANDOVER_EMAIL_MISMATCH`, 404 `HANDOVER_INVITATION_INVALID`, 409 `HANDOVER_ALREADY_CLAIMED` / `HANDOVER_NOT_ALLOWED` |
+| POST | `/api/v1/handover/turns/{turnId}/claim` | Đăng nhập | — | 200 `HandoverTurnResponse`; FE gọi khi người nhận bấm Đồng ý/Từ chối nhận ở thẻ thư mời trong cổng người nhận; chung mọi bước kiểm với nhận qua link | 401, 403 `EMAIL_NOT_VERIFIED` / `HANDOVER_EMAIL_MISMATCH`, 404 `HANDOVER_NOT_FOUND`, 409 `HANDOVER_ALREADY_CLAIMED` / `HANDOVER_NOT_ALLOWED` |
 | POST | `/api/v1/handover/invitations/{token}/check-mail` | Công khai | `{ caseCode, citizenIdLast4 }` | 200 `{ verified, attemptsLeft, containerName?, ownerFullName? }` | 400, 404 `HANDOVER_INVITATION_INVALID`, 423 `HANDOVER_MAIL_CHECK_LOCKED` (quá 5 lần thử cho một lượt mời) |
 | POST | `/api/v1/handover/turns/{turnId}/submission` | Người nhận của lượt | multipart: `Kind` (`ACCEPT`/`DECLINE`), `FullName`, `CitizenId` (12 số), `DateOfBirth` (yyyy-MM-dd), `ResidenceAddress` (bắt buộc, tối đa 500 ký tự; khoảng trắng thừa và xuống dòng được gộp thành một dấu cách), `Acknowledged` (phải true), `VoluntaryDecline` (phải true khi `DECLINE`), `FrontImage`, `BackImage` (JPEG/PNG/WEBP, mỗi ảnh tối đa 8 MiB) | 200 `HandoverSubmissionResponse` | 400, 404 `HANDOVER_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `ALREADY_APPROVED`), 413 |
 | GET | `/api/v1/handover/turns/{turnId}/submission` | Người nhận của lượt | — | 200 hồ sơ mới nhất hoặc 204 khi chưa nộp | 404 |

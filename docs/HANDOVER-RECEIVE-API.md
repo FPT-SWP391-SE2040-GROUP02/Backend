@@ -62,8 +62,10 @@ Tiền tố `/api/v1/handover`. Tất cả cần `Authorization: Bearer` trừ e
 
 | # | Phương thức và đường dẫn | Mô tả |
 |---|---|---|
-| 1 | `GET invitations/{token}` | Công khai. `200 { "valid": true, "responseExpired": false }`; token lạ `404 HANDOVER_INVITATION_INVALID`. Không lộ dữ liệu nào khác. |
-| 2 | `POST invitations/{token}/claim` | Gắn tài khoản đang đăng nhập vào lượt. Cùng người gọi lại: trả trạng thái hiện tại. Trả `HandoverTurn`. |
+| 1 | `GET invitations/{token}` | Công khai. `200 { "valid": true, "responseExpired": false, "invitedEmailMasked": "m•••••h@example.com", "accountExists": true, "ownerFullName": "Nguyễn Văn A" }`; token lạ `404 HANDOVER_INVITATION_INVALID`. `invitedEmailMasked` là email người nhận đã che bớt (không bao giờ trả email đầy đủ, null khi không đọc được); `accountExists` cho biết email được mời đã có tài khoản chưa để FE chọn nút Đăng nhập hay Tạo tài khoản; `ownerFullName` là tên Chủ kho (thư mời đã nêu tên này) để trang cửa vào ghi tiêu đề. |
+| 1a | `GET invitations/mine` | Cần đăng nhập. Lời mời nhận gói đang chờ tài khoản này: `200 [{ turnId, containerName, ownerFullName, invitedAt }]`, mới nhất trước. Chỉ gồm lượt chưa ai nhận, còn nhận được (`INVITED` / `INITIAL_RESPONSE_EXPIRED`), kế hoạch `HANDOVER_IN_PROGRESS`, kho không bị giữ, không phải kho của chính mình và email người nhận trùng email đã xác minh của tài khoản. Chưa xác minh email thì `[]`. Email người nhận nằm trong dữ liệu mã hóa nên server giải mã từng người nhận để so (quy mô đồ án, xem comment ở `HandoverService.GetMyInvitationsAsync`). |
+| 2 | `POST invitations/{token}/claim` | Gắn tài khoản đang đăng nhập vào lượt. Cùng người gọi lại: trả trạng thái hiện tại. Trả `HandoverTurn`. Email tài khoản (trim, chữ thường) phải trùng email người nhận, sai thì `403 HANDOVER_EMAIL_MISMATCH`. |
+| 2a | `POST turns/{turnId}/claim` | Nhận lượt ngay trong app (FE gọi khi người nhận bấm "Đồng ý nhận" / "Từ chối nhận" ở thẻ thư mời, không có nút nhận riêng). Dùng chung mọi bước kiểm của endpoint 2 (đã có người nhận `409 HANDOVER_ALREADY_CLAIMED`, chủ kho `OWNER_CANNOT_CLAIM`, kế hoạch, trạng thái, hold) và kiểm email. Cùng người gọi lại: trả trạng thái hiện tại, không ghi gì. Id lạ: `404 HANDOVER_NOT_FOUND`. |
 | 3 | `GET turns/me` | Các lượt tôi đã nhận, mới nhất trước. |
 | 4 | `GET turns/{turnId}` | Một lượt của tôi. |
 | 4a | `POST turns/{turnId}/identity/complete` | Chốt xác minh danh tính: lượt `IDENTITY_IN_PROGRESS` sang `READY_TO_ACCEPT` (đặt hạn quyết định 7 ngày) khi lượt eKYC mới nhất của tôi cho đúng lượt này đã `PASSED` và `identityMatch = MATCHED`. Gọi lặp khi đã `READY_TO_ACCEPT` trả lại lượt, không đổi hạn. Trả `HandoverTurn`. Không tự đóng lượt khi sai người. |
@@ -112,6 +114,7 @@ Lỗi trả `application/problem+json` có trường `code` (UPPER_SNAKE) và đ
 | `HANDOVER_INVITATION_INVALID` | 404 | Token trong link không tồn tại. |
 | `HANDOVER_NOT_FOUND` | 404 | Lượt/grant/tài sản không tồn tại **hoặc không phải của bạn** (cùng một lỗi, không lộ sự tồn tại, SEC-04). |
 | `HANDOVER_ALREADY_CLAIMED` | 409 | Lượt đã được tài khoản khác nhận. |
+| `HANDOVER_EMAIL_MISMATCH` | 403 | Email tài khoản không trùng email người nhận của lượt (nhận qua link hoặc qua `turns/{turnId}/claim`). Kèm `invitedEmailMasked` (email được mời đã che bớt, ví dụ `m•••••h@example.com`; không có khi lượt không có email). |
 | `HANDOVER_NOT_ALLOWED` | 409 | `reason`: `OWNER_CANNOT_CLAIM`, `PLAN_NOT_IN_HANDOVER`, `WRONG_STATE`, `PLAN_NOT_READY`, `NOTHING_TO_HAND_OVER`; ở `identity/complete` thêm `IDENTITY_NOT_VERIFIED` (chưa eKYC cho lượt này), `IDENTITY_NOT_FINISHED` (chưa so khớp mặt), `IDENTITY_FAILED`, `IDENTITY_NEEDS_REVIEW`, `IDENTITY_WRONG_PERSON`. |
 | `HANDOVER_DECISION_EXPIRED` | 409 | Quá hạn 7 ngày quyết định. |
 | `GRANT_NOT_ACTIVE` | 403 | `reason`: `EXPIRED`, `BLOCKED`, `REVOKED`, `PLAN_NOT_ACTIVE`. |

@@ -93,13 +93,17 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, fileAssetId)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, textAssetId)).StatusCode);
 
+        // Thứ tự người nhận (theo chỉ số) để gán token và email đúng người, không phụ thuộc thứ tự Id của lượt.
+        List<Guid> beneficiaryIds = new List<Guid>();
         for (int i = 0; i < beneficiaryCount; i++)
         {
             string citizenId = "00109000000" + (i + 1);
-            JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, citizenId, ApiTestHelpers.BeneficiaryName(i));
+            JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
+                owner, vaultId, citizenId, ApiTestHelpers.BeneficiaryName(i), ReceiverEmail(i));
             HttpResponseMessage designate = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
                 owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
             Assert.Equal(HttpStatusCode.OK, designate.StatusCode);
+            beneficiaryIds.Add(beneficiary.GetProperty("id").GetGuid());
         }
 
         await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.DeathCaseOpen);
@@ -117,9 +121,10 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         {
             List<HandoverTurn> turns = await db.Set<HandoverTurn>()
                 .Where(t => t.VaultId == vaultId).OrderBy(t => t.Id).ToListAsync();
-            for (int i = 0; i < turns.Count; i++)
+            foreach (HandoverTurn turn in turns)
             {
-                turns[i].InvitationTokenHash = tokens.HashOpaqueToken(TokenFor(i));
+                int index = beneficiaryIds.IndexOf(turn.BeneficiaryId);
+                turn.InvitationTokenHash = tokens.HashOpaqueToken(TokenFor(index));
             }
             await db.SaveChangesAsync();
         });
@@ -134,7 +139,20 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         return scenario;
     }
 
-    private Task<HttpClient> NewReceiverAsync()
+    /// <summary>Email người nhận thứ index của kịch bản; tài khoản nhận lượt phải đúng email này (D2).</summary>
+    private static string ReceiverEmail(int index)
+    {
+        return "nguoinhan" + index + "@example.com";
+    }
+
+    /// <summary>Tài khoản đã xác minh email với đúng email của người nhận thứ index.</summary>
+    private Task<HttpClient> NewReceiverAsync(int index = 0)
+    {
+        return ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, ReceiverEmail(index));
+    }
+
+    /// <summary>Tài khoản đã xác minh email nhưng không phải người nhận nào.</summary>
+    private Task<HttpClient> NewStrangerAsync()
     {
         return ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
     }
@@ -227,10 +245,79 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(ok);
         Assert.True(body.GetProperty("valid").GetBoolean());
         Assert.False(body.GetProperty("responseExpired").GetBoolean());
-        Assert.Equal(2, body.EnumerateObject().Count());
+        // Chỉ 5 trường: hai cờ cũ, email đã che bớt, cờ "đã có tài khoản" và tên Chủ kho. Không có email đầy đủ.
+        Assert.Equal(5, body.EnumerateObject().Count());
+        Assert.False(string.IsNullOrEmpty(body.GetProperty("ownerFullName").GetString()));
+        Assert.False(body.GetProperty("accountExists").GetBoolean());
+        string masked = body.GetProperty("invitedEmailMasked").GetString()!;
+        Assert.EndsWith("@example.com", masked);
+        Assert.DoesNotContain(ReceiverEmail(0), await ok.Content.ReadAsStringAsync());
 
         HttpResponseMessage unknown = await anonymous.GetAsync("/api/v1/handover/invitations/khong-ton-tai");
         await ApiTestHelpers.AssertProblemAsync(unknown, HttpStatusCode.NotFound, "HANDOVER_INVITATION_INVALID");
+    }
+
+    [SqlFact]
+    public async Task InvitationEndpoint_ReportsAccountExistsOnceRecipientHasAccount()
+    {
+        await BuildScenarioAsync(1);
+        await NewReceiverAsync();
+
+        HttpResponseMessage response = await factory.CreateClient().GetAsync($"/api/v1/handover/invitations/{TokenFor(0)}");
+
+        JsonElement body = await ApiTestHelpers.ReadJsonAsync(response);
+        Assert.True(body.GetProperty("accountExists").GetBoolean());
+    }
+
+    [SqlFact]
+    public async Task MyInvitations_ListsOnlyForRecipientEmail_AndClaimByTurnIdWorks()
+    {
+        Scenario scenario = await BuildScenarioAsync(2);
+        HttpClient receiver = await NewReceiverAsync(0);
+        HttpClient stranger = await NewStrangerAsync();
+
+        HttpResponseMessage mine = await receiver.GetAsync("/api/v1/handover/invitations/mine");
+        Assert.Equal(HttpStatusCode.OK, mine.StatusCode);
+        JsonElement list = await ApiTestHelpers.ReadJsonAsync(mine);
+        Assert.Equal(1, list.GetArrayLength());
+        Assert.Equal("Gói thừa kế", list[0].GetProperty("containerName").GetString());
+        Guid turnId = list[0].GetProperty("turnId").GetGuid();
+
+        JsonElement strangerList = await ApiTestHelpers.ReadJsonAsync(await stranger.GetAsync("/api/v1/handover/invitations/mine"));
+        Assert.Equal(0, strangerList.GetArrayLength());
+
+        // Chủ kho không thấy lời mời của kho mình, kể cả khi anonymous bị chặn.
+        JsonElement ownerList = await ApiTestHelpers.ReadJsonAsync(await scenario.Owner.GetAsync("/api/v1/handover/invitations/mine"));
+        Assert.Equal(0, ownerList.GetArrayLength());
+        HttpResponseMessage anonymous = await factory.CreateClient().GetAsync("/api/v1/handover/invitations/mine");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        // Sai email: 403 HANDOVER_EMAIL_MISMATCH, không lộ email đầy đủ.
+        HttpResponseMessage wrong = await stranger.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null);
+        await ApiTestHelpers.AssertProblemAsync(wrong, HttpStatusCode.Forbidden, "HANDOVER_EMAIL_MISMATCH");
+        Assert.DoesNotContain(ReceiverEmail(0), await wrong.Content.ReadAsStringAsync());
+
+        // Đúng email: nhận được, gọi lặp trả lại cùng trạng thái, và lượt biến khỏi danh sách chờ.
+        HttpResponseMessage claim = await receiver.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null);
+        Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
+        JsonElement claimed = await ApiTestHelpers.ReadJsonAsync(claim);
+        Assert.Equal(turnId, claimed.GetProperty("id").GetGuid());
+        HttpResponseMessage again = await receiver.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null);
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+
+        JsonElement after = await ApiTestHelpers.ReadJsonAsync(await receiver.GetAsync("/api/v1/handover/invitations/mine"));
+        Assert.Equal(0, after.GetArrayLength());
+    }
+
+    [SqlFact]
+    public async Task ClaimByToken_WithWrongEmail_Returns403()
+    {
+        await BuildScenarioAsync(1);
+        HttpClient stranger = await NewStrangerAsync();
+
+        HttpResponseMessage response = await stranger.PostAsync($"/api/v1/handover/invitations/{TokenFor(0)}/claim", null);
+
+        await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Forbidden, "HANDOVER_EMAIL_MISMATCH");
     }
 
     [SqlFact]
@@ -238,7 +325,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     {
         await BuildScenarioAsync(1);
         HttpClient receiver = await NewReceiverAsync();
-        HttpClient stranger = await NewReceiverAsync();
+        HttpClient stranger = await NewStrangerAsync();
         (Guid turnId, Guid grantId, JsonElement items) = await ClaimAndAcceptAsync(receiver, 0);
         Guid itemId = FindItemId(items, "FILE");
 
@@ -327,7 +414,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     {
         await BuildScenarioAsync(2);
         HttpClient receiverA = await NewReceiverAsync();
-        HttpClient receiverB = await NewReceiverAsync();
+        HttpClient receiverB = await NewReceiverAsync(1);
 
         (Guid _, Guid grantA, JsonElement itemsA) = await ClaimAndAcceptAsync(receiverA, 0);
         JsonElement claimedB = await ClaimAsync(receiverB, 1);
@@ -438,7 +525,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     {
         Scenario scenario = await BuildScenarioAsync(2);
         HttpClient receiverA = await NewReceiverAsync();
-        HttpClient receiverB = await NewReceiverAsync();
+        HttpClient receiverB = await NewReceiverAsync(1);
         (Guid _, Guid grantA, JsonElement _) = await ClaimAndAcceptAsync(receiverA, 0);
         JsonElement claimedB = await ClaimAsync(receiverB, 1);
         Guid turnB = claimedB.GetProperty("id").GetGuid();

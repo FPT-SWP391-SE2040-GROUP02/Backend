@@ -90,6 +90,19 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         public List<string> Tokens { get; set; } = new List<string>();
     }
 
+    /// <summary>Tài khoản đã xác minh có đúng email người nhận (BeneficiaryEmail) để nhận lượt (D2).</summary>
+    private async Task<User> AddRecipientAsync()
+    {
+        User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Users.Where(u => u.Id == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.Email, ApiTestHelpers.BeneficiaryEmail));
+        });
+        user.Email = ApiTestHelpers.BeneficiaryEmail;
+        return user;
+    }
+
     private HttpClient ClientFor(User user)
     {
         HttpClient client = app.CreateClient();
@@ -224,7 +237,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         });
 
         // Người nhận nhận lượt (bypass xác minh ở Development): claim đang xử lý → tạm dừng
-        User recipient = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User recipient = await AddRecipientAsync();
         HttpClient client = ClientFor(recipient);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/api/v1/handover/invitations/{s.Tokens[0]}/claim", null)).StatusCode);
         await RunAsync(s.PlanId);
@@ -307,7 +320,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
     public async Task Retention09_ActiveGrantHolds_ExpiredGrantStartsClock_NoAutoRegrant()
     {
         Scenario s = await BuildHandoverAsync(1);
-        User recipient = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User recipient = await AddRecipientAsync();
         HttpClient client = ClientFor(recipient);
         JsonElement claimed = await ApiTestHelpers.ReadJsonAsync(
             await client.PostAsync($"/api/v1/handover/invitations/{s.Tokens[0]}/claim", null));

@@ -84,15 +84,133 @@ public sealed class HandoverService : IHandoverService
         InvitationStatusResponse response = new InvitationStatusResponse();
         response.Valid = true;
         response.ResponseExpired = responseExpired;
+
+        // Chỉ trả email đã che bớt và cờ "đã có tài khoản": link công khai không được lộ email đầy đủ.
+        string? invitedEmail = await FindRecipientEmailAsync(turn, ct);
+        if (invitedEmail != null)
+        {
+            response.InvitedEmailMasked = MaskEmail(invitedEmail);
+            User? existing = await users.FindByEmailAsync(invitedEmail, ct);
+            response.AccountExists = existing != null;
+        }
+
+        Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
+        if (vault != null)
+        {
+            User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+            if (owner != null)
+            {
+                response.OwnerFullName = owner.FullName;
+            }
+        }
         return response;
     }
 
     public async Task<HandoverTurnResponse> ClaimAsync(string token, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
-        await EnsureAccountUsableAsync(userId, ct);
+        User user = await EnsureAccountUsableAsync(userId, ct);
 
         HandoverTurn turn = await FindTurnByTokenAsync(token, ct);
+        return await ClaimTurnAsync(user, turn, ct);
+    }
+
+    /// <summary>
+    /// Nhận lượt ngay trong app (không qua link): FE gọi khi người nhận bấm "Đồng ý nhận" / "Từ chối nhận" ở thẻ thư mời.
+    /// Dùng chung mọi bước kiểm với nhận bằng link (ClaimTurnAsync).
+    /// </summary>
+    public async Task<HandoverTurnResponse> ClaimByTurnAsync(Guid turnId, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        User user = await EnsureAccountUsableAsync(userId, ct);
+
+        HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
+        if (turn == null)
+        {
+            throw HandoverNotFound();
+        }
+        return await ClaimTurnAsync(user, turn, ct);
+    }
+
+    /// <summary>
+    /// Lời mời nhận gói đang chờ tài khoản này: lượt chưa ai nhận, còn nhận được, kế hoạch đang bàn giao, kho không bị giữ,
+    /// không phải kho của chính mình và email người nhận trùng email đã xác minh của tài khoản (D2).
+    /// </summary>
+    /// <remarks>
+    /// Email người nhận nằm trong dữ liệu mã hóa (Beneficiary.ContactEncrypted), không có cột băm để tra, nên phải lấy các lượt
+    /// chưa nhận của mọi kế hoạch đang bàn giao rồi giải mã từng người nhận để so email. Chấp nhận được ở quy mô đồ án
+    /// (ít kế hoạch đang bàn giao cùng lúc); nếu lớn hơn thì cần thêm cột băm email (phải có migration). Không log email.
+    /// </remarks>
+    public async Task<List<PendingInvitationResponse>> GetMyInvitationsAsync(CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        User? user = await users.FindByIdAsync(userId, ct);
+        if (user == null)
+        {
+            throw new AppException(AppErrorType.Unauthorized, ErrorCode.SessionExpired,
+                "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        }
+
+        List<PendingInvitationResponse> result = new List<PendingInvitationResponse>();
+        if (user.Status != UserStatus.Active || user.EmailVerifiedAt == null)
+        {
+            return result;
+        }
+
+        string accountEmail = NormalizeEmail(user.Email);
+        List<HandoverTurn> candidates = await handover.FindUnclaimedTurnsInHandoverAsync(ct);
+        foreach (HandoverTurn turn in candidates)
+        {
+            if (!HandoverRules.CanClaim(turn.Status))
+            {
+                continue;
+            }
+
+            Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
+            if (vault == null || vault.OwnerId == userId)
+            {
+                continue;
+            }
+
+            if (vault.Plan.Status != PlanStatus.HandoverInProgress)
+            {
+                continue;
+            }
+
+            if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
+            {
+                continue;
+            }
+
+            string? invitedEmail = await FindRecipientEmailAsync(turn, ct);
+            if (invitedEmail == null || invitedEmail != accountEmail)
+            {
+                continue;
+            }
+
+            User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+            string ownerName = string.Empty;
+            if (owner != null)
+            {
+                ownerName = owner.FullName;
+            }
+
+            PendingInvitationResponse item = new PendingInvitationResponse();
+            item.TurnId = turn.Id;
+            item.ContainerName = turn.ContainerName;
+            item.OwnerFullName = ownerName;
+            item.InvitedAt = turn.InvitedAt;
+            result.Add(item);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Các bước kiểm và ghi chung cho nhận bằng token và nhận bằng turnId (turn đã tìm được, user đã qua EnsureAccountUsableAsync).
+    /// </summary>
+    private async Task<HandoverTurnResponse> ClaimTurnAsync(User user, HandoverTurn turn, CancellationToken ct)
+    {
+        Guid userId = user.Id;
         DateTimeOffset now = timeProvider.GetUtcNow();
 
         // Cùng người bấm lại (F5, mở link lần hai): trả trạng thái hiện tại, không ghi gì.
@@ -132,6 +250,9 @@ public sealed class HandoverService : IHandoverService
         {
             throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa nhận được lượt này.");
         }
+
+        // D2: đúng email mới được nhận (tài khoản đã xác minh email ở EnsureAccountUsableAsync).
+        await EnsureEmailMatchesAsync(user, turn, ct);
 
         turn.ClaimantUserId = userId;
         turn.ClaimedAt = now;
@@ -311,7 +432,7 @@ public sealed class HandoverService : IHandoverService
         HandoverRules.CloseIfAllTerminal(plan, turns, now);
     }
 
-    private async Task EnsureAccountUsableAsync(Guid userId, CancellationToken ct)
+    private async Task<User> EnsureAccountUsableAsync(Guid userId, CancellationToken ct)
     {
         User? user = await users.FindByIdAsync(userId, ct);
         if (user == null)
@@ -331,6 +452,83 @@ public sealed class HandoverService : IHandoverService
             throw new AppException(AppErrorType.Forbidden, ErrorCode.EmailNotVerified,
                 "Vui lòng xác minh email trước khi nhận tài sản.");
         }
+
+        return user;
+    }
+
+    /// <summary>
+    /// D2: email tài khoản (chuẩn hóa) phải trùng email người nhận của lượt. Sai thì 403 HANDOVER_EMAIL_MISMATCH kèm email được mời
+    /// đã che bớt, không lộ email đầy đủ.
+    /// </summary>
+    private async Task EnsureEmailMatchesAsync(User user, HandoverTurn turn, CancellationToken ct)
+    {
+        string? invitedEmail = await FindRecipientEmailAsync(turn, ct);
+        string accountEmail = NormalizeEmail(user.Email);
+        if (invitedEmail != null && invitedEmail == accountEmail)
+        {
+            return;
+        }
+
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        if (invitedEmail != null)
+        {
+            extensions["invitedEmailMasked"] = MaskEmail(invitedEmail);
+        }
+        throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverEmailMismatch,
+            "Lời mời này gửi tới một email khác. Hãy đăng nhập bằng đúng email được mời.", extensions);
+    }
+
+    /// <summary>Email người nhận của lượt (giải mã, chuẩn hóa trim + chữ thường); không có hoặc không đọc được thì null.</summary>
+    private async Task<string?> FindRecipientEmailAsync(HandoverTurn turn, CancellationToken ct)
+    {
+        if (beneficiaries == null || beneficiaryProtector == null)
+        {
+            return null;
+        }
+        try
+        {
+            Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
+            if (beneficiary == null)
+            {
+                return null;
+            }
+            string? email = beneficiaryProtector.Unprotect(beneficiary).Email;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return null;
+            }
+            return NormalizeEmail(email);
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeEmail(string email)
+    {
+        return email.Trim().ToLowerInvariant();
+    }
+
+    /// <summary>Che email dạng m•••••h@example.com: giữ ký tự đầu và cuối của phần tên, giữ nguyên tên miền.</summary>
+    private static string MaskEmail(string email)
+    {
+        int atIndex = email.IndexOf('@');
+        if (atIndex <= 0)
+        {
+            return "•••";
+        }
+
+        string localPart = email.Substring(0, atIndex);
+        string domain = email.Substring(atIndex);
+        if (localPart.Length <= 2)
+        {
+            return localPart.Substring(0, 1) + "•••" + domain;
+        }
+
+        string hidden = new string('•', localPart.Length - 2);
+        string lastChar = localPart.Substring(localPart.Length - 1);
+        return localPart.Substring(0, 1) + hidden + lastChar + domain;
     }
 
     private async Task<HandoverTurn> FindTurnByTokenAsync(string token, CancellationToken ct)

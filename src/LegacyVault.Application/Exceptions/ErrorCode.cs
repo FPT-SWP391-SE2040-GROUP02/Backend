@@ -123,6 +123,8 @@ public enum ErrorCode
     DemoClockBusy,
     /// <summary>404: mã tỉnh/thành phố không có trong danh mục đơn vị hành chính.</summary>
     AdministrativeUnitNotFound,
+    /// <summary>403: tài khoản đang đăng nhập không đúng email mà Chủ kho đã mời nhận gói; kèm invitedEmailMasked (email đã che bớt).</summary>
+    HandoverEmailMismatch,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

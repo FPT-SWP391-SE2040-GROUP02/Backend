@@ -40,6 +40,17 @@ public sealed class FakeHandoverRepository : IHandoverRepository
         return Task.FromResult(mine);
     }
 
+    public Task<List<HandoverTurn>> FindUnclaimedTurnsInHandoverAsync(CancellationToken ct)
+    {
+        List<HandoverTurn> found = Turns
+            .Where(t => t.ClaimantUserId == null
+                && (t.Status == HandoverTurnStatus.Invited || t.Status == HandoverTurnStatus.InitialResponseExpired))
+            .OrderByDescending(t => t.InvitedAt)
+            .ThenByDescending(t => t.Id)
+            .ToList();
+        return Task.FromResult(found);
+    }
+
     public Task<List<HandoverTurn>> FindTurnsByPlanAsync(Guid planId, CancellationToken ct)
     {
         return Task.FromResult(Turns.Where(t => t.PlanId == planId).ToList());

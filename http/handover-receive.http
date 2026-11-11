@@ -20,9 +20,19 @@ Content-Type: application/json
 @token = {{login.response.body.$.accessToken}}
 
 ### 1) Kiểm link mời (công khai, không cần đăng nhập)
+# Trả valid, responseExpired, invitedEmailMasked (email đã che bớt), accountExists và ownerFullName.
 GET {{baseUrl}}/handover/invitations/dev-token-1
 
-### 2) Nhận lượt
+### 1a) Lời mời nhận gói đang chờ tài khoản này (cần đăng nhập; chỉ thấy lượt gửi đúng email đã xác minh của tài khoản)
+# @name mine
+GET {{baseUrl}}/handover/invitations/mine
+Authorization: Bearer {{token}}
+
+### 1b) Nhận lượt trong app theo turnId (thẻ thư mời bấm Đồng ý/Từ chối nhận). Sai email: 403 HANDOVER_EMAIL_MISMATCH
+POST {{baseUrl}}/handover/turns/{{mine.response.body.$[0].turnId}}/claim
+Authorization: Bearer {{token}}
+
+### 2) Nhận lượt qua link (email tài khoản phải trùng email người nhận, sai thì 403 HANDOVER_EMAIL_MISMATCH)
 # @name claim
 POST {{baseUrl}}/handover/invitations/dev-token-1/claim
 Authorization: Bearer {{token}}

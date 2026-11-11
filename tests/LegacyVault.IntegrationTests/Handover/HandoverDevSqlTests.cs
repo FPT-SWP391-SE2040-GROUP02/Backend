@@ -72,7 +72,7 @@ public sealed class HandoverDevSqlTests : IAsyncLifetime
             await command.ExecuteNonQueryAsync();
         });
 
-        HttpClient receiver = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
+        HttpClient receiver = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, ApiTestHelpers.BeneficiaryEmail);
         HttpResponseMessage claim = await receiver.PostAsync("/api/v1/handover/invitations/dev-token-1/claim", null);
         Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
         JsonElement turn = await ApiTestHelpers.ReadJsonAsync(claim);
