@@ -30,6 +30,22 @@ public static class HandoverInvitationEmail
     /// <param name="supportContact">Câu liên hệ hỗ trợ của nhóm, ví dụ "email ho-tro@... hoặc số 090...". Null thì chỉ bảo báo lại cho LegacyVault.</param>
     public static EmailContent Build(HandoverInvitation invitation, string link, string? supportContact)
     {
+        return Build(invitation, link, supportContact, true);
+    }
+
+    /// <summary>Chữ gốc của tiêu đề, nút và ghi chú với biến giữ nguyên, để Admin sao chép làm chỗ bắt đầu.</summary>
+    public static EmailParts SampleParts()
+    {
+        HandoverInvitation sample = new HandoverInvitation();
+        sample.FullName = "{TEN_NGUOI_NHAN}";
+        sample.OwnerFullName = "{TEN_CHU_KHO}";
+        sample.ResponseDeadline = DateTimeOffset.UtcNow;
+        EmailContent content = Build(sample, string.Empty, null, false);
+        return content.Defaults!;
+    }
+
+    private static EmailContent Build(HandoverInvitation invitation, string link, string? supportContact, bool applyOverrides)
+    {
         string deadline = invitation.ResponseDeadline.ToOffset(VietnamOffset)
             .ToString("HH:mm 'ngày' dd/MM/yyyy", CultureInfo.InvariantCulture);
         string shortDeadline = invitation.ResponseDeadline.ToOffset(VietnamOffset)
@@ -105,16 +121,30 @@ public static class HandoverInvitationEmail
             + "Trân trọng, Đội ngũ LegacyVault. " + ScamWarning();
 
         string leadText = string.Join("\n", lines);
-        string text = $"Xin chào {invitation.FullName},\n\n{leadText}\n\nNhận tài sản: {link}\n\n{note}\n";
+
+        // Admin chỉ sửa được tiêu đề, tiêu đề lớn, nút và ghi chú; phần thân theo từng hồ sơ nên giữ nguyên.
+        EmailParts defaults = new EmailParts(subject, title, leadText, "Nhận tài sản", note);
+        if (!applyOverrides)
+        {
+            return new EmailContent(subject, leadText, string.Empty, EmailTemplateCatalog.HandoverInvitation, defaults);
+        }
+        Dictionary<string, string> tokens = new Dictionary<string, string>();
+        tokens["TEN_NGUOI_NHAN"] = invitation.FullName;
+        tokens["TEN_CHU_KHO"] = ownerLabel;
+        tokens["HAN_PHAN_HOI"] = deadline;
+        tokens["HAN_NGAN"] = shortDeadline;
+        EmailParts parts = EmailTemplateOverrides.Apply(EmailTemplateCatalog.HandoverInvitation, defaults, tokens);
+
+        string text = $"Xin chào {invitation.FullName},\n\n{leadText}\n\n{parts.ButtonText}: {link}\n\n{parts.Note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(
-            title,
+            parts.Title,
             invitation.FullName,
             leadText,
             link,
-            "Nhận tài sản",
-            note,
+            parts.ButtonText,
+            parts.Note,
             "Thông báo bàn giao");
-        return new EmailContent(subject, text, html);
+        return new EmailContent(parts.Subject, text, html, EmailTemplateCatalog.HandoverInvitation);
     }
 
     /// <summary>Cảnh báo lừa đảo kèm thông tin công ty (do Admin đặt) để người nhận tự gọi xác minh.</summary>

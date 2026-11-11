@@ -79,6 +79,7 @@ public static class EmailConfig
         services.AddSingleton<SmtpMailSender>();
         services.AddHostedService<EmailStartupLogger>();
         services.AddSingleton<ICheckInReminderSender>(provider => ChooseReminderSender(provider));
+        services.AddSingleton<IExtraMailSender>(provider => ChooseExtraMailSender(provider));
         services.AddSingleton<IEmailSender>(provider => ChooseVerificationSender(provider));
         return services;
     }
@@ -90,6 +91,15 @@ public static class EmailConfig
             return ActivatorUtilities.CreateInstance<SmtpCheckInReminderSender>(provider);
         }
         return ActivatorUtilities.CreateInstance<LogCheckInReminderSender>(provider);
+    }
+
+    private static IExtraMailSender ChooseExtraMailSender(IServiceProvider provider)
+    {
+        if (IsConfigured(provider))
+        {
+            return ActivatorUtilities.CreateInstance<SmtpExtraMailSender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LogExtraMailSender>(provider);
     }
 
     private static IEmailSender ChooseVerificationSender(IServiceProvider provider)

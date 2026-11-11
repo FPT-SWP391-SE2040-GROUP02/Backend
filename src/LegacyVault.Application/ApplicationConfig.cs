@@ -77,6 +77,9 @@ public static class ApplicationConfig
         services.AddScoped<ISePayWebhookService, SePayWebhookService>();
         services.AddScoped<IAdminPaymentService, AdminPaymentService>();
         services.AddScoped<IHandoverTemplateService, HandoverTemplateService>();
+        services.AddScoped<IEmailTemplateService, EmailTemplateService>();
+        services.AddScoped<IExtraMailService, ExtraMailService>();
+        services.AddScoped<IExtraMailJob, ExtraMailJob>();
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsService, DevToolsService>();
         // Nút "Tua thời gian" để demo (controller chỉ mở ở Development/Staging)

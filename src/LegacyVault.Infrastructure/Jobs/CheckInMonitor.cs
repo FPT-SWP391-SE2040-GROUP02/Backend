@@ -93,5 +93,45 @@ public sealed class CheckInMonitor : BackgroundService
                 logger.LogWarning("Xử lý kỳ điểm danh {PeriodId} lỗi: {ExceptionType}", periodId, ex.GetType().Name);
             }
         }
+
+        await RunExtraMailsAsync(ct);
+    }
+
+    /// <summary>Thư bổ sung do Admin đặt; lỗi một kỳ không ảnh hưởng kỳ khác và không ảnh hưởng thư nhắc có sẵn.</summary>
+    private async Task RunExtraMailsAsync(CancellationToken ct)
+    {
+        IReadOnlyList<Guid> periodIds;
+        try
+        {
+            using IServiceScope scope = scopeFactory.CreateScope();
+            periodIds = await scope.ServiceProvider.GetRequiredService<IExtraMailJob>().FindPeriodIdsAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning("Tìm kỳ cho thư bổ sung lỗi: {ExceptionType}", ex.GetType().Name);
+            return;
+        }
+
+        foreach (Guid periodId in periodIds)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using IServiceScope scope = scopeFactory.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<IExtraMailJob>().ProcessPeriodAsync(periodId, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning("Gửi thư bổ sung cho kỳ {PeriodId} lỗi: {ExceptionType}", periodId, ex.GetType().Name);
+            }
+        }
     }
 }

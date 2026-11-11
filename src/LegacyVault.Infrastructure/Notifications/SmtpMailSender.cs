@@ -42,6 +42,16 @@ public class SmtpMailSender
         this.logger = logger;
     }
 
+    /// <summary>Gửi một thư đã dựng; loại thư Admin đã tắt thì bỏ qua, không gửi và không báo lỗi.</summary>
+    public Task SendAsync(string toEmail, string toName, EmailContent content, CancellationToken ct)
+    {
+        if (content.TemplateKey != null && !LegacyVault.Application.Notifications.EmailTemplateOverrides.IsEnabled(content.TemplateKey))
+        {
+            return Task.CompletedTask;
+        }
+        return SendAsync(toEmail, toName, content.Subject, content.TextBody, content.HtmlBody, ct);
+    }
+
     public async Task SendAsync(
         string toEmail, string toName, string subject, string textBody, string htmlBody, CancellationToken ct)
     {
