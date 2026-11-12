@@ -40,6 +40,90 @@ public static class CheckInRules
         }
     }
 
+    /// <summary>Số thư nhắc trước hạn tối đa mà Admin được đặt (khớp các mốc DueInSevenDays, DueInOneDay, DueReminder3 đến DueReminder5).</summary>
+    public const int MaxDueRemindersLimit = 5;
+
+    /// <summary>Mặc định: hai thư nhắc trước hạn, như trước khi Admin được đặt số thư.</summary>
+    public const int DefaultDueReminderCount = 2;
+
+    public const string DueReminderCountKey = "CheckIn.DueReminderCount";
+
+    /// <summary>Khóa số ngày của từng thư nhắc trước hạn, theo thứ tự thư 1 (xa hạn nhất) đến thư 5 (gần hạn nhất).</summary>
+    private static readonly string[] DueReminderKeys =
+    {
+        "CheckIn.FirstReminderDaysBeforeDue",
+        "CheckIn.SecondReminderDaysBeforeDue",
+        "CheckIn.ThirdReminderDaysBeforeDue",
+        "CheckIn.FourthReminderDaysBeforeDue",
+        "CheckIn.FifthReminderDaysBeforeDue",
+    };
+
+    private static readonly int[] DueReminderDefaults = { DefaultFirstReminderDays, DefaultSecondReminderDays, 1, 1, 1 };
+
+    /// <summary>Khóa số ngày của thư nhắc trước hạn thứ position (1 đến 5).</summary>
+    public static string DueReminderKey(int position)
+    {
+        return DueReminderKeys[position - 1];
+    }
+
+    /// <summary>Số ngày mặc định của thư nhắc trước hạn thứ position (1 đến 5), dùng khi chưa có dòng cấu hình.</summary>
+    public static int DueReminderDefaultDays(int position)
+    {
+        return DueReminderDefaults[position - 1];
+    }
+
+    /// <summary>Số thư nhắc trước hạn gửi chủ kho, Admin đặt, từ 1 đến 5.</summary>
+    public static int DueReminderCount
+    {
+        get
+        {
+            return Math.Clamp(RuntimeSettings.Int(DueReminderCountKey, DefaultDueReminderCount), 1, MaxDueRemindersLimit);
+        }
+    }
+
+    /// <summary>
+    /// Số ngày trước hạn của từng thư nhắc trước hạn đang dùng, thứ tự từ xa hạn nhất đến gần hạn nhất, luôn giảm dần chặt.
+    /// Thư gần hạn nhất từ 1 đến 30 ngày; các thư xa hơn phải lớn hơn thư liền sau (thư đầu tối đa 60 ngày, các thư giữa tối đa 30).
+    /// Giá trị sai thứ tự được nâng lên để không bao giờ có hai thư trùng ngày hay đảo thứ tự. Đọc ngay mỗi lần, áp dụng cho kỳ đang chạy.
+    /// </summary>
+    public static IReadOnlyList<int> DueReminderDays
+    {
+        get
+        {
+            int count = DueReminderCount;
+            int[] days = new int[count];
+            for (int i = count - 1; i >= 0; i--)
+            {
+                int raw = RuntimeSettings.Int(DueReminderKeys[i], DueReminderDefaults[i]);
+                if (i == count - 1)
+                {
+                    days[i] = Math.Clamp(raw, 1, 30);
+                }
+                else
+                {
+                    int lower = days[i + 1] + 1;
+                    int upper = Math.Max(i == 0 ? 60 : 30, lower);
+                    days[i] = Math.Clamp(raw, lower, upper);
+                }
+            }
+            return days;
+        }
+    }
+
+    /// <summary>
+    /// Số ngày của thư nhắc trước hạn thứ position (1 đến 5). Vị trí ngoài số thư đang đặt thì lấy giá trị đã nhập (hoặc mặc định),
+    /// dùng để dựng mẫu email và email của dữ liệu cũ.
+    /// </summary>
+    public static int DueReminderDaysAt(int position)
+    {
+        IReadOnlyList<int> days = DueReminderDays;
+        if (position <= days.Count)
+        {
+            return days[position - 1];
+        }
+        return Math.Clamp(RuntimeSettings.Int(DueReminderKeys[position - 1], DueReminderDefaults[position - 1]), 1, 60);
+    }
+
     /// <summary>Khoảng cách giữa hai thư nhắc trễ (ngày), Admin đặt, từ 1 đến 30.</summary>
     public static int LateReminderGapDays => Math.Clamp(RuntimeSettings.Int("CheckIn.LateReminderGapDays", 3), 1, 30);
 

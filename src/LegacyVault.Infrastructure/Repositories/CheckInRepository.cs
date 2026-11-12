@@ -11,7 +11,7 @@ public sealed class CheckInRepository : ICheckInRepository
 {
     /// <summary>Mốc nhắc sớm nhất là 7 ngày trước hạn: kỳ có hạn xa hơn chưa cần job xử lý.</summary>
     /// <summary>Kỳ chỉ cần xét khi còn không quá chừng này tới hạn: bằng số ngày của thư nhắc trước hạn thứ nhất (Admin đặt).</summary>
-    private static TimeSpan EarliestReminderLead => TimeUnits.Days(CheckInRules.FirstReminderDaysBeforeDue);
+    private static TimeSpan EarliestReminderLead => TimeUnits.Days(CheckInRules.DueReminderDays[0]);
 
     private readonly AppDbContext context;
 

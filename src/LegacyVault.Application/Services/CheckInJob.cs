@@ -91,21 +91,27 @@ public sealed class CheckInJob : ICheckInJob
     /// </summary>
     private async Task SendLatestReminderAsync(CheckInPeriod period, DateTimeOffset now, CancellationToken ct)
     {
+        IReadOnlyList<int> dueDays = CheckInRules.DueReminderDays;
         CheckInReminderKind? latest = CheckInTimeline.LatestReachedMilestone(
-            period.DueAt, period.MaxLateReminders, period.LateReminderGapDays, now,
-            CheckInRules.FirstReminderDaysBeforeDue, CheckInRules.SecondReminderDaysBeforeDue);
+            period.DueAt, period.MaxLateReminders, period.LateReminderGapDays, now, dueDays);
         if (latest == null)
         {
             return;
         }
 
         bool changed = false;
-        foreach (CheckInReminderKind kind in CheckInTimeline.ActiveKinds(period.MaxLateReminders))
+        IReadOnlyList<CheckInReminderKind> kinds = CheckInTimeline.ActiveKinds(dueDays.Count, period.MaxLateReminders);
+        int latestIndex = -1;
+        for (int i = 0; i < kinds.Count; i++)
         {
-            if ((int)kind >= (int)latest.Value)
+            if (kinds[i] == latest.Value)
             {
-                continue;
+                latestIndex = i;
             }
+        }
+        for (int i = 0; i < latestIndex; i++)
+        {
+            CheckInReminderKind kind = kinds[i];
             CheckInReminder? older = FindReminder(period, kind);
             if (older == null)
             {

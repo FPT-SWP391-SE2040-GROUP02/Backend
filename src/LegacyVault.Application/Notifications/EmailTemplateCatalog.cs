@@ -59,7 +59,7 @@ public static class EmailTemplateCatalog
         OverdueDefinition(ExecutorOverdue, "Báo Người thực thi: Chủ kho quá hạn điểm danh"),
         OverdueDefinition(ExecutorOverdueReminder, "Nhắc lại Người thực thi: Chủ kho quá hạn điểm danh"),
         CheckInDefinition(CheckInDueFirst, "Nhắc điểm danh: lần nhắc đầu trước hạn"),
-        CheckInDefinition(CheckInDueSecond, "Nhắc điểm danh: lần nhắc thứ hai trước hạn"),
+        CheckInDefinition(CheckInDueSecond, "Nhắc điểm danh: các lần nhắc từ thứ hai trở đi trước hạn"),
         CheckInDefinition(CheckInLate, "Nhắc điểm danh: nhắc trễ khi đã quá hạn (lần 1 đến 5)"),
     };
 
