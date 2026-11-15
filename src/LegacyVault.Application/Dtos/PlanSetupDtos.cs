@@ -13,7 +13,8 @@ public sealed record ExecutorCandidateResponse(Guid UserId, string FullName, str
 public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, bool CanActivate,
     string[] MissingRequirements, string PolicyVersion, string PolicyText, string ExecutorScopeVersion,
     string ExecutorScopeText, List<ExecutorInvitationResponse> Executors,
-    List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings);
+    List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings,
+    List<string>? WillClauses = null);
 public sealed record ExecutorInvitationInfo(DateTimeOffset ExpiresAt, string Status,
     string ScopeVersion, string ScopeText);
 

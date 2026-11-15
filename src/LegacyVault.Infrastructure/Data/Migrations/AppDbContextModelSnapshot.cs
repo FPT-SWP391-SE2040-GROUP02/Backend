@@ -3001,6 +3001,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("WillClauses")
+                        .HasMaxLength(5100)
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId")

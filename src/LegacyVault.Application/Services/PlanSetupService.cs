@@ -414,7 +414,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
             vault.Executors.OrderByDescending(e => e.InvitedAt).Select(Map).ToList(),
-            PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>());
+            PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>(),
+            WillClauseRules.Split(vault.WillClauses));
     }
 
     private const int MyInvitationsMaxCount = 50;
@@ -446,6 +447,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         response.InvitedAt = item.InvitedAt;
         response.ExpiresAt = item.ExpiresAt;
         response.EndedAt = endedAt;
+        response.WillClauses = WillClauseRules.Split(item.Vault.WillClauses);
         return response;
     }
 

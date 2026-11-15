@@ -24,6 +24,10 @@ public sealed class VaultConfiguration : IEntityTypeConfiguration<Vault>
         builder.Property(v => v.ExecutorNote)
             .HasMaxLength(2000);
 
+        // Khớp WillClauseRules: tối đa 10 điều x 500 ký tự, cộng ký tự ngăn dòng.
+        builder.Property(v => v.WillClauses)
+            .HasMaxLength(5100);
+
         builder.Property(v => v.Status)
             .IsRequired()
             .HasConversion<string>()

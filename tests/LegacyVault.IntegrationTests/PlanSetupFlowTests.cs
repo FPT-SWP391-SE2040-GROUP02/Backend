@@ -102,6 +102,45 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task OwnerWillClausesAreSavedReadBackAndLimited()
+    {
+        var (owner, vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        var vault = await owner.GetFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>($"/api/v1/vaults/{vaultId}");
+        Assert.Empty(vault!.WillClauses);
+
+        // Lưu hai điều khoản; dòng thừa khoảng trắng và xuống dòng được gộp thành một dòng.
+        var saved = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new
+        {
+            etag = vault.Etag,
+            willClauses = new[] { "  Không bán   ngôi nhà  ", "Chia\nđều cho hai con" },
+        });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var after = await saved.Content.ReadFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>();
+        Assert.Equal(new[] { "Không bán ngôi nhà", "Chia đều cho hai con" }, after!.WillClauses);
+
+        // Kế hoạch bàn giao (nơi Chủ kho xem trước khi kích hoạt) trả cùng danh sách.
+        var setup = await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup");
+        Assert.Equal(after.WillClauses, setup!.WillClauses);
+
+        // Điều khoản trống, quá dài hoặc quá nhiều đều bị từ chối và không đổi dữ liệu đã lưu.
+        var blank = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = after.Etag, willClauses = new[] { "   " } });
+        Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
+        var tooLong = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = after.Etag, willClauses = new[] { new string('a', 501) } });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        var tooMany = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = after.Etag, willClauses = Enumerable.Repeat("x", 11).ToArray() });
+        Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
+        var unchanged = await owner.GetFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>($"/api/v1/vaults/{vaultId}");
+        Assert.Equal(2, unchanged!.WillClauses.Count);
+
+        // Danh sách rỗng xóa hết; không gửi trường này thì giữ nguyên.
+        var kept = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = unchanged.Etag, description = "mô tả mới" });
+        var keptBody = await kept.Content.ReadFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>();
+        Assert.Equal(2, keptBody!.WillClauses.Count);
+        var cleared = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = keptBody.Etag, willClauses = Array.Empty<string>() });
+        Assert.Empty((await cleared.Content.ReadFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>())!.WillClauses);
+    }
+
+    [SqlFact]
     public async Task FullHttpFlowAcceptActivateCheckInAndDuplicatesPreserveSingleOpenPeriod()
     {
         var (owner, recipient, vaultId) = await PrepareAsync();
