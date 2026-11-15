@@ -5,17 +5,17 @@ Implemented 15/10/2026. Canonical prefix is `/api/v1` only. Swagger UI: `/swagge
 | Method / path | Caller / body | Result |
 |---|---|---|
 | GET `/vaults/{vaultId}/plan-setup` | Owner Bearer | Status, configVersion, missingRequirements, policy/scope versions and text, invitation metadata |
-| POST `/vaults/{vaultId}/executors` | Owner: email, role PRIMARY/BACKUP, optional beneficiaryId | 201 invitation metadata; no raw token |
+| POST `/vaults/{vaultId}/executors` | Owner + `X-Vault-Pin`: `{ email }` (không còn `role`, `beneficiaryId`) | 201 invitation metadata; no raw token. Người thực thi là tài khoản nhân sự (role EXECUTOR), không phải người nhận |
 | POST `/vaults/{vaultId}/executors/{executorId}/resend` | Owner: etag | Rotates token and expiry; old link invalid |
 | POST `/executor-invitations/inspect` | Public: token | Minimal role/status/expiry/scope; no owner/vault content |
 | POST `/executor-invitations/respond` | Verified active account: token, accept, acknowledgeScope, scopeVersion | Explicit accept/decline; Owner, second claimant and an account whose verified email differs from the invited email (409 `EXECUTOR_NOT_ALLOWED`, reason `INVITEE_EMAIL_MISMATCH`) are rejected |
 | GET `/executor-invitations/mine` | Signed-in account | `{ scopeVersion, scopeText, pending[], ended[] }`. Mỗi lời mời: `id, ownerName, inviteeEmail, status (INVITED/DECLINED/EXPIRED/REVOKED), invitedAt, expiresAt, endedAt`. Chỉ lời mời gửi tới email **đã xác minh** của tài khoản; email chưa xác minh hoặc tài khoản không Active thì hai danh sách rỗng. Không có token, không có nội dung kho. `pending` sắp hết hạn trước, `ended` mới nhất trước (tối đa 50 lời mời) |
 | POST `/executor-invitations/{invitationId}/respond` | Verified active account: accept, acknowledgeScope, scopeVersion | Giống respond bằng token (cùng luật và mã lỗi). Lời mời không gửi tới email của người gọi → 404 `EXECUTOR_INVITATION_INVALID` (không lộ lời mời của người khác) |
-| POST `/vaults/{vaultId}/activate` | Owner: configVersion, policyVersion, acknowledgePolicy=true | Recheck requirements, atomically activate and open first period |
+| POST `/vaults/{vaultId}/activate` | Owner + **`X-Vault-Pin`** (bắt buộc): configVersion, policyVersion, acknowledgePolicy=true | Recheck requirements, atomically activate and open first period; ký di chúc bằng PIN; server tự tạo mã mở gói (không trả mã) |
 
 Paths in the table follow `/api/v1`. Request/response schemas are generated from DTOs in OpenAPI. FE validates wire responses with Zod.
 
-Activation requires an active email-verified Owner, open vault, unexpired paid service, latest Passed Owner eKYC with purpose OWNER_ENROLLMENT, a Ready container, and an active verified distinct primary Executor who accepted the current scope. If primary is also a beneficiary, an independent accepted non-beneficiary backup is required. Policy acknowledgement is explicit and stores version/time. A stale configVersion returns EDIT_CONFLICT. Duplicate activation does not reset deadlines. Deactivation suspends accepted Executors; reactivation requires fresh acceptance. Existing pending check-in settings apply when a new period starts.
+Activation requires an active email-verified Owner, open vault, unexpired paid service, latest Passed Owner eKYC with purpose OWNER_ENROLLMENT, a Ready container, and an active verified distinct primary Executor who accepted the current scope. (Executor dự phòng đã bỏ từ 30/10/2026; một Người thực thi là nhân sự role EXECUTOR, không phải người nhận.) Policy acknowledgement is explicit and stores version/time. A stale configVersion returns EDIT_CONFLICT. Duplicate activation does not reset deadlines. Deactivation suspends accepted Executors; reactivation requires fresh acceptance. Existing pending check-in settings apply when a new period starts.
 
 **Lời mời của tôi (FE: mục Lời mời).** Người được mời xem và trả lời lời mời ngay trong app, không cần link email: `GET /executor-invitations/mine` rồi `POST /executor-invitations/{invitationId}/respond`. Vẫn phải bấm chấp nhận rõ ràng; chỉ email đã xác minh trùng email được mời mới thấy và trả lời được. `GET mine` không áp giới hạn tần suất `executor-invitations` (chỉ đọc theo tài khoản).
 
@@ -100,3 +100,39 @@ Ví dụ GET rút gọn, giả định các điều kiện kích hoạt khác đ
 ```
 
 Lỗi `409 PLAN_ACTIVATION_REQUIREMENTS_NOT_MET` giữ nguyên ProblemDetails với `missingRequirements`; ba field mới thuộc phản hồi thành công. Thử tay bằng `http/plan-setup.http`; dữ liệu giả lập cho DB local nằm trong `http/plan-dev.sql`.
+
+## Di chúc điện tử, mã mở gói do server tạo, người nhận (bổ sung 16/11/2026, nhánh feat/will-signature)
+
+Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự LegacyVault** (role `EXECUTOR`) do Admin tạo, Chủ kho chọn một người. Người nhận không eKYC, không gọi video. Trang bàn giao của Chủ kho là "Di chúc" điện tử: Chủ kho ký bằng PIN kho lúc kích hoạt, Người thực thi ký khi chấp nhận lời mời. Mọi trường mới trong response đều tùy chọn để client cũ không vỡ.
+
+**`GET /vaults/{vaultId}/plan-setup` (và response của `POST .../activate`)** thêm:
+
+| Field | Kiểu | Nội dung |
+|---|---|---|
+| `ownerFullName`, `ownerEmail` | string | Họ tên và email tài khoản Chủ kho. |
+| `activatedAt` | ISO hoặc null | Thời điểm kích hoạt. FE chỉ coi Chủ kho "đã ký" khi `planStatus != DRAFT` và `activatedAt != null`. |
+| `recipients[]` | mảng | Người nhận theo từng người, lấy từ chỉ định của các gói đang mở (không gồm gói đã xóa), sắp theo `fullName`; người không có gói nào thì không xuất hiện. Mỗi phần tử: `beneficiaryId`, `fullName` (giải mã từ dữ liệu cá nhân, không log), `hasMessage` (đã có lời nhắn; **không trả nội dung lời nhắn**), `containers[]` (`id`, `name`, `assetCount`, `status` `READY`/`DRAFT`). |
+| `executors[].fullName` | string hoặc null | Họ tên tài khoản Người thực thi nếu đã liên kết (sau khi chấp nhận), ngược lại null. |
+
+**Kích hoạt (`POST .../activate`).** Bắt buộc header `X-Vault-Pin` (thiếu/sai/khóa PIN trả cùng mã lỗi `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN` / `VAULT_PIN_LOCKED` như các thao tác PIN khác). Cùng một giao dịch: đặt kế hoạch `ACTIVE`, mở kỳ điểm danh đầu, **tự tạo mã mở gói** nếu kho chưa có (hoặc chỉ có bản cũ chỉ-hash thì tạo mới, version + 1; không trả mã trong response) và ghi nhật ký `PlanActivated` (actor Owner, đích Vault). Gọi lặp khi đã `ACTIVE` không ghi thêm.
+
+**Mã mở gói (executor key).**
+
+| Method / path | Ai | Kết quả |
+|---|---|---|
+| `GET /vaults/{vaultId}/executor-key` | Owner | `{ hasKey, version, issuedAt, reissuedAt, canIssue }`, không có mã. |
+| `POST /vaults/{vaultId}/executor-key/reissue` | Owner + `X-Vault-Pin` | Đổi mã (version + 1), trả `ExecutorKeyStatusResponse` như GET, **không có trường `shard`**. Chưa có mã → 409 `EXECUTOR_KEY_NOT_ISSUED`; kế hoạch đã khóa → 409 `VAULT_NOT_EDITABLE`. |
+| `GET /executor/vaults/{vaultId}/handover-key` | Người thực thi đã chấp nhận | Đọc mã (16 ký tự Crockford base32, dạng `XXXX-XXXX-XXXX-XXXX`). Không phải Executor đã chấp nhận → 404 `VAULT_NOT_FOUND`. Kế hoạch chưa `HANDOVER_IN_PROGRESS` → 409 `HANDOVER_NOT_ALLOWED`, `reason = HANDOVER_NOT_STARTED`. |
+
+- **Đã xóa** endpoint Chủ kho cấp mã lần đầu (`POST /vaults/{vaultId}/executor-key`); gọi sẽ nhận 405. Mã chỉ do server tạo.
+- Tự đổi mã (version + 1, nhật ký `ExecutorKeyReissued`, actor System) khi **đổi Người thực thi**: người thay chấp nhận làm người cũ `REVOKED`, hoặc Admin giao người thay khi người cũ bị thu hồi ngay. Chỉ đổi nếu kho đã có mã.
+- Khi **bắt đầu bàn giao** (`HandoverStarter` đặt `HANDOVER_IN_PROGRESS`) server đảm bảo có mã đọc được: chưa có hoặc chỉ có hash thì tạo mới (actor System).
+- Mã lưu dạng hash SHA-256 (gắn kho và phiên bản) và bản mã hóa phong bì AES-256-GCM; chỉ là cổng mở khóa việc tải của người nhận (người nhận nhập mã trước khi tải), không dùng mã hóa nội dung. Nhật ký chỉ ghi version, không ghi mã hay hash (SEC-07). `send-key` (gửi mã cho người nhận) giữ nguyên.
+
+**Nhân sự không được làm người nhận.**
+- Tạo/sửa người nhận với email trùng tài khoản role `EXECUTOR`, `VERIFIER`, `ADMIN` → 400 `VALIDATION_ERROR`, trường `email`: "Email này thuộc tài khoản nhân sự của LegacyVault nên không thể làm người nhận."
+- Nhận gói trong app (`claim`, `turns/{turnId}/claim`): tài khoản nhân sự → 409 `HANDOVER_NOT_ALLOWED`, `reason = STAFF_CANNOT_CLAIM`.
+- Admin đổi role sang nhân sự (`PUT /admin/users/{id}/role`): người dùng đang có lượt bàn giao đã nhận còn mở (chưa `HANDOVER_COMMITTED`/`DECLINED`/`DECISION_EXPIRED`/`CANCELLED`/`LAPSED`) → 409 `ADMIN_ACTION_NOT_ALLOWED`, `reason = RECIPIENT_HAS_ACTIVE_HANDOVER`. Email người nhận được mã hóa nên không dò theo email ở bước này; hai bước chặn ở trên lo phần còn lại.
+- `GET /vaults/{vaultId}/executor-candidates?q=`: chỉ trả tài khoản role `EXECUTOR`, Active, đã xác minh email và đã có `LegalVerifiedAt` (cùng điều kiện được mời), không gồm Chủ kho.
+
+**Nhật ký mới (`AuditAction`, lưu dạng chuỗi, không migration):** `PlanActivated = 62` (Chủ kho ký bằng PIN), `ExecutorAccepted = 63` (Người thực thi tự chấp nhận lời mời, actor Executor, đích Vault).

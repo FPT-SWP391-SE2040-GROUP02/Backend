@@ -530,6 +530,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **Tìm kiếm:** họ tên đã mã hóa nên `searchTerm` **chỉ** tìm theo 4 số cuối CCCD: 1–4 chữ số, khớp phần cuối của `citizenIdLast4` (ví dụ `01` khớp `8901`). Có chữ hoặc quá 4 ký tự → 400.
 - **CCCD:** đúng 12 chữ số, được gõ khoảng trắng (BE bỏ đi), giữ số 0 đầu. **Không sửa được** sau khi tạo; muốn đổi thì xóa hồ sơ rồi tạo lại.
 - **Liên hệ:** cần ít nhất `email` hoặc `phone`. Khi tạo, `""` coi như không có. Khi sửa, `null`/không gửi = giữ nguyên, `""` = xóa. Email được đổi sang chữ thường; số điện thoại bỏ khoảng trắng, dấu chấm, dấu gạch, phải có 9–15 chữ số (cho phép `+` đầu).
+- **Email nhân sự:** `email` trùng một tài khoản role `EXECUTOR`/`VERIFIER`/`ADMIN` (khi tạo hoặc sửa) → `400 VALIDATION_ERROR` ở trường `email`: "Email này thuộc tài khoản nhân sự của LegacyVault nên không thể làm người nhận."
 - **Trùng CCCD trong kho:** cùng CCCD, cùng họ tên (không phân biệt hoa thường, bỏ khoảng trắng thừa) và cùng ngày sinh → **200** trả hồ sơ cũ, không đổi gì (kể cả liên hệ). Khác họ tên hoặc ngày sinh → `409 BENEFICIARY_IDENTITY_CONFLICT` kèm `beneficiaryId`; FE mở hồ sơ đó cho Owner sửa cho thống nhất.
 - **Tuổi:** không kiểm tra và không trả nhãn tuổi (đã bỏ `isMinor`). `minorAcknowledgedAt` không còn dùng (hồ sơ mới luôn `null`). Trường `confirmMinor` của FE cũ nếu còn gửi sẽ bị bỏ qua, không lỗi. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
@@ -1218,6 +1219,7 @@ Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Own
 - `POST`, `PUT`, `DELETE /vaults/{vaultId}/beneficiaries...` (tạo, sửa, xóa hồ sơ người nhận).
 - `DELETE /vaults/{vaultId}/containers/{containerId}` (xóa gói), `DELETE .../containers/{containerId}/assets/{assetId}` (gỡ tài sản khỏi gói), `POST` và `DELETE .../containers/{containerId}/beneficiaries...` (gán, gỡ người nhận của gói).
 - `POST /vaults/{vaultId}/executors` (mời Executor) và `POST /vaults/{vaultId}/executors/{executorId}/revoke` (thu hồi).
+- `POST /vaults/{vaultId}/activate` (kích hoạt kế hoạch = Chủ kho ký di chúc bằng PIN) và `POST /vaults/{vaultId}/executor-key/reissue` (đổi mã mở gói).
 - Token của đồng hồ thông minh (có claim `device_id`) bị từ chối `403 ROLE_NOT_ALLOWED`, không cho nhập PIN.
 
 Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem "Ép đặt PIN"), liệt kê, xem thông tin, đưa tài sản vào gói.
@@ -1405,6 +1407,14 @@ Mỗi lượt bàn giao có **một biên bản** đi qua hai người ký theo 
 
 See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.
 Màn kích hoạt (SETUP-01, SETUP-10, ASSET-03/AC-68): xem [PLAN-SETUP-API.md](PLAN-SETUP-API.md) để biết các field `containers`, `assetsOutsideContainer`, `warnings` và cách thử tay.
+
+Di chúc điện tử (nhánh feat/will-signature), chi tiết ở mục cuối [PLAN-SETUP-API.md](PLAN-SETUP-API.md):
+- `GET .../plan-setup` thêm `ownerFullName`, `ownerEmail`, `activatedAt`, `recipients[]` (`beneficiaryId`, `fullName`, `hasMessage`, `containers[]`; không trả nội dung lời nhắn) và `executors[].fullName`.
+- `POST .../activate` cần header `X-Vault-Pin`; thành công thì server tự tạo mã mở gói (không trả mã) và ghi nhật ký `PlanActivated`. Người thực thi chấp nhận lời mời ghi `ExecutorAccepted`.
+- `POST .../executor-key` (Chủ kho cấp mã lần đầu) đã **xóa**. `POST .../executor-key/reissue` cần PIN và trả `{ hasKey, version, issuedAt, reissuedAt, canIssue }`, không có `shard`.
+- `GET /executor/vaults/{vaultId}/handover-key`: chỉ đọc được khi kế hoạch `HANDOVER_IN_PROGRESS`; trước đó 409 `HANDOVER_NOT_ALLOWED` (`reason = HANDOVER_NOT_STARTED`).
+- `POST .../executors` bỏ `beneficiaryId`. Người thực thi là tài khoản nhân sự (role EXECUTOR); `executor-candidates` chỉ trả role EXECUTOR đã xác minh pháp lý.
+- Email của tài khoản nhân sự (EXECUTOR/VERIFIER/ADMIN) không được làm người nhận (400 trường `email`); nhân sự nhận gói trong app → 409 `HANDOVER_NOT_ALLOWED` (`STAFF_CANNOT_CLAIM`); Admin cấp role nhân sự cho người đang nhận gói → 409 `ADMIN_ACTION_NOT_ALLOWED` (`RECIPIENT_HAS_ACTIVE_HANDOVER`).
 
 ## 9a. Tính đúng đắn dữ liệu khi chạy đồng thời (LV-01)
 
