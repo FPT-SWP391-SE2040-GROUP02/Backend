@@ -67,6 +67,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
 
     private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, Guid? beneficiaryId = null, string email = "executor@example.test")
     {
+        await ApiTestHelpers.EnsureSystemExecutorAsync(factory, email);
         var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email, beneficiaryId });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var raw = await response.Content.ReadAsStringAsync();
@@ -344,8 +345,9 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     public async Task MyInvitations_UnverifiedEmailSeesNothing()
     {
         (HttpClient owner, _, Guid vaultId) = await PrepareAsync();
-        await InviteAsync(owner, vaultId, null, "unverified@example.test");
+        // Tài khoản phải có trước (chỉ mời được Người thực thi hệ thống); email vẫn chưa xác minh.
         HttpClient unverified = await ApiTestHelpers.CreateClientForNewUserAsync(factory, false, "unverified@example.test");
+        await InviteAsync(owner, vaultId, null, "unverified@example.test");
 
         JsonElement mine = await unverified.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
 

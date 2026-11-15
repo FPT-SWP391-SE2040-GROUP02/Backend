@@ -17,4 +17,9 @@ public interface IExecutorKeyService
     /// Quên khóa: cấp mảnh mới, mảnh cũ hết hiệu lực ngay. Chưa cấp lần nào → 409 EXECUTOR_KEY_NOT_ISSUED.
     /// </summary>
     Task<ExecutorKeyIssuedResponse> ReissueAsync(Guid vaultId, CancellationToken ct);
+
+    /// <summary>
+    /// Người thực thi hợp lệ đọc mã mở gói được Chủ kho cấp và gửi trực tiếp trên hệ thống.
+    /// </summary>
+    Task<ExecutorHandoverKeyResponse> GetKeyForExecutorAsync(Guid vaultId, CancellationToken ct);
 }

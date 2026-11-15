@@ -74,7 +74,13 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             ownerName = owner!.FullName;
             if (email == owner.Email.Trim().ToLowerInvariant()) throw NotAllowed("OWNER_CANNOT_ACCEPT");
             var inviteeUser = await users.FindByEmailAsync(email, ct);
-            accountExists = inviteeUser is not null;
+            if (inviteeUser == null || inviteeUser.Role != UserRole.Executor || inviteeUser.Status != UserStatus.Active
+                || inviteeUser.LegalVerifiedAt == null)
+            {
+                throw new AppException(AppErrorType.Validation, ErrorCode.OnlySystemExecutorsAllowed,
+                    "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đã được xác minh pháp lý.");
+            }
+            accountExists = true;
             var now = time.GetUtcNow();
             foreach (var previous in vault.Executors.Where(e => e.Status == ExecutorStatus.Invited && e.ExpiresAt <= now))
             {
@@ -139,6 +145,10 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (target.Id == vault.OwnerId) throw NotAllowed("OWNER_CANNOT_ACCEPT");
             if (target.Role == UserRole.Admin || target.Role == UserRole.Verifier)
                 throw NotAllowed("ROLE_CONFLICT");
+            // Cùng luật với Chủ kho mời: chỉ giao cho Người thực thi hệ thống đã được cấp vai trò.
+            if (target.Role != UserRole.Executor)
+                throw new AppException(AppErrorType.Validation, ErrorCode.OnlySystemExecutorsAllowed,
+                    "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đã được xác minh pháp lý.");
 
             var now = time.GetUtcNow();
             Guid? replaces = ExecutorAssignRules.PrepareForAssign(vault.Executors, vault.Plan.Status, now);

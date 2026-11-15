@@ -80,9 +80,9 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Admin_AssignsExecutor_InvitesWithAdminWording_AndWritesAudit()
     {
-        // Chuẩn bị: kho đang chạy chưa có Người thực thi, và một tài khoản thường được chọn
+        // Chuẩn bị: kho đang chạy chưa có Người thực thi, và một Người thực thi hệ thống được chọn
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        User target = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User target = await DeathCaseTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
         HttpClient admin = await ClientForAsync(UserRole.Admin);
 
         // Hành động
@@ -109,7 +109,7 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        User target = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User target = await DeathCaseTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
         HttpClient admin = await ClientForAsync(UserRole.Admin);
         HttpClient member = await ClientForAsync(UserRole.User);
         string url = "/api/v1/admin/vaults/" + vault.VaultId + "/executor";
@@ -124,5 +124,28 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, noReason.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, nonAdmin.StatusCode);
         Assert.Equal(0, mail.ByAdmin + mail.Normal);
+    }
+
+    [SqlFact]
+    public async Task Assign_OrdinaryUser_IsRejected_OnlySystemExecutorsAllowed()
+    {
+        // Chuẩn bị: tài khoản thường (không phải Người thực thi hệ thống)
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        User ordinary = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        HttpClient admin = await ClientForAsync(UserRole.Admin);
+
+        // Hành động
+        HttpResponseMessage response = await admin.PostAsJsonAsync(
+            "/api/v1/admin/vaults/" + vault.VaultId + "/executor",
+            new { userId = ordinary.Id, reason = "Thử giao cho tài khoản thường." });
+
+        // Kiểm tra: 400, không tạo lời mời, không gửi thư, không ghi nhật ký giao
+        await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "ONLY_SYSTEM_EXECUTORS_ALLOWED");
+        Assert.Equal(0, mail.ByAdmin + mail.Normal);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.False(await db.Set<Executor>().AnyAsync(e => e.VaultId == vault.VaultId));
+            Assert.Equal(0, await db.AuditLogs.CountAsync(a => a.Action == AuditAction.ExecutorAssignedByAdmin));
+        });
     }
 }

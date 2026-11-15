@@ -19,6 +19,18 @@ public sealed class ExecutorKeyShardConfiguration : IEntityTypeConfiguration<Exe
             .HasMaxLength(64)
             .IsUnicode(false);
 
+        builder.Property(s => s.EncryptedShard)
+            .HasMaxLength(512)
+            .IsUnicode(false);
+
+        builder.Property(s => s.EncryptionKeyId)
+            .HasMaxLength(64)
+            .IsUnicode(false);
+
+        builder.Property(s => s.WrappedDataKey)
+            .HasMaxLength(60)
+            .IsFixedLength();
+
         // Hai request cấp lại song song không được ghi đè lẫn nhau.
         builder.Property(s => s.RowVersion)
             .IsRowVersion();

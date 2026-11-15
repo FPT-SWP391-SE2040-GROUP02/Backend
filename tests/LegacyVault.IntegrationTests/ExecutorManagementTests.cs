@@ -106,6 +106,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
 
     private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email)
     {
+        await ApiTestHelpers.EnsureSystemExecutorAsync(factory, email);
         HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<ExecutorInvitationResponse>())!;
@@ -206,11 +207,31 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Invite_OutsiderOrOrdinaryUser_IsRejected_OnlySystemExecutorsAllowed()
+    {
+        (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
+        await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "thuong@example.test");
+
+        HttpResponseMessage outsider = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors",
+            new { email = "nguoi-ngoai@example.test" });
+        HttpResponseMessage ordinary = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors",
+            new { email = "thuong@example.test" });
+
+        await ApiTestHelpers.AssertProblemAsync(outsider, HttpStatusCode.BadRequest, "ONLY_SYSTEM_EXECUTORS_ALLOWED");
+        await ApiTestHelpers.AssertProblemAsync(ordinary, HttpStatusCode.BadRequest, "ONLY_SYSTEM_EXECUTORS_ALLOWED");
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.False(await db.Set<Executor>().AnyAsync(e => e.VaultId == vaultId));
+        });
+    }
+
+    [SqlFact]
     public async Task SecondInvite_StillConflicts_WhenNoReplacementCase()
     {
         (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
         await InviteAsync(owner, vaultId, "mot@example.test");
 
+        await ApiTestHelpers.EnsureSystemExecutorAsync(factory, "hai@example.test");
         HttpResponseMessage second = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors",
             new { email = "hai@example.test" });
 

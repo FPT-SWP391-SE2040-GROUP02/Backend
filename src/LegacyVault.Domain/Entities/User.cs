@@ -26,11 +26,20 @@ public class User
 
     public string? Phone { get; set; }
 
-    /// <summary>Số chứng chỉ hành nghề luật sư của Người xét duyệt, do Admin nhập khi tạo tài khoản; người dùng chỉ xem.</summary>
+    /// <summary>Số chứng chỉ hành nghề luật sư của Người xét duyệt hoặc Người thực thi, do Admin nhập khi tạo/cập nhật tài khoản.</summary>
     public string? PracticeCertificateNumber { get; set; }
 
-    /// <summary>Số thẻ luật sư của Người xét duyệt, do Admin nhập khi tạo tài khoản; người dùng chỉ xem.</summary>
+    /// <summary>Số thẻ luật sư của Người xét duyệt hoặc Người thực thi, do Admin nhập khi tạo/cập nhật tài khoản.</summary>
     public string? LawyerCardNumber { get; set; }
+
+    /// <summary>Chức danh / vai trò chuyên môn của Người thực thi hệ thống (VD: "Luật sư thi hành di chúc & Giám sát di sản").</summary>
+    public string? ExecutorRoleTitle { get; set; }
+
+    /// <summary>Đoàn luật sư / tổ chức pháp lý công tác của Người thực thi hoặc Người xét duyệt.</summary>
+    public string? LegalOrganization { get; set; }
+
+    /// <summary>Thời điểm được xác minh pháp lý.</summary>
+    public DateTimeOffset? LegalVerifiedAt { get; set; }
 
     public UserRole Role { get; set; }
 

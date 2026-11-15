@@ -273,6 +273,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     // SETUP-10: mời và chấp nhận qua HTTP; token chỉ giữ trong RAM của test.
     private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email)
     {
+        await ApiTestHelpers.EnsureSystemExecutorAsync(factory, email);
         HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         ExecutorInvitationResponse? invitation = await response.Content.ReadFromJsonAsync<ExecutorInvitationResponse>();

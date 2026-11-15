@@ -11,6 +11,9 @@ public interface IUserRepository
     /// <summary>Tìm theo Id (có theo dõi thay đổi, sửa rồi SaveChanges là lưu). Không thấy → null.</summary>
     Task<User?> FindByIdAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Lấy danh sách người dùng theo vai trò và trạng thái (chỉ đọc).</summary>
+    Task<List<User>> ListByRoleAsync(LegacyVault.Domain.Enums.UserRole role, LegacyVault.Domain.Enums.UserStatus status, CancellationToken ct);
+
     /// <summary>
     /// Thêm user mới rồi lưu ngay. Trả false khi DB báo trùng email (hai request đăng ký cùng email đồng thời).
     /// </summary>

@@ -89,6 +89,8 @@ public static class InfrastructureConfig
         services.AddSingleton<ITotpSecretProtector, TotpSecretProtector>();
         // Khóa API/mật khẩu của cấu hình dịch vụ ngoài do Admin sửa trên web, cũng bọc bằng KEK của DataKeyProtector.
         services.AddSingleton<ISystemConfigSecretProtector, SystemConfigSecretProtector>();
+        // Mã hóa mảnh khóa Người thực thi để gửi trực tiếp trên hệ thống
+        services.AddSingleton<IExecutorKeyProtector, ExecutorKeyProtector>();
         // Cấu hình dịch vụ ngoài đọc lúc chạy: dòng DB đè appsettings, cache 30 giây, theo dõi lần gọi gần nhất.
         services.AddMemoryCache();
         services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();

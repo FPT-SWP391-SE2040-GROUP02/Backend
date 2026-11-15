@@ -106,7 +106,7 @@ public class CreateAdminUserRequest
     [MaxLength(128)]
     public string Password { get; set; } = string.Empty;
 
-    /// <summary>VERIFIER | ADMIN. Không tạo EXECUTOR: người thực hiện do Owner mời theo từng kho.</summary>
+    /// <summary>VERIFIER | EXECUTOR | ADMIN. EXECUTOR là Người thực thi hệ thống để Chủ kho chọn trong danh bạ.</summary>
     [Required(ErrorMessage = "Vui lòng chọn vai trò.")]
     [MaxLength(16)]
     public string Role { get; set; } = string.Empty;
@@ -114,12 +114,20 @@ public class CreateAdminUserRequest
     [MaxLength(32)]
     public string? Phone { get; set; }
 
-    /// <summary>Số chứng chỉ hành nghề luật sư (chỉ dùng cho VERIFIER).</summary>
+    /// <summary>Số chứng chỉ hành nghề luật sư (VERIFIER hoặc EXECUTOR).</summary>
     [MaxLength(64)]
     public string? PracticeCertificateNumber { get; set; }
 
-    /// <summary>Số thẻ luật sư (chỉ dùng cho VERIFIER).</summary>
+    /// <summary>Số thẻ luật sư (VERIFIER hoặc EXECUTOR).</summary>
     [MaxLength(64)]
     public string? LawyerCardNumber { get; set; }
+
+    /// <summary>Vai trò chuyên môn của Người thực thi hệ thống (chỉ dùng cho EXECUTOR).</summary>
+    [MaxLength(200)]
+    public string? ExecutorRoleTitle { get; set; }
+
+    /// <summary>Đoàn luật sư / tổ chức hành nghề (chỉ dùng cho EXECUTOR).</summary>
+    [MaxLength(200)]
+    public string? LegalOrganization { get; set; }
 }
 
