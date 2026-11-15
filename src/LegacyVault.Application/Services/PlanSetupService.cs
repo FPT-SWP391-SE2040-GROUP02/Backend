@@ -48,7 +48,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
-    TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit) : IPlanSetupService
+    TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
+    ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-30";
     public const string ScopeVersion = "executor-2026-10-15";
@@ -118,13 +119,12 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 if (!replacement) throw Conflict();
                 replaces = occupying[0].Id;
             }
-            if (request.BeneficiaryId is Guid beneficiaryId && await beneficiaries.FindByIdAsync(vault.Id, beneficiaryId, ct) is null)
-                throw new AppException(AppErrorType.NotFound, ErrorCode.BeneficiaryNotFound, "Không tìm thấy hồ sơ người nhận.");
+            // Người thực thi là nhân sự LegacyVault, không phải người nhận: không gắn hồ sơ người nhận.
             var item = new Executor
             {
                 VaultId = vault.Id, Status = ExecutorStatus.Invited,
                 InviteeEmail = email, InvitationTokenHash = token.Hash,
-                IsBeneficiary = request.BeneficiaryId.HasValue, BeneficiaryId = request.BeneficiaryId,
+                IsBeneficiary = false, BeneficiaryId = null,
                 InvitedAt = now, ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7),
                 ReplacesExecutorId = replaces,
             };
@@ -170,7 +170,20 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                     "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đã được xác minh pháp lý.");
 
             var now = time.GetUtcNow();
+            bool hadAccepted = false;
+            foreach (Executor existingExecutor in vault.Executors)
+            {
+                if (existingExecutor.Status == ExecutorStatus.Accepted)
+                {
+                    hadAccepted = true;
+                }
+            }
             Guid? replaces = ExecutorAssignRules.PrepareForAssign(vault.Executors, vault.Plan.Status, now);
+            if (hadAccepted && replaces == null)
+            {
+                // Người đã chấp nhận bị thu hồi ngay (kế hoạch chưa chạy): đổi mã nếu kho đã có mã, để người cũ không còn mã đúng.
+                await keyIssuer.RotateIfExistsAsync(vault, AuditActorRole.System, null, now, ct);
+            }
             var item = new Executor
             {
                 VaultId = vault.Id, Status = ExecutorStatus.Invited,
@@ -326,7 +339,15 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                     replaced.Status = ExecutorStatus.Revoked;
                     replaced.EndedAt = now;
                     replaced.UpdatedAt = now;
+                    // Đổi Người thực thi: kho đã có mã thì tự đổi mã (version + 1) để người cũ không còn mã đúng.
+                    await keyIssuer.RotateIfExistsAsync(vault, AuditActorRole.System, null, now, ct);
                 }
+            }
+            if (accept)
+            {
+                // Người thực thi tự chấp nhận là bước ký xác nhận di chúc; chỉ ghi phiên bản/đích, không ghi nội dung.
+                audit.Add(AuditRules.Create(vault.Id, userId, AuditActorRole.Executor, AuditAction.ExecutorAccepted,
+                    AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
             }
             PlanRules.BumpConfigVersion(vault.Plan, now);
             await unitOfWork.SaveChangesAsync(ct);
@@ -369,6 +390,10 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             vault.Plan.ActivationPolicyAcknowledgedAt = now;
             vault.Plan.UpdatedAt = now;
             await scheduler.StartFirstPeriodAsync(vault.Plan, ct);
+            // Mã mở gói do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
+            await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
+            audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.PlanActivated,
+                AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
             await unitOfWork.SaveChangesAsync(ct);
             markActivated();
             return await BuildAsync(vault, ct);
@@ -420,12 +445,89 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         if (vault.Plan.Status != PlanStatus.Draft) missing.Add("PLAN_NOT_DRAFT");
         var openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
         var outsideAssets = await assets.FindOutsideContainerByVaultIdAsync(vault.Id, ct);
+        List<PlanSetupRecipientResponse> recipients = await BuildRecipientsAsync(vault, openContainers, ct);
+        List<ExecutorInvitationResponse> executorItems = new List<ExecutorInvitationResponse>();
+        foreach (Executor executorItem in vault.Executors.OrderByDescending(e => e.InvitedAt))
+        {
+            string? executorFullName = null;
+            if (executorItem.UserId.HasValue)
+            {
+                User? linkedUser = await users.FindByIdAsync(executorItem.UserId.Value, ct);
+                if (linkedUser != null)
+                {
+                    executorFullName = linkedUser.FullName;
+                }
+            }
+            executorItems.Add(Map(executorItem, false, executorFullName));
+        }
+        string ownerFullName = string.Empty;
+        string ownerEmail = string.Empty;
+        if (user != null)
+        {
+            ownerFullName = user.FullName;
+            ownerEmail = user.Email;
+        }
         // Cảnh báo duy nhất trước đây là NO_BACKUP_EXECUTOR; đã bỏ Executor dự phòng nên giữ mảng rỗng cho đúng hợp đồng API.
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
-            vault.Executors.OrderByDescending(e => e.InvitedAt).Select(Map).ToList(),
+            executorItems,
             PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>(),
-            WillClauseRules.Split(vault.WillClauses));
+            WillClauseRules.Split(vault.WillClauses), ownerFullName, ownerEmail, vault.Plan.ActivatedAt, recipients);
+    }
+
+    /// <summary>
+    /// Người nhận theo từng người, lấy từ chỉ định của các gói đang mở. Tên được giải mã từ dữ liệu cá nhân đã mã hóa;
+    /// chỉ trả hasMessage chứ không trả nội dung lời nhắn, và không ghi log dữ liệu cá nhân (SEC-07).
+    /// </summary>
+    private async Task<List<PlanSetupRecipientResponse>> BuildRecipientsAsync(
+        Vault vault, List<Container> openContainers, CancellationToken ct)
+    {
+        Dictionary<Guid, PlanSetupRecipientResponse> byBeneficiary = new Dictionary<Guid, PlanSetupRecipientResponse>();
+        HashSet<Guid> skipped = new HashSet<Guid>();
+        foreach (Container container in openContainers)
+        {
+            foreach (Designation designation in container.Designations)
+            {
+                Guid beneficiaryId = designation.BeneficiaryId;
+                if (skipped.Contains(beneficiaryId))
+                {
+                    continue;
+                }
+                if (!byBeneficiary.ContainsKey(beneficiaryId))
+                {
+                    Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, beneficiaryId, ct);
+                    if (beneficiary == null)
+                    {
+                        skipped.Add(beneficiaryId);
+                        continue;
+                    }
+                    string fullName = string.Empty;
+                    bool hasMessage = false;
+                    try
+                    {
+                        BeneficiaryPersonalData data = beneficiaryProtector.Unprotect(beneficiary);
+                        fullName = data.FullName;
+                        hasMessage = !string.IsNullOrWhiteSpace(data.Message);
+                    }
+                    catch (System.Security.Cryptography.CryptographicException)
+                    {
+                        // Không giải mã được thì vẫn liệt kê người nhận (tên rỗng), không làm hỏng cả màn kích hoạt.
+                    }
+                    byBeneficiary[beneficiaryId] = new PlanSetupRecipientResponse(
+                        beneficiaryId, fullName, hasMessage, new List<PlanSetupRecipientContainerResponse>());
+                }
+                byBeneficiary[beneficiaryId].Containers.Add(new PlanSetupRecipientContainerResponse(
+                    container.Id, container.Name, container.Assets.Count, container.Status.ToApiString()));
+            }
+        }
+        List<PlanSetupRecipientResponse> result = new List<PlanSetupRecipientResponse>(byBeneficiary.Values);
+        result.Sort(CompareRecipientsByName);
+        return result;
+    }
+
+    private static int CompareRecipientsByName(PlanSetupRecipientResponse left, PlanSetupRecipientResponse right)
+    {
+        return string.Compare(left.FullName, right.FullName, StringComparison.CurrentCultureIgnoreCase);
     }
 
     private const int MyInvitationsMaxCount = 50;
@@ -499,9 +601,11 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return Map(executor, accountExists);
     }
     private ExecutorInvitationResponse Map(Executor item) => Map(item, false);
-    private ExecutorInvitationResponse Map(Executor item, bool accountExists) => new(item.Id,
+    private ExecutorInvitationResponse Map(Executor item, bool accountExists) => Map(item, accountExists, null);
+    private ExecutorInvitationResponse Map(Executor item, bool accountExists, string? fullName) => new(item.Id,
         item.Status == ExecutorStatus.Invited && item.ExpiresAt <= time.GetUtcNow() ? "EXPIRED" : item.Status.ToApiString(), item.InviteeEmail,
-        item.IsBeneficiary, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt), accountExists);
+        item.IsBeneficiary, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt), accountExists,
+        fullName);
     private static AppException InvalidInvitation() => new(AppErrorType.NotFound, ErrorCode.ExecutorInvitationInvalid, "Lời mời Executor không hợp lệ hoặc đã hết hạn.");
     private static AppException Conflict() => new(AppErrorType.Conflict, ErrorCode.ExecutorInvitationConflict, "Lời mời hoặc phân công Executor đã tồn tại/thay đổi. Tải lại để kiểm tra.");
     private static AppException NotAllowed(string reason) => new(AppErrorType.Conflict, ErrorCode.ExecutorNotAllowed, "Không thể thực hiện thao tác Executor lúc này.", new Dictionary<string, object?> { ["reason"] = reason });

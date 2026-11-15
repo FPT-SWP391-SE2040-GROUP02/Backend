@@ -3,12 +3,14 @@ using System.Reflection;
 using System.Text.Json;
 using LegacyVault.Api.Controllers;
 using LegacyVault.Api.Security;
+using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.ExecutorKey;
@@ -65,19 +67,24 @@ public sealed class ExecutorKeyRulesTests
         Assert.False(ExecutorKeyRules.Matches(vaultId, 1, ExecutorKeyRules.GenerateShard(), hash));
     }
 
-    [Theory]
-    [InlineData(nameof(ExecutorKeyController.Issue))]
-    [InlineData(nameof(ExecutorKeyController.Reissue))]
-    public void IssuingActionsRequireTheVaultPin(string action)
+    [Fact]
+    public void ReissueRequiresTheVaultPin()
     {
-        MethodInfo? method = typeof(ExecutorKeyController).GetMethod(action);
+        MethodInfo? method = typeof(ExecutorKeyController).GetMethod(nameof(ExecutorKeyController.Reissue));
 
         Assert.NotNull(method);
         Assert.NotNull(method.GetCustomAttribute<RequireVaultPinAttribute>());
     }
+
+    [Fact]
+    public void OwnerCannotIssueTheFirstKey_TheServerCreatesItAtActivation()
+    {
+        // Endpoint cấp mã lần đầu đã bị xóa: không còn action nào ngoài xem trạng thái và đổi mã.
+        Assert.Null(typeof(ExecutorKeyController).GetMethod("Issue"));
+    }
 }
 
-/// <summary>Cấp mảnh khóa Người thực thi và "quên khóa" (cấp lại) qua HTTP trên SQL Server thật.</summary>
+/// <summary>Mã mở gói do server tạo: Chủ kho xem trạng thái và đổi mã, Người thực thi đọc khi bàn giao bắt đầu (SQL Server thật).</summary>
 public sealed class ExecutorKeyFlowTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;
@@ -108,6 +115,25 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
         return "/api/v1/vaults/" + vaultId + "/executor-key";
     }
 
+    private static string HandoverKeyUrl(Guid vaultId)
+    {
+        return "/api/v1/executor/vaults/" + vaultId + "/handover-key";
+    }
+
+    /// <summary>Tạo mã như lúc kích hoạt kế hoạch (dùng đúng ExecutorKeyIssuer của server).</summary>
+    private async Task SeedKeyAsync(Guid vaultId)
+    {
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IVaultRepository vaults = scope.ServiceProvider.GetRequiredService<IVaultRepository>();
+            ExecutorKeyIssuer issuer = scope.ServiceProvider.GetRequiredService<ExecutorKeyIssuer>();
+            IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            Vault? vault = await vaults.FindByIdAsync(vaultId, CancellationToken.None);
+            await issuer.EnsureReadableAsync(vault!, AuditActorRole.Owner, vault!.OwnerId, DateTimeOffset.UtcNow, CancellationToken.None);
+            await unitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+    }
+
     [SqlFact]
     public async Task StatusStartsWithoutAKeyAndNeverReturnsTheShard()
     {
@@ -118,30 +144,42 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
         Assert.Equal(0, before.GetProperty("version").GetInt32());
         Assert.True(before.GetProperty("canIssue").GetBoolean());
 
-        await vault.Client.PostAsync(Url(vault.VaultId), null);
+        await SeedKeyAsync(vault.VaultId);
         string raw = await (await vault.Client.GetAsync(Url(vault.VaultId))).Content.ReadAsStringAsync();
         Assert.DoesNotContain("shard", raw, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"hasKey\":true", raw);
     }
 
     [SqlFact]
-    public async Task IssueReturnsTheShardOnceAndStoresOnlyItsHash()
+    public async Task IssueEndpointIsGone()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
 
         HttpResponseMessage response = await vault.Client.PostAsync(Url(vault.VaultId), null);
-        JsonElement body = await ApiTestHelpers.ReadJsonAsync(response);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        string shard = body.GetProperty("shard").GetString()!;
-        Assert.Equal(1, body.GetProperty("version").GetInt32());
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        JsonElement status = await ApiTestHelpers.ReadJsonAsync(await vault.Client.GetAsync(Url(vault.VaultId)));
+        Assert.False(status.GetProperty("hasKey").GetBoolean());
+    }
+
+    [SqlFact]
+    public async Task SeededKeyStoresOnlyTheHashAndAnEnvelopeCopy()
+    {
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        await SeedKeyAsync(vault.VaultId);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.HandoverInProgress);
+
+        JsonElement read = await ApiTestHelpers.ReadJsonAsync(await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId)));
+
+        string shard = read.GetProperty("shard").GetString()!;
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             ExecutorKeyShard stored = await db.Set<ExecutorKeyShard>().AsNoTracking().SingleAsync(s => s.VaultId == vault.VaultId);
             Assert.Equal(1, stored.Version);
             Assert.NotEqual(shard, stored.ShardHash);
             Assert.True(ExecutorKeyRules.Matches(vault.VaultId, 1, shard, stored.ShardHash));
-            // Bản gửi trên hệ thống là bản mã hóa phong bì, không phải mã gốc.
+            // Bản đọc lại trên hệ thống là bản mã hóa phong bì, không phải mã gốc.
             Assert.False(string.IsNullOrEmpty(stored.EncryptedShard));
             Assert.DoesNotContain(shard, stored.EncryptedShard);
             Assert.NotNull(stored.WrappedDataKey);
@@ -152,35 +190,34 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task IssuingTwiceIsAConflictThatPointsToReissue()
+    public async Task ReissueBumpsTheVersionAndNeverReturnsTheShard()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        await vault.Client.PostAsync(Url(vault.VaultId), null);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        await SeedKeyAsync(vault.VaultId);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.HandoverInProgress);
+        string oldShard = (await ApiTestHelpers.ReadJsonAsync(
+            await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId)))).GetProperty("shard").GetString()!;
+        // Kế hoạch đang chạy lại (Active) thì Chủ kho mới đổi mã được.
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.Active);
 
-        HttpResponseMessage again = await vault.Client.PostAsync(Url(vault.VaultId), null);
+        HttpResponseMessage response = await vault.Client.PostAsync(Url(vault.VaultId) + "/reissue", null);
+        string raw = await response.Content.ReadAsStringAsync();
+        JsonElement second = JsonDocument.Parse(raw).RootElement;
 
-        await ApiTestHelpers.AssertProblemAsync(again, HttpStatusCode.Conflict, "EXECUTOR_KEY_ALREADY_ISSUED");
-    }
-
-    [SqlFact]
-    public async Task ReissueReplacesTheOldShardAndBumpsTheVersion()
-    {
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        JsonElement first = await ApiTestHelpers.ReadJsonAsync(await vault.Client.PostAsync(Url(vault.VaultId), null));
-        string oldShard = first.GetProperty("shard").GetString()!;
-
-        JsonElement second = await ApiTestHelpers.ReadJsonAsync(
-            await vault.Client.PostAsync(Url(vault.VaultId) + "/reissue", null));
-
-        string newShard = second.GetProperty("shard").GetString()!;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain("shard", raw, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, second.GetProperty("version").GetInt32());
-        Assert.NotEqual(oldShard, newShard);
         Assert.NotEqual(JsonValueKind.Null, second.GetProperty("reissuedAt").ValueKind);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.HandoverInProgress);
+        JsonElement read = await ApiTestHelpers.ReadJsonAsync(await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId)));
+        string newShard = read.GetProperty("shard").GetString()!;
+        Assert.NotEqual(oldShard, newShard);
+        Assert.Equal(2, read.GetProperty("version").GetInt32());
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             ExecutorKeyShard stored = await db.Set<ExecutorKeyShard>().AsNoTracking().SingleAsync(s => s.VaultId == vault.VaultId);
             Assert.True(ExecutorKeyRules.Matches(vault.VaultId, 2, newShard, stored.ShardHash));
-            Assert.False(ExecutorKeyRules.Matches(vault.VaultId, 1, oldShard, stored.ShardHash));
             Assert.False(ExecutorKeyRules.Matches(vault.VaultId, 2, oldShard, stored.ShardHash));
             Assert.Equal(1, await db.Set<AuditLog>().CountAsync(
                 l => l.VaultId == vault.VaultId && l.Action == AuditAction.ExecutorKeyReissued));
@@ -188,7 +225,7 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task ReissueBeforeAnyIssueIsAConflict()
+    public async Task ReissueBeforeAnyKeyIsAConflict()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
 
@@ -198,13 +235,14 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task AnotherUserCannotSeeOrIssueTheKey()
+    public async Task AnotherUserCannotSeeOrReissueTheKey()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.OwnerVault stranger = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        await SeedKeyAsync(vault.VaultId);
 
         HttpResponseMessage get = await stranger.Client.GetAsync(Url(vault.VaultId));
-        HttpResponseMessage post = await stranger.Client.PostAsync(Url(vault.VaultId), null);
+        HttpResponseMessage post = await stranger.Client.PostAsync(Url(vault.VaultId) + "/reissue", null);
 
         await ApiTestHelpers.AssertProblemAsync(get, HttpStatusCode.NotFound, "VAULT_NOT_FOUND");
         await ApiTestHelpers.AssertProblemAsync(post, HttpStatusCode.NotFound, "VAULT_NOT_FOUND");
@@ -214,7 +252,7 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
     public async Task ReissueIsBlockedOnceThePlanIsLockedByADeathCase()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        await vault.Client.PostAsync(Url(vault.VaultId), null);
+        await SeedKeyAsync(vault.VaultId);
         await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.DeathCaseOpen);
 
         HttpResponseMessage response = await vault.Client.PostAsync(Url(vault.VaultId) + "/reissue", null);
@@ -225,39 +263,37 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
         Assert.Equal(1, status.GetProperty("version").GetInt32());
     }
 
-    private static string HandoverKeyUrl(Guid vaultId)
-    {
-        return "/api/v1/executor/vaults/" + vaultId + "/handover-key";
-    }
-
     [SqlFact]
-    public async Task AcceptedExecutorReadsTheKeyOnSystem_AndSeesTheNewOneAfterReissue()
+    public async Task ExecutorCannotReadTheKeyBeforeHandoverStarts_ButCanAfter()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
-        JsonElement issued = await ApiTestHelpers.ReadJsonAsync(await vault.Client.PostAsync(Url(vault.VaultId), null));
+        await SeedKeyAsync(vault.VaultId);
 
+        // Kế hoạch Active (và cả khi đã mở hồ sơ chứng tử) thì chưa xem được mã.
+        JsonElement early = await ApiTestHelpers.AssertProblemAsync(
+            await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId)), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("HANDOVER_NOT_STARTED", early.GetProperty("reason").GetString());
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.DeathCaseOpen);
+        await ApiTestHelpers.AssertProblemAsync(
+            await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId)), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.HandoverInProgress);
         HttpResponseMessage response = await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId));
-        JsonElement first = await ApiTestHelpers.ReadJsonAsync(response);
+        JsonElement body = await ApiTestHelpers.ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(issued.GetProperty("shard").GetString(), first.GetProperty("shard").GetString());
-        Assert.Equal(1, first.GetProperty("version").GetInt32());
-        Assert.Equal(vault.Owner.FullName, first.GetProperty("ownerFullName").GetString());
-
-        JsonElement reissued = await ApiTestHelpers.ReadJsonAsync(
-            await vault.Client.PostAsync(Url(vault.VaultId) + "/reissue", null));
-        JsonElement second = await ApiTestHelpers.ReadJsonAsync(await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId)));
-
-        Assert.Equal(reissued.GetProperty("shard").GetString(), second.GetProperty("shard").GetString());
-        Assert.Equal(2, second.GetProperty("version").GetInt32());
+        Assert.Equal(16, ExecutorKeyRules.Normalize(body.GetProperty("shard").GetString()).Length);
+        Assert.Equal(1, body.GetProperty("version").GetInt32());
+        Assert.Equal(vault.Owner.FullName, body.GetProperty("ownerFullName").GetString());
     }
 
     [SqlFact]
     public async Task OwnerStrangerAndNotYetAcceptedExecutorCannotReadTheKey()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        await vault.Client.PostAsync(Url(vault.VaultId), null);
+        await SeedKeyAsync(vault.VaultId);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.HandoverInProgress);
         DeathCaseTestData.OwnerVault stranger = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         User invitedUser = await DeathCaseTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
         await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, invitedUser.Id, ExecutorStatus.Invited);
@@ -275,11 +311,12 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task KeyIssuedBeforeOnSystemDeliveryAsksTheOwnerToReissue()
+    public async Task KeyWithoutAnEnvelopeCopyAsksTheOwnerToReissue()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
-        await vault.Client.PostAsync(Url(vault.VaultId), null);
+        await SeedKeyAsync(vault.VaultId);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.HandoverInProgress);
         // Mã cấp trước tính năng này chỉ có hash, không có bản mã hóa.
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {

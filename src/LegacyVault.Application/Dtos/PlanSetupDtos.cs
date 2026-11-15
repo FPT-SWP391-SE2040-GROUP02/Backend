@@ -6,7 +6,8 @@ namespace LegacyVault.Application.Dtos;
 /// <summary>Owner-only metadata; token hashes and raw tokens are never serialized.</summary>
 public sealed record ExecutorInvitationResponse(Guid Id, string Status, string InviteeEmail,
     bool IsBeneficiary, DateTimeOffset ExpiresAt, DateTimeOffset? AcceptedAt,
-    DateTimeOffset? InvitationSentAt, string? AcceptedScopeVersion, string Etag, bool AccountExists = false);
+    DateTimeOffset? InvitationSentAt, string? AcceptedScopeVersion, string Etag, bool AccountExists = false,
+    string? FullName = null);
 public sealed record CheckInviteeEmailResponse(string Email, bool Exists);
 /// <summary>Tài khoản có sẵn mà Chủ kho có thể chọn làm Người thực thi.</summary>
 public sealed record ExecutorCandidateResponse(Guid UserId, string FullName, string Email);
@@ -14,14 +15,21 @@ public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, boo
     string[] MissingRequirements, string PolicyVersion, string PolicyText, string ExecutorScopeVersion,
     string ExecutorScopeText, List<ExecutorInvitationResponse> Executors,
     List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings,
-    List<string>? WillClauses = null);
+    List<string>? WillClauses = null, string OwnerFullName = "", string OwnerEmail = "",
+    DateTimeOffset? ActivatedAt = null, List<PlanSetupRecipientResponse>? Recipients = null);
+
+/// <summary>Một gói của người nhận trên màn kích hoạt (chỉ tên, số tài sản và trạng thái, không có nội dung).</summary>
+public sealed record PlanSetupRecipientContainerResponse(Guid Id, string Name, int AssetCount, string Status);
+
+/// <summary>Người nhận theo từng người (di chúc điện tử). Chỉ cho biết đã có lời nhắn hay chưa, không trả nội dung lời nhắn.</summary>
+public sealed record PlanSetupRecipientResponse(Guid BeneficiaryId, string FullName, bool HasMessage,
+    List<PlanSetupRecipientContainerResponse> Containers);
 public sealed record ExecutorInvitationInfo(DateTimeOffset ExpiresAt, string Status,
     string ScopeVersion, string ScopeText);
 
 public sealed class InviteExecutorRequest
 {
     [Required, EmailAddress, MaxLength(254)] public string Email { get; set; } = "";
-    public Guid? BeneficiaryId { get; set; }
 }
 public sealed class ResendExecutorRequest
 {

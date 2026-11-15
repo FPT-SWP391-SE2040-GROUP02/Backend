@@ -203,7 +203,116 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
             Assert.Equal(ExecutorStatus.Revoked, old.Status);
             Assert.Equal(ExecutorStatus.Accepted, fresh.Status);
             Assert.Equal(first.Id, fresh.ReplacesExecutorId);
+            // Đổi Người thực thi: mã mở gói tự đổi (version 1 → 2), nhật ký ghi System, không ghi mã.
+            ExecutorKeyShard key = await db.Set<ExecutorKeyShard>().SingleAsync(k => k.VaultId == vaultId);
+            Assert.Equal(2, key.Version);
+            Assert.NotNull(key.ReissuedAt);
+            AuditLog rotated = await db.Set<AuditLog>().SingleAsync(
+                l => l.VaultId == vaultId && l.Action == AuditAction.ExecutorKeyReissued);
+            Assert.Equal(AuditActorRole.System, rotated.ActorRole);
+            Assert.Equal(2, rotated.TargetVersion);
         });
+    }
+
+    [SqlFact]
+    public async Task Activation_CreatesTheKeyAndWritesPlanActivatedAndExecutorAcceptedAudits()
+    {
+        (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
+        HttpClient executor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "ky@example.test");
+        await InviteAsync(owner, vaultId, "ky@example.test");
+        await AcceptAsync(executor, mail.Token);
+        PlanSetupResponse setup = (await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup"))!;
+
+        HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate",
+            new ActivatePlanRequest { ConfigVersion = setup.ConfigVersion, PolicyVersion = setup.PolicyVersion, AcknowledgePolicy = true });
+        string raw = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // Không trả mã gốc trong response kích hoạt.
+        Assert.DoesNotContain("shard", raw, StringComparison.OrdinalIgnoreCase);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Vault vault = await db.Vaults.SingleAsync(v => v.Id == vaultId);
+            ExecutorKeyShard key = await db.Set<ExecutorKeyShard>().SingleAsync(k => k.VaultId == vaultId);
+            Assert.Equal(1, key.Version);
+            Assert.False(string.IsNullOrEmpty(key.EncryptedShard));
+            Assert.Equal(1, await db.Set<AuditLog>().CountAsync(
+                l => l.VaultId == vaultId && l.Action == AuditAction.ExecutorKeyIssued && l.ActorRole == AuditActorRole.Owner));
+
+            AuditLog activated = await db.Set<AuditLog>().SingleAsync(
+                l => l.VaultId == vaultId && l.Action == AuditAction.PlanActivated);
+            Assert.Equal(AuditActorRole.Owner, activated.ActorRole);
+            Assert.Equal(vault.OwnerId, activated.ActorUserId);
+            Assert.Equal(AuditTargetType.Vault, activated.TargetType);
+            Assert.Equal(vaultId, activated.TargetId);
+
+            Executor accepted = await db.Set<Executor>().SingleAsync(e => e.VaultId == vaultId);
+            AuditLog acceptedLog = await db.Set<AuditLog>().SingleAsync(
+                l => l.VaultId == vaultId && l.Action == AuditAction.ExecutorAccepted);
+            Assert.Equal(AuditActorRole.Executor, acceptedLog.ActorRole);
+            Assert.Equal(accepted.UserId, acceptedLog.ActorUserId);
+            Assert.Equal(AuditTargetType.Vault, acceptedLog.TargetType);
+        });
+
+        // Kích hoạt lặp lại không tạo thêm mã hay nhật ký.
+        await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate",
+            new ActivatePlanRequest { ConfigVersion = setup.ConfigVersion, PolicyVersion = setup.PolicyVersion, AcknowledgePolicy = true });
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(1, await db.Set<AuditLog>().CountAsync(l => l.VaultId == vaultId && l.Action == AuditAction.PlanActivated));
+            Assert.Equal(1, (await db.Set<ExecutorKeyShard>().SingleAsync(k => k.VaultId == vaultId)).Version);
+        });
+    }
+
+    [SqlFact]
+    public async Task PlanSetup_ReturnsOwnerActivatedAtAndRecipientsButNeverTheMessage()
+    {
+        (HttpClient owner, Guid vaultId) = await PrepareOwnerAsync();
+        const string secretMessage = "Loi-nhan-bi-mat-QZX";
+        Guid beneficiaryId = Guid.Empty;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            beneficiaryId = await db.Beneficiaries.Where(b => b.VaultId == vaultId).Select(b => b.Id).SingleAsync();
+        });
+        JsonElement current = await ApiTestHelpers.ReadJsonAsync(
+            await owner.GetAsync($"/api/v1/vaults/{vaultId}/beneficiaries/{beneficiaryId}"));
+        HttpResponseMessage updated = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}/beneficiaries/{beneficiaryId}",
+            new { etag = current.GetProperty("etag").GetString(), message = secretMessage });
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        HttpClient executor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "ds@example.test");
+        await InviteAsync(owner, vaultId, "ds@example.test");
+
+        HttpResponseMessage beforeResponse = await owner.GetAsync($"/api/v1/vaults/{vaultId}/plan-setup");
+        string beforeRaw = await beforeResponse.Content.ReadAsStringAsync();
+        JsonElement before = JsonDocument.Parse(beforeRaw).RootElement;
+
+        Assert.DoesNotContain(secretMessage, beforeRaw);
+        Assert.Equal("DRAFT", before.GetProperty("planStatus").GetString());
+        Assert.Equal("Người thử", before.GetProperty("ownerFullName").GetString());
+        Assert.False(string.IsNullOrEmpty(before.GetProperty("ownerEmail").GetString()));
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("activatedAt").ValueKind);
+        JsonElement recipients = before.GetProperty("recipients");
+        Assert.Equal(1, recipients.GetArrayLength());
+        Assert.Equal(beneficiaryId, recipients[0].GetProperty("beneficiaryId").GetGuid());
+        Assert.Equal("Người nhận", recipients[0].GetProperty("fullName").GetString());
+        Assert.True(recipients[0].GetProperty("hasMessage").GetBoolean());
+        JsonElement packs = recipients[0].GetProperty("containers");
+        Assert.Equal(1, packs.GetArrayLength());
+        Assert.Equal("Gói", packs[0].GetProperty("name").GetString());
+        Assert.Equal(1, packs[0].GetProperty("assetCount").GetInt32());
+        Assert.Equal("READY", packs[0].GetProperty("status").GetString());
+        // Chưa chấp nhận thì chưa liên kết tài khoản nên chưa có fullName.
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("executors")[0].GetProperty("fullName").ValueKind);
+
+        await AcceptAsync(executor, mail.Token);
+        await ActivateAsync(owner, vaultId);
+        string afterRaw = await owner.GetStringAsync($"/api/v1/vaults/{vaultId}/plan-setup");
+        JsonElement after = JsonDocument.Parse(afterRaw).RootElement;
+
+        Assert.DoesNotContain(secretMessage, afterRaw);
+        Assert.NotEqual(JsonValueKind.Null, after.GetProperty("activatedAt").ValueKind);
+        Assert.NotEqual("DRAFT", after.GetProperty("planStatus").GetString());
+        Assert.Equal("Người thử", after.GetProperty("executors")[0].GetProperty("fullName").GetString());
     }
 
     [SqlFact]

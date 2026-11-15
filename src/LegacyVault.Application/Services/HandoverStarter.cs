@@ -18,6 +18,7 @@ public sealed class HandoverStarter : IHandoverStarter
     private readonly TimeProvider timeProvider;
 
     private readonly IHandoverContactReader? contactReader;
+    private readonly ExecutorKeyIssuer? keyIssuer;
 
     public HandoverStarter(
         IVaultRepository vaults,
@@ -27,9 +28,11 @@ public sealed class HandoverStarter : IHandoverStarter
         IHandoverInvitationSender sender,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        IHandoverContactReader? contactReader = null)
+        IHandoverContactReader? contactReader = null,
+        ExecutorKeyIssuer? keyIssuer = null)
     {
         this.contactReader = contactReader;
+        this.keyIssuer = keyIssuer;
         this.vaults = vaults;
         this.handover = handover;
         this.protector = protector;
@@ -125,6 +128,13 @@ public sealed class HandoverStarter : IHandoverStarter
                 invitation.OwnerMessage = data.Message;
                 invitations.Add(invitation);
             }
+        }
+
+        // Bắt đầu bàn giao thì Người thực thi đọc được mã: đảm bảo kho có mã đọc được (chưa có hoặc chỉ có hash thì tạo mới).
+        // Lưu chung giao dịch với việc đổi trạng thái kế hoạch.
+        if (keyIssuer != null)
+        {
+            await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.System, null, now, ct);
         }
 
         plan.Status = PlanStatus.HandoverInProgress;

@@ -14,6 +14,7 @@ public static class ApplicationConfig
         services.AddScoped<IContainerService, ContainerService>();
         services.AddScoped<IBeneficiaryService, BeneficiaryService>();
         services.AddScoped<IVaultPinService, VaultPinService>();
+        services.AddScoped<ExecutorKeyIssuer>();
         services.AddScoped<IExecutorKeyService, ExecutorKeyService>();
         services.AddScoped<ISystemExecutorDirectoryService, SystemExecutorDirectoryService>();
         services.AddHandoverApplication();

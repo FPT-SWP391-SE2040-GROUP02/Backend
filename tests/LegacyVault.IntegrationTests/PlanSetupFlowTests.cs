@@ -65,10 +65,10 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         return (owner, recipient, vaultId);
     }
 
-    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, Guid? beneficiaryId = null, string email = "executor@example.test")
+    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email = "executor@example.test")
     {
         await ApiTestHelpers.EnsureSystemExecutorAsync(factory, email);
-        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email, beneficiaryId });
+        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain(mail.Token, raw);
@@ -85,7 +85,9 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     public async Task ExecutorCandidatesFindExistingAccountsOnlyAndNeverBrowseEveryone()
     {
         var (owner, vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "ung-vien@example.test");
+        // Chỉ tài khoản nhân sự role EXECUTOR (Active, đã xác minh email, đã xác minh pháp lý) mới là ứng viên.
+        await ApiTestHelpers.EnsureSystemExecutorAsync(factory, "ung-vien@example.test");
+        await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "ung-vien-thuong@example.test");
 
         var found = await owner.GetFromJsonAsync<List<ExecutorCandidateResponse>>(
             $"/api/v1/vaults/{vaultId}/executor-candidates?q=ung-vien");
@@ -250,13 +252,11 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task ExecutorWhoIsBeneficiary_CanActivateWithoutAnyOtherExecutor()
+    public async Task SingleExecutor_CanActivateWithoutAnyOtherExecutor()
     {
-        // Đã bỏ Executor dự phòng (30/10/2026): Executor kiêm người nhận không còn đòi người dự phòng độc lập.
+        // Đã bỏ Executor dự phòng (30/10/2026): một Người thực thi đã chấp nhận là đủ để kích hoạt.
         var (owner, primary, vaultId) = await PrepareAsync();
-        Guid beneficiaryId = Guid.Empty;
-        await ApiTestHelpers.WithDbAsync(factory, async db => beneficiaryId = await db.Beneficiaries.Where(b => b.VaultId == vaultId).Select(b => b.Id).SingleAsync());
-        await InviteAsync(owner, vaultId, beneficiaryId: beneficiaryId);
+        await InviteAsync(owner, vaultId);
         Assert.Equal(HttpStatusCode.OK, (await RespondAsync(primary, mail.Token)).StatusCode);
         var request = await ActivationAsync(owner, vaultId);
         Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request)).StatusCode);
@@ -407,7 +407,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         (HttpClient owner, _, Guid vaultId) = await PrepareAsync();
         // Tài khoản phải có trước (chỉ mời được Người thực thi hệ thống); email vẫn chưa xác minh.
         HttpClient unverified = await ApiTestHelpers.CreateClientForNewUserAsync(factory, false, "unverified@example.test");
-        await InviteAsync(owner, vaultId, null, "unverified@example.test");
+        await InviteAsync(owner, vaultId, "unverified@example.test");
 
         JsonElement mine = await unverified.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
 
