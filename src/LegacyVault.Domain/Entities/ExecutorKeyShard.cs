@@ -25,5 +25,17 @@ public class ExecutorKeyShard
     /// <summary>Lần cấp lại gần nhất (quên khóa); null khi chưa cấp lại lần nào.</summary>
     public DateTimeOffset? ReissuedAt { get; set; }
 
+    /// <summary>
+    /// Mảnh khóa được mã hóa bảo mật (Envelope Encryption) để gửi trực tiếp cho Người thực thi trên hệ thống.
+    /// Giải mã bằng KEK của hệ thống khi Người thực thi truy cập.
+    /// </summary>
+    public string? EncryptedShard { get; set; }
+
+    /// <summary>Định danh KEK dùng để bọc khóa mã hóa mảnh.</summary>
+    public string? EncryptionKeyId { get; set; }
+
+    /// <summary>DEK đã bọc (wrapped data key) dùng để mã hóa mảnh.</summary>
+    public byte[]? WrappedDataKey { get; set; }
+
     public byte[] RowVersion { get; set; } = [];
 }

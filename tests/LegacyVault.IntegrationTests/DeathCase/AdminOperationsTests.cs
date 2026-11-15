@@ -139,31 +139,38 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Role02_AdminCannotCreateOrGrantExecutorAccount()
+    public async Task AdminCreatesAndGrantsSystemExecutor_AndDirectoryListsLegalProfile()
     {
         // Chuẩn bị
         (User _, HttpClient client) = await AddAdminAsync();
         User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         string email = "executor-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
 
-        // Hành động
-        HttpResponseMessage create = await client.PostAsJsonAsync("/api/v1/admin/users",
-            new { fullName = "Người Thực Hiện", email = email, password = "MatKhauThu123!", role = "EXECUTOR" });
-        HttpResponseMessage grant = await client.PutAsJsonAsync($"/api/v1/admin/users/{plain.Id}/role",
-            new { role = "EXECUTOR", reason = "Thử cấp vai trò" });
-
-        // Kiểm tra: cả hai đều 400 theo trường role, không tạo tài khoản, không đổi vai trò, không ghi nhật ký
-        JsonElement createProblem = await ApiTestHelpers.AssertProblemAsync(create, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        Assert.True(createProblem.GetProperty("errors").TryGetProperty("role", out JsonElement _));
-        JsonElement grantProblem = await ApiTestHelpers.AssertProblemAsync(grant, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        Assert.True(grantProblem.GetProperty("errors").TryGetProperty("role", out JsonElement _));
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        // Hành động: tạo Người thực thi hệ thống kèm hồ sơ pháp lý, và cấp vai trò cho một tài khoản thường
+        HttpResponseMessage create = await client.PostAsJsonAsync("/api/v1/admin/users", new
         {
-            Assert.False(await db.Users.AnyAsync(u => u.Email == email));
-            User stored = await db.Users.AsNoTracking().SingleAsync(u => u.Id == plain.Id);
-            Assert.Equal(UserRole.User, stored.Role);
-            Assert.False(await db.Set<AuditLog>().AnyAsync(a => a.Action == AuditAction.UserRoleChanged || a.Action == AuditAction.AdminCreatedUser));
+            fullName = "Người Thực Thi", email = email, password = "MatKhauThu123!", role = "EXECUTOR",
+            lawyerCardNumber = " LS-TEST-001 ", executorRoleTitle = "Luật sư thi hành di chúc", legalOrganization = "Đoàn Luật sư thử nghiệm",
         });
+        HttpResponseMessage grant = await client.PutAsJsonAsync($"/api/v1/admin/users/{plain.Id}/role",
+            new { role = "EXECUTOR", reason = "Bổ nhiệm Người thực thi hệ thống" });
+
+        // Kiểm tra
+        Assert.True(create.IsSuccessStatusCode, "Tạo Executor phải thành công, nhận " + (int)create.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, grant.StatusCode);
+        // Danh bạ có email và số thẻ luật sư: chỉ Chủ kho xem được, Admin không có kho thì 404.
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/system-executors")).StatusCode);
+        DeathCaseTestData.OwnerVault ownerVault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        JsonElement directory = await ApiTestHelpers.ReadJsonAsync(await ownerVault.Client.GetAsync("/api/v1/system-executors"));
+        JsonElement created = directory.EnumerateArray().Single(e => e.GetProperty("email").GetString() == email);
+        Assert.Equal("Luật sư thi hành di chúc", created.GetProperty("executorRoleTitle").GetString());
+        Assert.Equal("VERIFIED", created.GetProperty("legalVerification").GetProperty("status").GetString());
+        Assert.Equal("LS-TEST-001", created.GetProperty("legalVerification").GetProperty("lawyerCardNumber").GetString());
+        Assert.Equal("Đoàn Luật sư thử nghiệm", created.GetProperty("legalVerification").GetProperty("organization").GetString());
+        // Tài khoản chỉ được cấp vai trò, chưa có hồ sơ pháp lý: có trong danh bạ nhưng không có số thẻ bịa ra.
+        JsonElement granted = directory.EnumerateArray().Single(e => e.GetProperty("id").GetGuid() == plain.Id);
+        Assert.Equal("UNVERIFIED", granted.GetProperty("legalVerification").GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, granted.GetProperty("legalVerification").GetProperty("lawyerCardNumber").ValueKind);
     }
 
     [SqlFact]

@@ -24,6 +24,15 @@ public sealed class UserRepository : IUserRepository
         return _db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
     }
 
+    public Task<List<User>> ListByRoleAsync(LegacyVault.Domain.Enums.UserRole role, LegacyVault.Domain.Enums.UserStatus status, CancellationToken ct)
+    {
+        return _db.Users
+            .AsNoTracking()
+            .Where(u => u.Role == role && u.Status == status)
+            .OrderBy(u => u.FullName)
+            .ToListAsync(ct);
+    }
+
     public async Task<bool> TryAddAsync(User user, CancellationToken ct)
     {
         _db.Users.Add(user);

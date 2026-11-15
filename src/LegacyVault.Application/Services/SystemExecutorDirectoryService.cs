@@ -1,0 +1,78 @@
+using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Repositories;
+using LegacyVault.Application.Security;
+using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
+
+namespace LegacyVault.Application.Services;
+
+/// <summary>
+/// Triển khai dịch vụ tra cứu danh bạ Người thực thi hệ thống.
+/// </summary>
+public sealed class SystemExecutorDirectoryService : ISystemExecutorDirectoryService
+{
+    private readonly IUserRepository userRepository;
+    private readonly IVaultRepository vaultRepository;
+    private readonly ICurrentUser currentUser;
+
+    public SystemExecutorDirectoryService(IUserRepository userRepository, IVaultRepository vaultRepository, ICurrentUser currentUser)
+    {
+        this.userRepository = userRepository;
+        this.vaultRepository = vaultRepository;
+        this.currentUser = currentUser;
+    }
+
+    public async Task<List<SystemExecutorResponse>> ListAvailableExecutorsAsync(CancellationToken ct)
+    {
+        // Danh bạ có email và số thẻ luật sư: chỉ Chủ kho (người có kho) được xem, vai trò tài khoản không đủ để phân biệt.
+        if (await vaultRepository.FindByOwnerIdAsync(currentUser.RequireUserId(), ct) == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
+        }
+
+        List<User> users = await userRepository.ListByRoleAsync(UserRole.Executor, UserStatus.Active, ct);
+        List<SystemExecutorResponse> result = new(users.Count);
+
+        foreach (User user in users)
+        {
+            string? phoneMasked = MaskPhone(user.Phone);
+            result.Add(new SystemExecutorResponse
+            {
+                Id = user.Id,
+                FullName = user.FullName,
+                Email = user.Email,
+                PhoneMasked = phoneMasked,
+                AvatarUrl = null,
+                ExecutorRoleTitle = user.ExecutorRoleTitle ?? string.Empty,
+                LegalVerification = new SystemExecutorLegalVerification
+                {
+                    // Chỉ báo "đã xác minh" khi Admin đã ghi nhận; thiếu số thẻ thì để trống, không điền số giả.
+                    Status = user.LegalVerifiedAt == null ? "UNVERIFIED" : "VERIFIED",
+                    LawyerCardNumber = user.LawyerCardNumber,
+                    PracticeCertificateNumber = user.PracticeCertificateNumber,
+                    Organization = user.LegalOrganization,
+                    VerifiedAt = user.LegalVerifiedAt
+                },
+                AssignedVaultsCount = 0,
+                IsAvailable = true
+            });
+        }
+
+        return result;
+    }
+
+    private static string? MaskPhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            return null;
+        }
+        string trimmed = phone.Trim();
+        if (trimmed.Length <= 6)
+        {
+            return trimmed;
+        }
+        return string.Concat(trimmed.AsSpan(0, 4), "***", trimmed.AsSpan(trimmed.Length - 3));
+    }
+}

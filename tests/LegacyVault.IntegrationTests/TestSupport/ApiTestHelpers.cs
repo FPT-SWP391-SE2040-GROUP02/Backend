@@ -44,6 +44,31 @@ public static class ApiTestHelpers
     }
 
     /// <summary>
+    /// Chủ kho chỉ mời được Người thực thi hệ thống: đổi tài khoản có email này thành EXECUTOR đang hoạt động,
+    /// chưa có thì thêm mới (đã xác minh email).
+    /// </summary>
+    public static async Task EnsureSystemExecutorAsync(ApiFactory factory, string email)
+    {
+        await WithDbAsync(factory, async db =>
+        {
+            User? user = await db.Users.SingleOrDefaultAsync(u => u.Email == email);
+            if (user == null)
+            {
+                user = new User();
+                user.Email = email;
+                user.FullName = "Người thực thi thử";
+                user.Status = UserStatus.Active;
+                user.CreatedAt = DateTimeOffset.UtcNow;
+                user.EmailVerifiedAt = DateTimeOffset.UtcNow;
+                db.Users.Add(user);
+            }
+            user.Role = UserRole.Executor;
+            user.LegalVerifiedAt ??= DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        });
+    }
+
+    /// <summary>
     /// Tạo access token JWT cho user bằng ITokenService của chính API đang test (cùng khóa ký),
     /// rồi gắn header Authorization: Bearer cho client. Không đi qua luồng đăng nhập.
     /// </summary>

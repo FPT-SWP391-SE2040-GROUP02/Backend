@@ -248,11 +248,6 @@ public sealed class AdminService : IAdminService
     {
         Guid adminId = await RequireAdminAsync(ct);
         UserRole newRole = ParseRole(request.Role, "role");
-        // Executor là người ngoài do Owner mời theo từng kho (quan hệ với kho, ROLE-02), không phải vai trò Admin cấp.
-        if (newRole == UserRole.Executor)
-        {
-            throw ValidationErrors.For("role", "Không cấp vai trò EXECUTOR. Người thực hiện do Owner mời theo từng kho.");
-        }
         string reason = RequireReason(request.Reason);
         User user = await LoadUserAsync(userId, ct);
         if (user.Id == adminId)
@@ -497,9 +492,9 @@ public sealed class AdminService : IAdminService
 
         UserRole targetRole = ParseRole(request.Role, "role");
         // Executor là người ngoài do Owner mời theo từng kho (ROLE-02), Admin không tạo tài khoản Executor.
-        if (targetRole != UserRole.Verifier && targetRole != UserRole.Admin)
+        if (targetRole != UserRole.Verifier && targetRole != UserRole.Admin && targetRole != UserRole.Executor)
         {
-            throw ValidationErrors.For("role", "Chỉ được tạo tài khoản VERIFIER hoặc ADMIN. Người thực hiện do Owner mời theo từng kho.");
+            throw ValidationErrors.For("role", "Chỉ được tạo tài khoản VERIFIER, EXECUTOR hoặc ADMIN.");
         }
 
         User? existing = await users.FindByEmailAsync(email, ct);
@@ -526,6 +521,12 @@ public sealed class AdminService : IAdminService
             Phone = phone,
             PracticeCertificateNumber = TrimOrNull(request.PracticeCertificateNumber, targetRole),
             LawyerCardNumber = TrimOrNull(request.LawyerCardNumber, targetRole),
+            // Người thực thi hệ thống: Admin nhập hồ sơ pháp lý lúc tạo, có số thẻ/chứng chỉ mới tính là đã xác minh.
+            ExecutorRoleTitle = targetRole == UserRole.Executor ? TrimOrNull(request.ExecutorRoleTitle, targetRole) : null,
+            LegalOrganization = targetRole == UserRole.Executor ? TrimOrNull(request.LegalOrganization, targetRole) : null,
+            LegalVerifiedAt = targetRole == UserRole.Executor
+                && (TrimOrNull(request.LawyerCardNumber, targetRole) != null || TrimOrNull(request.PracticeCertificateNumber, targetRole) != null)
+                ? now : null,
             PasswordHash = passwordHasher.Hash(request.Password),
             Role = targetRole,
             Status = UserStatus.Active,
@@ -555,7 +556,7 @@ public sealed class AdminService : IAdminService
     /// <summary>Số chứng chỉ và thẻ luật sư chỉ có ý nghĩa với Người xét duyệt; vai trò khác bỏ qua. Trống = không có.</summary>
     private static string? TrimOrNull(string? value, UserRole role)
     {
-        if (role != UserRole.Verifier || string.IsNullOrWhiteSpace(value))
+        if ((role != UserRole.Verifier && role != UserRole.Executor) || string.IsNullOrWhiteSpace(value))
         {
             return null;
         }

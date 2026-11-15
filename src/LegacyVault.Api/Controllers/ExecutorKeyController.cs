@@ -44,3 +44,21 @@ public sealed class ExecutorKeyController(IExecutorKeyService service) : Control
         return service.ReissueAsync(vaultId, ct);
     }
 }
+
+/// <summary>Cổng Người thực thi: đọc mã mở gói bàn giao do Chủ kho gửi trực tiếp trên hệ thống.</summary>
+[ApiController]
+[Authorize]
+[Route("api/v1/executor/vaults/{vaultId:guid}/handover-key")]
+[Produces("application/json")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+public sealed class ExecutorHandoverKeyController(IExecutorKeyService service) : ControllerBase
+{
+    /// <summary>Đọc mã mở gói bàn giao được cấp và gửi trên hệ thống.</summary>
+    [HttpGet]
+    [ProducesResponseType<ExecutorHandoverKeyResponse>(StatusCodes.Status200OK)]
+    public Task<ExecutorHandoverKeyResponse> Get(Guid vaultId, CancellationToken ct) =>
+        service.GetKeyForExecutorAsync(vaultId, ct);
+}

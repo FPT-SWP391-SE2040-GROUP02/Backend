@@ -125,6 +125,8 @@ public enum ErrorCode
     AdministrativeUnitNotFound,
     /// <summary>403: tài khoản đang đăng nhập không đúng email mà Chủ kho đã mời nhận gói; kèm invitedEmailMasked (email đã che bớt).</summary>
     HandoverEmailMismatch,
+    /// <summary>400: chỉ được chỉ định Người thực thi hệ thống đã được xác minh.</summary>
+    OnlySystemExecutorsAllowed,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

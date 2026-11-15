@@ -15,6 +15,7 @@ public static class ApplicationConfig
         services.AddScoped<IBeneficiaryService, BeneficiaryService>();
         services.AddScoped<IVaultPinService, VaultPinService>();
         services.AddScoped<IExecutorKeyService, ExecutorKeyService>();
+        services.AddScoped<ISystemExecutorDirectoryService, SystemExecutorDirectoryService>();
         services.AddHandoverApplication();
 
         // Điểm danh (deadman switch)

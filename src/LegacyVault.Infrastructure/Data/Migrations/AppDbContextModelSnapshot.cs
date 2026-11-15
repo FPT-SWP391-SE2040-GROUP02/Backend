@@ -1164,6 +1164,16 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<Guid>("VaultId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("EncryptedShard")
+                        .HasMaxLength(512)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(512)");
+
+                    b.Property<string>("EncryptionKeyId")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
                     b.Property<DateTimeOffset>("IssuedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -1184,6 +1194,11 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<int>("Version")
                         .HasColumnType("int");
+
+                    b.Property<byte[]>("WrappedDataKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("binary(60)")
+                        .IsFixedLength();
 
                     b.HasKey("VaultId");
 
@@ -2850,6 +2865,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("EmailVerifiedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("ExecutorRoleTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -2861,6 +2880,13 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<string>("LawyerCardNumber")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("LegalOrganization")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("LegalVerifiedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("NotaryCardContentType")
                         .HasMaxLength(50)

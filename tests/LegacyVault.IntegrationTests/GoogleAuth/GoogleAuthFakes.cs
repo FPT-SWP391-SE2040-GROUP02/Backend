@@ -95,6 +95,11 @@ public sealed class FakeUserRepository : IUserRepository
         return Task.FromResult(Users.FirstOrDefault(u => u.Id == id));
     }
 
+    public Task<List<User>> ListByRoleAsync(LegacyVault.Domain.Enums.UserRole role, LegacyVault.Domain.Enums.UserStatus status, CancellationToken ct)
+    {
+        return Task.FromResult(Users.Where(u => u.Role == role && u.Status == status).ToList());
+    }
+
     public Task<bool> TryAddAsync(User user, CancellationToken ct)
     {
         if (Users.Any(u => u.Email == user.Email || (user.Phone != null && u.Phone == user.Phone)))
