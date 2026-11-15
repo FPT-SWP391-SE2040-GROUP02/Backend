@@ -215,6 +215,75 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         });
     }
 
+    /// <summary>Tạo một lượt bàn giao đã được người dùng này nhận, với trạng thái cho trước (kho thật, gói thật).</summary>
+    private async Task AddClaimedTurnAsync(Guid claimantId, HandoverTurnStatus status)
+    {
+        (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú");
+        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói")).GetProperty("id").GetGuid();
+        JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "000000001015", "Người nhận");
+        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(
+            owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid())).StatusCode);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Designation designation = await db.Set<Designation>().Include(d => d.Container).SingleAsync(d => d.Container.VaultId == vaultId);
+            HandoverPlan plan = await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId);
+            HandoverTurn turn = new HandoverTurn();
+            turn.VaultId = vaultId;
+            turn.PlanId = plan.Id;
+            turn.ContainerId = designation.ContainerId;
+            turn.ContainerName = designation.Container.Name;
+            turn.DesignationId = designation.Id;
+            turn.BeneficiaryId = designation.BeneficiaryId;
+            turn.Status = status;
+            turn.ClaimantUserId = claimantId;
+            turn.ClaimedAt = DateTimeOffset.UtcNow;
+            turn.InvitationTokenHash = Guid.NewGuid().ToString("N");
+            turn.InvitedAt = DateTimeOffset.UtcNow;
+            turn.ResponseDeadline = DateTimeOffset.UtcNow.AddDays(5);
+            turn.CreatedAt = DateTimeOffset.UtcNow;
+            db.Set<HandoverTurn>().Add(turn);
+            await db.SaveChangesAsync();
+        });
+    }
+
+    [SqlFact]
+    public async Task ChangeRoleToStaff_IsBlockedWhileTheUserHasAnOpenClaimedHandoverTurn()
+    {
+        // Chuẩn bị: một người dùng thường đang nhận tài sản bàn giao (lượt chưa kết thúc)
+        (User _, HttpClient client) = await AddAdminAsync();
+        User recipient = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        await AddClaimedTurnAsync(recipient.Id, HandoverTurnStatus.ReadyToAccept);
+
+        // Hành động và kiểm tra: cấp vai trò nhân sự bị chặn, vai trò không đổi
+        foreach (string staffRole in new string[] { "EXECUTOR", "VERIFIER", "ADMIN" })
+        {
+            HttpResponseMessage blocked = await client.PutAsJsonAsync($"/api/v1/admin/users/{recipient.Id}/role",
+                new { role = staffRole, reason = "Bổ nhiệm" });
+            JsonElement problem = await ApiTestHelpers.AssertProblemAsync(blocked, HttpStatusCode.Conflict, "ADMIN_ACTION_NOT_ALLOWED");
+            Assert.Equal("RECIPIENT_HAS_ACTIVE_HANDOVER", problem.GetProperty("reason").GetString());
+        }
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(UserRole.User, (await db.Users.SingleAsync(u => u.Id == recipient.Id)).Role);
+        });
+    }
+
+    [SqlFact]
+    public async Task ChangeRoleToStaff_IsAllowedOnceTheClaimedTurnIsFinished()
+    {
+        // Chuẩn bị: lượt đã kết thúc (đã nhận xong) và một người dùng khác chưa nhận lượt nào
+        (User _, HttpClient client) = await AddAdminAsync();
+        User finished = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        await AddClaimedTurnAsync(finished.Id, HandoverTurnStatus.HandoverCommitted);
+
+        HttpResponseMessage ok = await client.PutAsJsonAsync($"/api/v1/admin/users/{finished.Id}/role",
+            new { role = "EXECUTOR", reason = "Bổ nhiệm" });
+
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+    }
+
     [SqlFact]
     public async Task Users_ChangeRole_Rules_AndAuditTrail()
     {

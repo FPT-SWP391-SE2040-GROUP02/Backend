@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -416,6 +417,51 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
 
         // Kiểm tra
         await ApiTestHelpers.AssertProblemAsync(put, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+    }
+
+    [SqlFact]
+    public async Task StaffAccountEmailCannotBeUsedAsRecipient_OnCreateOrUpdate()
+    {
+        // Chuẩn bị: email của tài khoản nhân sự (Executor, Verifier, Admin) và một người nhận hợp lệ
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        string staffMessage = "Email này thuộc tài khoản nhân sự của LegacyVault nên không thể làm người nhận.";
+        UserRole[] staffRoles = new UserRole[] { UserRole.Executor, UserRole.Verifier, UserRole.Admin };
+        foreach (UserRole role in staffRoles)
+        {
+            User staff = await DeathCaseTestData.AddUserAsync(factory, role, UserStatus.Active);
+
+            // Hành động: tạo người nhận bằng email nhân sự
+            HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+                new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = "1990-05-20", email = staff.Email.ToUpperInvariant() });
+
+            // Kiểm tra: 400 ở trường email
+            JsonElement problem = await ApiTestHelpers.AssertProblemAsync(create, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+            JsonElement emailErrors = problem.GetProperty("errors").GetProperty("email");
+            Assert.Equal(staffMessage, emailErrors[0].GetString());
+        }
+        Assert.Equal(0, await CountBeneficiariesAsync(vaultId));
+
+        // Sửa người nhận hợp lệ sang email nhân sự cũng bị chặn, dữ liệu giữ nguyên
+        JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
+        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        HttpResponseMessage update = await client.PutAsJsonAsync($"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}",
+            new { etag = created.GetProperty("etag").GetString(), email = admin.Email });
+        await ApiTestHelpers.AssertProblemAsync(update, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        JsonElement stored = await ApiTestHelpers.ReadJsonAsync(
+            await client.GetAsync($"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}"));
+        Assert.Equal(Email, stored.GetProperty("email").GetString());
+    }
+
+    [SqlFact]
+    public async Task OrdinaryAccountEmailIsStillAllowedAsRecipient()
+    {
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        User ordinary = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+
+        HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = "1990-05-20", email = ordinary.Email });
+
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
     }
 
     [SqlFact]

@@ -98,6 +98,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             {
                 throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
             }
+            await EnsureEmailIsNotStaffAsync(data.Email, ct);
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -213,6 +214,25 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         return responses.ToPaginatedList(page.TotalCount, pagination);
     }
 
+    /// <summary>
+    /// Tài khoản nhân sự LegacyVault (Executor, Verifier, Admin) không được làm người nhận: họ xử lý hồ sơ bàn giao
+    /// nên không thể đồng thời là bên nhận tài sản.
+    /// </summary>
+    private async Task EnsureEmailIsNotStaffAsync(string email, CancellationToken ct)
+    {
+        string normalized = email.Trim().ToLowerInvariant();
+        User? account = await userRepository.FindByEmailAsync(normalized, ct);
+        if (account == null)
+        {
+            return;
+        }
+        if (account.Role == UserRole.Executor || account.Role == UserRole.Verifier || account.Role == UserRole.Admin)
+        {
+            throw ValidationErrors.For("email",
+                "Email này thuộc tài khoản nhân sự của LegacyVault nên không thể làm người nhận.");
+        }
+    }
+
     public async Task<BeneficiaryResponse> GetBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
@@ -275,6 +295,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             {
                 throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
             }
+            await EnsureEmailIsNotStaffAsync(updated.Email, ct);
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();

@@ -226,6 +226,38 @@ public sealed class HandoverClaimTests
         Assert.Equal("OWNER_CANNOT_CLAIM", error.Extensions["reason"]);
     }
 
+    [Theory]
+    [InlineData(UserRole.Executor)]
+    [InlineData(UserRole.Verifier)]
+    [InlineData(UserRole.Admin)]
+    public async Task Claim_ByStaffAccount_ThrowsStaffCannotClaim(UserRole role)
+    {
+        // Tài khoản nhân sự không nhận được tài sản bàn giao, kể cả khi đúng email người nhận.
+        AddTurn(HandoverTurnStatus.Invited, null);
+        claimant.Role = role;
+
+        AppException error = await Assert.ThrowsAsync<AppException>(() => service.ClaimAsync(Token, CancellationToken.None));
+
+        Assert.Equal(ErrorCode.HandoverNotAllowed, error.Code);
+        Assert.Equal(AppErrorType.Conflict, error.Type);
+        Assert.Equal("STAFF_CANNOT_CLAIM", error.Extensions["reason"]);
+        Assert.Equal("Tài khoản nhân sự không thể nhận tài sản bàn giao.", error.Message);
+        Assert.Null(repository.Turns.Single().ClaimantUserId);
+    }
+
+    [Fact]
+    public async Task ClaimByTurn_ByStaffAccount_ThrowsStaffCannotClaim()
+    {
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited, null);
+        claimant.Role = UserRole.Executor;
+
+        AppException error = await Assert.ThrowsAsync<AppException>(() => service.ClaimByTurnAsync(turn.Id, CancellationToken.None));
+
+        Assert.Equal(ErrorCode.HandoverNotAllowed, error.Code);
+        Assert.Equal("STAFF_CANNOT_CLAIM", error.Extensions["reason"]);
+        Assert.Null(turn.ClaimantUserId);
+    }
+
     [Fact]
     public async Task Claim_EmailNotVerified_ThrowsEmailNotVerified()
     {

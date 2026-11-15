@@ -237,6 +237,12 @@ public sealed class HandoverService : IHandoverService
             throw NotAllowed("OWNER_CANNOT_CLAIM", "Chủ kho không thể nhận tài sản của chính mình.");
         }
 
+        // Tài khoản nhân sự (Executor, Verifier, Admin) xử lý hồ sơ bàn giao nên không được nhận tài sản.
+        if (user.Role == UserRole.Executor || user.Role == UserRole.Verifier || user.Role == UserRole.Admin)
+        {
+            throw NotAllowed("STAFF_CANNOT_CLAIM", "Tài khoản nhân sự không thể nhận tài sản bàn giao.");
+        }
+
         if (vault.Plan.Status != PlanStatus.HandoverInProgress)
         {
             throw NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");

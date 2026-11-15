@@ -72,6 +72,7 @@ public sealed class AdminService : IAdminService
     private readonly IUnitOfWork unitOfWork;
     private readonly IPasswordHasher passwordHasher;
     private readonly TimeProvider timeProvider;
+    private readonly IHandoverRepository handover;
 
     public AdminService(
         ICurrentUser currentUser,
@@ -87,8 +88,10 @@ public sealed class AdminService : IAdminService
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverRepository handover)
     {
+        this.handover = handover;
         this.refreshTokens = refreshTokens;
         this.currentUser = currentUser;
         this.users = users;
@@ -262,6 +265,12 @@ public sealed class AdminService : IAdminService
             && await adminUsers.CountActiveAdminsAsync(ct) <= 1)
         {
             throw NotAllowed("LAST_ADMIN");
+        }
+        // Người đang nhận tài sản bàn giao (lượt chưa kết thúc) không được cấp vai trò nhân sự: nhân sự không được làm người nhận.
+        bool becomesStaff = newRole == UserRole.Executor || newRole == UserRole.Verifier || newRole == UserRole.Admin;
+        if (becomesStaff && await handover.HasOpenClaimedTurnAsync(user.Id, ct))
+        {
+            throw NotAllowed("RECIPIENT_HAS_ACTIVE_HANDOVER");
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
