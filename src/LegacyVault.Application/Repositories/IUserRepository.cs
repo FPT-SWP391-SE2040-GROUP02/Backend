@@ -22,6 +22,12 @@ public interface IUserRepository
     /// </summary>
     Task<bool> PhoneExistsAsync(string normalizedPhone, Guid? exceptUserId, CancellationToken ct);
 
+    /// <summary>
+    /// Tìm tài khoản có thể làm Người thực thi: đang hoạt động, đã xác minh email, không phải Admin/Verifier,
+    /// không phải <paramref name="excludeUserId"/>. Khớp một phần tên hoặc email (<paramref name="term"/> đã trim, chữ thường).
+    /// </summary>
+    Task<IReadOnlyList<User>> SearchExecutorCandidatesAsync(string term, Guid excludeUserId, int take, CancellationToken ct);
+
     /// <summary>true khi lỗi lưu là do vi phạm index unique (request khác vừa ghi cùng giá trị).</summary>
     bool IsUniqueViolation(Exception exception);
 }

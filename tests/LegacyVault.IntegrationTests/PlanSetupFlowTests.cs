@@ -81,6 +81,27 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task ExecutorCandidatesFindExistingAccountsOnlyAndNeverBrowseEveryone()
+    {
+        var (owner, vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "ung-vien@example.test");
+
+        var found = await owner.GetFromJsonAsync<List<ExecutorCandidateResponse>>(
+            $"/api/v1/vaults/{vaultId}/executor-candidates?q=ung-vien");
+        Assert.Single(found!);
+        Assert.Equal("ung-vien@example.test", found![0].Email);
+
+        // Dưới 2 ký tự: rỗng, không cho duyệt toàn bộ người dùng.
+        var tooShort = await owner.GetFromJsonAsync<List<ExecutorCandidateResponse>>(
+            $"/api/v1/vaults/{vaultId}/executor-candidates?q=u");
+        Assert.Empty(tooShort!);
+
+        var nobody = await owner.GetFromJsonAsync<List<ExecutorCandidateResponse>>(
+            $"/api/v1/vaults/{vaultId}/executor-candidates?q=khong-ton-tai");
+        Assert.Empty(nobody!);
+    }
+
+    [SqlFact]
     public async Task FullHttpFlowAcceptActivateCheckInAndDuplicatesPreserveSingleOpenPeriod()
     {
         var (owner, recipient, vaultId) = await PrepareAsync();
