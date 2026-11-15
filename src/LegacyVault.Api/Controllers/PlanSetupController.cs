@@ -25,6 +25,11 @@ public sealed class PlanSetupController(IPlanSetupService service) : ControllerB
     public async Task<ActionResult<CheckInviteeEmailResponse>> CheckEmail(Guid vaultId, [FromQuery] string email, CancellationToken ct) =>
         Ok(new CheckInviteeEmailResponse(email, await service.CheckEmailExistsAsync(email, ct)));
 
+    /// <summary>Search existing accounts (name or email, min 2 chars, max 8) that the owner can pick as Executor.</summary>
+    [HttpGet("executor-candidates"), EnableRateLimiting("plan-setup")]
+    public Task<IReadOnlyList<ExecutorCandidateResponse>> Candidates(Guid vaultId, [FromQuery] string? q, CancellationToken ct) =>
+        service.SearchCandidatesAsync(vaultId, q, ct);
+
     /// <summary>Create invitation. Null invitationSentAt means delivery is not confirmed; token is never returned.</summary>
     [RequireVaultPin]
     [HttpPost("executors"), EnableRateLimiting("plan-setup")]

@@ -64,10 +64,25 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Tạo database tạm và áp toàn bộ migration.</summary>
     public async Task MigrateAsync()
     {
-        using (IServiceScope scope = Services.CreateScope())
+        // Trên CI chạy lâu, SQL Server đôi khi cắt kết nối giữa lúc migrate nên lệnh nhả khóa __EFMigrationsLock
+        // lỗi "not currently held" dù migration không sai. Thử lại với kết nối mới; migration idempotent nên an toàn.
+        const int maxAttempts = 3;
+        for (int attempt = 1; ; attempt++)
         {
-            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await db.Database.MigrateAsync();
+            try
+            {
+                using (IServiceScope scope = Services.CreateScope())
+                {
+                    AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    await db.Database.MigrateAsync();
+                }
+                return;
+            }
+            catch (SqlException ex) when (attempt < maxAttempts && ex.Message.Contains("__EFMigrationsLock"))
+            {
+                SqlConnection.ClearAllPools();
+                await Task.Delay(TimeSpan.FromSeconds(2 * attempt));
+            }
         }
     }
 

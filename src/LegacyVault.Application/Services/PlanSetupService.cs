@@ -31,6 +31,12 @@ public interface IPlanSetupService
     Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct);
 
     /// <summary>
+    /// Chủ kho tìm tài khoản có sẵn để chọn làm Người thực thi. Từ khóa dưới 2 ký tự trả danh sách rỗng
+    /// (không cho duyệt toàn bộ người dùng); tối đa 8 kết quả; không gồm chính Chủ kho, Admin, Verifier.
+    /// </summary>
+    Task<IReadOnlyList<ExecutorCandidateResponse>> SearchCandidatesAsync(Guid vaultId, string? query, CancellationToken ct);
+
+    /// <summary>
     /// Admin giao hoặc đổi Người thực thi của kho (lý do bắt buộc, có nhật ký). Người được giao nhận lời mời qua email và phải
     /// chấp nhận; người cũ (nếu kế hoạch đang chạy) giữ vai trò tới khi người mới chấp nhận. Không phải Admin → 404.
     /// </summary>
@@ -55,6 +61,19 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         var normalized = (email ?? "").Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(normalized)) return false;
         return await users.FindByEmailAsync(normalized, ct) is not null;
+    }
+
+    public async Task<IReadOnlyList<ExecutorCandidateResponse>> SearchCandidatesAsync(
+        Guid vaultId, string? query, CancellationToken ct)
+    {
+        var vault = await OwnedAsync(vaultId, ct);
+        string term = (query ?? "").Trim().ToLowerInvariant();
+        if (term.Length < 2)
+        {
+            return [];
+        }
+        var found = await users.SearchExecutorCandidatesAsync(term, vault.OwnerId, 8, ct);
+        return found.Select(u => new ExecutorCandidateResponse(u.Id, u.FullName, u.Email)).ToList();
     }
 
     public async Task<PlanSetupResponse> GetAsync(Guid vaultId, CancellationToken ct) =>
@@ -405,7 +424,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
             vault.Executors.OrderByDescending(e => e.InvitedAt).Select(Map).ToList(),
-            PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>());
+            PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>(),
+            WillClauseRules.Split(vault.WillClauses));
     }
 
     private const int MyInvitationsMaxCount = 50;
@@ -437,6 +457,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         response.InvitedAt = item.InvitedAt;
         response.ExpiresAt = item.ExpiresAt;
         response.EndedAt = endedAt;
+        response.WillClauses = WillClauseRules.Split(item.Vault.WillClauses);
         return response;
     }
 

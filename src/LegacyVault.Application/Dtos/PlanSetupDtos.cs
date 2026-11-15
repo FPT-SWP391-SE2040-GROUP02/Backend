@@ -8,10 +8,13 @@ public sealed record ExecutorInvitationResponse(Guid Id, string Status, string I
     bool IsBeneficiary, DateTimeOffset ExpiresAt, DateTimeOffset? AcceptedAt,
     DateTimeOffset? InvitationSentAt, string? AcceptedScopeVersion, string Etag, bool AccountExists = false);
 public sealed record CheckInviteeEmailResponse(string Email, bool Exists);
+/// <summary>Tài khoản có sẵn mà Chủ kho có thể chọn làm Người thực thi.</summary>
+public sealed record ExecutorCandidateResponse(Guid UserId, string FullName, string Email);
 public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, bool CanActivate,
     string[] MissingRequirements, string PolicyVersion, string PolicyText, string ExecutorScopeVersion,
     string ExecutorScopeText, List<ExecutorInvitationResponse> Executors,
-    List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings);
+    List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings,
+    List<string>? WillClauses = null);
 public sealed record ExecutorInvitationInfo(DateTimeOffset ExpiresAt, string Status,
     string ScopeVersion, string ScopeText);
 

@@ -115,6 +115,17 @@ public sealed class FakeUserRepository : IUserRepository
         return Task.FromResult(Users.Any(u => u.Phone == normalizedPhone && u.Id != exceptUserId));
     }
 
+    public Task<IReadOnlyList<User>> SearchExecutorCandidatesAsync(string term, Guid excludeUserId, int take, CancellationToken ct)
+    {
+        IReadOnlyList<User> found = Users
+            .Where(u => u.Id != excludeUserId && u.Status == UserStatus.Active && u.EmailVerifiedAt != null
+                && u.Role != UserRole.Admin && u.Role != UserRole.Verifier
+                && (u.Email.ToLowerInvariant().Contains(term) || u.FullName.ToLowerInvariant().Contains(term)))
+            .Take(take)
+            .ToList();
+        return Task.FromResult(found);
+    }
+
     public bool IsUniqueViolation(Exception exception)
     {
         return false;

@@ -1,5 +1,6 @@
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,6 +53,22 @@ public sealed class UserRepository : IUserRepository
     public Task<bool> PhoneExistsAsync(string normalizedPhone, Guid? exceptUserId, CancellationToken ct)
     {
         return _db.Users.AnyAsync(u => u.Phone == normalizedPhone && (exceptUserId == null || u.Id != exceptUserId), ct);
+    }
+
+    public async Task<IReadOnlyList<User>> SearchExecutorCandidatesAsync(
+        string term, Guid excludeUserId, int take, CancellationToken ct)
+    {
+        return await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id != excludeUserId
+                && u.Status == UserStatus.Active
+                && u.EmailVerifiedAt != null
+                && u.Role != UserRole.Admin
+                && u.Role != UserRole.Verifier
+                && (u.Email.ToLower().Contains(term) || u.FullName.ToLower().Contains(term)))
+            .OrderBy(u => u.FullName)
+            .Take(take)
+            .ToListAsync(ct);
     }
 
     public bool IsUniqueViolation(Exception exception)
