@@ -7,58 +7,6 @@ namespace LegacyVault.Application.Mappings;
 
 public static class OperationsMapper
 {
-    public static IncidentSummaryResponse ToSummary(Incident incident, DateTimeOffset now)
-    {
-        IncidentSummaryResponse response = new IncidentSummaryResponse();
-        Fill(response, incident, now);
-        return response;
-    }
-
-    public static IncidentDetailResponse ToDetail(Incident incident, DateTimeOffset now)
-    {
-        IncidentDetailResponse response = new IncidentDetailResponse();
-        Fill(response, incident, now);
-        response.RemindedCount = incident.RemindedCount;
-        response.EscalatedAt = incident.EscalatedAt;
-        response.ResolvedAt = incident.ResolvedAt;
-        response.ResolutionNote = incident.ResolutionNote;
-        List<IncidentEvent> ordered = new List<IncidentEvent>(incident.Events);
-        ordered.Sort((left, right) => left.At.CompareTo(right.At));
-        foreach (IncidentEvent incidentEvent in ordered)
-        {
-            IncidentEventResponse item = new IncidentEventResponse();
-            item.Kind = incidentEvent.Kind.ToApiString();
-            item.ActorUserId = incidentEvent.ActorUserId;
-            item.Note = incidentEvent.Note;
-            item.At = incidentEvent.At;
-            response.Events.Add(item);
-        }
-        return response;
-    }
-
-    private static void Fill(IncidentSummaryResponse response, Incident incident, DateTimeOffset now)
-    {
-        response.Id = incident.Id;
-        response.Type = incident.Type.ToApiString();
-        response.Status = incident.Status.ToApiString();
-        response.VaultId = incident.VaultId;
-        response.TargetType = incident.TargetType;
-        response.TargetId = incident.TargetId;
-        response.Summary = incident.Summary;
-        response.AssigneeUserId = incident.AssigneeUserId;
-        response.ResponsibleRole = IncidentRules.ResponsibleRole(incident.Type);
-        response.DueAt = incident.DueAt;
-        response.Overdue = incident.Status != IncidentStatus.Resolved && now >= incident.DueAt;
-        response.NextReviewAt = incident.NextReviewAt;
-        response.CreatedAt = incident.CreatedAt;
-        response.HasActiveHold = (incident.TargetType == "HOLD" || incident.Type == IncidentType.OwnerAlive) && incident.Status != IncidentStatus.Resolved;
-        if (incident.TargetType == "HOLD")
-        {
-            response.HoldId = incident.TargetId;
-        }
-        response.Etag = Etag.From(incident.UpdatedAt);
-    }
-
     public static HoldResponse ToResponse(Hold hold, DateTimeOffset now)
     {
         HoldResponse response = new HoldResponse();

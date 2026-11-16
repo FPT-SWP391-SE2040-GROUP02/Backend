@@ -119,12 +119,11 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 if (!replacement) throw Conflict();
                 replaces = occupying[0].Id;
             }
-            // Người thực thi là nhân sự LegacyVault, không phải người nhận: không gắn hồ sơ người nhận.
+            // Người thực thi là nhân sự LegacyVault, không phải người nhận.
             var item = new Executor
             {
                 VaultId = vault.Id, Status = ExecutorStatus.Invited,
                 InviteeEmail = email, InvitationTokenHash = token.Hash,
-                IsBeneficiary = false, BeneficiaryId = null,
                 InvitedAt = now, ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7),
                 ReplacesExecutorId = replaces,
             };
@@ -603,7 +602,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     private ExecutorInvitationResponse Map(Executor item, bool accountExists) => Map(item, accountExists, null);
     private ExecutorInvitationResponse Map(Executor item, bool accountExists, string? fullName) => new(item.Id,
         item.Status == ExecutorStatus.Invited && item.ExpiresAt <= time.GetUtcNow() ? "EXPIRED" : item.Status.ToApiString(), item.InviteeEmail,
-        item.IsBeneficiary, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt), accountExists,
+        item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt), accountExists,
         fullName);
     private static AppException InvalidInvitation() => new(AppErrorType.NotFound, ErrorCode.ExecutorInvitationInvalid, "Lời mời Executor không hợp lệ hoặc đã hết hạn.");
     private static AppException Conflict() => new(AppErrorType.Conflict, ErrorCode.ExecutorInvitationConflict, "Lời mời hoặc phân công Executor đã tồn tại/thay đổi. Tải lại để kiểm tra.");

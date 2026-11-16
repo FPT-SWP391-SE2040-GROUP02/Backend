@@ -6,6 +6,7 @@ using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
@@ -25,7 +26,6 @@ public sealed class HandoverInvitationRetryJobTests
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly FakeInvitationSender sender = new FakeInvitationSender();
     private readonly FakeHoldReader holds = new FakeHoldReader();
-    private readonly FakeIncidentService incidents = new FakeIncidentService();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(CreatedAt.AddMinutes(10));
     private readonly HandoverInvitationRetryJob job;
@@ -43,8 +43,8 @@ public sealed class HandoverInvitationRetryJobTests
         protector.Data[designation.BeneficiaryId] = data.People[designation.BeneficiaryId];
 
         job = new HandoverInvitationRetryJob(
-            vaults, repository, beneficiaries, protector, new FakeTokenService(), sender, holds, incidents,
-            unitOfWork, time);
+            vaults, repository, beneficiaries, protector, new FakeTokenService(), sender, holds,
+            NullLogger<HandoverInvitationRetryJob>.Instance, unitOfWork, time);
     }
 
     private HandoverTurn AddUndeliveredTurn()
@@ -86,7 +86,6 @@ public sealed class HandoverInvitationRetryJobTests
         Assert.Equal(time.GetUtcNow().AddDays(5), turn.ResponseDeadline);
         Assert.NotEqual(oldHash, turn.InvitationTokenHash);
         Assert.Equal(new FakeTokenService().HashOpaqueToken(sender.Sent[0].Token), turn.InvitationTokenHash);
-        Assert.Empty(incidents.Raised);
     }
 
     [Fact]
@@ -113,7 +112,6 @@ public sealed class HandoverInvitationRetryJobTests
         Assert.Equal(time.GetUtcNow(), turn.InvitationLastAttemptAt);
         Assert.Null(turn.InvitationSentAt);
         Assert.Equal(oldHash, turn.InvitationTokenHash);
-        Assert.Empty(incidents.Raised);
 
         // Chưa đủ giãn cách (5 phút) thì chưa thử lại.
         time.Now = time.Now.AddMinutes(4);
@@ -129,7 +127,7 @@ public sealed class HandoverInvitationRetryJobTests
     }
 
     [Fact]
-    public async Task Process_FifthFailure_RaisesNotificationFailedIncident()
+    public async Task Process_FifthFailure_StopsRetrying()
     {
         HandoverTurn turn = AddUndeliveredTurn();
         turn.InvitationAttempts = HandoverInvitationRetryJob.MaxAttempts - 1;
@@ -141,10 +139,6 @@ public sealed class HandoverInvitationRetryJobTests
         await job.ProcessTurnAsync(turn.Id, CancellationToken.None);
 
         Assert.Equal(HandoverInvitationRetryJob.MaxAttempts, turn.InvitationAttempts);
-        Assert.Single(incidents.Raised);
-        Assert.Equal(IncidentType.NotificationFailed, incidents.Raised[0].Type);
-        Assert.Equal(HandoverInvitationRetryJob.TargetTurn, incidents.Raised[0].TargetType);
-        Assert.Equal(turn.Id, incidents.Raised[0].TargetId);
 
         // Đã ngừng thử.
         IReadOnlyList<Guid> ids = await job.FindPendingTurnIdsAsync(CancellationToken.None);
@@ -152,7 +146,7 @@ public sealed class HandoverInvitationRetryJobTests
     }
 
     [Fact]
-    public async Task Process_RecipientWithoutEmail_StopsAndRaisesIncident()
+    public async Task Process_RecipientWithoutEmail_Stops()
     {
         protector.Data[designation.BeneficiaryId] = new BeneficiaryPersonalData
         {
@@ -164,7 +158,6 @@ public sealed class HandoverInvitationRetryJobTests
 
         Assert.Empty(sender.Sent);
         Assert.Equal(HandoverInvitationRetryJob.MaxAttempts, turn.InvitationAttempts);
-        Assert.Single(incidents.Raised);
     }
 
     [Fact]
@@ -177,7 +170,6 @@ public sealed class HandoverInvitationRetryJobTests
 
         Assert.Empty(sender.Sent);
         Assert.Equal(0, turn.InvitationAttempts);
-        Assert.Empty(incidents.Raised);
     }
 
     [Fact]

@@ -138,19 +138,4 @@ public sealed class OwnerFaceTemplateEnrollmentTests
         Assert.Equal(EkycStatus.Pending, verification.Status);
         Assert.Empty(templates.Templates);
     }
-
-    [Fact]
-    public async Task StaticSelfiePath_CreatesNoTemplate()
-    {
-        // EKYC-22: mẫu chỉ tạo từ selfie trực tiếp của phiên thử thách, không từ ảnh tải lên.
-        await StartedAsync(EkycPurpose.OwnerEnrollment);
-        client.LivenessFrame = new EkycLivenessState { Passed = true };
-        await service.SubmitLivenessFrameAsync(Image(), "f.jpg", "image/jpeg", CancellationToken.None);
-
-        EkycStatusResponse response = await service.SubmitSelfieAsync(Image(), "s.jpg", "image/jpeg", CancellationToken.None);
-
-        Assert.Equal("PASSED", response.Status);
-        Assert.Empty(templates.Templates);
-        Assert.Equal(0, client.EmbeddingCalls);
-    }
 }

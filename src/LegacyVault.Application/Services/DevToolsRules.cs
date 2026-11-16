@@ -139,7 +139,7 @@ public static class DevToolsRules
         return Build(CheckInOverdue, Available, string.Empty);
     }
 
-    /// <summary>Mốc 2: hết thời gian chờ, kế hoạch sang bước kiểm tra và mở sự cố cho Executor.</summary>
+    /// <summary>Mốc 2: hết thời gian chờ, kế hoạch sang bước kiểm tra.</summary>
     public static DevMilestoneResponse EvaluateGraceEnded(PlanStatus status, CheckInPeriod? openPeriod, DateTimeOffset now)
     {
         if (status == PlanStatus.AwaitingCheck || IsBeyondCheckIn(status))

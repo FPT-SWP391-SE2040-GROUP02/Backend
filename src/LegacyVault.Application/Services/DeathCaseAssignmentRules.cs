@@ -39,36 +39,12 @@ public static class DeathCaseAssignmentRules
     }
 
     /// <summary>
-    /// D1, ASSIGN-04, TIME-07: hạn Verifier phải ra quyết định = mốc muộn hơn giữa (start + 48 giờ)
-    /// và (hết phản đối + 48 giờ). start là lúc giao hoặc lúc Executor gửi bản mới gần nhất.
-    /// Các đồng hồ không đặt lại hay tạm dừng nhau; hạn Verifier chỉ có mức sàn "sau khi hồ sơ duyệt được".
+    /// D1, ASSIGN-04: hạn Verifier phải ra quyết định = start + ReviewDueHours (48 giờ). start là lúc giao
+    /// hoặc lúc Executor gửi bản mới gần nhất.
     /// </summary>
-    public static DateTimeOffset ComputeDueAt(DateTimeOffset start, DateTimeOffset? objectionEndsAt = null)
+    public static DateTimeOffset ComputeDueAt(DateTimeOffset start)
     {
-        DateTimeOffset dueAt = start + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
-        if (objectionEndsAt != null)
-        {
-            DateTimeOffset afterObjection = objectionEndsAt.Value + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
-            if (afterObjection > dueAt)
-            {
-                dueAt = afterObjection;
-            }
-        }
-        return dueAt;
-    }
-
-    /// <summary>
-    /// D1, TIME-07: khi Owner nhận thư và đồng hồ 72 giờ bắt đầu, dời hạn của phân công đang hiệu lực
-    /// nếu hạn hiện tại sớm hơn (hết phản đối + 48 giờ). Không bao giờ rút ngắn hạn.
-    /// </summary>
-    public static DateTimeOffset ExtendForObjection(DateTimeOffset dueAt, DateTimeOffset objectionEndsAt)
-    {
-        DateTimeOffset afterObjection = objectionEndsAt + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
-        if (afterObjection > dueAt)
-        {
-            return afterObjection;
-        }
-        return dueAt;
+        return start + TimeUnits.Hours(DeathCaseRules.ReviewDueHours);
     }
 
     /// <summary>TIME-01: đúng lúc hết hạn là quá hạn.</summary>

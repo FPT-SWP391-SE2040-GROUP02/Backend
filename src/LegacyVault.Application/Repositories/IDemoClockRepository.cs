@@ -32,13 +32,11 @@ public interface IDemoClockRepository
     Task<List<DemoOpenPeriod>> ListOpenCheckInPeriodsAsync(CancellationToken ct);
 
     /// <summary>
-    /// Các mốc hạn của lời mời Người thực thi, hạn dịch vụ, hạn phản hồi/quyết định/tải của bàn giao và sự cố,
-    /// nằm trong khoảng (after, until]. remindAfter là khoảng từ lúc mời tới lúc nhắc, incidentEscalateAfter là
-    /// khoảng từ lúc tạo sự cố tới lúc báo lên.
+    /// Các mốc hạn của lời mời Người thực thi, hạn dịch vụ, hạn phản hồi/quyết định/tải của bàn giao,
+    /// nằm trong khoảng (after, until]. remindAfter là khoảng từ lúc mời tới lúc nhắc.
     /// </summary>
     Task<List<DemoDeadline>> ListUpcomingDeadlinesAsync(
-        DateTimeOffset after, DateTimeOffset until, TimeSpan remindAfter, TimeSpan incidentEscalateAfter,
-        CancellationToken ct);
+        DateTimeOffset after, DateTimeOffset until, TimeSpan remindAfter, CancellationToken ct);
 
     /// <summary>Số thư nhắc điểm danh đã gửi từ trước tới nay (để đếm số thư gửi thêm ở mỗi bước).</summary>
     Task<int> CountSentCheckInRemindersAsync(CancellationToken ct);

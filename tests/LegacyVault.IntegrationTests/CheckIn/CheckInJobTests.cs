@@ -1,7 +1,9 @@
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.GoogleAuth;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.CheckIn;
@@ -16,13 +18,17 @@ public sealed class CheckInJobTests
 
     private readonly FakeCheckInRepository repository = new FakeCheckInRepository();
     private readonly FakeCheckInReminderSender sender = new FakeCheckInReminderSender();
+    private readonly FakeCheckInOverdueNoticeSender overdueSender = new FakeCheckInOverdueNoticeSender();
+    private readonly FakeAvailableExecutorReader executorReader = new FakeAvailableExecutorReader();
+    private readonly FakeUserRepository users = new FakeUserRepository();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider clock = new FixedTimeProvider(Start);
     private readonly CheckInJob job;
 
     public CheckInJobTests()
     {
-        job = new CheckInJob(repository, sender, unitOfWork, clock);
+        job = new CheckInJob(repository, sender, overdueSender, executorReader, users,
+            NullLogger<CheckInJob>.Instance, unitOfWork, clock);
     }
 
     private CheckInPeriod SeedPeriod(PlanStatus planStatus)
@@ -37,6 +43,92 @@ public sealed class CheckInJobTests
     {
         clock.Now = now;
         await job.ProcessPeriodAsync(period.Id, CancellationToken.None);
+    }
+
+    private User AddExecutor(string email, UserStatus status)
+    {
+        User user = new User();
+        user.Email = email;
+        user.FullName = "Người thực thi";
+        user.Status = status;
+        users.Users.Add(user);
+        Executor executor = new Executor();
+        executor.UserId = user.Id;
+        executor.Status = ExecutorStatus.Accepted;
+        executorReader.Available.Add(executor);
+        return user;
+    }
+
+    [Fact]
+    public async Task Process_TransitionToAwaitingCheck_NotifiesExecutorExactlyOnce()
+    {
+        CheckInPeriod period = SeedPeriod(PlanStatus.CheckinOverdue);
+        period.OverdueAt = Due;
+        AddExecutor("executor@example.com", UserStatus.Active);
+
+        await RunAtAsync(period, GraceEnds);
+        await RunAtAsync(period, GraceEnds.AddMinutes(1));
+        await RunAtAsync(period, GraceEnds.AddDays(1));
+
+        Assert.Equal(PlanStatus.AwaitingCheck, period.Plan.Status);
+        CheckInOverdueNotice notice = Assert.Single(overdueSender.Sent);
+        Assert.Equal("executor@example.com", notice.ToEmail);
+        Assert.Equal(period.Plan.VaultId, notice.VaultId);
+        Assert.Equal(period.DueAt, notice.DueAt);
+    }
+
+    [Fact]
+    public async Task Process_BeforeAwaitingCheck_DoesNotNotifyExecutor()
+    {
+        CheckInPeriod period = SeedPeriod(PlanStatus.Active);
+        AddExecutor("executor@example.com", UserStatus.Active);
+
+        await RunAtAsync(period, Due);
+
+        Assert.Equal(PlanStatus.CheckinOverdue, period.Plan.Status);
+        Assert.Empty(overdueSender.Sent);
+    }
+
+    [Fact]
+    public async Task Process_NoExecutor_StillMovesStatusAndSendsNothing()
+    {
+        CheckInPeriod period = SeedPeriod(PlanStatus.CheckinOverdue);
+        period.OverdueAt = Due;
+
+        await RunAtAsync(period, GraceEnds);
+
+        Assert.Equal(PlanStatus.AwaitingCheck, period.Plan.Status);
+        Assert.Empty(overdueSender.Sent);
+    }
+
+    [Fact]
+    public async Task Process_LockedExecutorIsSkipped()
+    {
+        CheckInPeriod period = SeedPeriod(PlanStatus.CheckinOverdue);
+        period.OverdueAt = Due;
+        AddExecutor("locked@example.com", UserStatus.Locked);
+        AddExecutor("active@example.com", UserStatus.Active);
+
+        await RunAtAsync(period, GraceEnds);
+
+        CheckInOverdueNotice notice = Assert.Single(overdueSender.Sent);
+        Assert.Equal("active@example.com", notice.ToEmail);
+    }
+
+    [Fact]
+    public async Task Process_SendFailure_IsSwallowedAndStatusStaysChanged()
+    {
+        CheckInPeriod period = SeedPeriod(PlanStatus.CheckinOverdue);
+        period.OverdueAt = Due;
+        AddExecutor("executor@example.com", UserStatus.Active);
+        overdueSender.FailNext = true;
+
+        await RunAtAsync(period, GraceEnds);
+        await RunAtAsync(period, GraceEnds.AddMinutes(1));
+
+        Assert.Equal(PlanStatus.AwaitingCheck, period.Plan.Status);
+        Assert.Equal(GraceEnds, period.AwaitingCheckAt);
+        Assert.Empty(overdueSender.Sent);
     }
 
     [Fact]

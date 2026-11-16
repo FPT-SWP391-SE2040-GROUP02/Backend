@@ -11,7 +11,7 @@ namespace LegacyVault.Infrastructure.Jobs;
 /// nhắc Verifier sắp quá hạn và giao lại khi quá hạn hoặc Verifier mất quyền (ASSIGN-04, TIME-05, NFR-03, D6).
 /// </summary>
 /// <remarks>
-/// Cùng mẫu với DeathCaseNoticeMonitor: chờ hết một chu kỳ rồi mới quét; mỗi hồ sơ một DI scope
+/// Chờ hết một chu kỳ rồi mới quét; mỗi hồ sơ một DI scope
 /// và try/catch riêng; chỉ log kiểu exception và id (OPS-04). Chỉ Reassigned và ReminderFailed được log;
 /// NoCandidate, Conflict, None không log để tránh đầy log mỗi phút.
 /// </remarks>
@@ -88,9 +88,11 @@ public sealed class DeathCaseAssignmentMonitor : BackgroundService
                     {
                         logger.LogWarning("Gửi thư nhắc Verifier hồ sơ chứng tử {CaseId} lỗi, vòng sau thử lại.", id);
                     }
-                    // Không có Verifier phù hợp → sự cố NO_VERIFIER có người phụ trách và hạn (ASSIGN-04); giao được thì đóng sự cố.
-                    IOperationsRecorder recorder = scope.ServiceProvider.GetRequiredService<IOperationsRecorder>();
-                    await recorder.RecordAssignmentOutcomeAsync(id, outcome, ct);
+                    else if (outcome == DeathCaseAssignmentOutcome.NoCandidate)
+                    {
+                        // ASSIGN-04: không có Verifier phù hợp thì hồ sơ vẫn chờ, vòng sau thử giao lại.
+                        logger.LogWarning("Hồ sơ chứng tử {CaseId} chưa có Verifier phù hợp để giao.", id);
+                    }
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

@@ -79,7 +79,7 @@ public sealed class AuthOpenApiTests
             {
                 ["ConnectionStrings:Default"] = "Server=127.0.0.1,1;Database=Unavailable;User Id=sa;Password=FixtureOnly;TrustServerCertificate=True;Connect Timeout=1",
                 ["Email:Smtp:UserName"] = "", ["Email:Smtp:Password"] = "",
-                ["CheckIn:Enabled"] = "false", ["DeathCase:NoticeJobEnabled"] = "false",
+                ["CheckIn:Enabled"] = "false",
                 ["Handover:Enabled"] = "false",
             }));
         }

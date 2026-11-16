@@ -51,16 +51,6 @@ public sealed class EkycServiceTests
         });
     }
 
-    /// <summary>Đọc mặt trước rồi qua thử thách camera: điều kiện để đường ảnh selfie tĩnh được so khớp.</summary>
-    private async Task SubmitDocumentAndPassChallengeAsync()
-    {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
-        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
-        await service.StartLivenessAsync(CancellationToken.None);
-        client.LivenessFrame = new EkycLivenessState { Passed = true, ChallengeCompleted = true, PadPassed = true };
-        await service.SubmitLivenessFrameAsync(Image(), "frame.jpg", "image/jpeg", CancellationToken.None);
-    }
-
     private static MemoryStream Image()
     {
         return new MemoryStream(new byte[] { 1, 2, 3 });
@@ -192,34 +182,9 @@ public sealed class EkycServiceTests
         Assert.Equal(ErrorCode.FileTooLarge, error.Code);
     }
 
-    [Fact]
-    public async Task Selfie_WithoutDocument_Conflict()
-    {
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None));
-
-        Assert.Equal(ErrorCode.EkycDocumentExpired, error.Code);
-    }
-
-    [Fact]
-    public async Task Selfie_Match_PassesWithServerThresholdAndClearsToken()
-    {
-        await SubmitDocumentAndPassChallengeAsync();
-
-        EkycStatusResponse response = await service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
-
-        Assert.Equal("PASSED", response.Status);
-        Assert.Equal(0.6, response.FaceMatchScore);
-        Assert.Equal(EkycRules.MatchThreshold, client.LastThreshold);
-        EkycVerification saved = Assert.Single(repository.Verifications);
-        Assert.Null(saved.DocumentToken);
-        Assert.Equal(new List<string> { "token-1" }, client.DeletedTokens);
-    }
-
     /// <summary>Cài ngưỡng từ cấu hình (Ekyc:MatchThreshold): service phải truyền đúng giá trị đó cho eKYC và trả trong response.</summary>
     [Fact]
-    public async Task Selfie_CustomConfiguredThreshold_IsPassedToClientAndReported()
+    public async Task Complete_CustomConfiguredThreshold_IsPassedToClientAndReported()
     {
         double customThreshold = 0.5;
         EkycService configured = new EkycService(
@@ -239,70 +204,17 @@ public sealed class EkycServiceTests
             DocumentTokenExpiresAt = Now + TimeSpan.FromMinutes(30),
             CitizenIdLast4 = "2345",
             BackSubmittedAt = Now,
-            LivenessPassed = true,
-            SpoofCheckPassed = true,
+            LivenessSessionId = "live-custom",
         };
         repository.Verifications.Add(pending);
 
         // 0.4 >= 0.363 mặc định nhưng < 0.5 cấu hình: phải FAILED khi dùng ngưỡng cấu hình.
         client.Comparison = new EkycFaceComparison { Score = 0.4, Matched = false };
-        EkycStatusResponse response = await configured.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
+        EkycStatusResponse response = await configured.CompleteLivenessAsync(CancellationToken.None);
 
         Assert.Equal("FAILED", response.Status);
         Assert.Equal(customThreshold, client.LastThreshold);
         Assert.Equal(customThreshold, response.MatchThreshold);
-    }
-
-    [Fact]
-    public async Task Selfie_ScoreBelowThreshold_FailsEvenIfServiceSaysMatched()
-    {
-        await SubmitDocumentAndPassChallengeAsync();
-        client.Comparison = new EkycFaceComparison { Score = 0.2, Matched = true };
-
-        EkycStatusResponse response = await service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
-
-        Assert.Equal("FAILED", response.Status);
-    }
-
-    [Fact]
-    public async Task Selfie_Spoof_FailsWithoutMatching()
-    {
-        await SubmitDocumentAndPassChallengeAsync();
-        client.Spoof = new EkycSpoofCheck { Passed = false, LiveScore = 0.1 };
-
-        EkycStatusResponse response = await service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
-
-        Assert.Equal("FAILED", response.Status);
-        Assert.False(response.SpoofCheckPassed);
-        Assert.Null(response.FaceMatchScore);
-        Assert.Null(client.LastThreshold);
-    }
-
-    [Fact]
-    public async Task Selfie_SecondAttemptOnSameDocument_Conflict()
-    {
-        await SubmitDocumentAndPassChallengeAsync();
-        await service.SubmitSelfieAsync(Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None));
-
-        Assert.Equal(ErrorCode.EkycDocumentExpired, error.Code);
-    }
-
-    [Fact]
-    public async Task Selfie_AfterTokenExpired_Conflict()
-    {
-        await SubmitDocumentAndPassChallengeAsync();
-        clock.Now = Now + EkycRules.DocumentTokenLifetime;
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None));
-
-        Assert.Equal(ErrorCode.EkycDocumentExpired, error.Code);
     }
 
     [Theory]

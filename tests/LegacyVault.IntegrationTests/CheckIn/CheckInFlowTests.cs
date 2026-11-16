@@ -123,7 +123,7 @@ public sealed class CheckInFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task WebAndWatchConcurrentCheckIn_OnlyOneNewPeriod()
+    public async Task ConcurrentCheckIn_OnlyOneNewPeriod()
     {
         (HttpClient client, _, Guid planId) = await CreateVaultWithPlanAsync(PlanStatus.Active);
         HttpResponseMessage seeded = await client.PostAsync("/api/v1/check-ins", null);
@@ -134,10 +134,9 @@ public sealed class CheckInFlowTests : IAsyncLifetime
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastCheckInAt, DateTimeOffset.UtcNow.AddDays(-1)));
         });
 
-        Task<HttpResponseMessage> web = client.PostAsync("/api/v1/check-ins", null);
-        Task<HttpResponseMessage> watch = client.PostAsJsonAsync("/api/v1/check-ins/smartwatch",
-            new { heartRate = 75, isOnWrist = true });
-        HttpResponseMessage[] responses = await Task.WhenAll(web, watch);
+        Task<HttpResponseMessage> first = client.PostAsync("/api/v1/check-ins", null);
+        Task<HttpResponseMessage> second = client.PostAsync("/api/v1/check-ins", null);
+        HttpResponseMessage[] responses = await Task.WhenAll(first, second);
         foreach (HttpResponseMessage response in responses)
         {
             Assert.True(response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Conflict);

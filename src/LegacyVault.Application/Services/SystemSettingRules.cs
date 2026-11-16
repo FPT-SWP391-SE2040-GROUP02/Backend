@@ -31,8 +31,6 @@ public static class SystemSettingRules
     public const string FirstReminderKey = "CheckIn.FirstReminderDaysBeforeDue";
     public const string SecondReminderKey = "CheckIn.SecondReminderDaysBeforeDue";
     public const string DueReminderCountKey = "CheckIn.DueReminderCount";
-    public const string IncidentReminderKey = "Incident.ReminderAfterHours";
-    public const string IncidentEscalateKey = "Incident.EscalateAfterHours";
     public const string ExecutorExpiresKey = "Executor.InvitationExpiresDays";
     public const string ExecutorReminderKey = "Executor.ReminderAfterHours";
 
@@ -54,8 +52,6 @@ public static class SystemSettingRules
         { "CheckIn.ThirdReminderDaysBeforeDue", 1 },
         { "CheckIn.FourthReminderDaysBeforeDue", 1 },
         { "CheckIn.FifthReminderDaysBeforeDue", 1 },
-        { IncidentReminderKey, 48 },
-        { IncidentEscalateKey, 72 },
         { ExecutorExpiresKey, 7 },
         { ExecutorReminderKey, 48 },
     };
@@ -98,10 +94,6 @@ public static class SystemSettingRules
         Add(rules, "DeathCase.MaxFilesPerVersion", "Số tệp tối đa mỗi bản hồ sơ chứng tử", 1, 50);
         Add(rules, "DeathCase.MaxFileSizeMb", "Dung lượng tối đa một tệp hồ sơ chứng tử (MiB)", 1, 200);
         Add(rules, "DeathCase.ReviewDueHours", "Hạn Người xét duyệt hoàn tất thẩm định (giờ)", 1, 720);
-
-        Add(rules, IncidentReminderKey, "Giờ nhắc người phụ trách sự cố (giờ)", 1, 720);
-        Add(rules, IncidentEscalateKey, "Giờ báo sự cố lên Quản trị viên (giờ)", 1, 720);
-        Add(rules, "Incident.MaxReviewIntervalDays", "Khoảng cách tối đa giữa các lần hẹn xem lại sự cố (ngày)", 1, 60);
 
         Add(rules, "Limits.MaxUploadsPerHour", "Số lần tải lên tối đa mỗi giờ", 1, 10000);
         Add(rules, "Limits.MaxAssetsPerVault", "Số tài sản tối đa trong một kho", 1, 100000);
@@ -241,14 +233,6 @@ public static class SystemSettingRules
                     + " (số ngày lớn hơn). Hiện là "
                     + farther.ToString(CultureInfo.InvariantCulture) + " ngày và " + nearer.ToString(CultureInfo.InvariantCulture) + " ngày.";
             }
-        }
-
-        long reminder = Pick(effective, IncidentReminderKey);
-        long escalate = Pick(effective, IncidentEscalateKey);
-        if (escalate <= reminder)
-        {
-            return "Giờ báo sự cố lên Quản trị viên phải sau giờ nhắc người phụ trách. Hiện là "
-                + escalate.ToString(CultureInfo.InvariantCulture) + " giờ và " + reminder.ToString(CultureInfo.InvariantCulture) + " giờ.";
         }
 
         long expiresDays = Pick(effective, ExecutorExpiresKey);

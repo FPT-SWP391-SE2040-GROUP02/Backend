@@ -2,6 +2,7 @@ using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace LegacyVault.Application.Services;
 
@@ -9,17 +10,29 @@ public sealed class CheckInJob : ICheckInJob
 {
     private readonly ICheckInRepository repository;
     private readonly ICheckInReminderSender reminderSender;
+    private readonly ICheckInOverdueNoticeSender overdueNoticeSender;
+    private readonly IExecutorReader executorReader;
+    private readonly IUserRepository userRepository;
+    private readonly ILogger<CheckInJob> logger;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
     public CheckInJob(
         ICheckInRepository repository,
         ICheckInReminderSender reminderSender,
+        ICheckInOverdueNoticeSender overdueNoticeSender,
+        IExecutorReader executorReader,
+        IUserRepository userRepository,
+        ILogger<CheckInJob> logger,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
         this.repository = repository;
         this.reminderSender = reminderSender;
+        this.overdueNoticeSender = overdueNoticeSender;
+        this.executorReader = executorReader;
+        this.userRepository = userRepository;
+        this.logger = logger;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -52,10 +65,55 @@ public sealed class CheckInJob : ICheckInJob
 
         if (plan.Status == PlanStatus.AwaitingCheck)
         {
+            // DMS-05: đầu hàm đã loại kế hoạch không ở Active/CheckinOverdue, nên tới đây kế hoạch vừa sang
+            // AWAITING_CHECK ngay trong lần chạy này và đã lưu: đây là lần duy nhất báo Executor cho kỳ này.
+            await NotifyExecutorsAsync(period, ct);
             // Đã giao việc cho Executor; không nhắc Owner nữa.
             return;
         }
         await SendLatestReminderAsync(period, now, ct);
+    }
+
+    /// <summary>
+    /// DMS-05: báo từng Executor nhận được việc của kho rằng chủ kho quá hạn điểm danh. Gọi sau khi đã lưu trạng thái.
+    /// Không có Executor thì chỉ ghi log cảnh báo. Gửi lỗi chỉ ghi log, không ném và không hoàn tác việc đổi trạng thái.
+    /// </summary>
+    private async Task NotifyExecutorsAsync(CheckInPeriod period, CancellationToken ct)
+    {
+        Guid vaultId = period.Plan.VaultId;
+        try
+        {
+            List<Executor> executors = await executorReader.GetAvailableAsync(vaultId, ct);
+            if (executors.Count == 0)
+            {
+                logger.LogWarning("Kho {VaultId} quá hạn điểm danh nhưng chưa có Executor hiệu lực để báo.", vaultId);
+                return;
+            }
+            foreach (Executor executor in executors)
+            {
+                if (executor.UserId == null)
+                {
+                    continue;
+                }
+                User? user = await userRepository.FindByIdAsync(executor.UserId.Value, ct);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email) || user.Status != UserStatus.Active)
+                {
+                    continue;
+                }
+                CheckInOverdueNotice notice = new CheckInOverdueNotice();
+                notice.ToEmail = user.Email;
+                notice.FullName = user.FullName;
+                notice.VaultId = vaultId;
+                notice.DueAt = period.DueAt;
+                await overdueNoticeSender.SendAsync(notice, ct);
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            // Không ghi chi tiết lỗi (có thể chứa email).
+            logger.LogWarning("Gửi thư báo quá hạn điểm danh cho Executor kho {VaultId} lỗi: {ExceptionType}",
+                vaultId, ex.GetType().Name);
+        }
     }
 
     /// <summary>

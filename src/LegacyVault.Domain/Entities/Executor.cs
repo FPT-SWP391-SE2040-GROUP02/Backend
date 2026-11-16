@@ -34,16 +34,8 @@ public class Executor
     /// <summary>Mã băm SHA-256 của token trong link mời, dạng hex. Không trùng nhau.</summary>
     public string InvitationTokenHash { get; set; } = string.Empty;
 
-    /// <summary>Executor này cũng là người nhận trong kho.</summary>
-    public bool IsBeneficiary { get; set; }
-
-    /// <summary>Hồ sơ người nhận tương ứng khi IsBeneficiary là true; null khi không phải người nhận.</summary>
-    public Guid? BeneficiaryId { get; set; }
-
     /// <summary>SETUP-06: lời mời này thay cho Executor đã chấp nhận (id dòng cũ); khi người mới chấp nhận thì dòng cũ thành Revoked trong cùng giao dịch.</summary>
     public Guid? ReplacesExecutorId { get; set; }
-
-    public Beneficiary? Beneficiary { get; set; }
 
     public DateTimeOffset InvitedAt { get; set; }
 

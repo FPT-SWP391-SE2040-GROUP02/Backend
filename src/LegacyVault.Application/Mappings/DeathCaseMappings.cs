@@ -161,28 +161,4 @@ public static class DeathCaseMappings
         }
         return null;
     }
-
-    /// <summary>Thông báo của bản mới nhất; cùng bản thì lấy thông báo tạo sau. Chưa có → null.</summary>
-    private static DeathCaseNoticeResponse? ToNoticeResponse(DeathCase deathCase)
-    {
-        DeathCaseNotice? latest = null;
-        foreach (DeathCaseNotice notice in deathCase.Notices)
-        {
-            if (latest == null
-                || notice.VersionNo > latest.VersionNo
-                || (notice.VersionNo == latest.VersionNo && notice.CreatedAt > latest.CreatedAt))
-            {
-                latest = notice;
-            }
-        }
-        if (latest == null)
-        {
-            return null;
-        }
-
-        DeathCaseNoticeResponse response = new DeathCaseNoticeResponse();
-        response.Status = latest.Status.ToApiString();
-        response.DeliveredAt = latest.DeliveredAt;
-        return response;
-    }
 }

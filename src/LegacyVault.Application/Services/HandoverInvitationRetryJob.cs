@@ -3,6 +3,7 @@ using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace LegacyVault.Application.Services;
 
@@ -15,7 +16,7 @@ public interface IHandoverInvitationRetryJob
     /// <summary>Id các lượt cần thử gửi (đã đủ tuổi, chưa đủ số lần thử). Còn phải kiểm giãn cách ở ProcessTurnAsync.</summary>
     Task<IReadOnlyList<Guid>> FindPendingTurnIdsAsync(CancellationToken ct);
 
-    /// <summary>Thử gửi một lượt. Thành công thì đặt InvitationSentAt; đủ số lần lỗi thì mở sự cố NotificationFailed.</summary>
+    /// <summary>Thử gửi một lượt. Thành công thì đặt InvitationSentAt; đủ số lần lỗi thì ghi log cảnh báo và ngừng thử.</summary>
     Task ProcessTurnAsync(Guid turnId, CancellationToken ct);
 }
 
@@ -25,8 +26,8 @@ public interface IHandoverInvitationRetryJob
 ///   nên gửi lỗi thì link cũ còn nguyên. Lượt có RowVersion nên hai tiến trình cùng xử lý thì bên lưu sau bị xung đột.
 /// - INVITE-04: lời mời chưa từng giao được thì hạn phản hồi bắt đầu tính từ lần giao thành công đầu tiên.
 /// - Giãn cách giữa các lần thử tăng dần (5 phút nhân số lần lỗi); đủ 5 lần lỗi hoặc người nhận không có email
-///   thì ngừng thử và mở sự cố có người phụ trách (ASSIGN-04) để Executor/Admin xử lý, không để trôi.
-/// - Sự cố và log không chứa email, token hay tên gói (OPS-04, SEC-07).
+///   thì ngừng thử và ghi log cảnh báo.
+/// - Log không chứa email, token hay tên gói (OPS-04, SEC-07).
 /// </remarks>
 public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
 {
@@ -38,8 +39,6 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
     /// <summary>Giãn cách cơ bản giữa các lần thử; lần thứ n chờ n lần giá trị này.</summary>
     public static readonly TimeSpan BackoffStep = TimeSpan.FromMinutes(5);
 
-    public const string TargetTurn = "HANDOVER_TURN";
-
     private readonly IVaultRepository vaults;
     private readonly IHandoverRepository handover;
     private readonly IBeneficiaryRepository beneficiaries;
@@ -47,7 +46,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
     private readonly ITokenService tokens;
     private readonly IHandoverInvitationSender sender;
     private readonly IHoldReader holdReader;
-    private readonly IIncidentService incidentService;
+    private readonly ILogger<HandoverInvitationRetryJob> logger;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -61,7 +60,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         ITokenService tokens,
         IHandoverInvitationSender sender,
         IHoldReader holdReader,
-        IIncidentService incidentService,
+        ILogger<HandoverInvitationRetryJob> logger,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IHandoverContactReader? contactReader = null)
@@ -74,7 +73,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         this.tokens = tokens;
         this.sender = sender;
         this.holdReader = holdReader;
-        this.incidentService = incidentService;
+        this.logger = logger;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -123,11 +122,11 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         }
         if (string.IsNullOrWhiteSpace(email))
         {
-            // Không có email thì thử lại cũng vô ích: ngừng thử và giao cho người xử lý.
+            // Không có email thì thử lại cũng vô ích: ngừng thử và ghi log cảnh báo.
             turn.InvitationAttempts = MaxAttempts;
             turn.InvitationLastAttemptAt = now;
             turn.UpdatedAt = now;
-            await RaiseIncidentAsync(vault, turn, "Người nhận chưa có email nên chưa gửi được lời mời nhận tài sản.", ct);
+            WarnInvitationNotSent(vault, turn, "Người nhận chưa có email nên chưa gửi được lời mời nhận tài sản.");
             await unitOfWork.SaveChangesAsync(ct);
             return;
         }
@@ -163,8 +162,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
             turn.UpdatedAt = now;
             if (turn.InvitationAttempts >= MaxAttempts)
             {
-                await RaiseIncidentAsync(vault, turn,
-                    "Không gửi được lời mời nhận tài sản cho người nhận sau nhiều lần thử.", ct);
+                WarnInvitationNotSent(vault, turn, "Không gửi được lời mời nhận tài sản cho người nhận sau nhiều lần thử.");
             }
             await unitOfWork.SaveChangesAsync(ct);
             return;
@@ -174,9 +172,6 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         turn.InvitationSentAt = now;
         turn.ResponseDeadline = responseDeadline;
         turn.UpdatedAt = now;
-        // Đã giao được: đóng sự cố (nếu trước đó đã mở vì lỗi) cùng lần lưu.
-        await incidentService.ResolveByTargetAsync(IncidentType.NotificationFailed, TargetTurn, turn.Id,
-            "Lời mời đã được gửi.", ct);
         await unitOfWork.SaveChangesAsync(ct);
     }
 
@@ -190,8 +185,9 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         return now - turn.InvitationLastAttemptAt.Value >= wait;
     }
 
-    private async Task RaiseIncidentAsync(Vault vault, HandoverTurn turn, string summary, CancellationToken ct)
+    /// <summary>Chỉ ghi mã lượt và mã kho, không ghi email hay tên người nhận.</summary>
+    private void WarnInvitationNotSent(Vault vault, HandoverTurn turn, string reason)
     {
-        await incidentService.RaiseAsync(IncidentType.NotificationFailed, vault.Id, TargetTurn, turn.Id, summary, null, ct);
+        logger.LogWarning("Lời mời bàn giao không gửi được: {Reason} (lượt {TurnId}, kho {VaultId}).", reason, turn.Id, vault.Id);
     }
 }

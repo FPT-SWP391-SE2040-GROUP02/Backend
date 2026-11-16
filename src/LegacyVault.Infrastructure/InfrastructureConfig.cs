@@ -113,19 +113,7 @@ public static class InfrastructureConfig
         services.AddScoped<IEntitlementExpiryRepository, EntitlementExpiryRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IHoldRepository, HoldRepository>();
-        services.AddScoped<IIncidentRepository, IncidentRepository>();
         services.AddScoped<IAdminUserRepository, AdminUserRepository>();
-        services.AddScoped<IOperationsScanRepository, OperationsScanRepository>();
-        services.AddHostedService<IncidentMonitor>();
-        services.AddSingleton<IIncidentNoticeSender>(provider =>
-        {
-            SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
-            if (smtp.IsConfigured)
-            {
-                return ActivatorUtilities.CreateInstance<SmtpIncidentNoticeSender>(provider);
-            }
-            return ActivatorUtilities.CreateInstance<LogIncidentNoticeSender>(provider);
-        });
         services.AddScoped<IOwnerIdentityReader, OwnerIdentityReader>();
         services.AddScoped<IStorageReservationRepository, StorageReservationRepository>();
 
@@ -275,12 +263,6 @@ public static class InfrastructureConfig
                     {
                         var principal = context.Principal;
                         if (principal == null)
-                        {
-                            return;
-                        }
-
-                        var roleClaim = principal.FindFirst("role")?.Value;
-                        if (string.Equals(roleClaim, JwtTokenService.SmartwatchRoleClaim, StringComparison.OrdinalIgnoreCase))
                         {
                             return;
                         }

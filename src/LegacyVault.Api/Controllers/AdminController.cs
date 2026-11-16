@@ -20,18 +20,16 @@ namespace LegacyVault.Api.Controllers;
 public sealed class AdminController : ControllerBase
 {
     private readonly IAdminService adminService;
-    private readonly IIncidentService incidentService;
     private readonly IHoldService holdService;
     private readonly IPlanSetupService planSetupService;
     private readonly INotaryCardService notaryCardService;
 
-    public AdminController(IAdminService adminService, IIncidentService incidentService, IHoldService holdService,
+    public AdminController(IAdminService adminService, IHoldService holdService,
         IPlanSetupService planSetupService, INotaryCardService notaryCardService)
     {
         this.planSetupService = planSetupService;
         this.notaryCardService = notaryCardService;
         this.adminService = adminService;
-        this.incidentService = incidentService;
         this.holdService = holdService;
     }
 
@@ -155,65 +153,6 @@ public sealed class AdminController : ControllerBase
     public async Task<ExecutorInvitationResponse> AssignExecutor(Guid vaultId, AssignExecutorRequest request, CancellationToken ct)
     {
         return await planSetupService.AssignByAdminAsync(vaultId, request, ct);
-    }
-
-    // ---- Sự cố ----
-
-    [HttpGet("incidents")]
-    [ProducesResponseType<PaginatedList<IncidentSummaryResponse>>(StatusCodes.Status200OK)]
-    public Task<PaginatedList<IncidentSummaryResponse>> ListIncidents(
-        [FromQuery] string? status, [FromQuery] string? type, [FromQuery] Guid? assigneeUserId,
-        [FromQuery] string? search, CancellationToken ct, [FromQuery] bool overdueOnly = false,
-        [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20, [FromQuery] bool mine = false)
-    {
-        return incidentService.ListAsync(
-            status, type, assigneeUserId, search, overdueOnly, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct, mine);
-    }
-
-    /// <summary>Số sự cố theo trạng thái cho các thẻ lọc; nhận cùng bộ lọc với danh sách, trừ trạng thái.</summary>
-    [HttpGet("incidents/counts")]
-    [ProducesResponseType<CountsResponse>(StatusCodes.Status200OK)]
-    public Task<CountsResponse> CountIncidents(
-        [FromQuery] string? type, [FromQuery] Guid? assigneeUserId, [FromQuery] string? search, CancellationToken ct,
-        [FromQuery] bool overdueOnly = false, [FromQuery] bool mine = false)
-    {
-        return incidentService.CountsAsync(type, assigneeUserId, search, overdueOnly, mine, ct);
-    }
-
-    [HttpGet("incidents/{incidentId:guid}")]
-    [ProducesResponseType<IncidentDetailResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public Task<IncidentDetailResponse> GetIncident(Guid incidentId, CancellationToken ct)
-    {
-        return incidentService.GetAsync(incidentId, ct);
-    }
-
-    [HttpPost("incidents/{incidentId:guid}/assign")]
-    [ProducesResponseType<IncidentDetailResponse>(StatusCodes.Status200OK)]
-    public Task<IncidentDetailResponse> AssignIncident(Guid incidentId, AssignIncidentRequest request, CancellationToken ct)
-    {
-        return incidentService.AssignAsync(incidentId, request.AssigneeUserId!.Value, request.Reason, request.Etag, ct);
-    }
-
-    [HttpPost("incidents/{incidentId:guid}/notes")]
-    [ProducesResponseType<IncidentDetailResponse>(StatusCodes.Status200OK)]
-    public Task<IncidentDetailResponse> AddIncidentNote(Guid incidentId, IncidentNoteRequest request, CancellationToken ct)
-    {
-        return incidentService.AddNoteAsync(incidentId, request.Note, ct);
-    }
-
-    [HttpPost("incidents/{incidentId:guid}/review")]
-    [ProducesResponseType<IncidentDetailResponse>(StatusCodes.Status200OK)]
-    public Task<IncidentDetailResponse> ReviewIncident(Guid incidentId, ReviewIncidentRequest request, CancellationToken ct)
-    {
-        return incidentService.ReviewAsync(incidentId, request.NextReviewAt!.Value, request.Note, request.Etag, ct);
-    }
-
-    [HttpPost("incidents/{incidentId:guid}/resolve")]
-    [ProducesResponseType<IncidentDetailResponse>(StatusCodes.Status200OK)]
-    public Task<IncidentDetailResponse> ResolveIncident(Guid incidentId, ResolveIncidentRequest request, CancellationToken ct)
-    {
-        return incidentService.ResolveAsync(incidentId, request.Note, request.Etag, ct);
     }
 
     // ---- Hold (chỉ xem; hold do hệ thống đặt và gỡ) ----

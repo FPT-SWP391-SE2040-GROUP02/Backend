@@ -53,8 +53,8 @@ Lượt được lưu **trước** khi gửi thư, nên nếu lần gửi đầu
 - Chọn lượt còn `INVITED`, chưa ai nhận, `InvitationSentAt = null`, đã tạo ít nhất 2 phút và mới thử dưới 5 lần.
 - Giãn cách giữa các lần thử tăng dần: lần lỗi thứ n chờ n x 5 phút. Kho có hold hoặc kế hoạch không còn `HANDOVER_IN_PROGRESS` thì tạm dừng, không tính là lần lỗi.
 - Mỗi lần gửi dùng token mới; DB chỉ lưu mã băm mới sau khi email được nhận, nên gửi lỗi thì link cũ còn nguyên. Giao thành công lần đầu thì hạn phản hồi 5 ngày bắt đầu tính từ lúc đó (INVITE-04).
-- Đủ 5 lần lỗi, hoặc người nhận không có email: ngừng thử và mở sự cố `NOTIFICATION_FAILED` (đối tượng `HANDOVER_TURN`) có người phụ trách để Executor/Admin xử lý; Executor vẫn có thể gửi lại thủ công bằng `resend-invitation`. Giao được về sau thì sự cố tự đóng.
-- Log và sự cố không chứa email, token hay tên gói. Hai tiến trình cùng xử lý một lượt thì bên lưu sau bị xung đột (`RowVersion`).
+- Đủ 5 lần lỗi, hoặc người nhận không có email: ngừng thử và ghi log cảnh báo (mã lượt và mã kho).
+- Log không chứa email, token hay tên gói. Hai tiến trình cùng xử lý một lượt thì bên lưu sau bị xung đột (`RowVersion`).
 
 ## 5. API
 

@@ -32,7 +32,6 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
     private readonly IDeathCaseVerifierReminderSender reminderSender;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
-    private readonly IIncidentService incidentService;
 
     public DeathCaseAssignmentJob(
         IDeathCaseRepository deathCaseRepository,
@@ -42,8 +41,7 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         IDeathCaseVerifierPicker verifierPicker,
         IDeathCaseVerifierReminderSender reminderSender,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider,
-        IIncidentService incidentService)
+        TimeProvider timeProvider)
     {
         this.deathCaseRepository = deathCaseRepository;
         this.assignmentRepository = assignmentRepository;
@@ -53,7 +51,6 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         this.reminderSender = reminderSender;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
-        this.incidentService = incidentService;
     }
 
     public Task<List<Guid>> FindCaseIdsAsync(CancellationToken ct)
@@ -215,14 +212,14 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         return DeathCaseAssignmentOutcome.Reminded;
     }
 
-    /// <summary>ASSIGN-04, D1: thêm phân công mới, hạn = ComputeDueAt(lúc giao, ObjectionEndsAt).</summary>
+    /// <summary>ASSIGN-04, D1: thêm phân công mới, hạn = ComputeDueAt(lúc giao).</summary>
     private void AddAssignment(DeathCase deathCase, Guid verifierUserId, DateTimeOffset now)
     {
         DeathCaseAssignment assignment = new DeathCaseAssignment();
         assignment.CaseId = deathCase.Id;
         assignment.VerifierUserId = verifierUserId;
         assignment.AssignedAt = now;
-        assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now, deathCase.ObjectionEndsAt);
+        assignment.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now);
         deathCase.Assignments.Add(assignment);
         deathCaseRepository.AddAssignment(assignment);
     }

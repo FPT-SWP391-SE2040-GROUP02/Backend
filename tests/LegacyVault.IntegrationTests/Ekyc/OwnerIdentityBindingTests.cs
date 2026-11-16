@@ -210,21 +210,6 @@ public sealed class OwnerIdentityBindingTests
     }
 
     [Fact]
-    public async Task StaticSelfiePath_AlsoBindsIdentity_WhenPassed()
-    {
-        await SubmitDocumentAsync();
-        await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
-        await service.StartLivenessAsync(CancellationToken.None);
-        client.LivenessFrame = new EkycLivenessState { Passed = true };
-        await service.SubmitLivenessFrameAsync(Image(), "f.jpg", "image/jpeg", CancellationToken.None);
-
-        EkycStatusResponse response = await service.SubmitSelfieAsync(Image(), "s.jpg", "image/jpeg", CancellationToken.None);
-
-        Assert.Equal("PASSED", response.Status);
-        Assert.Single(identities.Identities);
-    }
-
-    [Fact]
     public async Task SecondEnrollment_AfterPassed_IsLocked_AndKeepsTheBoundIdentity()
     {
         await EnrollAsync();
