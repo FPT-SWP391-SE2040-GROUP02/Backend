@@ -71,7 +71,7 @@ public static class InfrastructureConfig
             {
                 if (settings.Default != null)
                 {
-                    settings.Default = settings.Default.Trim().Trim('"').Trim('\'');
+                    settings.Default = ConfigText.Clean(settings.Default);
                 }
             })
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Default),
@@ -80,15 +80,15 @@ public static class InfrastructureConfig
 
         services.AddDbContext<AppDbContext>((provider, options) =>
         {
-            var raw = provider.GetRequiredService<IOptions<DatabaseSettings>>().Value.Default ?? string.Empty;
-            raw = raw.Trim().Trim('"').Trim('\'');
+            string raw = provider.GetRequiredService<IOptions<DatabaseSettings>>().Value.Default ?? string.Empty;
+            raw = ConfigText.Clean(raw);
             if (raw.StartsWith("ConnectionStrings__Default=", StringComparison.OrdinalIgnoreCase))
             {
-                raw = raw["ConnectionStrings__Default=".Length..].Trim().Trim('"').Trim('\'');
+                raw = ConfigText.Clean(raw["ConnectionStrings__Default=".Length..]);
             }
             else if (raw.StartsWith("ConnectionStrings:Default=", StringComparison.OrdinalIgnoreCase))
             {
-                raw = raw["ConnectionStrings:Default=".Length..].Trim().Trim('"').Trim('\'');
+                raw = ConfigText.Clean(raw["ConnectionStrings:Default=".Length..]);
             }
             options.UseSqlServer(raw);
         });
@@ -195,13 +195,19 @@ public static class InfrastructureConfig
             .Bind(configuration.GetSection("AssetEncryption"))
             .PostConfigure(settings =>
             {
-                if (settings.BlindIndexKey != null) settings.BlindIndexKey = settings.BlindIndexKey.Trim().Trim('"').Trim('\'');
-                if (settings.ActiveKeyId != null) settings.ActiveKeyId = settings.ActiveKeyId.Trim().Trim('"').Trim('\'');
+                if (settings.BlindIndexKey != null)
+                {
+                    settings.BlindIndexKey = ConfigText.Clean(settings.BlindIndexKey);
+                }
+                if (settings.ActiveKeyId != null)
+                {
+                    settings.ActiveKeyId = ConfigText.Clean(settings.ActiveKeyId);
+                }
                 if (settings.Keys != null)
                 {
-                    foreach (var key in settings.Keys.Keys.ToList())
+                    foreach (string key in settings.Keys.Keys.ToList())
                     {
-                        settings.Keys[key] = settings.Keys[key]?.Trim().Trim('"').Trim('\'') ?? string.Empty;
+                        settings.Keys[key] = ConfigText.Clean(settings.Keys[key]);
                     }
                 }
             })
@@ -252,9 +258,18 @@ public static class InfrastructureConfig
             .Bind(configuration.GetSection(JwtSettings.SectionName))
             .PostConfigure(settings =>
             {
-                if (settings.SigningKey != null) settings.SigningKey = settings.SigningKey.Trim().Trim('"').Trim('\'');
-                if (settings.Issuer != null) settings.Issuer = settings.Issuer.Trim().Trim('"').Trim('\'');
-                if (settings.Audience != null) settings.Audience = settings.Audience.Trim().Trim('"').Trim('\'');
+                if (settings.SigningKey != null)
+                {
+                    settings.SigningKey = ConfigText.Clean(settings.SigningKey);
+                }
+                if (settings.Issuer != null)
+                {
+                    settings.Issuer = ConfigText.Clean(settings.Issuer);
+                }
+                if (settings.Audience != null)
+                {
+                    settings.Audience = ConfigText.Clean(settings.Audience);
+                }
             })
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.SigningKey) && Encoding.UTF8.GetByteCount(settings.SigningKey) >= 32,
                 "Cấu hình Jwt:SigningKey phải có độ dài tối thiểu 32 bytes.")
@@ -269,8 +284,8 @@ public static class InfrastructureConfig
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                var jwtSection = configuration.GetSection(JwtSettings.SectionName);
-                var signingKey = jwtSection["SigningKey"]?.Trim().Trim('"').Trim('\'');
+                IConfigurationSection jwtSection = configuration.GetSection(JwtSettings.SectionName);
+                string signingKey = ConfigText.Clean(jwtSection["SigningKey"]);
                 if (string.IsNullOrWhiteSpace(signingKey) || Encoding.UTF8.GetByteCount(signingKey) < 32)
                 {
                     throw new InvalidOperationException("Cấu hình Jwt:SigningKey thiếu hoặc ngắn hơn 32 bytes.");
@@ -364,14 +379,14 @@ public static class InfrastructureConfig
             {
                 if (settings.BaseUrl != null)
                 {
-                    settings.BaseUrl = settings.BaseUrl.Trim().Trim('"').Trim('\'');
+                    settings.BaseUrl = ConfigText.Clean(settings.BaseUrl);
                 }
                 if (settings.ApiKey != null)
                 {
-                    settings.ApiKey = settings.ApiKey.Trim().Trim('"').Trim('\'');
+                    settings.ApiKey = ConfigText.Clean(settings.ApiKey);
                 }
                 string? rawTimeout = configuration["Ekyc:TimeoutSeconds"] ?? configuration["Ekyc__TimeoutSeconds"];
-                if (!string.IsNullOrWhiteSpace(rawTimeout) && int.TryParse(rawTimeout.Trim().Trim('"').Trim('\''), out int t) && t > 0)
+                if (!string.IsNullOrWhiteSpace(rawTimeout) && int.TryParse(ConfigText.Clean(rawTimeout), out int t) && t > 0)
                 {
                     settings.TimeoutSeconds = t;
                 }
