@@ -12,11 +12,6 @@ namespace LegacyVault.Application.Services;
 
 public sealed class AuthService : IAuthService
 {
-    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan FailureWindow = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan MaxSessionLifetime = TimeSpan.FromHours(12);
-    private const int MaxFailedAttempts = 5;
 
     private static string? _dummyHash;
 
@@ -152,8 +147,8 @@ public sealed class AuthService : IAuthService
         // 7. Mở phiên mới (FamilyId đại diện cho một lần đăng nhập của thiết bị)
         var familyId = Guid.CreateVersion7();
         var opaque = _tokenService.CreateOpaqueToken();
-        var initialExpiresAt = now.Add(IdleTimeout);
-        var maxExpiresAt = now.Add(MaxSessionLifetime);
+        var initialExpiresAt = now.Add(AuthPolicy.IdleTimeout);
+        var maxExpiresAt = now.Add(AuthPolicy.MaxSessionLifetime);
         if (initialExpiresAt > maxExpiresAt)
         {
             initialExpiresAt = maxExpiresAt;
@@ -236,7 +231,7 @@ public sealed class AuthService : IAuthService
         }
 
         // Kiểm tra thời hạn phiên (tối đa 12 giờ hoặc idle 30 phút, NFR-06)
-        var maxSessionLimit = tokenEntity.SessionStartedAt.Add(MaxSessionLifetime);
+        var maxSessionLimit = tokenEntity.SessionStartedAt.Add(AuthPolicy.MaxSessionLifetime);
         if (maxSessionLimit <= now || tokenEntity.ExpiresAt <= now)
         {
             tokenEntity.RevokedAt = now;
@@ -260,7 +255,7 @@ public sealed class AuthService : IAuthService
         tokenEntity.RevokedAt = now;
 
         var newOpaque = _tokenService.CreateOpaqueToken();
-        var newExpiresAt = now.Add(IdleTimeout);
+        var newExpiresAt = now.Add(AuthPolicy.IdleTimeout);
         if (newExpiresAt > maxSessionLimit)
         {
             newExpiresAt = maxSessionLimit;
@@ -357,7 +352,7 @@ public sealed class AuthService : IAuthService
             else
             {
                 if (cookieToken == null || cookieToken.RevokedAt != null || cookieToken.ExpiresAt <= now
-                    || cookieToken.SessionStartedAt.Add(MaxSessionLifetime) <= now
+                    || cookieToken.SessionStartedAt.Add(AuthPolicy.MaxSessionLifetime) <= now
                     || cookieToken.User.Status != UserStatus.Active)
                 {
                     throw new SessionExpiredException();
@@ -424,7 +419,7 @@ public sealed class AuthService : IAuthService
         }
         else
         {
-            if (throttle.WindowStartedAt.Add(FailureWindow) <= now)
+            if (throttle.WindowStartedAt.Add(AuthPolicy.FailureWindow) <= now)
             {
                 throttle.FailedCount = 1;
                 throttle.WindowStartedAt = now;
@@ -436,16 +431,16 @@ public sealed class AuthService : IAuthService
             }
         }
 
-        if (throttle.FailedCount >= MaxFailedAttempts)
+        if (throttle.FailedCount >= AuthPolicy.MaxFailedAttempts)
         {
-            throttle.LockedUntil = now.Add(LockoutDuration);
+            throttle.LockedUntil = now.Add(AuthPolicy.LockoutDuration);
             WarnAccountLocked(user);
             await _unitOfWork.SaveChangesAsync(ct);
-            return new AccountLockedException((int)LockoutDuration.TotalSeconds);
+            return new AccountLockedException((int)AuthPolicy.LockoutDuration.TotalSeconds);
         }
 
         await _unitOfWork.SaveChangesAsync(ct);
-        return new InvalidCredentialsException(MaxFailedAttempts - throttle.FailedCount);
+        return new InvalidCredentialsException(AuthPolicy.MaxFailedAttempts - throttle.FailedCount);
     }
 
     /// <summary>
@@ -460,7 +455,7 @@ public sealed class AuthService : IAuthService
         }
         _logger.LogWarning(
             "Tài khoản {UserId} bị tạm khóa {LockoutMinutes} phút do nhập sai mật khẩu nhiều lần.",
-            user.Id, (int)LockoutDuration.TotalMinutes);
+            user.Id, (int)AuthPolicy.LockoutDuration.TotalMinutes);
     }
 
     private static UserResponse MapUser(User user)

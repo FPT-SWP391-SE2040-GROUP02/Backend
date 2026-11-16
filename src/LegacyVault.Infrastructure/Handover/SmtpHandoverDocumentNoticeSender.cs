@@ -7,8 +7,6 @@ namespace LegacyVault.Infrastructure.Handover;
 /// <summary>Gửi thư báo biên bản qua SMTP (SmtpMailSender). Gửi lỗi thì ném exception; notifier nuốt lỗi này.</summary>
 public sealed class SmtpHandoverDocumentNoticeSender : IHandoverDocumentNoticeSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly string appUrl;
 
@@ -16,11 +14,7 @@ public sealed class SmtpHandoverDocumentNoticeSender : IHandoverDocumentNoticeSe
     {
         this.mailSender = mailSender;
 
-        string? clientUrl = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(clientUrl))
-        {
-            clientUrl = DefaultClientUrl;
-        }
+        string clientUrl = ClientUrlSettings.Read(configuration);
         appUrl = clientUrl.TrimEnd('/') + "/";
     }
 
