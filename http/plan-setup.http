@@ -46,7 +46,8 @@ Content-Type: application/json
   "token": "{{primaryInvitationToken}}",
   "accept": true,
   "acknowledgeScope": true,
-  "scopeVersion": "{{scopeVersion}}"
+  "scopeVersion": "{{scopeVersion}}",
+  "password": "<mật khẩu tài khoản>"
 }
 
 ### Khi các điều kiện khác đủ: canActivate = true dù vẫn có NO_BACKUP_EXECUTOR
@@ -77,7 +78,8 @@ Content-Type: application/json
   "token": "{{backupInvitationToken}}",
   "accept": true,
   "acknowledgeScope": true,
-  "scopeVersion": "{{scopeVersion}}"
+  "scopeVersion": "{{scopeVersion}}",
+  "password": "<mật khẩu tài khoản>"
 }
 
 ### GET lại ngay trước kích hoạt — sao chép configVersion vào biến đầu file

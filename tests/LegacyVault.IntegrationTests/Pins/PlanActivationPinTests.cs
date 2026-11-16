@@ -108,7 +108,7 @@ public sealed class PlanActivationPinTests : IAsyncLifetime
         HttpResponseMessage invite = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email = ExecutorEmail });
         Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
         HttpResponseMessage accept = await executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token = mail.Token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion });
+            new { token = mail.Token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
         Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
 
         PlanSetupResponse setup = (await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup"))!;
