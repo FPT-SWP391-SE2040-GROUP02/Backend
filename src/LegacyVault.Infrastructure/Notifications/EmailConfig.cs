@@ -51,7 +51,7 @@ public static class EmailConfig
                 string? rawPort = configuration["Email:Smtp:Port"] ?? configuration["Email__Smtp__Port"] ?? configuration["SMTP:PORT"] ?? configuration["SMTP__PORT"] ?? configuration["Smtp:Port"];
                 if (!string.IsNullOrWhiteSpace(rawPort))
                 {
-                    string cleanedPort = rawPort.Trim().Trim('"').Trim('\'');
+                    string cleanedPort = ConfigText.Clean(rawPort);
                     if (int.TryParse(cleanedPort, out int port) && port > 0)
                     {
                         settings.Port = port;
@@ -59,16 +59,40 @@ public static class EmailConfig
                 }
 
                 string? altWebhook = configuration["Email:WebhookUrl"] ?? configuration["Email__WebhookUrl"] ?? configuration["EMAIL_WEBHOOK_URL"];
-                if (!string.IsNullOrWhiteSpace(altWebhook)) settings.WebhookUrl = altWebhook;
+                if (!string.IsNullOrWhiteSpace(altWebhook))
+                {
+                    settings.WebhookUrl = altWebhook;
+                }
 
                 // Cắt bỏ dấu nháy kép / nháy đơn thừa nếu dán từ môi trường
-                settings.WebhookUrl = settings.WebhookUrl?.Trim().Trim('"').Trim('\'') ?? string.Empty;
-                settings.Host = settings.Host?.Trim().Trim('"').Trim('\'') ?? "smtp.gmail.com";
-                settings.UserName = settings.UserName?.Trim().Trim('"').Trim('\'') ?? string.Empty;
-                settings.Password = settings.Password?.Trim().Trim('"').Trim('\'') ?? string.Empty;
-                settings.FromAddress = settings.FromAddress?.Trim().Trim('"').Trim('\'') ?? string.Empty;
-                settings.FromName = settings.FromName?.Trim().Trim('"').Trim('\'') ?? "LegacyVault";
-                settings.SecureSocket = settings.SecureSocket?.Trim().Trim('"').Trim('\'') ?? "StartTls";
+                settings.WebhookUrl = ConfigText.Clean(settings.WebhookUrl);
+                if (settings.Host == null)
+                {
+                    settings.Host = "smtp.gmail.com";
+                }
+                else
+                {
+                    settings.Host = ConfigText.Clean(settings.Host);
+                }
+                settings.UserName = ConfigText.Clean(settings.UserName);
+                settings.Password = ConfigText.Clean(settings.Password);
+                settings.FromAddress = ConfigText.Clean(settings.FromAddress);
+                if (settings.FromName == null)
+                {
+                    settings.FromName = "LegacyVault";
+                }
+                else
+                {
+                    settings.FromName = ConfigText.Clean(settings.FromName);
+                }
+                if (settings.SecureSocket == null)
+                {
+                    settings.SecureSocket = "StartTls";
+                }
+                else
+                {
+                    settings.SecureSocket = ConfigText.Clean(settings.SecureSocket);
+                }
             })
             .Validate(settings => settings.FindError() == null,
                 "Cấu hình Email:Smtp không hợp lệ (Port 1–65535, SecureSocket đúng tên, FromAddress là email).")

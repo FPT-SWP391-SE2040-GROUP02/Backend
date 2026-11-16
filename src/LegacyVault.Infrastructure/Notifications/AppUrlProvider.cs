@@ -16,13 +16,13 @@ public sealed class AppUrlProvider : IAppUrlProvider
 
         if (!string.IsNullOrWhiteSpace(url))
         {
-            url = url.Trim().Trim('"').Trim('\'');
+            url = ConfigText.Clean(url);
         }
 
         if (string.IsNullOrWhiteSpace(url))
         {
             string? env = configuration["ASPNETCORE_ENVIRONMENT"];
-            url = string.Equals(env?.Trim().Trim('"').Trim('\''), "Production", StringComparison.OrdinalIgnoreCase)
+            url = string.Equals(ConfigText.Clean(env), "Production", StringComparison.OrdinalIgnoreCase)
                 ? "https://legacyvault-swart.vercel.app"
                 : "http://localhost:5173";
         }

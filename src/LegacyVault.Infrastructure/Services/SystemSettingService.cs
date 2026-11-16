@@ -374,7 +374,7 @@ public sealed class SystemSettingService : ISystemSettingService
 
         await db.SaveChangesAsync(ct);
 
-        InvalidateCache(entity.Key);
+        await RefreshAfterSaveAsync(entity.Key);
         logger.LogInformation("SystemSetting '{Key}' updated by {User} (AuditId={AuditId}) to Value='{Value}', IsEnabled={IsEnabled}",
             entity.Key, updatedBy ?? "System", auditLog.Id, entity.Value, entity.IsEnabled);
 
@@ -424,7 +424,7 @@ public sealed class SystemSettingService : ISystemSettingService
         });
         await db.SaveChangesAsync(ct);
 
-        InvalidateCache(entity.Key);
+        await RefreshAfterSaveAsync(entity.Key);
         return Map(entity);
     }
 
@@ -450,12 +450,12 @@ public sealed class SystemSettingService : ISystemSettingService
         return bool.TryParse(setting.Value, out var val) ? val : defaultValue;
     }
 
-    private void InvalidateCache(string key)
+    private async Task RefreshAfterSaveAsync(string key)
     {
         // Admin vừa lưu: nạp lại ảnh chụp tham số ngay để cấu hình có hiệu lực không phải đợi vòng nạp định kỳ.
         try
         {
-            RuntimeSettingsRefresher.LoadAsync(db, CancellationToken.None).GetAwaiter().GetResult();
+            await RuntimeSettingsRefresher.LoadAsync(db, CancellationToken.None);
         }
         catch (Exception ex)
         {
