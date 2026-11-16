@@ -16,7 +16,7 @@ public sealed class ExecutorKeyService : IExecutorKeyService
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
     private readonly IExecutorKeyShardRepository shardRepository;
-    private readonly IAuditLogRepository auditLogRepository;
+    private readonly ExecutorKeyIssuer keyIssuer;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IExecutorKeyProtector keyProtector;
@@ -27,7 +27,7 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
         IExecutorKeyShardRepository shardRepository,
-        IAuditLogRepository auditLogRepository,
+        ExecutorKeyIssuer keyIssuer,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IExecutorKeyProtector keyProtector,
@@ -37,7 +37,7 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.shardRepository = shardRepository;
-        this.auditLogRepository = auditLogRepository;
+        this.keyIssuer = keyIssuer;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
         this.keyProtector = keyProtector;
@@ -54,57 +54,23 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         return response;
     }
 
-    public async Task<ExecutorKeyIssuedResponse> IssueAsync(Guid vaultId, CancellationToken ct)
+    public async Task<ExecutorKeyStatusResponse> ReissueAsync(Guid vaultId, CancellationToken ct)
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
         VaultRules.EnsureEditable(vault);
-        if (await shardRepository.FindByVaultIdAsync(vault.Id, ct) != null)
-        {
-            throw AlreadyIssued();
-        }
-
         DateTimeOffset now = timeProvider.GetUtcNow();
-        string text = ExecutorKeyRules.GenerateShard();
-        ExecutorKeyShard shard = new ExecutorKeyShard();
-        shard.VaultId = vault.Id;
-        shard.Version = 1;
-        shard.ShardHash = ExecutorKeyRules.Hash(vault.Id, shard.Version, text);
-        shard.IssuedAt = now;
-        keyProtector.Protect(shard, text);
-        shardRepository.Add(shard);
-        AddAudit(vault, AuditAction.ExecutorKeyIssued, shard.Version, now);
-        try
-        {
-            await unitOfWork.SaveChangesAsync(ct);
-        }
-        catch (Exception exception) when (shardRepository.IsUniqueViolation(exception))
-        {
-            shardRepository.DiscardPendingChanges();
-            throw AlreadyIssued();
-        }
-        return BuildIssued(vault, shard, text);
-    }
-
-    public async Task<ExecutorKeyIssuedResponse> ReissueAsync(Guid vaultId, CancellationToken ct)
-    {
-        Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
-        VaultRules.EnsureEditable(vault);
-        ExecutorKeyShard? shard = await shardRepository.FindByVaultIdAsync(vault.Id, ct);
-        if (shard == null)
+        bool rotated = await keyIssuer.RotateIfExistsAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
+        if (!rotated)
         {
             throw new AppException(AppErrorType.Conflict, ErrorCode.ExecutorKeyNotIssued,
-                "Kho chưa cấp mảnh khóa nên chưa có gì để cấp lại.");
+                "Kho chưa có mã mở gói nên chưa có gì để đổi.");
         }
-
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        string text = ExecutorKeyRules.GenerateShard();
-        shard.Version = shard.Version + 1;
-        shard.ShardHash = ExecutorKeyRules.Hash(vault.Id, shard.Version, text);
-        shard.ReissuedAt = now;
-        keyProtector.Protect(shard, text);
-        AddAudit(vault, AuditAction.ExecutorKeyReissued, shard.Version, now);
         await unitOfWork.SaveChangesAsync(ct);
-        return BuildIssued(vault, shard, text);
+
+        ExecutorKeyShard? shard = await shardRepository.FindByVaultIdAsync(vault.Id, ct);
+        ExecutorKeyStatusResponse response = new ExecutorKeyStatusResponse();
+        Fill(response, vault, shard);
+        return response;
     }
 
     public async Task<ExecutorHandoverKeyResponse> GetKeyForExecutorAsync(Guid vaultId, CancellationToken ct)
@@ -116,6 +82,15 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         if (vault == null || vault.OwnerId == userId || !await IsAcceptedExecutorAsync(vault.Id, userId, ct))
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
+        }
+
+        // Mã chỉ xem được sau khi hồ sơ được duyệt và bàn giao đã bắt đầu (kế hoạch HandoverInProgress).
+        if (vault.Plan.Status != PlanStatus.HandoverInProgress)
+        {
+            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+            extensions["reason"] = "HANDOVER_NOT_STARTED";
+            throw new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed,
+                "Mã mở gói chỉ xem được sau khi hồ sơ được duyệt và bàn giao đã bắt đầu.", extensions);
         }
 
         ExecutorKeyShard? shard = await shardRepository.FindByVaultIdAsync(vault.Id, ct);
@@ -139,7 +114,7 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         {
             // Mã cấp trước khi có tính năng gửi trên hệ thống (chỉ có hash) hoặc không giải mã được.
             throw new AppException(AppErrorType.Conflict, ErrorCode.ExecutorKeyNotIssued,
-                "Mã mở gói của kho này chưa được gửi trên hệ thống. Chủ kho cần cấp lại mã.");
+                "Mã mở gói của kho này chưa đọc được trên hệ thống. Chủ kho cần đổi mã.");
         }
 
         User? owner = await userRepository.FindByIdAsync(vault.OwnerId, ct);
@@ -167,12 +142,6 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         return false;
     }
 
-    private static AppException AlreadyIssued()
-    {
-        return new AppException(AppErrorType.Conflict, ErrorCode.ExecutorKeyAlreadyIssued,
-            "Kho đã có mảnh khóa. Nếu Người thực thi quên, hãy dùng cấp lại.");
-    }
-
     private async Task<Vault> LoadOwnedVaultAsync(Guid vaultId, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
@@ -193,21 +162,5 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         response.Version = shard.Version;
         response.IssuedAt = shard.IssuedAt;
         response.ReissuedAt = shard.ReissuedAt;
-    }
-
-    private static ExecutorKeyIssuedResponse BuildIssued(Vault vault, ExecutorKeyShard shard, string text)
-    {
-        ExecutorKeyIssuedResponse response = new ExecutorKeyIssuedResponse();
-        Fill(response, vault, shard);
-        response.Shard = text;
-        return response;
-    }
-
-    private void AddAudit(Vault vault, AuditAction action, int version, DateTimeOffset now)
-    {
-        // Chỉ ghi phiên bản, không ghi mảnh hay hash (SEC-07).
-        auditLogRepository.Add(AuditRules.Create(
-            vault.Id, vault.OwnerId, AuditActorRole.Owner, action, AuditTargetType.Vault, vault.Id, version,
-            AuditOutcome.Succeeded, null, now));
     }
 }

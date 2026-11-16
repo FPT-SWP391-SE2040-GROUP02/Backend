@@ -1,74 +1,5 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
-public class IncidentSummaryResponse
-{
-    public Guid Id { get; set; }
-
-    /// <summary>NO_VERIFIER | NO_EXECUTOR | CHECK_IN_OVERDUE | NOTIFICATION_FAILED | OWNER_ALIVE | INTEGRATION | MANUAL.</summary>
-    public string Type { get; set; } = string.Empty;
-
-    /// <summary>OPEN | IN_PROGRESS | RESOLVED.</summary>
-    public string Status { get; set; } = string.Empty;
-
-    public Guid? VaultId { get; set; }
-
-    public string TargetType { get; set; } = string.Empty;
-
-    public Guid? TargetId { get; set; }
-
-    public string Summary { get; set; } = string.Empty;
-
-    /// <summary>null = chưa có ai nhận ("bị kẹt"), luôn kèm nextReviewAt.</summary>
-    public Guid? AssigneeUserId { get; set; }
-
-    /// <summary>Họ tên người phụ trách để hiện thẳng trên danh sách; null khi chưa có người nhận hoặc tài khoản không còn.</summary>
-    public string? AssigneeFullName { get; set; }
-
-    /// <summary>Vai trò tài khoản người phụ trách (USER | VERIFIER | ADMIN); null khi chưa có người nhận hoặc tài khoản không còn.</summary>
-    public string? AssigneeRole { get; set; }
-
-    /// <summary>ADMIN | EXECUTOR | VERIFIER: ai chịu trách nhiệm xử lý loại sự cố này; Admin chỉ theo dõi khi không phải ADMIN.</summary>
-    public string ResponsibleRole { get; set; } = string.Empty;
-
-    public DateTimeOffset DueAt { get; set; }
-
-    public bool Overdue { get; set; }
-
-    public DateTimeOffset NextReviewAt { get; set; }
-
-    public DateTimeOffset CreatedAt { get; set; }
-
-    public bool HasActiveHold { get; set; }
-
-    public Guid? HoldId { get; set; }
-
-    public string Etag { get; set; } = string.Empty;
-}
-
-public class IncidentEventResponse
-{
-    public string Kind { get; set; } = string.Empty;
-
-    public Guid? ActorUserId { get; set; }
-
-    public string? Note { get; set; }
-
-    public DateTimeOffset At { get; set; }
-}
-
-public class IncidentDetailResponse : IncidentSummaryResponse
-{
-    public int RemindedCount { get; set; }
-
-    public DateTimeOffset? EscalatedAt { get; set; }
-
-    public DateTimeOffset? ResolvedAt { get; set; }
-
-    public string? ResolutionNote { get; set; }
-
-    public List<IncidentEventResponse> Events { get; set; } = new List<IncidentEventResponse>();
-}
-
 public class HoldResponse
 {
     public Guid Id { get; set; }
@@ -175,13 +106,6 @@ public class AdminUserActivityResponse
 
 public class AdminDashboardResponse
 {
-    public int OpenIncidents { get; set; }
-
-    public int OverdueIncidents { get; set; }
-
-    /// <summary>Sự cố chưa có người phụ trách ("bị kẹt").</summary>
-    public int UnassignedIncidents { get; set; }
-
     public int ActiveHolds { get; set; }
 
     public int HoldsPastReview { get; set; }

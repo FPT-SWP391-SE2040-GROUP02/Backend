@@ -64,8 +64,6 @@ public enum ErrorCode
     StorageUnavailable,
     ExecutorInvitationInvalid,
     ExecutorNotFound,
-    IncidentNotFound,
-    IncidentNotOpen,
     HoldNotFound,
     AdminActionNotAllowed,
     UserNotFound,

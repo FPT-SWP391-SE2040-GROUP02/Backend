@@ -141,23 +141,4 @@ public sealed class EkycController : ControllerBase
     {
         return ekycService.CompleteLivenessAsync(ct);
     }
-
-    /// <summary>Gửi selfie để so khớp với khuôn mặt trên thẻ vừa đọc. Mỗi lần đọc thẻ chỉ so khớp một lần.</summary>
-    [HttpPost("face-match")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(MaxRequestBytes)]
-    [ProducesResponseType<EkycStatusResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
-    public async Task<EkycStatusResponse> SubmitSelfie([FromForm] EkycImageForm form, CancellationToken ct)
-    {
-        IFormFile file = form.File!;
-        await using (Stream content = file.OpenReadStream())
-        {
-            return await ekycService.SubmitSelfieAsync(content, file.FileName, file.ContentType, ct);
-        }
-    }
 }

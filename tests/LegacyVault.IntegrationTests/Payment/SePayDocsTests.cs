@@ -6,7 +6,7 @@ namespace LegacyVault.IntegrationTests.Payment;
 
 /// <summary>
 /// Chống tài liệu webhook SePay lệch code: docs/api-contract.md phải nhắc đủ endpoint, mã lỗi, lý do đối chiếu,
-/// loại sự cố và cấu hình; http/billing-webhook.http không chứa key (SRS §8.5, ADMIN-09). Không cần database.
+/// và cấu hình; http/billing-webhook.http không chứa key (SRS §8.5, ADMIN-09). Không cần database.
 /// </summary>
 public sealed class SePayDocsTests
 {
@@ -69,14 +69,13 @@ public sealed class SePayDocsTests
     }
 
     [Fact]
-    public void Pay05_ApiContract_DocumentsErrorCodeIncidentTypeStatusesAndConfiguration()
+    public void Pay05_ApiContract_DocumentsErrorCodeStatusesAndConfiguration()
     {
         // Chuẩn bị
         string contract = ReadRepoFile("docs", "api-contract.md");
         string[] expected = new string[]
         {
             "WEBHOOK_UNAUTHORIZED",
-            "`PAYMENT`",
             "RECEIVED",
             "MATCHED",
             "RECONCILIATION_REQUIRED",

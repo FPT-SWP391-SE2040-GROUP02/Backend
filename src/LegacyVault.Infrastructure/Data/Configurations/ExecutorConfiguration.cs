@@ -52,10 +52,5 @@ public sealed class ExecutorConfiguration : IEntityTypeConfiguration<Executor>
             .WithMany()
             .HasForeignKey(e => e.UserId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne(e => e.Beneficiary)
-            .WithMany()
-            .HasForeignKey(e => e.BeneficiaryId)
-            .OnDelete(DeleteBehavior.Restrict);
     }
 }

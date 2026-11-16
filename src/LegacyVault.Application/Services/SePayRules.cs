@@ -270,8 +270,8 @@ public static class SePayRules
         return true;
     }
 
-    /// <summary>Giao dịch tiền ra không phải sự cố; mọi lý do khác đều mở sự cố cho Admin (E7).</summary>
-    public static bool ShouldRaiseIncident(string reason)
+    /// <summary>Giao dịch tiền ra không cần cảnh báo; mọi lý do khác đều ghi log cảnh báo để Admin đối chiếu (E7).</summary>
+    public static bool ShouldWarnReconciliation(string reason)
     {
         return reason != PaymentReconciliationReasons.NotIncoming;
     }

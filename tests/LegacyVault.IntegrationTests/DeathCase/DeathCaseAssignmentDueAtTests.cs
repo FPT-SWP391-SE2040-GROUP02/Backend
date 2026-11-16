@@ -32,24 +32,18 @@ public sealed class DeathCaseAssignmentDueAtTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Assign04_ResubmitKeepsDueAtAfterObjectionEnds()
+    public async Task Assign04_ResubmitRecomputesDueAtFromSubmitTime()
     {
-        // Chuẩn bị: Owner nhận thư cách đây 10 giờ nên phản đối còn khoảng 62 giờ nữa mới hết
+        // Chuẩn bị: hồ sơ đã gửi và có phân công
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        await DeathCaseReviewTestData.MarkOwnerNotifiedAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow.AddHours(-10));
-        DateTimeOffset objectionEndsAt = DateTimeOffset.MinValue;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            DeathCase deathCase = await db.Set<DeathCase>().AsNoTracking().SingleAsync(c => c.Id == submitted.CaseId);
-            objectionEndsAt = deathCase.ObjectionEndsAt!.Value;
-        });
+        DateTimeOffset beforeResubmit = DateTimeOffset.UtcNow;
 
-        // Hành động: Executor gửi lại, đổi không trọng yếu nên đồng hồ phản đối giữ nguyên
+        // Hành động: Executor gửi lại
         await DeathCaseReviewTestData.ResubmitAsync(submitted);
 
-        // Kiểm tra: hạn = hết phản đối + 48 giờ (muộn hơn lúc gửi + 48 giờ)
+        // Kiểm tra: hạn = lúc gửi lại + 48 giờ
         DeathCaseAssignment? active = await DeathCaseReviewTestData.LoadActiveAssignmentAsync(factory, submitted.CaseId);
         Assert.NotNull(active);
-        Assert.Equal(objectionEndsAt.AddHours(48), active.DueAt);
+        Assert.True(active.DueAt >= beforeResubmit.AddHours(48));
     }
 }

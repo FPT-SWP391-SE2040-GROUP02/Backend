@@ -46,7 +46,7 @@ public interface IDeathCaseReviewService
         Guid caseId, Guid flagId, ReviewDeathCaseFlagRequest request, CancellationToken ct);
 
     /// <summary>
-    /// DEATH-01: yêu cầu Executor bổ sung (hồ sơ → SUPPLEMENT_REQUIRED, giữ phân công và đồng hồ 72 giờ).
+    /// DEATH-01: yêu cầu Executor bổ sung (hồ sơ → SUPPLEMENT_REQUIRED, giữ phân công).
     /// Gọi lặp cùng nội dung trả trạng thái hiện tại. Làm được cả khi Executor đang có bản nháp.
     /// </summary>
     Task<VerifierDeathCaseResponse> RequestSupplementAsync(

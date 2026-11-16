@@ -397,7 +397,6 @@ public sealed class DeathCaseCertificateInfoFlowTests : IAsyncLifetime
             verifierUser = await db.Users.AsNoTracking().SingleAsync(u => u.Id == verifierId);
         });
         DeathCaseReviewTestData.VerifierClient verifier = DeathCaseReviewTestData.CreateClientFor(factory, verifierUser);
-        await DeathCaseReviewTestData.MarkOwnerNotifiedAsync(factory, caseId, DateTimeOffset.UtcNow.AddHours(-80));
 
         // Hành động
         JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(verifier.Client, caseId);

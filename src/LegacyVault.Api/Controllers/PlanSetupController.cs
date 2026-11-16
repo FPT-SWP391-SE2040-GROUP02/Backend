@@ -41,7 +41,11 @@ public sealed class PlanSetupController(IPlanSetupService service) : ControllerB
     public Task<ExecutorInvitationResponse> Resend(Guid vaultId, Guid executorId, ResendExecutorRequest request, CancellationToken ct) =>
         service.ResendAsync(vaultId, executorId, request, ct);
 
-    /// <summary>Recheck all requirements and atomically activate/open the first check-in period. Duplicate request does not reset deadlines.</summary>
+    /// <summary>
+    /// Recheck all requirements and atomically activate/open the first check-in period. Duplicate request does not reset deadlines.
+    /// Cần header X-Vault-Pin: nhập PIN là bước Chủ kho ký di chúc điện tử.
+    /// </summary>
+    [RequireVaultPin]
     [HttpPost("activate"), EnableRateLimiting("plan-setup")]
     public Task<PlanSetupResponse> Activate(Guid vaultId, ActivatePlanRequest request, CancellationToken ct) =>
         service.ActivateAsync(vaultId, request, ct);

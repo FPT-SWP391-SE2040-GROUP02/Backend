@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Services;
 /// </summary>
 public static class PaymentReconciliationReasons
 {
-    /// <summary>Giao dịch tiền ra, không phải tiền vào. Không mở sự cố.</summary>
+    /// <summary>Giao dịch tiền ra, không phải tiền vào. Không cần cảnh báo.</summary>
     public const string NotIncoming = "NOT_INCOMING";
 
     /// <summary>Tiền vào tài khoản khác tài khoản nhận cấu hình (PAY-03).</summary>

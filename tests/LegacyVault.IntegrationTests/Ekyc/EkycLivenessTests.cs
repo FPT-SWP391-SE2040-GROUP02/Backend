@@ -263,46 +263,6 @@ public sealed class EkycLivenessTests
     }
 
     [Fact]
-    public async Task Selfie_WithoutChallenge_Rejected()
-    {
-        await ReadFrontAsync();
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None));
-
-        Assert.Equal(ErrorCode.EkycLivenessRequired, error.Code);
-        Assert.Equal(EkycStatus.Pending, Assert.Single(repository.Verifications).Status);
-        Assert.Null(client.LastThreshold);
-    }
-
-    [Fact]
-    public async Task Selfie_ChallengeStartedButNotPassed_Rejected()
-    {
-        await StartedAsync();
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None));
-
-        Assert.Equal(ErrorCode.EkycLivenessNotPassed, error.Code);
-        Assert.Null(client.LastThreshold);
-    }
-
-    [Fact]
-    public async Task Selfie_AfterChallengePassed_ComparesTheUploadedPhoto()
-    {
-        await StartedAsync();
-        client.LivenessFrame = new EkycLivenessState { Passed = true };
-        await service.SubmitLivenessFrameAsync(Image(), "f.jpg", "image/jpeg", CancellationToken.None);
-
-        EkycStatusResponse response = await service.SubmitSelfieAsync(
-            Image(), "selfie.jpg", "image/jpeg", CancellationToken.None);
-
-        Assert.Equal("PASSED", response.Status);
-        Assert.True(Assert.Single(repository.Verifications).LivenessPassed);
-        Assert.Equal(EkycRules.MatchThreshold, client.LastThreshold);
-    }
-
-    [Fact]
     public async Task Complete_DirectPath_NeedsNoExtraSelfie()
     {
         await StartedAsync();

@@ -45,7 +45,7 @@ public sealed class DeathCaseVerifierReminderEmailTests
         // Hành động
         string code = DeathCaseRules.CaseCode(caseId);
 
-        // Kiểm tra: 8 ký tự hex cuối, chữ hoa (giữ đúng thuật toán cũ của DeathCaseNoticeJob)
+        // Kiểm tra: 8 ký tự hex cuối, chữ hoa
         Assert.Equal("0000ABCD", code);
     }
 }

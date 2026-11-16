@@ -290,63 +290,6 @@ public sealed class EkycService : IEkycService
         return verification.ToBackResponse(reading.ResidenceAddress, ekycOptions.CurrentThreshold);
     }
 
-    public async Task<EkycStatusResponse> SubmitSelfieAsync(
-        Stream content, string fileName, string contentType, CancellationToken ct)
-    {
-        Guid userId = currentUser.RequireUserId();
-        DateTimeOffset now = timeProvider.GetUtcNow();
-
-        EkycVerification? verification = await verificationRepository.FindLatestByUserIdAsync(userId, ct);
-        if (verification == null || !EkycRules.CanMatchFace(verification, now))
-        {
-            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycDocumentExpired,
-                "Vui lòng đọc lại mặt trước giấy tờ trước khi gửi ảnh chân dung.");
-        }
-        string documentToken = verification.DocumentToken!;
-        RequireBackSide(verification);
-
-        // Đường ảnh selfie tĩnh cũng phải qua thử thách camera trước (EKYC-14): chưa qua thì chưa so khớp.
-        if (!verification.LivenessPassed)
-        {
-            if (verification.LivenessSessionId == null)
-            {
-                throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessRequired,
-                    "Vui lòng hoàn thành thử thách camera trước khi gửi ảnh chân dung.");
-            }
-            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessNotPassed,
-                "Bạn chưa hoàn thành thử thách camera.");
-        }
-
-        byte[] selfie = await ReadImageAsync(content, contentType, ct);
-        double threshold = ekycOptions.CurrentThreshold;
-
-        EkycSpoofCheck spoofCheck = await ActiveClient().CheckSpoofAsync(selfie, fileName, contentType, ct);
-        verification.SpoofCheckPassed = spoofCheck.Passed;
-        if (!spoofCheck.Passed)
-        {
-            await FinishAsync(verification, EkycStatus.Failed, now, ct);
-            return verification.ToResponse(threshold);
-        }
-
-        EkycFaceComparison comparison = await ActiveClient().CompareFaceAsync(
-            documentToken, selfie, fileName, contentType, threshold, ct);
-        verification.FaceMatchScore = comparison.Score;
-
-        // Tự so lại với ngưỡng của server, không tin cờ matched do dịch vụ ngoài trả về.
-        if (comparison.Score >= threshold)
-        {
-            await FinishAsync(verification, EkycStatus.Passed, now, ct);
-        }
-        else
-        {
-            await FinishAsync(verification, EkycStatus.Failed, now, ct);
-        }
-        EkycStatusResponse response = verification.ToResponse(threshold);
-        response.ReferenceCrop = comparison.ReferenceCrop;
-        response.SelfieCrop = comparison.SelfieCrop;
-        return response;
-    }
-
     public async Task<EkycLivenessResponse> StartLivenessAsync(CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();

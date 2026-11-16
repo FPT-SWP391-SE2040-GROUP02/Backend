@@ -101,7 +101,6 @@ Content-Type: application/json
 @etagAfterSubmit = {{submit.response.body.$.etag}}
 
 ### 8) Tạo phiên bản bổ sung từ bản đã gửi (hồ sơ đang xét hoặc cần bổ sung). Bản mới là bản nháp: sửa xong phải gửi lại với confirm.
-# Đổi họ tên/CCCD/ngày mất ở bản mới → Owner được báo lại và 72 giờ chạy lại.
 # @name newVersion
 POST {{baseUrl}}/executor/death-cases/{{caseId}}/versions
 Authorization: Bearer {{token}}

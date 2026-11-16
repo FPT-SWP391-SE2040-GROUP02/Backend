@@ -132,4 +132,8 @@ public enum AuditAction
     HandoverSubmissionApproved = 60,
     /// <summary>Người xét duyệt yêu cầu người nhận bổ sung hồ sơ.</summary>
     HandoverSubmissionSupplementRequested = 61,
+    /// <summary>Chủ kho ký di chúc điện tử bằng mã PIN của kho và kích hoạt kế hoạch bàn giao.</summary>
+    PlanActivated = 62,
+    /// <summary>Người thực thi tự chấp nhận lời mời làm Người thực thi của kho (ký xác nhận di chúc).</summary>
+    ExecutorAccepted = 63,
 }

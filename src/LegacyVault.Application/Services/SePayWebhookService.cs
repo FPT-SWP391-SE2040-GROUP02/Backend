@@ -3,20 +3,18 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace LegacyVault.Application.Services;
 
 /// <remarks>
 /// SRS §8.3 bước 6–9, §8.5, PAY-02..07: lưu giao dịch trước (lần lưu 1), rồi đối chiếu với đơn và cấp quyền
 /// trong một transaction Serializable (lần lưu 2). Lỗi bất ngờ ở lần 2 làm giao dịch còn Received để SePay gửi lại
-/// thì xử lý tiếp. SEC-07: không ghi log key, số tài khoản hay nội dung chuyển khoản; sự cố chỉ chứa mã lý do.
+/// thì xử lý tiếp. SEC-07: không ghi log key, số tài khoản hay nội dung chuyển khoản; log cảnh báo chỉ chứa mã lý do.
 /// </remarks>
 public sealed class SePayWebhookService : ISePayWebhookService
 {
     public const string ProviderName = "SePay";
-
-    /// <summary>Loại đối tượng của sự cố thanh toán; TargetId là Id giao dịch.</summary>
-    public const string IncidentTargetType = "PaymentTransaction";
 
     private const string TransferTypeIn = "in";
     private const string TransferTypeOut = "out";
@@ -33,7 +31,7 @@ public sealed class SePayWebhookService : ISePayWebhookService
     private readonly IPaymentTransactionRepository transactionRepository;
     private readonly IPaymentOrderRepository orderRepository;
     private readonly PaymentGranter paymentGranter;
-    private readonly IIncidentService incidentService;
+    private readonly ILogger<SePayWebhookService> logger;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -43,7 +41,7 @@ public sealed class SePayWebhookService : ISePayWebhookService
         IPaymentTransactionRepository transactionRepository,
         IPaymentOrderRepository orderRepository,
         PaymentGranter paymentGranter,
-        IIncidentService incidentService,
+        ILogger<SePayWebhookService> logger,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
@@ -52,7 +50,7 @@ public sealed class SePayWebhookService : ISePayWebhookService
         this.transactionRepository = transactionRepository;
         this.orderRepository = orderRepository;
         this.paymentGranter = paymentGranter;
-        this.incidentService = incidentService;
+        this.logger = logger;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -127,7 +125,7 @@ public sealed class SePayWebhookService : ISePayWebhookService
 
     /// <summary>
     /// Đối chiếu một giao dịch Received với đơn theo SePayRules.FindReconciliationReason, rồi cấp quyền (PaymentGranter)
-    /// hoặc đánh dấu cần đối chiếu và mở sự cố. Lưu đúng một lần ở cuối. Không bắt lỗi bất ngờ: để lỗi đi ra thành 500/409.
+    /// hoặc đánh dấu cần đối chiếu và ghi log cảnh báo. Lưu đúng một lần ở cuối. Không bắt lỗi bất ngờ: để lỗi đi ra thành 500/409.
     /// </summary>
     private async Task ReconcileAsync(PaymentTransaction transaction, CancellationToken ct)
     {
@@ -163,7 +161,7 @@ public sealed class SePayWebhookService : ISePayWebhookService
         }
         else
         {
-            await MarkReconciliationRequiredAsync(transaction, order, reason, now, ct);
+            MarkReconciliationRequired(transaction, order, reason, now);
         }
 
         await unitOfWork.SaveChangesAsync(ct);
@@ -197,29 +195,22 @@ public sealed class SePayWebhookService : ISePayWebhookService
         }
     }
 
-    private async Task MarkReconciliationRequiredAsync(
-        PaymentTransaction transaction, PaymentOrder? order, string reason, DateTimeOffset now, CancellationToken ct)
+    private void MarkReconciliationRequired(
+        PaymentTransaction transaction, PaymentOrder? order, string reason, DateTimeOffset now)
     {
         transaction.Status = PaymentTransactionStatus.ReconciliationRequired;
         transaction.ReconciliationReason = reason;
         transaction.ProcessedAt = now;
 
-        Guid? vaultId = null;
-        if (order != null)
+        if (order != null && SePayRules.ShouldLinkToOrder(reason))
         {
-            vaultId = order.VaultId;
-            if (SePayRules.ShouldLinkToOrder(reason))
-            {
-                transaction.PaymentOrderId = order.Id;
-            }
+            transaction.PaymentOrderId = order.Id;
         }
 
-        if (SePayRules.ShouldRaiseIncident(reason))
+        if (SePayRules.ShouldWarnReconciliation(reason))
         {
-            // E7: chỉ lưu lý do, không có số tiền, mã thanh toán hay số tài khoản (SEC-07). RaiseAsync không tự lưu.
-            string summary = "Giao dịch thanh toán cần đối chiếu, lý do: " + reason;
-            await incidentService.RaiseAsync(
-                IncidentType.Payment, vaultId, IncidentTargetType, transaction.Id, summary, null, ct);
+            // E7: chỉ ghi mã giao dịch và lý do, không có số tiền, mã thanh toán hay số tài khoản (SEC-07).
+            logger.LogWarning("Giao dịch thanh toán {TransactionId} cần đối chiếu, lý do: {Reason}.", transaction.Id, reason);
         }
     }
 

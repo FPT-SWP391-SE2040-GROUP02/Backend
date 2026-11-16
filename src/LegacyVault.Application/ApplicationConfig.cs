@@ -14,6 +14,7 @@ public static class ApplicationConfig
         services.AddScoped<IContainerService, ContainerService>();
         services.AddScoped<IBeneficiaryService, BeneficiaryService>();
         services.AddScoped<IVaultPinService, VaultPinService>();
+        services.AddScoped<ExecutorKeyIssuer>();
         services.AddScoped<IExecutorKeyService, ExecutorKeyService>();
         services.AddScoped<ISystemExecutorDirectoryService, SystemExecutorDirectoryService>();
         services.AddHandoverApplication();
@@ -22,7 +23,6 @@ public static class ApplicationConfig
         services.AddScoped<ICheckInService, CheckInService>();
         services.AddScoped<IExecutorCheckInService, ExecutorCheckInService>();
         services.AddScoped<IExecutorAssetService, ExecutorAssetService>();
-        services.AddSingleton<ISmartwatchPairingStore, SmartwatchPairingStore>();
         services.AddScoped<ICheckInScheduler, CheckInScheduler>();
         services.AddScoped<ICheckInJob, CheckInJob>();
         services.AddScoped<IEntitlementExpiryJob, EntitlementExpiryJob>();
@@ -35,15 +35,10 @@ public static class ApplicationConfig
         services.AddScoped<IRetentionJob, RetentionJob>();
         services.AddScoped<IExecutorManagementService, ExecutorManagementService>();
         services.AddScoped<IExecutorInvitationJob, ExecutorInvitationJob>();
-        services.AddScoped<IIncidentService, IncidentService>();
         services.AddScoped<IHoldService, HoldService>();
         services.AddScoped<IHoldReader, HoldReader>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<ISystemConfigService, SystemConfigService>();
-        services.AddScoped<IOperationsRecorder, OperationsRecorder>();
-        services.AddScoped<IIncidentJob, IncidentJob>();
-        services.AddScoped<IDeathCaseNoticeJob, DeathCaseNoticeJob>();
-        services.AddScoped<IOperationsScanner, OperationsScanner>();
         services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
         services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();
         services.AddScoped<IDeathCaseAssignmentJob, DeathCaseAssignmentJob>();

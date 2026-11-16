@@ -272,7 +272,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         EnsureCanDecide(deathCase);
         await EnsureNoConflictOfInterestAsync(context, ct);
 
-        // 8) Ghi một lần. Phân công, kế hoạch và đồng hồ 72 giờ giữ nguyên. Được làm khi Executor đang có bản nháp.
+        // 8) Ghi một lần. Phân công và kế hoạch giữ nguyên. Được làm khi Executor đang có bản nháp.
         DateTimeOffset now = timeProvider.GetUtcNow();
         DeathCaseDecision decision = NewDecision(context, DeathCaseDecisionKind.SupplementRequested, reason, now);
         decision.RequestedParts = requestedParts;
@@ -313,7 +313,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
 
         // 4) DEATH-04, 08, 09, 10: còn lý do chưa duyệt được thì 409, reason = lý do đầu, approveBlockers = cả danh sách.
         //    Sau đó ROLE-03 (VERIFIER_CONFLICT).
-        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase, timeProvider.GetUtcNow());
+        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase);
         if (blockers.Count > 0)
         {
             Dictionary<string, object?> blockerExtensions = new Dictionary<string, object?>();
@@ -467,7 +467,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
             previous = await reviewRepository.FindPreviousCaseAsync(deathCase.PreviousCaseId.Value, ct);
         }
 
-        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase, timeProvider.GetUtcNow());
+        List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase);
         // ROLE-03: GetApproveBlockers giữ thuần; xung đột lợi ích cần đọc kho nên thêm ở đây, cuối danh sách,
         // để FE không hiện nút duyệt với Verifier sẽ bị chặn lúc ghi.
         bool conflict = await HasConflictOfInterestAsync(deathCase, context.UserId, ct);

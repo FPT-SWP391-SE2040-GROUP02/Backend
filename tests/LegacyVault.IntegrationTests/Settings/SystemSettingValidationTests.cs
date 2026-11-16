@@ -108,25 +108,6 @@ public sealed class SystemSettingRulesTests
     }
 
     [Theory]
-    [InlineData(48, 72, true)]
-    [InlineData(48, 49, true)]
-    [InlineData(48, 48, false)]
-    [InlineData(72, 48, false)]
-    public void FindRelationError_IncidentEscalateMustComeAfterReminder(long reminder, long escalate, bool valid)
-    {
-        // Chuẩn bị
-        Dictionary<string, long> effective = new Dictionary<string, long>();
-        effective[SystemSettingRules.IncidentReminderKey] = reminder;
-        effective[SystemSettingRules.IncidentEscalateKey] = escalate;
-
-        // Hành động
-        string? error = SystemSettingRules.FindRelationError(effective);
-
-        // Kiểm tra
-        Assert.Equal(valid, error == null);
-    }
-
-    [Theory]
     [InlineData(7, 48, true)]
     [InlineData(1, 23, true)]
     [InlineData(1, 24, false)]

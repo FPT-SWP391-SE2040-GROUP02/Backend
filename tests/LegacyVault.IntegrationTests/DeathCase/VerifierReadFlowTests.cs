@@ -221,7 +221,7 @@ public sealed class VerifierReadFlowTests : IAsyncLifetime
         Assert.Equal(0, detail.GetProperty("decisions").GetArrayLength());
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("previousCase").ValueKind);
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("handover").ValueKind);
-        Assert.Equal(JsonValueKind.Null, detail.GetProperty("ownerNotice").ValueKind);
+        Assert.False(detail.TryGetProperty("ownerNotice", out _));
         Assert.NotEqual(JsonValueKind.Null, detail.GetProperty("assignment").GetProperty("dueAt").ValueKind);
     }
 

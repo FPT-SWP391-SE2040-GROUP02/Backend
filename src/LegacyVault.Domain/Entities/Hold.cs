@@ -28,7 +28,7 @@ public class Hold
 
     public string Reason { get; set; } = string.Empty;
 
-    /// <summary>Người phụ trách xem lại hold; null chỉ khi chưa có ai (khi đó có sự cố đi kèm).</summary>
+    /// <summary>Người phụ trách xem lại hold; null chỉ khi chưa có ai.</summary>
     public Guid? ResponsibleUserId { get; set; }
 
     /// <summary>Ngày xem lại tiếp theo.</summary>

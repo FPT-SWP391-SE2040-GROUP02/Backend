@@ -21,6 +21,12 @@ public interface IHandoverRepository
     Task<List<HandoverTurn>> FindTurnsByClaimantAsync(Guid userId, CancellationToken ct);
 
     /// <summary>
+    /// true khi tài khoản đã nhận một lượt bàn giao mà lượt chưa kết thúc (không phải HandoverCommitted, Declined,
+    /// DecisionExpired, Cancelled, Lapsed). Dùng để chặn Admin cấp vai trò nhân sự cho người đang nhận tài sản.
+    /// </summary>
+    Task<bool> HasOpenClaimedTurnAsync(Guid userId, CancellationToken ct);
+
+    /// <summary>
     /// Các lượt chưa ai nhận (ClaimantUserId null), còn nhận được (Invited hoặc InitialResponseExpired) và thuộc kế hoạch
     /// đang HandoverInProgress, mới nhất (InvitedAt giảm dần) trước. Không kèm Items; không theo dõi.
     /// Email người nhận nằm trong dữ liệu mã hóa nên không lọc theo email được ở đây; service lọc tiếp.

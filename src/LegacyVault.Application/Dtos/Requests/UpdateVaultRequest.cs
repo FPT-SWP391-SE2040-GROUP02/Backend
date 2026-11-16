@@ -26,9 +26,4 @@ public class UpdateVaultRequest
     [MaxLength(2000, ErrorMessage = "Hướng dẫn cho Executor tối đa 2000 ký tự.")]
     public string? ExecutorNote { get; set; }
 
-    /// <summary>
-    /// Điều khoản Chủ kho thêm vào di chúc (cả danh sách, thay toàn bộ); null = giữ nguyên, [] = xóa hết.
-    /// Chỉ sửa được khi kế hoạch còn nháp. Tối đa 10 điều, mỗi điều tối đa 500 ký tự.
-    /// </summary>
-    public List<string>? WillClauses { get; set; }
 }

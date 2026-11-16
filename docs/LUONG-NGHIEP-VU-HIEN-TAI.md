@@ -77,7 +77,7 @@ Mỗi chỉ định (một gói cho một người nhận) là một **lượt**
 Các bước:
 
 1. Lời mời gửi qua email (lưu lượt trước, gửi sau; lỗi thì thử lại tối đa 5 lần rồi mở sự cố `NOTIFICATION_FAILED`). Người thực thi có thể gửi lại lời mời thủ công.
-2. Người nhận xác minh danh tính bằng eKYC mục đích `BENEFICIARY_CLAIM`: họ tên, CCCD, ngày sinh đọc từ giấy phải khớp thông tin Chủ kho đã khai (`MATCHED`, `NEEDS_REVIEW`, `WRONG_PERSON`). `NEEDS_REVIEW` thì Người thực thi xác nhận danh tính (`confirm-identity`). Ở môi trường Development có công tắc `Handover:RequireIdentityVerification = false` để bỏ qua bước này.
+2. Người nhận xác minh danh tính bằng eKYC mục đích `BENEFICIARY_CLAIM`: họ tên, CCCD, ngày sinh đọc từ giấy phải khớp thông tin Chủ kho đã khai (`MATCHED`, `NEEDS_REVIEW`, `WRONG_PERSON`). `NEEDS_REVIEW` thì Verifier xem xét khi duyệt biên bản. Ở môi trường Development có công tắc `Handover:RequireIdentityVerification = false` để bỏ qua bước này.
 3. **Khóa mở gói:** nếu kho đã được Chủ kho cấp khóa cho Người thực thi thì người nhận phải nhập đúng khóa đó (`POST turns/{id}/verify-key`) trước khi đồng ý. Sai 5 lần thì khóa lượt, cần Người thực thi hoặc Admin xử lý. Kho chưa cấp khóa thì bỏ qua bước này. Chủ kho cấp lại được khi Người thực thi quên khóa; mảnh khóa cũ hết hiệu lực. DB chỉ lưu băm SHA-256 có muối.
 4. Người nhận đồng ý hoặc từ chối. Đồng ý thì có quyền xem và tải từng tài sản trong 30 ngày.
 5. Kế hoạch tự chuyển `CLOSED` khi mọi lượt kết thúc; job lưu và xóa dọn nội dung sau thời hạn lưu.
@@ -100,7 +100,7 @@ Các bước:
 ## 9. eKYC
 
 - Dịch vụ eKYC là chương trình Python riêng; backend chỉ lưu kết quả, không lưu ảnh giấy tờ thô.
-- Chuỗi bước: đồng ý (`consent`, phiên bản thông báo `2026-10-v1`) → chụp mặt trước (`document`) → xác nhận bản khai (`document/confirm`) → chụp mặt sau (`document-back`) → thử thách camera (`liveness/start`, `liveness/frame`, `liveness/complete`) hoặc ảnh selfie tĩnh (`face-match`) → kết quả `PASSED` hoặc `FAILED`. Mỗi lượt so khớp một lần.
+- Chuỗi bước: đồng ý (`consent`, phiên bản thông báo `2026-10-v1`) → chụp mặt trước (`document`) → xác nhận bản khai (`document/confirm`) → chụp mặt sau (`document-back`) → thử thách camera (`liveness/start`, `liveness/frame`, `liveness/complete`) → kết quả `PASSED` hoặc `FAILED`. Mỗi lượt so khớp một lần.
 - Ba mục đích: `OWNER_ENROLLMENT` (Chủ kho, một lần, gắn danh tính đã mã hóa và mẫu khuôn mặt), `BENEFICIARY_CLAIM` (người nhận, đối chiếu với người được chỉ định), `OWNER_ALIVE` (còn trong enum nhưng luồng "Tôi còn sống" đã gỡ).
 - Số CCCD không được trùng giữa các tài khoản Chủ kho và không được trùng người nhận của chính Chủ kho đó.
 
@@ -160,7 +160,7 @@ Các bước:
 
 ## 12. Chỗ code và tài liệu cũ chưa khớp
 
-- Luật thông báo và phản đối vẫn còn nguyên bộ khung ở backend (mốc phản đối đặt bằng lúc nộp để tự qua). Cờ "điểm danh sau ngày mất" đã gỡ.
-- Bảng `DeathCaseObjection` và các enum phản đối vẫn còn; chưa có migration xóa. Cài đặt `DeathCase.MaxNoticeAttempts` và `DeathCase.ObjectionHours` còn trong dữ liệu mặc định phía backend.
+- Cờ "điểm danh sau ngày mất" đã gỡ. Luật thông báo Owner và 72 giờ phản đối đã xóa khỏi code, bảng và cột (migration `RemoveUnusedFeatures`).
+- Bảng `DeathCaseObjection` (nếu còn trong DB cũ) và các giá trị enum phản đối giữ lại vì dòng cũ có thể còn dữ liệu.
 - Hạn xử lý sự cố của Admin tính bằng ngày/giờ thật, chưa đi qua chế độ demo.
 - `Pay11` (tạo đơn thanh toán trả 201) fail trên máy dev vì thiếu cấu hình tài khoản ngân hàng thử; không liên quan phần gộp.

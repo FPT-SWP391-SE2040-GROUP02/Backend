@@ -34,12 +34,6 @@ public class Vault
     /// <summary>Lần sửa ghi chú cho Executor gần nhất; null khi chưa viết.</summary>
     public DateTimeOffset? ExecutorNoteUpdatedAt { get; set; }
 
-    /// <summary>
-    /// Điều khoản Chủ kho tự thêm vào di chúc, mỗi điều một dòng (ngăn bằng ký tự xuống dòng). Chỉ sửa được khi
-    /// kế hoạch còn nháp; kích hoạt kế hoạch là Chủ kho ký bản di chúc có các điều khoản này. Null khi chưa thêm.
-    /// </summary>
-    public string? WillClauses { get; set; }
-
     public VaultStatus Status { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

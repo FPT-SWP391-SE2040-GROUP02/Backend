@@ -14,7 +14,7 @@ namespace LegacyVault.IntegrationTests.Payment;
 
 /// <summary>
 /// Webhook SePay bước đối chiếu và cấp quyền (SRS §8.3 bước 6–9, PAY-02..07, AC-28, AC-29, AC-30, AC-90, AC-97, AC-104):
-/// khớp đơn thì cấp quyền đúng một lần; lệch thì giao dịch ReconciliationRequired, không cấp, mở sự cố PAYMENT.
+/// khớp đơn thì cấp quyền đúng một lần; lệch thì giao dịch ReconciliationRequired, không cấp, ghi log cảnh báo.
 /// Chạy API thật trên SQL Server database tạm; số tài khoản lấy từ cấu hình của chính factory.
 /// </summary>
 public sealed class SePayWebhookReconcileTests : IAsyncLifetime
@@ -153,17 +153,6 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         return entitlement!;
     }
 
-    private async Task<List<Incident>> LoadPaymentIncidentsAsync()
-    {
-        List<Incident> incidents = new List<Incident>();
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            incidents = await db.Set<Incident>().AsNoTracking()
-                .Where(i => i.Type == IncidentType.Payment).ToListAsync();
-        });
-        return incidents;
-    }
-
     private async Task<int> CountPaidLogsAsync(Guid vaultId)
     {
         int count = 0;
@@ -184,32 +173,12 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         return await LoadTransactionAsync(id);
     }
 
-    /// <summary>Giao dịch lệch: ReconciliationRequired với đúng lý do, đã xử lý xong, và (trừ tiền ra) có đúng một sự cố mở cho giao dịch đó.</summary>
-    private async Task AssertReconciliationRequiredAsync(PaymentTransaction transaction, string reason, bool expectIncident)
+    /// <summary>Giao dịch lệch: ReconciliationRequired với đúng lý do và đã xử lý xong.</summary>
+    private static void AssertReconciliationRequired(PaymentTransaction transaction, string reason)
     {
         Assert.Equal(PaymentTransactionStatus.ReconciliationRequired, transaction.Status);
         Assert.Equal(reason, transaction.ReconciliationReason);
         Assert.NotNull(transaction.ProcessedAt);
-
-        List<Incident> incidents = await LoadPaymentIncidentsAsync();
-        int matching = 0;
-        foreach (Incident incident in incidents)
-        {
-            if (incident.TargetId == transaction.Id)
-            {
-                matching++;
-                Assert.Equal("PaymentTransaction", incident.TargetType);
-                Assert.Equal(IncidentStatus.Open, incident.Status);
-            }
-        }
-        if (expectIncident)
-        {
-            Assert.Equal(1, matching);
-        }
-        else
-        {
-            Assert.Equal(0, matching);
-        }
     }
 
     [SqlFact]
@@ -244,9 +213,8 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         JsonElement vault = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
         Assert.Equal("DRAFT", vault.GetProperty("planStatus").GetString());
 
-        // Kiểm tra: nhật ký PAYMENT_PAID của hệ thống, không có sự cố
+        // Kiểm tra: nhật ký PAYMENT_PAID của hệ thống
         Assert.Equal(1, await CountPaidLogsAsync(vaultId));
-        Assert.Empty(await LoadPaymentIncidentsAsync());
     }
 
     [SqlFact]
@@ -296,7 +264,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Ac97_Webhook_SecondTransactionForSameOrder_IsAlreadyPaidWithIncident()
+    public async Task Ac97_Webhook_SecondTransactionForSameOrder_IsAlreadyPaid()
     {
         // Chuẩn bị: giao dịch đầu đã khớp
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
@@ -309,7 +277,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
 
         // Kiểm tra: giao dịch hai chờ đối chiếu, không cấp thêm, đơn gắn đúng
         Assert.Equal(PaymentTransactionStatus.Matched, first.Status);
-        await AssertReconciliationRequiredAsync(second, "ALREADY_PAID", true);
+        AssertReconciliationRequired(second, "ALREADY_PAID");
         Assert.Equal(order.OrderId, second.PaymentOrderId);
         VaultEntitlement afterSecond = await LoadEntitlementAsync(vaultId);
         Assert.Equal(afterFirst.ServiceExpiresAt, afterSecond.ServiceExpiresAt);
@@ -334,8 +302,8 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction over = await SendAndLoadAsync(overPayload);
 
         // Kiểm tra: không cấp, đơn vẫn chờ, giao dịch gắn đơn để Admin thấy
-        await AssertReconciliationRequiredAsync(under, "AMOUNT_MISMATCH", true);
-        await AssertReconciliationRequiredAsync(over, "AMOUNT_MISMATCH", true);
+        AssertReconciliationRequired(under, "AMOUNT_MISMATCH");
+        AssertReconciliationRequired(over, "AMOUNT_MISMATCH");
         Assert.Equal(underOrder.OrderId, under.PaymentOrderId);
         Assert.Equal(overOrder.OrderId, over.PaymentOrderId);
         Assert.Equal(PaymentOrderStatus.Pending, (await BillingTestData.LoadOrderAsync(factory, underOrder.OrderId)).Status);
@@ -378,7 +346,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction transaction = await SendAndLoadAsync(payload);
 
         // Kiểm tra
-        await AssertReconciliationRequiredAsync(transaction, "WRONG_ACCOUNT", true);
+        AssertReconciliationRequired(transaction, "WRONG_ACCOUNT");
         Assert.Null(transaction.PaymentOrderId);
         Assert.Equal(EntitlementStatus.Free, (await LoadEntitlementAsync(vaultId)).Status);
     }
@@ -396,7 +364,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction transaction = await SendAndLoadAsync(payload);
 
         // Kiểm tra: sai tài khoản thì chưa gắn đơn
-        await AssertReconciliationRequiredAsync(transaction, "WRONG_ACCOUNT", true);
+        AssertReconciliationRequired(transaction, "WRONG_ACCOUNT");
         Assert.Null(transaction.PaymentOrderId);
         Assert.Equal(PaymentOrderStatus.Pending, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
         Assert.Equal(EntitlementStatus.Free, (await LoadEntitlementAsync(vaultId)).Status);
@@ -414,8 +382,8 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction notFound = await SendAndLoadAsync(unknownCode);
 
         // Kiểm tra
-        await AssertReconciliationRequiredAsync(missing, "CODE_MISSING", true);
-        await AssertReconciliationRequiredAsync(notFound, "ORDER_NOT_FOUND", true);
+        AssertReconciliationRequired(missing, "CODE_MISSING");
+        AssertReconciliationRequired(notFound, "ORDER_NOT_FOUND");
         Assert.Null(missing.PaymentOrderId);
         Assert.Null(notFound.PaymentOrderId);
     }
@@ -433,7 +401,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction transaction = await SendAndLoadAsync(PayloadFor(order, NewTransactionId()));
 
         // Kiểm tra
-        await AssertReconciliationRequiredAsync(transaction, "ORDER_CANCELLED", true);
+        AssertReconciliationRequired(transaction, "ORDER_CANCELLED");
         Assert.Equal(order.OrderId, transaction.PaymentOrderId);
         Assert.Equal(PaymentOrderStatus.Cancelled, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
         Assert.Equal(EntitlementStatus.Free, (await LoadEntitlementAsync(vaultId)).Status);
@@ -453,7 +421,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction transaction = await SendAndLoadAsync(payload);
 
         // Kiểm tra: giao dịch vẫn được lưu để đối chiếu, không cấp
-        await AssertReconciliationRequiredAsync(transaction, "LATE_AFTER_EXPIRY", true);
+        AssertReconciliationRequired(transaction, "LATE_AFTER_EXPIRY");
         Assert.Equal(order.OrderId, transaction.PaymentOrderId);
         Assert.Equal(EntitlementStatus.Free, (await LoadEntitlementAsync(vaultId)).Status);
     }
@@ -491,7 +459,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction transaction = await SendAndLoadAsync(payload);
 
         // Kiểm tra: không biết giờ thì không tự cấp
-        await AssertReconciliationRequiredAsync(transaction, "TIME_UNKNOWN", true);
+        AssertReconciliationRequired(transaction, "TIME_UNKNOWN");
         Assert.Equal(EntitlementStatus.Free, (await LoadEntitlementAsync(vaultId)).Status);
     }
 
@@ -511,7 +479,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction transaction = await SendAndLoadAsync(PayloadFor(order, NewTransactionId()));
 
         // Kiểm tra
-        await AssertReconciliationRequiredAsync(transaction, "VAULT_CLOSED", true);
+        AssertReconciliationRequired(transaction, "VAULT_CLOSED");
         Assert.Equal(order.OrderId, transaction.PaymentOrderId);
         Assert.Equal(EntitlementStatus.Free, (await LoadEntitlementAsync(vaultId)).Status);
         Assert.Equal(PaymentOrderStatus.Pending, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
@@ -531,13 +499,13 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         PaymentTransaction transaction = await SendAndLoadAsync(PayloadFor(order, NewTransactionId()));
 
         // Kiểm tra: không tự cấp suất
-        await AssertReconciliationRequiredAsync(transaction, "ENTITLEMENT_CHANGED", true);
+        AssertReconciliationRequired(transaction, "ENTITLEMENT_CHANGED");
         Assert.Equal(0, (await LoadEntitlementAsync(vaultId)).ExtraBeneficiarySlots);
         Assert.Equal(PaymentOrderStatus.Pending, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
     }
 
     [SqlFact]
-    public async Task Pay07_Webhook_OutgoingTransfer_IsNotIncomingWithoutIncident()
+    public async Task Pay07_Webhook_OutgoingTransfer_IsNotIncoming()
     {
         // Chuẩn bị: tiền ra tài khoản nhưng nội dung có mã của một đơn đang chờ
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
@@ -548,37 +516,11 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         // Hành động
         PaymentTransaction transaction = await SendAndLoadAsync(payload);
 
-        // Kiểm tra: ghi nhận để đối chiếu nhưng không mở sự cố, không gắn đơn, không cấp
-        await AssertReconciliationRequiredAsync(transaction, "NOT_INCOMING", false);
+        // Kiểm tra: ghi nhận để đối chiếu nhưng không gắn đơn, không cấp
+        AssertReconciliationRequired(transaction, "NOT_INCOMING");
         Assert.Null(transaction.PaymentOrderId);
         Assert.Equal(PaymentOrderStatus.Pending, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
         Assert.Equal(EntitlementStatus.Free, (await LoadEntitlementAsync(vaultId)).Status);
-        Assert.Empty(await LoadPaymentIncidentsAsync());
-    }
-
-    [SqlFact]
-    public async Task Sec07_Webhook_PaymentIncident_HasOnlyReasonAndNoSensitiveData()
-    {
-        // Chuẩn bị: giao dịch thiếu tiền của một đơn có kho
-        (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
-        CreatedOrder order = await CreatePurchaseOrderAsync(client);
-        Dictionary<string, object?> payload = Payload(
-            NewTransactionId(), "chuyen tien " + order.PaymentCode, order.TotalAmount - 1, DateTimeOffset.UtcNow);
-
-        // Hành động
-        PaymentTransaction transaction = await SendAndLoadAsync(payload);
-
-        // Kiểm tra: một sự cố PAYMENT mở cho giao dịch, gắn đúng kho, nội dung chỉ có mã lý do
-        List<Incident> incidents = await LoadPaymentIncidentsAsync();
-        Assert.Single(incidents);
-        Incident incident = incidents[0];
-        Assert.Equal(transaction.Id, incident.TargetId);
-        Assert.Equal("PaymentTransaction", incident.TargetType);
-        Assert.Equal(vaultId, incident.VaultId);
-        Assert.Equal("Giao dịch thanh toán cần đối chiếu, lý do: AMOUNT_MISMATCH", incident.Summary);
-        Assert.DoesNotContain(order.PaymentCode, incident.Summary);
-        Assert.DoesNotContain(BankAccountNumber(), incident.Summary);
-        Assert.DoesNotContain(order.TotalAmount.ToString(CultureInfo.InvariantCulture), incident.Summary);
     }
 
     [SqlFact]
@@ -657,7 +599,6 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         Assert.Equal(PaymentTransactionStatus.Matched, transaction.Status);
         Assert.Equal(PaymentOrderStatus.Paid, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
         Assert.Equal(1, await CountPaidLogsAsync(vaultId));
-        Assert.Empty(await LoadPaymentIncidentsAsync());
         int rows = 0;
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {

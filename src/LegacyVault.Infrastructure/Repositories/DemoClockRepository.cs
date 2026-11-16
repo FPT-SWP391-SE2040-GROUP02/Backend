@@ -73,8 +73,7 @@ public sealed class DemoClockRepository : IDemoClockRepository
     }
 
     public async Task<List<DemoDeadline>> ListUpcomingDeadlinesAsync(
-        DateTimeOffset after, DateTimeOffset until, TimeSpan remindAfter, TimeSpan incidentEscalateAfter,
-        CancellationToken ct)
+        DateTimeOffset after, DateTimeOffset until, TimeSpan remindAfter, CancellationToken ct)
     {
         List<DemoDeadline> result = new List<DemoDeadline>();
 
@@ -133,30 +132,6 @@ public sealed class DemoClockRepository : IDemoClockRepository
             .ToListAsync(ct);
         AddAll(result, grantExpiries, "HANDOVER_DEADLINE");
 
-        // Sự cố chưa đóng: giờ nhắc người phụ trách và giờ báo lên Admin.
-        List<DemoIncidentTimes> incidents = await context.Set<Incident>()
-            .AsNoTracking()
-            .Where(i => i.Status != IncidentStatus.Resolved)
-            .Select(i => new DemoIncidentTimes
-            {
-                DueAt = i.DueAt,
-                CreatedAt = i.CreatedAt,
-                NeedsReminder = i.RemindedCount == 0,
-                NeedsEscalation = i.EscalatedAt == null,
-            })
-            .ToListAsync(ct);
-        foreach (DemoIncidentTimes incident in incidents)
-        {
-            if (incident.NeedsReminder && incident.DueAt > after && incident.DueAt <= until)
-            {
-                AddOne(result, incident.DueAt, "INCIDENT");
-            }
-            DateTimeOffset escalateAt = incident.CreatedAt + incidentEscalateAfter;
-            if (incident.NeedsEscalation && escalateAt > after && escalateAt <= until)
-            {
-                AddOne(result, escalateAt, "INCIDENT");
-            }
-        }
         return result;
     }
 
@@ -184,12 +159,4 @@ public sealed class DemoClockRepository : IDemoClockRepository
         list.Add(deadline);
     }
 
-    /// <summary>Dữ liệu tối thiểu của sự cố để tính giờ nhắc và giờ báo lên.</summary>
-    private sealed class DemoIncidentTimes
-    {
-        public DateTimeOffset DueAt { get; set; }
-        public DateTimeOffset CreatedAt { get; set; }
-        public bool NeedsReminder { get; set; }
-        public bool NeedsEscalation { get; set; }
-    }
 }

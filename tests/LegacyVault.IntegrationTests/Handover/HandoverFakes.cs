@@ -30,6 +30,19 @@ public sealed class FakeHandoverRepository : IHandoverRepository
         return Task.FromResult(Turns.FirstOrDefault(t => t.Id == turnId));
     }
 
+    public Task<bool> HasOpenClaimedTurnAsync(Guid userId, CancellationToken ct)
+    {
+        bool open = false;
+        foreach (HandoverTurn turn in Turns)
+        {
+            if (turn.ClaimantUserId == userId && !HandoverRules.IsTerminal(turn.Status))
+            {
+                open = true;
+            }
+        }
+        return Task.FromResult(open);
+    }
+
     public Task<List<HandoverTurn>> FindTurnsByClaimantAsync(Guid userId, CancellationToken ct)
     {
         List<HandoverTurn> mine = Turns

@@ -64,14 +64,13 @@ public sealed class AdminService : IAdminService
     private readonly IVaultRepository vaults;
     private readonly IDeathCaseRepository deathCases;
     private readonly IExecutorReader executorReader;
-    private readonly IIncidentService incidentService;
-    private readonly IIncidentRepository incidents;
     private readonly IHoldRepository holds;
     private readonly IRefreshTokenRepository refreshTokens;
     private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
     private readonly IPasswordHasher passwordHasher;
     private readonly TimeProvider timeProvider;
+    private readonly IHandoverRepository handover;
 
     public AdminService(
         ICurrentUser currentUser,
@@ -80,15 +79,15 @@ public sealed class AdminService : IAdminService
         IVaultRepository vaults,
         IDeathCaseRepository deathCases,
         IExecutorReader executorReader,
-        IIncidentService incidentService,
-        IIncidentRepository incidents,
         IHoldRepository holds,
         IRefreshTokenRepository refreshTokens,
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IHandoverRepository handover)
     {
+        this.handover = handover;
         this.refreshTokens = refreshTokens;
         this.currentUser = currentUser;
         this.users = users;
@@ -96,8 +95,6 @@ public sealed class AdminService : IAdminService
         this.vaults = vaults;
         this.deathCases = deathCases;
         this.executorReader = executorReader;
-        this.incidentService = incidentService;
-        this.incidents = incidents;
         this.holds = holds;
         this.audit = audit;
         this.unitOfWork = unitOfWork;
@@ -263,6 +260,12 @@ public sealed class AdminService : IAdminService
         {
             throw NotAllowed("LAST_ADMIN");
         }
+        // Người đang nhận tài sản bàn giao (lượt chưa kết thúc) không được cấp vai trò nhân sự: nhân sự không được làm người nhận.
+        bool becomesStaff = newRole == UserRole.Executor || newRole == UserRole.Verifier || newRole == UserRole.Admin;
+        if (becomesStaff && await handover.HasOpenClaimedTurnAsync(user.Id, ct))
+        {
+            throw NotAllowed("RECIPIENT_HAS_ACTIVE_HANDOVER");
+        }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
         user.Role = newRole;
@@ -376,15 +379,13 @@ public sealed class AdminService : IAdminService
         deathCases.AddAssignment(created);
         // Đổi etag để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT, tải lại thì 404.
         deathCase.UpdatedAt = now;
-        await incidentService.ResolveByTargetAsync(
-            IncidentType.NoVerifier, IncidentRules.TargetDeathCase, deathCase.Id, "Admin đã giao Verifier.", ct);
         audit.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.VerifierReassigned,
             AuditTargetType.DeathCase, deathCase.Id, null, AuditOutcome.Succeeded, reason, now));
         try
         {
             await unitOfWork.SaveChangesAsync(ct);
         }
-        catch (Exception ex) when (incidents.IsUniqueViolation(ex))
+        catch (Exception ex) when (deathCases.IsUniqueViolation(ex))
         {
             // Job phân công vừa giao cùng lúc (chỉ mục "mỗi hồ sơ một phân công còn hiệu lực"): báo xung đột để Admin tải lại.
             throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
@@ -397,9 +398,6 @@ public sealed class AdminService : IAdminService
         await RequireAdminAsync(ct);
         DateTimeOffset now = timeProvider.GetUtcNow();
         AdminDashboardResponse response = new AdminDashboardResponse();
-        response.OpenIncidents = await incidents.CountOpenAsync(ct);
-        response.OverdueIncidents = await incidents.CountOverdueAsync(now, ct);
-        response.UnassignedIncidents = await incidents.CountUnassignedAsync(ct);
         response.ActiveHolds = await holds.CountActiveAsync(ct);
         response.HoldsPastReview = await holds.CountReviewOverdueAsync(now, ct);
         response.ActiveAdmins = await adminUsers.CountActiveAdminsAsync(ct);

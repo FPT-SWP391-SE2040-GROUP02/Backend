@@ -72,15 +72,3 @@ Content-Type: image/jpeg
 ### Thử thách camera: chốt khi passed = true (so khớp selfie của chính phiên với thẻ)
 POST {{baseUrl}}/ekyc/liveness/complete
 Authorization: Bearer {{token}}
-
-### Gửi ảnh selfie để so khớp (chỉ sau khi thử thách camera đã passed = true, trong 30 phút)
-POST {{baseUrl}}/ekyc/face-match
-Authorization: Bearer {{token}}
-Content-Type: multipart/form-data; boundary=lv
-
---lv
-Content-Disposition: form-data; name="file"; filename="selfie.jpg"
-Content-Type: image/jpeg
-
-< C:\duong-dan\selfie.jpg
---lv--
