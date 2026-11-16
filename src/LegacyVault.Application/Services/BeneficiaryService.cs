@@ -1,3 +1,4 @@
+using LegacyVault.Application.Notifications;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -34,6 +35,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly IOwnerIdentityReader ownerIdentityReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IEmailDomainChecker domainChecker;
+    private readonly IEmailBounceStore bounces;
 
     public BeneficiaryService(
         ICurrentUser currentUser,
@@ -45,8 +48,12 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         IUserRepository userRepository,
         IOwnerIdentityReader ownerIdentityReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IEmailDomainChecker domainChecker,
+        IEmailBounceStore bounces)
     {
+        this.domainChecker = domainChecker;
+        this.bounces = bounces;
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.beneficiaryRepository = beneficiaryRepository;
@@ -99,6 +106,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
                 throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
             }
             await EnsureEmailIsNotStaffAsync(data.Email, ct);
+            await EmailDomainGuard.EnsureAsync(domainChecker, data.Email.Trim().ToLowerInvariant(), "email", ct);
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -210,6 +218,12 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
             List<Guid> containerIds = GetContainerIds(containerIdsByBeneficiary, beneficiary.Id);
             responses.Add(beneficiary.ToResponse(data, containerIds));
+        }
+        HashSet<string> bouncedEmails = await bounces.FindBouncedAsync(responses.Select(r => r.Email ?? string.Empty), ct);
+        foreach (BeneficiaryResponse response in responses)
+        {
+            response.EmailUndeliverable = !string.IsNullOrWhiteSpace(response.Email)
+                && bouncedEmails.Contains(response.Email.Trim().ToLowerInvariant());
         }
         return responses.ToPaginatedList(page.TotalCount, pagination);
     }

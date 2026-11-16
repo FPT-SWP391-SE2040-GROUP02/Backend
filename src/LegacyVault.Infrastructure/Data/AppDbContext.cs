@@ -84,6 +84,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     // Cấu hình tham số động (CR5)
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
+    public DbSet<EmailBounce> EmailBounces => Set<EmailBounce>();
+
     // Cấu hình dịch vụ ngoài do Admin sửa trên web
     public DbSet<SystemConfig> SystemConfigs => Set<SystemConfig>();
 

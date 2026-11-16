@@ -34,4 +34,7 @@ public class BeneficiaryResponse
 
     /// <summary>True khi hồ sơ cùng CCCD đã tồn tại trong kho (tạo mới nhưng trả về hồ sơ cũ theo QUOTA-04).</summary>
     public bool IsExisting { get; set; }
+
+    /// <summary>True khi máy chủ thư đã báo không giao được thư tới email này (bounce); Chủ kho nên sửa email.</summary>
+    public bool EmailUndeliverable { get; set; }
 }

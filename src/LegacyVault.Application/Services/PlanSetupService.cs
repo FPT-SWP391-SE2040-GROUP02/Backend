@@ -49,7 +49,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
     TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
-    ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector) : IPlanSetupService
+    ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector,
+    IEmailBounceStore bounces) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-30";
     public const string ScopeVersion = "executor-2026-10-15";
@@ -584,6 +585,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 }
             }
             executorItems.Add(Map(executorItem, false, executorFullName));
+        }
+        HashSet<string> bouncedEmails = await bounces.FindBouncedAsync(executorItems.Select(e => e.InviteeEmail), ct);
+        for (int i = 0; i < executorItems.Count; i++)
+        {
+            if (bouncedEmails.Contains(executorItems[i].InviteeEmail.Trim().ToLowerInvariant()))
+            {
+                executorItems[i] = executorItems[i] with { EmailUndeliverable = true };
+            }
         }
         string ownerFullName = string.Empty;
         string ownerEmail = string.Empty;

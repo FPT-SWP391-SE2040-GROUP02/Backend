@@ -1,3 +1,4 @@
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
@@ -72,6 +73,8 @@ public sealed class AdminService : IAdminService
     private readonly TimeProvider timeProvider;
     private readonly IPasswordResetService passwordResetService;
     private readonly IHandoverRepository handover;
+    private readonly IEmailDomainChecker domainChecker;
+    private readonly IEmailBounceStore bounces;
 
     public AdminService(
         ICurrentUser currentUser,
@@ -87,10 +90,14 @@ public sealed class AdminService : IAdminService
         IPasswordHasher passwordHasher,
         TimeProvider timeProvider,
         IHandoverRepository handover,
-        IPasswordResetService passwordResetService)
+        IPasswordResetService passwordResetService,
+        IEmailDomainChecker domainChecker,
+        IEmailBounceStore bounces)
     {
         this.handover = handover;
         this.passwordResetService = passwordResetService;
+        this.bounces = bounces;
+        this.domainChecker = domainChecker;
         this.refreshTokens = refreshTokens;
         this.currentUser = currentUser;
         this.users = users;
@@ -124,6 +131,11 @@ public sealed class AdminService : IAdminService
         foreach (User user in items)
         {
             page.Items.Add(OperationsMapper.ToAdminUser(user));
+        }
+        HashSet<string> bouncedEmails = await bounces.FindBouncedAsync(page.Items.Select(u => u.Email), ct);
+        foreach (AdminUserResponse item in page.Items)
+        {
+            item.EmailUndeliverable = bouncedEmails.Contains(item.Email.Trim().ToLowerInvariant());
         }
         page.TotalCount = total;
         page.PageIndex = pageIndex;
@@ -501,6 +513,7 @@ public sealed class AdminService : IAdminService
             throw ValidationErrors.For("role", "Chỉ được tạo tài khoản VERIFIER, EXECUTOR hoặc ADMIN.");
         }
 
+        await EmailDomainGuard.EnsureAsync(domainChecker, email, "email", ct);
         User? existing = await users.FindByEmailAsync(email, ct);
         if (existing != null)
         {
