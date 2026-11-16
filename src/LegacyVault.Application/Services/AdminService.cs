@@ -73,6 +73,7 @@ public sealed class AdminService : IAdminService
     private readonly TimeProvider timeProvider;
     private readonly IHandoverRepository handover;
     private readonly IEmailDomainChecker domainChecker;
+    private readonly IEmailBounceStore bounces;
 
     public AdminService(
         ICurrentUser currentUser,
@@ -88,9 +89,11 @@ public sealed class AdminService : IAdminService
         IPasswordHasher passwordHasher,
         TimeProvider timeProvider,
         IHandoverRepository handover,
-        IEmailDomainChecker domainChecker)
+        IEmailDomainChecker domainChecker,
+        IEmailBounceStore bounces)
     {
         this.handover = handover;
+        this.bounces = bounces;
         this.domainChecker = domainChecker;
         this.refreshTokens = refreshTokens;
         this.currentUser = currentUser;
@@ -125,6 +128,11 @@ public sealed class AdminService : IAdminService
         foreach (User user in items)
         {
             page.Items.Add(OperationsMapper.ToAdminUser(user));
+        }
+        HashSet<string> bouncedEmails = await bounces.FindBouncedAsync(page.Items.Select(u => u.Email), ct);
+        foreach (AdminUserResponse item in page.Items)
+        {
+            item.EmailUndeliverable = bouncedEmails.Contains(item.Email.Trim().ToLowerInvariant());
         }
         page.TotalCount = total;
         page.PageIndex = pageIndex;

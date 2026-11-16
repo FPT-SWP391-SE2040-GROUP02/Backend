@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Dtos;
 public sealed record ExecutorInvitationResponse(Guid Id, string Status, string InviteeEmail,
     DateTimeOffset ExpiresAt, DateTimeOffset? AcceptedAt,
     DateTimeOffset? InvitationSentAt, string? AcceptedScopeVersion, string Etag, bool AccountExists = false,
-    string? FullName = null);
+    string? FullName = null, bool EmailUndeliverable = false);
 public sealed record CheckInviteeEmailResponse(string Email, bool Exists);
 /// <summary>Tài khoản có sẵn mà Chủ kho có thể chọn làm Người thực thi.</summary>
 public sealed record ExecutorCandidateResponse(Guid UserId, string FullName, string Email);

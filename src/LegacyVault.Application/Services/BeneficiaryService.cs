@@ -36,6 +36,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IEmailDomainChecker domainChecker;
+    private readonly IEmailBounceStore bounces;
 
     public BeneficiaryService(
         ICurrentUser currentUser,
@@ -48,9 +49,11 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         IOwnerIdentityReader ownerIdentityReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        IEmailDomainChecker domainChecker)
+        IEmailDomainChecker domainChecker,
+        IEmailBounceStore bounces)
     {
         this.domainChecker = domainChecker;
+        this.bounces = bounces;
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.beneficiaryRepository = beneficiaryRepository;
@@ -215,6 +218,12 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
             List<Guid> containerIds = GetContainerIds(containerIdsByBeneficiary, beneficiary.Id);
             responses.Add(beneficiary.ToResponse(data, containerIds));
+        }
+        HashSet<string> bouncedEmails = await bounces.FindBouncedAsync(responses.Select(r => r.Email ?? string.Empty), ct);
+        foreach (BeneficiaryResponse response in responses)
+        {
+            response.EmailUndeliverable = !string.IsNullOrWhiteSpace(response.Email)
+                && bouncedEmails.Contains(response.Email.Trim().ToLowerInvariant());
         }
         return responses.ToPaginatedList(page.TotalCount, pagination);
     }
