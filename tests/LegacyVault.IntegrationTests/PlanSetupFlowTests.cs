@@ -74,7 +74,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.DoesNotContain(mail.Token, raw);
         return JsonSerializer.Deserialize<ExecutorInvitationResponse>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
     }
-    private Task<HttpResponseMessage> RespondAsync(HttpClient client, string token, bool acknowledge = true) => client.PostAsJsonAsync("/api/v1/executor-invitations/respond", new { token, accept = true, acknowledgeScope = acknowledge, scopeVersion = PlanSetupService.ScopeVersion });
+    private Task<HttpResponseMessage> RespondAsync(HttpClient client, string token, bool acknowledge = true) => client.PostAsJsonAsync("/api/v1/executor-invitations/respond", new { token, accept = true, acknowledgeScope = acknowledge, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
     private async Task<ActivatePlanRequest> ActivationAsync(HttpClient owner, Guid vaultId)
     {
         var setup = await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup");
@@ -304,7 +304,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     private static Task<HttpResponseMessage> RespondByIdAsync(HttpClient client, Guid invitationId, bool accept)
     {
         return client.PostAsJsonAsync($"/api/v1/executor-invitations/{invitationId}/respond",
-            new { accept, acknowledgeScope = accept, scopeVersion = PlanSetupService.ScopeVersion });
+            new { accept, acknowledgeScope = accept, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
     }
 
     [SqlFact]

@@ -18,6 +18,9 @@ public static class ApiTestHelpers
     /// <summary>Email của hồ sơ người nhận tạo bằng CreateBeneficiaryAsync.</summary>
     public const string BeneficiaryEmail = "nguoinhan@example.com";
 
+    /// <summary>Mật khẩu tài khoản của Người thực thi tạo bằng EnsureSystemExecutorAsync (dùng để ký nhận vai).</summary>
+    public const string ExecutorPassword = "Executor-Test-Pass-1";
+
     /// <summary>Thêm một user Active vào DB và trả HttpClient đã gắn Bearer token của user đó.</summary>
     public static async Task<HttpClient> CreateClientForNewUserAsync(ApiFactory factory, bool emailVerified, string? email = null)
     {
@@ -64,6 +67,11 @@ public static class ApiTestHelpers
             }
             user.Role = UserRole.Executor;
             user.LegalVerifiedAt ??= DateTimeOffset.UtcNow;
+            if (string.IsNullOrEmpty(user.PasswordHash))
+            {
+                IPasswordHasher passwordHasher = factory.Services.GetRequiredService<IPasswordHasher>();
+                user.PasswordHash = passwordHasher.Hash(ExecutorPassword);
+            }
             await db.SaveChangesAsync();
         });
     }

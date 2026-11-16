@@ -6,7 +6,7 @@ using LegacyVault.Domain.Entities;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// DEATH-03: Verifier nhập lại mật khẩu khi Duyệt/Từ chối. Sai 5 lần liên tiếp thì khóa chức năng duyệt/từ chối
+/// DEATH-03: Verifier nhập lại mật khẩu khi Duyệt/Từ chối; Người thực thi nhập lại mật khẩu khi ký nhận vai. Sai 5 lần liên tiếp thì khóa chức năng duyệt/từ chối
 /// 15 phút → 1 giờ → 24 giờ; dùng lại hằng của VaultPinRules (cách viết theo VaultPinService.CheckPinAsync).
 /// </summary>
 /// <remarks>

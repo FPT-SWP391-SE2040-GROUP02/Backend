@@ -44,6 +44,9 @@ public sealed class RespondExecutorInvitationRequest : InspectExecutorInvitation
     public bool Accept { get; set; }
     public bool AcknowledgeScope { get; set; }
     [Required, MaxLength(64)] public string ScopeVersion { get; set; } = "";
+
+    /// <summary>Mật khẩu tài khoản để ký nhận vai khi chấp nhận; từ chối thì bỏ qua.</summary>
+    [MaxLength(128)] public string? Password { get; set; }
 }
 
 /// <summary>Trả lời lời mời theo id (lấy từ GET /executor-invitations/mine), không cần token trong link email.</summary>
@@ -55,6 +58,10 @@ public sealed class RespondMyExecutorInvitationRequest
 
     [Required, MaxLength(64)]
     public string ScopeVersion { get; set; } = "";
+
+    /// <summary>Mật khẩu tài khoản để ký nhận vai khi chấp nhận; từ chối thì bỏ qua.</summary>
+    [MaxLength(128)]
+    public string? Password { get; set; }
 }
 public sealed class ActivatePlanRequest
 {

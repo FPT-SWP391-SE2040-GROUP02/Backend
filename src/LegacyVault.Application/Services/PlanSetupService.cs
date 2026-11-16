@@ -49,7 +49,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
     TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
-    ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector) : IPlanSetupService
+    ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector,
+    ISigningPasswordChecker signingPasswordChecker) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-30";
     public const string ScopeVersion = "executor-2026-10-15";
@@ -243,14 +244,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     public Task<ExecutorInvitationResponse> RespondAsync(RespondExecutorInvitationRequest request, CancellationToken ct)
     {
-        return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion,
+        return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion, request.Password,
             responder => FindTokenAsync(request.Token, ct), ct);
     }
 
     public Task<ExecutorInvitationResponse> RespondByIdAsync(
         Guid invitationId, RespondMyExecutorInvitationRequest request, CancellationToken ct)
     {
-        return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion,
+        return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion, request.Password,
             responder => FindMyInvitationAsync(invitationId, responder, ct), ct);
     }
 
@@ -301,7 +302,42 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return response;
     }
 
-    private Task<ExecutorInvitationResponse> RespondCoreAsync(bool accept, bool acknowledgeScope, string scopeVersion,
+    /// <summary>
+    /// Người thực thi "ký" nhận vai bằng mật khẩu tài khoản (chỉ khi chấp nhận; từ chối không cần mật khẩu).
+    /// Kiểm mật khẩu làm TRƯỚC khối serializable: ISigningPasswordChecker lưu bộ đếm sai rồi mới ném lỗi, nếu nằm trong
+    /// giao dịch serializable thì lỗi ném ra sẽ hoàn tác luôn bộ đếm. Chỉ kiểm khi lời mời còn hợp lệ cho người này,
+    /// để link sai/hết hạn không làm tốn lượt thử; các luật còn lại vẫn được kiểm lại đầy đủ trong giao dịch.
+    /// </summary>
+    private async Task<ExecutorInvitationResponse> RespondCoreAsync(bool accept, bool acknowledgeScope, string scopeVersion,
+        string? password, Func<User, Task<Executor>> findInvitation, CancellationToken ct)
+    {
+        if (accept)
+        {
+            Guid currentUserId = currentUser.RequireUserId();
+            User signer = await UsableUserAsync(currentUserId, ct);
+            if (scopeVersion != ScopeVersion || !acknowledgeScope)
+            {
+                throw new AppException(AppErrorType.Validation, ErrorCode.PolicyAcknowledgementRequired, "Cần đọc và xác nhận phạm vi nhiệm vụ hiện hành.");
+            }
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                throw ValidationErrors.For("password", "Nhập mật khẩu tài khoản để ký nhận vai Người thực thi.");
+            }
+
+            Executor pending = await findInvitation(signer);
+            DateTimeOffset checkTime = time.GetUtcNow();
+            bool emailMatches = string.Equals(signer.Email?.Trim(), pending.InviteeEmail?.Trim(), StringComparison.OrdinalIgnoreCase);
+            bool belongsToSigner = !pending.UserId.HasValue || pending.UserId == currentUserId;
+            bool stillOpen = pending.Status == ExecutorStatus.Invited && pending.ExpiresAt > checkTime;
+            if (stillOpen && emailMatches && belongsToSigner)
+            {
+                await signingPasswordChecker.CheckAsync(signer, password, checkTime, ct);
+            }
+        }
+        return await RespondInTransactionAsync(accept, acknowledgeScope, scopeVersion, findInvitation, ct);
+    }
+
+    private Task<ExecutorInvitationResponse> RespondInTransactionAsync(bool accept, bool acknowledgeScope, string scopeVersion,
         Func<User, Task<Executor>> findInvitation, CancellationToken ct) =>
         unitOfWork.ExecuteSerializableAsync(async () =>
         {

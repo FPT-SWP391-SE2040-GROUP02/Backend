@@ -115,7 +115,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     private static async Task AcceptAsync(HttpClient client, string token)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion });
+            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -149,7 +149,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await RevokeAsync(owner, vaultId, invited.Id, invited.Etag)).StatusCode);
 
         HttpResponseMessage accept = await executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion });
+            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
         Assert.False(accept.IsSuccessStatusCode);
 
         // Chỗ trống: mời người khác được ngay

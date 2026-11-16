@@ -289,6 +289,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
             accept = true,
             acknowledgeScope = true,
             scopeVersion = PlanSetupService.ScopeVersion,
+            password = ApiTestHelpers.ExecutorPassword,
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
