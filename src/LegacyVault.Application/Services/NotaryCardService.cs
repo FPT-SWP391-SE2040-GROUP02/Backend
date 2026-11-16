@@ -8,7 +8,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Ảnh thẻ công chứng viên (xem INotaryCardService). Cùng quy tắc ảnh với ảnh đại diện: loại ảnh nhận theo nội dung thật,
+/// Ảnh thẻ công chứng viên / thẻ luật sư của Người thực thi (xem INotaryCardService). Cùng quy tắc ảnh với ảnh đại diện: loại ảnh nhận theo nội dung thật,
 /// tối đa 2 MiB, không lưu tên tệp gốc, không có link công khai.
 /// </summary>
 public sealed class NotaryCardService : INotaryCardService
@@ -42,9 +42,9 @@ public sealed class NotaryCardService : INotaryCardService
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Không tìm thấy tài khoản.");
         }
-        if (target.Role != UserRole.Verifier)
+        if (target.Role != UserRole.Verifier && target.Role != UserRole.Executor)
         {
-            throw ValidationErrors.For("userId", "Chỉ Người xét duyệt mới có thẻ công chứng viên.");
+            throw ValidationErrors.For("userId", "Chỉ Người xét duyệt hoặc Người thực thi hệ thống mới có ảnh thẻ.");
         }
         if (length <= 0)
         {
@@ -75,6 +75,11 @@ public sealed class NotaryCardService : INotaryCardService
         target.NotaryCardEncryptionKeyId = stored.EncryptionKeyId;
         target.NotaryCardWrappedDataKey = stored.WrappedDataKey;
         target.NotaryCardUploadedAt = now;
+        if (target.Role == UserRole.Executor)
+        {
+            // Ảnh thẻ là bằng chứng Admin đã xem giấy tờ; chỉ khi đó Người thực thi mới được tính là đã xác minh pháp lý.
+            target.LegalVerifiedAt = now;
+        }
         target.UpdatedAt = now;
 
         try
