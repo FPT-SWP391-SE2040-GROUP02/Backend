@@ -1,19 +1,31 @@
 using System.Net;
 using LegacyVault.Application.Notifications;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace LegacyVault.Infrastructure.Notifications;
 
-/// <summary>Gửi email xác minh tài khoản thật qua Gmail (SmtpMailSender). Không ghi link/token vào log (SEC-06).</summary>
+/// <summary>Gửi email xác minh tài khoản thật qua Gmail (SmtpMailSender). Trong môi trường Development, nếu SMTP lỗi sẽ tự động fallback sang DevEmailSender để không chặn luồng đăng ký/thử nghiệm.</summary>
 public sealed class SmtpEmailSender : IEmailSender
 {
     private readonly SmtpMailSender mailSender;
+    private readonly DevEmailSender devSender;
+    private readonly IHostEnvironment environment;
+    private readonly ILogger<SmtpEmailSender> logger;
 
-    public SmtpEmailSender(SmtpMailSender mailSender)
+    public SmtpEmailSender(
+        SmtpMailSender mailSender,
+        DevEmailSender devSender,
+        IHostEnvironment environment,
+        ILogger<SmtpEmailSender> logger)
     {
         this.mailSender = mailSender;
+        this.devSender = devSender;
+        this.environment = environment;
+        this.logger = logger;
     }
 
-    public Task SendEmailVerificationAsync(string toEmail, string fullName, string verificationUrl, CancellationToken ct)
+    public async Task SendEmailVerificationAsync(string toEmail, string fullName, string verificationUrl, CancellationToken ct)
     {
         const string subject = "Xác minh email tài khoản LegacyVault";
         const string note = "Liên kết chỉ có hiệu lực trong vòng 24 giờ và dùng một lần duy nhất. Nếu bạn không đăng ký tài khoản LegacyVault, vui lòng bỏ qua email này.";
@@ -28,10 +40,19 @@ public sealed class SmtpEmailSender : IEmailSender
             note,
             "Xác minh email");
 
-        return mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
+        try
+        {
+            await mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
+        }
+        catch (Exception ex) when (environment.IsDevelopment())
+        {
+            logger.LogWarning("SMTP: Gửi email xác minh thất bại ({ErrorType}). Tự động fallback sang DevEmailSender để in link ra Console.",
+                ex.GetType().Name);
+            await devSender.SendEmailVerificationAsync(toEmail, fullName, verificationUrl, ct);
+        }
     }
 
-    public Task SendPasswordResetAsync(string toEmail, string fullName, string resetUrl, CancellationToken ct)
+    public async Task SendPasswordResetAsync(string toEmail, string fullName, string resetUrl, CancellationToken ct)
     {
         const string subject = "Đặt lại mật khẩu tài khoản LegacyVault";
         const string note = "Liên kết có hiệu lực trong 30 phút và chỉ dùng một lần. Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này; mật khẩu hiện tại vẫn an toàn.";
@@ -47,10 +68,19 @@ public sealed class SmtpEmailSender : IEmailSender
             "Đặt lại mật khẩu",
             true);
 
-        return mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
+        try
+        {
+            await mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
+        }
+        catch (Exception ex) when (environment.IsDevelopment())
+        {
+            logger.LogWarning("SMTP: Gửi email đặt lại mật khẩu thất bại ({ErrorType}). Tự động fallback sang DevEmailSender.",
+                ex.GetType().Name);
+            await devSender.SendPasswordResetAsync(toEmail, fullName, resetUrl, ct);
+        }
     }
 
-    public Task SendVaultPinNoticeAsync(
+    public async Task SendVaultPinNoticeAsync(
         string toEmail, string fullName, VaultPinNoticeKind kind, DateTimeOffset? lockedUntil, CancellationToken ct)
     {
         string subject;
@@ -91,6 +121,15 @@ public sealed class SmtpEmailSender : IEmailSender
         string html = LegacyVaultEmailTheme.BuildHtml(
             subject, fullName, lead, string.Empty, string.Empty, note, kicker, true);
 
-        return mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
+        try
+        {
+            await mailSender.SendAsync(toEmail, fullName, subject, text, html, ct);
+        }
+        catch (Exception ex) when (environment.IsDevelopment())
+        {
+            logger.LogWarning("SMTP: Gửi thông báo mã PIN thất bại ({ErrorType}). Tự động fallback sang DevEmailSender.",
+                ex.GetType().Name);
+            await devSender.SendVaultPinNoticeAsync(toEmail, fullName, kind, lockedUntil, ct);
+        }
     }
 }
