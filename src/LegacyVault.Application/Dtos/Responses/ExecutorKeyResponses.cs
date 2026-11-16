@@ -17,10 +17,3 @@ public class ExecutorKeyStatusResponse
     /// <summary>false khi kế hoạch đã khóa (có báo tin) nên không cấp mới hay cấp lại được.</summary>
     public bool CanIssue { get; set; }
 }
-
-/// <summary>Kết quả cấp mảnh: mảnh gốc chỉ có trong response này, không đọc lại được.</summary>
-public class ExecutorKeyIssuedResponse : ExecutorKeyStatusResponse
-{
-    /// <summary>Mảnh dạng "XXXX-XXXX-XXXX-XXXX"; Chủ kho đưa trực tiếp cho Người thực thi.</summary>
-    public string Shard { get; set; } = string.Empty;
-}

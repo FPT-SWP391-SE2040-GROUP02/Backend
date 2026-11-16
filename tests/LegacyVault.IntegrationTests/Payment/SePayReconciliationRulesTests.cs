@@ -257,7 +257,7 @@ public sealed class SePayReconciliationRulesTests
     }
 
     [Fact]
-    public void Pay07_OnlyNotIncomingSkipsIncident()
+    public void Pay07_OnlyNotIncomingSkipsWarning()
     {
         // Chuẩn bị: mọi lý do trong hằng số
         List<string> reasons = new List<string>
@@ -275,10 +275,10 @@ public sealed class SePayReconciliationRulesTests
         };
 
         // Hành động + Kiểm tra
-        Assert.False(SePayRules.ShouldRaiseIncident(PaymentReconciliationReasons.NotIncoming));
+        Assert.False(SePayRules.ShouldWarnReconciliation(PaymentReconciliationReasons.NotIncoming));
         foreach (string reason in reasons)
         {
-            Assert.True(SePayRules.ShouldRaiseIncident(reason));
+            Assert.True(SePayRules.ShouldWarnReconciliation(reason));
         }
     }
 

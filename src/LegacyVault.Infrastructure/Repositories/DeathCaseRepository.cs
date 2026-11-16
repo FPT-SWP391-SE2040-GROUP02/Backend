@@ -135,11 +135,6 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
         context.Set<DeathCaseFlag>().Add(flag);
     }
 
-    public void AddNotice(DeathCaseNotice notice)
-    {
-        context.Set<DeathCaseNotice>().Add(notice);
-    }
-
     public void AddAssignment(DeathCaseAssignment assignment)
     {
         context.Set<DeathCaseAssignment>().Add(assignment);
@@ -174,22 +169,6 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
         return candidateId;
     }
 
-    public Task<List<Guid>> FindPendingNoticeIdsAsync(int maxCount, CancellationToken ct)
-    {
-        return context.Set<DeathCaseNotice>()
-            .Where(n => n.Status == DeathCaseNoticeStatus.Pending)
-            .OrderBy(n => n.CreatedAt)
-            .ThenBy(n => n.Id)
-            .Select(n => n.Id)
-            .Take(maxCount)
-            .ToListAsync(ct);
-    }
-
-    public Task<DeathCaseNotice?> FindNoticeForJobAsync(Guid noticeId, CancellationToken ct)
-    {
-        return context.Set<DeathCaseNotice>().FirstOrDefaultAsync(n => n.Id == noticeId, ct);
-    }
-
     public bool IsUniqueViolation(Exception exception)
     {
         DbUpdateException? dbException = exception as DbUpdateException;
@@ -205,13 +184,12 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
         context.ChangeTracker.Clear();
     }
 
-    /// <summary>Hồ sơ kèm phiên bản, file, cờ, thông báo, quyết định và phân công còn hiệu lực; tách truy vấn tránh nhân dòng.</summary>
+    /// <summary>Hồ sơ kèm phiên bản, file, cờ, quyết định và phân công còn hiệu lực; tách truy vấn tránh nhân dòng.</summary>
     private IQueryable<DeathCase> QueryWithDetails()
     {
         return context.Set<DeathCase>()
             .Include(c => c.Versions).ThenInclude(v => v.Files)
             .Include(c => c.Flags)
-            .Include(c => c.Notices)
             .Include(c => c.Decisions)
             .Include(c => c.Assignments.Where(a => a.EndedAt == null))
             .AsSplitQuery();

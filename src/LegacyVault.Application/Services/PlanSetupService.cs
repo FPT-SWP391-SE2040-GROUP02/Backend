@@ -48,7 +48,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
-    TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit) : IPlanSetupService
+    TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
+    ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-30";
     public const string ScopeVersion = "executor-2026-10-15";
@@ -58,21 +59,24 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     public async Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct)
     {
-        var normalized = (email ?? "").Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
+        string normalized = (email ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return false;
+        }
         return await users.FindByEmailAsync(normalized, ct) is not null;
     }
 
     public async Task<IReadOnlyList<ExecutorCandidateResponse>> SearchCandidatesAsync(
         Guid vaultId, string? query, CancellationToken ct)
     {
-        var vault = await OwnedAsync(vaultId, ct);
+        Vault vault = await OwnedAsync(vaultId, ct);
         string term = (query ?? "").Trim().ToLowerInvariant();
         if (term.Length < 2)
         {
-            return [];
+            return new List<ExecutorCandidateResponse>();
         }
-        var found = await users.SearchExecutorCandidatesAsync(term, vault.OwnerId, 8, ct);
+        IReadOnlyList<User> found = await users.SearchExecutorCandidatesAsync(term, vault.OwnerId, 8, ct);
         return found.Select(u => new ExecutorCandidateResponse(u.Id, u.FullName, u.Email)).ToList();
     }
 
@@ -81,18 +85,21 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     public async Task<ExecutorInvitationResponse> InviteAsync(Guid vaultId, InviteExecutorRequest request, CancellationToken ct)
     {
-        var token = tokens.CreateOpaqueToken();
+        OpaqueToken token = tokens.CreateOpaqueToken();
         bool accountExists = false;
         string ownerName = string.Empty;
-        var executor = await unitOfWork.ExecuteSerializableAsync(async () =>
+        Executor executor = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
-            var vault = await OwnedAsync(vaultId, ct);
+            Vault vault = await OwnedAsync(vaultId, ct);
             await EnsureInvitationEditableAsync(vault, ct);
-            var email = request.Email.Trim().ToLowerInvariant();
-            var owner = await users.FindByIdAsync(vault.OwnerId, ct);
+            string email = request.Email.Trim().ToLowerInvariant();
+            User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
             ownerName = owner!.FullName;
-            if (email == owner.Email.Trim().ToLowerInvariant()) throw NotAllowed("OWNER_CANNOT_ACCEPT");
-            var inviteeUser = await users.FindByEmailAsync(email, ct);
+            if (email == owner.Email.Trim().ToLowerInvariant())
+            {
+                throw NotAllowed("OWNER_CANNOT_ACCEPT");
+            }
+            User? inviteeUser = await users.FindByEmailAsync(email, ct);
             if (inviteeUser == null || inviteeUser.Role != UserRole.Executor || inviteeUser.Status != UserStatus.Active
                 || inviteeUser.LegalVerifiedAt == null)
             {
@@ -100,31 +107,32 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                     "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đã được xác minh pháp lý.");
             }
             accountExists = true;
-            var now = time.GetUtcNow();
-            foreach (var previous in vault.Executors.Where(e => e.Status == ExecutorStatus.Invited && e.ExpiresAt <= now))
+            DateTimeOffset now = time.GetUtcNow();
+            foreach (Executor previous in vault.Executors.Where(e => e.Status == ExecutorStatus.Invited && e.ExpiresAt <= now))
             {
                 previous.Status = ExecutorStatus.Expired;
                 previous.EndedAt = now;
                 previous.UpdatedAt = now;
             }
             Guid? replaces = null;
-            var occupying = vault.Executors.Where(e => e.Status is ExecutorStatus.Invited or ExecutorStatus.Accepted or ExecutorStatus.Suspended).ToList();
+            List<Executor> occupying = vault.Executors.Where(e => e.Status is ExecutorStatus.Invited or ExecutorStatus.Accepted or ExecutorStatus.Suspended).ToList();
             if (occupying.Count > 0)
             {
                 // SETUP-06: kế hoạch đang chạy mà đã có Executor đã chấp nhận → mời người thay; người cũ giữ vai trò
                 // cho tới khi người mới chấp nhận. Mọi trường hợp khác vẫn là trùng lời mời.
                 bool replacement = PlanRules.IsRunning(vault.Plan.Status)
                     && occupying.Count == 1 && occupying[0].Status == ExecutorStatus.Accepted;
-                if (!replacement) throw Conflict();
+                if (!replacement)
+                {
+                    throw Conflict();
+                }
                 replaces = occupying[0].Id;
             }
-            if (request.BeneficiaryId is Guid beneficiaryId && await beneficiaries.FindByIdAsync(vault.Id, beneficiaryId, ct) is null)
-                throw new AppException(AppErrorType.NotFound, ErrorCode.BeneficiaryNotFound, "Không tìm thấy hồ sơ người nhận.");
-            var item = new Executor
+            // Người thực thi là nhân sự LegacyVault, không phải người nhận.
+            Executor item = new Executor
             {
                 VaultId = vault.Id, Status = ExecutorStatus.Invited,
                 InviteeEmail = email, InvitationTokenHash = token.Hash,
-                IsBeneficiary = request.BeneficiaryId.HasValue, BeneficiaryId = request.BeneficiaryId,
                 InvitedAt = now, ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7),
                 ReplacesExecutorId = replaces,
             };
@@ -150,28 +158,53 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             throw ValidationErrors.For("reason", "Vui lòng ghi lý do.");
         }
 
-        var token = tokens.CreateOpaqueToken();
+        OpaqueToken token = tokens.CreateOpaqueToken();
         bool accountExists = true;
-        var executor = await unitOfWork.ExecuteSerializableAsync(async () =>
+        Executor executor = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
             Vault vault = await vaults.FindByIdAsync(vaultId, ct)
                 ?? throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
-            if (!ExecutorAssignRules.PlanAllowsAssign(vault.Status, vault.Plan.Status)) throw NotAllowed("PLAN_LOCKED");
+            if (!ExecutorAssignRules.PlanAllowsAssign(vault.Status, vault.Plan.Status))
+            {
+                throw NotAllowed("PLAN_LOCKED");
+            }
             User target = await users.FindByIdAsync(request.UserId!.Value, ct)
                 ?? throw ValidationErrors.For("userId", "Không tìm thấy tài khoản được giao.");
             if (target.Status != UserStatus.Active || target.EmailVerifiedAt == null)
+            {
                 throw ValidationErrors.For("userId", "Chỉ giao cho tài khoản đang hoạt động và đã xác minh email.");
-            if (target.Id == vault.OwnerId) throw NotAllowed("OWNER_CANNOT_ACCEPT");
+            }
+            if (target.Id == vault.OwnerId)
+            {
+                throw NotAllowed("OWNER_CANNOT_ACCEPT");
+            }
             if (target.Role == UserRole.Admin || target.Role == UserRole.Verifier)
+            {
                 throw NotAllowed("ROLE_CONFLICT");
+            }
             // Cùng luật với Chủ kho mời: chỉ giao cho Người thực thi hệ thống đã được cấp vai trò.
             if (target.Role != UserRole.Executor)
+            {
                 throw new AppException(AppErrorType.Validation, ErrorCode.OnlySystemExecutorsAllowed,
                     "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đã được xác minh pháp lý.");
+            }
 
-            var now = time.GetUtcNow();
+            DateTimeOffset now = time.GetUtcNow();
+            bool hadAccepted = false;
+            foreach (Executor existingExecutor in vault.Executors)
+            {
+                if (existingExecutor.Status == ExecutorStatus.Accepted)
+                {
+                    hadAccepted = true;
+                }
+            }
             Guid? replaces = ExecutorAssignRules.PrepareForAssign(vault.Executors, vault.Plan.Status, now);
-            var item = new Executor
+            if (hadAccepted && replaces == null)
+            {
+                // Người đã chấp nhận bị thu hồi ngay (kế hoạch chưa chạy): đổi mã nếu kho đã có mã, để người cũ không còn mã đúng.
+                await keyIssuer.RotateIfExistsAsync(vault, AuditActorRole.System, null, now, ct);
+            }
+            Executor item = new Executor
             {
                 VaultId = vault.Id, Status = ExecutorStatus.Invited,
                 InviteeEmail = target.Email.Trim().ToLowerInvariant(), InvitationTokenHash = token.Hash,
@@ -191,21 +224,27 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     public async Task<ExecutorInvitationResponse> ResendAsync(Guid vaultId, Guid executorId, ResendExecutorRequest request, CancellationToken ct)
     {
-        var token = tokens.CreateOpaqueToken();
+        OpaqueToken token = tokens.CreateOpaqueToken();
         bool accountExists = false;
         string ownerName = string.Empty;
-        var executor = await unitOfWork.ExecuteSerializableAsync(async () =>
+        Executor executor = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
-            var vault = await OwnedAsync(vaultId, ct);
+            Vault vault = await OwnedAsync(vaultId, ct);
             await EnsureInvitationEditableAsync(vault, ct);
             ownerName = (await users.FindByIdAsync(vault.OwnerId, ct))!.FullName;
-            var item = vault.Executors.SingleOrDefault(e => e.Id == executorId) ?? throw InvalidInvitation();
-            if (!Etag.Matches(request.Etag, item.UpdatedAt)) throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict, "Lời mời đã thay đổi. Tải lại trước khi gửi tiếp.");
+            Executor item = vault.Executors.SingleOrDefault(e => e.Id == executorId) ?? throw InvalidInvitation();
+            if (!Etag.Matches(request.Etag, item.UpdatedAt))
+            {
+                throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict, "Lời mời đã thay đổi. Tải lại trước khi gửi tiếp.");
+            }
             if (item.Status is not (ExecutorStatus.Invited or ExecutorStatus.Expired or ExecutorStatus.Suspended)
-                && !(item.Status == ExecutorStatus.Accepted && item.AcceptedScopeVersion != ScopeVersion)) throw NotAllowed("WRONG_STATE");
-            var inviteeUser = await users.FindByEmailAsync(item.InviteeEmail, ct);
+                && !(item.Status == ExecutorStatus.Accepted && item.AcceptedScopeVersion != ScopeVersion))
+            {
+                throw NotAllowed("WRONG_STATE");
+            }
+            User? inviteeUser = await users.FindByEmailAsync(item.InviteeEmail, ct);
             accountExists = inviteeUser is not null;
-            var now = time.GetUtcNow();
+            DateTimeOffset now = time.GetUtcNow();
             item.Status = ExecutorStatus.Invited;
             item.InvitationTokenHash = token.Hash;
             item.InvitedAt = now;
@@ -224,8 +263,11 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     public async Task<ExecutorInvitationInfo> InspectAsync(string token, CancellationToken ct)
     {
-        var item = await FindTokenAsync(token, ct);
-        if (item.Status != ExecutorStatus.Accepted && (item.Status != ExecutorStatus.Invited || item.ExpiresAt <= time.GetUtcNow())) throw InvalidInvitation();
+        Executor item = await FindTokenAsync(token, ct);
+        if (item.Status != ExecutorStatus.Accepted && (item.Status != ExecutorStatus.Invited || item.ExpiresAt <= time.GetUtcNow()))
+        {
+            throw InvalidInvitation();
+        }
         return new(item.ExpiresAt, item.Status.ToApiString(), ScopeVersion, ScopeText);
     }
 
@@ -293,24 +335,46 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         Func<User, Task<Executor>> findInvitation, CancellationToken ct) =>
         unitOfWork.ExecuteSerializableAsync(async () =>
         {
-            var userId = currentUser.RequireUserId();
-            var responder = await UsableUserAsync(userId, ct);
+            Guid userId = currentUser.RequireUserId();
+            User responder = await UsableUserAsync(userId, ct);
             if (scopeVersion != ScopeVersion || (accept && !acknowledgeScope))
+            {
                 throw new AppException(AppErrorType.Validation, ErrorCode.PolicyAcknowledgementRequired, "Cần đọc và xác nhận phạm vi nhiệm vụ hiện hành.");
-            var item = await findInvitation(responder);
-            var vault = await vaults.FindByIdAsync(item.VaultId, ct) ?? throw InvalidInvitation();
-            if (vault.OwnerId == userId) throw NotAllowed("OWNER_CANNOT_ACCEPT");
-            if (item.UserId.HasValue && item.UserId != userId) throw Conflict();
+            }
+            Executor item = await findInvitation(responder);
+            Vault vault = await vaults.FindByIdAsync(item.VaultId, ct) ?? throw InvalidInvitation();
+            if (vault.OwnerId == userId)
+            {
+                throw NotAllowed("OWNER_CANNOT_ACCEPT");
+            }
+            if (item.UserId.HasValue && item.UserId != userId)
+            {
+                throw Conflict();
+            }
             if (item.UserId == userId && ((accept && item.Status == ExecutorStatus.Accepted) || (!accept && item.Status == ExecutorStatus.Declined)))
+            {
                 return Map(item);
-            if (item.Status != ExecutorStatus.Invited || item.ExpiresAt <= time.GetUtcNow()) throw InvalidInvitation();
+            }
+            if (item.Status != ExecutorStatus.Invited || item.ExpiresAt <= time.GetUtcNow())
+            {
+                throw InvalidInvitation();
+            }
             // M4, SETUP-20: người trả lời phải dùng tài khoản có email đã xác minh trùng email được mời; link bị chuyển tiếp
             // hay tài khoản email khác không nhận được vai trò Executor.
-            if (!string.Equals(responder.Email?.Trim(), item.InviteeEmail?.Trim(), StringComparison.OrdinalIgnoreCase)) throw NotAllowed("INVITEE_EMAIL_MISMATCH");
+            if (!string.Equals(responder.Email?.Trim(), item.InviteeEmail?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw NotAllowed("INVITEE_EMAIL_MISMATCH");
+            }
             VaultRules.EnsureEditable(vault);
-            if (vault.Plan.Status != PlanStatus.Draft && !PlanRules.IsRunning(vault.Plan.Status)) throw NotAllowed("PLAN_NOT_DRAFT");
-            if (accept && vault.Executors.Any(e => e.Id != item.Id && e.UserId == userId && e.Status == ExecutorStatus.Accepted)) throw NotAllowed("INDEPENDENT_EXECUTOR_REQUIRED");
-            var now = time.GetUtcNow();
+            if (vault.Plan.Status != PlanStatus.Draft && !PlanRules.IsRunning(vault.Plan.Status))
+            {
+                throw NotAllowed("PLAN_NOT_DRAFT");
+            }
+            if (accept && vault.Executors.Any(e => e.Id != item.Id && e.UserId == userId && e.Status == ExecutorStatus.Accepted))
+            {
+                throw NotAllowed("INDEPENDENT_EXECUTOR_REQUIRED");
+            }
+            DateTimeOffset now = time.GetUtcNow();
             item.UserId = userId;
             item.Status = accept ? ExecutorStatus.Accepted : ExecutorStatus.Declined;
             item.AcceptedAt = accept ? now : null;
@@ -320,13 +384,21 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (accept && item.ReplacesExecutorId is Guid replacedId)
             {
                 // SETUP-06: người thay chấp nhận thì người cũ thôi vai trò trong cùng giao dịch.
-                var replaced = vault.Executors.SingleOrDefault(e => e.Id == replacedId && e.Status == ExecutorStatus.Accepted);
+                Executor? replaced = vault.Executors.SingleOrDefault(e => e.Id == replacedId && e.Status == ExecutorStatus.Accepted);
                 if (replaced is not null)
                 {
                     replaced.Status = ExecutorStatus.Revoked;
                     replaced.EndedAt = now;
                     replaced.UpdatedAt = now;
+                    // Đổi Người thực thi: kho đã có mã thì tự đổi mã (version + 1) để người cũ không còn mã đúng.
+                    await keyIssuer.RotateIfExistsAsync(vault, AuditActorRole.System, null, now, ct);
                 }
+            }
+            if (accept)
+            {
+                // Người thực thi tự chấp nhận là bước ký xác nhận di chúc; chỉ ghi phiên bản/đích, không ghi nội dung.
+                audit.Add(AuditRules.Create(vault.Id, userId, AuditActorRole.Executor, AuditAction.ExecutorAccepted,
+                    AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
             }
             PlanRules.BumpConfigVersion(vault.Plan, now);
             await unitOfWork.SaveChangesAsync(ct);
@@ -348,27 +420,42 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     private Task<PlanSetupResponse> ActivateCoreAsync(Guid vaultId, ActivatePlanRequest request, Action markActivated, CancellationToken ct) =>
         unitOfWork.ExecuteSerializableAsync(async () =>
         {
-            var vault = await OwnedAsync(vaultId, ct);
+            Vault vault = await OwnedAsync(vaultId, ct);
             await UsableUserAsync(vault.OwnerId, ct);
             if (!request.AcknowledgePolicy || request.PolicyVersion != PolicyVersion)
+            {
                 throw new AppException(AppErrorType.Validation, ErrorCode.PolicyAcknowledgementRequired, "Cần đọc và xác nhận chính sách hiện hành.");
+            }
             if (request.ConfigVersion != vault.Plan.ConfigVersion)
+            {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict, "Cấu hình kế hoạch đã thay đổi. Tải lại trước khi kích hoạt.");
+            }
             // A duplicate request returns the existing state without resetting deadlines or opening a period.
-            if (vault.Plan.Status == PlanStatus.Active) return await BuildAsync(vault, ct);
+            if (vault.Plan.Status == PlanStatus.Active)
+            {
+                return await BuildAsync(vault, ct);
+            }
             if (vault.Plan.Status != PlanStatus.Draft)
+            {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.PlanActivationNotAllowed, "Trạng thái kế hoạch không cho phép kích hoạt lại.");
-            var setup = await BuildAsync(vault, ct);
+            }
+            PlanSetupResponse setup = await BuildAsync(vault, ct);
             if (!setup.CanActivate)
+            {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.PlanActivationRequirementsNotMet,
                     "Kế hoạch chưa đủ điều kiện kích hoạt.", new Dictionary<string, object?> { ["missingRequirements"] = setup.MissingRequirements });
-            var now = time.GetUtcNow();
+            }
+            DateTimeOffset now = time.GetUtcNow();
             vault.Plan.Status = PlanStatus.Active;
             vault.Plan.ActivatedAt = now;
             vault.Plan.ActivationPolicyVersion = PolicyVersion;
             vault.Plan.ActivationPolicyAcknowledgedAt = now;
             vault.Plan.UpdatedAt = now;
             await scheduler.StartFirstPeriodAsync(vault.Plan, ct);
+            // Mã mở gói do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
+            await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
+            audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.PlanActivated,
+                AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
             await unitOfWork.SaveChangesAsync(ct);
             markActivated();
             return await BuildAsync(vault, ct);
@@ -379,9 +466,15 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     private async Task<User> UsableUserAsync(Guid id, CancellationToken ct)
     {
-        var user = await users.FindByIdAsync(id, ct) ?? throw new AppException(AppErrorType.Unauthorized, ErrorCode.SessionExpired, "Phiên đã hết hạn.");
-        if (user.Status != UserStatus.Active) throw new AppException(AppErrorType.Forbidden, ErrorCode.AccountNotActive, "Tài khoản hiện không được phép thực hiện thao tác.");
-        if (user.EmailVerifiedAt is null) throw new AppException(AppErrorType.Forbidden, ErrorCode.EmailNotVerified, "Cần xác minh email trước khi tiếp tục.");
+        User user = await users.FindByIdAsync(id, ct) ?? throw new AppException(AppErrorType.Unauthorized, ErrorCode.SessionExpired, "Phiên đã hết hạn.");
+        if (user.Status != UserStatus.Active)
+        {
+            throw new AppException(AppErrorType.Forbidden, ErrorCode.AccountNotActive, "Tài khoản hiện không được phép thực hiện thao tác.");
+        }
+        if (user.EmailVerifiedAt is null)
+        {
+            throw new AppException(AppErrorType.Forbidden, ErrorCode.EmailNotVerified, "Cần xác minh email trước khi tiếp tục.");
+        }
         return user;
     }
 
@@ -389,8 +482,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     {
         await UsableUserAsync(vault.OwnerId, ct);
         VaultRules.EnsureEditable(vault);
-        if (vault.Plan.Status != PlanStatus.Draft && !PlanRules.IsRunning(vault.Plan.Status)) throw NotAllowed("PLAN_NOT_DRAFT");
-        if (!Paid(vault)) throw new AppException(AppErrorType.Forbidden, ErrorCode.PaidTierRequired, "Cần gói trả phí còn hiệu lực.");
+        if (vault.Plan.Status != PlanStatus.Draft && !PlanRules.IsRunning(vault.Plan.Status))
+        {
+            throw NotAllowed("PLAN_NOT_DRAFT");
+        }
+        if (!Paid(vault))
+        {
+            throw new AppException(AppErrorType.Forbidden, ErrorCode.PaidTierRequired, "Cần gói trả phí còn hiệu lực.");
+        }
     }
 
     private bool Paid(Vault vault) => vault.Entitlement.Tier != ServiceTier.Free
@@ -399,33 +498,161 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     private async Task<PlanSetupResponse> BuildAsync(Vault vault, CancellationToken ct)
     {
-        var missing = new List<string>();
-        var user = await users.FindByIdAsync(vault.OwnerId, ct);
-        if (user?.Status != UserStatus.Active) missing.Add("ACCOUNT_NOT_ACTIVE");
-        if (user?.EmailVerifiedAt is null) missing.Add("EMAIL_VERIFICATION_REQUIRED");
-        if (vault.Status != VaultStatus.Open) missing.Add("VAULT_NOT_OPEN");
-        if (await holdReader.HasActiveHoldAsync(vault.Id, ct)) missing.Add("HOLD_ACTIVE");
-        if (!Paid(vault)) missing.Add("PAID_SERVICE_REQUIRED");
-        // EKYC-01: chỉ lượt eKYC đăng ký Owner. Đã từng đạt thì giữ, chụp lại giữa chừng không làm mất kết quả.
-        if (await ekyc.FindLatestPassedByUserAndPurposeAsync(vault.OwnerId, EkycPurpose.OwnerEnrollment, ct) == null) missing.Add("OWNER_EKYC_REQUIRED");
-        if (await containers.CountReadyByVaultIdAsync(vault.Id, ct) == 0) missing.Add("READY_CONTAINER_REQUIRED");
-        var accepted = new List<Executor>();
-        foreach (var item in vault.Executors.Where(e => e.Status == ExecutorStatus.Accepted && e.UserId.HasValue && e.AcceptedAt.HasValue && e.AcceptedScopeVersion == ScopeVersion))
+        List<string> missing = new List<string>();
+        User? user = await users.FindByIdAsync(vault.OwnerId, ct);
+        if (user?.Status != UserStatus.Active)
         {
-            var executorUser = await users.FindByIdAsync(item.UserId!.Value, ct);
-            if (executorUser?.Status == UserStatus.Active && executorUser.EmailVerifiedAt.HasValue && executorUser.Id != vault.OwnerId) accepted.Add(item);
+            missing.Add("ACCOUNT_NOT_ACTIVE");
+        }
+        if (user?.EmailVerifiedAt is null)
+        {
+            missing.Add("EMAIL_VERIFICATION_REQUIRED");
+        }
+        if (vault.Status != VaultStatus.Open)
+        {
+            missing.Add("VAULT_NOT_OPEN");
+        }
+        bool hasActiveHold = await holdReader.HasActiveHoldAsync(vault.Id, ct);
+        if (hasActiveHold)
+        {
+            missing.Add("HOLD_ACTIVE");
+        }
+        if (!Paid(vault))
+        {
+            missing.Add("PAID_SERVICE_REQUIRED");
+        }
+        // EKYC-01: chỉ lượt eKYC đăng ký Owner. Đã từng đạt thì giữ, chụp lại giữa chừng không làm mất kết quả.
+        EkycVerification? latestPassedEkyc = await ekyc.FindLatestPassedByUserAndPurposeAsync(vault.OwnerId, EkycPurpose.OwnerEnrollment, ct);
+        if (latestPassedEkyc == null)
+        {
+            missing.Add("OWNER_EKYC_REQUIRED");
+        }
+        int readyContainersCount = await containers.CountReadyByVaultIdAsync(vault.Id, ct);
+        if (readyContainersCount == 0)
+        {
+            missing.Add("READY_CONTAINER_REQUIRED");
+        }
+        List<Executor> accepted = new List<Executor>();
+        foreach (Executor item in vault.Executors)
+        {
+            if (!item.UserId.HasValue)
+            {
+                continue;
+            }
+
+            bool isAcceptedScopeValid = item.Status == ExecutorStatus.Accepted
+                && item.AcceptedAt.HasValue
+                && item.AcceptedScopeVersion == ScopeVersion;
+
+            if (!isAcceptedScopeValid)
+            {
+                continue;
+            }
+
+            User? executorUser = await users.FindByIdAsync(item.UserId.Value, ct);
+            bool isExecutorEligible = executorUser?.Status == UserStatus.Active
+                && executorUser.EmailVerifiedAt.HasValue
+                && executorUser.Id != vault.OwnerId;
+
+            if (isExecutorEligible)
+            {
+                accepted.Add(item);
+            }
         }
         // Mỗi kho đúng một Executor đã chấp nhận (không còn Executor dự phòng).
-        if (accepted.Count != 1) missing.Add("PRIMARY_EXECUTOR_REQUIRED");
-        if (vault.Plan.Status != PlanStatus.Draft) missing.Add("PLAN_NOT_DRAFT");
-        var openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
-        var outsideAssets = await assets.FindOutsideContainerByVaultIdAsync(vault.Id, ct);
+        if (accepted.Count != 1)
+        {
+            missing.Add("PRIMARY_EXECUTOR_REQUIRED");
+        }
+        if (vault.Plan.Status != PlanStatus.Draft)
+        {
+            missing.Add("PLAN_NOT_DRAFT");
+        }
+        List<Container> openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
+        List<Asset> outsideAssets = await assets.FindOutsideContainerByVaultIdAsync(vault.Id, ct);
+        List<PlanSetupRecipientResponse> recipients = await BuildRecipientsAsync(vault, openContainers, ct);
+        List<ExecutorInvitationResponse> executorItems = new List<ExecutorInvitationResponse>();
+        foreach (Executor executorItem in vault.Executors.OrderByDescending(e => e.InvitedAt))
+        {
+            string? executorFullName = null;
+            if (executorItem.UserId.HasValue)
+            {
+                User? linkedUser = await users.FindByIdAsync(executorItem.UserId.Value, ct);
+                if (linkedUser != null)
+                {
+                    executorFullName = linkedUser.FullName;
+                }
+            }
+            executorItems.Add(Map(executorItem, false, executorFullName));
+        }
+        string ownerFullName = string.Empty;
+        string ownerEmail = string.Empty;
+        if (user != null)
+        {
+            ownerFullName = user.FullName;
+            ownerEmail = user.Email;
+        }
         // Cảnh báo duy nhất trước đây là NO_BACKUP_EXECUTOR; đã bỏ Executor dự phòng nên giữ mảng rỗng cho đúng hợp đồng API.
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
-            vault.Executors.OrderByDescending(e => e.InvitedAt).Select(Map).ToList(),
+            executorItems,
             PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>(),
-            WillClauseRules.Split(vault.WillClauses));
+            ownerFullName, ownerEmail, vault.Plan.ActivatedAt, recipients);
+    }
+
+    /// <summary>
+    /// Người nhận theo từng người, lấy từ chỉ định của các gói đang mở. Tên được giải mã từ dữ liệu cá nhân đã mã hóa;
+    /// chỉ trả hasMessage chứ không trả nội dung lời nhắn, và không ghi log dữ liệu cá nhân (SEC-07).
+    /// </summary>
+    private async Task<List<PlanSetupRecipientResponse>> BuildRecipientsAsync(
+        Vault vault, List<Container> openContainers, CancellationToken ct)
+    {
+        Dictionary<Guid, PlanSetupRecipientResponse> byBeneficiary = new Dictionary<Guid, PlanSetupRecipientResponse>();
+        HashSet<Guid> skipped = new HashSet<Guid>();
+        foreach (Container container in openContainers)
+        {
+            foreach (Designation designation in container.Designations)
+            {
+                Guid beneficiaryId = designation.BeneficiaryId;
+                if (skipped.Contains(beneficiaryId))
+                {
+                    continue;
+                }
+                if (!byBeneficiary.ContainsKey(beneficiaryId))
+                {
+                    Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, beneficiaryId, ct);
+                    if (beneficiary == null)
+                    {
+                        skipped.Add(beneficiaryId);
+                        continue;
+                    }
+                    string fullName = string.Empty;
+                    bool hasMessage = false;
+                    try
+                    {
+                        BeneficiaryPersonalData data = beneficiaryProtector.Unprotect(beneficiary);
+                        fullName = data.FullName;
+                        hasMessage = !string.IsNullOrWhiteSpace(data.Message);
+                    }
+                    catch (System.Security.Cryptography.CryptographicException)
+                    {
+                        // Không giải mã được thì vẫn liệt kê người nhận (tên rỗng), không làm hỏng cả màn kích hoạt.
+                    }
+                    byBeneficiary[beneficiaryId] = new PlanSetupRecipientResponse(
+                        beneficiaryId, fullName, hasMessage, new List<PlanSetupRecipientContainerResponse>());
+                }
+                byBeneficiary[beneficiaryId].Containers.Add(new PlanSetupRecipientContainerResponse(
+                    container.Id, container.Name, container.Assets.Count, container.Status.ToApiString()));
+            }
+        }
+        List<PlanSetupRecipientResponse> result = new List<PlanSetupRecipientResponse>(byBeneficiary.Values);
+        result.Sort(CompareRecipientsByName);
+        return result;
+    }
+
+    private static int CompareRecipientsByName(PlanSetupRecipientResponse left, PlanSetupRecipientResponse right)
+    {
+        return string.Compare(left.FullName, right.FullName, StringComparison.CurrentCultureIgnoreCase);
     }
 
     private const int MyInvitationsMaxCount = 50;
@@ -457,7 +684,6 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         response.InvitedAt = item.InvitedAt;
         response.ExpiresAt = item.ExpiresAt;
         response.EndedAt = endedAt;
-        response.WillClauses = WillClauseRules.Split(item.Vault.WillClauses);
         return response;
     }
 
@@ -468,7 +694,10 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     private async Task<Executor> FindTokenAsync(string token, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(token) || token.Length is < 32 or > 512) throw InvalidInvitation();
+        if (string.IsNullOrWhiteSpace(token) || token.Length is < 32 or > 512)
+        {
+            throw InvalidInvitation();
+        }
         return await invitations.FindByTokenHashAsync(tokens.HashOpaqueToken(token), ct) ?? throw InvalidInvitation();
     }
 
@@ -499,9 +728,11 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return Map(executor, accountExists);
     }
     private ExecutorInvitationResponse Map(Executor item) => Map(item, false);
-    private ExecutorInvitationResponse Map(Executor item, bool accountExists) => new(item.Id,
+    private ExecutorInvitationResponse Map(Executor item, bool accountExists) => Map(item, accountExists, null);
+    private ExecutorInvitationResponse Map(Executor item, bool accountExists, string? fullName) => new(item.Id,
         item.Status == ExecutorStatus.Invited && item.ExpiresAt <= time.GetUtcNow() ? "EXPIRED" : item.Status.ToApiString(), item.InviteeEmail,
-        item.IsBeneficiary, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt), accountExists);
+        item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt), accountExists,
+        fullName);
     private static AppException InvalidInvitation() => new(AppErrorType.NotFound, ErrorCode.ExecutorInvitationInvalid, "Lời mời Executor không hợp lệ hoặc đã hết hạn.");
     private static AppException Conflict() => new(AppErrorType.Conflict, ErrorCode.ExecutorInvitationConflict, "Lời mời hoặc phân công Executor đã tồn tại/thay đổi. Tải lại để kiểm tra.");
     private static AppException NotAllowed(string reason) => new(AppErrorType.Conflict, ErrorCode.ExecutorNotAllowed, "Không thể thực hiện thao tác Executor lúc này.", new Dictionary<string, object?> { ["reason"] = reason });

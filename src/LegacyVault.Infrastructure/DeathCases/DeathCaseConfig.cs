@@ -33,9 +33,7 @@ public static class DeathCaseConfig
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.
         services.AddSingleton<IDeathCaseDataProtector, DeathCaseDataProtector>();
 
-        // D3: job gửi thông báo Owner theo outbox.
         services.Configure<DeathCaseJobSettings>(configuration.GetSection(DeathCaseJobSettings.SectionName));
-        services.AddHostedService<DeathCaseNoticeMonitor>();
 
         // D6: job giao Verifier cho hồ sơ trống, nhắc trước hạn và giao lại khi quá hạn.
         services.AddHostedService<DeathCaseAssignmentMonitor>();
@@ -43,20 +41,9 @@ public static class DeathCaseConfig
         services.AddHostedService<DeathCaseSupplementMonitor>();
 
         // Chọn bộ gửi lúc cần dùng: có Email:Smtp đầy đủ thì gửi thật, không thì chỉ ghi log (như HandoverConfig).
-        services.AddSingleton<IDeathCaseNoticeSender>(provider => ChooseSender(provider));
         services.AddSingleton<IDeathCaseVerifierReminderSender>(provider => ChooseReminderSender(provider));
         services.AddSingleton<IDeathCaseExecutorNoticeSender>(provider => ChooseExecutorNoticeSender(provider));
         return services;
-    }
-
-    private static IDeathCaseNoticeSender ChooseSender(IServiceProvider provider)
-    {
-        SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
-        if (smtp.IsConfigured)
-        {
-            return ActivatorUtilities.CreateInstance<SmtpDeathCaseNoticeSender>(provider);
-        }
-        return ActivatorUtilities.CreateInstance<LogDeathCaseNoticeSender>(provider);
     }
 
     private static IDeathCaseVerifierReminderSender ChooseReminderSender(IServiceProvider provider)

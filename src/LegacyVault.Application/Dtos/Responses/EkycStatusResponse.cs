@@ -1,6 +1,6 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
-/// <summary>Kết quả eKYC hiện hành của người dùng (GET /api/v1/ekyc/me, POST /api/v1/ekyc/face-match).</summary>
+/// <summary>Kết quả eKYC hiện hành của người dùng (GET /api/v1/ekyc/me, POST /api/v1/ekyc/liveness/complete).</summary>
 public class EkycStatusResponse
 {
     /// <summary>NOT_STARTED, PENDING, PASSED hoặc FAILED.</summary>

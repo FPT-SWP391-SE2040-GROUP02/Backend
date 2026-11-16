@@ -55,19 +55,13 @@ public static class RetentionNoticeEmail
 
 public sealed class SmtpRetentionNoticeSender : IRetentionNoticeSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly string loginUrl;
 
     public SmtpRetentionNoticeSender(SmtpMailSender mailSender, IConfiguration configuration)
     {
         this.mailSender = mailSender;
-        string? clientUrl = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(clientUrl))
-        {
-            clientUrl = DefaultClientUrl;
-        }
+        string clientUrl = ClientUrlSettings.Read(configuration);
         loginUrl = clientUrl.TrimEnd('/') + "/login";
     }
 

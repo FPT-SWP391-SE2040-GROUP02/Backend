@@ -1,13 +1,14 @@
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Mảnh khóa Chủ kho giao cho Người thực thi (bảng ExecutorKeyShards). Mỗi kho có tối đa một bản ghi, khóa chính là VaultId.
+/// Mã mở gói bàn giao của kho (bảng ExecutorKeyShards). Mỗi kho có tối đa một bản ghi, khóa chính là VaultId.
 /// </summary>
 /// <remarks>
-/// - Chỉ lưu ShardHash (SHA-256 có muối theo kho và phiên bản); mảnh gốc chỉ hiện một lần cho Chủ kho lúc cấp (SEC-07).
-/// - "Quên khóa": Chủ kho cấp lại thì Version tăng, hash mới thay hash cũ nên mảnh cũ hết hiệu lực.
-/// - Mảnh này là một trong hai mảnh của mã mở gói (mảnh kia nằm trong email gửi người nhận); việc ghép bằng HKDF
-///   làm ở luồng mở gói của người nhận, bảng này chỉ giữ thông tin để kiểm mảnh Người thực thi đưa ra.
+/// - Mã do server tạo, gồm 16 ký tự Crockford base32 (80 bit), hiển thị dạng "XXXX-XXXX-XXXX-XXXX".
+/// - DB giữ ShardHash (SHA-256 gắn với kho và phiên bản) để đối chiếu, và bản mã hóa phong bì (AES-256-GCM, DEK bọc bằng KEK)
+///   để Người thực thi đọc lại khi bàn giao đã bắt đầu. Mã gốc không bao giờ lưu dạng rõ và không vào nhật ký (SEC-07).
+/// - Mã chỉ là cổng mở khóa việc tải của người nhận (người nhận nhập mã trước khi tải), không dùng để mã hóa nội dung tài sản.
+/// - Đổi mã (Chủ kho đổi, hoặc hệ thống tự đổi khi đổi Người thực thi) thì Version tăng, hash mới thay hash cũ nên mã cũ hết hiệu lực.
 /// </remarks>
 public class ExecutorKeyShard
 {

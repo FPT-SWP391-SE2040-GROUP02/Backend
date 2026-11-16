@@ -7,8 +7,6 @@ namespace LegacyVault.Infrastructure.Notifications;
 /// <summary>Gửi email nhắc điểm danh thật qua Gmail (SmtpMailSender). Gửi lỗi thì ném exception để job thử lại.</summary>
 public sealed class SmtpCheckInReminderSender : ICheckInReminderSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly string checkInUrl;
 
@@ -16,11 +14,7 @@ public sealed class SmtpCheckInReminderSender : ICheckInReminderSender
     {
         this.mailSender = mailSender;
 
-        string? clientUrl = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(clientUrl))
-        {
-            clientUrl = DefaultClientUrl;
-        }
+        string clientUrl = ClientUrlSettings.Read(configuration);
         // Trang điểm danh của FE nằm ở /dms (không có route /checkin).
         checkInUrl = clientUrl.TrimEnd('/') + "/dms";
     }

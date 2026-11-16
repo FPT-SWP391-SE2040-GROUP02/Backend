@@ -18,10 +18,8 @@ public sealed class CheckInsController : ControllerBase
     // R5 (audit 2026-10-27): policy rate-limit riêng cho kênh điểm danh, chống flood.
     private const string CheckInRateLimitPolicy = "check-ins";
 
-    // R2 (audit 2026-10-27): role claim trong JWT luôn THUA HỬA CHỮ HOA (UserRole.ToString().ToUpperInvariant());
-    // "SmartwatchDevice" là role riêng của token thiết bị (JwtTokenService.SmartwatchRoleClaim).
+    // Role claim trong JWT luôn viết HOA (UserRole.ToString().ToUpperInvariant()).
     private const string OwnerRoles = "USER,VERIFIER,ADMIN,EXECUTOR";
-    private const string DeviceRole = "SmartwatchDevice";
 
     private readonly ICheckInService checkInService;
 
@@ -32,10 +30,10 @@ public sealed class CheckInsController : ControllerBase
 
     /// <summary>
     /// Trạng thái điểm danh, các hạn, cấu hình và lịch sử (phân trang, kỳ mới nhất trước).
-    /// Chưa kích hoạt kế hoạch → status NOT_STARTED. Đồng hồ cũng poll endpoint này để hiện trạng thái.
+    /// Chưa kích hoạt kế hoạch → status NOT_STARTED.
     /// </summary>
     [HttpGet("check-ins/me")]
-    [Authorize(Roles = OwnerRoles + "," + DeviceRole)]
+    [Authorize(Roles = OwnerRoles)]
     [ProducesResponseType<CheckInStatusResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -55,24 +53,6 @@ public sealed class CheckInsController : ControllerBase
     public Task<CheckInStatusResponse> CheckIn(CancellationToken ct)
     {
         return checkInService.CheckInAsync(ct);
-    }
-
-    /// <summary>
-    /// Điểm danh sinh trắc học qua Smartwatch (Galaxy Watch): kiểm tra nhịp tim và trạng thái đeo trên tay.
-    /// R2: chấp nhận cả token chủ kho (vai trò thật) lẫn token thiết bị "SmartwatchDevice" đã ghép nối.
-    /// </summary>
-    [HttpPost("check-ins/smartwatch")]
-    [Authorize(Roles = OwnerRoles + "," + DeviceRole)]
-    [EnableRateLimiting(CheckInRateLimitPolicy)]
-    [Consumes("application/json")]
-    [ProducesResponseType<CheckInStatusResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<CheckInStatusResponse> CheckInViaSmartwatch([FromBody] SmartwatchCheckInRequest request, CancellationToken ct)
-    {
-        return checkInService.CheckInViaSmartwatchAsync(request, ct);
     }
 
     /// <summary>Đổi chu kỳ (30/60/90 ngày) và thời gian chờ (7/14/30 ngày); áp dụng từ kỳ sau nếu đang có kỳ chạy.</summary>

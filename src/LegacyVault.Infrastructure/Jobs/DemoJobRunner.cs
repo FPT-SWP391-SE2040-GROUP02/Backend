@@ -37,7 +37,6 @@ public sealed class DemoJobRunner : IDemoJobRunner
             async (provider, id, token) =>
             {
                 await provider.GetRequiredService<ICheckInJob>().ProcessPeriodAsync(id, token);
-                await provider.GetRequiredService<IOperationsRecorder>().RecordCheckInPeriodAsync(id, token);
             }, ct);
 
         // Thư bổ sung do Admin đặt, tính theo ngày từ hạn điểm danh.
@@ -112,17 +111,7 @@ public sealed class DemoJobRunner : IDemoJobRunner
                 await provider.GetRequiredService<IHandoverJob>().ProcessGrantExpiryAsync(id, token);
             }, ct);
 
-        // Hồ sơ chứng tử: thông báo cho Chủ kho, giao Người xét duyệt, quá hạn bổ sung.
-        await RunKindAsync("thông báo hồ sơ chứng tử", result,
-            async (provider, token) =>
-            {
-                List<Guid> ids = await provider.GetRequiredService<IDeathCaseNoticeJob>().FindPendingNoticeIdsAsync(token);
-                return ids;
-            },
-            async (provider, id, token) =>
-            {
-                await provider.GetRequiredService<IDeathCaseNoticeJob>().ProcessNoticeAsync(id, token);
-            }, ct);
+        // Hồ sơ chứng tử: giao Người xét duyệt, quá hạn bổ sung.
         await RunKindAsync("giao Người xét duyệt", result,
             async (provider, token) =>
             {
@@ -131,9 +120,7 @@ public sealed class DemoJobRunner : IDemoJobRunner
             },
             async (provider, id, token) =>
             {
-                DeathCaseAssignmentOutcome outcome =
-                    await provider.GetRequiredService<IDeathCaseAssignmentJob>().ProcessCaseAsync(id, token);
-                await provider.GetRequiredService<IOperationsRecorder>().RecordAssignmentOutcomeAsync(id, outcome, token);
+                await provider.GetRequiredService<IDeathCaseAssignmentJob>().ProcessCaseAsync(id, token);
             }, ct);
         await RunKindAsync("quá hạn bổ sung hồ sơ", result,
             async (provider, token) =>
@@ -144,18 +131,6 @@ public sealed class DemoJobRunner : IDemoJobRunner
             async (provider, id, token) =>
             {
                 await provider.GetRequiredService<IDeathCaseSupplementJob>().ProcessCaseAsync(id, token);
-            }, ct);
-
-        // Sự cố vận hành: giao người, nhắc, báo lên Admin.
-        await RunKindAsync("sự cố", result,
-            async (provider, token) =>
-            {
-                List<Guid> ids = await provider.GetRequiredService<IIncidentJob>().FindIdsAsync(token);
-                return ids;
-            },
-            async (provider, id, token) =>
-            {
-                await provider.GetRequiredService<IIncidentJob>().ProcessAsync(id, token);
             }, ct);
 
         int sentAfter = await CountSentRemindersAsync(ct);

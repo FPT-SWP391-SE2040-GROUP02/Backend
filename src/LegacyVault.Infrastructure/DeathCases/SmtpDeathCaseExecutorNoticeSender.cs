@@ -11,8 +11,6 @@ namespace LegacyVault.Infrastructure.DeathCases;
 /// </summary>
 public sealed class SmtpDeathCaseExecutorNoticeSender : IDeathCaseExecutorNoticeSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly ILogger<SmtpDeathCaseExecutorNoticeSender> logger;
     private readonly string executorUrl;
@@ -23,11 +21,7 @@ public sealed class SmtpDeathCaseExecutorNoticeSender : IDeathCaseExecutorNotice
         this.mailSender = mailSender;
         this.logger = logger;
 
-        string? clientUrl = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(clientUrl))
-        {
-            clientUrl = DefaultClientUrl;
-        }
+        string clientUrl = ClientUrlSettings.Read(configuration);
         executorUrl = clientUrl.TrimEnd('/') + "/executor/claim";
     }
 

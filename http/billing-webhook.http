@@ -38,7 +38,7 @@ Content-Type: application/json
   "referenceCode": "FT00000000001"
 }
 
-### Sai số tiền (thiếu 1 đồng) — 200; giao dịch RECONCILIATION_REQUIRED / AMOUNT_MISMATCH, không cấp, có sự cố PAYMENT
+### Sai số tiền (thiếu 1 đồng) — 200; giao dịch RECONCILIATION_REQUIRED / AMOUNT_MISMATCH, không cấp
 POST {{baseUrl}}/billing/sepay/webhook
 Authorization: Apikey {{apiKey}}
 Content-Type: application/json
@@ -86,7 +86,7 @@ Content-Type: application/json
   "referenceCode": "FT00000000004"
 }
 
-### Giao dịch tiền ra — 200; NOT_INCOMING (không mở sự cố)
+### Giao dịch tiền ra — 200; NOT_INCOMING (không ghi log cảnh báo)
 POST {{baseUrl}}/billing/sepay/webhook
 Authorization: Apikey {{apiKey}}
 Content-Type: application/json

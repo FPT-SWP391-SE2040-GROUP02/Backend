@@ -1,7 +1,9 @@
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Security;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using LegacyVault.IntegrationTests.Audit;
 using LegacyVault.IntegrationTests.CheckIn;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
@@ -262,5 +264,93 @@ public sealed class HandoverStarterTests
         Assert.Equal(1, result.TurnCount);
         Assert.Single(repository.Turns);
         Assert.Empty(sender.Sent);
+    }
+
+    /// <summary>Bộ bảo vệ mã giả: không mã hóa thật, chỉ gắn tiền tố để test thấy bản "mã hóa".</summary>
+    private sealed class FakeKeyProtector : IExecutorKeyProtector
+    {
+        public void Protect(ExecutorKeyShard shard, string plainShard)
+        {
+            shard.EncryptedShard = "enc:" + plainShard;
+            shard.EncryptionKeyId = "test-key";
+            shard.WrappedDataKey = new byte[] { 1, 2, 3 };
+        }
+
+        public string Unprotect(ExecutorKeyShard shard)
+        {
+            if (string.IsNullOrEmpty(shard.EncryptedShard))
+            {
+                return string.Empty;
+            }
+            return shard.EncryptedShard.Substring(4);
+        }
+    }
+
+    private HandoverStarter BuildStarterWithKeys(HandoverKeyTests.FakeKeyShards shards, FakeAuditLogRepository audit)
+    {
+        ExecutorKeyIssuer issuer = new ExecutorKeyIssuer(shards, new FakeKeyProtector(), audit);
+        return new HandoverStarter(vaults, repository, protector, tokens, sender, unitOfWork, new FixedTimeProvider(Now), null, issuer);
+    }
+
+    [Fact]
+    public async Task Start_CreatesAReadableKeyWhenTheVaultHasNone()
+    {
+        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
+        data.Designate(container, "Người A", "a@example.com");
+        Publish();
+        HandoverKeyTests.FakeKeyShards shards = new HandoverKeyTests.FakeKeyShards();
+        FakeAuditLogRepository audit = new FakeAuditLogRepository();
+
+        await BuildStarterWithKeys(shards, audit).StartAsync(data.Vault.Id, CancellationToken.None);
+
+        Assert.NotNull(shards.Shard);
+        Assert.Equal(1, shards.Shard!.Version);
+        Assert.False(string.IsNullOrEmpty(shards.Shard.EncryptedShard));
+        Assert.Equal(PlanStatus.HandoverInProgress, data.Plan.Status);
+        AuditLog log = Assert.Single(audit.Logs);
+        Assert.Equal(AuditAction.ExecutorKeyIssued, log.Action);
+        Assert.Equal(AuditActorRole.System, log.ActorRole);
+        Assert.Equal(1, log.TargetVersion);
+        // Nhật ký không chứa mã hay hash (SEC-07).
+        Assert.Null(log.Reason);
+    }
+
+    [Fact]
+    public async Task Start_ReplacesAHashOnlyKeyWithAReadableOne()
+    {
+        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
+        data.Designate(container, "Người A", "a@example.com");
+        Publish();
+        HandoverKeyTests.FakeKeyShards shards = new HandoverKeyTests.FakeKeyShards();
+        shards.Shard = new ExecutorKeyShard { VaultId = data.Vault.Id, Version = 3, ShardHash = "OLDHASH", IssuedAt = Now.AddDays(-30) };
+        FakeAuditLogRepository audit = new FakeAuditLogRepository();
+
+        await BuildStarterWithKeys(shards, audit).StartAsync(data.Vault.Id, CancellationToken.None);
+
+        Assert.Equal(4, shards.Shard!.Version);
+        Assert.NotEqual("OLDHASH", shards.Shard.ShardHash);
+        Assert.False(string.IsNullOrEmpty(shards.Shard.EncryptedShard));
+        Assert.Equal(AuditAction.ExecutorKeyReissued, Assert.Single(audit.Logs).Action);
+    }
+
+    [Fact]
+    public async Task Start_KeepsAnExistingReadableKey()
+    {
+        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
+        data.Designate(container, "Người A", "a@example.com");
+        Publish();
+        HandoverKeyTests.FakeKeyShards shards = new HandoverKeyTests.FakeKeyShards();
+        shards.Shard = new ExecutorKeyShard
+        {
+            VaultId = data.Vault.Id, Version = 2, ShardHash = "KEEP", IssuedAt = Now.AddDays(-30),
+            EncryptedShard = "enc:AAAA-BBBB-CCCC-DDDD", EncryptionKeyId = "test-key", WrappedDataKey = new byte[] { 1 },
+        };
+        FakeAuditLogRepository audit = new FakeAuditLogRepository();
+
+        await BuildStarterWithKeys(shards, audit).StartAsync(data.Vault.Id, CancellationToken.None);
+
+        Assert.Equal(2, shards.Shard!.Version);
+        Assert.Equal("KEEP", shards.Shard.ShardHash);
+        Assert.Empty(audit.Logs);
     }
 }

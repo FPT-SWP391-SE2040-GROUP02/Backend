@@ -149,7 +149,7 @@ public sealed class CheckInReminderDaysTests
         FakeCheckInRepository repository = new FakeCheckInRepository();
         FakeCheckInReminderSender sender = new FakeCheckInReminderSender();
         FixedTimeProvider clock = new FixedTimeProvider(Start);
-        CheckInJob job = new CheckInJob(repository, sender, new FakeUnitOfWork(), clock);
+        CheckInJob job = CheckInJobTestFactory.Create(repository, sender, new FakeUnitOfWork(), clock);
         Vault vault = CheckInTestData.CreateVault(Guid.NewGuid(), PlanStatus.Active);
         CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, 1, Start, 30);
         repository.Periods.Add(period);
@@ -276,7 +276,7 @@ public sealed class CheckInReminderDaysTests
         FakeCheckInRepository repository = new FakeCheckInRepository();
         FakeCheckInReminderSender sender = new FakeCheckInReminderSender();
         FixedTimeProvider clock = new FixedTimeProvider(Start);
-        CheckInJob job = new CheckInJob(repository, sender, new FakeUnitOfWork(), clock);
+        CheckInJob job = CheckInJobTestFactory.Create(repository, sender, new FakeUnitOfWork(), clock);
         Vault vault = CheckInTestData.CreateVault(Guid.NewGuid(), PlanStatus.Active);
         CheckInPeriod period = CheckInTestData.CreateOpenPeriod(vault.Plan, 1, Start, 30);
         repository.Periods.Add(period);

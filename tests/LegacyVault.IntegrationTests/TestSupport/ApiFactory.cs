@@ -138,12 +138,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Handover:Job:Enabled"] = "false";
             settings["Handover:RequireIdentityVerification"] = "false";
             settings["ExecutorInvitations:DeliveryEnabled"] = "false";
-            settings["DeathCase:NoticeJobEnabled"] = "false";
             settings["DeathCase:AssignmentJobEnabled"] = "false";
             settings["DeathCase:SupplementJobEnabled"] = "false";
             settings["Executor:InvitationJobEnabled"] = "false";
             settings["Retention:Enabled"] = "false";
-            settings["Incident:JobEnabled"] = "false";
             // Key giả cho webhook SePay (chỉ dùng trong test); key thật chỉ đặt bằng user-secrets.
             settings["Billing:SePay:WebhookApiKey"] = SePayTestApiKey;
             settings["Billing:SePay:Environment"] = "Test";

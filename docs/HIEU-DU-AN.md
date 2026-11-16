@@ -2,7 +2,7 @@
 
 Tài liệu này dành cho người mới vào dự án. Đọc theo thứ tự: (1) dự án làm gì, (2) mã nguồn tổ chức thế nào, (3) mỗi tính năng nằm ở file nào, (4) cái gì đã làm và chưa làm, (5) các vấn đề đã phát hiện, (6) cách chạy và kiểm tra.
 
-Căn cứ: `LegacyVault-SRS-v3.15.0.md` (nghiệp vụ), `BE-FEATURE-API-HANDOFF.md` (phân công), và chính mã nguồn trong repo này. Ngày lập: 14/10/2026.
+Căn cứ: `LegacyVault-SRS-v3.15.0.md` (nghiệp vụ), `BE-FEATURE-API-HANDOFF.md` (phân công), và chính mã nguồn trong repo này. Ngày lập: 14/10/2026; **mục 1, 4 cập nhật 16/11/2026** theo nghiệp vụ hiện hành (Người thực thi là nhân sự LegacyVault, người nhận không eKYC hay gọi video, Di chúc điện tử). Mục 3 và 5 là ảnh chụp ngày 14/10/2026, một số dòng đã lỗi thời (kích hoạt, Executor, chứng tử, bàn giao nay đã làm).
 
 ---
 
@@ -14,11 +14,11 @@ Hình dung một người (gọi là **Owner**, chủ kho) muốn để lại ch
 
 1. **Tạo kho** và **tải tài sản lên**. Hệ thống **mã hóa** nội dung trước khi lưu.
 2. Chia tài sản thành các **gói bàn giao** và chỉ định **người nhận** cho từng gói.
-3. Mời một người tin cậy làm **Executor** (người thực hiện) để sau này xử lý thủ tục.
-4. **Điểm danh định kỳ** (mặc định 30 ngày một lần) để hệ thống biết họ vẫn ổn. Đây là tính năng *deadman switch* ("công tắc người chết").
-5. Nếu Owner **ngừng điểm danh**, hệ thống không tự mở kho. Nó chỉ **giao việc cho Executor liên hệ kiểm tra**.
-6. Khi Owner mất thật, Executor nộp **giấy chứng tử**. Nhân viên duyệt (**Verifier**) sau 72 giờ cho Owner kịp phản đối ("Tôi còn sống").
-7. Sau khi chứng tử được duyệt, **từng người nhận** phải chứng minh đúng là người được chỉ định (eKYC + gọi video với Executor), rồi bấm đồng ý nhận. Họ được **xem và tải trong 30 ngày**.
+3. Chọn một **Người thực thi** (Executor) trong danh sách nhân sự LegacyVault. Đây là tài khoản role `EXECUTOR` do **Admin tạo** (đã xác minh pháp lý), không phải người thân; Owner mời, người đó phải tự chấp nhận.
+4. **Ký Di chúc điện tử và kích hoạt**: trang bàn giao của Owner là một bản "Di chúc" (người thực thi, người nhận theo từng người, các gói). Owner ký bằng **mã PIN của kho** lúc kích hoạt; Người thực thi ký khi chấp nhận lời mời. Lúc kích hoạt, server tự tạo **mã mở gói** (Owner không phải tự cấp).
+5. **Điểm danh định kỳ** (mặc định 30 ngày một lần) để hệ thống biết họ vẫn ổn. Đây là tính năng *deadman switch* ("công tắc người chết"). Nếu Owner **ngừng điểm danh**, hệ thống không tự mở kho. Nó chỉ **giao việc cho Executor liên hệ kiểm tra**.
+6. Khi Owner mất thật, Executor nộp **giấy chứng tử**. Nhân viên duyệt (**Verifier**) sau 72 giờ cho Owner kịp phản đối ("Tôi còn sống"). Khi được duyệt, bàn giao bắt đầu: từ lúc này Người thực thi mới đọc được **mã mở gói** và gửi cho người nhận.
+7. Sau khi bàn giao bắt đầu, **từng người nhận** nhận email mời, đăng nhập đúng email được chỉ định, bấm đồng ý nhận (**không eKYC, không gọi video**), nhập mã mở gói rồi **xem và tải trong 30 ngày**. Tài khoản nhân sự (EXECUTOR, VERIFIER, ADMIN) không được làm người nhận.
 8. Dữ liệu hết hạn lưu thì bị **xóa theo quy tắc**.
 
 Ba nguyên tắc xuyên suốt của SRS: **không ai tự mở kho** (kể cả Admin), **mọi quyết định có người chịu trách nhiệm và có nhật ký**, **mọi hạn thời gian do server quyết định**.
@@ -27,11 +27,10 @@ Ba nguyên tắc xuyên suốt của SRS: **không ai tự mở kho** (kể cả
 
 | Mã | Tên | Nói đơn giản |
 |---|---|---|
-| F1 | Tài khoản và thiết lập kho | Đăng ký, tạo kho, tải tài sản, chia gói, chỉ định người nhận, mời Executor, kích hoạt kế hoạch |
+| F1 | Tài khoản và thiết lập kho | Đăng ký, tạo kho, tải tài sản, chia gói, chỉ định người nhận, chọn Người thực thi, ký Di chúc bằng PIN và kích hoạt kế hoạch |
 | F2A | Điểm danh | Owner điểm danh; quá hạn thì giao việc cho Executor |
-| F2B | Nộp và duyệt chứng tử | Executor nộp, Verifier duyệt sau 72 giờ |
-| F2C | Owner báo còn sống | Owner phản đối hồ sơ chứng tử |
-| F3 | Xác minh người nhận và bàn giao | eKYC, gọi video, đồng ý nhận, tải 30 ngày, xóa dữ liệu |
+| F2B | Nộp và duyệt chứng tử | Executor nộp, Verifier duyệt sau 72 giờ; Owner còn sống có thể phản đối trong thời gian này |
+| F3 | Bàn giao cho người nhận | Email mời, đăng nhập đúng email, đồng ý nhận, nhập mã mở gói, tải 30 ngày, xóa dữ liệu (không eKYC, không gọi video) |
 | F4 | Xử lý sự cố | Admin xử lý lỗi, giữ dữ liệu |
 | P | Thanh toán | Mua dịch vụ qua SePay; Free chỉ có 20 MiB |
 
@@ -79,13 +78,13 @@ Ký hiệu: Xong = đã chạy và có test; Một phần = có nền nhưng thi
 | Hồ sơ người nhận (mã hóa) | QUOTA-03/04 | Một phần: chưa có chỉ định theo gói | `BeneficiariesController` | `BeneficiaryService` | `Beneficiary` |
 | **Điểm danh (deadman switch)** | F2A, DMS-01..06 | Xong phần lõi | `CheckInsController` | `CheckInService`, `CheckInJob`, `CheckInScheduler`, `CheckInTimeline` | `CheckInSchedule`, `CheckInPeriod`, `CheckInReminder` |
 | Gửi email thật (Gmail) | OPS-04 | Xong, cần cấu hình | không có | `SmtpMailSender` (Infrastructure) | không có |
-| Kích hoạt kế hoạch | SETUP-01 | **Chưa** | | | |
-| Mời và chấp nhận Executor | SETUP-20 | **Chưa** | | | |
-| Chứng tử, duyệt 72 giờ, báo còn sống | F2B, F2C | **Chưa** | | | |
-| eKYC, lịch gọi video | EKYC, F3 | **Chưa** | | | |
-| Đồng ý nhận, grant, tải 30 ngày, xóa dữ liệu | F3 | **Chưa** | | | |
-| Thanh toán SePay | P | **Chưa** | | | |
-| Admin, sự cố, nhật ký | F4 | **Chưa** | | | |
+| Kích hoạt kế hoạch (Di chúc điện tử, ký bằng PIN, tự tạo mã mở gói) | SETUP-01 | Xong (cập nhật 16/11/2026) | `PlanSetupController` | `PlanSetupService`, `ExecutorKeyIssuer` | `HandoverPlan`, `ExecutorKeyShard` |
+| Mời và chấp nhận Executor (nhân sự role EXECUTOR do Admin tạo) | SETUP-20 | Xong (cập nhật 16/11/2026) | `PlanSetupController`, `ExecutorInvitationsController` | `PlanSetupService` | `Executor` |
+| Chứng tử, duyệt 72 giờ, báo còn sống | F2B | Xong (cập nhật 16/11/2026) | `DeathCase*Controller` | `DeathCaseService`, `DeathCaseReviewService` | `DeathCase` |
+| eKYC của Owner khi đăng ký (người nhận không eKYC, không gọi video) | EKYC | Xong phần Owner (cập nhật 16/11/2026) | `EkycController` | `EkycService` | `EkycVerification` |
+| Đồng ý nhận, nhập mã mở gói, tải 30 ngày, xóa dữ liệu | F3 | Xong (cập nhật 16/11/2026) | `Handover*Controller` | `HandoverService`, `HandoverDownloadService` | `HandoverTurn`, `HandoverGrant` |
+| Thanh toán SePay | P | Xong (cập nhật 16/11/2026) | `BillingController` | `BillingService` | `Payment*` |
+| Admin, sự cố, nhật ký | F4 | Xong (cập nhật 16/11/2026) | `Admin*Controller` | `AdminService` | `AuditLog` |
 
 ### 3.1. Đăng nhập (đã có)
 
@@ -189,31 +188,33 @@ Hai chống ghi đè quan trọng: bảng `CheckInPeriods` có **`RowVersion`** 
 
 ```mermaid
 flowchart TD
-    A["Owner tạo kho,<br/>tải tài sản"]:::done --> B["Chia gói,<br/>hồ sơ người nhận"]:::part
-    B --> C["Chỉ định người nhận vào gói<br/>(gói thành READY)"]:::todo
-    C --> D["Mời Executor,<br/>Executor chấp nhận"]:::todo
-    D --> E["eKYC Owner, thanh toán"]:::todo
-    E --> F["Kích hoạt kế hoạch"]:::todo
+    A["Owner tạo kho,<br/>tải tài sản"]:::done --> B["Chia gói,<br/>hồ sơ người nhận"]:::done
+    B --> C["Chỉ định người nhận vào gói<br/>(gói thành READY)"]:::done
+    C --> D["Chọn Người thực thi (nhân sự EXECUTOR),<br/>người đó chấp nhận"]:::done
+    D --> E["eKYC Owner, thanh toán"]:::done
+    E --> F["Owner ký Di chúc bằng PIN,<br/>kích hoạt, server tạo mã mở gói"]:::done
     F --> G["Điểm danh định kỳ,<br/>job nhắc và chuyển trạng thái"]:::done
-    G --> H["Quá hạn: giao việc cho Executor"]:::part
-    H --> I["Executor nộp chứng tử,<br/>ghim snapshot"]:::todo
-    I --> J["72 giờ phản đối,<br/>Verifier duyệt"]:::todo
-    J --> K["Từng người nhận: eKYC,<br/>gọi video, Executor xác nhận"]:::todo
-    K --> L["Người nhận đồng ý, nhận grant"]:::todo
-    L --> M["Xem và tải 30 ngày<br/>(giải mã nội dung)"]:::todo
-    M --> N["Hết hạn: lưu 30 ngày rồi xóa"]:::todo
+    G --> H["Quá hạn: giao việc cho Executor"]:::done
+    H --> I["Executor nộp chứng tử,<br/>ghim snapshot"]:::done
+    I --> J["72 giờ phản đối,<br/>Verifier duyệt, bàn giao bắt đầu"]:::done
+    J --> K["Người thực thi đọc mã mở gói,<br/>gửi cho người nhận"]:::done
+    K --> L["Người nhận đăng nhập đúng email,<br/>đồng ý nhận, nhập mã mở gói"]:::done
+    L --> M["Xem và tải 30 ngày<br/>(giải mã nội dung)"]:::done
+    M --> N["Hết hạn: lưu 30 ngày rồi xóa"]:::done
     classDef done fill:#d4edda,stroke:#2e7d32,color:#000
     classDef part fill:#fff3cd,stroke:#b8860b,color:#000
     classDef todo fill:#f8d7da,stroke:#b71c1c,color:#000
 ```
 
-Xanh = đã có. Vàng = có một phần. Đỏ = chưa có.
+Xanh = đã có. Vàng = có một phần. Đỏ = chưa có. (Sơ đồ cập nhật 16/11/2026: toàn bộ quy trình đã có API.)
 
-**Điều cần nhớ:** hiện tại chỉ có *phần đầu* (chuẩn bị kho) và *công tắc điểm danh*. Hầu hết quy trình bàn giao (từ kích hoạt tới xóa dữ liệu) chưa có. Và vì **không có API "chỉ định người nhận"**, gói không bao giờ thành `READY`, nên **kế hoạch chưa thể được kích hoạt bằng cách hợp lệ**. Khi thử, phải đặt `Status = 'Active'` trực tiếp bằng SQL (xem `http/checkin-dev.sql`).
+**Điều cần nhớ:** (1) **Người thực thi** là tài khoản nhân sự LegacyVault (role `EXECUTOR`) do Admin tạo, Owner chọn một người; họ không phải người nhận. (2) Trang bàn giao của Owner là **Di chúc** điện tử: Owner ký bằng PIN kho lúc kích hoạt, Người thực thi ký khi chấp nhận. (3) **Mã mở gói** do server tạo lúc kích hoạt, chỉ Người thực thi đọc được và chỉ khi bàn giao đã bắt đầu (`HANDOVER_IN_PROGRESS`), rồi gửi qua email cho người nhận; mã là cổng mở khóa việc tải, không dùng mã hóa nội dung. (4) Người nhận không eKYC, không gọi video; đăng nhập đúng email được chỉ định và đồng ý nhận. (5) Tài khoản nhân sự không được làm người nhận (chặn ở bước tạo/sửa người nhận, bước nhận gói và bước Admin cấp role).
 
 ---
 
 ## 5. Vấn đề đã phát hiện khi rà quy trình bàn giao
+
+> Ghi chú 16/11/2026: mục 5 là ảnh chụp ngày 14/10/2026. Vấn đề A2 (không có API chỉ định người nhận nên không kích hoạt được) đã được giải quyết; các mục về hạ tầng, mã hóa và giới hạn tải lên cần kiểm lại trước khi dùng.
 
 Mức độ: **Cao** = chặn nghiệp vụ hoặc có thể gây sai trạng thái; **Trung bình** = lệch SRS hoặc rủi ro bảo mật cần sửa trước khi chạy thật; **Thấp** = ghi nhận.
 

@@ -24,7 +24,7 @@ public class DemoClockStepResponse
 
     /// <summary>
     /// Loại mốc: CHECK_IN_REMINDER, CHECK_IN_DUE, CHECK_IN_GRACE_END, EXECUTOR_INVITATION, SERVICE_EXPIRY,
-    /// HANDOVER_DEADLINE, INCIDENT hoặc TARGET_DAY (ngày đích).
+    /// HANDOVER_DEADLINE hoặc TARGET_DAY (ngày đích).
     /// </summary>
     public string Kind { get; set; } = string.Empty;
 

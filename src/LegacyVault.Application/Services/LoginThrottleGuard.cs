@@ -14,9 +14,6 @@ namespace LegacyVault.Application.Services;
 /// </remarks>
 public sealed class LoginThrottleGuard
 {
-    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan FailureWindow = TimeSpan.FromMinutes(15);
-    private const int MaxFailedAttempts = 5;
 
     private readonly ILoginThrottleRepository _loginThrottleRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -65,7 +62,7 @@ public sealed class LoginThrottleGuard
             };
             _loginThrottleRepository.Add(throttle);
         }
-        else if (throttle.WindowStartedAt.Add(FailureWindow) <= now)
+        else if (throttle.WindowStartedAt.Add(AuthPolicy.FailureWindow) <= now)
         {
             // Cửa sổ 15 phút cũ đã qua: đếm lại từ đầu.
             throttle.FailedCount = 1;
@@ -77,15 +74,15 @@ public sealed class LoginThrottleGuard
             throttle.FailedCount++;
         }
 
-        if (throttle.FailedCount >= MaxFailedAttempts)
+        if (throttle.FailedCount >= AuthPolicy.MaxFailedAttempts)
         {
-            throttle.LockedUntil = now.Add(LockoutDuration);
+            throttle.LockedUntil = now.Add(AuthPolicy.LockoutDuration);
             await _unitOfWork.SaveChangesAsync(ct);
-            return new AccountLockedException((int)LockoutDuration.TotalSeconds);
+            return new AccountLockedException((int)AuthPolicy.LockoutDuration.TotalSeconds);
         }
 
         await _unitOfWork.SaveChangesAsync(ct);
-        return new InvalidCredentialsException(MaxFailedAttempts - throttle.FailedCount);
+        return new InvalidCredentialsException(AuthPolicy.MaxFailedAttempts - throttle.FailedCount);
     }
 
     /// <summary>Nhập đúng mật khẩu: xóa bộ đếm (chỉ đánh dấu, lưu cùng lần SaveChanges sau).</summary>

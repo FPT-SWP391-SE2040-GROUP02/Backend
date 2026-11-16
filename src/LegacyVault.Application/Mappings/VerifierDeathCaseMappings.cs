@@ -20,7 +20,6 @@ public static class VerifierDeathCaseMappings
         response.SubmittedAt = row.SubmittedAt;
         response.AssignedAt = row.AssignedAt;
         response.DueAt = row.DueAt;
-        response.ObjectionEndsAt = row.ObjectionEndsAt;
         response.SupplementOverdueAt = row.SupplementOverdueAt;
         response.UnreviewedFlagCount = row.UnreviewedFlagCount;
         response.ClosedAt = row.ClosedAt;
@@ -94,8 +93,6 @@ public static class VerifierDeathCaseMappings
         }
         response.Flags = ToFlagResponses(deathCase, reviewVersion);
         response.Decisions = ToDecisionResponses(deathCase);
-        response.OwnerNotice = ToNoticeResponse(deathCase);
-        response.ObjectionEndsAt = deathCase.ObjectionEndsAt;
         response.SupplementOverdueAt = deathCase.SupplementOverdueAt;
 
         VerifierAssignmentResponse assignmentResponse = new VerifierAssignmentResponse();
@@ -210,35 +207,5 @@ public static class VerifierDeathCaseMappings
             return byTime;
         }
         return left.Id.CompareTo(right.Id);
-    }
-
-    /// <summary>Thông báo của bản NotifiedVersionNo (nhiều dòng thì lấy dòng tạo sau). Chưa có → null.</summary>
-    private static DeathCaseNoticeResponse? ToNoticeResponse(DeathCase deathCase)
-    {
-        if (deathCase.NotifiedVersionNo == null)
-        {
-            return null;
-        }
-        DeathCaseNotice? latest = null;
-        foreach (DeathCaseNotice notice in deathCase.Notices)
-        {
-            if (notice.VersionNo != deathCase.NotifiedVersionNo.Value)
-            {
-                continue;
-            }
-            if (latest == null || notice.CreatedAt > latest.CreatedAt)
-            {
-                latest = notice;
-            }
-        }
-        if (latest == null)
-        {
-            return null;
-        }
-
-        DeathCaseNoticeResponse response = new DeathCaseNoticeResponse();
-        response.Status = latest.Status.ToApiString();
-        response.DeliveredAt = latest.DeliveredAt;
-        return response;
     }
 }

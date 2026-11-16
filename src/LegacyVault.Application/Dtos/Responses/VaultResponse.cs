@@ -14,9 +14,6 @@ public class VaultResponse
     public string? ExecutorNote { get; set; }
     public DateTimeOffset? ExecutorNoteUpdatedAt { get; set; }
 
-    /// <summary>Điều khoản Chủ kho thêm vào di chúc, theo thứ tự; rỗng khi chưa có.</summary>
-    public List<string> WillClauses { get; set; } = new List<string>();
-
     /// <summary>"OPEN" hoặc "CLOSED".</summary>
     public string Status { get; set; } = string.Empty;
     public DateTimeOffset? ClosedAt { get; set; }

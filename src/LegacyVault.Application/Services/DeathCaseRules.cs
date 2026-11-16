@@ -1,28 +1,21 @@
 using System.Globalization;
-using System.Text;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Hằng số và luật thuần của hồ sơ chứng tử (SRS §6.2 F2B), dùng chung cho service và job.</summary>
+/// <summary>Hằng số và luật thuần của hồ sơ chứng tử, dùng chung cho service và job.</summary>
 public static class DeathCaseRules
 {
-    /// <summary>DEATH-08: Owner có 72 giờ phản đối, tính từ lúc thông báo được giao.</summary>
-    public static int ObjectionHours => RuntimeSettings.Int("DeathCase.ObjectionHours", 72);
-
-    /// <summary>ASSIGN-01: Verifier có 48 giờ để xét hồ sơ được giao.</summary>
+    /// <summary>Verifier có 48 giờ để xét hồ sơ được giao.</summary>
     public static int ReviewDueHours => RuntimeSettings.Int("DeathCase.ReviewDueHours", 48);
 
-    /// <summary>NFR-09: tối đa 10 tệp giấy chứng tử mỗi phiên bản.</summary>
+    /// <summary>tối đa 10 tệp giấy chứng tử mỗi phiên bản.</summary>
     public static int MaxFilesPerVersion => RuntimeSettings.Int("DeathCase.MaxFilesPerVersion", 10);
 
-    /// <summary>NFR-09: mỗi tệp tối đa 20 MiB.</summary>
+    /// <summary>mỗi tệp tối đa 20 MiB.</summary>
     public static long MaxFileBytes => RuntimeSettings.Int("DeathCase.MaxFileSizeMb", 20) * 1024L * 1024;
-
-    /// <summary>D3: thử gửi thông báo tối đa 5 lần rồi đánh dấu Failed.</summary>
-    public static int MaxNoticeAttempts => RuntimeSettings.Int("DeathCase.MaxNoticeAttempts", 5);
 
     /// <summary>Số ký tự của Id hồ sơ dùng làm mã rút gọn trong thư.</summary>
     public const int CaseCodeLength = 8;
@@ -36,17 +29,17 @@ public static class DeathCaseRules
     public const string MissingFiles = "FILES";
     public const string MissingDeathRegistrationPlace = "DEATH_REGISTRATION_PLACE";
 
-    /// <summary>D7: mã cảnh báo Người xét duyệt khi chủ kho còn điểm danh sau ngày mất ghi trên giấy.</summary>
+    /// <summary>mã cảnh báo Người xét duyệt khi chủ kho còn điểm danh sau ngày mất ghi trên giấy.</summary>
     public const string WarningDeathBeforeLastCheckIn = "DEATH_BEFORE_LAST_CHECKIN";
 
-    /// <summary>D7: mã cảnh báo khi đăng ký khai tử trễ hơn số ngày cho phép so với ngày mất.</summary>
+    /// <summary>mã cảnh báo khi đăng ký khai tử trễ hơn số ngày cho phép so với ngày mất.</summary>
     public const string WarningLateRegistration = "LATE_REGISTRATION";
 
-    /// <summary>D7: đăng ký khai tử sau ngày mất quá số ngày này thì cảnh báo (không chặn duyệt).</summary>
+    /// <summary>đăng ký khai tử sau ngày mất quá số ngày này thì cảnh báo (không chặn duyệt).</summary>
     public const int LateRegistrationDays = 15;
 
     /// <summary>
-    /// DEATH-01: mọi mã phần hồ sơ có thể thiếu. Verifier chỉ được yêu cầu bổ sung các mã này.
+    /// mọi mã phần hồ sơ có thể thiếu. Verifier chỉ được yêu cầu bổ sung các mã này.
     /// Mã mới luôn thêm CUỐI mảng; GetMissingRequirements trả theo thứ tự riêng của nó.
     /// </summary>
     public static readonly string[] AllRequirementCodes =
@@ -59,13 +52,13 @@ public static class DeathCaseRules
     /// <summary>Ngày trên giấy tờ tính theo giờ Việt Nam (UTC+07:00).</summary>
     public static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
-    /// <summary>DEATH-05: chỉ mở/gửi hồ sơ khi kế hoạch đang chạy (đã kích hoạt, chưa khóa).</summary>
+    /// <summary>chỉ mở/gửi hồ sơ khi kế hoạch đang chạy (đã kích hoạt, chưa khóa).</summary>
     public static bool CanOpen(PlanStatus planStatus)
     {
         return PlanRules.IsRunning(planStatus);
     }
 
-    /// <summary>DEATH-05, D1: hồ sơ còn chiếm suất "một hồ sơ mỗi kho" khi chưa bị từ chối (kể cả Draft).</summary>
+    /// <summary>hồ sơ còn chiếm suất "một hồ sơ mỗi kho" khi chưa bị từ chối (kể cả Draft).</summary>
     public static bool IsOpen(DeathCaseStatus status)
     {
         if (status == DeathCaseStatus.Rejected)
@@ -76,7 +69,7 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-04: chỉ sửa được bản mới nhất chưa gửi, khi hồ sơ còn ở giai đoạn Executor được khai báo.
+    /// chỉ sửa được bản mới nhất chưa gửi, khi hồ sơ còn ở giai đoạn Executor được khai báo.
     /// Bản đã có SubmittedAt không bao giờ sửa.
     /// </summary>
     public static bool CanEditVersion(DeathCase deathCase, DeathCaseVersion version)
@@ -99,7 +92,7 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// D5, DEATH-04: tạo bản mới khi hồ sơ đang xét hoặc cần bổ sung và bản mới nhất đã gửi
+    /// tạo bản mới khi hồ sơ đang xét hoặc cần bổ sung và bản mới nhất đã gửi
     /// (mỗi hồ sơ chỉ có tối đa một bản nháp).
     /// </summary>
     public static bool CanCreateNewVersion(DeathCase deathCase, DeathCaseVersion currentVersion)
@@ -117,7 +110,7 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-01: các phần còn thiếu để gửi được. Executor phải điền 3 thông tin trên giấy chứng tử (ngày mất, ngày đăng ký
+    /// các phần còn thiếu để gửi được. Executor phải điền 3 thông tin trên giấy chứng tử (ngày mất, ngày đăng ký
     /// khai tử, nơi đăng ký khai tử gồm tỉnh và phường/xã) và tải ít nhất một giấy chứng tử hoặc trích lục khai tử (FILES).
     /// Họ tên và ngày sinh của Chủ kho lấy từ danh tính đã xác minh nên Executor không phải nhập.
     /// Chỉ xét có hay chưa; đúng/sai của giá trị do ValidateCertificateInfo kiểm.
@@ -160,7 +153,7 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-01: luật kiểm 3 thông tin trên giấy chứng tử, dùng chung cho sửa nháp và gửi hồ sơ. Thiếu giá trị (null) thì bỏ qua
+    /// luật kiểm 3 thông tin trên giấy chứng tử, dùng chung cho sửa nháp và gửi hồ sơ. Thiếu giá trị (null) thì bỏ qua
     /// (bản nháp chưa nhập, việc thiếu do GetMissingRequirements báo). "Hôm nay" là ngày Việt Nam của utcNow
     /// (TimeProvider, đúng cả khi tua thời gian). planActivatedAt là lúc Chủ kho kích hoạt kế hoạch; null thì bỏ qua luật đó.
     /// Lỗi 400 VALIDATION_ERROR theo tên trường: dateOfDeath, issuedOn, deathRegistrationProvinceCode, deathRegistrationWardCode.
@@ -226,7 +219,7 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// D7: ngày Việt Nam của lần điểm danh cuối của Chủ kho. Chủ kho còn điểm danh SAU ngày mất ghi trên giấy
+    /// ngày Việt Nam của lần điểm danh cuối của Chủ kho. Chủ kho còn điểm danh SAU ngày mất ghi trên giấy
     /// (lần điểm danh cuối &gt; ngày mất) là dấu hiệu bất thường. Thiếu ngày mất hoặc chưa từng điểm danh thì không cảnh báo.
     /// </summary>
     public static bool IsDeathBeforeLastCheckIn(DateOnly? dateOfDeath, DateTimeOffset? lastCheckInAt)
@@ -239,7 +232,7 @@ public static class DeathCaseRules
         return lastCheckInDay > dateOfDeath.Value;
     }
 
-    /// <summary>D7: đăng ký khai tử cách ngày mất hơn 15 ngày. Thiếu một trong hai ngày thì không cảnh báo.</summary>
+    /// <summary>đăng ký khai tử cách ngày mất hơn 15 ngày. Thiếu một trong hai ngày thì không cảnh báo.</summary>
     public static bool IsLateRegistration(DateOnly? dateOfDeath, DateOnly? issuedOn)
     {
         if (dateOfDeath == null || issuedOn == null)
@@ -251,32 +244,7 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-11: thay đổi trọng yếu = đổi danh tính Owner (họ tên, CCCD) hoặc ngày mất.
-    /// Họ tên so sau khi bỏ khoảng trắng thừa, không phân biệt hoa thường. Số giấy, nơi cấp, ngày cấp không tính.
-    /// </summary>
-    public static bool IsCriticalChange(
-        string? oldOwnerFullName, string? oldOwnerCitizenId, DateOnly? oldDateOfDeath,
-        string? newOwnerFullName, string? newOwnerCitizenId, DateOnly? newDateOfDeath)
-    {
-        string oldName = NormalizeNameForCompare(oldOwnerFullName);
-        string newName = NormalizeNameForCompare(newOwnerFullName);
-        if (!string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-        if (!string.Equals(oldOwnerCitizenId, newOwnerCitizenId, StringComparison.Ordinal))
-        {
-            return true;
-        }
-        if (oldDateOfDeath != newDateOfDeath)
-        {
-            return true;
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// DEATH-13: CCCD khai trên hồ sơ khác CCCD đã xác minh của Owner. Owner chưa xác minh (verifiedLast4 null)
+    /// CCCD khai trên hồ sơ khác CCCD đã xác minh của Owner. Owner chưa xác minh (verifiedLast4 null)
     /// hoặc hồ sơ chưa có số thì không kết luận được, trả false.
     /// </summary>
     public static bool IsIdentityMismatch(string? verifiedLast4, string? caseCitizenId)
@@ -290,7 +258,7 @@ public static class DeathCaseRules
     }
 
     /// <summary>
-    /// DEATH-13, EKYC-27: so ĐỦ 12 số CCCD khai trên hồ sơ với danh tính đã gắn của Owner. Hồ sơ chưa có số thì không
+    /// so ĐỦ 12 số CCCD khai trên hồ sơ với danh tính đã gắn của Owner. Hồ sơ chưa có số thì không
     /// kết luận được, trả false.
     /// </summary>
     public static bool IsIdentityMismatchFull(string boundCitizenId, string? caseCitizenId)
@@ -300,12 +268,6 @@ public static class DeathCaseRules
             return false;
         }
         return !string.Equals(boundCitizenId, caseCitizenId, StringComparison.Ordinal);
-    }
-
-    /// <summary>DEATH-08: hạn phản đối = lúc thông báo được giao + 72 giờ.</summary>
-    public static DateTimeOffset ObjectionEndsAt(DateTimeOffset deliveredAt)
-    {
-        return deliveredAt.AddHours(ObjectionHours);
     }
 
     /// <summary>
@@ -323,35 +285,5 @@ public static class DeathCaseRules
     {
         DateTimeOffset nowInVietnam = utcNow.ToOffset(VietnamOffset);
         return DateOnly.FromDateTime(nowInVietnam.DateTime);
-    }
-
-    /// <summary>Bỏ khoảng trắng đầu/cuối, gộp nhiều khoảng trắng thành một, chuẩn Unicode NFC; null → "".</summary>
-    private static string NormalizeNameForCompare(string? name)
-    {
-        if (name == null)
-        {
-            return string.Empty;
-        }
-
-        string composed = name.Normalize(NormalizationForm.FormC).Trim();
-        StringBuilder builder = new StringBuilder();
-        bool previousIsSpace = false;
-        foreach (char c in composed)
-        {
-            if (char.IsWhiteSpace(c))
-            {
-                if (!previousIsSpace)
-                {
-                    builder.Append(' ');
-                }
-                previousIsSpace = true;
-            }
-            else
-            {
-                builder.Append(c);
-                previousIsSpace = false;
-            }
-        }
-        return builder.ToString();
     }
 }

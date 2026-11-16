@@ -110,17 +110,6 @@ public sealed class VaultService(
             vault.ExecutorNoteUpdatedAt = now;
         }
 
-        if (request.WillClauses is not null)
-        {
-            // Kế hoạch đã kích hoạt nghĩa là di chúc đã ký: không đổi điều khoản nữa.
-            if (vault.Plan.Status != PlanStatus.Draft)
-            {
-                throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
-                    "Kế hoạch đã kích hoạt, không sửa điều khoản di chúc được nữa.");
-            }
-            vault.WillClauses = WillClauseRules.Join(request.WillClauses);
-        }
-
         // Không tăng Plan.ConfigVersion: tên/mô tả kho và hướng dẫn cho Executor không thuộc cấu hình bàn giao.
         vault.UpdatedAt = now;
         auditLogRepository.Add(AuditRules.OwnerAction(

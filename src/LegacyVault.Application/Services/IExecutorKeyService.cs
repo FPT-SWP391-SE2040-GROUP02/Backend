@@ -3,23 +3,21 @@ using LegacyVault.Application.Dtos.Responses;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Mảnh khóa Chủ kho giao cho Người thực thi. Mọi hàm chỉ chạy cho Owner của kho; kho người khác trả 404 VAULT_NOT_FOUND.
-/// Cấp mới và cấp lại chỉ được khi kế hoạch chưa khóa (409 VAULT_NOT_EDITABLE nếu đã có báo tin).
+/// Mã mở gói bàn giao do server tạo (lúc kích hoạt kế hoạch). Hàm của Owner chỉ chạy cho Owner của kho; kho người khác trả 404.
+/// Đổi mã chỉ được khi kế hoạch chưa khóa (409 VAULT_NOT_EDITABLE nếu đã có báo tin).
 /// </summary>
 public interface IExecutorKeyService
 {
     Task<ExecutorKeyStatusResponse> GetStatusAsync(Guid vaultId, CancellationToken ct);
 
-    /// <summary>Cấp mảnh lần đầu, trả mảnh gốc một lần duy nhất. Đã cấp → 409 EXECUTOR_KEY_ALREADY_ISSUED.</summary>
-    Task<ExecutorKeyIssuedResponse> IssueAsync(Guid vaultId, CancellationToken ct);
-
     /// <summary>
-    /// Quên khóa: cấp mảnh mới, mảnh cũ hết hiệu lực ngay. Chưa cấp lần nào → 409 EXECUTOR_KEY_NOT_ISSUED.
+    /// Chủ kho đổi mã: mã mới thay mã cũ ngay, không trả mã gốc (mã do server giữ). Kho chưa có mã → 409 EXECUTOR_KEY_NOT_ISSUED.
     /// </summary>
-    Task<ExecutorKeyIssuedResponse> ReissueAsync(Guid vaultId, CancellationToken ct);
+    Task<ExecutorKeyStatusResponse> ReissueAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>
-    /// Người thực thi hợp lệ đọc mã mở gói được Chủ kho cấp và gửi trực tiếp trên hệ thống.
+    /// Người thực thi đã chấp nhận đọc mã mở gói, chỉ khi kế hoạch đã HandoverInProgress
+    /// (chưa tới lúc → 409 HANDOVER_NOT_ALLOWED, reason HANDOVER_NOT_STARTED).
     /// </summary>
     Task<ExecutorHandoverKeyResponse> GetKeyForExecutorAsync(Guid vaultId, CancellationToken ct);
 }

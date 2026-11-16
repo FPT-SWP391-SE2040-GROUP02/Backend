@@ -28,6 +28,17 @@ public sealed class HandoverRepository : IHandoverRepository
             .FirstOrDefaultAsync(t => t.InvitationTokenHash == tokenHash, ct);
     }
 
+    public Task<bool> HasOpenClaimedTurnAsync(Guid userId, CancellationToken ct)
+    {
+        return context.Set<HandoverTurn>()
+            .AnyAsync(t => t.ClaimantUserId == userId
+                && t.Status != HandoverTurnStatus.HandoverCommitted
+                && t.Status != HandoverTurnStatus.Declined
+                && t.Status != HandoverTurnStatus.DecisionExpired
+                && t.Status != HandoverTurnStatus.Cancelled
+                && t.Status != HandoverTurnStatus.Lapsed, ct);
+    }
+
     public Task<HandoverTurn?> FindTurnByIdAsync(Guid turnId, CancellationToken ct)
     {
         return context.Set<HandoverTurn>()

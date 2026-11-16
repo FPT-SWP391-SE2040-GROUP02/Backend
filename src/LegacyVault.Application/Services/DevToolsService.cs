@@ -19,7 +19,6 @@ public sealed class DevToolsService(
     IUnitOfWork unitOfWork,
     ICheckInJob checkInJob,
     IEntitlementExpiryJob entitlementExpiryJob,
-    IOperationsRecorder operationsRecorder,
     TimeProvider timeProvider,
     IEkycOptions ekycOptions,
     IAssetContentStore contentStore,
@@ -158,7 +157,6 @@ public sealed class DevToolsService(
         {
             // Chạy ngay vòng xử lý của job điểm danh cho kỳ này, giống job nền, để màn hình thấy trạng thái mới liền.
             await checkInJob.ProcessPeriodAsync(periodToProcess.Value, ct);
-            await operationsRecorder.RecordCheckInPeriodAsync(periodToProcess.Value, ct);
         }
         if (runEntitlementExpiry)
         {

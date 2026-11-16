@@ -53,8 +53,8 @@ Lượt được lưu **trước** khi gửi thư, nên nếu lần gửi đầu
 - Chọn lượt còn `INVITED`, chưa ai nhận, `InvitationSentAt = null`, đã tạo ít nhất 2 phút và mới thử dưới 5 lần.
 - Giãn cách giữa các lần thử tăng dần: lần lỗi thứ n chờ n x 5 phút. Kho có hold hoặc kế hoạch không còn `HANDOVER_IN_PROGRESS` thì tạm dừng, không tính là lần lỗi.
 - Mỗi lần gửi dùng token mới; DB chỉ lưu mã băm mới sau khi email được nhận, nên gửi lỗi thì link cũ còn nguyên. Giao thành công lần đầu thì hạn phản hồi 5 ngày bắt đầu tính từ lúc đó (INVITE-04).
-- Đủ 5 lần lỗi, hoặc người nhận không có email: ngừng thử và mở sự cố `NOTIFICATION_FAILED` (đối tượng `HANDOVER_TURN`) có người phụ trách để Executor/Admin xử lý; Executor vẫn có thể gửi lại thủ công bằng `resend-invitation`. Giao được về sau thì sự cố tự đóng.
-- Log và sự cố không chứa email, token hay tên gói. Hai tiến trình cùng xử lý một lượt thì bên lưu sau bị xung đột (`RowVersion`).
+- Đủ 5 lần lỗi, hoặc người nhận không có email: ngừng thử và ghi log cảnh báo (mã lượt và mã kho).
+- Log không chứa email, token hay tên gói. Hai tiến trình cùng xử lý một lượt thì bên lưu sau bị xung đột (`RowVersion`).
 
 ## 5. API
 
@@ -115,7 +115,7 @@ Lỗi trả `application/problem+json` có trường `code` (UPPER_SNAKE) và đ
 | `HANDOVER_NOT_FOUND` | 404 | Lượt/grant/tài sản không tồn tại **hoặc không phải của bạn** (cùng một lỗi, không lộ sự tồn tại, SEC-04). |
 | `HANDOVER_ALREADY_CLAIMED` | 409 | Lượt đã được tài khoản khác nhận. |
 | `HANDOVER_EMAIL_MISMATCH` | 403 | Email tài khoản không trùng email người nhận của lượt (nhận qua link hoặc qua `turns/{turnId}/claim`). Kèm `invitedEmailMasked` (email được mời đã che bớt, ví dụ `m•••••h@example.com`; không có khi lượt không có email). |
-| `HANDOVER_NOT_ALLOWED` | 409 | `reason`: `OWNER_CANNOT_CLAIM`, `PLAN_NOT_IN_HANDOVER`, `WRONG_STATE`, `PLAN_NOT_READY`, `NOTHING_TO_HAND_OVER`; ở `identity/complete` thêm `IDENTITY_NOT_VERIFIED` (chưa eKYC cho lượt này), `IDENTITY_NOT_FINISHED` (chưa so khớp mặt), `IDENTITY_FAILED`, `IDENTITY_NEEDS_REVIEW`, `IDENTITY_WRONG_PERSON`. |
+| `HANDOVER_NOT_ALLOWED` | 409 | `reason`: `OWNER_CANNOT_CLAIM`, `STAFF_CANNOT_CLAIM`, `PLAN_NOT_IN_HANDOVER`, `WRONG_STATE`, `PLAN_NOT_READY`, `NOTHING_TO_HAND_OVER`; ở `identity/complete` thêm `IDENTITY_NOT_VERIFIED` (chưa eKYC cho lượt này), `IDENTITY_NOT_FINISHED` (chưa so khớp mặt), `IDENTITY_FAILED`, `IDENTITY_NEEDS_REVIEW`, `IDENTITY_WRONG_PERSON`. |
 | `HANDOVER_DECISION_EXPIRED` | 409 | Quá hạn 7 ngày quyết định. |
 | `GRANT_NOT_ACTIVE` | 403 | `reason`: `EXPIRED`, `BLOCKED`, `REVOKED`, `PLAN_NOT_ACTIVE`. |
 | `CONTENT_INTEGRITY_FAILED` | 500 | Nội dung không qua kiểm toàn vẹn. |
@@ -126,6 +126,7 @@ Lỗi trả `application/problem+json` có trường `code` (UPPER_SNAKE) và đ
 
 - Token mời chỉ lưu dạng hash SHA-256 (`InvitationTokenHash`); token gốc chỉ đi tới bộ gửi email. Email mời chỉ có tên và link, không có tên gói hay tài sản.
 - Chủ kho không thể tự nhận lượt của mình (`OWNER_CANNOT_CLAIM`).
+- Tài khoản nhân sự (role EXECUTOR, VERIFIER, ADMIN) không nhận được tài sản bàn giao (`STAFF_CANNOT_CLAIM`).
 - Snapshot ghim phiên bản tài sản lúc mở bàn giao; chủ kho sửa tài sản sau đó không đổi gì ở lượt.
 - Chỉ mục unique: một grant cho mỗi lượt; mỗi chỉ định chỉ một lượt đang hiệu lực/đã nhận (`UX_HandoverTurns_ActivePerDesignation`).
 - Nhật ký truy cập (`HandoverAccessLogs`) chỉ ghi id và kết quả (`Succeeded`, `Denied`, `IntegrityFailed`), không ghi tên tệp hay nội dung.

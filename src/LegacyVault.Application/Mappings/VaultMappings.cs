@@ -20,7 +20,6 @@ public static class VaultMappings
             Description = vault.Description,
             ExecutorNote = vault.ExecutorNote,
             ExecutorNoteUpdatedAt = vault.ExecutorNoteUpdatedAt,
-            WillClauses = WillClauseRules.Split(vault.WillClauses),
             Status = vault.Status.ToApiString(),
             ClosedAt = vault.ClosedAt,
             PlanStatus = vault.Plan.Status.ToApiString(),

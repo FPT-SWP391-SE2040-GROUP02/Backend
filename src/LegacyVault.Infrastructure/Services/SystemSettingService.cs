@@ -374,7 +374,7 @@ public sealed class SystemSettingService : ISystemSettingService
 
         await db.SaveChangesAsync(ct);
 
-        InvalidateCache(entity.Key);
+        await RefreshAfterSaveAsync(entity.Key);
         logger.LogInformation("SystemSetting '{Key}' updated by {User} (AuditId={AuditId}) to Value='{Value}', IsEnabled={IsEnabled}",
             entity.Key, updatedBy ?? "System", auditLog.Id, entity.Value, entity.IsEnabled);
 
@@ -424,7 +424,7 @@ public sealed class SystemSettingService : ISystemSettingService
         });
         await db.SaveChangesAsync(ct);
 
-        InvalidateCache(entity.Key);
+        await RefreshAfterSaveAsync(entity.Key);
         return Map(entity);
     }
 
@@ -450,12 +450,12 @@ public sealed class SystemSettingService : ISystemSettingService
         return bool.TryParse(setting.Value, out var val) ? val : defaultValue;
     }
 
-    private void InvalidateCache(string key)
+    private async Task RefreshAfterSaveAsync(string key)
     {
         // Admin vừa lưu: nạp lại ảnh chụp tham số ngay để cấu hình có hiệu lực không phải đợi vòng nạp định kỳ.
         try
         {
-            RuntimeSettingsRefresher.LoadAsync(db, CancellationToken.None).GetAwaiter().GetResult();
+            await RuntimeSettingsRefresher.LoadAsync(db, CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -524,11 +524,6 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "DeathCase.MaxFilesPerVersion", Value = "10", DataType = "NUMBER", Category = "DeathCase", Description = "Số lượng tệp tối đa tải lên trong một bản hồ sơ chứng tử" },
             new() { Key = "DeathCase.MaxFileSizeMb", Value = "20", DataType = "NUMBER", Category = "DeathCase", Description = "Dung lượng tối đa của một tệp hồ sơ chứng tử (MiB)" },
             new() { Key = "DeathCase.ReviewDueHours", Value = "48", DataType = "NUMBER", Category = "DeathCase", Description = "Thời hạn Người xét duyệt phải hoàn tất thẩm định (giờ)" },
-
-            // Sự cố & Tạm giữ (Incident & Hold)
-            new() { Key = "Incident.ReminderAfterHours", Value = "48", DataType = "NUMBER", Category = "Incident", Description = "Thời gian nhắc nhở người phụ trách sự cố chưa xử lý (giờ)" },
-            new() { Key = "Incident.EscalateAfterHours", Value = "72", DataType = "NUMBER", Category = "Incident", Description = "Thời gian tự động báo cáo lên Quản trị viên (giờ)" },
-            new() { Key = "Incident.MaxReviewIntervalDays", Value = "7", DataType = "NUMBER", Category = "Incident", Description = "Khoảng cách tối đa giữa các lần hẹn xem lại sự cố (ngày)" },
 
             // Giới hạn chống lạm dụng & Quota (Limits)
             new() { Key = "Limits.MaxUploadsPerHour", Value = "60", DataType = "NUMBER", Category = "Limits", Description = "Số lần tải lên tối đa mỗi giờ cho một tài khoản" },

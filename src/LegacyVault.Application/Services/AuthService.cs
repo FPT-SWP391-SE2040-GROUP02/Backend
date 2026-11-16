@@ -6,16 +6,12 @@ using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LegacyVault.Application.Services;
 
 public sealed class AuthService : IAuthService
 {
-    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan FailureWindow = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan MaxSessionLifetime = TimeSpan.FromHours(12);
-    private const int MaxFailedAttempts = 5;
 
     private static string? _dummyHash;
 
@@ -29,7 +25,7 @@ public sealed class AuthService : IAuthService
     private readonly TimeProvider _timeProvider;
     private readonly ITwoFactorService? _twoFactorService;
     private readonly ISessionRevocationValidator? _sessionValidator;
-    private readonly IIncidentService? _incidentService;
+    private readonly ILogger<AuthService>? _logger;
     private readonly MaintenanceModeGuard? _maintenanceGuard;
 
     public AuthService(
@@ -44,13 +40,13 @@ public sealed class AuthService : IAuthService
         [FromKeyedServices(AuthClock.ServiceKey)] TimeProvider timeProvider,
         ITwoFactorService? twoFactorService = null,
         ISessionRevocationValidator? sessionValidator = null,
-        IIncidentService? incidentService = null,
+        ILogger<AuthService>? logger = null,
         MaintenanceModeGuard? maintenanceGuard = null)
     {
         _maintenanceGuard = maintenanceGuard;
         _twoFactorService = twoFactorService;
         _sessionValidator = sessionValidator;
-        _incidentService = incidentService;
+        _logger = logger;
         _userRepository = userRepository;
         _loginThrottleRepository = loginThrottleRepository;
         _refreshTokenRepository = refreshTokenRepository;
@@ -151,8 +147,8 @@ public sealed class AuthService : IAuthService
         // 7. Mở phiên mới (FamilyId đại diện cho một lần đăng nhập của thiết bị)
         var familyId = Guid.CreateVersion7();
         var opaque = _tokenService.CreateOpaqueToken();
-        var initialExpiresAt = now.Add(IdleTimeout);
-        var maxExpiresAt = now.Add(MaxSessionLifetime);
+        var initialExpiresAt = now.Add(AuthPolicy.IdleTimeout);
+        var maxExpiresAt = now.Add(AuthPolicy.MaxSessionLifetime);
         if (initialExpiresAt > maxExpiresAt)
         {
             initialExpiresAt = maxExpiresAt;
@@ -235,7 +231,7 @@ public sealed class AuthService : IAuthService
         }
 
         // Kiểm tra thời hạn phiên (tối đa 12 giờ hoặc idle 30 phút, NFR-06)
-        var maxSessionLimit = tokenEntity.SessionStartedAt.Add(MaxSessionLifetime);
+        var maxSessionLimit = tokenEntity.SessionStartedAt.Add(AuthPolicy.MaxSessionLifetime);
         if (maxSessionLimit <= now || tokenEntity.ExpiresAt <= now)
         {
             tokenEntity.RevokedAt = now;
@@ -259,7 +255,7 @@ public sealed class AuthService : IAuthService
         tokenEntity.RevokedAt = now;
 
         var newOpaque = _tokenService.CreateOpaqueToken();
-        var newExpiresAt = now.Add(IdleTimeout);
+        var newExpiresAt = now.Add(AuthPolicy.IdleTimeout);
         if (newExpiresAt > maxSessionLimit)
         {
             newExpiresAt = maxSessionLimit;
@@ -356,7 +352,7 @@ public sealed class AuthService : IAuthService
             else
             {
                 if (cookieToken == null || cookieToken.RevokedAt != null || cookieToken.ExpiresAt <= now
-                    || cookieToken.SessionStartedAt.Add(MaxSessionLifetime) <= now
+                    || cookieToken.SessionStartedAt.Add(AuthPolicy.MaxSessionLifetime) <= now
                     || cookieToken.User.Status != UserStatus.Active)
                 {
                     throw new SessionExpiredException();
@@ -405,7 +401,7 @@ public sealed class AuthService : IAuthService
         return MapUser(user);
     }
 
-    /// <param name="user">Tài khoản của email; null khi email chưa đăng ký (khi đó không mở sự cố).</param>
+    /// <param name="user">Tài khoản của email; null khi email chưa đăng ký (khi đó không ghi log cảnh báo).</param>
     private async Task<ApiException> RecordFailedLoginAsync(
         LoginThrottle? throttle, User? user, string email, string ipRange, DateTimeOffset now, CancellationToken ct)
     {
@@ -423,7 +419,7 @@ public sealed class AuthService : IAuthService
         }
         else
         {
-            if (throttle.WindowStartedAt.Add(FailureWindow) <= now)
+            if (throttle.WindowStartedAt.Add(AuthPolicy.FailureWindow) <= now)
             {
                 throttle.FailedCount = 1;
                 throttle.WindowStartedAt = now;
@@ -435,33 +431,31 @@ public sealed class AuthService : IAuthService
             }
         }
 
-        if (throttle.FailedCount >= MaxFailedAttempts)
+        if (throttle.FailedCount >= AuthPolicy.MaxFailedAttempts)
         {
-            throttle.LockedUntil = now.Add(LockoutDuration);
-            await RaiseSuspiciousLoginAsync(user, ipRange, ct);
+            throttle.LockedUntil = now.Add(AuthPolicy.LockoutDuration);
+            WarnAccountLocked(user);
             await _unitOfWork.SaveChangesAsync(ct);
-            return new AccountLockedException((int)LockoutDuration.TotalSeconds);
+            return new AccountLockedException((int)AuthPolicy.LockoutDuration.TotalSeconds);
         }
 
         await _unitOfWork.SaveChangesAsync(ct);
-        return new InvalidCredentialsException(MaxFailedAttempts - throttle.FailedCount);
+        return new InvalidCredentialsException(AuthPolicy.MaxFailedAttempts - throttle.FailedCount);
     }
 
     /// <summary>
-    /// Cảnh báo đăng nhập bất thường (SEC-10): vừa khóa một tài khoản có thật thì mở sự cố cho Admin ít việc nhất.
-    /// Tài khoản đang có sự cố mở thì RaiseAsync không tạo thêm. Lưu cùng lần khóa, trong cùng giao dịch đăng nhập.
+    /// Cảnh báo đăng nhập bất thường (SEC-10): vừa khóa một tài khoản có thật thì ghi log cảnh báo.
+    /// Chỉ ghi mã tài khoản, không ghi email hay dải IP.
     /// </summary>
-    private async Task RaiseSuspiciousLoginAsync(User? user, string ipRange, CancellationToken ct)
+    private void WarnAccountLocked(User? user)
     {
-        if (user == null || _incidentService == null)
+        if (user == null || _logger == null)
         {
             return;
         }
-        string summary = "Nhập sai mật khẩu " + MaxFailedAttempts + " lần trong "
-            + (int)FailureWindow.TotalMinutes + " phút từ dải IP " + ipRange
-            + "; tài khoản bị tạm khóa " + (int)LockoutDuration.TotalMinutes + " phút.";
-        await _incidentService.RaiseAsync(
-            IncidentType.SuspiciousLogin, null, IncidentRules.TargetUser, user.Id, summary, null, ct);
+        _logger.LogWarning(
+            "Tài khoản {UserId} bị tạm khóa {LockoutMinutes} phút do nhập sai mật khẩu nhiều lần.",
+            user.Id, (int)AuthPolicy.LockoutDuration.TotalMinutes);
     }
 
     private static UserResponse MapUser(User user)

@@ -195,7 +195,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         await context.Set<DeathCaseFlag>().Where(f => caseIds.Contains(f.CaseId)).ExecuteDeleteAsync(ct);
         await context.Set<DeathCaseFile>().Where(f => versionIds.Contains(f.VersionId)).ExecuteDeleteAsync(ct);
         await context.Set<DeathCaseVersion>().Where(v => caseIds.Contains(v.CaseId)).ExecuteDeleteAsync(ct);
-        await context.Set<DeathCaseNotice>().Where(n => caseIds.Contains(n.CaseId)).ExecuteDeleteAsync(ct);
         // Hồ sơ trỏ vào hồ sơ trước của cùng kho: gỡ liên kết rồi mới xóa được.
         await context.Set<DeathCase>()
             .Where(c => c.VaultId == vaultId && c.PreviousCaseId != null)
@@ -214,14 +213,13 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         await context.Set<Designation>().Where(d => containerIds.Contains(d.ContainerId)).ExecuteDeleteAsync(ct);
         await context.Set<ContainerAsset>().Where(a => containerIds.Contains(a.ContainerId)).ExecuteDeleteAsync(ct);
         await context.Set<Executor>().Where(e => e.VaultId == vaultId).ExecuteDeleteAsync(ct);
+        // Mã mở gói do server tạo khi kích hoạt kế hoạch: phải xóa trước kho vì khóa ngoại tới Vaults.
+        await context.Set<ExecutorKeyShard>().Where(s => s.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Container>().Where(c => c.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Asset>().Where(a => a.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Beneficiary>().Where(b => b.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
         // Vận hành và thanh toán.
-        var incidentIds = context.Set<Incident>().Where(i => i.VaultId == vaultId).Select(i => i.Id);
-        await context.Set<IncidentEvent>().Where(e => incidentIds.Contains(e.IncidentId)).ExecuteDeleteAsync(ct);
-        await context.Set<Incident>().Where(i => i.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Hold>().Where(h => h.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<StorageReservation>().Where(r => r.VaultId == vaultId).ExecuteDeleteAsync(ct);
         var orderIds = context.Set<PaymentOrder>().Where(o => o.VaultId == vaultId).Select(o => o.Id);

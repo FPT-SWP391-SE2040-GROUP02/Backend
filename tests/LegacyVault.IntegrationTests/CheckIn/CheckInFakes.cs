@@ -210,3 +210,50 @@ public static class CheckInTestData
         return period;
     }
 }
+
+/// <summary>Bộ gửi thư báo quá hạn điểm danh giả: ghi lại thư; FailNext = true thì lần gọi kế tiếp ném lỗi.</summary>
+public sealed class FakeCheckInOverdueNoticeSender : ICheckInOverdueNoticeSender
+{
+    public List<CheckInOverdueNotice> Sent { get; } = new List<CheckInOverdueNotice>();
+
+    public bool FailNext { get; set; }
+
+    public Task SendAsync(CheckInOverdueNotice notice, CancellationToken ct)
+    {
+        if (FailNext)
+        {
+            FailNext = false;
+            throw new InvalidOperationException("Gửi thư thất bại (giả lập).");
+        }
+        Sent.Add(notice);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Executor nhận được việc giả: trả đúng danh sách đã nạp cho mọi kho.</summary>
+public sealed class FakeAvailableExecutorReader : LegacyVault.Application.Repositories.IExecutorReader
+{
+    public List<Executor> Available { get; } = new List<Executor>();
+
+    public Task<List<Executor>> GetActiveAsync(Guid vaultId, CancellationToken ct)
+    {
+        return Task.FromResult(new List<Executor>(Available));
+    }
+
+    public Task<List<Executor>> GetAvailableAsync(Guid vaultId, CancellationToken ct)
+    {
+        return Task.FromResult(new List<Executor>(Available));
+    }
+}
+
+/// <summary>Tạo CheckInJob với các phụ thuộc giả mặc định (không có Executor) cho test không quan tâm thư báo quá hạn.</summary>
+public static class CheckInJobTestFactory
+{
+    public static CheckInJob Create(
+        ICheckInRepository repository, ICheckInReminderSender sender, IUnitOfWork unitOfWork, TimeProvider clock)
+    {
+        return new CheckInJob(repository, sender, new FakeCheckInOverdueNoticeSender(), new FakeAvailableExecutorReader(),
+            new LegacyVault.IntegrationTests.GoogleAuth.FakeUserRepository(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<CheckInJob>.Instance, unitOfWork, clock);
+    }
+}

@@ -212,33 +212,13 @@ public sealed class CheckInServiceTests
         Assert.Equal(Now.AddHours(-6), schedule.LastCheckInAt);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CheckIn_WebAndWatchShareDailyLimit(bool watchFirst)
+    [Fact]
+    public async Task CheckIn_SecondCheckInSameDayShareDailyLimit()
     {
         SeedVault(PlanStatus.Active, withOpenPeriod: true);
-        SmartwatchCheckInRequest request = new SmartwatchCheckInRequest();
-        request.HeartRate = 75;
-        request.IsOnWrist = true;
-        if (watchFirst)
-        {
-            await service.CheckInViaSmartwatchAsync(request, CancellationToken.None);
-        }
-        else
-        {
-            await service.CheckInAsync(CancellationToken.None);
-        }
+        await service.CheckInAsync(CancellationToken.None);
         clock.Now = Now.AddHours(6);
-        CheckInStatusResponse response;
-        if (watchFirst)
-        {
-            response = await service.CheckInAsync(CancellationToken.None);
-        }
-        else
-        {
-            response = await service.CheckInViaSmartwatchAsync(request, CancellationToken.None);
-        }
+        CheckInStatusResponse response = await service.CheckInAsync(CancellationToken.None);
         Assert.Equal(2, repository.Periods.Count);
         Assert.Equal(1, unitOfWork.SaveCount);
         Assert.Equal(Now, response.LastCheckInAt);

@@ -95,17 +95,7 @@ public sealed class DeathCaseDevSqlTests : IAsyncLifetime
         Guid newCaseId = resubmitted.GetProperty("id").GetGuid();
         Assert.NotEqual(submitted.CaseId, newCaseId);
 
-        // Các lệnh "Cho phép duyệt" trong phần ghi chú của script chạy được và làm hồ sơ mới duyệt được
-        string vaultLiteral = "DECLARE @vaultId uniqueidentifier = '" + submitted.Vault.VaultId + "';\n";
-        foreach (string line in lines)
-        {
-            bool isAllowApprove = line.StartsWith("--   UPDATE n SET Status = 'Delivered'", StringComparison.Ordinal)
-                || line.StartsWith("--   UPDATE DeathCases SET ObjectionStartsAt = DATEADD(HOUR, -80", StringComparison.Ordinal);
-            if (isAllowApprove)
-            {
-                await RunSqlAsync(vaultLiteral + line.Substring("--   ".Length));
-            }
-        }
+        // Hồ sơ mới duyệt được ngay (không còn đồng hồ phản đối)
         JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, newCaseId);
         Assert.True(detail.GetProperty("canApprove").GetBoolean());
         HttpResponseMessage secondApprove = await DeathCaseReviewTestData.ApproveAsync(

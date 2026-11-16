@@ -184,6 +184,27 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         return (turnId, grantId, accepted.GetProperty("items"));
     }
 
+    /// <summary>
+    /// Bắt đầu bàn giao luôn tạo mã mở gói, nên người nhận phải nhập mã trước khi tải. Lấy mã gốc bằng bộ giải mã của server
+    /// (Người thực thi đọc mã này trên hệ thống rồi gửi cho người nhận) và nhập qua API verify-key.
+    /// </summary>
+    private async Task VerifyKeyAsync(HttpClient client, Guid turnId)
+    {
+        string key = string.Empty;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            HandoverTurn turn = await db.Set<HandoverTurn>().AsNoTracking().SingleAsync(t => t.Id == turnId);
+            ExecutorKeyShard shard = await db.Set<ExecutorKeyShard>().AsNoTracking().SingleAsync(k => k.VaultId == turn.VaultId);
+            IExecutorKeyProtector protector = factory.Services.GetRequiredService<IExecutorKeyProtector>();
+            key = protector.Unprotect(shard);
+        });
+        Assert.False(string.IsNullOrEmpty(key));
+
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/handover/turns/{turnId}/verify-key", new { key });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     private static Guid FindItemId(JsonElement items, string kind)
     {
         foreach (JsonElement item in items.EnumerateArray())
@@ -206,7 +227,12 @@ public sealed class HandoverFlowTests : IAsyncLifetime
 
         Assert.Equal(2, items.GetArrayLength());
 
+        // Chưa nhập mã mở gói thì chưa tải được.
         Guid fileItemId = FindItemId(items, "FILE");
+        HttpResponseMessage locked = await receiver.GetAsync($"/api/v1/handover/grants/{grantId}/assets/{fileItemId}/content");
+        Assert.Equal(HttpStatusCode.Forbidden, locked.StatusCode);
+        await VerifyKeyAsync(receiver, turnId);
+
         HttpResponseMessage download = await receiver.GetAsync($"/api/v1/handover/grants/{grantId}/assets/{fileItemId}/content");
         Assert.Equal(HttpStatusCode.OK, download.StatusCode);
         Assert.Equal("application/octet-stream", download.Content.Headers.ContentType!.MediaType);
@@ -416,7 +442,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         HttpClient receiverA = await NewReceiverAsync();
         HttpClient receiverB = await NewReceiverAsync(1);
 
-        (Guid _, Guid grantA, JsonElement itemsA) = await ClaimAndAcceptAsync(receiverA, 0);
+        (Guid turnA, Guid grantA, JsonElement itemsA) = await ClaimAndAcceptAsync(receiverA, 0);
+        await VerifyKeyAsync(receiverA, turnA);
         JsonElement claimedB = await ClaimAsync(receiverB, 1);
         Guid turnB = claimedB.GetProperty("id").GetGuid();
         HttpResponseMessage declined = await receiverB.PostAsync($"/api/v1/handover/turns/{turnB}/decline", null);
@@ -443,7 +470,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     {
         Scenario scenario = await BuildScenarioAsync(1);
         HttpClient receiver = await NewReceiverAsync();
-        (Guid _, Guid grantId, JsonElement items) = await ClaimAndAcceptAsync(receiver, 0);
+        (Guid turnId, Guid grantId, JsonElement items) = await ClaimAndAcceptAsync(receiver, 0);
+        await VerifyKeyAsync(receiver, turnId);
         Guid fileItemId = FindItemId(items, "FILE");
 
         string storageKey = string.Empty;

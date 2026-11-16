@@ -12,8 +12,7 @@ namespace LegacyVault.Api.Security;
 /// <see cref="IVaultPinService.VerifyAsync"/>. Route của action phải có tham số <c>vaultId</c>.
 /// </summary>
 /// <remarks>
-/// Bộ lọc chạy sau [Authorize], nên kho của người khác vẫn trả 404 như các API khác. Token của đồng hồ thông minh
-/// (có claim device_id) bị từ chối luôn, không cho nhập PIN.
+/// Bộ lọc chạy sau [Authorize], nên kho của người khác vẫn trả 404 như các API khác.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = false)]
 public sealed class RequireVaultPinAttribute : TypeFilterAttribute
@@ -29,17 +28,9 @@ public sealed class RequireVaultPinFilter(IVaultPinService vaultPinService) : IA
     /// <summary>Tên header chứa mã PIN.</summary>
     public const string HeaderName = "X-Vault-Pin";
 
-    private const string DeviceClaimType = "device_id";
-
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         HttpContext http = context.HttpContext;
-        if (http.User.HasClaim(claim => claim.Type == DeviceClaimType))
-        {
-            throw new AppException(AppErrorType.Forbidden, ErrorCode.RoleNotAllowed,
-                "Thiết bị đeo không được thực hiện thao tác này.");
-        }
-
         if (!context.RouteData.Values.TryGetValue("vaultId", out object? raw)
             || !Guid.TryParse(Convert.ToString(raw, CultureInfo.InvariantCulture), out Guid vaultId))
         {

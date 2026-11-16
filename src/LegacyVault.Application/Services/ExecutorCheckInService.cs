@@ -95,7 +95,6 @@ public sealed class ExecutorCheckInService : IExecutorCheckInService
         }
 
         // Kỳ quá hạn đóng lại nhưng không ghi CheckedInAt, vì chủ kho không tự điểm danh.
-        // Sự cố quá hạn của kỳ này được job sự cố tự đóng khi thấy kỳ đã đóng.
         CheckInPeriod? openPeriod = await checkInRepository.FindOpenPeriodByPlanIdAsync(plan.Id, ct);
         if (openPeriod != null)
         {

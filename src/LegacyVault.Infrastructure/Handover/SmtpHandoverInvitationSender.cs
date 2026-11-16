@@ -7,8 +7,6 @@ namespace LegacyVault.Infrastructure.Handover;
 /// <summary>Gửi email mời thật qua Gmail (SmtpMailSender). Gửi lỗi thì ném exception để HandoverStarter ghi nhận.</summary>
 public sealed class SmtpHandoverInvitationSender : IHandoverInvitationSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly string receiveUrl;
     private readonly string? supportContact;
@@ -17,11 +15,7 @@ public sealed class SmtpHandoverInvitationSender : IHandoverInvitationSender
     {
         this.mailSender = mailSender;
 
-        string? clientUrl = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(clientUrl))
-        {
-            clientUrl = DefaultClientUrl;
-        }
+        string clientUrl = ClientUrlSettings.Read(configuration);
         receiveUrl = clientUrl.TrimEnd('/') + "/receive";
 
         // Liên hệ hỗ trợ của nhóm lấy từ cấu hình (App:SupportEmail, App:SupportPhone); không có thì thư chỉ bảo báo lại cho LegacyVault.

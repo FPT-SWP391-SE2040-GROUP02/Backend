@@ -65,10 +65,10 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         return (owner, recipient, vaultId);
     }
 
-    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, Guid? beneficiaryId = null, string email = "executor@example.test")
+    private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email = "executor@example.test")
     {
         await ApiTestHelpers.EnsureSystemExecutorAsync(factory, email);
-        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email, beneficiaryId });
+        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain(mail.Token, raw);
@@ -85,7 +85,9 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     public async Task ExecutorCandidatesFindExistingAccountsOnlyAndNeverBrowseEveryone()
     {
         var (owner, vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "ung-vien@example.test");
+        // Chỉ tài khoản nhân sự role EXECUTOR (Active, đã xác minh email, đã xác minh pháp lý) mới là ứng viên.
+        await ApiTestHelpers.EnsureSystemExecutorAsync(factory, "ung-vien@example.test");
+        await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, "ung-vien-thuong@example.test");
 
         var found = await owner.GetFromJsonAsync<List<ExecutorCandidateResponse>>(
             $"/api/v1/vaults/{vaultId}/executor-candidates?q=ung-vien");
@@ -100,45 +102,6 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         var nobody = await owner.GetFromJsonAsync<List<ExecutorCandidateResponse>>(
             $"/api/v1/vaults/{vaultId}/executor-candidates?q=khong-ton-tai");
         Assert.Empty(nobody!);
-    }
-
-    [SqlFact]
-    public async Task OwnerWillClausesAreSavedReadBackAndLimited()
-    {
-        var (owner, vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        var vault = await owner.GetFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>($"/api/v1/vaults/{vaultId}");
-        Assert.Empty(vault!.WillClauses);
-
-        // Lưu hai điều khoản; dòng thừa khoảng trắng và xuống dòng được gộp thành một dòng.
-        var saved = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new
-        {
-            etag = vault.Etag,
-            willClauses = new[] { "  Không bán   ngôi nhà  ", "Chia\nđều cho hai con" },
-        });
-        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
-        var after = await saved.Content.ReadFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>();
-        Assert.Equal(new[] { "Không bán ngôi nhà", "Chia đều cho hai con" }, after!.WillClauses);
-
-        // Kế hoạch bàn giao (nơi Chủ kho xem trước khi kích hoạt) trả cùng danh sách.
-        var setup = await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup");
-        Assert.Equal(after.WillClauses, setup!.WillClauses);
-
-        // Điều khoản trống, quá dài hoặc quá nhiều đều bị từ chối và không đổi dữ liệu đã lưu.
-        var blank = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = after.Etag, willClauses = new[] { "   " } });
-        Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
-        var tooLong = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = after.Etag, willClauses = new[] { new string('a', 501) } });
-        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
-        var tooMany = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = after.Etag, willClauses = Enumerable.Repeat("x", 11).ToArray() });
-        Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
-        var unchanged = await owner.GetFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>($"/api/v1/vaults/{vaultId}");
-        Assert.Equal(2, unchanged!.WillClauses.Count);
-
-        // Danh sách rỗng xóa hết; không gửi trường này thì giữ nguyên.
-        var kept = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = unchanged.Etag, description = "mô tả mới" });
-        var keptBody = await kept.Content.ReadFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>();
-        Assert.Equal(2, keptBody!.WillClauses.Count);
-        var cleared = await owner.PutAsJsonAsync($"/api/v1/vaults/{vaultId}", new { etag = keptBody.Etag, willClauses = Array.Empty<string>() });
-        Assert.Empty((await cleared.Content.ReadFromJsonAsync<LegacyVault.Application.Dtos.Responses.VaultResponse>())!.WillClauses);
     }
 
     [SqlFact]
@@ -250,13 +213,11 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task ExecutorWhoIsBeneficiary_CanActivateWithoutAnyOtherExecutor()
+    public async Task SingleExecutor_CanActivateWithoutAnyOtherExecutor()
     {
-        // Đã bỏ Executor dự phòng (30/10/2026): Executor kiêm người nhận không còn đòi người dự phòng độc lập.
+        // Đã bỏ Executor dự phòng (30/10/2026): một Người thực thi đã chấp nhận là đủ để kích hoạt.
         var (owner, primary, vaultId) = await PrepareAsync();
-        Guid beneficiaryId = Guid.Empty;
-        await ApiTestHelpers.WithDbAsync(factory, async db => beneficiaryId = await db.Beneficiaries.Where(b => b.VaultId == vaultId).Select(b => b.Id).SingleAsync());
-        await InviteAsync(owner, vaultId, beneficiaryId: beneficiaryId);
+        await InviteAsync(owner, vaultId);
         Assert.Equal(HttpStatusCode.OK, (await RespondAsync(primary, mail.Token)).StatusCode);
         var request = await ActivationAsync(owner, vaultId);
         Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request)).StatusCode);
@@ -407,7 +368,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         (HttpClient owner, _, Guid vaultId) = await PrepareAsync();
         // Tài khoản phải có trước (chỉ mời được Người thực thi hệ thống); email vẫn chưa xác minh.
         HttpClient unverified = await ApiTestHelpers.CreateClientForNewUserAsync(factory, false, "unverified@example.test");
-        await InviteAsync(owner, vaultId, null, "unverified@example.test");
+        await InviteAsync(owner, vaultId, "unverified@example.test");
 
         JsonElement mine = await unverified.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
 

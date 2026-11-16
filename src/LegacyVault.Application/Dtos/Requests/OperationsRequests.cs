@@ -2,49 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LegacyVault.Application.Dtos.Requests;
 
-public class AssignIncidentRequest
-{
-    [Required]
-    public Guid? AssigneeUserId { get; set; }
-
-    [Required(ErrorMessage = "Vui lòng ghi lý do.")]
-    [MaxLength(1000)]
-    public string Reason { get; set; } = string.Empty;
-
-    [Required]
-    public string Etag { get; set; } = string.Empty;
-}
-
-public class IncidentNoteRequest
-{
-    [Required(ErrorMessage = "Vui lòng ghi ghi chú.")]
-    [MaxLength(1000)]
-    public string Note { get; set; } = string.Empty;
-}
-
-public class ReviewIncidentRequest
-{
-    [Required]
-    public DateTimeOffset? NextReviewAt { get; set; }
-
-    [Required(ErrorMessage = "Vui lòng ghi kết quả xem lại.")]
-    [MaxLength(1000)]
-    public string Note { get; set; } = string.Empty;
-
-    [Required]
-    public string Etag { get; set; } = string.Empty;
-}
-
-public class ResolveIncidentRequest
-{
-    [Required(ErrorMessage = "Vui lòng ghi kết quả xử lý.")]
-    [MaxLength(1000)]
-    public string Note { get; set; } = string.Empty;
-
-    [Required]
-    public string Etag { get; set; } = string.Empty;
-}
-
 public class ChangeUserRoleRequest
 {
     /// <summary>USER | VERIFIER | ADMIN.</summary>

@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
@@ -15,26 +14,14 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.DeathCases;
 
-public sealed class CapturingIncidentSender : IIncidentNoticeSender
-{
-    public List<IncidentNotice> Sent { get; } = new List<IncidentNotice>();
-
-    public Task SendAsync(IncidentNotice notice, CancellationToken ct)
-    {
-        Sent.Add(notice);
-        return Task.CompletedTask;
-    }
-}
-
 /// <summary>
-/// Hold, sự cố, Admin (SRS §6.4, ASSIGN-04, AC-40) trên SQL Server thật: quyền, hold chặn phát hành,
-/// sự cố luôn có người và hạn, phân công lại Verifier, nhật ký.
+/// Hold, Admin (SRS §6.4, ASSIGN-04, AC-40) trên SQL Server thật: quyền, hold chặn phát hành,
+/// phân công lại Verifier, nhật ký.
 /// </summary>
 public sealed class AdminOperationsTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;
     private WebApplicationFactory<Program> app = null!;
-    private readonly CapturingIncidentSender incidentMail = new CapturingIncidentSender();
 
     public async Task InitializeAsync()
     {
@@ -45,14 +32,7 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         }
         factory = created;
         await factory.MigrateAsync();
-        app = factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IIncidentNoticeSender>();
-                services.AddSingleton<IIncidentNoticeSender>(incidentMail);
-            });
-        });
+        app = factory.WithWebHostBuilder(builder => { });
     }
 
     public async Task DisposeAsync()
@@ -131,7 +111,6 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         {
             HttpClient client = ClientFor(user);
             Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/admin/dashboard")).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/admin/incidents")).StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/admin/holds")).StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/admin/users")).StatusCode);
         }
@@ -255,6 +234,75 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         });
     }
 
+    /// <summary>Tạo một lượt bàn giao đã được người dùng này nhận, với trạng thái cho trước (kho thật, gói thật).</summary>
+    private async Task AddClaimedTurnAsync(Guid claimantId, HandoverTurnStatus status)
+    {
+        (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú");
+        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói")).GetProperty("id").GetGuid();
+        JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "000000001015", "Người nhận");
+        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(
+            owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid())).StatusCode);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Designation designation = await db.Set<Designation>().Include(d => d.Container).SingleAsync(d => d.Container.VaultId == vaultId);
+            HandoverPlan plan = await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId);
+            HandoverTurn turn = new HandoverTurn();
+            turn.VaultId = vaultId;
+            turn.PlanId = plan.Id;
+            turn.ContainerId = designation.ContainerId;
+            turn.ContainerName = designation.Container.Name;
+            turn.DesignationId = designation.Id;
+            turn.BeneficiaryId = designation.BeneficiaryId;
+            turn.Status = status;
+            turn.ClaimantUserId = claimantId;
+            turn.ClaimedAt = DateTimeOffset.UtcNow;
+            turn.InvitationTokenHash = Guid.NewGuid().ToString("N");
+            turn.InvitedAt = DateTimeOffset.UtcNow;
+            turn.ResponseDeadline = DateTimeOffset.UtcNow.AddDays(5);
+            turn.CreatedAt = DateTimeOffset.UtcNow;
+            db.Set<HandoverTurn>().Add(turn);
+            await db.SaveChangesAsync();
+        });
+    }
+
+    [SqlFact]
+    public async Task ChangeRoleToStaff_IsBlockedWhileTheUserHasAnOpenClaimedHandoverTurn()
+    {
+        // Chuẩn bị: một người dùng thường đang nhận tài sản bàn giao (lượt chưa kết thúc)
+        (User _, HttpClient client) = await AddAdminAsync();
+        User recipient = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        await AddClaimedTurnAsync(recipient.Id, HandoverTurnStatus.ReadyToAccept);
+
+        // Hành động và kiểm tra: cấp vai trò nhân sự bị chặn, vai trò không đổi
+        foreach (string staffRole in new string[] { "EXECUTOR", "VERIFIER", "ADMIN" })
+        {
+            HttpResponseMessage blocked = await client.PutAsJsonAsync($"/api/v1/admin/users/{recipient.Id}/role",
+                new { role = staffRole, reason = "Bổ nhiệm" });
+            JsonElement problem = await ApiTestHelpers.AssertProblemAsync(blocked, HttpStatusCode.Conflict, "ADMIN_ACTION_NOT_ALLOWED");
+            Assert.Equal("RECIPIENT_HAS_ACTIVE_HANDOVER", problem.GetProperty("reason").GetString());
+        }
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(UserRole.User, (await db.Users.SingleAsync(u => u.Id == recipient.Id)).Role);
+        });
+    }
+
+    [SqlFact]
+    public async Task ChangeRoleToStaff_IsAllowedOnceTheClaimedTurnIsFinished()
+    {
+        // Chuẩn bị: lượt đã kết thúc (đã nhận xong) và một người dùng khác chưa nhận lượt nào
+        (User _, HttpClient client) = await AddAdminAsync();
+        User finished = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        await AddClaimedTurnAsync(finished.Id, HandoverTurnStatus.HandoverCommitted);
+
+        HttpResponseMessage ok = await client.PutAsJsonAsync($"/api/v1/admin/users/{finished.Id}/role",
+            new { role = "EXECUTOR", reason = "Bổ nhiệm" });
+
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+    }
+
     [SqlFact]
     public async Task Users_ChangeRole_Rules_AndAuditTrail()
     {
@@ -362,35 +410,24 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Assign04_NoVerifier_RaisesIncidentWithOwnerAndDue_ResolvedWhenAssigned()
+    public async Task Assign04_NoVerifier_AdminAssignsVerifierAndAuditIsWritten()
     {
         (User admin, HttpClient adminClient) = await AddAdminAsync();
         DeathCaseReviewTestData.SubmittedCase submitted = await CreateNoVerifierCaseAsync();
 
-        // Job phân công không có ai để giao → sự cố NO_VERIFIER giao Admin, có hạn
+        // Job phân công không có ai để giao
         using (IServiceScope scope = app.Services.CreateScope())
         {
             IDeathCaseAssignmentJob job = scope.ServiceProvider.GetRequiredService<IDeathCaseAssignmentJob>();
             DeathCaseAssignmentOutcome outcome = await job.ProcessCaseAsync(submitted.CaseId, CancellationToken.None);
             Assert.Equal(DeathCaseAssignmentOutcome.NoCandidate, outcome);
-            await scope.ServiceProvider.GetRequiredService<IOperationsRecorder>()
-                .RecordAssignmentOutcomeAsync(submitted.CaseId, outcome, CancellationToken.None);
-            // Chạy lặp không tạo sự cố thứ hai
-            await scope.ServiceProvider.GetRequiredService<IOperationsRecorder>()
-                .RecordAssignmentOutcomeAsync(submitted.CaseId, outcome, CancellationToken.None);
         }
-        JsonElement incident = Assert.Single((await ListAsync(adminClient, "incidents?type=NO_VERIFIER")).GetProperty("items").EnumerateArray());
-        Assert.Equal(admin.Id, incident.GetProperty("assigneeUserId").GetGuid());
-        Assert.Equal(submitted.CaseId, incident.GetProperty("targetId").GetGuid());
-        Assert.True(incident.GetProperty("dueAt").GetDateTimeOffset() > DateTimeOffset.UtcNow.AddHours(47));
 
-        // Admin giao Verifier cho hồ sơ (kèm lý do) → sự cố tự đóng, ghi nhật ký
+        // Admin giao Verifier cho hồ sơ (kèm lý do), ghi nhật ký
         User verifier = await DeathCaseTestData.AddVerifierAsync(factory);
         HttpResponseMessage reassign = await adminClient.PostAsJsonAsync(
             $"/api/v1/admin/death-cases/{submitted.CaseId}/reassign-verifier", new { verifierUserId = verifier.Id, reason = "Điều phối thủ công" });
         Assert.Equal(HttpStatusCode.NoContent, reassign.StatusCode);
-        Assert.Equal("RESOLVED", Assert.Single((await ListAsync(adminClient, "incidents?type=NO_VERIFIER")).GetProperty("items").EnumerateArray())
-            .GetProperty("status").GetString());
         Assert.Equal(HttpStatusCode.OK, (await ClientFor(verifier).GetAsync($"/api/v1/verifier/death-cases/{submitted.CaseId}")).StatusCode);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
@@ -428,169 +465,17 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Incident_AssignNoteReviewResolve_WithRules()
-    {
-        (User admin, HttpClient adminClient) = await AddAdminAsync();
-        DeathCaseReviewTestData.SubmittedCase submitted = await CreateNoVerifierCaseAsync();
-        using (IServiceScope scope = app.Services.CreateScope())
-        {
-            await scope.ServiceProvider.GetRequiredService<IOperationsRecorder>()
-                .RecordAssignmentOutcomeAsync(submitted.CaseId, DeathCaseAssignmentOutcome.NoCandidate, CancellationToken.None);
-        }
-        JsonElement incident = Assert.Single((await ListAsync(adminClient, "incidents")).GetProperty("items").EnumerateArray());
-        Guid id = incident.GetProperty("id").GetGuid();
-        string etag = incident.GetProperty("etag").GetString()!;
-        User verifier = await DeathCaseTestData.AddVerifierAsync(factory);
-
-        // Không giao cho chủ kho
-        HttpResponseMessage toOwner = await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{id}/assign",
-            new { assigneeUserId = submitted.Vault.Owner.Id, reason = "thử", etag });
-        Assert.Equal(HttpStatusCode.BadRequest, toOwner.StatusCode);
-        // Etag cũ bị từ chối
-        HttpResponseMessage stale = await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{id}/assign",
-            new { assigneeUserId = verifier.Id, reason = "thử", etag = "\"1\"" });
-        await ApiTestHelpers.AssertProblemAsync(stale, HttpStatusCode.Conflict, "EDIT_CONFLICT");
-
-        HttpResponseMessage assigned = await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{id}/assign",
-            new { assigneeUserId = verifier.Id, reason = "Verifier có thời gian", etag });
-        Assert.Equal(HttpStatusCode.OK, assigned.StatusCode);
-        JsonElement detail = await ApiTestHelpers.ReadJsonAsync(assigned);
-        Assert.Equal("IN_PROGRESS", detail.GetProperty("status").GetString());
-        Assert.Equal(verifier.Id, detail.GetProperty("assigneeUserId").GetGuid());
-
-        Assert.Equal(HttpStatusCode.OK, (await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{id}/notes", new { note = "Đã gọi điện" })).StatusCode);
-
-        HttpResponseMessage farReview = await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{id}/review",
-            new { nextReviewAt = DateTimeOffset.UtcNow.AddDays(30), note = "xa", etag = detail.GetProperty("etag").GetString() });
-        await ApiTestHelpers.AssertProblemAsync(farReview, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-
-        HttpResponseMessage resolved = await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{id}/resolve",
-            new { note = "Đã xử lý", etag = detail.GetProperty("etag").GetString() });
-        Assert.Equal(HttpStatusCode.OK, resolved.StatusCode);
-        JsonElement done = await ApiTestHelpers.ReadJsonAsync(resolved);
-        Assert.Equal("RESOLVED", done.GetProperty("status").GetString());
-        // Lịch sử đủ: tạo, giao, ghi chú, đóng
-        List<string> kinds = new List<string>();
-        foreach (JsonElement e in done.GetProperty("events").EnumerateArray())
-        {
-            kinds.Add(e.GetProperty("kind").GetString()!);
-        }
-        Assert.Equal(new List<string> { "RAISED", "ASSIGNED", "NOTE", "RESOLVED" }, kinds);
-        // Đóng lặp không lỗi
-        Assert.Equal(HttpStatusCode.OK, (await adminClient.PostAsJsonAsync($"/api/v1/admin/incidents/{id}/resolve",
-            new { note = "Lặp", etag = done.GetProperty("etag").GetString() })).StatusCode);
-        Assert.NotEqual(Guid.Empty, admin.Id);
-    }
-
-    [SqlFact]
-    public async Task IncidentJob_Reminds48h_Escalates72h_AssignsOrphans_NeverAutoCloses()
-    {
-        (User admin, HttpClient adminClient) = await AddAdminAsync();
-        DeathCaseReviewTestData.SubmittedCase submitted = await CreateNoVerifierCaseAsync();
-        using (IServiceScope scope = app.Services.CreateScope())
-        {
-            await scope.ServiceProvider.GetRequiredService<IOperationsRecorder>()
-                .RecordAssignmentOutcomeAsync(submitted.CaseId, DeathCaseAssignmentOutcome.NoCandidate, CancellationToken.None);
-        }
-        Guid id = Assert.Single((await ListAsync(adminClient, "incidents")).GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid();
-
-        // Chưa tới hạn: job không làm gì
-        Assert.Null(await ProcessIncidentAsync(id));
-
-        // Qua 48 giờ: nhắc đúng một lần
-        await MoveIncidentBackAsync(id, TimeSpan.FromHours(49));
-        Assert.Equal("REMINDED", await ProcessIncidentAsync(id));
-        Assert.Null(await ProcessIncidentAsync(id));
-        Assert.Single(incidentMail.Sent, n => n.Kind == IncidentNoticeKind.Reminder);
-
-        // Qua 72 giờ: báo Admin một lần; sự cố vẫn mở (không tự đóng)
-        await MoveIncidentBackAsync(id, TimeSpan.FromHours(30));
-        Assert.Equal("ESCALATED", await ProcessIncidentAsync(id));
-        Assert.Null(await ProcessIncidentAsync(id));
-        Assert.Single(incidentMail.Sent, n => n.Kind == IncidentNoticeKind.Escalation);
-        JsonElement detail = await ApiTestHelpers.ReadJsonAsync(await adminClient.GetAsync($"/api/v1/admin/incidents/{id}"));
-        Assert.NotEqual("RESOLVED", detail.GetProperty("status").GetString());
-        Assert.True(detail.GetProperty("overdue").GetBoolean());
-
-        // Sự cố mồ côi (chưa có ai): job giao cho Admin
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            await db.Set<Incident>().Where(i => i.Id == id).ExecuteUpdateAsync(s => s
-                .SetProperty(i => i.AssigneeUserId, (Guid?)null));
-        });
-        Assert.Equal("ASSIGNED", await ProcessIncidentAsync(id));
-        Assert.Equal(admin.Id, (await ApiTestHelpers.ReadJsonAsync(await adminClient.GetAsync($"/api/v1/admin/incidents/{id}")))
-            .GetProperty("assigneeUserId").GetGuid());
-    }
-
-    [SqlFact]
-    public async Task Dms05_CheckInOverdue_AssignsExecutor_NoExecutorMeansStuckIncident()
-    {
-        (User admin, HttpClient adminClient) = await AddAdminAsync();
-
-        // Có Executor: sự cố giao Executor chính, hạn có sẵn
-        DeathCaseTestData.OwnerVault withExecutor = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, withExecutor.VaultId);
-        Guid periodA = await MakePeriodAwaitingAsync(withExecutor);
-        await RecordPeriodAsync(periodA);
-
-        // Không có Executor: "bị kẹt" do Admin phụ trách, có ngày xem lại
-        DeathCaseTestData.OwnerVault noExecutor = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        Guid periodB = await MakePeriodAwaitingAsync(noExecutor);
-        await RecordPeriodAsync(periodB);
-        await RecordPeriodAsync(periodB);
-
-        JsonElement overdue = await ListAsync(adminClient, "incidents?type=CHECK_IN_OVERDUE");
-        JsonElement first = Assert.Single(overdue.GetProperty("items").EnumerateArray());
-        Assert.Equal(executor.User.Id, first.GetProperty("assigneeUserId").GetGuid());
-        Assert.Equal(periodA, first.GetProperty("targetId").GetGuid());
-        JsonElement stuck = Assert.Single((await ListAsync(adminClient, "incidents?type=NO_EXECUTOR")).GetProperty("items").EnumerateArray());
-        Assert.Equal(admin.Id, stuck.GetProperty("assigneeUserId").GetGuid());
-        Assert.True(stuck.GetProperty("nextReviewAt").GetDateTimeOffset() <= DateTimeOffset.UtcNow.AddDays(7).AddMinutes(1));
-
-        // DMS-05: Executor được báo ngay khi kế hoạch sang AWAITING_CHECK, đúng một lần dù job ghi nhận lại kỳ nhiều lần;
-        // thư dẫn về trang Executor của kho. Kho không có Executor thì không có thư Executor nào.
-        await RecordPeriodAsync(periodA);
-        IncidentNotice executorNotice = Assert.Single(incidentMail.Sent, n => n.Area == IncidentRecipientArea.Executor);
-        Assert.Equal(IncidentNoticeKind.Assigned, executorNotice.Kind);
-        Assert.Equal(executor.User.Email, executorNotice.ToEmail);
-        Assert.Equal(withExecutor.VaultId, executorNotice.VaultId);
-        Assert.Equal("CHECK_IN_OVERDUE", executorNotice.IncidentType);
-        Assert.DoesNotContain(incidentMail.Sent, n => n.VaultId == noExecutor.VaultId);
-
-        // Thư nhắc sau 48 giờ cho Executor cũng dẫn về trang Executor, không phải /admin.
-        Guid overdueId = first.GetProperty("id").GetGuid();
-        await MoveIncidentBackAsync(overdueId, TimeSpan.FromHours(49));
-        Assert.Equal("REMINDED", await ProcessIncidentAsync(overdueId));
-        IncidentNotice reminder = Assert.Single(incidentMail.Sent, n => n.Kind == IncidentNoticeKind.Reminder);
-        Assert.Equal(IncidentRecipientArea.Executor, reminder.Area);
-        Assert.Equal(withExecutor.VaultId, reminder.VaultId);
-
-        // Owner điểm danh → kỳ đóng → job sự cố đóng sự cố
-        HttpResponseMessage checkIn = await ClientFor(withExecutor.Owner).PostAsync("/api/v1/check-ins", null);
-        Assert.Equal(HttpStatusCode.OK, checkIn.StatusCode);
-        Assert.Equal("RESOLVED", await ProcessIncidentAsync(first.GetProperty("id").GetGuid()));
-    }
-
-    [SqlFact]
     public async Task Dashboard_CountsStuckWorkAndHolds()
     {
         (User admin, HttpClient adminClient) = await AddAdminAsync();
         DeathCaseReviewTestData.SubmittedCase submitted = await CreateNoVerifierCaseAsync();
-        using (IServiceScope scope = app.Services.CreateScope())
-        {
-            await scope.ServiceProvider.GetRequiredService<IOperationsRecorder>()
-                .RecordAssignmentOutcomeAsync(submitted.CaseId, DeathCaseAssignmentOutcome.NoCandidate, CancellationToken.None);
-        }
         await SeedActiveHoldAsync(submitted.Vault.VaultId);
 
         JsonElement dashboard = await ApiTestHelpers.ReadJsonAsync(await adminClient.GetAsync("/api/v1/admin/dashboard"));
 
-        Assert.Equal(1, dashboard.GetProperty("openIncidents").GetInt32());
         Assert.Equal(1, dashboard.GetProperty("activeHolds").GetInt32());
         Assert.Equal(1, dashboard.GetProperty("casesWithoutVerifier").GetInt32());
         Assert.Equal(1, dashboard.GetProperty("activeAdmins").GetInt32());
-        Assert.Equal(0, dashboard.GetProperty("unassignedIncidents").GetInt32());
         Assert.NotEqual(Guid.Empty, admin.Id);
     }
 
@@ -601,46 +486,5 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         await DeathCaseReviewTestData.EndAssignmentAsync(factory, submitted.CaseId, DateTimeOffset.UtcNow);
         await DeathCaseReviewTestData.SetUserStatusAsync(factory, submitted.Verifier.User.Id, UserStatus.Locked);
         return submitted;
-    }
-
-    private async Task<Guid> MakePeriodAwaitingAsync(DeathCaseTestData.OwnerVault vault)
-    {
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, vault.PlanId, 1, DateTimeOffset.UtcNow.AddDays(-60), null);
-        Guid periodId = Guid.Empty;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            periodId = await db.CheckInPeriods.Where(p => p.PlanId == vault.PlanId).Select(p => p.Id).SingleAsync();
-            await db.CheckInPeriods.Where(p => p.Id == periodId).ExecuteUpdateAsync(s => s
-                .SetProperty(p => p.AwaitingCheckAt, DateTimeOffset.UtcNow.AddDays(-1)));
-        });
-        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.AwaitingCheck);
-        return periodId;
-    }
-
-    private async Task RecordPeriodAsync(Guid periodId)
-    {
-        using (IServiceScope scope = app.Services.CreateScope())
-        {
-            await scope.ServiceProvider.GetRequiredService<IOperationsRecorder>().RecordCheckInPeriodAsync(periodId, CancellationToken.None);
-        }
-    }
-
-    private async Task<string?> ProcessIncidentAsync(Guid id)
-    {
-        using (IServiceScope scope = app.Services.CreateScope())
-        {
-            return await scope.ServiceProvider.GetRequiredService<IIncidentJob>().ProcessAsync(id, CancellationToken.None);
-        }
-    }
-
-    private Task MoveIncidentBackAsync(Guid id, TimeSpan by)
-    {
-        return ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            Incident incident = await db.Set<Incident>().SingleAsync(i => i.Id == id);
-            incident.CreatedAt = incident.CreatedAt - by;
-            incident.DueAt = incident.DueAt - by;
-            await db.SaveChangesAsync();
-        });
     }
 }

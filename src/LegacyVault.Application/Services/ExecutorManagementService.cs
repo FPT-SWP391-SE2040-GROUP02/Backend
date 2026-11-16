@@ -65,7 +65,7 @@ public sealed class ExecutorManagementService(ICurrentUser currentUser, IVaultRe
 
     private static ExecutorInvitationResponse Map(Executor item, DateTimeOffset now) => new(item.Id,
         item.Status == ExecutorStatus.Invited && item.ExpiresAt <= now ? "EXPIRED" : item.Status.ToApiString(),
-        item.InviteeEmail, item.IsBeneficiary, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt,
+        item.InviteeEmail, item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt,
         item.AcceptedScopeVersion, Etag.From(item.UpdatedAt));
 
     private static AppException NotAllowed(string reason) => new(AppErrorType.Conflict, ErrorCode.ExecutorNotAllowed,

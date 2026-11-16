@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace LegacyVault.Api.Controllers;
 
-/// <summary>Mảnh khóa Chủ kho giao cho Người thực thi: cấp lần đầu và cấp lại khi quên khóa.</summary>
+/// <summary>Mã mở gói bàn giao: server tự tạo lúc kích hoạt; Chủ kho xem trạng thái và đổi mã.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/vaults/{vaultId:guid}/executor-key")]
@@ -24,22 +24,12 @@ public sealed class ExecutorKeyController(IExecutorKeyService service) : Control
         return service.GetStatusAsync(vaultId, ct);
     }
 
-    /// <summary>Cấp mảnh lần đầu; mảnh gốc chỉ có trong response này. Đã cấp → 409 EXECUTOR_KEY_ALREADY_ISSUED.</summary>
-    [RequireVaultPin]
-    [HttpPost]
-    [ProducesResponseType<ExecutorKeyIssuedResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<ExecutorKeyIssuedResponse> Issue(Guid vaultId, CancellationToken ct)
-    {
-        return service.IssueAsync(vaultId, ct);
-    }
-
-    /// <summary>Quên khóa: cấp mảnh mới, mảnh cũ hết hiệu lực. Chưa cấp → 409 EXECUTOR_KEY_NOT_ISSUED.</summary>
+    /// <summary>Đổi mã mở gói: mã mới thay mã cũ, không trả mã gốc. Chưa có mã → 409 EXECUTOR_KEY_NOT_ISSUED.</summary>
     [RequireVaultPin]
     [HttpPost("reissue")]
-    [ProducesResponseType<ExecutorKeyIssuedResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ExecutorKeyStatusResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<ExecutorKeyIssuedResponse> Reissue(Guid vaultId, CancellationToken ct)
+    public Task<ExecutorKeyStatusResponse> Reissue(Guid vaultId, CancellationToken ct)
     {
         return service.ReissueAsync(vaultId, ct);
     }
@@ -56,7 +46,7 @@ public sealed class ExecutorKeyController(IExecutorKeyService service) : Control
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
 public sealed class ExecutorHandoverKeyController(IExecutorKeyService service) : ControllerBase
 {
-    /// <summary>Đọc mã mở gói bàn giao được cấp và gửi trên hệ thống.</summary>
+    /// <summary>Đọc mã mở gói bàn giao; chỉ được sau khi bàn giao đã bắt đầu (HandoverInProgress), chưa tới lúc → 409.</summary>
     [HttpGet]
     [ProducesResponseType<ExecutorHandoverKeyResponse>(StatusCodes.Status200OK)]
     public Task<ExecutorHandoverKeyResponse> Get(Guid vaultId, CancellationToken ct) =>

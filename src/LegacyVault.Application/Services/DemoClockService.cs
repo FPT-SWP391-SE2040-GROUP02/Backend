@@ -10,7 +10,7 @@ namespace LegacyVault.Application.Services;
 
 /// <remarks>
 /// Thuật toán tua: lặp "tìm mốc kế tiếp trong (giờ hệ thống, ngày đích) → đặt giờ hệ thống ngay sau mốc → chạy việc nền
-/// một lượt". Mốc được tìm lại sau mỗi bước nên mốc mới do việc nền sinh ra (ví dụ sự cố) cũng được xét. Cuối cùng đặt giờ
+/// một lượt". Mốc được tìm lại sau mỗi bước nên mốc mới do việc nền sinh ra cũng được xét. Cuối cùng đặt giờ
 /// đúng 9:00 sáng giờ Việt Nam của ngày đích và chạy việc nền lần cuối. Chỉ cho một lần tua chạy tại một thời điểm.
 /// </remarks>
 public sealed class DemoClockService : IDemoClockService
@@ -97,14 +97,13 @@ public sealed class DemoClockService : IDemoClockService
     private async Task RunStepsAsync(DateTimeOffset target, List<DemoClockStepResponse> steps, CancellationToken ct)
     {
         TimeSpan remindAfter = ExecutorInvitationJob.ReminderAfter;
-        TimeSpan escalateAfter = IncidentRules.EscalateAfter;
 
         int guard = 0;
         while (guard < DemoClockRules.MaxSteps)
         {
             guard++;
             DateTimeOffset now = clock.RealNow + clock.Offset;
-            DemoDeadline? next = await FindNextMilestoneAsync(now, target, remindAfter, escalateAfter, ct);
+            DemoDeadline? next = await FindNextMilestoneAsync(now, target, remindAfter, ct);
             if (next == null)
             {
                 break;
@@ -121,11 +120,11 @@ public sealed class DemoClockService : IDemoClockService
     }
 
     private async Task<DemoDeadline?> FindNextMilestoneAsync(
-        DateTimeOffset now, DateTimeOffset target, TimeSpan remindAfter, TimeSpan escalateAfter, CancellationToken ct)
+        DateTimeOffset now, DateTimeOffset target, TimeSpan remindAfter, CancellationToken ct)
     {
         List<DemoOpenPeriod> periods = await repository.ListOpenCheckInPeriodsAsync(ct);
         List<DemoDeadline> candidates = DemoClockRules.CheckInMilestones(periods, now, target);
-        List<DemoDeadline> others = await repository.ListUpcomingDeadlinesAsync(now, target, remindAfter, escalateAfter, ct);
+        List<DemoDeadline> others = await repository.ListUpcomingDeadlinesAsync(now, target, remindAfter, ct);
         foreach (DemoDeadline other in others)
         {
             if (other.At < target)
