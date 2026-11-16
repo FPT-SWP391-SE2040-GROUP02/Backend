@@ -14,7 +14,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <remarks>
-/// BR-48 sửa 25/10/2026: ảnh mặt trước CCCD của lượt OWNER_ENROLLMENT được lưu MÃ HÓA (kho lưu trữ private) để Verifier
+/// Ảnh mặt trước CCCD của lượt OWNER_ENROLLMENT được lưu MÃ HÓA (kho lưu trữ private) để Verifier
 /// đối chiếu khi xét hồ sơ chứng tử. Lượt đạt thì chuyển sang danh tính đã gắn; lượt thất bại hoặc bị lượt mới thay thì xóa.
 /// </remarks>
 public sealed class EkycService : IEkycService
@@ -102,7 +102,7 @@ public sealed class EkycService : IEkycService
         Guid userId = currentUser.RequireUserId();
         DateTimeOffset now = timeProvider.GetUtcNow();
 
-        // EKYC-03: phải có đồng ý còn hiệu lực trước khi nhận bất kỳ ảnh nào.
+        // phải có đồng ý còn hiệu lực trước khi nhận bất kỳ ảnh nào.
         EkycConsent? consent = await consentRepository.FindLatestByUserIdAsync(userId, ct);
         if (consent == null || !EkycRules.IsConsentValid(consent, now))
         {
@@ -112,7 +112,7 @@ public sealed class EkycService : IEkycService
         EkycPurpose purpose = consent.Purpose;
         await RequireNotVerifiedAsync(userId, purpose, ct);
 
-        // EKYC-02: người được chỉ định lấy từ backend (lượt bàn giao đã ghim), không nhận từ FE.
+        // người được chỉ định lấy từ backend (lượt bàn giao đã ghim), không nhận từ FE.
         BeneficiaryPersonalData? expected = await LoadExpectedPersonAsync(purpose, handoverTurnId, userId, ct);
 
         byte[] image = await ReadImageAsync(content, contentType, ct);
@@ -120,7 +120,7 @@ public sealed class EkycService : IEkycService
         // Đọc trước, hủy lượt cũ sau: ảnh lỗi thì lượt Pending đang có vẫn giữ nguyên.
         EkycDocumentReading reading = await ActiveClient(expected).ReadFrontAsync(image, fileName, contentType, ct);
 
-        // EKYC-24, EKYC-27: Owner đăng ký phải đọc được đủ CCCD, họ tên, ngày sinh, và đã gắn danh tính thì phải ra đúng danh tính đó.
+        // Owner đăng ký phải đọc được đủ CCCD, họ tên, ngày sinh, và đã gắn danh tính thì phải ra đúng danh tính đó.
         OwnerIdentityData? enrollmentIdentity = null;
         if (purpose == EkycPurpose.OwnerEnrollment && reading.DocumentToken != null)
         {
@@ -264,7 +264,7 @@ public sealed class EkycService : IEkycService
         Guid userId = currentUser.RequireUserId();
         DateTimeOffset now = timeProvider.GetUtcNow();
 
-        // EKYC-04: mặt sau thuộc cùng lần chụp với mặt trước, nên phải có lượt đang chờ selfie.
+        // mặt sau thuộc cùng lần chụp với mặt trước, nên phải có lượt đang chờ selfie.
         EkycVerification? verification = await verificationRepository.FindLatestByUserIdAsync(userId, ct);
         if (verification == null || !EkycRules.CanMatchFace(verification, now))
         {
@@ -286,7 +286,7 @@ public sealed class EkycService : IEkycService
         verification.BackSubmittedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
 
-        // BR-88: nơi cư trú đọc từ mặt sau chỉ trả cho người dùng đối chiếu; chỉ bản người dùng xác nhận ở ConfirmDocumentAsync mới được lưu.
+        // nơi cư trú đọc từ mặt sau chỉ trả cho người dùng đối chiếu; chỉ bản người dùng xác nhận ở ConfirmDocumentAsync mới được lưu.
         return verification.ToBackResponse(reading.ResidenceAddress, ekycOptions.CurrentThreshold);
     }
 
@@ -319,7 +319,7 @@ public sealed class EkycService : IEkycService
         byte[] frame = await ReadImageAsync(content, contentType, ct);
         EkycLivenessState state = await ActiveClient().SendLivenessFrameAsync(sessionId, frame, fileName, contentType, ct);
 
-        // Ghi nhớ lúc phiên đạt cả động tác và chống giả mạo để đường ảnh selfie tĩnh cũng dùng được (EKYC-14).
+        // Ghi nhớ lúc phiên đạt cả động tác và chống giả mạo để đường ảnh selfie tĩnh cũng dùng được.
         if (state.Passed && !verification.LivenessPassed)
         {
             verification.LivenessPassed = true;
@@ -337,10 +337,10 @@ public sealed class EkycService : IEkycService
         string sessionId = RequireLivenessSession(verification);
         string documentToken = verification.DocumentToken!;
 
-        // EKYC-13: selfie lấy từ chính phiên đã đạt. Phiên chưa đạt thì dịch vụ từ chối (EKYC_LIVENESS_NOT_PASSED).
+        // selfie lấy từ chính phiên đã đạt. Phiên chưa đạt thì dịch vụ từ chối (EKYC_LIVENESS_NOT_PASSED).
         byte[] selfie = await ActiveClient().GetLivenessSelfieAsync(sessionId, ct);
 
-        // Dịch vụ chỉ trả selfie khi cả động tác và chống giả mạo trong phiên đều đạt (EKYC-14).
+        // Dịch vụ chỉ trả selfie khi cả động tác và chống giả mạo trong phiên đều đạt.
         verification.SpoofCheckPassed = true;
         verification.LivenessPassed = true;
         double threshold = ekycOptions.CurrentThreshold;
@@ -353,7 +353,7 @@ public sealed class EkycService : IEkycService
         // Tự so lại với ngưỡng của server, không tin cờ matched do dịch vụ ngoài trả về.
         if (comparison.Score >= threshold)
         {
-            // EKYC-22: Owner đăng ký đạt thì tạo mẫu khuôn mặt từ chính selfie của phiên này, lưu cùng lần chốt kết quả.
+            // Owner đăng ký đạt thì tạo mẫu khuôn mặt từ chính selfie của phiên này, lưu cùng lần chốt kết quả.
             // Lấy vector trước khi chốt: dịch vụ lỗi thì lượt vẫn Pending để thử lại, không có lượt đạt mà thiếu mẫu.
             if (verification.Purpose == EkycPurpose.OwnerEnrollment)
             {
@@ -373,8 +373,8 @@ public sealed class EkycService : IEkycService
     }
 
     /// <summary>
-    /// Tạo mẫu khuôn mặt Owner từ selfie của phiên thử thách đã đạt (EKYC-22). Đã có mẫu thì giữ nguyên, không thay bằng
-    /// mẫu mới (EKYC-23). Chỉ đánh dấu INSERT; lưu cùng lần FinishAsync.
+    /// Tạo mẫu khuôn mặt Owner từ selfie của phiên thử thách đã đạt. Đã có mẫu thì giữ nguyên, không thay bằng
+    /// mẫu mới. Chỉ đánh dấu INSERT; lưu cùng lần FinishAsync.
     /// </summary>
     private async Task AddFaceTemplateAsync(
         Guid userId, Guid verificationId, byte[] selfie, DateTimeOffset now, CancellationToken ct)
@@ -510,7 +510,7 @@ public sealed class EkycService : IEkycService
 
     /// <summary>
     /// Lấy dữ liệu người được chỉ định của lượt bàn giao để đối chiếu (BeneficiaryClaim). Mục đích khác thì không có lượt.
-    /// Lượt của người khác hoặc không tồn tại đều trả 404 (SEC-04).
+    /// Lượt của người khác hoặc không tồn tại đều trả 404.
     /// </summary>
     private async Task<BeneficiaryPersonalData?> LoadExpectedPersonAsync(
         EkycPurpose purpose, Guid? handoverTurnId, Guid userId, CancellationToken ct)
@@ -569,7 +569,7 @@ public sealed class EkycService : IEkycService
     }
 
     /// <summary>
-    /// Đọc danh tính từ mặt trước của Owner đăng ký và đối chiếu với danh tính đã gắn nếu có (EKYC-24).
+    /// Đọc danh tính từ mặt trước của Owner đăng ký và đối chiếu với danh tính đã gắn nếu có.
     /// Đọc chưa đủ hoặc OCR chưa chắc: 400 EKYC_IMAGE_REJECTED, chụp lại. CCCD khác rõ ràng: 409 EKYC_IDENTITY_MISMATCH.
     /// Lỗi thì hủy khuôn mặt vừa giữ ở dịch vụ eKYC. Trả danh tính đọc được để giữ tạm (mã hóa) trên lượt.
     /// </summary>
@@ -660,15 +660,15 @@ public sealed class EkycService : IEkycService
     }
 
     /// <summary>
-    /// Gắn danh tính cho Owner khi lượt OWNER_ENROLLMENT đạt (EKYC-27). Đã có danh tính thì giữ nguyên (đã đối chiếu
-    /// lúc đọc giấy tờ, EKYC-24). Chỉ đánh dấu INSERT; lưu cùng lần FinishAsync.
+    /// Gắn danh tính cho Owner khi lượt OWNER_ENROLLMENT đạt. Đã có danh tính thì giữ nguyên (đã đối chiếu
+    /// lúc đọc giấy tờ). Chỉ đánh dấu INSERT; lưu cùng lần FinishAsync.
     /// </summary>
     private async Task BindIdentityAsync(EkycVerification verification, DateTimeOffset now, CancellationToken ct)
     {
         OwnerIdentity? existing = await identityRepository.FindByUserIdAsync(verification.UserId, ct);
         if (existing != null)
         {
-            // Danh tính gắn trước khi có ảnh (BR-48 sửa): lượt đạt mới bổ sung ảnh, không thay ảnh đã có.
+            // Danh tính gắn trước khi có ảnh (trường hợp cũ): lượt đạt mới bổ sung ảnh, không thay ảnh đã có.
             if (existing.DocumentImageStorageKey == null)
             {
                 MovePendingDocumentImage(verification, existing);
@@ -701,7 +701,7 @@ public sealed class EkycService : IEkycService
     }
 
     /// <summary>
-    /// Lưu MÃ HÓA ảnh mặt trước CCCD tạm trên lượt OWNER_ENROLLMENT (BR-48 sửa). Ảnh không phải JPEG/PNG/WebP theo nội
+    /// Lưu MÃ HÓA ảnh mặt trước CCCD tạm trên lượt OWNER_ENROLLMENT. Ảnh không phải JPEG/PNG/WebP theo nội
     /// dung thật thì không lưu (eKYC vẫn chạy). Trả khóa lưu trữ để bù trừ nếu lưu DB thất bại.
     /// </summary>
     private async Task<string?> KeepPendingDocumentImageAsync(EkycVerification verification, byte[] image, CancellationToken ct)

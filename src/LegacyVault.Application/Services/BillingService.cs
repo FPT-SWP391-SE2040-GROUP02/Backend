@@ -10,9 +10,9 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <remarks>
-/// SRS §8: backend tự xác định loại đơn và tự tính giá; thanh toán không tự kích hoạt bàn giao.
-/// Không có job hết hạn đơn ở phiên bản này (D7): khi đọc, tạo hoặc hủy mà thấy đơn Pending đã quá hạn thì đổi Expired.
-/// SEC-07: không ghi mã thanh toán, số tài khoản hay số tiền vào nhật ký hoạt động.
+/// backend tự xác định loại đơn và tự tính giá; thanh toán không tự kích hoạt bàn giao.
+/// Không có job hết hạn đơn ở phiên bản này: khi đọc, tạo hoặc hủy mà thấy đơn Pending đã quá hạn thì đổi Expired.
+/// không ghi mã thanh toán, số tài khoản hay số tiền vào nhật ký hoạt động.
 /// </remarks>
 public sealed class BillingService : IBillingService
 {
@@ -67,12 +67,12 @@ public sealed class BillingService : IBillingService
     }
     public async Task<BillingQuoteResponse> QuoteAsync(BillingSelectionRequest request, CancellationToken ct)
     {
-        // Người đăng nhập → kho → điều kiện (§8.3 bước 1–5).
+        // Người đăng nhập → kho → điều kiện (5 bước kiểm theo thứ tự).
         Guid userId = currentUser.RequireUserId();
         DateTimeOffset now = timeProvider.GetUtcNow();
         BillingEligibility eligibility = await CheckEligibilityAsync(userId, request, now, ct);
 
-        // Dữ liệu: tính giá bằng đúng hàm mà bước tạo đơn dùng (D2).
+        // Dữ liệu: tính giá bằng đúng hàm mà bước tạo đơn dùng.
         BillingQuote quote = await BuildCheckedQuoteAsync(request, eligibility, now, ct);
         return quote.ToResponse(now);
     }
@@ -95,19 +95,19 @@ public sealed class BillingService : IBillingService
 
         for (int attempt = 0; attempt < MaxCreateAttempts; attempt++)
         {
-            // PAY-04: mỗi kho tối đa một đơn Pending.
+            // mỗi kho tối đa một đơn Pending.
             PaymentOrder? pending = await paymentOrderRepository.FindPendingByVaultIdAsync(vaultId, ct);
             if (pending != null)
             {
                 if (BillingRules.IsExpired(pending, now))
                 {
-                    // D7: đơn cũ quá hạn → Expired, lưu cùng lần lưu với đơn mới bên dưới.
+                    // đơn cũ quá hạn → Expired, lưu cùng lần lưu với đơn mới bên dưới.
                     pending.Status = PaymentOrderStatus.Expired;
                     pending.UpdatedAt = now;
                 }
                 else if (BillingRules.IsSameSelection(pending, quote))
                 {
-                    // §8.3: cùng lựa chọn thì trả lại đơn cũ, không tạo thêm.
+                    // cùng lựa chọn thì trả lại đơn cũ, không tạo thêm.
                     return NewResult(pending, false, now);
                 }
                 else
@@ -120,7 +120,7 @@ public sealed class BillingService : IBillingService
             auditLogRepository.Add(AuditRules.OwnerAction(
                 vaultId, userId, AuditAction.PaymentOrderCreated, AuditTargetType.PaymentOrder, order.Id, null, now));
 
-            // Một lần lưu cho: đổi đơn cũ sang Expired (nếu có), thêm đơn mới, ghi nhật ký (STATE-02).
+            // Một lần lưu cho: đổi đơn cũ sang Expired (nếu có), thêm đơn mới, ghi nhật ký.
             bool added = await paymentOrderRepository.TryAddAsync(order, ct);
             if (added)
             {
@@ -190,7 +190,7 @@ public sealed class BillingService : IBillingService
         Vault vault = await LoadVaultAsync(userId, ct);
         Guid vaultId = vault.Id;
 
-        // Đơn của người khác cũng 404 để không lộ sự tồn tại (SEC-04).
+        // Đơn của người khác cũng 404 để không lộ sự tồn tại.
         PaymentOrder? found = await paymentOrderRepository.FindByIdForVaultAsync(vaultId, orderId, ct);
         if (found == null)
         {
@@ -266,7 +266,7 @@ public sealed class BillingService : IBillingService
 
     public async Task<PaymentOrderResponse> DevPayAsync(Guid orderId, CancellationToken ct)
     {
-        // D9: lớp bảo vệ thứ hai ngoài việc route không được map ngoài Development. Tắt thì coi như không có đơn.
+        // lớp bảo vệ thứ hai ngoài việc route không được map ngoài Development. Tắt thì coi như không có đơn.
         if (!devSettings.DevPaymentEnabled)
         {
             throw BillingRules.OrderNotFound();
@@ -278,7 +278,7 @@ public sealed class BillingService : IBillingService
             DateTimeOffset now = timeProvider.GetUtcNow();
             Vault vault = await LoadVaultAsync(userId, ct);
 
-            // Đơn của người khác cũng 404 (SEC-04).
+            // Đơn của người khác cũng 404.
             PaymentOrder? found = await paymentOrderRepository.FindByIdForVaultAsync(vault.Id, orderId, ct);
             if (found == null)
             {
@@ -322,7 +322,7 @@ public sealed class BillingService : IBillingService
 
         if (kind == PaymentOrderKind.Purchase)
         {
-            // §8.3: mua mới cần eKYC Owner đạt trong 90 ngày. Chỉ xét lượt mục đích OwnerEnrollment (EKYC-01).
+            // mua mới cần eKYC Owner đạt trong 90 ngày. Chỉ xét lượt mục đích OwnerEnrollment.
             EkycVerification? latest = await ekycRepository.FindLatestByUserAndPurposeAsync(
                 userId, EkycPurpose.OwnerEnrollment, ct);
             if (!BillingRules.IsOwnerEkycFresh(latest, now))
@@ -345,7 +345,7 @@ public sealed class BillingService : IBillingService
         return eligibility;
     }
 
-    /// <summary>Kho của người đang đăng nhập; chưa có kho → 404 VAULT_NOT_FOUND (SEC-04).</summary>
+    /// <summary>Kho của người đang đăng nhập; chưa có kho → 404 VAULT_NOT_FOUND.</summary>
     private async Task<Vault> LoadVaultAsync(Guid userId, CancellationToken ct)
     {
         Vault? found = await vaultRepository.FindByOwnerIdAsync(userId, ct);
@@ -354,7 +354,7 @@ public sealed class BillingService : IBillingService
 
     /// <summary>
     /// Tính giá rồi, với đơn gia hạn, kiểm tra dữ liệu đang dùng có vừa hạng và số suất được chọn không.
-    /// Báo giá và tạo đơn dùng chung hàm này nên hai bước luôn cùng kết luận (D2).
+    /// Báo giá và tạo đơn dùng chung hàm này nên hai bước luôn cùng kết luận.
     /// </summary>
     private async Task<BillingQuote> BuildCheckedQuoteAsync(
         BillingSelectionRequest request, BillingEligibility eligibility, DateTimeOffset now, CancellationToken ct)
@@ -385,7 +385,7 @@ public sealed class BillingService : IBillingService
         return quote;
     }
 
-    /// <summary>Tính giá theo loại đơn đã xác định; báo giá và tạo đơn dùng chung (D2).</summary>
+    /// <summary>Tính giá theo loại đơn đã xác định; báo giá và tạo đơn dùng chung.</summary>
     private BillingQuote BuildQuote(
         IBillingPriceSettings prices, BillingSelectionRequest request, BillingEligibility eligibility, DateTimeOffset now)
     {
@@ -406,7 +406,7 @@ public sealed class BillingService : IBillingService
         return BillingRules.QuoteAddon(prices, eligibility.Vault.Entitlement, request.ExtraSlots, now);
     }
 
-    /// <summary>Dựng đơn Pending từ báo giá: giá, dung lượng, số suất, phiên bản chính sách đều được chốt tại đây (PAY-11).</summary>
+    /// <summary>Dựng đơn Pending từ báo giá: giá, dung lượng, số suất, phiên bản chính sách đều được chốt tại đây.</summary>
     private static PaymentOrder BuildOrder(
         Guid vaultId, Guid ownerId, BillingQuote quote, DateTimeOffset now, TimeSpan orderLifetime)
     {
@@ -427,7 +427,7 @@ public sealed class BillingService : IBillingService
         order.PolicyVersion = quote.PolicyVersion;
         order.PaymentCode = BillingRules.NewPaymentCode();
         order.Status = PaymentOrderStatus.Pending;
-        // ADDON-03: đơn mua thêm hết hạn ở mốc sớm hơn giữa thời gian chờ (Admin cấu hình, mặc định 15 phút) và hết kỳ hiện tại.
+        // đơn mua thêm hết hạn ở mốc sớm hơn giữa thời gian chờ (Admin cấu hình, mặc định 15 phút) và hết kỳ hiện tại.
         order.ExpiresAt = BillingRules.ComputeOrderExpiresAt(quote.Kind, now, quote.BaseServiceExpiresAt, orderLifetime);
         order.CreatedAt = now;
         order.UpdatedAt = now;
@@ -435,7 +435,7 @@ public sealed class BillingService : IBillingService
     }
 
     /// <summary>
-    /// D7: đổi đơn Pending quá hạn sang Expired và lưu. Nếu request khác vừa sửa cùng đơn (trả tiền, hủy, hoặc cũng
+    /// đổi đơn Pending quá hạn sang Expired và lưu. Nếu request khác vừa sửa cùng đơn (trả tiền, hủy, hoặc cũng
     /// đánh dấu Expired) thì RowVersion lệch: bỏ thay đổi của mình và trả trạng thái mới nhất trong DB.
     /// </summary>
     private async Task<PaymentOrder> MarkExpiredAsync(PaymentOrder order, Guid vaultId, DateTimeOffset now, CancellationToken ct)
