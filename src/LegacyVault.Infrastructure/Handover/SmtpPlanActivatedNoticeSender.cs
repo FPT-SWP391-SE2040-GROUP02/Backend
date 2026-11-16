@@ -7,8 +7,6 @@ namespace LegacyVault.Infrastructure.Handover;
 /// <summary>Gửi thư báo người nhận khi kích hoạt kế hoạch qua Gmail (SmtpMailSender). Gửi lỗi thì ném exception.</summary>
 public sealed class SmtpPlanActivatedNoticeSender : IPlanActivatedNoticeSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly string landingUrl;
 
@@ -16,11 +14,7 @@ public sealed class SmtpPlanActivatedNoticeSender : IPlanActivatedNoticeSender
     {
         this.mailSender = mailSender;
 
-        string? clientUrl = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(clientUrl))
-        {
-            clientUrl = DefaultClientUrl;
-        }
+        string clientUrl = ClientUrlSettings.Read(configuration);
         landingUrl = clientUrl.TrimEnd('/') + "/";
     }
 

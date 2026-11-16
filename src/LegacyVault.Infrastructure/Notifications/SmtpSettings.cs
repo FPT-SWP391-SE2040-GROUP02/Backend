@@ -31,12 +31,12 @@ public sealed class SmtpSettings
 
     public string ResolveUserName()
     {
-        return (UserName ?? string.Empty).Trim().Trim('"').Trim('\'');
+        return ConfigText.Clean(UserName);
     }
 
     public string ResolveHost()
     {
-        string host = (Host ?? string.Empty).Trim().Trim('"').Trim('\'');
+        string host = ConfigText.Clean(Host);
         return string.IsNullOrWhiteSpace(host) ? "smtp.gmail.com" : host;
     }
 
@@ -45,7 +45,7 @@ public sealed class SmtpSettings
 
     public string ResolvePassword()
     {
-        return (Password ?? string.Empty).Trim().Trim('"').Trim('\'').Replace(" ", "").Trim();
+        return ConfigText.Clean(Password).Replace(" ", "").Trim();
     }
 
     /// <summary>Địa chỉ người gửi; để trống thì dùng UserName (Gmail chỉ cho gửi từ tài khoản đã đăng nhập hoặc bí danh đã xác minh).</summary>
@@ -63,7 +63,7 @@ public sealed class SmtpSettings
 
     public string ResolveWebhookUrl()
     {
-        return (WebhookUrl ?? string.Empty).Trim().Trim('"').Trim('\'');
+        return ConfigText.Clean(WebhookUrl);
     }
 
     /// <summary>Đủ WebhookUrl, hoặc Host/UserName/Password thì mới gửi email thật.</summary>
@@ -83,7 +83,7 @@ public sealed class SmtpSettings
 
     public string ResolveFromAddress()
     {
-        string from = (FromAddress ?? string.Empty).Trim().Trim('"').Trim('\'');
+        string from = ConfigText.Clean(FromAddress);
         if (!string.IsNullOrWhiteSpace(from))
         {
             return from;
@@ -94,7 +94,7 @@ public sealed class SmtpSettings
     /// <summary>Đổi SecureSocket (chữ) sang giá trị của MailKit; sai tên → null.</summary>
     public SecureSocketOptions? ParseSecureSocket()
     {
-        string cleaned = (SecureSocket ?? string.Empty).Trim().Trim('"').Trim('\'');
+        string cleaned = ConfigText.Clean(SecureSocket);
         if (Port == 465 && (string.IsNullOrWhiteSpace(cleaned) || cleaned.Equals("StartTls", StringComparison.OrdinalIgnoreCase)))
         {
             return SecureSocketOptions.SslOnConnect;

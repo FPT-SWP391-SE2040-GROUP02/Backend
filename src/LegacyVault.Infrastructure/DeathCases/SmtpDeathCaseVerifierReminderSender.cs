@@ -10,8 +10,6 @@ namespace LegacyVault.Infrastructure.DeathCases;
 /// </summary>
 public sealed class SmtpDeathCaseVerifierReminderSender : IDeathCaseVerifierReminderSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly string loginUrl;
 
@@ -19,11 +17,7 @@ public sealed class SmtpDeathCaseVerifierReminderSender : IDeathCaseVerifierRemi
     {
         this.mailSender = mailSender;
 
-        string? clientUrl = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(clientUrl))
-        {
-            clientUrl = DefaultClientUrl;
-        }
+        string clientUrl = ClientUrlSettings.Read(configuration);
         loginUrl = clientUrl.TrimEnd('/') + "/login";
     }
 

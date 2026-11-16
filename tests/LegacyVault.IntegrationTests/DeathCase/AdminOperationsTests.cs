@@ -143,13 +143,53 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         JsonElement directory = await ApiTestHelpers.ReadJsonAsync(await ownerVault.Client.GetAsync("/api/v1/system-executors"));
         JsonElement created = directory.EnumerateArray().Single(e => e.GetProperty("email").GetString() == email);
         Assert.Equal("Luật sư thi hành di chúc", created.GetProperty("executorRoleTitle").GetString());
-        Assert.Equal("VERIFIED", created.GetProperty("legalVerification").GetProperty("status").GetString());
+        // Có số thẻ nhưng chưa có ảnh: chưa xác minh.
+        Assert.Equal("UNVERIFIED", created.GetProperty("legalVerification").GetProperty("status").GetString());
         Assert.Equal("LS-TEST-001", created.GetProperty("legalVerification").GetProperty("lawyerCardNumber").GetString());
         Assert.Equal("Đoàn Luật sư thử nghiệm", created.GetProperty("legalVerification").GetProperty("organization").GetString());
+        // Admin tải ảnh thẻ lên thì tài khoản được xác minh pháp lý.
+        Guid createdId = created.GetProperty("id").GetGuid();
+        byte[] png = new byte[300];
+        Array.Copy(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, png, 8);
+        using (MultipartFormDataContent form = new MultipartFormDataContent())
+        {
+            ByteArrayContent file = new ByteArrayContent(png);
+            file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+            form.Add(file, "file", "the.png");
+            Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsync($"/api/v1/admin/users/{createdId}/notary-card", form)).StatusCode);
+        }
+        JsonElement afterUpload = await ApiTestHelpers.ReadJsonAsync(await ownerVault.Client.GetAsync("/api/v1/system-executors"));
+        JsonElement verified = afterUpload.EnumerateArray().Single(e => e.GetProperty("id").GetGuid() == createdId);
+        Assert.Equal("VERIFIED", verified.GetProperty("legalVerification").GetProperty("status").GetString());
         // Tài khoản chỉ được cấp vai trò, chưa có hồ sơ pháp lý: có trong danh bạ nhưng không có số thẻ bịa ra.
         JsonElement granted = directory.EnumerateArray().Single(e => e.GetProperty("id").GetGuid() == plain.Id);
         Assert.Equal("UNVERIFIED", granted.GetProperty("legalVerification").GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, granted.GetProperty("legalVerification").GetProperty("lawyerCardNumber").ValueKind);
+    }
+
+    [SqlFact]
+    public async Task AdminCreatesExecutorWithoutPassword_InvitesByEmail_AndAdminStillNeedsPassword()
+    {
+        // Chuẩn bị
+        (User _, HttpClient client) = await AddAdminAsync();
+        string email = "moi-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
+
+        // Hành động: không đặt mật khẩu cho Người thực thi; Quản trị viên mới thì thiếu mật khẩu là lỗi
+        HttpResponseMessage invite = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Người Được Mời", email = email, role = "EXECUTOR" });
+        HttpResponseMessage adminNoPassword = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Admin Mới", email = "a-" + email, role = "ADMIN" });
+
+        // Kiểm tra: tài khoản chưa xác minh email, có link đặt mật khẩu chờ gửi; Admin thiếu mật khẩu bị 400
+        Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
+        await ApiTestHelpers.AssertProblemAsync(adminNoPassword, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            User created = await db.Users.AsNoTracking().SingleAsync(u => u.Email == email);
+            Assert.Null(created.EmailVerifiedAt);
+            Assert.Equal(1, await db.Set<PasswordResetToken>().CountAsync(t => t.UserId == created.Id && t.UsedAt == null));
+            Assert.False(await db.Users.AnyAsync(u => u.Email == "a-" + email));
+        });
     }
 
     [SqlFact]

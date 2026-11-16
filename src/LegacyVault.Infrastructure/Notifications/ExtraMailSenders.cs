@@ -7,19 +7,13 @@ namespace LegacyVault.Infrastructure.Notifications;
 /// <summary>Gửi thư bổ sung thật qua SMTP, nút dẫn tới trang điểm danh của Chủ kho.</summary>
 public sealed class SmtpExtraMailSender : IExtraMailSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly string checkInUrl;
 
     public SmtpExtraMailSender(SmtpMailSender mailSender, IConfiguration configuration)
     {
         this.mailSender = mailSender;
-        string? clientUrl = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(clientUrl))
-        {
-            clientUrl = DefaultClientUrl;
-        }
+        string clientUrl = ClientUrlSettings.Read(configuration);
         checkInUrl = clientUrl.TrimEnd('/') + "/dms";
     }
 

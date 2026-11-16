@@ -51,6 +51,9 @@ public class AdminUserResponse
 
     public bool EmailVerified { get; set; }
 
+    /// <summary>True khi máy chủ thư đã báo không giao được thư tới email này (bounce).</summary>
+    public bool EmailUndeliverable { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? LastLoginAt { get; set; }

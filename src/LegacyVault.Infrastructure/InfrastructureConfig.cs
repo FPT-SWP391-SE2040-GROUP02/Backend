@@ -33,6 +33,24 @@ public static class InfrastructureConfig
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services, IConfiguration configuration)
     {
+        AddClocks(services);
+        AddDatabase(services, configuration);
+        AddRepositoriesAndSecretProtectors(services);
+        AddBilling(services, configuration);
+        AddExecutorAndHandoverSupport(services);
+        AddAssetStorage(services, configuration);
+        AddNotificationsAndJobs(services, configuration);
+        AddJwtAuthentication(services, configuration);
+        AddGoogleLogin(services, configuration);
+        AddEkyc(services, configuration);
+        AddDevTools(services);
+
+        return services;
+    }
+
+    /// <summary>Đồng hồ thật hoặc đồng hồ ảo để demo, và công cụ chạy job một lần.</summary>
+    private static void AddClocks(IServiceCollection services)
+    {
         // Đồng hồ: Development/Staging dùng DemoClock (nút "Tua thời gian" để demo), môi trường khác giữ TimeProvider.System.
         services.AddSingleton<DemoClock>();
         services.AddSingleton<TimeProvider>(provider => ChooseTimeProvider(provider));
@@ -42,14 +60,18 @@ public static class InfrastructureConfig
         services.AddHostedService<DemoClockLoader>();
         services.AddScoped<IDemoClockRepository, DemoClockRepository>();
         services.AddScoped<IDemoJobRunner, DemoJobRunner>();
+    }
 
+    /// <summary>Chuỗi kết nối, AppDbContext, kiểm tra sức khỏe và IUnitOfWork.</summary>
+    private static void AddDatabase(IServiceCollection services, IConfiguration configuration)
+    {
         services.AddOptions<DatabaseSettings>()
             .Bind(configuration.GetSection("ConnectionStrings"))
             .PostConfigure(settings =>
             {
                 if (settings.Default != null)
                 {
-                    settings.Default = settings.Default.Trim().Trim('"').Trim('\'');
+                    settings.Default = ConfigText.Clean(settings.Default);
                 }
             })
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.Default),
@@ -58,15 +80,15 @@ public static class InfrastructureConfig
 
         services.AddDbContext<AppDbContext>((provider, options) =>
         {
-            var raw = provider.GetRequiredService<IOptions<DatabaseSettings>>().Value.Default ?? string.Empty;
-            raw = raw.Trim().Trim('"').Trim('\'');
+            string raw = provider.GetRequiredService<IOptions<DatabaseSettings>>().Value.Default ?? string.Empty;
+            raw = ConfigText.Clean(raw);
             if (raw.StartsWith("ConnectionStrings__Default=", StringComparison.OrdinalIgnoreCase))
             {
-                raw = raw["ConnectionStrings__Default=".Length..].Trim().Trim('"').Trim('\'');
+                raw = ConfigText.Clean(raw["ConnectionStrings__Default=".Length..]);
             }
             else if (raw.StartsWith("ConnectionStrings:Default=", StringComparison.OrdinalIgnoreCase))
             {
-                raw = raw["ConnectionStrings:Default=".Length..].Trim().Trim('"').Trim('\'');
+                raw = ConfigText.Clean(raw["ConnectionStrings:Default=".Length..]);
             }
             options.UseSqlServer(raw);
         });
@@ -75,7 +97,11 @@ public static class InfrastructureConfig
 
         // IUnitOfWork chính là AppDbContext của request: repository và service dùng chung một instance.
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<AppDbContext>());
+    }
 
+    /// <summary>Danh mục tỉnh phường, repository của tài khoản và kho, bộ bọc khóa bí mật, cấu hình dịch vụ ngoài.</summary>
+    private static void AddRepositoriesAndSecretProtectors(IServiceCollection services)
+    {
         // Danh mục tỉnh/phường: đọc tệp nhúng một lần, dùng chung cho cả ứng dụng (không có trạng thái thay đổi).
         services.AddSingleton<IAdministrativeUnitCatalog, LegacyVault.Infrastructure.Reference.AdministrativeUnitCatalog>();
 
@@ -116,7 +142,11 @@ public static class InfrastructureConfig
         services.AddScoped<IAdminUserRepository, AdminUserRepository>();
         services.AddScoped<IOwnerIdentityReader, OwnerIdentityReader>();
         services.AddScoped<IStorageReservationRepository, StorageReservationRepository>();
+    }
 
+    /// <summary>Đơn thanh toán, bảng giá, webhook SePay và mẫu email.</summary>
+    private static void AddBilling(IServiceCollection services, IConfiguration configuration)
+    {
         // Thanh toán (SRS §8): đơn thanh toán và thông tin tài khoản nhận tiền.
         services.AddScoped<IPaymentOrderRepository, PaymentOrderRepository>();
         services.Configure<BillingSettings>(configuration.GetSection(BillingSettings.SectionName));
@@ -133,7 +163,11 @@ public static class InfrastructureConfig
         services.AddSingleton<IEmailTemplateDefaults, EmailTemplateDefaults>();
         services.AddHostedService<EmailTemplateRefresher>();
         services.AddSingleton<IBillingSePaySettings, BillingSePaySettings>();
+    }
 
+    /// <summary>Đọc dữ liệu Executor và lời mời.</summary>
+    private static void AddExecutorAndHandoverSupport(IServiceCollection services)
+    {
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();
         services.AddScoped<IExecutorAssetReader, ExecutorAssetReader>();
@@ -142,7 +176,11 @@ public static class InfrastructureConfig
         services.AddScoped<IExecutorReminderSender, ExecutorReminderSender>();
         services.AddHostedService<ExecutorInvitationMonitor>();
         services.AddScoped<IHandoverProgressReader, HandoverProgressReader>();
+    }
 
+    /// <summary>Nơi lưu tệp, khóa mã hóa tài sản và dữ liệu cá nhân của người nhận.</summary>
+    private static void AddAssetStorage(IServiceCollection services, IConfiguration configuration)
+    {
         // Lưu trữ và mã hóa nội dung tài sản
         services.AddOptions<AssetStorageSettings>()
             .Bind(configuration.GetSection("AssetStorage"))
@@ -157,13 +195,19 @@ public static class InfrastructureConfig
             .Bind(configuration.GetSection("AssetEncryption"))
             .PostConfigure(settings =>
             {
-                if (settings.BlindIndexKey != null) settings.BlindIndexKey = settings.BlindIndexKey.Trim().Trim('"').Trim('\'');
-                if (settings.ActiveKeyId != null) settings.ActiveKeyId = settings.ActiveKeyId.Trim().Trim('"').Trim('\'');
+                if (settings.BlindIndexKey != null)
+                {
+                    settings.BlindIndexKey = ConfigText.Clean(settings.BlindIndexKey);
+                }
+                if (settings.ActiveKeyId != null)
+                {
+                    settings.ActiveKeyId = ConfigText.Clean(settings.ActiveKeyId);
+                }
                 if (settings.Keys != null)
                 {
-                    foreach (var key in settings.Keys.Keys.ToList())
+                    foreach (string key in settings.Keys.Keys.ToList())
                     {
-                        settings.Keys[key] = settings.Keys[key]?.Trim().Trim('"').Trim('\'') ?? string.Empty;
+                        settings.Keys[key] = ConfigText.Clean(settings.Keys[key]);
                     }
                 }
             })
@@ -176,7 +220,11 @@ public static class InfrastructureConfig
         services.AddSingleton<IAssetContentStore>(provider => ChooseAssetContentStore(provider));
         // Mã hóa dữ liệu cá nhân của người nhận, dùng chung DataKeyProtector (DATA-02).
         services.AddSingleton<IBeneficiaryDataProtector, BeneficiaryDataProtector>();
+    }
 
+    /// <summary>Mã băm, token, email, job nền, bàn giao và hồ sơ chứng tử.</summary>
+    private static void AddNotificationsAndJobs(IServiceCollection services, IConfiguration configuration)
+    {
         // Security & Notifications
         services.AddMemoryCache();
         services.AddScoped<ISystemSettingService, SystemSettingService>();
@@ -194,21 +242,37 @@ public static class InfrastructureConfig
         services.Configure<CheckInJobSettings>(configuration.GetSection(CheckInJobSettings.SectionName));
         // Dịch vụ email: Gmail qua MailKit khi có cấu hình Email:Smtp, không thì chỉ ghi log (xem EmailConfig).
         services.AddEmailServices(configuration);
+        services.AddSingleton<IEmailDomainChecker, DnsEmailDomainChecker>();
+        services.AddScoped<IEmailBounceStore, EmailBounceStore>();
+        services.AddHostedService<BounceMailboxMonitor>();
         LegacyVault.Infrastructure.Handover.HandoverConfig.AddHandover(services, configuration);
         LegacyVault.Infrastructure.DeathCases.DeathCaseConfig.AddDeathCases(services, configuration);
         services.AddHostedService<CheckInMonitor>();
         // Job nền hết hạn dịch vụ (OPLAN-01): kho trả phí hết kỳ thì sang ân hạn chỉ đọc.
         services.Configure<EntitlementExpiryJobSettings>(configuration.GetSection(EntitlementExpiryJobSettings.SectionName));
         services.AddHostedService<EntitlementExpiryMonitor>();
+    }
 
+    /// <summary>Xác thực JWT và kiểm tra thu hồi phiên.</summary>
+    private static void AddJwtAuthentication(IServiceCollection services, IConfiguration configuration)
+    {
         // JWT Bearer Authentication
         services.AddOptions<JwtSettings>()
             .Bind(configuration.GetSection(JwtSettings.SectionName))
             .PostConfigure(settings =>
             {
-                if (settings.SigningKey != null) settings.SigningKey = settings.SigningKey.Trim().Trim('"').Trim('\'');
-                if (settings.Issuer != null) settings.Issuer = settings.Issuer.Trim().Trim('"').Trim('\'');
-                if (settings.Audience != null) settings.Audience = settings.Audience.Trim().Trim('"').Trim('\'');
+                if (settings.SigningKey != null)
+                {
+                    settings.SigningKey = ConfigText.Clean(settings.SigningKey);
+                }
+                if (settings.Issuer != null)
+                {
+                    settings.Issuer = ConfigText.Clean(settings.Issuer);
+                }
+                if (settings.Audience != null)
+                {
+                    settings.Audience = ConfigText.Clean(settings.Audience);
+                }
             })
             .Validate(settings => !string.IsNullOrWhiteSpace(settings.SigningKey) && Encoding.UTF8.GetByteCount(settings.SigningKey) >= 32,
                 "Cấu hình Jwt:SigningKey phải có độ dài tối thiểu 32 bytes.")
@@ -223,8 +287,8 @@ public static class InfrastructureConfig
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                var jwtSection = configuration.GetSection(JwtSettings.SectionName);
-                var signingKey = jwtSection["SigningKey"]?.Trim().Trim('"').Trim('\'');
+                IConfigurationSection jwtSection = configuration.GetSection(JwtSettings.SectionName);
+                string signingKey = ConfigText.Clean(jwtSection["SigningKey"]);
                 if (string.IsNullOrWhiteSpace(signingKey) || Encoding.UTF8.GetByteCount(signingKey) < 32)
                 {
                     throw new InvalidOperationException("Cấu hình Jwt:SigningKey thiếu hoặc ngắn hơn 32 bytes.");
@@ -296,13 +360,21 @@ public static class InfrastructureConfig
             });
 
         services.AddAuthorization();
+    }
 
+    /// <summary>Bộ kiểm token Google.</summary>
+    private static void AddGoogleLogin(IServiceCollection services, IConfiguration configuration)
+    {
         // Đăng nhập Google: Client ID đọc từ cấu hình GoogleAuth:ClientId, không viết cứng trong code.
         services.AddOptions<GoogleAuthSettings>().Bind(configuration.GetSection(GoogleAuthSettings.SectionName));
         services.AddSingleton<IGoogleTokenVerifier, GoogleTokenVerifier>();
         services.AddScoped<IExternalLoginRepository, ExternalLoginRepository>();
         services.AddScoped<IExternalLoginLinkTicketRepository, ExternalLoginLinkTicketRepository>();
+    }
 
+    /// <summary>Gọi dịch vụ eKYC, mẫu khuôn mặt và danh tính Owner.</summary>
+    private static void AddEkyc(IServiceCollection services, IConfiguration configuration)
+    {
         // eKYC: gọi dịch vụ Python riêng qua HTTP. Chưa cấu hình Ekyc:BaseUrl thì mọi lệnh eKYC trả 503.
         services.AddOptions<EkycSettings>()
             .Bind(configuration.GetSection(EkycSettings.SectionName))
@@ -310,14 +382,14 @@ public static class InfrastructureConfig
             {
                 if (settings.BaseUrl != null)
                 {
-                    settings.BaseUrl = settings.BaseUrl.Trim().Trim('"').Trim('\'');
+                    settings.BaseUrl = ConfigText.Clean(settings.BaseUrl);
                 }
                 if (settings.ApiKey != null)
                 {
-                    settings.ApiKey = settings.ApiKey.Trim().Trim('"').Trim('\'');
+                    settings.ApiKey = ConfigText.Clean(settings.ApiKey);
                 }
                 string? rawTimeout = configuration["Ekyc:TimeoutSeconds"] ?? configuration["Ekyc__TimeoutSeconds"];
-                if (!string.IsNullOrWhiteSpace(rawTimeout) && int.TryParse(rawTimeout.Trim().Trim('"').Trim('\''), out int t) && t > 0)
+                if (!string.IsNullOrWhiteSpace(rawTimeout) && int.TryParse(ConfigText.Clean(rawTimeout), out int t) && t > 0)
                 {
                     settings.TimeoutSeconds = t;
                 }
@@ -354,11 +426,13 @@ public static class InfrastructureConfig
             // thời gian chờ do EkycHttpClient tự canh nên HttpClient không đặt giới hạn riêng.
             client.Timeout = Timeout.InfiniteTimeSpan;
         });
+    }
 
+    /// <summary>Công cụ thử nghiệm của Admin.</summary>
+    private static void AddDevTools(IServiceCollection services)
+    {
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsRepository, DevToolsRepository>();
-
-        return services;
     }
 
     /// <summary>Chọn nơi lưu nội dung tài sản theo AssetStorage:Provider: "R2" dùng Cloudflare R2, còn lại dùng đĩa server.</summary>

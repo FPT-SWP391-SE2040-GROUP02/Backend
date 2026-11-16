@@ -10,14 +10,12 @@ namespace LegacyVault.Application.Services;
 /// Mở phiên đăng nhập cho một user đã được xác thực: tạo refresh token (lưu hash) và access token.
 /// </summary>
 /// <remarks>
-/// Cách mở phiên giống hệt bước 7 trong AuthService.LoginAsync (cùng IdleTimeout 30 phút, tối đa 12 giờ, NFR-06).
+/// Cách mở phiên giống hệt bước 7 trong AuthService.LoginAsync (cùng AuthPolicy.IdleTimeout 30 phút, tối đa 12 giờ, NFR-06).
 /// Tách thành class riêng để đăng nhập Google dùng lại mà không phải sửa AuthService (tránh conflict khi nhóm
 /// còn đang sửa đăng nhập thường). Sau này AuthService có thể gọi class này để bỏ phần code trùng.
 /// </remarks>
 public sealed class LoginSessionIssuer
 {
-    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan MaxSessionLifetime = TimeSpan.FromHours(12);
 
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly ITokenService _tokenService;
@@ -58,8 +56,8 @@ public sealed class LoginSessionIssuer
         var now = _timeProvider.GetUtcNow();
 
         // Phiên hết khi không dùng 30 phút, nhưng không bao giờ quá 12 giờ kể từ lúc đăng nhập.
-        var idleExpiresAt = now.Add(IdleTimeout);
-        var maxExpiresAt = now.Add(MaxSessionLifetime);
+        var idleExpiresAt = now.Add(AuthPolicy.IdleTimeout);
+        var maxExpiresAt = now.Add(AuthPolicy.MaxSessionLifetime);
         if (idleExpiresAt > maxExpiresAt)
         {
             idleExpiresAt = maxExpiresAt;

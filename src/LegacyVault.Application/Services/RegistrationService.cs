@@ -19,6 +19,7 @@ public sealed class RegistrationService : IRegistrationService
     private readonly IEmailSender _emailSender;
     private readonly IAppUrlProvider _appUrlProvider;
     private readonly TimeProvider _timeProvider;
+    private readonly IEmailDomainChecker _domainChecker;
 
     public RegistrationService(
         IUserRepository userRepository,
@@ -28,8 +29,10 @@ public sealed class RegistrationService : IRegistrationService
         ITokenService tokenService,
         IEmailSender emailSender,
         IAppUrlProvider appUrlProvider,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IEmailDomainChecker domainChecker)
     {
+        _domainChecker = domainChecker;
         _userRepository = userRepository;
         _tokenRepository = tokenRepository;
         _unitOfWork = unitOfWork;
@@ -46,6 +49,7 @@ public sealed class RegistrationService : IRegistrationService
         var fullName = request.FullName.Trim();
         string phone = PhoneRules.NormalizeContactPhone(request.Phone, "phone");
         var now = _timeProvider.GetUtcNow();
+        await EmailDomainGuard.EnsureAsync(_domainChecker, email, "email", ct);
 
         // 1. Kiểm tra tài khoản đã tồn tại chưa
         var existing = await _userRepository.FindByEmailAsync(email, ct);

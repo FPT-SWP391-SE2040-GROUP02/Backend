@@ -1,3 +1,4 @@
+using LegacyVault.Application.Notifications;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -13,8 +14,8 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <remarks>
-/// SEC-07: không ghi CCCD, họ tên, ngày sinh, email, số điện thoại vào log hay message lỗi.
-/// SETUP-02: không gửi thông báo, không tạo tài khoản cho người nhận.
+/// không ghi CCCD, họ tên, ngày sinh, email, số điện thoại vào log hay message lỗi.
+/// không gửi thông báo, không tạo tài khoản cho người nhận.
 /// </remarks>
 public sealed partial class BeneficiaryService : IBeneficiaryService
 {
@@ -34,6 +35,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly IOwnerIdentityReader ownerIdentityReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+    private readonly IEmailDomainChecker domainChecker;
+    private readonly IEmailBounceStore bounces;
 
     public BeneficiaryService(
         ICurrentUser currentUser,
@@ -45,8 +48,12 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         IUserRepository userRepository,
         IOwnerIdentityReader ownerIdentityReader,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IEmailDomainChecker domainChecker,
+        IEmailBounceStore bounces)
     {
+        this.domainChecker = domainChecker;
+        this.bounces = bounces;
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.beneficiaryRepository = beneficiaryRepository;
@@ -63,16 +70,16 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Guid vaultId, CreateBeneficiaryRequest request, CancellationToken ct)
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
-        // OPLAN-01: tạo hồ sơ người nhận là thao tác "thêm".
+        // tạo hồ sơ người nhận là thao tác "thêm".
         VaultRules.EnsureEditable(vault);
-        // SETUP-17 / AC-04: hạng Free không được thêm người nhận; chặn ở API, không chỉ ẩn nút.
+        // hạng Free không được thêm người nhận; chặn ở API, không chỉ ẩn nút.
         if (vault.Entitlement.Tier == ServiceTier.Free)
         {
             throw new AppException(AppErrorType.Forbidden, ErrorCode.PaidTierRequired,
                 "Hạng miễn phí chưa được thêm người nhận. Vui lòng nâng cấp dịch vụ.");
         }
 
-        // SETUP-08: đủ số CCCD, họ tên, ngày sinh.
+        // đủ số CCCD, họ tên, ngày sinh.
         BeneficiaryPersonalData data = new BeneficiaryPersonalData();
         data.CitizenId = CitizenIdRules.NormalizeCitizenId(request.CitizenId, "citizenId");
         data.FullName = NormalizeFullName(request.FullName);
@@ -99,6 +106,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
                 throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
             }
             await EnsureEmailIsNotStaffAsync(data.Email, ct);
+            await EmailDomainGuard.EnsureAsync(domainChecker, data.Email.Trim().ToLowerInvariant(), "email", ct);
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -107,7 +115,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         beneficiary.VaultId = vault.Id;
         EnsureDateOfBirthNotInFuture(data.DateOfBirth, today);
 
-        // QUOTA-04: hồ sơ chung trong kho, một số CCCD chỉ có một hồ sơ.
+        // hồ sơ chung trong kho, một số CCCD chỉ có một hồ sơ.
         MatchedBeneficiary? existing = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
         if (existing != null)
         {
@@ -127,8 +135,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // Hồ sơ mới chưa sửa lần nào: UpdatedAt = null → etag "0".
         beneficiary.CreatedAt = now;
         beneficiaryRepository.Add(beneficiary);
-        // QUOTA-03: chưa gắn vào gói thì chưa thuộc cấu hình bàn giao, chưa chiếm suất → KHÔNG tăng ConfigVersion.
-        // SEC-13: chỉ ghi id hồ sơ; họ tên, số CCCD, liên hệ không vào nhật ký (SEC-07).
+        // chưa gắn vào gói thì chưa thuộc cấu hình bàn giao, chưa chiếm suất → KHÔNG tăng ConfigVersion.
+        // chỉ ghi id hồ sơ; họ tên, số CCCD, liên hệ không vào nhật ký.
         AddAudit(vault, AuditAction.BeneficiaryCreated, beneficiary.Id, null, now);
         try
         {
@@ -156,7 +164,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
     /// <summary>
     /// Đã có hồ sơ cùng CCCD: cùng họ tên và ngày sinh thì trả hồ sơ cũ nguyên trạng (không ghi DB, liên hệ mới không được
-    /// cập nhật); khác thì 409 BENEFICIARY_IDENTITY_CONFLICT để Owner sửa cho thống nhất (QUOTA-04, AC-92).
+    /// cập nhật); khác thì 409 BENEFICIARY_IDENTITY_CONFLICT để Owner sửa cho thống nhất.
     /// </summary>
     private async Task<CreateBeneficiaryResult> ResultForExistingAsync(
         MatchedBeneficiary existing, BeneficiaryPersonalData data, CancellationToken ct)
@@ -185,7 +193,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             throw ValidationErrors.For("sortBy", "Chỉ sắp xếp theo createdAt.");
         }
 
-        // Họ tên đã mã hóa nên chỉ tìm được theo 4 số cuối CCCD (DATA-02).
+        // Họ tên đã mã hóa nên chỉ tìm được theo 4 số cuối CCCD.
         string? searchTerm = TextInput.NullIfBlank(pagination.SearchTerm);
         if (searchTerm != null && !CitizenIdRules.IsDigits(searchTerm, 1, MaxSearchDigits))
         {
@@ -210,6 +218,12 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
             List<Guid> containerIds = GetContainerIds(containerIdsByBeneficiary, beneficiary.Id);
             responses.Add(beneficiary.ToResponse(data, containerIds));
+        }
+        HashSet<string> bouncedEmails = await bounces.FindBouncedAsync(responses.Select(r => r.Email ?? string.Empty), ct);
+        foreach (BeneficiaryResponse response in responses)
+        {
+            response.EmailUndeliverable = !string.IsNullOrWhiteSpace(response.Email)
+                && bouncedEmails.Contains(response.Email.Trim().ToLowerInvariant());
         }
         return responses.ToPaginatedList(page.TotalCount, pagination);
     }
@@ -246,7 +260,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Guid vaultId, Guid beneficiaryId, UpdateBeneficiaryRequest request, CancellationToken ct)
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
-        // OPLAN-01: sửa hồ sơ người nhận là thao tác "thêm".
+        // sửa hồ sơ người nhận là thao tác "thêm".
         VaultRules.EnsureEditable(vault);
         Beneficiary beneficiary = await LoadBeneficiaryAsync(vault.Id, beneficiaryId, ct);
 
@@ -319,7 +333,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // Mỗi lần lưu dùng DEK mới.
         dataProtector.Protect(beneficiary, updated);
         beneficiary.UpdatedAt = now;
-        // SETUP-04: hồ sơ đang ở gói thì sửa người nhận là đổi cấu hình bàn giao → tăng ConfigVersion
+        // hồ sơ đang ở gói thì sửa người nhận là đổi cấu hình bàn giao → tăng ConfigVersion
         // (lưu cùng một lần SaveChanges với hồ sơ).
         int? configVersion = null;
         if (containerIds.Count > 0)
@@ -335,7 +349,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     public async Task DeleteBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
-        // OPLAN-01: xóa hồ sơ là thao tác "giảm", vẫn cho khi dịch vụ đang ân hạn.
+        // xóa hồ sơ là thao tác "giảm", vẫn cho khi dịch vụ đang ân hạn.
         VaultRules.EnsureCanReduce(vault);
         Beneficiary beneficiary = await LoadBeneficiaryAsync(vault.Id, beneficiaryId, ct);
 
@@ -349,14 +363,14 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // TODO: request khác gắn hồ sơ này vào gói đúng lúc này thì FK Restrict ở DB chặn việc xóa,
         // nhưng lỗi đó hiện ra 500 thay vì 409 BENEFICIARY_IN_USE.
         beneficiaryRepository.Remove(beneficiary);
-        // AuditLogs.TargetId không có khóa ngoại nên dòng nhật ký vẫn giữ sau khi hồ sơ bị xóa (DATA-07).
+        // AuditLogs.TargetId không có khóa ngoại nên dòng nhật ký vẫn giữ sau khi hồ sơ bị xóa.
         AddAudit(vault, AuditAction.BeneficiaryDeleted, beneficiary.Id, null, timeProvider.GetUtcNow());
         await unitOfWork.SaveChangesAsync(ct);
     }
 
     /// <summary>
-    /// SEC-13: một dòng nhật ký cho thao tác trên hồ sơ người nhận, lưu cùng lần SaveChanges (STATE-02).
-    /// configVersion chỉ có khi thao tác đổi cấu hình bàn giao (hồ sơ đang ở gói, SETUP-04).
+    /// một dòng nhật ký cho thao tác trên hồ sơ người nhận, lưu cùng lần SaveChanges.
+    /// configVersion chỉ có khi thao tác đổi cấu hình bàn giao (hồ sơ đang ở gói).
     /// </summary>
     private void AddAudit(Vault vault, AuditAction action, Guid beneficiaryId, int? configVersion, DateTimeOffset now)
     {
@@ -364,7 +378,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             vault.Id, vault.OwnerId, action, AuditTargetType.Beneficiary, beneficiaryId, configVersion, now));
     }
 
-    /// <summary>MATCH-02: chuẩn hóa Unicode NFC, bỏ khoảng trắng đầu/cuối, gộp nhiều khoảng trắng thành một.</summary>
+    /// <summary>chuẩn hóa Unicode NFC, bỏ khoảng trắng đầu/cuối, gộp nhiều khoảng trắng thành một.</summary>
     private static string NormalizeFullName(string? fullName)
     {
         if (fullName == null)
@@ -488,7 +502,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     }
 
     /// <summary>
-    /// QUOTA-04: tìm hồ sơ cùng số CCCD trong kho. Lọc theo 4 số cuối rồi giải mã từng hồ sơ và so số đầy đủ.
+    /// tìm hồ sơ cùng số CCCD trong kho. Lọc theo 4 số cuối rồi giải mã từng hồ sơ và so số đầy đủ.
     /// Không có → null.
     /// </summary>
     private async Task<MatchedBeneficiary?> FindSameCitizenIdAsync(Guid vaultId, string citizenId, CancellationToken ct)
@@ -510,7 +524,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     }
 
     /// <summary>
-    /// MATCH-02: cùng người khi họ tên (đã chuẩn hóa) giống nhau không phân biệt hoa thường và cùng ngày sinh.
+    /// cùng người khi họ tên (đã chuẩn hóa) giống nhau không phân biệt hoa thường và cùng ngày sinh.
     /// Không bỏ dấu, không so liên hệ.
     /// </summary>
     private static bool IsSameIdentity(BeneficiaryPersonalData left, BeneficiaryPersonalData right)
@@ -526,7 +540,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         return VaultRules.EnsureOwnedBy(vault, userId);
     }
 
-    /// <summary>Hồ sơ không có hoặc thuộc kho khác → 404 BENEFICIARY_NOT_FOUND (SEC-04).</summary>
+    /// <summary>Hồ sơ không có hoặc thuộc kho khác → 404 BENEFICIARY_NOT_FOUND.</summary>
     private async Task<Beneficiary> LoadBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
     {
         Beneficiary? beneficiary = await beneficiaryRepository.FindByIdAsync(vaultId, beneficiaryId, ct);
@@ -576,7 +590,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             "Kho đã đủ số người nhận theo suất hiện có. Vui lòng mua thêm suất hoặc xóa hồ sơ chưa dùng.", extensions);
     }
 
-    /// <summary>QUOTA-04 / AC-92: beneficiaryId để FE mở hồ sơ đang có cùng CCCD cho Owner sửa.</summary>
+    /// <summary>beneficiaryId để FE mở hồ sơ đang có cùng CCCD cho Owner sửa.</summary>
     private static AppException IdentityConflict(Guid beneficiaryId)
     {
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();

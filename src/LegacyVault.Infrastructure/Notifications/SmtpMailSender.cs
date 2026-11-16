@@ -116,7 +116,7 @@ public class SmtpMailSender
         string userName = settings.ResolveUserName();
         string password = settings.ResolvePassword();
         string fromAddress = settings.ResolveFromAddress();
-        string fromName = (settings.FromName ?? "LegacyVault").Trim().Trim('"').Trim('\'');
+        string fromName = ConfigText.Clean(settings.FromName ?? "LegacyVault");
 
         MimeMessage message = new MimeMessage();
         message.From.Add(new MailboxAddress(fromName, fromAddress));
@@ -192,7 +192,7 @@ public class SmtpMailSender
             subject = subject,
             text = textBody,
             html = htmlBody,
-            fromName = (settings.FromName ?? "LegacyVault").Trim().Trim('"').Trim('\''),
+            fromName = ConfigText.Clean(settings.FromName ?? "LegacyVault"),
             fromEmail = settings.ResolveFromAddress()
         };
 
