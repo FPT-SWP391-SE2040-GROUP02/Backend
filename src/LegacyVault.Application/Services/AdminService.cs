@@ -72,6 +72,7 @@ public sealed class AdminService : IAdminService
     private readonly IUnitOfWork unitOfWork;
     private readonly IPasswordHasher passwordHasher;
     private readonly TimeProvider timeProvider;
+    private readonly IPasswordResetService passwordResetService;
 
     public AdminService(
         ICurrentUser currentUser,
@@ -87,8 +88,10 @@ public sealed class AdminService : IAdminService
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IPasswordResetService passwordResetService)
     {
+        this.passwordResetService = passwordResetService;
         this.refreshTokens = refreshTokens;
         this.currentUser = currentUser;
         this.users = users;
@@ -485,12 +488,15 @@ public sealed class AdminService : IAdminService
         {
             throw ValidationErrors.For("fullName", "Vui lòng nhập họ và tên.");
         }
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+        UserRole targetRole = ParseRole(request.Role, "role");
+        // Người xét duyệt / Người thực thi: bỏ trống mật khẩu thì gửi thư mời đặt mật khẩu tới email; mở được link chính là
+        // chứng minh người đó sở hữu email. Quản trị viên vẫn bắt buộc mật khẩu khởi tạo.
+        bool inviteByEmail = string.IsNullOrWhiteSpace(request.Password) && targetRole != UserRole.Admin;
+        if (!inviteByEmail && (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8))
         {
             throw ValidationErrors.For("password", "Mật khẩu tối thiểu 8 ký tự.");
         }
 
-        UserRole targetRole = ParseRole(request.Role, "role");
         // Executor là người ngoài do Owner mời theo từng kho (ROLE-02), Admin không tạo tài khoản Executor.
         if (targetRole != UserRole.Verifier && targetRole != UserRole.Admin && targetRole != UserRole.Executor)
         {
@@ -521,16 +527,16 @@ public sealed class AdminService : IAdminService
             Phone = phone,
             PracticeCertificateNumber = TrimOrNull(request.PracticeCertificateNumber, targetRole),
             LawyerCardNumber = TrimOrNull(request.LawyerCardNumber, targetRole),
-            // Người thực thi hệ thống: Admin nhập hồ sơ pháp lý lúc tạo, có số thẻ/chứng chỉ mới tính là đã xác minh.
+            // Người thực thi hệ thống: số thẻ chỉ để hiển thị. Chỉ tính "đã xác minh pháp lý" khi Admin tải ảnh thẻ lên.
             ExecutorRoleTitle = targetRole == UserRole.Executor ? TrimOrNull(request.ExecutorRoleTitle, targetRole) : null,
             LegalOrganization = targetRole == UserRole.Executor ? TrimOrNull(request.LegalOrganization, targetRole) : null,
-            LegalVerifiedAt = targetRole == UserRole.Executor
-                && (TrimOrNull(request.LawyerCardNumber, targetRole) != null || TrimOrNull(request.PracticeCertificateNumber, targetRole) != null)
-                ? now : null,
-            PasswordHash = passwordHasher.Hash(request.Password),
+            // Mời qua email: mật khẩu ngẫu nhiên không ai biết, người nhận tự đặt qua link.
+            PasswordHash = passwordHasher.Hash(inviteByEmail
+                ? Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+                : request.Password),
             Role = targetRole,
             Status = UserStatus.Active,
-            EmailVerifiedAt = now,
+            EmailVerifiedAt = inviteByEmail ? null : now,
             CreatedAt = now,
         };
 
@@ -549,6 +555,12 @@ public sealed class AdminService : IAdminService
         audit.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.AdminCreatedUser,
             AuditTargetType.User, newUser.Id, null, AuditOutcome.Succeeded, $"Tạo tài khoản {targetRole.ToApiString()}: {email}", now));
         await unitOfWork.SaveChangesAsync(ct);
+
+        if (inviteByEmail)
+        {
+            // shortcut: dùng link đặt lại mật khẩu (hạn 30 phút); hết hạn thì người nhận bấm "Quên mật khẩu" để lấy link mới.
+            await passwordResetService.ForgotPasswordAsync(new ForgotPasswordRequest { Email = email }, ct);
+        }
 
         return OperationsMapper.ToAdminUser(newUser);
     }
