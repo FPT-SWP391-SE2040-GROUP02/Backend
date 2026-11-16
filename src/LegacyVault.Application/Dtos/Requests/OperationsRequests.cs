@@ -58,8 +58,7 @@ public class CreateAdminUserRequest
     [MaxLength(200)]
     public string FullName { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
-    [MinLength(8, ErrorMessage = "Mật khẩu tối thiểu 8 ký tự.")]
+    /// <summary>Bắt buộc với ADMIN. Bỏ trống với VERIFIER/EXECUTOR thì hệ thống gửi thư mời đặt mật khẩu tới email.</summary>
     [MaxLength(128)]
     public string Password { get; set; } = string.Empty;
 
