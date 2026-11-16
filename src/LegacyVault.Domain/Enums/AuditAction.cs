@@ -1,44 +1,44 @@
 namespace LegacyVault.Domain.Enums;
 
 /// <summary>
-/// Loại thao tác ghi vào nhật ký (SEC-07, SEC-13). Lưu dạng chữ nên chỉ thêm giá trị mới ở cuối, không đổi tên giá trị cũ.
+/// Loại thao tác ghi vào nhật ký. Lưu dạng chữ nên chỉ thêm giá trị mới ở cuối, không đổi tên giá trị cũ.
 /// </summary>
 public enum AuditAction
 {
-    /// <summary>Owner bấm "Tạo kho của tôi" lần đầu (SETUP-12).</summary>
+    /// <summary>Owner bấm "Tạo kho của tôi" lần đầu.</summary>
     VaultCreated = 0,
     /// <summary>Owner đổi tên hoặc mô tả kho.</summary>
     VaultUpdated = 1,
-    /// <summary>Owner tải lên một tài sản mới (ASSET-01).</summary>
+    /// <summary>Owner tải lên một tài sản mới.</summary>
     AssetCreated = 2,
-    /// <summary>Owner tạo gói (SETUP-04).</summary>
+    /// <summary>Owner tạo gói.</summary>
     ContainerCreated = 3,
-    /// <summary>Owner đổi tên hoặc mô tả gói (SETUP-04).</summary>
+    /// <summary>Owner đổi tên hoặc mô tả gói.</summary>
     ContainerUpdated = 4,
     /// <summary>
-    /// Owner xóa gói (SETUP-16), tên cũ trước khi đổi Archived thành Removed. Chỉ còn trong nhật ký cũ; thao tác mới
+    /// Owner xóa gói, tên cũ trước khi đổi Archived thành Removed. Chỉ còn trong nhật ký cũ; thao tác mới
     /// ghi ContainerRemoved. Giữ nguyên để không sửa nhật ký đã ghi.
     /// </summary>
     ContainerArchived = 5,
-    /// <summary>Owner thêm tài sản vào gói (SETUP-04).</summary>
+    /// <summary>Owner thêm tài sản vào gói.</summary>
     ContainerAssetAdded = 6,
-    /// <summary>Owner gỡ tài sản khỏi gói (SETUP-04).</summary>
+    /// <summary>Owner gỡ tài sản khỏi gói.</summary>
     ContainerAssetRemoved = 7,
-    /// <summary>Owner chỉ định người nhận cho gói (SETUP-04).</summary>
+    /// <summary>Owner chỉ định người nhận cho gói.</summary>
     ContainerBeneficiaryAdded = 8,
-    /// <summary>Owner gỡ người nhận khỏi gói (SETUP-04).</summary>
+    /// <summary>Owner gỡ người nhận khỏi gói.</summary>
     ContainerBeneficiaryRemoved = 9,
-    /// <summary>Kế hoạch về DRAFT vì mất gói READY cuối cùng, Owner đã xác nhận (SETUP-16).</summary>
+    /// <summary>Kế hoạch về DRAFT vì mất gói READY cuối cùng, Owner đã xác nhận.</summary>
     PlanDeactivated = 10,
-    /// <summary>Owner tạo hồ sơ người nhận (QUOTA-04).</summary>
+    /// <summary>Owner tạo hồ sơ người nhận.</summary>
     BeneficiaryCreated = 11,
     /// <summary>Owner sửa hồ sơ người nhận.</summary>
     BeneficiaryUpdated = 12,
     /// <summary>Owner xóa hồ sơ người nhận không còn ở gói nào.</summary>
     BeneficiaryDeleted = 13,
-    /// <summary>Owner điểm danh (F2A).</summary>
+    /// <summary>Owner điểm danh.</summary>
     CheckedIn = 14,
-    /// <summary>Owner đổi chu kỳ hoặc thời gian chờ điểm danh (DMS-01).</summary>
+    /// <summary>Owner đổi chu kỳ hoặc thời gian chờ điểm danh.</summary>
     CheckInSettingsUpdated = 15,
     /// <summary>Admin hoặc job đặt hold.</summary>
     HoldPlaced = 16,
@@ -54,23 +54,23 @@ public enum AuditAction
     UserStatusChanged = 21,
     /// <summary>Admin giao lại Verifier cho hồ sơ chứng tử.</summary>
     VerifierReassigned = 22,
-    /// <summary>Owner báo còn sống (F2C).</summary>
+    /// <summary>Owner báo còn sống.</summary>
     ObjectionReported = 23,
     /// <summary>Verifier kết luận báo còn sống.</summary>
     ObjectionConcluded = 24,
-    /// <summary>Executor mở hồ sơ chứng tử (DEATH-05).</summary>
+    /// <summary>Executor mở hồ sơ chứng tử.</summary>
     DeathCaseOpened = 25,
     /// <summary>Executor gửi một bản hồ sơ chứng tử, kể cả bản bổ sung.</summary>
     DeathCaseSubmitted = 26,
     /// <summary>Executor tạo bản bổ sung của hồ sơ chứng tử.</summary>
     DeathCaseVersionCreated = 27,
-    /// <summary>Verifier xem xét cờ cảnh báo của hồ sơ (DEATH-10).</summary>
+    /// <summary>Verifier xem xét cờ cảnh báo của hồ sơ.</summary>
     DeathCaseFlagReviewed = 28,
     /// <summary>Verifier yêu cầu Executor bổ sung hồ sơ.</summary>
     DeathCaseSupplementRequested = 29,
-    /// <summary>Verifier từ chối hồ sơ chứng tử (DEATH-12).</summary>
+    /// <summary>Verifier từ chối hồ sơ chứng tử.</summary>
     DeathCaseRejected = 30,
-    /// <summary>Verifier duyệt hồ sơ chứng tử và mở bàn giao (DEATH-06).</summary>
+    /// <summary>Verifier duyệt hồ sơ chứng tử và mở bàn giao.</summary>
     DeathCaseApproved = 31,
     /// <summary>Owner đổi tên hoặc mô tả tài sản.</summary>
     AssetUpdated = 32,
@@ -84,7 +84,7 @@ public enum AuditAction
     DevTimeTravel = 36,
     /// <summary>Admin đưa đồng hồ của kho thử về thời gian thực (chỉ có ở Development).</summary>
     DevClockReset = 37,
-    /// <summary>Owner tạo đơn thanh toán (SRS §8.3).</summary>
+    /// <summary>Owner tạo đơn thanh toán.</summary>
     PaymentOrderCreated = 38,
     /// <summary>Owner hủy đơn thanh toán đang chờ.</summary>
     PaymentOrderCancelled = 39,
@@ -110,13 +110,13 @@ public enum AuditAction
     VaultPinWrong = 48,
     /// <summary>Mã PIN của kho bị khóa tạm vì nhập sai nhiều lần (kết quả Denied).</summary>
     VaultPinLocked = 49,
-    /// <summary>Owner xóa gói (SETUP-16): gói không còn thuộc kế hoạch, không khôi phục được. Thay cho ContainerArchived.</summary>
+    /// <summary>Owner xóa gói: gói không còn thuộc kế hoạch, không khôi phục được. Thay cho ContainerArchived.</summary>
     ContainerRemoved = 50,
-    /// <summary>Kho trả phí hết hạn dịch vụ, chưa có kỳ nối tiếp nên sang ân hạn chỉ đọc (OPLAN-01; job, không có người dùng).</summary>
+    /// <summary>Kho trả phí hết hạn dịch vụ, chưa có kỳ nối tiếp nên sang ân hạn chỉ đọc (do job, không có người dùng).</summary>
     ServiceGraceStarted = 51,
     /// <summary>Executor hủy hồ sơ chứng tử còn nháp (chưa gửi lần nào); hồ sơ và các trang đã tải bị xóa.</summary>
     DeathCaseDraftCancelled = 52,
-    /// <summary>Admin cập nhật tham số cấu hình hệ thống (SYS-01).</summary>
+    /// <summary>Admin cập nhật tham số cấu hình hệ thống.</summary>
     SystemSettingUpdated = 53,
     /// <summary>Admin lưu cấu hình một dịch vụ ngoài (model, địa chỉ, khóa...). Nhật ký chỉ ghi tên trường đã đổi, không ghi giá trị.</summary>
     SystemConfigUpdated = 54,

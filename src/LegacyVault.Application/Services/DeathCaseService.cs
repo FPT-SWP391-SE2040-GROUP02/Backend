@@ -11,9 +11,9 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <remarks>
-/// SEC-04: người không phải Executor đang hiệu lực, hoặc là Owner, luôn nhận 404.
-/// DATA-02, SEC-07: không ghi CCCD, họ tên, số giấy vào log hay message lỗi; response chỉ có 4 số cuối CCCD.
-/// Mỗi use case gọi SaveChanges một lần (STATE-02).
+/// người không phải Executor đang hiệu lực, hoặc là Owner, luôn nhận 404.
+/// không ghi CCCD, họ tên, số giấy vào log hay message lỗi; response chỉ có 4 số cuối CCCD.
+/// Mỗi use case gọi SaveChanges một lần.
 /// </remarks>
 public sealed class DeathCaseService : IDeathCaseService
 {
@@ -88,14 +88,14 @@ public sealed class DeathCaseService : IDeathCaseService
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
         }
 
-        // DEATH-05: kho đã có hồ sơ đang mở (kể cả bản nháp) thì trả lại hồ sơ đó, không tạo thêm.
+        // kho đã có hồ sơ đang mở (kể cả bản nháp) thì trả lại hồ sơ đó, không tạo thêm.
         DeathCase? existing = await deathCaseRepository.FindOpenByVaultIdAsync(vault.Id, ct);
         if (existing != null)
         {
             return BuildOpenResult(existing, false);
         }
 
-        // DEATH-05: chỉ mở hồ sơ khi kế hoạch đang chạy. Dịch vụ ân hạn (chỉ đọc) vẫn mở được vì không kiểm gói dịch vụ.
+        // chỉ mở hồ sơ khi kế hoạch đang chạy. Dịch vụ ân hạn (chỉ đọc) vẫn mở được vì không kiểm gói dịch vụ.
         if (!DeathCaseRules.CanOpen(vault.Plan.Status))
         {
             throw PlanNotRunning(vault.Plan.Status);
@@ -124,8 +124,8 @@ public sealed class DeathCaseService : IDeathCaseService
         version.CreatedAt = now;
         deathCase.Versions.Add(version);
 
-        // AC-71, AC-91: hai Executor mở cùng lúc — DB chỉ cho một hồ sơ mở mỗi kho; bên thua đọc lại hồ sơ bên thắng.
-        // SEC-07: dòng nhật ký lưu cùng lần lưu của TryAddAsync; bên thua gọi DiscardPendingChanges nên dòng bị bỏ.
+        // hai Executor mở cùng lúc — DB chỉ cho một hồ sơ mở mỗi kho; bên thua đọc lại hồ sơ bên thắng.
+        // dòng nhật ký lưu cùng lần lưu của TryAddAsync; bên thua gọi DiscardPendingChanges nên dòng bị bỏ.
         AddAudit(deathCase, userId, AuditAction.DeathCaseOpened, 1, now);
         bool added = await deathCaseRepository.TryAddAsync(deathCase, ct);
         if (added)
@@ -159,7 +159,7 @@ public sealed class DeathCaseService : IDeathCaseService
             throw EditConflict();
         }
 
-        // DEATH-04: chỉ sửa bản nháp mới nhất.
+        // chỉ sửa bản nháp mới nhất.
         DeathCaseVersion version = DeathCaseMappings.FindVersion(deathCase, deathCase.CurrentVersionNo);
         EnsureVersionEditable(deathCase, version);
 
@@ -198,7 +198,7 @@ public sealed class DeathCaseService : IDeathCaseService
             issuedOn = request.IssuedOn;
         }
 
-        // DEATH-01 (D6): nơi đăng ký khai tử. null = giữ nguyên, "" = xóa. Đổi tỉnh mà không gửi phường thì xóa phường.
+        // nơi đăng ký khai tử. null = giữ nguyên, "" = xóa. Đổi tỉnh mà không gửi phường thì xóa phường.
         string? provinceCode = ApplyText(version.DeathRegistrationProvinceCode, request.DeathRegistrationProvinceCode);
         string? wardCode = ApplyText(version.DeathRegistrationWardCode, request.DeathRegistrationWardCode);
         bool provinceChanged = !string.Equals(provinceCode, version.DeathRegistrationProvinceCode, StringComparison.Ordinal);
@@ -207,7 +207,7 @@ public sealed class DeathCaseService : IDeathCaseService
             wardCode = null;
         }
 
-        // DEATH-01 (D5): luật kiểm 3 thông tin trên giấy, dùng chung với lúc gửi hồ sơ (theo giờ Việt Nam).
+        // luật kiểm 3 thông tin trên giấy, dùng chung với lúc gửi hồ sơ (theo giờ Việt Nam).
         DateTimeOffset now = timeProvider.GetUtcNow();
         DeathCaseRules.ValidateCertificateInfo(
             dateOfDeath, issuedOn, provinceCode, wardCode, context.Vault.Plan.ActivatedAt, now, administrativeUnits);
@@ -226,7 +226,7 @@ public sealed class DeathCaseService : IDeathCaseService
             return BuildResponse(deathCase);
         }
 
-        // DATA-02: mỗi lần lưu dùng DEK mới.
+        // mỗi lần lưu dùng DEK mới.
         dataProtector.Protect(version, updated);
         version.DateOfDeath = dateOfDeath;
         version.IssuedOn = issuedOn;
@@ -264,7 +264,7 @@ public sealed class DeathCaseService : IDeathCaseService
             }
         }
 
-        // NFR-09: tối đa 10 tệp mỗi phiên bản (tệp sắp bị thay không tính).
+        // tối đa 10 tệp mỗi phiên bản (tệp sắp bị thay không tính).
         int fileCountAfterReplace = version.Files.Count;
         if (replaced != null)
         {
@@ -290,11 +290,11 @@ public sealed class DeathCaseService : IDeathCaseService
             throw ValidationErrors.For("file", "Không đọc được nội dung tệp để kiểm tra loại tệp.");
         }
 
-        // NFR-09, SEC-12, AC-70: loại tệp theo nội dung thật (chữ ký đầu tệp), không tin đuôi tệp hay Content-Type.
+        // loại tệp theo nội dung thật (chữ ký đầu tệp), không tin đuôi tệp hay Content-Type.
         string contentType = await DetectContentTypeAsync(request.Content, ct);
 
         // Kho lưu trữ mã hóa nội dung trước khi ghi, tự đếm byte thật và dừng khi vượt 20 MiB (FILE_TOO_LARGE).
-        // D8: không tính vào dung lượng kho nên không kiểm quota.
+        // không tính vào dung lượng kho nên không kiểm quota.
         StoredContent stored = await contentStore.SaveAsync(request.Content, DeathCaseRules.MaxFileBytes, ct);
 
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -341,7 +341,7 @@ public sealed class DeathCaseService : IDeathCaseService
             throw;
         }
 
-        // D8: nội dung của tệp bị thay có thể dùng chung với phiên bản khác; chỉ xóa khi không còn dòng nào dùng.
+        // nội dung của tệp bị thay có thể dùng chung với phiên bản khác; chỉ xóa khi không còn dòng nào dùng.
         if (replacedStorageKey != null)
         {
             int stillUsed = await deathCaseRepository.CountFilesUsingStorageKeyAsync(replacedStorageKey, ct);
@@ -378,7 +378,7 @@ public sealed class DeathCaseService : IDeathCaseService
         stored.EncryptionKeyId = file.EncryptionKeyId;
         stored.WrappedDataKey = file.WrappedDataKey;
 
-        // DATA-06: giải mã một lượt vào Stream.Null để kiểm toàn vẹn trước khi gửi byte đầu tiên.
+        // giải mã một lượt vào Stream.Null để kiểm toàn vẹn trước khi gửi byte đầu tiên.
         try
         {
             await contentStore.CopyToAsync(stored, Stream.Null, ct);
@@ -409,7 +409,7 @@ public sealed class DeathCaseService : IDeathCaseService
         CaseContext context = await LoadCaseForExecutorAsync(caseId, ct);
         DeathCase deathCase = context.DeathCase;
         DeathCaseVersion version = DeathCaseMappings.FindVersion(deathCase, deathCase.CurrentVersionNo);
-        // DEATH-04: file của bản đã gửi không gỡ được.
+        // file của bản đã gửi không gỡ được.
         EnsureVersionEditable(deathCase, version);
 
         DeathCaseFile? target = null;
@@ -433,7 +433,7 @@ public sealed class DeathCaseService : IDeathCaseService
         deathCase.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
 
-        // D8: nội dung có thể được dùng chung với phiên bản khác; chỉ xóa khi không còn dòng nào dùng StorageKey này.
+        // nội dung có thể được dùng chung với phiên bản khác; chỉ xóa khi không còn dòng nào dùng StorageKey này.
         int remaining = await deathCaseRepository.CountFilesUsingStorageKeyAsync(storageKey, ct);
         if (remaining == 0)
         {
@@ -474,13 +474,13 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         deathCaseRepository.RemoveCase(deathCase);
 
-        // SEC-07: dòng nhật ký giữ lại dấu vết dù hồ sơ đã bị xóa; không ghi dữ liệu trong hồ sơ.
+        // dòng nhật ký giữ lại dấu vết dù hồ sơ đã bị xóa; không ghi dữ liệu trong hồ sơ.
         // Hai Executor cùng thao tác: UpdatedAt là ETag nên bên lưu sau (ví dụ vừa gửi hồ sơ) nhận 409 EDIT_CONFLICT.
         DateTimeOffset now = timeProvider.GetUtcNow();
         AddAudit(deathCase, context.UserId, AuditAction.DeathCaseDraftCancelled, deathCase.CurrentVersionNo, now);
         await unitOfWork.SaveChangesAsync(ct);
 
-        // D8: chỉ xóa nội dung khi không còn dòng file nào dùng StorageKey. Không dùng ct vì DB đã lưu xong.
+        // chỉ xóa nội dung khi không còn dòng file nào dùng StorageKey. Không dùng ct vì DB đã lưu xong.
         foreach (string storageKey in storageKeys)
         {
             int remaining = await deathCaseRepository.CountFilesUsingStorageKeyAsync(storageKey, CancellationToken.None);
@@ -499,7 +499,7 @@ public sealed class DeathCaseService : IDeathCaseService
         HandoverPlan plan = vault.Plan;
         DeathCaseVersion version = DeathCaseMappings.FindVersion(deathCase, deathCase.CurrentVersionNo);
 
-        // AC-71: bản hiện tại đã được xác nhận rồi (bấm lặp, hoặc Executor kia vừa gửi) → trả trạng thái hiện tại.
+        // bản hiện tại đã được xác nhận rồi (bấm lặp, hoặc Executor kia vừa gửi) → trả trạng thái hiện tại.
         if (version.SubmittedAt != null)
         {
             return BuildResponse(deathCase);
@@ -514,7 +514,7 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         EnsureVersionEditable(deathCase, version);
 
-        // DEATH-01: cần đủ 3 thông tin trên giấy (ngày mất, ngày đăng ký khai tử, nơi đăng ký) và ít nhất một giấy chứng tử
+        // cần đủ 3 thông tin trên giấy (ngày mất, ngày đăng ký khai tử, nơi đăng ký) và ít nhất một giấy chứng tử
         // hoặc trích lục khai tử. Họ tên và CCCD của Chủ kho không còn do Executor nhập.
         DeathCaseIdentityData? identity = dataProtector.Unprotect(version);
         DeathCaseIdentityData data = new DeathCaseIdentityData();
@@ -533,14 +533,14 @@ public sealed class DeathCaseService : IDeathCaseService
                 "Hồ sơ chưa đủ thông tin trên giấy chứng tử hoặc chưa có giấy chứng tử.", incompleteExtensions);
         }
 
-        // DEATH-01 (D5): chạy lại luật kiểm khi gửi, vì "hôm nay" và ngày kích hoạt có thể đã đổi từ lúc lưu nháp (kể cả tua thời gian).
+        // chạy lại luật kiểm khi gửi, vì "hôm nay" và ngày kích hoạt có thể đã đổi từ lúc lưu nháp (kể cả tua thời gian).
         DateTimeOffset now = timeProvider.GetUtcNow();
         DeathCaseRules.ValidateCertificateInfo(
             version.DateOfDeath, version.IssuedOn, version.DeathRegistrationProvinceCode,
             version.DeathRegistrationWardCode, plan.ActivatedAt, now, administrativeUnits);
         int submittingVersionNo = version.VersionNo;
 
-        // DEATH-05, DEATH-12 (phần mở), SETUP-05: lần gửi đầu mới khóa kế hoạch và ghim trạng thái trước đó (D1, D2).
+        // lần gửi đầu mới khóa kế hoạch và ghim trạng thái trước đó.
         // Không dừng lịch điểm danh: nhánh B cần kỳ đang mở để tính lại khi từ chối.
         // Kế hoạch dùng RowVersion: Owner điểm danh hoặc job điểm danh xen giữa thì lần lưu này báo EDIT_CONFLICT.
         bool isFirstSubmit = deathCase.FirstSubmittedAt == null;
@@ -556,7 +556,7 @@ public sealed class DeathCaseService : IDeathCaseService
             plan.UpdatedAt = now;
         }
 
-        // DEATH-04: xác nhận bản này; bản đã gửi không bao giờ sửa lại.
+        // xác nhận bản này; bản đã gửi không bao giờ sửa lại.
         version.SubmittedAt = now;
         version.SubmittedByUserId = context.UserId;
         version.PlanConfigVersion = plan.ConfigVersion;
@@ -564,8 +564,8 @@ public sealed class DeathCaseService : IDeathCaseService
         deathCase.ReviewVersionNo = version.VersionNo;
         deathCase.Status = DeathCaseStatus.UnderReview;
 
-        // DEATH-13: số CCCD trên hồ sơ khác CCCD đã xác minh của Owner → đặt cờ, chặn duyệt tới khi Verifier xem xét.
-        // Có danh tính đã gắn (EKYC-27) thì so đủ 12 số; chưa có (Owner đăng ký trước đó) thì chỉ so 4 số cuối của lượt đạt.
+        // số CCCD trên hồ sơ khác CCCD đã xác minh của Owner → đặt cờ, chặn duyệt tới khi Verifier xem xét.
+        // Có danh tính đã gắn thì so đủ 12 số; chưa có (Owner đăng ký trước đó) thì chỉ so 4 số cuối của lượt đạt.
         string? boundCitizenId = await identityReader.FindBoundCitizenIdAsync(vault.OwnerId, ct);
         bool identityMismatch;
         if (boundCitizenId != null)
@@ -592,7 +592,7 @@ public sealed class DeathCaseService : IDeathCaseService
         // Bản bổ sung mới: hết trạng thái quá hạn bổ sung.
         deathCase.SupplementOverdueAt = null;
 
-        // ASSIGN-01, ROLE-03 (D4): chưa có phân công còn hiệu lực thì chọn Verifier xoay vòng, loại Owner,
+        // chưa có phân công còn hiệu lực thì chọn Verifier xoay vòng, loại Owner,
         // Executor đang hiệu lực của kho và người gửi. Không ai phù hợp → để trống.
         if (deathCase.Assignments.Count == 0)
         {
@@ -600,7 +600,7 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         else if (!isFirstSubmit)
         {
-            // ASSIGN-04, D1: Executor gửi bản mới thì hạn xét của phân công đang hiệu lực tính lại = lúc gửi + 48 giờ
+            // Executor gửi bản mới thì hạn xét của phân công đang hiệu lực tính lại = lúc gửi + 48 giờ
             // (giữ AssignedAt).
             foreach (DeathCaseAssignment assignment in deathCase.Assignments)
             {
@@ -612,7 +612,7 @@ public sealed class DeathCaseService : IDeathCaseService
         }
 
         deathCase.UpdatedAt = now;
-        // SEC-07: nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
+        // nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
         AddAudit(deathCase, context.UserId, AuditAction.DeathCaseSubmitted, submittingVersionNo, now);
         try
         {
@@ -620,7 +620,7 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         catch (Exception ex) when (IsSubmitRace(ex))
         {
-            // AC-71: Executor khác vừa gửi cùng bản này (etag/RowVersion lệch, hoặc trùng cờ/phân công)
+            // Executor khác vừa gửi cùng bản này (etag/RowVersion lệch, hoặc trùng cờ/phân công)
             // → trả trạng thái hiện tại thay vì báo lỗi.
             deathCaseRepository.DiscardPendingChanges();
             DeathCase? latest = await deathCaseRepository.FindByIdAsync(caseId, ct);
@@ -646,7 +646,7 @@ public sealed class DeathCaseService : IDeathCaseService
             throw EditConflict();
         }
 
-        // D5: chỉ tạo bản mới từ bản đã gửi, khi hồ sơ đang xét hoặc cần bổ sung, và chưa có bản nháp nào.
+        // chỉ tạo bản mới từ bản đã gửi, khi hồ sơ đang xét hoặc cần bổ sung, và chưa có bản nháp nào.
         DeathCaseVersion current = DeathCaseMappings.FindVersion(deathCase, deathCase.CurrentVersionNo);
         if (!DeathCaseRules.CanCreateNewVersion(deathCase, current))
         {
@@ -664,14 +664,14 @@ public sealed class DeathCaseService : IDeathCaseService
         next.CreatedByUserId = context.UserId;
         next.CreatedAt = now;
 
-        // DATA-02: chép dữ liệu nhạy cảm sang bản mới và mã hóa lại bằng DEK mới.
+        // chép dữ liệu nhạy cảm sang bản mới và mã hóa lại bằng DEK mới.
         DeathCaseIdentityData? identity = dataProtector.Unprotect(current);
         if (identity != null)
         {
             dataProtector.Protect(next, identity);
         }
 
-        // D8: chép dòng file, dùng chung nội dung đã lưu (cùng StorageKey); không ghi lại nội dung.
+        // chép dòng file, dùng chung nội dung đã lưu (cùng StorageKey); không ghi lại nội dung.
         foreach (DeathCaseFile source in current.Files)
         {
             DeathCaseFile copy = new DeathCaseFile();
@@ -699,7 +699,7 @@ public sealed class DeathCaseService : IDeathCaseService
         }
         deathCase.CurrentVersionNo = next.VersionNo;
         deathCase.UpdatedAt = now;
-        // SEC-07: nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
+        // nhật ký lưu cùng lần lưu; bên thua tranh chấp bị DiscardPendingChanges nên dòng bị bỏ.
         AddAudit(deathCase, context.UserId, AuditAction.DeathCaseVersionCreated, next.VersionNo, now);
         try
         {
@@ -714,7 +714,7 @@ public sealed class DeathCaseService : IDeathCaseService
         return BuildResponse(deathCase);
     }
 
-    /// <summary>SEC-07: dòng nhật ký của Executor trên hồ sơ; không có lý do (không ghi dữ liệu nhạy cảm).</summary>
+    /// <summary>dòng nhật ký của Executor trên hồ sơ; không có lý do (không ghi dữ liệu nhạy cảm).</summary>
     private void AddAudit(DeathCase deathCase, Guid userId, AuditAction action, int versionNo, DateTimeOffset now)
     {
         auditLogRepository.Add(AuditRules.DeathCaseAction(
@@ -735,11 +735,11 @@ public sealed class DeathCaseService : IDeathCaseService
     private async Task AssignVerifierAsync(
         DeathCase deathCase, Vault vault, Guid submitterUserId, DateTimeOffset now, CancellationToken ct)
     {
-        // D5: danh sách loại trừ nằm ở IDeathCaseVerifierPicker, dùng chung với job phân công.
+        // danh sách loại trừ nằm ở IDeathCaseVerifierPicker, dùng chung với job phân công.
         Guid? verifierId = await verifierPicker.PickAsync(vault, submitterUserId, null, ct);
         if (verifierId == null)
         {
-            // ASSIGN-04 (nhánh B): chưa có Verifier phù hợp thì hồ sơ chờ được giao sau.
+            // chưa có Verifier phù hợp thì hồ sơ chờ được giao sau.
             return;
         }
 
@@ -787,7 +787,7 @@ public sealed class DeathCaseService : IDeathCaseService
 
     /// <summary>
     /// Hồ sơ theo Id mà người gọi là Executor đang hiệu lực của kho. Không có, hoặc không đủ quyền → 404
-    /// DEATH_CASE_NOT_FOUND (SEC-04). Trả kèm kho (đã nạp Plan) cho các bước sau.
+    /// DEATH_CASE_NOT_FOUND. Trả kèm kho (đã nạp Plan) cho các bước sau.
     /// </summary>
     private async Task<CaseContext> LoadCaseForExecutorAsync(Guid caseId, CancellationToken ct)
     {
@@ -810,7 +810,7 @@ public sealed class DeathCaseService : IDeathCaseService
         return context;
     }
 
-    /// <summary>ROLE-03: Owner không bao giờ là Executor của chính kho; chỉ Executor Accepted mới tính.</summary>
+    /// <summary>Owner không bao giờ là Executor của chính kho; chỉ Executor Accepted mới tính.</summary>
     private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
     {
         if (vault.OwnerId == userId)
@@ -829,7 +829,7 @@ public sealed class DeathCaseService : IDeathCaseService
     }
 
     /// <summary>
-    /// DEATH-04: bản đã gửi không bao giờ sửa. Hồ sơ đã đóng (duyệt/từ chối/tạm dừng) → CASE_CLOSED,
+    /// bản đã gửi không bao giờ sửa. Hồ sơ đã đóng (duyệt/từ chối/tạm dừng) → CASE_CLOSED,
     /// còn lại → VERSION_LOCKED.
     /// </summary>
     private static void EnsureVersionEditable(DeathCase deathCase, DeathCaseVersion version)

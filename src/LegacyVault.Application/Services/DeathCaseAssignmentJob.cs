@@ -7,17 +7,17 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <remarks>
-/// - ASSIGN-04: hồ sơ luôn có người phụ trách và hạn. Chưa có người thì giao; quá hạn hoặc Verifier mất quyền thì giao lại.
-/// - D5: chỉ kết thúc phân công cũ khi tìm được người thay; không có ai thì giữ nguyên, vòng sau thử lại.
-/// - D4: giao lại đổi DeathCase.UpdatedAt (etag) để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT. Giao người cho hồ sơ
+/// - Hồ sơ luôn có người phụ trách và hạn. Chưa có người thì giao; quá hạn hoặc Verifier mất quyền thì giao lại.
+/// - Chỉ kết thúc phân công cũ khi tìm được người thay; không có ai thì giữ nguyên, vòng sau thử lại.
+/// - Giao lại đổi DeathCase.UpdatedAt (etag) để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT. Giao người cho hồ sơ
 ///   trống thì không đổi UpdatedAt vì không ai mất quyền.
-/// - Job KHÔNG BAO GIỜ đổi trạng thái hồ sơ, thêm quyết định hay mở bàn giao: quá hạn không tự cho đạt (ASSIGN-04).
-/// - ASSIGN-03: không sửa hay xóa quyết định cũ; quyết định cũ vẫn gắn AssignmentId của phân công đã kết thúc.
+/// - Job KHÔNG BAO GIỜ đổi trạng thái hồ sơ, thêm quyết định hay mở bàn giao: quá hạn không tự cho đạt.
+/// - Không sửa hay xóa quyết định cũ; quyết định cũ vẫn gắn AssignmentId của phân công đã kết thúc.
 /// - Mỗi hồ sơ SaveChanges tối đa một lần; đóng phân công cũ và thêm phân công mới nằm trong cùng lần lưu.
-/// - D3, TIME-02: nhắc Verifier đang giữ hồ sơ UnderReview khi còn không quá 12 giờ tới hạn, mỗi hạn một lần thành công.
-///   Hồ sơ SupplementRequired đang chờ Executor thì không nhắc (D2).
-/// - SEC-07: không đưa CCCD, tên Owner hay địa chỉ email vào bất kỳ đâu.
-/// TODO: thư "bạn được giao" cho Verifier mới và báo Admin khi không có người thay (F4).
+/// - Nhắc Verifier đang giữ hồ sơ UnderReview khi còn không quá 12 giờ tới hạn, mỗi hạn một lần thành công.
+///   Hồ sơ SupplementRequired đang chờ Executor thì không nhắc.
+/// - Không đưa CCCD, tên Owner hay địa chỉ email vào bất kỳ đâu.
+/// TODO: thư "bạn được giao" cho Verifier mới và báo Admin khi không có người thay.
 /// </remarks>
 public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
 {
@@ -61,7 +61,7 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
 
     public async Task<DeathCaseAssignmentOutcome> ProcessCaseAsync(Guid caseId, CancellationToken ct)
     {
-        // Bước 1: đọc lại và kiểm lại trạng thái (TIME-02: chạy lặp an toàn). Hồ sơ đã đóng hoặc còn Draft thì bỏ qua.
+        // Bước 1: đọc lại và kiểm lại trạng thái (chạy lặp lại vẫn an toàn). Hồ sơ đã đóng hoặc còn Draft thì bỏ qua.
         DeathCase? deathCase = await deathCaseRepository.FindByIdAsync(caseId, ct);
         if (deathCase == null || !DeathCaseReviewRules.CanDecide(deathCase.Status))
         {
@@ -90,8 +90,8 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         Guid submitterUserId = reviewVersion.SubmittedByUserId.Value;
         DateTimeOffset now = timeProvider.GetUtcNow();
 
-        // Bước 3 (D2, ASSIGN-04): chưa có người giữ thì giao, cả UnderReview lẫn SupplementRequired.
-        // Không đổi UpdatedAt (D4): không ai mất quyền, giao trùng đã có unique UX_DeathCaseAssignments_ActivePerCase chặn.
+        // Bước 3: chưa có người giữ thì giao, cả UnderReview lẫn SupplementRequired.
+        // Không đổi UpdatedAt: không ai mất quyền, giao trùng đã có unique UX_DeathCaseAssignments_ActivePerCase chặn.
         if (active == null)
         {
             Guid? firstPick = await verifierPicker.PickAsync(vault, submitterUserId, null, ct);
@@ -108,7 +108,7 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
             return DeathCaseAssignmentOutcome.Assigned;
         }
 
-        // Bước 4 (D5): lý do giao lại. Verifier mất quyền thì giao ngay; quá hạn chỉ tính khi UnderReview (D2).
+        // Bước 4: lý do giao lại. Verifier mất quyền thì giao ngay; quá hạn chỉ tính khi UnderReview.
         User? holder = await userRepository.FindByIdAsync(active.VerifierUserId, ct);
         string? reason = null;
         if (!DeathCaseAssignmentRules.IsVerifierAvailable(holder))
@@ -122,14 +122,14 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         }
         if (reason != null)
         {
-            // Bước 5 (D5): chỉ kết thúc phân công cũ khi tìm được người thay (loại cả Verifier đang giữ).
+            // Bước 5: chỉ kết thúc phân công cũ khi tìm được người thay (loại cả Verifier đang giữ).
             Guid? replacement = await verifierPicker.PickAsync(vault, submitterUserId, active.VerifierUserId, ct);
             if (replacement != null)
             {
                 active.EndedAt = now;
                 active.EndReason = reason;
                 AddAssignment(deathCase, replacement.Value, now);
-                // D4: đổi etag để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT, tải lại thì 404.
+                // đổi etag để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT, tải lại thì 404.
                 deathCase.UpdatedAt = now;
                 bool reassignedSaved = await TrySaveAsync(ct);
                 if (!reassignedSaved)
@@ -139,14 +139,14 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
                 return DeathCaseAssignmentOutcome.Reassigned;
             }
 
-            // Bước 6 (D5): không có người thay. Verifier đã mất quyền thì không gửi thư cho họ.
+            // Bước 6: không có người thay. Verifier đã mất quyền thì không gửi thư cho họ.
             if (reason == DeathCaseAssignmentRules.EndReasonVerifierUnavailable)
             {
                 return DeathCaseAssignmentOutcome.NoCandidate;
             }
         }
 
-        // Bước 7 (D3, TIME-02, ASSIGN-04): nhắc Verifier đang giữ hồ sơ, gồm cả cảnh báo quá hạn khi OVERDUE
+        // Bước 7: nhắc Verifier đang giữ hồ sơ, gồm cả cảnh báo quá hạn khi OVERDUE
         // mà không có người thay. Mỗi hạn chỉ nhắc thành công một lần (RemindedDueAt).
         DeathCaseAssignmentOutcome? reminderOutcome = await TryRemindAsync(deathCase, active, holder, now, ct);
         if (reminderOutcome != null)
@@ -163,9 +163,9 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
     }
 
     /// <summary>
-    /// D3, D2: chỉ nhắc khi hồ sơ UnderReview, đến lúc nhắc cho hạn này và Verifier có email. Trả null khi không có
+    /// chỉ nhắc khi hồ sơ UnderReview, đến lúc nhắc cho hạn này và Verifier có email. Trả null khi không có
     /// gì để nhắc. Gửi lỗi → ReminderFailed (không lưu, vòng sau thử lại, không đếm số lần). Gửi được → ghi
-    /// RemindedDueAt rồi lưu một lần; không đổi UpdatedAt (D4). Gửi được nhưng lưu lỗi thì có thể gửi trùng một lần.
+    /// RemindedDueAt rồi lưu một lần; không đổi UpdatedAt. Gửi được nhưng lưu lỗi thì có thể gửi trùng một lần.
     /// </summary>
     private async Task<DeathCaseAssignmentOutcome?> TryRemindAsync(
         DeathCase deathCase, DeathCaseAssignment active, User? holder, DateTimeOffset now, CancellationToken ct)
@@ -212,7 +212,7 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
         return DeathCaseAssignmentOutcome.Reminded;
     }
 
-    /// <summary>ASSIGN-04, D1: thêm phân công mới, hạn = ComputeDueAt(lúc giao).</summary>
+    /// <summary>thêm phân công mới, hạn = ComputeDueAt(lúc giao).</summary>
     private void AddAssignment(DeathCase deathCase, Guid verifierUserId, DateTimeOffset now)
     {
         DeathCaseAssignment assignment = new DeathCaseAssignment();
@@ -225,7 +225,7 @@ public sealed class DeathCaseAssignmentJob : IDeathCaseAssignmentJob
     }
 
     /// <summary>
-    /// D4: lưu một lần. Xung đột phiên bản (Verifier hoặc Executor vừa sửa hồ sơ) hoặc trùng phân công đang hiệu lực
+    /// lưu một lần. Xung đột phiên bản (Verifier hoặc Executor vừa sửa hồ sơ) hoặc trùng phân công đang hiệu lực
     /// thì bỏ mọi thay đổi chưa lưu và trả false; vòng sau đọc lại. Lỗi khác ném lên monitor.
     /// </summary>
     private async Task<bool> TrySaveAsync(CancellationToken ct)
