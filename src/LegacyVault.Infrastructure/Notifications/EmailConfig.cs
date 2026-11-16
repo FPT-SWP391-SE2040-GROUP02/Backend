@@ -76,6 +76,7 @@ public static class EmailConfig
         // SmtpMailSender ghi trạng thái lần gửi gần nhất và đọc cấu hình lúc chạy: bảo đảm có đủ thứ nó cần.
         services.TryAddSingleton<IServiceStatusTracker, ServiceStatusTracker>();
         services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<DevEmailSender>();
         services.AddSingleton<SmtpMailSender>();
         services.AddHostedService<EmailStartupLogger>();
         services.AddSingleton<ICheckInReminderSender>(provider => ChooseReminderSender(provider));

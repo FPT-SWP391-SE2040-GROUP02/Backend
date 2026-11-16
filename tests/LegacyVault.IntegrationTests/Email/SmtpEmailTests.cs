@@ -145,7 +145,7 @@ public sealed class SmtpEmailTests
     {
         using FakeSmtpServer server = new FakeSmtpServer();
         SmtpMailSender mailSender = SmtpTestSenders.Create(SettingsFor(server));
-        SmtpEmailSender sender = new SmtpEmailSender(mailSender);
+        SmtpEmailSender sender = NewSender(mailSender, "Production");
         string url = "http://localhost:5173/verify-email?token=abc123";
 
         await sender.SendEmailVerificationAsync("an@test.local", "Nguyễn Văn An", url, CancellationToken.None);
@@ -153,6 +153,30 @@ public sealed class SmtpEmailTests
         MimeMessage message = ParseOnlyMessage(server);
         Assert.Contains(url, message.TextBody);
         Assert.Contains(url, message.HtmlBody);
+    }
+
+    private static SmtpEmailSender NewSender(SmtpMailSender mailSender, string environment)
+    {
+        return new SmtpEmailSender(
+            mailSender,
+            new DevEmailSender(Microsoft.Extensions.Logging.Abstractions.NullLogger<DevEmailSender>.Instance),
+            new LegacyVault.IntegrationTests.Handover.HandoverSettingsTests.TestHostEnvironment(environment),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SmtpEmailSender>.Instance);
+    }
+
+    [Fact]
+    public async Task VerificationSender_SmtpFails_ThrowsInProduction_ButFallsBackInDevelopment()
+    {
+        using FakeSmtpServer server = new FakeSmtpServer();
+        server.RejectRecipientWith = "550 no such user";
+        SmtpMailSender mailSender = SmtpTestSenders.Create(SettingsFor(server));
+        string url = "http://localhost:5173/verify-email?token=abc123";
+
+        // Production: lỗi SMTP phải nổi lên để job gửi lại; Development: dùng DevEmailSender, không chặn luồng đăng ký.
+        await Assert.ThrowsAnyAsync<Exception>(() => NewSender(mailSender, "Production")
+            .SendEmailVerificationAsync("ghost@test.local", "Ghost", url, CancellationToken.None));
+        await NewSender(mailSender, "Development")
+            .SendEmailVerificationAsync("ghost@test.local", "Ghost", url, CancellationToken.None);
     }
 
     [Fact]
@@ -259,6 +283,9 @@ public sealed class SmtpEmailTests
         ServiceCollection services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<IConfiguration>(configuration);
+        // Ứng dụng thật luôn có IHostEnvironment; SmtpEmailSender cần nó để quyết định fallback ở Development.
+        services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(
+            new LegacyVault.IntegrationTests.Handover.HandoverSettingsTests.TestHostEnvironment("Production"));
         services.AddEmailServices(configuration);
         return services.BuildServiceProvider();
     }

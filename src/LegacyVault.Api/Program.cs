@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 var envCandidates = new[]
 {
     Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "Backend", ".env"),
     Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),
     Directory.GetParent(Directory.GetCurrentDirectory()) != null ? Path.Combine(Directory.GetParent(Directory.GetCurrentDirectory())!.FullName, ".env") : ""
 };
