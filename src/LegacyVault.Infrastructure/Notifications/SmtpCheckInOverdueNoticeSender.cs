@@ -9,19 +9,13 @@ namespace LegacyVault.Infrastructure.Notifications;
 /// </summary>
 public sealed class SmtpCheckInOverdueNoticeSender : ICheckInOverdueNoticeSender
 {
-    private const string DefaultClientUrl = "http://localhost:5173";
-
     private readonly SmtpMailSender mailSender;
     private readonly string clientUrl;
 
     public SmtpCheckInOverdueNoticeSender(SmtpMailSender mailSender, IConfiguration configuration)
     {
         this.mailSender = mailSender;
-        string? configured = configuration["App:ClientUrl"];
-        if (string.IsNullOrWhiteSpace(configured))
-        {
-            configured = DefaultClientUrl;
-        }
+        string configured = ClientUrlSettings.Read(configuration);
         clientUrl = configured.TrimEnd('/');
     }
 
