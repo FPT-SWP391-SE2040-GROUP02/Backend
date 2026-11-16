@@ -1,3 +1,4 @@
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
@@ -71,6 +72,7 @@ public sealed class AdminService : IAdminService
     private readonly IPasswordHasher passwordHasher;
     private readonly TimeProvider timeProvider;
     private readonly IHandoverRepository handover;
+    private readonly IEmailDomainChecker domainChecker;
 
     public AdminService(
         ICurrentUser currentUser,
@@ -85,9 +87,11 @@ public sealed class AdminService : IAdminService
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
         TimeProvider timeProvider,
-        IHandoverRepository handover)
+        IHandoverRepository handover,
+        IEmailDomainChecker domainChecker)
     {
         this.handover = handover;
+        this.domainChecker = domainChecker;
         this.refreshTokens = refreshTokens;
         this.currentUser = currentUser;
         this.users = users;
@@ -495,6 +499,7 @@ public sealed class AdminService : IAdminService
             throw ValidationErrors.For("role", "Chỉ được tạo tài khoản VERIFIER, EXECUTOR hoặc ADMIN.");
         }
 
+        await EmailDomainGuard.EnsureAsync(domainChecker, email, "email", ct);
         User? existing = await users.FindByEmailAsync(email, ct);
         if (existing != null)
         {

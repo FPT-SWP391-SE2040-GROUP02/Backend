@@ -1,5 +1,6 @@
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
@@ -50,7 +51,8 @@ public sealed class UniquePhoneTests
             new FakeTokenService(),
             new CapturingPasswordResetEmailSender(),
             new FakeAppUrlProvider(),
-            clock);
+            clock,
+            new AlwaysExistsDomainChecker());
     }
 
     [Theory]
@@ -134,5 +136,10 @@ public sealed class UniquePhoneTests
         public void Add(EmailVerificationToken token)
         {
         }
+    }
+
+    private sealed class AlwaysExistsDomainChecker : IEmailDomainChecker
+    {
+        public Task<bool> DomainExistsAsync(string email, CancellationToken ct) => Task.FromResult(true);
     }
 }

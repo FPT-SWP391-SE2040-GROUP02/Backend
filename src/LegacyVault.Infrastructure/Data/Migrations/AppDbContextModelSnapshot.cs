@@ -947,6 +947,33 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("EkycVerifications", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.EmailBounce", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("DetectedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("EmailHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("FailureCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmailHash")
+                        .IsUnique();
+
+                    b.ToTable("EmailBounces", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.EmailTemplate", b =>
                 {
                     b.Property<string>("Key")

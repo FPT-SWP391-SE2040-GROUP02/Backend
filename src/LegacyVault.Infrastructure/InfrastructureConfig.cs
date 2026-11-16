@@ -242,6 +242,9 @@ public static class InfrastructureConfig
         services.Configure<CheckInJobSettings>(configuration.GetSection(CheckInJobSettings.SectionName));
         // Dịch vụ email: Gmail qua MailKit khi có cấu hình Email:Smtp, không thì chỉ ghi log (xem EmailConfig).
         services.AddEmailServices(configuration);
+        services.AddSingleton<IEmailDomainChecker, DnsEmailDomainChecker>();
+        services.AddScoped<IEmailBounceStore, EmailBounceStore>();
+        services.AddHostedService<BounceMailboxMonitor>();
         LegacyVault.Infrastructure.Handover.HandoverConfig.AddHandover(services, configuration);
         LegacyVault.Infrastructure.DeathCases.DeathCaseConfig.AddDeathCases(services, configuration);
         services.AddHostedService<CheckInMonitor>();
