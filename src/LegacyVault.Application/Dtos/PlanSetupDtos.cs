@@ -15,7 +15,7 @@ public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, boo
     string[] MissingRequirements, string PolicyVersion, string PolicyText, string ExecutorScopeVersion,
     string ExecutorScopeText, List<ExecutorInvitationResponse> Executors,
     List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings,
-    List<string>? WillClauses = null, string OwnerFullName = "", string OwnerEmail = "",
+    string OwnerFullName = "", string OwnerEmail = "",
     DateTimeOffset? ActivatedAt = null, List<PlanSetupRecipientResponse>? Recipients = null);
 
 /// <summary>Một gói của người nhận trên màn kích hoạt (chỉ tên, số tài sản và trạng thái, không có nội dung).</summary>

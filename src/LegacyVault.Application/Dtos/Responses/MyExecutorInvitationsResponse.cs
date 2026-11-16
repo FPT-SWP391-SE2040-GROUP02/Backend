@@ -37,6 +37,4 @@ public sealed class MyExecutorInvitationResponse
     /// <summary>Lúc từ chối, hết hạn hoặc bị thu hồi; null khi còn chờ.</summary>
     public DateTimeOffset? EndedAt { get; set; }
 
-    /// <summary>Điều khoản Chủ kho thêm vào di chúc, để người được mời đọc trước khi ký nhận vai.</summary>
-    public List<string> WillClauses { get; set; } = new List<string>();
 }

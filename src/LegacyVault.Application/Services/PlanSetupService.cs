@@ -472,7 +472,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
             executorItems,
             PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>(),
-            WillClauseRules.Split(vault.WillClauses), ownerFullName, ownerEmail, vault.Plan.ActivatedAt, recipients);
+            ownerFullName, ownerEmail, vault.Plan.ActivatedAt, recipients);
     }
 
     /// <summary>
@@ -559,7 +559,6 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         response.InvitedAt = item.InvitedAt;
         response.ExpiresAt = item.ExpiresAt;
         response.EndedAt = endedAt;
-        response.WillClauses = WillClauseRules.Split(item.Vault.WillClauses);
         return response;
     }
 
