@@ -136,3 +136,30 @@ Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự 
 - `GET /vaults/{vaultId}/executor-candidates?q=`: chỉ trả tài khoản role `EXECUTOR`, Active, đã xác minh email và đã có `LegalVerifiedAt` (cùng điều kiện được mời), không gồm Chủ kho.
 
 **Nhật ký mới (`AuditAction`, lưu dạng chuỗi, không migration):** `PlanActivated = 62` (Chủ kho ký bằng PIN), `ExecutorAccepted = 63` (Người thực thi tự chấp nhận lời mời, actor Executor, đích Vault).
+
+## Phiên bản di chúc đã ký, ký lại, danh tính lập di chúc (bổ sung 17/11/2026, nhánh feat/will-signature)
+
+**Quy tắc nghiệp vụ.** Bàn giao chỉ theo **bản ký gần nhất**. Mỗi lần Chủ kho ký (kích hoạt hoặc ký lại bằng PIN) server lưu một phiên bản trong bảng `WillVersions`; khi bắt đầu bàn giao, `HandoverStarter` chỉ dùng phần **có trong bản ký gần nhất VÀ vẫn còn tồn tại** (giao của bản chụp và cấu hình hiện tại):
+
+- Xóa gói/tài sản/người nhận sau khi ký: có hiệu lực ngay (không bàn giao thứ đã xóa); phần còn lại vẫn bàn giao theo bản ký.
+- Thêm gói, thêm tài sản vào gói, đổi người nhận hoặc gắn người nhận mới mà **chưa ký lại**: bị **bỏ qua** khi bàn giao. Gói mà mọi tài sản trong bản ký đã bị gỡ (chỉ còn tài sản thêm sau khi ký) cũng không tạo lượt; không còn lượt nào → 409 `HANDOVER_NOT_ALLOWED`, `reason = NOTHING_TO_HAND_OVER`.
+- Kế hoạch đang chạy từ trước khi có tính năng này và **chưa có dòng `WillVersions` nào**: giữ cách cũ (theo cấu hình hiện tại). Người thực thi vẫn **không** ký lại khi đổi tài sản/người nhận (chỉ ký lại khi phạm vi nhiệm vụ đổi, như trước).
+- Chưa có hạn ân hạn hay tự động đưa kế hoạch về nháp.
+
+**Bảng `WillVersions`** (migration `AddWillVersions`): `Id`, `VaultId` (FK, unique cùng `VersionNo`), `VersionNo` (1, 2, ...), `ConfigVersion` (lúc ký), `SignedAt`, `SnapshotJson` (nvarchar(max)): `{"recipients":[{"containerId","beneficiaryId"}],"assets":[{"containerId","assetId"}]}`. Chỉ có id, không có tên tài sản/người nhận hay nội dung nhạy cảm; chỉ gói `READY` vào bản chụp. Kích hoạt tạo phiên bản kế tiếp trong cùng giao dịch (phiên bản 1 ở lần kích hoạt đầu; kích hoạt lại sau khi về nháp tạo phiên bản N+1).
+
+| Method / path | Caller / body | Result |
+|---|---|---|
+| POST `/vaults/{vaultId}/will/sign` | Owner + **`X-Vault-Pin`**: `{ configVersion }` | Ký lại: tạo phiên bản N+1, ghi nhật ký `WillResigned` (đích Vault, `targetVersion` = số phiên bản), trả `PlanSetupResponse` mới. Không có thay đổi chưa ký → 200 trả nguyên trạng, **không** tạo phiên bản (gọi lặp an toàn). Kế hoạch chưa chạy (`IsRunning` = false) → 409 `WILL_SIGN_NOT_ALLOWED`. `configVersion` cũ → 409 `EDIT_CONFLICT`. Thiếu/sai/khóa PIN → 403 `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN`, 423 `VAULT_PIN_LOCKED`. Người khác kể cả Admin/Executor → 404 `VAULT_NOT_FOUND`. Kế hoạch chạy từ trước, chưa có phiên bản nào: ký lần đầu tạo phiên bản 1 |
+| GET `/vaults/{vaultId}/will/identity` | Owner | Danh tính đầy đủ đã giải mã để lập di chúc: `{ owner, recipients[] }`; `owner` = `{ fullName, dateOfBirth, citizenId (12 số), residenceAddress }` hoặc **null** khi Chủ kho chưa có danh tính eKYC đã gắn; `recipients[]` = `{ beneficiaryId, fullName, dateOfBirth, citizenId }` cho mọi hồ sơ người nhận của kho. `Cache-Control: no-store`. Mỗi lần gọi thành công ghi nhật ký `WillIdentityViewed` (không ghi giá trị giải mã; không log họ tên/CCCD). Người khác kể cả Admin → 404 `VAULT_NOT_FOUND`; chưa đăng nhập → 401 |
+
+**`PlanSetupResponse`** (GET `plan-setup`, response của `activate` và `will/sign`) thêm bốn field (đều tùy chọn cho client cũ):
+
+| Field | Kiểu | Nội dung |
+|---|---|---|
+| `willVersion` | int hoặc null | Số phiên bản ký gần nhất; null nếu chưa có phiên bản nào. |
+| `willSignedAt` | ISO hoặc null | Thời điểm ký phiên bản gần nhất. |
+| `hasUnsignedChanges` | bool | Cấu hình hiện tại khác bản chụp gần nhất. Chỉ tính khi kế hoạch đang chạy; nháp hoặc chưa có phiên bản → `false`. |
+| `unsignedChanges` | object | Chỉ **số đếm**, không có tên: `removedContainers`, `addedContainers`, `removedAssets`, `addedAssets`, `removedRecipients`, `addedRecipients`, `changedRecipientCount`. Gói thêm/xóa tính ở mức gói; tài sản và người nhận chỉ đếm trong các gói có ở **cả** bản ký lẫn cấu hình hiện tại; `changedRecipientCount` = số gói như vậy mà tập người nhận khác bản ký. Gói đang `READY` mà về `DRAFT` tính là gói bị xóa. Không có thay đổi: toàn số 0. |
+
+Lỗi mới: `WILL_SIGN_NOT_ALLOWED` (409). Nhật ký mới (`AuditAction`, lưu dạng chuỗi): `WillResigned = 64`, `WillIdentityViewed = 65`. Thử tay: `http/plan-setup.http`.

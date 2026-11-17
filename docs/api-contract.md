@@ -1200,7 +1200,7 @@ Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Own
 - `POST`, `PUT`, `DELETE /vaults/{vaultId}/beneficiaries...` (tạo, sửa, xóa hồ sơ người nhận).
 - `DELETE /vaults/{vaultId}/containers/{containerId}` (xóa gói), `DELETE .../containers/{containerId}/assets/{assetId}` (gỡ tài sản khỏi gói), `POST` và `DELETE .../containers/{containerId}/beneficiaries...` (gán, gỡ người nhận của gói).
 - `POST /vaults/{vaultId}/executors` (mời Executor) và `POST /vaults/{vaultId}/executors/{executorId}/revoke` (thu hồi).
-- `POST /vaults/{vaultId}/activate` (kích hoạt kế hoạch = Chủ kho ký di chúc bằng PIN) và `POST /vaults/{vaultId}/executor-key/reissue` (đổi mã mở gói).
+- `POST /vaults/{vaultId}/activate` (kích hoạt kế hoạch = Chủ kho ký di chúc bằng PIN), `POST /vaults/{vaultId}/will/sign` (ký lại di chúc) và `POST /vaults/{vaultId}/executor-key/reissue` (đổi mã mở gói).
 
 Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem "Ép đặt PIN"), liệt kê, xem thông tin, đưa tài sản vào gói.
 
@@ -1393,6 +1393,8 @@ Di chúc điện tử (nhánh feat/will-signature), chi tiết ở mục cuối 
 - `POST .../activate` cần header `X-Vault-Pin`; thành công thì server tự tạo mã mở gói (không trả mã) và ghi nhật ký `PlanActivated`. Người thực thi chấp nhận lời mời ghi `ExecutorAccepted`.
 - `POST .../executor-key` (Chủ kho cấp mã lần đầu) đã **xóa**. `POST .../executor-key/reissue` cần PIN và trả `{ hasKey, version, issuedAt, reissuedAt, canIssue }`, không có `shard`.
 - `GET /executor/vaults/{vaultId}/handover-key`: chỉ đọc được khi kế hoạch `HANDOVER_IN_PROGRESS`; trước đó 409 `HANDOVER_NOT_ALLOWED` (`reason = HANDOVER_NOT_STARTED`).
+- Phiên bản di chúc đã ký (bảng `WillVersions`): kích hoạt tạo phiên bản đầu; `POST /vaults/{vaultId}/will/sign` (cần `X-Vault-Pin`, body `{ configVersion }`) ký lại khi kế hoạch đang chạy và có thay đổi chưa ký (không có thay đổi: 200 trả nguyên trạng; kế hoạch chưa chạy: 409 `WILL_SIGN_NOT_ALLOWED`; `configVersion` cũ: 409 `EDIT_CONFLICT`; ghi nhật ký `WillResigned`). `plan-setup` thêm `willVersion`, `willSignedAt`, `hasUnsignedChanges`, `unsignedChanges` (chỉ số đếm). **Bàn giao chỉ theo bản ký gần nhất**: phần thêm/đổi chưa ký lại bị bỏ qua, phần đã xóa không bàn giao; kế hoạch cũ chưa có phiên bản nào giữ cách cũ.
+- `GET /vaults/{vaultId}/will/identity` (Chủ kho, `Cache-Control: no-store`): `{ owner | null, recipients[] }` với họ tên, ngày sinh, CCCD đủ 12 số (Chủ kho thêm `residenceAddress`) đã giải mã; ghi nhật ký `WillIdentityViewed` mỗi lần gọi. Người khác kể cả Admin: 404.
 - `POST .../executors` bỏ `beneficiaryId`. Người thực thi là tài khoản nhân sự (role EXECUTOR); `executor-candidates` chỉ trả role EXECUTOR đã xác minh pháp lý.
 - Email của tài khoản nhân sự (EXECUTOR/VERIFIER/ADMIN) không được làm người nhận (400 trường `email`); nhân sự nhận gói trong app → 409 `HANDOVER_NOT_ALLOWED` (`STAFF_CANNOT_CLAIM`); Admin cấp role nhân sự cho người đang nhận gói → 409 `ADMIN_ACTION_NOT_ALLOWED` (`RECIPIENT_HAS_ACTIVE_HANDOVER`).
 

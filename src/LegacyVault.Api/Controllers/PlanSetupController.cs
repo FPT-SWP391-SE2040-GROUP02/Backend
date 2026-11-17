@@ -49,6 +49,17 @@ public sealed class PlanSetupController(IPlanSetupService service) : ControllerB
     [HttpPost("activate"), EnableRateLimiting("plan-setup")]
     public Task<PlanSetupResponse> Activate(Guid vaultId, ActivatePlanRequest request, CancellationToken ct) =>
         service.ActivateAsync(vaultId, request, ct);
+
+    /// <summary>
+    /// Chủ kho ký lại di chúc bằng PIN (header X-Vault-Pin) sau khi đổi cấu hình: tạo phiên bản di chúc mới. Chỉ khi kế hoạch
+    /// đang chạy và có thay đổi chưa ký; không có thay đổi thì trả nguyên trạng. configVersion cũ → 409 EDIT_CONFLICT.
+    /// </summary>
+    [RequireVaultPin]
+    [HttpPost("will/sign"), EnableRateLimiting("plan-setup")]
+    public Task<PlanSetupResponse> SignWill(Guid vaultId, SignWillRequest request, CancellationToken ct)
+    {
+        return service.SignWillAsync(vaultId, request, ct);
+    }
 }
 
 /// <summary>Invitation token is supplied in JSON body, not URL/access logs. No raw token in responses.</summary>

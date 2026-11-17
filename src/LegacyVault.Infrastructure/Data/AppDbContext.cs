@@ -31,6 +31,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<VaultEntitlement> VaultEntitlements => Set<VaultEntitlement>();
     public DbSet<Container> Containers => Set<Container>();
     public DbSet<ContainerAsset> ContainerAssets => Set<ContainerAsset>();
+    public DbSet<WillVersion> WillVersions => Set<WillVersion>();
 
     // Tài sản
     public DbSet<Asset> Assets => Set<Asset>();

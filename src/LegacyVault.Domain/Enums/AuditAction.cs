@@ -136,4 +136,8 @@ public enum AuditAction
     PlanActivated = 62,
     /// <summary>Người thực thi tự chấp nhận lời mời làm Người thực thi của kho (ký xác nhận di chúc).</summary>
     ExecutorAccepted = 63,
+    /// <summary>Chủ kho ký lại di chúc điện tử bằng mã PIN sau khi đổi cấu hình; tạo phiên bản di chúc mới.</summary>
+    WillResigned = 64,
+    /// <summary>Chủ kho xem danh tính đầy đủ (Chủ kho và người nhận) để lập di chúc. Nhật ký không ghi giá trị đã giải mã.</summary>
+    WillIdentityViewed = 65,
 }
