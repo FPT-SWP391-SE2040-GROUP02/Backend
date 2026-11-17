@@ -168,6 +168,40 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task VerifierSeesOwnNotaryCard_OnlyAfterAdminUploadsIt_AndOtherRolesGet404()
+    {
+        (User _, HttpClient admin) = await AddAdminAsync();
+        User verifier = await DeathCaseTestData.AddVerifierAsync(factory);
+        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        HttpClient verifierClient = ClientFor(verifier);
+
+        JsonElement before = await ApiTestHelpers.ReadJsonAsync(await verifierClient.GetAsync("/api/v1/verifier/notary-card"));
+        Assert.False(before.GetProperty("hasCard").GetBoolean());
+        Assert.Equal(HttpStatusCode.NotFound, (await verifierClient.GetAsync("/api/v1/verifier/notary-card/content")).StatusCode);
+
+        byte[] png = new byte[300];
+        Array.Copy(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, png, 8);
+        using (MultipartFormDataContent form = new MultipartFormDataContent())
+        {
+            ByteArrayContent file = new ByteArrayContent(png);
+            file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+            form.Add(file, "file", "the.png");
+            Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsync($"/api/v1/admin/users/{verifier.Id}/notary-card", form)).StatusCode);
+        }
+
+        JsonElement after = await ApiTestHelpers.ReadJsonAsync(await verifierClient.GetAsync("/api/v1/verifier/notary-card"));
+        Assert.True(after.GetProperty("hasCard").GetBoolean());
+        HttpResponseMessage content = await verifierClient.GetAsync("/api/v1/verifier/notary-card/content");
+        Assert.Equal(HttpStatusCode.OK, content.StatusCode);
+        Assert.Equal("image/png", content.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(png, await content.Content.ReadAsByteArrayAsync());
+
+        HttpClient plainClient = ClientFor(plain);
+        Assert.Equal(HttpStatusCode.NotFound, (await plainClient.GetAsync("/api/v1/verifier/notary-card")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await plainClient.GetAsync("/api/v1/verifier/notary-card/content")).StatusCode);
+    }
+
+    [SqlFact]
     public async Task AdminCreatesExecutorWithoutPassword_InvitesByEmail_AndAdminStillNeedsPassword()
     {
         // Chuẩn bị

@@ -2,18 +2,24 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// DEATH-03: Verifier nhập lại mật khẩu khi Duyệt/Từ chối; Người thực thi nhập lại mật khẩu khi ký nhận vai. Sai 5 lần liên tiếp thì khóa chức năng duyệt/từ chối
+/// DEATH-03: Verifier nhập lại mật khẩu khi Duyệt/Từ chối; Người thực thi nhập lại mật khẩu khi ký nhận vai.
+/// Sai 5 lần liên tiếp thì khóa chức năng xác nhận đó (duyệt/từ chối hoặc ký nhận vai)
 /// 15 phút → 1 giờ → 24 giờ; dùng lại hằng của VaultPinRules (cách viết theo VaultPinService.CheckPinAsync).
 /// </summary>
 /// <remarks>
-/// - Chỉ khóa chức năng duyệt/từ chối, không khóa đăng nhập hay xem hồ sơ.
+/// - Chỉ khóa chức năng xác nhận bằng mật khẩu, không khóa đăng nhập hay xem hồ sơ. Bộ đếm theo UserId
+///   (bảng VerifierSigningGuards, tên cũ giữ nguyên để khỏi phải migration); Verifier và Executor là hai tài khoản khác nhau.
 /// - SEC-07: không log, không ghi nhật ký mật khẩu.
 /// - Ngoại lệ có chủ đích của "một lần lưu mỗi use case": nhập sai thì lưu bộ đếm ngay trước khi ném lỗi,
 ///   lúc này chưa có thay đổi nào khác đang chờ lưu.
+/// - Nhập đúng thì chỉ đặt lại bộ đếm trong bộ nhớ, được lưu cùng lần lưu kế tiếp của use case. Verifier: lần lưu quyết
+///   định. Người thực thi: lần lưu trong giao dịch trả lời lời mời; nếu giao dịch đó bị từ chối (ví dụ kế hoạch
+///   không còn Draft) thì bộ đếm chưa được đặt lại, vô hại vì lần nhập đúng kế tiếp sẽ đặt lại.
 /// </remarks>
 public sealed class SigningPasswordChecker : ISigningPasswordChecker
 {
@@ -37,7 +43,7 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
         VerifierSigningGuard? guard = await signingGuardRepository.FindGuardAsync(user.Id, ct);
         if (guard != null && guard.LockedUntil != null && guard.LockedUntil.Value > now)
         {
-            throw Locked(guard.LockedUntil.Value);
+            throw Locked(user, guard.LockedUntil.Value);
         }
 
         // 2) Tài khoản chỉ đăng nhập Google thì chưa xác nhận được; không tính là một lần đoán.
@@ -98,7 +104,7 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
 
         if (locks)
         {
-            throw Locked(lockedUntil);
+            throw Locked(user, lockedUntil);
         }
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["attemptsRemaining"] = VaultPinRules.MaxFailedAttempts - guard.FailedCount;
@@ -116,11 +122,17 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
         return signingGuardRepository.IsUniqueViolation(exception);
     }
 
-    private static AppException Locked(DateTimeOffset lockedUntil)
+    private static AppException Locked(User user, DateTimeOffset lockedUntil)
     {
+        // Verifier giữ nguyên câu cũ (đã có test và tài liệu); người khác (Người thực thi) là ký nhận vai.
+        string feature = "ký nhận vai";
+        if (user.Role == UserRole.Verifier)
+        {
+            feature = "duyệt/từ chối";
+        }
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["lockedUntil"] = lockedUntil;
         return new AppException(AppErrorType.Locked, ErrorCode.SigningLocked,
-            "Chức năng duyệt/từ chối đang tạm khóa vì nhập sai mật khẩu nhiều lần. Vui lòng thử lại sau.", extensions);
+            $"Chức năng {feature} đang tạm khóa vì nhập sai mật khẩu nhiều lần. Vui lòng thử lại sau.", extensions);
     }
 }

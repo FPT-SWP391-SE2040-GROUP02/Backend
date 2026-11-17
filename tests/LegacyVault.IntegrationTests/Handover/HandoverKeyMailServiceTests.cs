@@ -138,7 +138,30 @@ public sealed class HandoverKeyMailServiceTests
     [Fact]
     public async Task FinishedTurn_IsRejected()
     {
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.Declined);
+
+        Assert.Equal("WRONG_STATE", await ReasonOfRejectionAsync(turn.Id));
+        Assert.Empty(sender.Sent);
+    }
+
+    [Fact]
+    public async Task CommittedTurnWithoutKey_InAClosedPlan_StillGetsTheKeyMailed()
+    {
+        // Người nhận cuối đồng ý thì kế hoạch tự đóng, nhưng họ chưa nhập mã nên Người thực thi vẫn phải gửi được mã.
         HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
+        data.Plan.Status = PlanStatus.Closed;
+
+        await service.SendAsync(deathCase.Id, turn.Id, key, CancellationToken.None);
+
+        Assert.Single(sender.Sent);
+    }
+
+    [Fact]
+    public async Task CommittedTurnWhoseKeyWasAlreadyEntered_IsRejectedEvenInAClosedPlan()
+    {
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
+        turn.KeyVerifiedAt = Now;
+        data.Plan.Status = PlanStatus.Closed;
 
         Assert.Equal("WRONG_STATE", await ReasonOfRejectionAsync(turn.Id));
         Assert.Empty(sender.Sent);
