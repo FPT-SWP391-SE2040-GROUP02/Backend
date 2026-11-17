@@ -1,3 +1,4 @@
+using System.Globalization;
 using LegacyVault.Application.Services;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -277,7 +278,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
             if (signedAt != null)
             {
                 DateTimeOffset at = signedAt.Value.ToOffset(TimeSpan.FromHours(7));
-                stamp = $"Đã ký điện tử {at:HH:mm dd/MM/yyyy}";
+                stamp = "Đã ký điện tử " + at.ToString("HH:mm dd/MM/yyyy", CultureInfo.InvariantCulture);
             }
             c.Item().AlignCenter().Text(stamp).FontSize(9.5f);
         });
@@ -307,6 +308,6 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
 
     private static string Date(DateOnly? value, string blank)
     {
-        return value == null ? blank : value.Value.ToString("dd/MM/yyyy");
+        return value == null ? blank : value.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
     }
 }
