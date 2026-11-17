@@ -457,9 +457,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("PreviousCaseId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<int?>("ReviewVersionNo")
                         .HasColumnType("int");
 
@@ -488,12 +485,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.HasIndex("PlanId");
 
-                    b.HasIndex("PreviousCaseId");
-
                     b.HasIndex("VaultId")
                         .IsUnique()
-                        .HasDatabaseName("UX_DeathCases_OpenPerVault")
-                        .HasFilter("[Status] <> 'Rejected'");
+                        .HasDatabaseName("UX_DeathCases_OpenPerVault");
 
                     b.ToTable("DeathCases", (string)null);
                 });
@@ -587,7 +581,7 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.HasIndex(new[] { "CaseId" }, "UX_DeathCaseDecisions_FinalPerCase")
                         .IsUnique()
-                        .HasFilter("[Kind] IN ('Rejected','Approved')");
+                        .HasFilter("[Kind] = 'Approved'");
 
                     b.ToTable("DeathCaseDecisions", (string)null);
                 });
@@ -2015,10 +2009,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.HasIndex("VaultId", "Status");
 
-                    b.HasIndex("VaultId", "Type", "Scope", "TargetId")
-                        .IsUnique()
-                        .HasFilter("[Status] = 'Active' AND [Type] = 'OwnerAlive'");
-
                     b.ToTable("Holds", (string)null);
                 });
 
@@ -3109,11 +3099,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasForeignKey("PlanId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("LegacyVault.Domain.Entities.DeathCase", null)
-                        .WithMany()
-                        .HasForeignKey("PreviousCaseId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("LegacyVault.Domain.Entities.Vault", null)
                         .WithMany()

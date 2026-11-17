@@ -4,7 +4,8 @@ namespace LegacyVault.Domain.Enums;
 /// Trạng thái hồ sơ chứng tử (SRS §6.2 F2B, §11.1). Giá trị lưu trong DB là tên enum; không đổi tên giá trị đã có.
 /// </summary>
 /// <remarks>
-/// DEATH-05, DATA-04: mỗi kho chỉ có một hồ sơ "đang mở" = mọi trạng thái trừ Rejected (kể cả Draft, quyết định D1).
+/// DEATH-05, DATA-04: mỗi kho chỉ có một hồ sơ chứng tử, ở mọi trạng thái (kể cả Draft, quyết định D1).
+/// Hồ sơ không bị từ chối: Verifier chỉ có thể yêu cầu bổ sung hoặc duyệt.
 /// </remarks>
 public enum DeathCaseStatus
 {
@@ -16,8 +17,6 @@ public enum DeathCaseStatus
     SupplementRequired = 2,
     /// <summary>Verifier đã duyệt; kế hoạch chuyển sang bàn giao. Đặt ở nhánh B.</summary>
     ApprovedForHandover = 3,
-    /// <summary>Bị từ chối; hồ sơ đóng, kho được mở hồ sơ mới. Đặt ở nhánh B.</summary>
-    Rejected = 4,
-    /// <summary>Tạm dừng (Owner báo còn sống / tranh chấp). Chỉ khai báo, F2C/F4 làm sau.</summary>
+    /// <summary>Tạm dừng (tranh chấp). Chỉ khai báo, F4 làm sau.</summary>
     Suspended = 5,
 }

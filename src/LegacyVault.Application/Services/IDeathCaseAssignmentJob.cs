@@ -2,7 +2,7 @@ namespace LegacyVault.Application.Services;
 
 /// <summary>
 /// Việc nền giao Verifier cho hồ sơ chứng tử chưa có người giữ và giao lại khi quá hạn hoặc Verifier mất quyền
-/// (ASSIGN-02, ASSIGN-04, D5). Job không bao giờ duyệt, từ chối hay đổi trạng thái hồ sơ.
+/// (ASSIGN-02, ASSIGN-04, D5). Job không bao giờ duyệt hay đổi trạng thái hồ sơ.
 /// </summary>
 public interface IDeathCaseAssignmentJob
 {

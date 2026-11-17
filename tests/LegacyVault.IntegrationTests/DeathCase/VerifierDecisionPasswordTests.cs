@@ -16,7 +16,6 @@ namespace LegacyVault.IntegrationTests.DeathCases;
 public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
 {
     private const string ApproveReason = "Giấy chứng tử hợp lệ, thông tin khớp.";
-    private const string RejectReason = "Giấy chứng tử không đọc được số hiệu.";
     private const string WrongPassword = "Sai-mat-khau-9";
 
     private ApiFactory factory = null!;
@@ -217,7 +216,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         Assert.Equal(new List<int> { 4, 3, 2, 1 }, remaining);
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(fifth, HttpStatusCode.Locked, "SIGNING_LOCKED");
         AssertLockedFor(problem, before, TimeSpan.FromMinutes(15));
-        Assert.Equal("Chức năng duyệt/từ chối đang tạm khóa vì nhập sai mật khẩu nhiều lần. Vui lòng thử lại sau.",
+        Assert.Equal("Chức năng duyệt đang tạm khóa vì nhập sai mật khẩu nhiều lần. Vui lòng thử lại sau.",
             problem.GetProperty("title").GetString());
         VerifierSigningGuard? guard = await LoadGuardAsync(submitted.Verifier.User.Id);
         Assert.NotNull(guard);
@@ -228,7 +227,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
     [SqlFact]
     public async Task Death03_CorrectPasswordWhileLockedIsStillLocked()
     {
-        // Chuẩn bị: đã bị khóa duyệt/từ chối
+        // Chuẩn bị: đã bị khóa duyệt
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
         await LockDecisionAsync(submitted.Verifier.Client, submitted.CaseId);
 
@@ -328,7 +327,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
         HttpResponseMessage detail = await submitted.Verifier.Client.GetAsync(DeathCaseReviewTestData.VerifierCaseUrl(submitted.CaseId));
         HttpResponseMessage list = await submitted.Verifier.Client.GetAsync("/api/v1/verifier/death-cases");
 
-        // Kiểm tra: vẫn xem được hồ sơ khi bị khóa duyệt/từ chối
+        // Kiểm tra: vẫn xem được hồ sơ khi bị khóa duyệt
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
     }
@@ -357,7 +356,7 @@ public sealed class VerifierDecisionPasswordTests : IAsyncLifetime
             client, caseId, detail.GetProperty("etag").GetString(), ApproveReason, password);
     }
 
-    /// <summary>Nhập sai đủ 5 lần để bị khóa duyệt/từ chối; trả ProblemDetails 423 của lần thứ 5.</summary>
+    /// <summary>Nhập sai đủ 5 lần để bị khóa duyệt; trả ProblemDetails 423 của lần thứ 5.</summary>
     private static async Task<JsonElement> LockDecisionAsync(HttpClient client, Guid caseId)
     {
         for (int attempt = 1; attempt < VaultPinRules.MaxFailedAttempts; attempt++)

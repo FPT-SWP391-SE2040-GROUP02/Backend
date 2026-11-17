@@ -219,44 +219,9 @@ public sealed class VerifierReadFlowTests : IAsyncLifetime
         Assert.True(detail.GetProperty("canApprove").GetBoolean());
         Assert.Empty(DeathCaseApi.ReadStrings(detail.GetProperty("approveBlockers")));
         Assert.Equal(0, detail.GetProperty("decisions").GetArrayLength());
-        Assert.Equal(JsonValueKind.Null, detail.GetProperty("previousCase").ValueKind);
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("handover").ValueKind);
         Assert.False(detail.TryGetProperty("ownerNotice", out _));
         Assert.NotEqual(JsonValueKind.Null, detail.GetProperty("assignment").GetProperty("dueAt").ValueKind);
-    }
-
-    [SqlFact]
-    public async Task Death12_DetailShowsPreviousRejectedCase()
-    {
-        // Chuẩn bị: hồ sơ đầu bị từ chối (có lý do), Executor mở và gửi hồ sơ mới của cùng kho
-        DeathCaseReviewTestData.SubmittedCase first = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        await DeathCaseReviewTestData.AddFinalDecisionAsync(
-            factory, first.CaseId, DeathCaseDecisionKind.Rejected, first.Verifier.User.Id, first.AssignmentId);
-        DateTimeOffset closedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            await db.Set<DeathCase>().Where(c => c.Id == first.CaseId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(c => c.Status, DeathCaseStatus.Rejected)
-                    .SetProperty(c => c.ClosedAt, closedAt));
-        });
-        await ApiTestHelpers.SetPlanStatusAsync(factory, first.Vault.VaultId, PlanStatus.Active);
-        JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
-            first.Executor.Client, first.Vault.VaultId, DeathCaseApi.Today().AddDays(-3));
-        JsonElement submittedSecond = await DeathCaseApi.SubmitOkAsync(first.Executor.Client, prepared);
-        Guid secondCaseId = submittedSecond.GetProperty("id").GetGuid();
-        Assert.NotEqual(first.CaseId, secondCaseId);
-
-        // Hành động: Verifier (người duy nhất) được giao hồ sơ mới
-        HttpResponseMessage response = await first.Verifier.Client.GetAsync(DeathCaseReviewTestData.VerifierCaseUrl(secondCaseId));
-        JsonElement detail = await ApiTestHelpers.ReadJsonAsync(response);
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        JsonElement previous = detail.GetProperty("previousCase");
-        Assert.Equal(first.CaseId, previous.GetProperty("id").GetGuid());
-        Assert.Equal("Lý do thử", previous.GetProperty("rejectReason").GetString());
-        Assert.NotEqual(JsonValueKind.Null, previous.GetProperty("closedAt").ValueKind);
     }
 
     [SqlFact]
@@ -272,7 +237,7 @@ public sealed class VerifierReadFlowTests : IAsyncLifetime
         {
             await db.Set<DeathCase>().Where(c => c.Id == caseA.CaseId)
                 .ExecuteUpdateAsync(s => s
-                    .SetProperty(c => c.Status, DeathCaseStatus.Rejected)
+                    .SetProperty(c => c.Status, DeathCaseStatus.ApprovedForHandover)
                     .SetProperty(c => c.ClosedAt, DateTimeOffset.UtcNow));
         });
         HttpClient verifier = caseA.Verifier.Client;

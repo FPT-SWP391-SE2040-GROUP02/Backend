@@ -27,7 +27,7 @@ public class VerifierDeathCaseSummaryResponse
 
     /// <summary>
     /// DEATH-01: lúc job đánh dấu Executor bổ sung quá hạn 7 ngày; null = chưa quá hạn hoặc đã gửi lại.
-    /// Chỉ để hiển thị, không tự từ chối.
+    /// Chỉ để hiển thị, không tự đổi trạng thái hồ sơ.
     /// </summary>
     public DateTimeOffset? SupplementOverdueAt { get; set; }
 

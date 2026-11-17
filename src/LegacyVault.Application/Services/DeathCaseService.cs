@@ -110,13 +110,6 @@ public sealed class DeathCaseService : IDeathCaseService
         deathCase.OpenedByUserId = userId;
         deathCase.CreatedAt = now;
 
-        // Nối với hồ sơ bị từ chối gần nhất (nếu có) để Verifier xem lịch sử.
-        DeathCase? previous = await deathCaseRepository.FindLatestRejectedByVaultIdAsync(vault.Id, ct);
-        if (previous != null)
-        {
-            deathCase.PreviousCaseId = previous.Id;
-        }
-
         DeathCaseVersion version = new DeathCaseVersion();
         version.CaseId = deathCase.Id;
         version.VersionNo = 1;
@@ -137,7 +130,7 @@ public sealed class DeathCaseService : IDeathCaseService
         DeathCase? winner = await deathCaseRepository.FindOpenByVaultIdAsync(vault.Id, ct);
         if (winner == null)
         {
-            // Hồ sơ bên thắng vừa bị từ chối ngay sau đó: hiếm; báo xung đột để FE gọi lại.
+            // Hồ sơ bên thắng vừa biến mất ngay sau đó: hiếm; báo xung đột để FE gọi lại.
             throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
                 "Hồ sơ chứng tử vừa thay đổi. Vui lòng thử lại.");
         }
@@ -452,7 +445,6 @@ public sealed class DeathCaseService : IDeathCaseService
         if (deathCase.Status != DeathCaseStatus.Draft)
         {
             if (deathCase.Status == DeathCaseStatus.ApprovedForHandover
-                || deathCase.Status == DeathCaseStatus.Rejected
                 || deathCase.Status == DeathCaseStatus.Suspended)
             {
                 throw NotAllowed(DeathCaseNotAllowedReason.CaseClosed);
@@ -541,7 +533,7 @@ public sealed class DeathCaseService : IDeathCaseService
         int submittingVersionNo = version.VersionNo;
 
         // lần gửi đầu mới khóa kế hoạch và ghim trạng thái trước đó.
-        // Không dừng lịch điểm danh: nhánh B cần kỳ đang mở để tính lại khi từ chối.
+        // Không dừng lịch điểm danh.
         // Kế hoạch dùng RowVersion: Owner điểm danh hoặc job điểm danh xen giữa thì lần lưu này báo EDIT_CONFLICT.
         bool isFirstSubmit = deathCase.FirstSubmittedAt == null;
         if (isFirstSubmit)
@@ -829,7 +821,7 @@ public sealed class DeathCaseService : IDeathCaseService
     }
 
     /// <summary>
-    /// bản đã gửi không bao giờ sửa. Hồ sơ đã đóng (duyệt/từ chối/tạm dừng) → CASE_CLOSED,
+    /// bản đã gửi không bao giờ sửa. Hồ sơ đã đóng (duyệt/tạm dừng) → CASE_CLOSED,
     /// còn lại → VERSION_LOCKED.
     /// </summary>
     private static void EnsureVersionEditable(DeathCase deathCase, DeathCaseVersion version)
@@ -839,7 +831,6 @@ public sealed class DeathCaseService : IDeathCaseService
             return;
         }
         if (deathCase.Status == DeathCaseStatus.ApprovedForHandover
-            || deathCase.Status == DeathCaseStatus.Rejected
             || deathCase.Status == DeathCaseStatus.Suspended)
         {
             throw NotAllowed(DeathCaseNotAllowedReason.CaseClosed);

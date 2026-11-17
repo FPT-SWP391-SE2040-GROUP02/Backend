@@ -329,26 +329,6 @@ public static class DeathCaseReviewTestData
             VerifierCaseUrl(caseId) + "/request-supplement", new { etag, reason, requestedParts });
     }
 
-    /// <summary>Từ chối kèm mật khẩu thử đúng (DEATH-03).</summary>
-    public static Task<HttpResponseMessage> RejectAsync(HttpClient verifier, Guid caseId, string? etag, string? reason)
-    {
-        return RejectAsync(verifier, caseId, etag, reason, DeathCaseTestData.TestPassword);
-    }
-
-    /// <summary>DEATH-03: từ chối với mật khẩu cho trước (null = không gửi trường password).</summary>
-    public static Task<HttpResponseMessage> RejectAsync(
-        HttpClient verifier, Guid caseId, string? etag, string? reason, string? password)
-    {
-        return verifier.PostAsJsonAsync(VerifierCaseUrl(caseId) + "/reject", new { etag, reason, password });
-    }
-
-    /// <summary>Verifier đọc lấy etag hiện tại rồi từ chối với lý do cho trước; trả response của lệnh từ chối.</summary>
-    public static async Task<HttpResponseMessage> RejectNowAsync(SubmittedCase submitted, string reason)
-    {
-        JsonElement detail = await GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
-        return await RejectAsync(submitted.Verifier.Client, submitted.CaseId, detail.GetProperty("etag").GetString(), reason);
-    }
-
     /// <summary>Duyệt kèm mật khẩu thử đúng (DEATH-03).</summary>
     public static Task<HttpResponseMessage> ApproveAsync(HttpClient verifier, Guid caseId, string? etag, string? reason)
     {

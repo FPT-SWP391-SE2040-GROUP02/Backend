@@ -34,7 +34,6 @@ public static class VerifierDeathCaseMappings
         this DeathCase deathCase,
         DeathCaseAssignment assignment,
         DeathCaseIdentityData? identity,
-        PreviousCaseRow? previous,
         List<string> approveBlockers,
         VerifierHandoverResponse? handover,
         IAdministrativeUnitCatalog catalog,
@@ -101,14 +100,6 @@ public static class VerifierDeathCaseMappings
 
         response.CanApprove = approveBlockers.Count == 0;
         response.ApproveBlockers = approveBlockers;
-        if (previous != null)
-        {
-            VerifierPreviousCaseResponse previousResponse = new VerifierPreviousCaseResponse();
-            previousResponse.Id = previous.Id;
-            previousResponse.ClosedAt = previous.ClosedAt;
-            previousResponse.RejectReason = previous.RejectReason;
-            response.PreviousCase = previousResponse;
-        }
         response.Handover = handover;
 
         // D7: cảnh báo tính lúc đọc, không chặn duyệt.

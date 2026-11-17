@@ -66,15 +66,14 @@ public sealed class ExecutorDecisionNoticeTests : IAsyncLifetime
         DeathCaseExecutorNotice notice = Assert.Single(sender.Sent);
         Assert.Equal(submitted.CaseId, notice.CaseId);
         Assert.Equal(submitted.Executor.User.Email, notice.ToEmail);
-        Assert.Equal(DeathCaseDecisionKind.SupplementRequested, notice.Kind);
         Assert.NotNull(notice.SupplementDueAt);
         Assert.Equal(8, notice.CaseCode.Length);
     }
 
     [SqlFact]
-    public async Task VaultList_NoRejectedCase_ReturnsNull()
+    public async Task VaultList_ReturnsOpenCaseOnly()
     {
-        // Chuẩn bị: hồ sơ đang xét, chưa từng bị từ chối
+        // Chuẩn bị: hồ sơ đang xét
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
 
         // Hành động
@@ -84,7 +83,7 @@ public sealed class ExecutorDecisionNoticeTests : IAsyncLifetime
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, vaults.StatusCode);
         Assert.Equal(submitted.CaseId, list[0].GetProperty("openDeathCaseId").GetGuid());
-        Assert.Equal(JsonValueKind.Null, list[0].GetProperty("lastRejectedDeathCaseId").ValueKind);
+        Assert.False(list[0].TryGetProperty("lastRejectedDeathCaseId", out _));
         Assert.Empty(sender.Sent);
     }
 }

@@ -27,11 +27,11 @@ public sealed class DeathCaseDecisionConfiguration : IEntityTypeConfiguration<De
         // Tra quyết định của một hồ sơ (kể cả các lần yêu cầu bổ sung). Đặt tên để EF không gộp với chỉ mục unique bên dưới.
         builder.HasIndex(d => d.CaseId, "IX_DeathCaseDecisions_CaseId");
 
-        // AC-71, DEATH-03: mỗi hồ sơ tối đa một quyết định cuối (từ chối hoặc duyệt);
+        // AC-71, DEATH-03: mỗi hồ sơ tối đa một quyết định cuối (duyệt);
         // yêu cầu bổ sung thì được nhiều dòng.
         builder.HasIndex(d => d.CaseId, "UX_DeathCaseDecisions_FinalPerCase")
             .IsUnique()
-            .HasFilter("[Kind] IN ('Rejected','Approved')");
+            .HasFilter("[Kind] = 'Approved'");
 
         // Giữ lịch sử quyết định: không xóa dây chuyền từ hồ sơ, người dùng, phân công.
         builder.HasOne<DeathCase>()

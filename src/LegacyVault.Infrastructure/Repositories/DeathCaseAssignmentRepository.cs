@@ -20,7 +20,7 @@ public sealed class DeathCaseAssignmentRepository : IDeathCaseAssignmentReposito
     }
 
     /// <summary>
-    /// Hồ sơ đang xét/chờ bổ sung cần giao hoặc nhắc (a)-(d), và hồ sơ Suspended có báo còn sống Open cần giao hoặc giao lại (e, ALIVE-08).
+    /// Hồ sơ đang xét/chờ bổ sung cần giao hoặc nhắc (a)-(d).
     /// </summary>
     public Task<List<Guid>> FindCaseIdsForJobAsync(DateTimeOffset now, int maxCount, CancellationToken ct)
     {

@@ -11,6 +11,7 @@ public enum AuditTargetType
     CheckIn = 5,
     DeathCase = 6,
     Hold = 7,
+    /// <summary>Không còn dùng (đã gỡ tính năng Sự cố); giữ giá trị để đọc nhật ký cũ.</summary>
     Incident = 8,
     User = 9,
     PaymentOrder = 10,

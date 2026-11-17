@@ -24,7 +24,7 @@ public static class DeathCaseConfig
         services.AddScoped<IDeathCaseReviewRepository, DeathCaseReviewRepository>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
         // AI nhận diện trang giấy có phải giấy chứng tử khi Executor gửi hồ sơ.
-        // DEATH-03: bộ đếm nhập sai mật khẩu xác nhận duyệt/từ chối của Verifier.
+        // DEATH-03: bộ đếm nhập sai mật khẩu xác nhận duyệt của Verifier.
         services.AddScoped<IVerifierSigningGuardRepository, VerifierSigningGuardRepository>();
 
         // DATA-02, D6: mã hóa phần khai báo nhạy cảm, dùng chung DataKeyProtector của tài sản.

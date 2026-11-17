@@ -71,7 +71,6 @@ public static class DeathCaseMappings
             current.DateOfDeath, current.IssuedOn, current.DeathRegistrationProvinceCode,
             current.DeathRegistrationWardCode, DeathCaseRules.CountCertificateFiles(current.Files));
         response.SupplementRequest = ToSupplementRequestResponse(deathCase);
-        response.RejectReason = ToRejectReason(deathCase);
         response.CreatedAt = deathCase.CreatedAt;
         response.UpdatedAt = deathCase.UpdatedAt;
         response.Etag = Etag.From(deathCase.UpdatedAt);
@@ -89,7 +88,6 @@ public static class DeathCaseMappings
         // DMS-05: quá hạn điểm danh = đang trong thời gian chờ hoặc đã hết thời gian chờ.
         response.CheckInOverdue = row.PlanStatus == PlanStatus.CheckinOverdue || row.PlanStatus == PlanStatus.AwaitingCheck;
         response.OpenDeathCaseId = row.OpenDeathCaseId;
-        response.LastRejectedDeathCaseId = row.LastRejectedDeathCaseId;
         response.LastOwnerCheckInAt = row.LastOwnerCheckInAt;
         response.AcceptedAt = row.ExecutorAcceptedAt;
         return response;
@@ -143,22 +141,5 @@ public static class DeathCaseMappings
         response.DueAt = latest.DueAt;
         response.Overdue = deathCase.SupplementOverdueAt != null;
         return response;
-    }
-
-    /// <summary>DEATH-12: lý do của dòng quyết định Rejected khi hồ sơ REJECTED; trạng thái khác hoặc không có dòng → null.</summary>
-    private static string? ToRejectReason(DeathCase deathCase)
-    {
-        if (deathCase.Status != DeathCaseStatus.Rejected)
-        {
-            return null;
-        }
-        foreach (DeathCaseDecision decision in deathCase.Decisions)
-        {
-            if (decision.Kind == DeathCaseDecisionKind.Rejected)
-            {
-                return decision.Reason;
-            }
-        }
-        return null;
     }
 }

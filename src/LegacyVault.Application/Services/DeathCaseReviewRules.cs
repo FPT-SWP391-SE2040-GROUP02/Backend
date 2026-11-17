@@ -18,17 +18,13 @@ public static class DeathCaseReviewRules
     /// <summary>DEATH-01: Executor có 7 ngày để bổ sung sau yêu cầu của Verifier.</summary>
     public static int SupplementDueDays => RuntimeSettings.Int("DeathCase.SupplementDueDays", 7);
 
-    /// <summary>AC-71: hồ sơ đã có quyết định cuối (duyệt hoặc từ chối).</summary>
+    /// <summary>AC-71: hồ sơ đã có quyết định cuối (duyệt).</summary>
     public static bool IsClosed(DeathCaseStatus status)
     {
-        if (status == DeathCaseStatus.ApprovedForHandover || status == DeathCaseStatus.Rejected)
-        {
-            return true;
-        }
-        return false;
+        return status == DeathCaseStatus.ApprovedForHandover;
     }
 
-    /// <summary>DEATH-01: yêu cầu bổ sung, từ chối, xem xét cờ chỉ làm được khi hồ sơ đang xét hoặc đang chờ bổ sung.</summary>
+    /// <summary>DEATH-01: yêu cầu bổ sung, duyệt, xem xét cờ chỉ làm được khi hồ sơ đang xét hoặc đang chờ bổ sung.</summary>
     public static bool CanDecide(DeathCaseStatus status)
     {
         if (status == DeathCaseStatus.UnderReview || status == DeathCaseStatus.SupplementRequired)
@@ -140,12 +136,12 @@ public static class DeathCaseReviewRules
 
     /// <summary>Tách chuỗi RequestedParts đã lưu thành danh sách để trả response; null/rỗng → danh sách rỗng.</summary>
     /// <summary>
-    /// Mã biên bản thẩm định của quyết định cuối (duyệt hoặc từ chối): BB-yyyyMMdd(giờ Việt Nam)-6 ký tự đầu của Id quyết định, in hoa.
+    /// Mã biên bản thẩm định của quyết định cuối (duyệt): BB-yyyyMMdd(giờ Việt Nam)-6 ký tự đầu của Id quyết định, in hoa.
     /// Suy ra từ dữ liệu đã lưu nên mỗi lần đọc ra cùng một mã, không cần cột riêng. Yêu cầu bổ sung thì không có biên bản.
     /// </summary>
     public static string? RecordCode(DeathCaseDecision decision)
     {
-        if (decision.Kind != DeathCaseDecisionKind.Approved && decision.Kind != DeathCaseDecisionKind.Rejected)
+        if (decision.Kind != DeathCaseDecisionKind.Approved)
         {
             return null;
         }

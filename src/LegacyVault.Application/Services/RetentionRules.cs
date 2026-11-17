@@ -24,7 +24,7 @@ public static class RetentionRules
     public const int NoticeOneDay = 3;
 
     /// <summary>
-    /// Chỉ kế hoạch đang/đã bàn giao mới áp dụng lưu và xóa. Kế hoạch đã về ACTIVE (Owner còn sống, ALIVE-06) hay
+    /// Chỉ kế hoạch đang/đã bàn giao mới áp dụng lưu và xóa. Kế hoạch đã về ACTIVE hay
     /// còn nháp thì dữ liệu là của Owner, không bao giờ bị dọn.
     /// </summary>
     public static bool AppliesToPlan(PlanStatus status)
@@ -34,7 +34,7 @@ public static class RetentionRules
             || status == PlanStatus.Blocked;
     }
 
-    /// <summary>Lượt bị hủy vì Owner còn sống không bao giờ dẫn tới xóa dữ liệu.</summary>
+    /// <summary>Lượt đã bị hủy không bao giờ dẫn tới xóa dữ liệu.</summary>
     public static bool AppliesToTurn(HandoverTurn turn)
     {
         return turn.Status != HandoverTurnStatus.Cancelled && turn.RetentionStatus != RetentionStatus.Deleted;

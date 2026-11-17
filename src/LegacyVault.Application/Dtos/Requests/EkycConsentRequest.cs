@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Dtos.Requests;
 /// </summary>
 public class EkycConsentRequest
 {
-    /// <summary>OWNER_ENROLLMENT, BENEFICIARY_CLAIM hoặc OWNER_ALIVE (service kiểm và trả 400 theo trường purpose).</summary>
+    /// <summary>OWNER_ENROLLMENT hoặc BENEFICIARY_CLAIM (service kiểm và trả 400 theo trường purpose).</summary>
     [Required(ErrorMessage = "Vui lòng chọn mục đích xác minh.")]
     [MaxLength(32)]
     public string Purpose { get; set; } = string.Empty;

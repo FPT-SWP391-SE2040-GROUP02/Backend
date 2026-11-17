@@ -3,7 +3,7 @@ using LegacyVault.Domain.Entities;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Kiểm mật khẩu xác nhận kèm khóa lũy tiến (giống PIN kho). Dùng cho Verifier duyệt/từ chối (DEATH-03)
+/// Kiểm mật khẩu xác nhận kèm khóa lũy tiến (giống PIN kho). Dùng cho Verifier duyệt (DEATH-03)
 /// và cho Người thực thi ký nhận vai khi chấp nhận lời mời (người dùng khác nhau nên dùng chung bảng bộ đếm).
 /// </summary>
 public interface ISigningPasswordChecker

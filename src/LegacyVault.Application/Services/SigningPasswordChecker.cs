@@ -8,7 +8,7 @@ namespace LegacyVault.Application.Services;
 
 /// <summary>
 /// DEATH-03: Verifier nhập lại mật khẩu khi Duyệt/Từ chối; Người thực thi nhập lại mật khẩu khi ký nhận vai.
-/// Sai 5 lần liên tiếp thì khóa chức năng xác nhận đó (duyệt/từ chối hoặc ký nhận vai)
+/// Sai 5 lần liên tiếp thì khóa chức năng xác nhận đó (duyệt hoặc ký nhận vai)
 /// 15 phút → 1 giờ → 24 giờ; dùng lại hằng của VaultPinRules (cách viết theo VaultPinService.CheckPinAsync).
 /// </summary>
 /// <remarks>
@@ -128,7 +128,7 @@ public sealed class SigningPasswordChecker : ISigningPasswordChecker
         string feature = "ký nhận vai";
         if (user.Role == UserRole.Verifier)
         {
-            feature = "duyệt/từ chối";
+            feature = "duyệt";
         }
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["lockedUntil"] = lockedUntil;

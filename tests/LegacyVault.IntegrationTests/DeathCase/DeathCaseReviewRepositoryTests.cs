@@ -42,23 +42,20 @@ public sealed class DeathCaseReviewRepositoryTests : IAsyncLifetime
     [SqlFact]
     public async Task Death03_Ac71_DatabaseRejectsSecondFinalDecision()
     {
-        // Chuẩn bị: hồ sơ đã có một quyết định cuối (từ chối)
+        // Chuẩn bị: hồ sơ đã có một quyết định cuối (duyệt)
         DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
         await DeathCaseReviewTestData.AddFinalDecisionAsync(
-            factory, submitted.CaseId, DeathCaseDecisionKind.Rejected, submitted.Verifier.User.Id, submitted.AssignmentId);
+            factory, submitted.CaseId, DeathCaseDecisionKind.Approved, submitted.Verifier.User.Id, submitted.AssignmentId);
 
-        // Hành động: thêm tiếp quyết định cuối thứ hai (duyệt, rồi lại từ chối)
-        DbUpdateException? approvedError = await TryAddDecisionAsync(submitted, DeathCaseDecisionKind.Approved);
-        DbUpdateException? rejectedAgainError = await TryAddDecisionAsync(submitted, DeathCaseDecisionKind.Rejected);
+        // Hành động: thêm tiếp quyết định cuối thứ hai (lại duyệt)
+        DbUpdateException? approvedAgainError = await TryAddDecisionAsync(submitted, DeathCaseDecisionKind.Approved);
 
-        // Kiểm tra: DB từ chối cả hai bằng vi phạm chỉ mục unique; chỉ còn một dòng
-        Assert.NotNull(approvedError);
-        Assert.NotNull(rejectedAgainError);
+        // Kiểm tra: DB từ chối bằng vi phạm chỉ mục unique; chỉ còn một dòng
+        Assert.NotNull(approvedAgainError);
         using (IServiceScope scope = factory.Services.CreateScope())
         {
             IDeathCaseRepository repository = scope.ServiceProvider.GetRequiredService<IDeathCaseRepository>();
-            Assert.True(repository.IsUniqueViolation(approvedError));
-            Assert.True(repository.IsUniqueViolation(rejectedAgainError));
+            Assert.True(repository.IsUniqueViolation(approvedAgainError));
         }
         int count = await CountDecisionsAsync(submitted.CaseId);
         Assert.Equal(1, count);
@@ -126,7 +123,7 @@ public sealed class DeathCaseReviewRepositoryTests : IAsyncLifetime
         {
             await db.Set<DeathCase>().Where(c => c.Id == caseA.CaseId)
                 .ExecuteUpdateAsync(s => s
-                    .SetProperty(c => c.Status, DeathCaseStatus.Rejected)
+                    .SetProperty(c => c.Status, DeathCaseStatus.ApprovedForHandover)
                     .SetProperty(c => c.ClosedAt, DateTimeOffset.UtcNow));
         });
 
@@ -168,45 +165,6 @@ public sealed class DeathCaseReviewRepositoryTests : IAsyncLifetime
         Assert.Equal(submittedFileId, submittedFile.Id);
         Assert.Null(draftFile);
         Assert.Null(otherCaseFile);
-    }
-
-    [SqlFact]
-    public async Task Death12_FindPreviousCaseReturnsRejectReason()
-    {
-        // Chuẩn bị: hồ sơ bị từ chối có lý do; một hồ sơ khác chưa có quyết định
-        DeathCaseReviewTestData.SubmittedCase rejectedCase = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory, 1);
-        DeathCaseReviewTestData.SubmittedCase openCase = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory, 0);
-        await DeathCaseReviewTestData.AddFinalDecisionAsync(
-            factory, rejectedCase.CaseId, DeathCaseDecisionKind.Rejected, rejectedCase.Verifier.User.Id, rejectedCase.AssignmentId);
-        DateTimeOffset closedAt = DateTimeOffset.UtcNow;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            await db.Set<DeathCase>().Where(c => c.Id == rejectedCase.CaseId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(c => c.Status, DeathCaseStatus.Rejected)
-                    .SetProperty(c => c.ClosedAt, closedAt));
-        });
-
-        // Hành động
-        PreviousCaseRow? previous = null;
-        PreviousCaseRow? withoutDecision = null;
-        PreviousCaseRow? missing = null;
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IDeathCaseReviewRepository repository = scope.ServiceProvider.GetRequiredService<IDeathCaseReviewRepository>();
-            previous = await repository.FindPreviousCaseAsync(rejectedCase.CaseId, CancellationToken.None);
-            withoutDecision = await repository.FindPreviousCaseAsync(openCase.CaseId, CancellationToken.None);
-            missing = await repository.FindPreviousCaseAsync(Guid.NewGuid(), CancellationToken.None);
-        }
-
-        // Kiểm tra
-        Assert.NotNull(previous);
-        Assert.Equal(rejectedCase.CaseId, previous.Id);
-        Assert.Equal("Lý do thử", previous.RejectReason);
-        Assert.NotNull(previous.ClosedAt);
-        Assert.NotNull(withoutDecision);
-        Assert.Null(withoutDecision.RejectReason);
-        Assert.Null(missing);
     }
 
     [SqlFact]

@@ -158,18 +158,15 @@ public sealed class DeathCaseAssignmentRepositoryTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Ac71_SkipsDraftApprovedAndRejectedCases()
+    public async Task Ac71_SkipsDraftAndApprovedCases()
     {
-        // Chuẩn bị: ba hồ sơ đã đóng hoặc chưa gửi, phân công đã kết thúc (nếu không lọc trạng thái thì sẽ bị chọn)
+        // Chuẩn bị: hai hồ sơ đã đóng hoặc chưa gửi, phân công đã kết thúc (nếu không lọc trạng thái thì sẽ bị chọn)
         DeathCaseReviewTestData.SubmittedCase draft = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
         DeathCaseReviewTestData.SubmittedCase approved = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        DeathCaseReviewTestData.SubmittedCase rejected = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
         await DeathCaseReviewTestData.SetCaseStatusAsync(factory, draft.CaseId, DeathCaseStatus.Draft);
         await DeathCaseReviewTestData.SetCaseStatusAsync(factory, approved.CaseId, DeathCaseStatus.ApprovedForHandover);
-        await DeathCaseReviewTestData.SetCaseStatusAsync(factory, rejected.CaseId, DeathCaseStatus.Rejected);
         await DeathCaseReviewTestData.EndAssignmentAsync(factory, draft.CaseId, DateTimeOffset.UtcNow);
         await DeathCaseReviewTestData.EndAssignmentAsync(factory, approved.CaseId, DateTimeOffset.UtcNow);
-        await DeathCaseReviewTestData.EndAssignmentAsync(factory, rejected.CaseId, DateTimeOffset.UtcNow);
 
         // Hành động
         List<Guid> ids = await FindIdsAsync();
@@ -177,7 +174,6 @@ public sealed class DeathCaseAssignmentRepositoryTests : IAsyncLifetime
         // Kiểm tra
         Assert.DoesNotContain(draft.CaseId, ids);
         Assert.DoesNotContain(approved.CaseId, ids);
-        Assert.DoesNotContain(rejected.CaseId, ids);
     }
 
     private async Task<List<Guid>> FindIdsAsync()

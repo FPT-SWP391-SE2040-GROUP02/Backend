@@ -24,20 +24,10 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
         return QueryWithDetails().FirstOrDefaultAsync(c => c.Id == caseId, ct);
     }
 
-    public Task<DeathCaseAssignment?> FindAliveConfirmedAssignmentAsync(Guid caseId, Guid verifierUserId, CancellationToken ct)
-    {
-        string aliveConfirmed = DeathCaseAssignmentRules.EndReasonAliveConfirmed;
-        return context.Set<DeathCaseAssignment>()
-            .AsNoTracking()
-            .Where(a => a.CaseId == caseId && a.VerifierUserId == verifierUserId && a.EndReason == aliveConfirmed)
-            .OrderByDescending(a => a.EndedAt)
-            .FirstOrDefaultAsync(ct);
-    }
-
     public Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
         return QueryWithDetails()
-            .FirstOrDefaultAsync(c => c.VaultId == vaultId && c.Status != DeathCaseStatus.Rejected, ct);
+            .FirstOrDefaultAsync(c => c.VaultId == vaultId, ct);
     }
 
     public async Task<List<ExecutorVaultRow>> FindExecutorVaultsAsync(Guid userId, CancellationToken ct)
@@ -61,27 +51,12 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
                 ExecutorNote = e.Vault.ExecutorNote,
                 ExecutorNoteUpdatedAt = e.Vault.ExecutorNoteUpdatedAt,
                 OpenDeathCaseId = context.Set<DeathCase>()
-                    .Where(c => c.VaultId == e.VaultId && c.Status != DeathCaseStatus.Rejected)
-                    .Select(c => (Guid?)c.Id)
-                    .FirstOrDefault(),
-                LastRejectedDeathCaseId = context.Set<DeathCase>()
-                    .Where(c => c.VaultId == e.VaultId && c.Status == DeathCaseStatus.Rejected)
-                    .OrderByDescending(c => c.CreatedAt)
-                    .ThenByDescending(c => c.Id)
+                    .Where(c => c.VaultId == e.VaultId)
                     .Select(c => (Guid?)c.Id)
                     .FirstOrDefault(),
             })
             .ToListAsync(ct);
         return rows;
-    }
-
-    public Task<DeathCase?> FindLatestRejectedByVaultIdAsync(Guid vaultId, CancellationToken ct)
-    {
-        return context.Set<DeathCase>()
-            .Where(c => c.VaultId == vaultId && c.Status == DeathCaseStatus.Rejected)
-            .OrderByDescending(c => c.CreatedAt)
-            .ThenByDescending(c => c.Id)
-            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<bool> TryAddAsync(DeathCase deathCase, CancellationToken ct)

@@ -52,9 +52,6 @@ public class VerifierDeathCaseResponse
     /// </summary>
     public List<string> ApproveBlockers { get; set; } = new List<string>();
 
-    /// <summary>DEATH-12: hồ sơ bị từ chối trước đó của cùng kho; null khi không có.</summary>
-    public VerifierPreviousCaseResponse? PreviousCase { get; set; }
-
     /// <summary>Chỉ có ở response duyệt lần đầu; còn lại null.</summary>
     public VerifierHandoverResponse? Handover { get; set; }
 
@@ -198,15 +195,6 @@ public class VerifierAssignmentResponse
     public DateTimeOffset AssignedAt { get; set; }
 
     public DateTimeOffset DueAt { get; set; }
-}
-
-public class VerifierPreviousCaseResponse
-{
-    public Guid Id { get; set; }
-
-    public DateTimeOffset? ClosedAt { get; set; }
-
-    public string? RejectReason { get; set; }
 }
 
 /// <summary>Kết quả mở bàn giao khi duyệt lần đầu.</summary>

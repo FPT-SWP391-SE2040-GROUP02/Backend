@@ -44,9 +44,9 @@ public enum AuditAction
     HoldPlaced = 16,
     /// <summary>Hold được gỡ.</summary>
     HoldReleased = 17,
-    /// <summary>Sự cố được giao lại người phụ trách.</summary>
+    /// <summary>Không còn dùng (đã gỡ tính năng Sự cố); giữ giá trị để đọc nhật ký cũ.</summary>
     IncidentAssigned = 18,
-    /// <summary>Sự cố được đóng.</summary>
+    /// <summary>Không còn dùng (đã gỡ tính năng Sự cố); giữ giá trị để đọc nhật ký cũ.</summary>
     IncidentResolved = 19,
     /// <summary>Admin đổi vai trò hệ thống của tài khoản.</summary>
     UserRoleChanged = 20,
@@ -54,9 +54,9 @@ public enum AuditAction
     UserStatusChanged = 21,
     /// <summary>Admin giao lại Verifier cho hồ sơ chứng tử.</summary>
     VerifierReassigned = 22,
-    /// <summary>Owner báo còn sống.</summary>
+    /// <summary>Đã gỡ luồng "Owner báo còn sống"; giữ giá trị để đọc nhật ký cũ.</summary>
     ObjectionReported = 23,
-    /// <summary>Verifier kết luận báo còn sống.</summary>
+    /// <summary>Đã gỡ luồng "Owner báo còn sống"; giữ giá trị để đọc nhật ký cũ.</summary>
     ObjectionConcluded = 24,
     /// <summary>Executor mở hồ sơ chứng tử.</summary>
     DeathCaseOpened = 25,
@@ -68,7 +68,7 @@ public enum AuditAction
     DeathCaseFlagReviewed = 28,
     /// <summary>Verifier yêu cầu Executor bổ sung hồ sơ.</summary>
     DeathCaseSupplementRequested = 29,
-    /// <summary>Verifier từ chối hồ sơ chứng tử.</summary>
+    /// <summary>Không còn dùng (đã bỏ từ chối hồ sơ chứng tử, nay chỉ yêu cầu bổ sung); giữ giá trị để đọc nhật ký cũ.</summary>
     DeathCaseRejected = 30,
     /// <summary>Verifier duyệt hồ sơ chứng tử và mở bàn giao.</summary>
     DeathCaseApproved = 31,

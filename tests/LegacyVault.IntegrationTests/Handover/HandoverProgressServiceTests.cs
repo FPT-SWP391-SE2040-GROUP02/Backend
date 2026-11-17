@@ -263,7 +263,6 @@ public sealed class HandoverProgressServiceTests
     [InlineData(DeathCaseStatus.Draft)]
     [InlineData(DeathCaseStatus.UnderReview)]
     [InlineData(DeathCaseStatus.SupplementRequired)]
-    [InlineData(DeathCaseStatus.Rejected)]
     public async Task Progress_CaseNotApproved_ReturnsNotStartedWithoutTurns(DeathCaseStatus status)
     {
         deathCase.Status = status;

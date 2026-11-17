@@ -24,7 +24,7 @@ public enum ErrorCode
     AssetNotFound,
     /// <summary>404: tài khoản chưa có ảnh đại diện.</summary>
     AvatarNotFound,
-    /// <summary>404: chưa có ảnh CCCD (Owner xác minh trước khi lưu ảnh) hoặc chưa có ảnh selfie báo còn sống.</summary>
+    /// <summary>404: chưa có ảnh CCCD (Owner xác minh trước khi lưu ảnh).</summary>
     IdentityImageNotFound,
     /// <summary>409: tài sản còn trong gói hoặc đã được ghim vào snapshot bàn giao nên không xóa được.</summary>
     AssetInUse,
@@ -109,9 +109,9 @@ public enum ErrorCode
     VaultPinTooWeak,
     /// <summary>409: tài khoản không có mật khẩu (đăng nhập bằng Google) nên chưa đặt lại PIN được.</summary>
     VaultPinResetNeedsPassword,
-    /// <summary>403 (DEATH-03): mật khẩu xác nhận duyệt/từ chối sai (kèm attemptsRemaining) hoặc tài khoản chưa có mật khẩu.</summary>
+    /// <summary>403 (DEATH-03): mật khẩu xác nhận duyệt sai (kèm attemptsRemaining) hoặc tài khoản chưa có mật khẩu.</summary>
     SigningPasswordInvalid,
-    /// <summary>423 (DEATH-03): chức năng duyệt/từ chối đang khóa tạm vì nhập sai mật khẩu nhiều lần, kèm lockedUntil.</summary>
+    /// <summary>423 (DEATH-03): chức năng duyệt đang khóa tạm vì nhập sai mật khẩu nhiều lần, kèm lockedUntil.</summary>
     SigningLocked,
     /// <summary>404: tham số cấu hình hệ thống không tồn tại.</summary>
     SettingNotFound,

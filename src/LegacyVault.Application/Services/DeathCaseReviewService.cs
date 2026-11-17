@@ -20,10 +20,6 @@ namespace LegacyVault.Application.Services;
 /// </remarks>
 public sealed class DeathCaseReviewService : IDeathCaseReviewService
 {
-    /// <summary>
-    /// Mã ghi vào nhật ký khi Verifier từ chối hồ sơ. Lý do tự do Verifier nhập nằm ở quyết định của hồ sơ, không ghi vào
-    /// nhật ký vì Owner xem được nhật ký.
-    /// </summary>
     private const string SortByDueAt = "dueAt";
     private const string SortByAssignedAt = "assignedAt";
 
@@ -130,13 +126,13 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
 
     public async Task<VerifierDeathCaseResponse> GetAsync(Guid caseId, CancellationToken ct)
     {
-        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct, true);
+        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
         return await BuildResponseAsync(context, null, ct);
     }
 
     public async Task<PreparedDeathCaseFile> PrepareFileAsync(Guid caseId, Guid fileId, CancellationToken ct)
     {
-        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct, true);
+        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
 
         // chỉ trang của bản đã gửi của đúng hồ sơ này; bản nháp hoặc hồ sơ khác → 404.
         DeathCaseFile? file = await reviewRepository.FindSubmittedFileAsync(caseId, fileId, ct);
@@ -182,7 +178,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
 
     public async Task<PreparedDownload> PrepareOwnerDocumentImageAsync(Guid caseId, CancellationToken ct)
     {
-        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct, true);
+        ReviewContext context = await LoadCaseForVerifierAsync(caseId, ct);
         OwnerIdentity? identity = await FindOwnerIdentityAsync(context.DeathCase, ct);
         if (identity == null || identity.DocumentImageStorageKey == null || identity.DocumentImageWrappedDataKey == null)
         {
@@ -285,7 +281,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         AddAudit(context, AuditAction.DeathCaseSupplementRequested, requestedParts, now);
         await unitOfWork.SaveChangesAsync(ct);
         // Báo Executor sau khi đã lưu: gửi thư lỗi không làm hỏng quyết định đã ghi.
-        await NotifyExecutorsAsync(deathCase, DeathCaseDecisionKind.SupplementRequested, decision.DueAt, ct);
+        await NotifyExecutorsAsync(deathCase, decision.DueAt, ct);
         return await BuildResponseAsync(context, null, ct);
     }
 
@@ -301,7 +297,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         await CheckSigningPasswordAsync(context, request.Password, ct);
 
         // 2) Hồ sơ đã đóng (kiểm TRƯỚC etag). Đã duyệt rồi thì gọi lặp trả trạng thái hiện tại
-        //    (không thêm dòng, không gọi lại StartAsync); đã bị từ chối thì 409 CASE_CLOSED.
+        //    (không thêm dòng, không gọi lại StartAsync); đã đóng thì 409 CASE_CLOSED.
         if (deathCase.Status == DeathCaseStatus.ApprovedForHandover)
         {
             return await BuildResponseAsync(context, null, ct);
@@ -325,9 +321,9 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         await EnsureNoConflictOfInterestAsync(context, ct);
 
         // 5) Kế hoạch phải đang khóa DEATH_CASE_OPEN (lúc Executor gửi lần đầu).
-        //    hồ sơ và kế hoạch không được đọc cùng một lúc. Verifier khác có thể vừa duyệt/từ chối xong ngay sau
+        //    hồ sơ và kế hoạch không được đọc cùng một lúc. Verifier khác có thể vừa duyệt xong ngay sau
         //    lúc ta đọc hồ sơ (kế hoạch khi đó không còn DEATH_CASE_OPEN), nên kế hoạch sai thì phải ĐỌC LẠI hồ sơ
-        //    chứ chưa kết luận PLAN_STATE_INVALID: đã duyệt → 200, đã bị từ chối → 409 CASE_CLOSED, còn lại → PLAN_STATE_INVALID.
+        //    chứ chưa kết luận PLAN_STATE_INVALID: đã duyệt → 200, đã đóng → 409 CASE_CLOSED, còn lại → PLAN_STATE_INVALID.
         Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
         if (vault == null || vault.Plan.Status != PlanStatus.DeathCaseOpen)
         {
@@ -411,9 +407,8 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     /// <summary>
     /// V3, V1: Verifier hợp lệ + hồ sơ mà tôi có phân công ĐANG HIỆU LỰC. Không có hồ sơ, hoặc không giao cho tôi,
     /// hoặc phân công đã kết thúc → 404 DEATH_CASE_NOT_FOUND.
-    /// forRead = true (chỉ các lần đọc): cho phép thêm hồ sơ mà chính tôi đã kết luận Owner còn sống, để xem lại ở lịch sử.
     /// </summary>
-    private async Task<ReviewContext> LoadCaseForVerifierAsync(Guid caseId, CancellationToken ct, bool forRead = false)
+    private async Task<ReviewContext> LoadCaseForVerifierAsync(Guid caseId, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
         await EnsureActiveVerifierAsync(userId, ct);
@@ -432,15 +427,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
                 mine = assignment;
             }
         }
-        if (mine == null && forRead && deathCase.Status == DeathCaseStatus.Rejected)
-        {
-            // FindByIdAsync chỉ nạp phân công còn hiệu lực: tìm riêng phân công mà chính tôi đã kết thúc bằng kết luận "còn sống".
-            DeathCaseAssignment? concluded = await deathCaseRepository.FindAliveConfirmedAssignmentAsync(caseId, userId, ct);
-            if (concluded != null && DeathCaseAssignmentRules.CanRead(concluded, userId, deathCase.Status))
-            {
-                mine = concluded;
-            }
-        }
         if (mine == null)
         {
             throw CaseNotFound();
@@ -453,19 +439,13 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         return context;
     }
 
-    /// <summary>Giải mã CHỈ bản đang xét, nạp hồ sơ trước đó rồi dựng response (kèm lý do chưa duyệt được).</summary>
+    /// <summary>Giải mã CHỈ bản đang xét rồi dựng response (kèm lý do chưa duyệt được).</summary>
     private async Task<VerifierDeathCaseResponse> BuildResponseAsync(
         ReviewContext context, VerifierHandoverResponse? handover, CancellationToken ct)
     {
         DeathCase deathCase = context.DeathCase;
         DeathCaseVersion reviewVersion = DeathCaseReviewRules.FindReviewVersion(deathCase);
         DeathCaseIdentityData? identity = dataProtector.Unprotect(reviewVersion);
-
-        PreviousCaseRow? previous = null;
-        if (deathCase.PreviousCaseId != null)
-        {
-            previous = await reviewRepository.FindPreviousCaseAsync(deathCase.PreviousCaseId.Value, ct);
-        }
 
         List<string> blockers = DeathCaseReviewRules.GetApproveBlockers(deathCase);
         // GetApproveBlockers giữ thuần; xung đột lợi ích cần đọc kho nên thêm ở đây, cuối danh sách,
@@ -483,7 +463,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
             lastCheckInAt = schedule.LastCheckInAt;
         }
         VerifierDeathCaseResponse response = deathCase.ToVerifierResponse(
-            context.Assignment, identity, previous, blockers, handover, administrativeUnits, lastCheckInAt);
+            context.Assignment, identity, blockers, handover, administrativeUnits, lastCheckInAt);
         response.OwnerIdentity = await BuildOwnerIdentityAsync(deathCase, identity, ct);
         return response;
     }
@@ -560,7 +540,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         {
             return await BuildResponseAsync(latest, null, ct);
         }
-        // Verifier khác vừa duyệt/từ chối bằng quyết định khác: không phải lỗi kế hoạch mà là hồ sơ đã đóng.
+        // Verifier khác vừa duyệt bằng quyết định khác: không phải lỗi kế hoạch mà là hồ sơ đã đóng.
         EnsureNotClosed(latest.DeathCase);
         return null;
     }
@@ -613,7 +593,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     }
 
     /// <summary>
-    /// đọc tài khoản Verifier rồi kiểm mật khẩu xác nhận duyệt/từ chối (khóa lũy tiến). Gọi SAU khi đã chắc là
+    /// đọc tài khoản Verifier rồi kiểm mật khẩu xác nhận duyệt (khóa lũy tiến). Gọi SAU khi đã chắc là
     /// Verifier được giao hồ sơ, để người không được giao (hoặc đã bị giao lại) không tốn lần đoán.
     /// </summary>
     private async Task CheckSigningPasswordAsync(ReviewContext context, string password, CancellationToken ct)
@@ -642,7 +622,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         return decision;
     }
 
-    /// <summary>hồ sơ đã duyệt hoặc từ chối thì không nhận thao tác ghi nào nữa → 409 CASE_CLOSED.</summary>
+    /// <summary>hồ sơ đã duyệt thì không nhận thao tác ghi nào nữa → 409 CASE_CLOSED.</summary>
     private static void EnsureNotClosed(DeathCase deathCase)
     {
         if (DeathCaseReviewRules.IsClosed(deathCase.Status))
@@ -661,7 +641,7 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
         }
     }
 
-    /// <summary>Bổ sung, từ chối, xem xét cờ chỉ làm được khi hồ sơ đang xét hoặc đang chờ bổ sung.</summary>
+    /// <summary>Bổ sung, duyệt, xem xét cờ chỉ làm được khi hồ sơ đang xét hoặc đang chờ bổ sung.</summary>
     private static void EnsureCanDecide(DeathCase deathCase)
     {
         if (!DeathCaseReviewRules.CanDecide(deathCase.Status))
@@ -730,10 +710,10 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
     /// <summary>dòng nhật ký của Verifier trên bản hồ sơ đang xét. reason chỉ nhận mã, không nhận lý do tự do.</summary>
     /// <summary>
     /// Gửi thư cho mọi Executor đang nhận việc được của kho (đã chấp nhận, tài khoản còn hoạt động), vì ai trong số đó
-    /// cũng có thể nộp bản bổ sung hoặc mở hồ sơ mới. Bỏ qua tài khoản không còn hoặc không có email.
+    /// cũng có thể nộp bản bổ sung. Bỏ qua tài khoản không còn hoặc không có email.
     /// </summary>
     private async Task NotifyExecutorsAsync(
-        DeathCase deathCase, DeathCaseDecisionKind kind, DateTimeOffset? supplementDueAt, CancellationToken ct)
+        DeathCase deathCase, DateTimeOffset? supplementDueAt, CancellationToken ct)
     {
         List<Executor> executors = await executorReader.GetAvailableAsync(deathCase.VaultId, ct);
         foreach (Executor executor in executors)
@@ -752,7 +732,6 @@ public sealed class DeathCaseReviewService : IDeathCaseReviewService
             notice.ToEmail = user.Email;
             notice.FullName = user.FullName;
             notice.CaseCode = DeathCaseRules.CaseCode(deathCase.Id);
-            notice.Kind = kind;
             notice.SupplementDueAt = supplementDueAt;
             await executorNoticeSender.SendAsync(notice, ct);
         }

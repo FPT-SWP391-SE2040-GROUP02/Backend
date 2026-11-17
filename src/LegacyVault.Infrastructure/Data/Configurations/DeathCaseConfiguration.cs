@@ -26,10 +26,9 @@ public sealed class DeathCaseConfiguration : IEntityTypeConfiguration<DeathCase>
         builder.Property(c => c.UpdatedAt)
             .IsConcurrencyToken();
 
-        // DEATH-05, DATA-04, D1: mỗi kho chỉ một hồ sơ chưa bị từ chối (kể cả Draft) — AC-71, AC-91.
+        // DEATH-05, DATA-04, D1: mỗi kho chỉ một hồ sơ (kể cả Draft) — AC-71, AC-91.
         builder.HasIndex(c => c.VaultId)
             .IsUnique()
-            .HasFilter("[Status] <> 'Rejected'")
             .HasDatabaseName("UX_DeathCases_OpenPerVault");
 
         builder.HasIndex(c => c.PlanId);
@@ -48,11 +47,6 @@ public sealed class DeathCaseConfiguration : IEntityTypeConfiguration<DeathCase>
         builder.HasOne<User>()
             .WithMany()
             .HasForeignKey(c => c.OpenedByUserId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne<DeathCase>()
-            .WithMany()
-            .HasForeignKey(c => c.PreviousCaseId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(c => c.Versions)

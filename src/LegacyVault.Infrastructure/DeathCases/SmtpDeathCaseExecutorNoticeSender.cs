@@ -28,7 +28,7 @@ public sealed class SmtpDeathCaseExecutorNoticeSender : IDeathCaseExecutorNotice
     public async Task SendAsync(DeathCaseExecutorNotice notice, CancellationToken ct)
     {
         EmailContent content = DeathCaseExecutorNoticeEmail.Build(
-            notice.FullName, notice.CaseCode, notice.Kind, notice.SupplementDueAt, executorUrl);
+            notice.FullName, notice.CaseCode, notice.SupplementDueAt, executorUrl);
         try
         {
             await mailSender.SendAsync(notice.ToEmail, notice.FullName, content.Subject, content.TextBody, content.HtmlBody, ct);

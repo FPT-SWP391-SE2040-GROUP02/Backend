@@ -15,7 +15,7 @@ public interface IDeathCaseSupplementJob
 
 /// <remarks>
 /// Quá hạn không tự quyết định gì: hồ sơ vẫn SUPPLEMENT_REQUIRED, chỉ có SupplementOverdueAt để Verifier thấy
-/// và tự từ chối hoặc yêu cầu lại. Executor nộp bản mới thì mốc này được xóa (DeathCaseService.SubmitAsync).
+/// và tự yêu cầu lại hoặc chờ Executor nộp. Executor nộp bản mới thì mốc này được xóa (DeathCaseService.SubmitAsync).
 /// Không đổi UpdatedAt của hồ sơ nên etag của Executor/Verifier không bị đổi.
 /// </remarks>
 public sealed class DeathCaseSupplementJob : IDeathCaseSupplementJob

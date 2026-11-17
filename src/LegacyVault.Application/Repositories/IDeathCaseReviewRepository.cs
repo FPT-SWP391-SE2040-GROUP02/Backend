@@ -33,17 +33,6 @@ public sealed class VerifierCaseRow
     public DateTimeOffset? ClosedAt { get; set; }
 }
 
-/// <summary>DEATH-12: hồ sơ bị từ chối trước đó của cùng kho, để Verifier xem lịch sử.</summary>
-public sealed class PreviousCaseRow
-{
-    public Guid Id { get; set; }
-
-    public DateTimeOffset? ClosedAt { get; set; }
-
-    /// <summary>Lý do của quyết định Rejected; null nếu không có dòng quyết định.</summary>
-    public string? RejectReason { get; set; }
-}
-
 /// <summary>
 /// Truy cập dữ liệu Verifier xét hồ sơ chứng tử (F2B nhánh B): bảng DeathCaseDecisions và các truy vấn đọc riêng.
 /// </summary>
@@ -54,8 +43,7 @@ public sealed class PreviousCaseRow
 public interface IDeathCaseReviewRepository
 {
     /// <summary>
-    /// SEC-05, ASSIGN-01: các hồ sơ có phân công ĐANG HIỆU LỰC (EndedAt null) của Verifier, cộng hồ sơ họ đã tự kết luận
-    /// Owner còn sống (ALIVE_CONFIRMED, hồ sơ Rejected) để xem lại ở lịch sử, một trang.
+    /// SEC-05, ASSIGN-01: các hồ sơ có phân công ĐANG HIỆU LỰC (EndedAt null) của Verifier, một trang.
     /// Hồ sơ còn mở (ClosedAt null) trước, rồi theo hạn xét (sortBy "dueAt") hoặc lúc được giao ("assignedAt"),
     /// rồi theo Id. sortBy đã được service kiểm tra. pageIndex bắt đầu từ 1.
     /// </summary>
@@ -67,9 +55,6 @@ public interface IDeathCaseReviewRepository
     /// (bản nháp hoặc hồ sơ khác → null). Một truy vấn, không theo dõi.
     /// </summary>
     Task<DeathCaseFile?> FindSubmittedFileAsync(Guid caseId, Guid fileId, CancellationToken ct);
-
-    /// <summary>DEATH-12: thông tin hồ sơ bị từ chối trước đó. Không có → null.</summary>
-    Task<PreviousCaseRow?> FindPreviousCaseAsync(Guid previousCaseId, CancellationToken ct);
 
     void AddDecision(DeathCaseDecision decision);
 }

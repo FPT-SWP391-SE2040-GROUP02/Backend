@@ -23,7 +23,7 @@ public enum HandoverTurnStatus
     Declined = 5,
     /// <summary>Quá 7 ngày chưa quyết định.</summary>
     DecisionExpired = 6,
-    /// <summary>Bị hủy (ví dụ Owner còn sống). Chưa có chức năng đặt trạng thái này.</summary>
+    /// <summary>Bị hủy. Chưa có chức năng đặt trạng thái này.</summary>
     Cancelled = 7,
     /// <summary>Job dọn dữ liệu đặt khi nội dung đã bị xóa. Chưa có chức năng đặt trạng thái này.</summary>
     Lapsed = 8,

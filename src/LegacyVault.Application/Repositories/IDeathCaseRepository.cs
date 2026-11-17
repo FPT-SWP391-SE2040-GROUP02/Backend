@@ -24,9 +24,6 @@ public sealed class ExecutorVaultRow
     /// <summary>Hồ sơ đang mở của kho (kể cả Draft); null khi chưa có.</summary>
     public Guid? OpenDeathCaseId { get; set; }
 
-    /// <summary>Hồ sơ bị từ chối gần nhất của kho, để Executor mở lại xem lý do; null khi chưa có.</summary>
-    public Guid? LastRejectedDeathCaseId { get; set; }
-
     /// <summary>Lần chủ kho TỰ điểm danh gần nhất (điểm danh thay của Executor không tính); null khi chưa từng.</summary>
     public DateTimeOffset? LastOwnerCheckInAt { get; set; }
 
@@ -50,23 +47,14 @@ public interface IDeathCaseRepository
     /// </summary>
     Task<DeathCase?> FindByIdAsync(Guid caseId, CancellationToken ct);
 
-    /// <summary>DEATH-05: hồ sơ đang mở (chưa bị từ chối) của kho, cùng phần nạp kèm như FindByIdAsync. Không có → null.</summary>
+    /// <summary>DEATH-05: hồ sơ của kho, cùng phần nạp kèm như FindByIdAsync. Không có → null.</summary>
     Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct);
-
-    /// <summary>
-    /// Phân công của chính Verifier này đã kết thúc vì họ kết luận Owner còn sống (ALIVE_CONFIRMED). FindByIdAsync chỉ nạp
-    /// phân công còn hiệu lực nên cần truy vấn riêng. Dùng để Verifier xem lại hồ sơ đã đóng; không có → null. Không theo dõi.
-    /// </summary>
-    Task<DeathCaseAssignment?> FindAliveConfirmedAssignmentAsync(Guid caseId, Guid verifierUserId, CancellationToken ct);
 
     /// <summary>
     /// D12, DMS-05: các kho mà tài khoản là Executor đang hiệu lực (Status Accepted), chấp nhận sớm nhất trước.
     /// Chỉ đọc bảng Executors, không đổi IExecutorReader.
     /// </summary>
     Task<List<ExecutorVaultRow>> FindExecutorVaultsAsync(Guid userId, CancellationToken ct);
-
-    /// <summary>Hồ sơ bị từ chối gần nhất của kho (không nạp kèm), để nối PreviousCaseId. Không có → null.</summary>
-    Task<DeathCase?> FindLatestRejectedByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>
     /// DEATH-05, AC-71: thêm hồ sơ mới (kèm các phiên bản trong Versions) rồi lưu ngay cùng mọi thay đổi đang chờ.

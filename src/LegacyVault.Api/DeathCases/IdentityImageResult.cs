@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.DeathCases;
 
 /// <summary>
-/// Trả ảnh danh tính (mặt trước CCCD, selfie báo còn sống) đã qua kiểm toàn vẹn cho Verifier. Giữ kiểu ảnh thật
+/// Trả ảnh danh tính (mặt trước CCCD) đã qua kiểm toàn vẹn cho Verifier. Giữ kiểu ảnh thật
 /// (JPEG/PNG/WebP do service đã nhận theo nội dung) để trình duyệt hiển thị; cấm đoán kiểu, chạy script và bộ nhớ đệm.
 /// </summary>
 public sealed class IdentityImageResult : IActionResult

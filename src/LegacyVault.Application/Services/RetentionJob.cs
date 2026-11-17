@@ -31,7 +31,7 @@ public interface IRetentionJob
 
 /// <remarks>
 /// - Đồng hồ theo từng lượt (một chỉ định). Lý do giữ: còn trong 5 ngày phản hồi, claim đang xử lý, grant còn hạn,
-///   Owner báo còn sống (kế hoạch BLOCKED). Tạm dừng lưu phần còn lại, không đặt lại 30 ngày.
+///   hold đang đặt (kế hoạch BLOCKED). Tạm dừng lưu phần còn lại, không đặt lại 30 ngày.
 /// - RETENTION-02: phiên bản tài sản chỉ bị xóa khi KHÔNG còn lượt nào khác chưa dọn cùng tham chiếu.
 /// - RETENTION-06: mọi kiểm tra và thay đổi DB của một kế hoạch lưu trong MỘT lần lưu và ghi plan.UpdatedAt, nên nhận lượt
 ///   hay đồng ý chạy cùng lúc (cũng ghi plan.UpdatedAt) thua RowVersion: không có grant mới trên dữ liệu vừa dọn.
@@ -39,7 +39,7 @@ public interface IRetentionJob
 ///   xóa tệp lỗi thì nội dung vẫn không giải mã được và vòng sau thử xóa lại.
 /// - Lượt còn mở khi dọn thành LAPSED, link mời bị vô hiệu (đổi mã băm token).
 /// - SETUP-18: kế hoạch CLOSED và mọi lượt đã dọn thì xóa nốt nội dung còn lại của kho và đóng kho.
-/// - Kế hoạch đã về ACTIVE (Owner còn sống) hay lượt CANCELLED không bao giờ bị dọn.
+/// - Kế hoạch đã về ACTIVE hay lượt CANCELLED không bao giờ bị dọn.
 /// - TODO(LV-07): thư mốc gửi lỗi phải giao người xử lý có hạn (RETENTION-05); hiện vòng sau gửi lại.
 /// </remarks>
 public sealed class RetentionJob : IRetentionJob

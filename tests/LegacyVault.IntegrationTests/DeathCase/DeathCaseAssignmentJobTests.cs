@@ -315,9 +315,9 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
             DeathCase? stale = await staleRepository.FindByIdAsync(submitted.CaseId, CancellationToken.None);
             Assert.NotNull(stale);
 
-            // Hành động: job giao lại và commit; sau đó phiên cũ cố ghi quyết định từ chối với dữ liệu đã đọc
+            // Hành động: job giao lại và commit; sau đó phiên cũ cố ghi quyết định duyệt với dữ liệu đã đọc
             DeathCaseAssignmentOutcome outcome = await RunJobAsync(submitted.CaseId);
-            stale.Status = DeathCaseStatus.Rejected;
+            stale.Status = DeathCaseStatus.ApprovedForHandover;
             stale.UpdatedAt = DateTimeOffset.UtcNow;
             AppException conflict = await Assert.ThrowsAsync<AppException>(
                 () => staleUnitOfWork.SaveChangesAsync(CancellationToken.None));
@@ -328,9 +328,9 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
         }
 
         // Tải lại hoặc gửi lại etag cũ sau khi job đã commit: Verifier cũ không còn phân công nên nhận 404; hồ sơ vẫn đang xét
-        HttpResponseMessage lateReject = await DeathCaseReviewTestData.RejectAsync(
-            submitted.Verifier.Client, submitted.CaseId, oldEtag, "Không đủ căn cứ");
-        Assert.Equal(HttpStatusCode.NotFound, lateReject.StatusCode);
+        HttpResponseMessage lateRequest = await DeathCaseReviewTestData.RequestSupplementAsync(
+            submitted.Verifier.Client, submitted.CaseId, oldEtag, "Không đủ căn cứ", new[] { "DATE_OF_DEATH" });
+        Assert.Equal(HttpStatusCode.NotFound, lateRequest.StatusCode);
         Assert.Equal(DeathCaseStatus.UnderReview, (await LoadCaseAsync(submitted.CaseId)).Status);
     }
 
@@ -362,7 +362,7 @@ public sealed class DeathCaseAssignmentJobTests : IAsyncLifetime
         // Hành động và kiểm tra
         DeathCaseStatus[] closedStatuses =
         {
-            DeathCaseStatus.ApprovedForHandover, DeathCaseStatus.Rejected, DeathCaseStatus.Draft,
+            DeathCaseStatus.ApprovedForHandover, DeathCaseStatus.Draft,
         };
         foreach (DeathCaseStatus status in closedStatuses)
         {

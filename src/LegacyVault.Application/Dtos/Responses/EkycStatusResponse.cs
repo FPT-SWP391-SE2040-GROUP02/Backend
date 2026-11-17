@@ -6,7 +6,7 @@ public class EkycStatusResponse
     /// <summary>NOT_STARTED, PENDING, PASSED hoặc FAILED.</summary>
     public string Status { get; set; } = string.Empty;
 
-    /// <summary>OWNER_ENROLLMENT, BENEFICIARY_CLAIM hoặc OWNER_ALIVE; null khi chưa làm.</summary>
+    /// <summary>OWNER_ENROLLMENT hoặc BENEFICIARY_CLAIM; null khi chưa làm.</summary>
     public string? Purpose { get; set; }
 
     /// <summary>NOT_CHECKED, MATCHED, NEEDS_REVIEW hoặc WRONG_PERSON.</summary>

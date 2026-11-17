@@ -10,7 +10,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.DeathCases;
 
 /// <summary>
-/// DEATH-03: ràng buộc DB của bộ đếm nhập sai mật khẩu xác nhận duyệt/từ chối trên SQL Server thật (database tạm).
+/// DEATH-03: ràng buộc DB của bộ đếm nhập sai mật khẩu xác nhận duyệt trên SQL Server thật (database tạm).
 /// </summary>
 public sealed class VerifierSigningGuardRepositoryTests : IAsyncLifetime
 {

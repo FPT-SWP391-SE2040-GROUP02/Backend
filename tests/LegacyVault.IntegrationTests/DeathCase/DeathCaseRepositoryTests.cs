@@ -59,41 +59,6 @@ public sealed class DeathCaseRepositoryTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Death05_RejectedCaseDoesNotBlockNewCase()
-    {
-        // Chuẩn bị
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        User executor = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        DeathCase rejected = DeathCaseTestData.NewDraftCase(vault, executor.Id);
-        await TryAddAsync(rejected);
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            await db.Set<DeathCase>().Where(c => c.Id == rejected.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, DeathCaseStatus.Rejected));
-        });
-        DeathCase second = DeathCaseTestData.NewDraftCase(vault, executor.Id);
-
-        // Hành động
-        bool added = await TryAddAsync(second);
-        DeathCase? open = null;
-        DeathCase? latestRejected = null;
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IDeathCaseRepository repository = scope.ServiceProvider.GetRequiredService<IDeathCaseRepository>();
-            open = await repository.FindOpenByVaultIdAsync(vault.VaultId, CancellationToken.None);
-            latestRejected = await repository.FindLatestRejectedByVaultIdAsync(vault.VaultId, CancellationToken.None);
-        }
-
-        // Kiểm tra
-        Assert.True(added);
-        Assert.NotNull(open);
-        Assert.Equal(second.Id, open.Id);
-        Assert.Single(open.Versions);
-        Assert.NotNull(latestRejected);
-        Assert.Equal(rejected.Id, latestRejected.Id);
-    }
-
-    [SqlFact]
     public async Task Assign01_PicksVerifierWithOldestLastAssignment()
     {
         // Chuẩn bị: A được giao 2 ngày trước, B 1 ngày trước, C chưa từng được giao

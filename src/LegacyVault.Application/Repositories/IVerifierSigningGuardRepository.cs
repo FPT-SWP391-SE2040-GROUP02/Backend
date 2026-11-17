@@ -3,7 +3,7 @@ using LegacyVault.Domain.Entities;
 namespace LegacyVault.Application.Repositories;
 
 /// <summary>
-/// DEATH-03: đọc/ghi bộ đếm nhập sai mật khẩu xác nhận duyệt/từ chối của Verifier.
+/// DEATH-03: đọc/ghi bộ đếm nhập sai mật khẩu xác nhận duyệt của Verifier.
 /// AddGuard chỉ đưa vào bộ theo dõi; người gọi lưu cùng lần lưu của use case.
 /// </summary>
 public interface IVerifierSigningGuardRepository

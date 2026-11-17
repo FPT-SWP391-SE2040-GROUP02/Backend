@@ -338,14 +338,14 @@ public sealed class RetentionFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task OwnerAlivePlan_IsNeverCleaned()
+    public async Task ActivePlan_IsNeverCleaned()
     {
         Scenario s = await BuildHandoverAsync(1);
         await PassResponseDeadlineAsync(s.PlanId);
         await RunAsync(s.PlanId);
         Guid turnId = Assert.Single(await TurnsAsync(s.PlanId)).Id;
         await PassRetentionDeadlineAsync(turnId);
-        // Kế hoạch về ACTIVE (như khi Verifier xác nhận Owner còn sống)
+        // Kế hoạch về ACTIVE
         await ApiTestHelpers.SetPlanStatusAsync(factory, s.VaultId, PlanStatus.Active);
 
         RetentionRunResult result = await RunAsync(s.PlanId);

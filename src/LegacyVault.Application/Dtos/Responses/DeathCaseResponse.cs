@@ -32,12 +32,6 @@ public class DeathCaseResponse
     /// </summary>
     public DeathCaseSupplementRequestResponse? SupplementRequest { get; set; }
 
-    /// <summary>
-    /// DEATH-12: lý do Verifier từ chối khi hồ sơ REJECTED (Executor là người phải mở hồ sơ mới); trạng thái khác thì null.
-    /// Không có thông tin Verifier.
-    /// </summary>
-    public string? RejectReason { get; set; }
-
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }

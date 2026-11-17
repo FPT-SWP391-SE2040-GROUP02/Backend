@@ -225,7 +225,7 @@ public sealed class DeathCaseReviewRulesTests
     [Fact]
     public void State03_ClosedAndDecidableStatuses()
     {
-        // Chuẩn bị: duyệt, từ chối là trạng thái đóng; chỉ đang xét/chờ bổ sung mới quyết được
+        // Chuẩn bị: duyệt là trạng thái đóng; chỉ đang xét/chờ bổ sung mới quyết được
         DeathCaseStatus[] statuses = Enum.GetValues<DeathCaseStatus>();
 
         foreach (DeathCaseStatus status in statuses)
@@ -235,7 +235,7 @@ public sealed class DeathCaseReviewRulesTests
             bool canDecide = DeathCaseReviewRules.CanDecide(status);
 
             // Kiểm tra
-            bool expectedClosed = status == DeathCaseStatus.ApprovedForHandover || status == DeathCaseStatus.Rejected;
+            bool expectedClosed = status == DeathCaseStatus.ApprovedForHandover;
             bool expectedDecide = status == DeathCaseStatus.UnderReview || status == DeathCaseStatus.SupplementRequired;
             Assert.Equal(expectedClosed, closed);
             Assert.Equal(expectedDecide, canDecide);
@@ -261,22 +261,18 @@ public sealed class DeathCaseReviewRulesTests
     }
 
     [Fact]
-    public void RecordCode_ForFinalDecisionsOnlyAndUsesVietnamDate()
+    public void RecordCode_ForApprovedOnlyAndUsesVietnamDate()
     {
         // 23:40 UTC ngày 07/11 là 06:40 ngày 08/11 giờ Việt Nam.
         DeathCaseDecision approved = new DeathCaseDecision();
         approved.Kind = DeathCaseDecisionKind.Approved;
         approved.DecidedAt = new DateTimeOffset(2026, 11, 7, 23, 40, 0, TimeSpan.Zero);
-        DeathCaseDecision rejected = new DeathCaseDecision();
-        rejected.Kind = DeathCaseDecisionKind.Rejected;
-        rejected.DecidedAt = approved.DecidedAt;
 
         string? code = DeathCaseReviewRules.RecordCode(approved);
 
         Assert.NotNull(code);
         Assert.Matches("^BB-20261108-[0-9A-F]{6}$", code);
         Assert.Equal(code, DeathCaseReviewRules.RecordCode(approved));
-        Assert.Matches("^BB-20261108-[0-9A-F]{6}$", DeathCaseReviewRules.RecordCode(rejected));
         DeathCaseDecision supplement = new DeathCaseDecision();
         supplement.Kind = DeathCaseDecisionKind.SupplementRequested;
         supplement.DecidedAt = approved.DecidedAt;

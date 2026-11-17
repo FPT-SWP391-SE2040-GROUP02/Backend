@@ -22,14 +22,9 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         return Task.FromResult(Cases.FirstOrDefault(c => c.Id == caseId));
     }
 
-    public Task<DeathCaseAssignment?> FindAliveConfirmedAssignmentAsync(Guid caseId, Guid verifierUserId, CancellationToken ct)
-    {
-        return Task.FromResult<DeathCaseAssignment?>(null);
-    }
-
     public Task<DeathCase?> FindOpenByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
-        return Task.FromResult(Cases.FirstOrDefault(c => c.VaultId == vaultId && c.Status != DeathCaseStatus.Rejected));
+        return Task.FromResult(Cases.FirstOrDefault(c => c.VaultId == vaultId));
     }
 
     /// <summary>Các kho mà người gọi làm Người thực thi, đặt sẵn trong test; mặc định rỗng.</summary>
@@ -40,17 +35,9 @@ public sealed class FakeDeathCaseRepository : IDeathCaseRepository
         return Task.FromResult(new List<ExecutorVaultRow>(ExecutorRows));
     }
 
-    public Task<DeathCase?> FindLatestRejectedByVaultIdAsync(Guid vaultId, CancellationToken ct)
-    {
-        return Task.FromResult(Cases
-            .Where(c => c.VaultId == vaultId && c.Status == DeathCaseStatus.Rejected)
-            .OrderByDescending(c => c.CreatedAt)
-            .FirstOrDefault());
-    }
-
     public Task<bool> TryAddAsync(DeathCase deathCase, CancellationToken ct)
     {
-        if (Cases.Any(c => c.VaultId == deathCase.VaultId && c.Status != DeathCaseStatus.Rejected))
+        if (Cases.Any(c => c.VaultId == deathCase.VaultId))
         {
             return Task.FromResult(false);
         }

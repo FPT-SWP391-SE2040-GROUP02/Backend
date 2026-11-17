@@ -51,7 +51,6 @@ DELETE l FROM HandoverAccessLogs l
 DELETE g FROM HandoverGrants g JOIN HandoverTurns t ON t.Id = g.TurnId WHERE t.VaultId = @vaultId;
 DELETE i FROM HandoverSnapshotItems i JOIN HandoverTurns t ON t.Id = i.TurnId WHERE t.VaultId = @vaultId;
 DELETE FROM HandoverTurns WHERE VaultId = @vaultId;
-UPDATE DeathCases SET PreviousCaseId = NULL WHERE VaultId = @vaultId;
 DELETE d FROM DeathCaseDecisions d JOIN DeathCases c ON c.Id = d.CaseId WHERE c.VaultId = @vaultId;
 DELETE f FROM DeathCaseFiles f JOIN DeathCaseVersions v ON v.Id = f.VersionId JOIN DeathCases c ON c.Id = v.CaseId WHERE c.VaultId = @vaultId;
 DELETE fl FROM DeathCaseFlags fl JOIN DeathCases c ON c.Id = fl.CaseId WHERE c.VaultId = @vaultId;

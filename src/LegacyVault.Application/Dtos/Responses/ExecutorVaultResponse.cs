@@ -18,11 +18,8 @@ public class ExecutorVaultResponse
     /// <summary>DMS-05: Owner đã quá hạn điểm danh (kế hoạch CHECKIN_OVERDUE hoặc AWAITING_CHECK).</summary>
     public bool CheckInOverdue { get; set; }
 
-    /// <summary>Hồ sơ chứng tử đang mở của kho (kể cả bản nháp); null khi chưa có.</summary>
+    /// <summary>Hồ sơ chứng tử của kho (kể cả bản nháp); null khi chưa có.</summary>
     public Guid? OpenDeathCaseId { get; set; }
-
-    /// <summary>Hồ sơ bị từ chối gần nhất của kho; Executor mở bằng GET hồ sơ để xem lý do. Null khi chưa có.</summary>
-    public Guid? LastRejectedDeathCaseId { get; set; }
 
     /// <summary>
     /// Lần chủ kho tự điểm danh gần nhất. Điểm danh thay của Executor không tính; null khi chủ kho chưa từng tự điểm danh.

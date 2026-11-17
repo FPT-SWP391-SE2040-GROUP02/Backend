@@ -7,11 +7,11 @@ public enum DeathCaseNotAllowedReason
     PlanNotRunning,
     /// <summary>DEATH-04: phiên bản đã được Executor xác nhận gửi, không sửa được nữa.</summary>
     VersionLocked,
-    /// <summary>Hồ sơ đã duyệt, bị từ chối hoặc tạm dừng nên Executor không sửa/gửi được.</summary>
+    /// <summary>Hồ sơ đã duyệt hoặc tạm dừng nên Executor không sửa/gửi được.</summary>
     CaseClosed,
     /// <summary>D5: chưa thể tạo phiên bản mới (đã có bản nháp, hoặc hồ sơ không ở trạng thái cần bổ sung).</summary>
     CaseNotRevisable,
-    /// <summary>Duyệt khi hồ sơ không ở UnderReview; bổ sung, từ chối, xem xét cờ khi không ở UnderReview/SupplementRequired.</summary>
+    /// <summary>Duyệt khi hồ sơ không ở UnderReview; bổ sung, xem xét cờ khi không ở UnderReview/SupplementRequired.</summary>
     NotUnderReview,
     /// <summary>DEATH-04: Executor đang có bản nháp mới hơn bản đang xét, chưa duyệt được.</summary>
     NewerVersionPending,
@@ -22,9 +22,6 @@ public enum DeathCaseNotAllowedReason
     /// <summary>Kế hoạch không ở DeathCaseOpen, thiếu StatusBeforeCase, hoặc đã có lượt bàn giao.</summary>
     PlanStateInvalid,
 
-    /// <summary>Kho đang có hold (Admin hoặc báo còn sống) nên chưa duyệt được.</summary>
+    /// <summary>Kho đang có hold (Admin hoặc tranh chấp) nên chưa duyệt được.</summary>
     HoldActive,
-
-    /// <summary>F2C: lời báo đã có selfie khớp mẫu khuôn mặt, Verifier không được bác phản đối (ALIVE-05).</summary>
-    OwnerSelfiePassed,
 }

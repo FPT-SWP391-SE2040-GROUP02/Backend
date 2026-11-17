@@ -18,8 +18,8 @@ public sealed class LogDeathCaseExecutorNoticeSender : IDeathCaseExecutorNoticeS
 
     public Task SendAsync(DeathCaseExecutorNotice notice, CancellationToken ct)
     {
-        logger.LogInformation("[THƯ BÁO EXECUTOR] Hồ sơ {CaseCode}, quyết định {Kind}; chưa cấu hình email nên không gửi thư.",
-            notice.CaseCode, notice.Kind);
+        logger.LogInformation("[THƯ BÁO EXECUTOR] Hồ sơ {CaseCode} cần bổ sung; chưa cấu hình email nên không gửi thư.",
+            notice.CaseCode);
         return Task.CompletedTask;
     }
 }

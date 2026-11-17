@@ -10,7 +10,7 @@ Tài liệu này mô tả **đúng những gì code hiện làm**, đọc từ n
 | Người thực thi (Executor) | Được Chủ kho mời (hoặc Admin giao). Điểm danh thay khi Chủ kho quá hạn, nộp hồ sơ chứng tử, theo dõi tiến độ bàn giao, gửi lại lời mời cho người nhận |
 | Người xét duyệt (Verifier) | Được hệ thống giao hồ sơ chứng tử theo vòng xoay. Chỉ có **Bổ sung** và **Đồng ý** (không còn Từ chối) |
 | Người nhận (Beneficiary) | Nhận lời mời qua email, xác minh danh tính, nhập khóa mở gói nếu có, đồng ý hoặc từ chối, rồi xem và tải tài sản |
-| Quản trị viên (Admin) | Giám sát, xử lý sự cố, giao lại Người thực thi, cấu hình tham số và gói dịch vụ, xem giao dịch, nhật ký. Không đọc nội dung kho |
+| Quản trị viên (Admin) | Giám sát, giao lại Người thực thi, cấu hình tham số và gói dịch vụ, xem giao dịch, nhật ký. Không đọc nội dung kho |
 
 ## 2. Lập kho và kích hoạt kế hoạch
 
@@ -58,8 +58,8 @@ Tài liệu này mô tả **đúng những gì code hiện làm**, đọc từ n
   - **Bổ sung:** hồ sơ thành `SUPPLEMENT_REQUIRED`, kèm lý do và phần cần bổ sung; Người thực thi có `DeathCase.SupplementDueDays` (mặc định 7 ngày) tạo phiên bản mới (`versions`) rồi gửi lại.
   - **Đồng ý:** cần đủ điều kiện duyệt và nhập lại mật khẩu để ký; hồ sơ thành `APPROVED_FOR_HANDOVER`, kế hoạch sang `HANDOVER_IN_PROGRESS`, snapshot bàn giao được ghim lúc duyệt.
 - Mật khẩu ký sai 5 lần thì khóa 15 phút; lần khóa sau dài hơn (1 giờ, rồi 1 ngày).
-- Không còn nút **Từ chối**. Giá trị `Rejected` vẫn nằm trong dữ liệu cũ để không hỏng hồ sơ đã lưu.
-- Quá hạn xét mà chưa quyết định: sự cố `STALE_CASE`. Bị yêu cầu bổ sung nhiều lần liên tiếp: sự cố `SUPPLEMENT_LOOP`.
+- Không còn nút **Từ chối**; Verifier chỉ yêu cầu bổ sung hoặc duyệt. Các giá trị `Rejected` (trạng thái hồ sơ, loại quyết định) đã gỡ khỏi code; migration `RemoveDeathCaseRejection` dừng nếu DB còn dòng dùng chúng.
+- Quá hạn xét mà chưa quyết định: job phân công giao lại cho Người xét duyệt khác, hồ sơ không tự đổi trạng thái.
 
 ## 7. Bàn giao cho người nhận
 
@@ -76,7 +76,7 @@ Mỗi chỉ định (một gói cho một người nhận) là một **lượt**
 
 Các bước:
 
-1. Lời mời gửi qua email (lưu lượt trước, gửi sau; lỗi thì thử lại tối đa 5 lần rồi mở sự cố `NOTIFICATION_FAILED`). Người thực thi có thể gửi lại lời mời thủ công.
+1. Lời mời gửi qua email (lưu lượt trước, gửi sau; lỗi thì thử lại tối đa 5 lần). Người thực thi có thể gửi lại lời mời thủ công.
 2. Người nhận xác minh danh tính bằng eKYC mục đích `BENEFICIARY_CLAIM`: họ tên, CCCD, ngày sinh đọc từ giấy phải khớp thông tin Chủ kho đã khai (`MATCHED`, `NEEDS_REVIEW`, `WRONG_PERSON`). `NEEDS_REVIEW` thì Verifier xem xét khi duyệt biên bản. Ở môi trường Development có công tắc `Handover:RequireIdentityVerification = false` để bỏ qua bước này.
 3. **Khóa mở gói:** nếu kho đã được Chủ kho cấp khóa cho Người thực thi thì người nhận phải nhập đúng khóa đó (`POST turns/{id}/verify-key`) trước khi đồng ý. Sai 5 lần thì khóa lượt, cần Người thực thi hoặc Admin xử lý. Kho chưa cấp khóa thì bỏ qua bước này. Chủ kho cấp lại được khi Người thực thi quên khóa; mảnh khóa cũ hết hiệu lực. DB chỉ lưu băm SHA-256 có muối.
 4. Người nhận đồng ý hoặc từ chối. Đồng ý thì có quyền xem và tải từng tài sản trong 30 ngày.
@@ -86,12 +86,9 @@ Các bước:
 
 ## 8. Admin
 
-- **Tổng quan:** số liệu vận hành, kế hoạch theo giai đoạn, tải việc của Người xét duyệt, hoạt động gần đây. Không còn ba thẻ Sự cố, Tạm giữ, Nhân sự.
-- **Sự cố:** lọc theo trạng thái (có số đếm), loại, "của tôi", quá hạn; có vai trò chịu trách nhiệm (Admin, Người xét duyệt, Người thực thi); ghi chú trong lịch sử. Loại sự cố: `NO_VERIFIER`, `NO_EXECUTOR`, `CHECKIN_OVERDUE`, `NOTIFICATION_FAILED`, `INTEGRATION`, `MANUAL`, `PAYMENT`, `SUSPICIOUS_LOGIN`, `STALE_CASE`, `SUPPLEMENT_LOOP`, `PLAN_EXPIRING`, `PROXY_LIMIT`.
-- **Quét vận hành:** tự mở và tự đóng các sự cố nói trên (gói sắp hết hạn, hết lượt điểm danh thay, hồ sơ quá hạn…).
-- **Giao dịch:** xem giao dịch SePay, lọc trạng thái, môi trường, từ ngày đến ngày và nhanh hôm nay, tháng này, quý này. Giao dịch lệch tự mở sự cố loại thanh toán. Chỉ xem, không sửa.
+- **Tổng quan:** số liệu vận hành, kế hoạch theo giai đoạn, tải việc của Người xét duyệt, hoạt động gần đây. Không còn các thẻ Sự cố, Tạm giữ, Nhân sự.
+- **Giao dịch:** xem giao dịch SePay, lọc trạng thái, môi trường, từ ngày đến ngày và nhanh hôm nay, tháng này, quý này. Chỉ xem, không sửa.
 - **Người dùng:** danh sách theo vai trò (có số đếm), chi tiết, đổi vai trò, tạo tài khoản Người xét duyệt hoặc Admin, khóa hoặc mở khóa.
-- **Tạm giữ:** chỉ xem, nằm trong chi tiết sự cố; hiện không còn nơi nào đặt tạm giữ mới.
 - **Gói dịch vụ:** thẻ gói sửa ngay tại chỗ (giá từng kỳ, dung lượng, số người nhận, số gói, dòng tính năng), bật tắt kỳ bán, xóa gói; bảng nâng cao để thêm gói hoặc kỳ mới.
 - **Cấu hình:** tham số hệ thống theo nhóm gập (mục 10), ghi nhật ký kiểm toán kèm lý do bắt buộc.
 - **Nhật ký hoạt động** và **Bảo mật tài khoản** (TOTP).
@@ -101,7 +98,7 @@ Các bước:
 
 - Dịch vụ eKYC là chương trình Python riêng; backend chỉ lưu kết quả, không lưu ảnh giấy tờ thô.
 - Chuỗi bước: đồng ý (`consent`, phiên bản thông báo `2026-10-v1`) → chụp mặt trước (`document`) → xác nhận bản khai (`document/confirm`) → chụp mặt sau (`document-back`) → thử thách camera (`liveness/start`, `liveness/frame`, `liveness/complete`) → kết quả `PASSED` hoặc `FAILED`. Mỗi lượt so khớp một lần.
-- Ba mục đích: `OWNER_ENROLLMENT` (Chủ kho, một lần, gắn danh tính đã mã hóa và mẫu khuôn mặt), `BENEFICIARY_CLAIM` (người nhận, đối chiếu với người được chỉ định), `OWNER_ALIVE` (còn trong enum nhưng luồng "Tôi còn sống" đã gỡ).
+- Hai mục đích: `OWNER_ENROLLMENT` (Chủ kho, một lần, gắn danh tính đã mã hóa và mẫu khuôn mặt), `BENEFICIARY_CLAIM` (người nhận, đối chiếu với người được chỉ định). Mục đích `OWNER_ALIVE` đã gỡ cùng luồng "Tôi còn sống".
 - Số CCCD không được trùng giữa các tài khoản Chủ kho và không được trùng người nhận của chính Chủ kho đó.
 
 ### Tạm ngừng eKYC (mới, để chạy thử)
@@ -134,15 +131,12 @@ Các bước:
 | | `DeathCase.MaxFilesPerVersion` | 10 |
 | | `DeathCase.MaxFileSizeMb` | 20 |
 | | `DeathCase.ReviewDueHours` | 48 |
-| Sự cố | `Incident.ReminderAfterHours` | 48 |
-| | `Incident.EscalateAfterHours` | 72 |
-| | `Incident.MaxReviewIntervalDays` | 7 |
 | Giới hạn | `Limits.*`, `Security.*`, `Features.MaintenanceMode` | xem màn Cấu hình |
 
 **Kiểm giá trị khi lưu** (Backend `SystemSettingRules`, màn Cấu hình báo lỗi ngay trước khi bấm lưu): sai thì trả 400 `VALIDATION_ERROR` và không lưu gì (cả lô bị từ chối).
 - Số nguyên trong khoảng: ví dụ `CheckIn.MaxLateReminders` từ 1 đến 5, `CheckIn.LateReminderGapDays` từ 1 đến 30, `CheckIn.FirstReminderDaysBeforeDue` từ 2 đến 60, `CheckIn.SecondReminderDaysBeforeDue` từ 1 đến 30, `Security.MaxPinAttempts` từ 1 đến 20.
 - `Features.MaintenanceMode` và `Time.DemoSeconds`: chỉ `true` hoặc `false`. `Company.*`: giới hạn độ dài, `Company.Email` đúng dạng email.
-- Các cặp phải đi cùng nhau: thư nhắc trước hạn thứ nhất phải xa hạn hơn thư thứ hai (không được bằng nhau); giờ báo sự cố lên Admin phải sau giờ nhắc người phụ trách; giờ nhắc lời mời Người thực thi phải sớm hơn hạn lời mời.
+- Các cặp phải đi cùng nhau: thư nhắc trước hạn thứ nhất phải xa hạn hơn thư thứ hai (không được bằng nhau); giờ nhắc lời mời Người thực thi phải sớm hơn hạn lời mời.
 - Tham số bị tắt thì không kiểm giá trị (hệ thống dùng mức gốc). Khóa `Plans.*` có bộ kiểm giá riêng.
 
 ## 11. Hai kịch bản chạy thử
@@ -151,16 +145,15 @@ Các bước:
 đăng ký Chủ kho → bật tạm ngừng eKYC (nếu không có giấy tờ thật) → eKYC Chủ kho → tạo gói, tài sản, người nhận → mời và chấp nhận Người thực thi → kích hoạt → tua thời gian tới quá hạn (công cụ thử nghiệm) → báo `AWAITING_CHECK` → Người thực thi mở và gửi hồ sơ chứng tử → Người xét duyệt đồng ý → các lượt bàn giao được mời → người nhận eKYC, nhập khóa mở gói nếu có, đồng ý → xem và tải tài sản → Người thực thi thấy tiến độ "đã đồng ý, đã tải" → kế hoạch `CLOSED` → job dọn dữ liệu.
 
 **Worst case thường gặp:**
-- Chủ kho quên điểm danh, Người thực thi điểm danh thay đủ 3 lần liên tiếp rồi bị chặn (`PROXY_LIMIT_REACHED`), Admin nhận sự cố.
+- Chủ kho quên điểm danh, Người thực thi điểm danh thay đủ 3 lần liên tiếp rồi bị chặn (`PROXY_LIMIT_REACHED`).
 - Hồ sơ bị yêu cầu bổ sung nhiều lần (`SUPPLEMENT_LOOP`) hoặc quá hạn xét (`STALE_CASE`).
 - Không có Người xét duyệt hoặc Người thực thi hoạt động (`NO_VERIFIER`, `NO_EXECUTOR`): Admin giao lại.
 - Người nhận không phản hồi 5 ngày, không quyết định 7 ngày, từ chối, nhập sai khóa mở gói 5 lần.
-- Thanh toán lệch đơn: giao dịch `RECONCILIATION_REQUIRED`, sự cố loại thanh toán.
+- Thanh toán lệch đơn: giao dịch `RECONCILIATION_REQUIRED`, Admin đối soát tay.
 - Nhập sai mật khẩu ký của Người xét duyệt 5 lần (khóa 15 phút).
 
 ## 12. Chỗ code và tài liệu cũ chưa khớp
 
 - Cờ "điểm danh sau ngày mất" đã gỡ. Luật thông báo Owner và 72 giờ phản đối đã xóa khỏi code, bảng và cột (migration `RemoveUnusedFeatures`).
 - Bảng `DeathCaseObjection` (nếu còn trong DB cũ) và các giá trị enum phản đối giữ lại vì dòng cũ có thể còn dữ liệu.
-- Hạn xử lý sự cố của Admin tính bằng ngày/giờ thật, chưa đi qua chế độ demo.
 - `Pay11` (tạo đơn thanh toán trả 201) fail trên máy dev vì thiếu cấu hình tài khoản ngân hàng thử; không liên quan phần gộp.

@@ -7,7 +7,7 @@ namespace LegacyVault.Domain.Entities;
 /// </summary>
 /// <remarks>
 /// - Chỉ thêm dòng, không sửa (DEATH-03): mỗi quyết định ghi người quyết, phân công và bản hồ sơ được xét.
-/// - AC-71: mỗi hồ sơ tối đa một quyết định cuối (Rejected hoặc Approved), giữ bằng chỉ mục unique có lọc;
+/// - AC-71: mỗi hồ sơ tối đa một quyết định cuối (Approved), giữ bằng chỉ mục unique có lọc;
 ///   yêu cầu bổ sung thì được nhiều lần.
 /// - Quyết định cuối chỉ đóng hồ sơ (ClosedAt), không kết thúc phân công.
 /// </remarks>
@@ -22,7 +22,7 @@ public class DeathCaseDecision
 
     public DeathCaseDecisionKind Kind { get; set; }
 
-    /// <summary>Lý do Verifier nhập (≤ 1000 ký tự), bắt buộc cho cả 3 loại.</summary>
+    /// <summary>Lý do Verifier nhập (≤ 1000 ký tự), bắt buộc cho cả hai loại.</summary>
     public string Reason { get; set; } = string.Empty;
 
     /// <summary>
