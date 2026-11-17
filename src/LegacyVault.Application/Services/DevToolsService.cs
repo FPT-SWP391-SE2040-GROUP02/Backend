@@ -207,9 +207,9 @@ public sealed class DevToolsService(
             Guid? vaultId = await repository.FindVaultIdByOwnerAsync(target.Id, ct);
             if (vaultId != null)
             {
-                List<string> vaultKeys = await repository.ListVaultStorageKeysAsync(vaultId.Value, target.Id, ct);
+                List<string> vaultKeys = await repository.ListVaultStorageKeysAsync(vaultId.Value, ct);
                 AddStorageKeys(storageKeys, vaultKeys);
-                await repository.DeleteVaultAsync(vaultId.Value, target.Id, ct);
+                await repository.DeleteVaultAsync(vaultId.Value, ct);
                 result.VaultRemoved = true;
             }
             if (!HasRemovedEkycData(result) && !result.VaultRemoved)
@@ -355,7 +355,6 @@ public sealed class DevToolsService(
         response.VerificationsRemoved = ekyc.VerificationsRemoved;
         response.ConsentsRemoved = ekyc.ConsentsRemoved;
         response.IdentityRemoved = ekyc.IdentityRemoved;
-        response.FaceTemplatesRemoved = ekyc.FaceTemplatesRemoved;
         response.PreviousTier = vault.Entitlement.Tier.ToApiString();
 
         // Trả quyền dịch vụ về đúng giá trị của kho mới tạo (VaultService).
@@ -407,7 +406,6 @@ public sealed class DevToolsService(
         List<EkycVerification> verifications = await repository.ListEkycVerificationsAsync(target.Id, ct);
         List<EkycConsent> consents = await repository.ListEkycConsentsAsync(target.Id, ct);
         OwnerIdentity? identity = await repository.FindOwnerIdentityAsync(target.Id, ct);
-        List<OwnerFaceTemplate> faceTemplates = await repository.ListOwnerFaceTemplatesAsync(target.Id, ct);
 
         List<string> imageKeys = new List<string>();
         foreach (EkycVerification verification in verifications)
@@ -429,19 +427,17 @@ public sealed class DevToolsService(
         response.VerificationsRemoved = verifications.Count;
         response.ConsentsRemoved = consents.Count;
         response.IdentityRemoved = identity != null;
-        response.FaceTemplatesRemoved = faceTemplates.Count;
 
         if (HasRemovedEkycData(response))
         {
-            repository.RemoveEkycData(verifications, consents, identity, faceTemplates);
+            repository.RemoveEkycData(verifications, consents, identity);
         }
         return response;
     }
 
     private static bool HasRemovedEkycData(DevEkycResetResponse response)
     {
-        if (response.VerificationsRemoved > 0 || response.ConsentsRemoved > 0
-            || response.IdentityRemoved || response.FaceTemplatesRemoved > 0)
+        if (response.VerificationsRemoved > 0 || response.ConsentsRemoved > 0 || response.IdentityRemoved)
         {
             return true;
         }

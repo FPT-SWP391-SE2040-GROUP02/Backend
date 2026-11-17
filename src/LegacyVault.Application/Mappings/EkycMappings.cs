@@ -12,7 +12,6 @@ public static class EkycMappings
         {
             Status = verification.Status.ToApiString(),
             Purpose = verification.Purpose.ToApiString(),
-            IdentityMatch = verification.IdentityMatch.ToApiString(),
             BackSideChecked = verification.BackSideChecked,
             VerificationId = verification.Id,
             CitizenIdLast4 = verification.CitizenIdLast4,
@@ -33,7 +32,6 @@ public static class EkycMappings
         EkycBackResponse response = new EkycBackResponse();
         response.Status = verification.Status.ToApiString();
         response.Purpose = verification.Purpose.ToApiString();
-        response.IdentityMatch = verification.IdentityMatch.ToApiString();
         response.BackSideChecked = verification.BackSideChecked;
         response.VerificationId = verification.Id;
         response.CitizenIdLast4 = verification.CitizenIdLast4;

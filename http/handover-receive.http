@@ -48,9 +48,7 @@ Authorization: Bearer {{token}}
 GET {{baseUrl}}/handover/turns/{{turnId}}
 Authorization: Bearer {{token}}
 
-### 4a) Chốt xác minh danh tính (chỉ khi Handover:RequireIdentityVerification = true; cần eKYC BENEFICIARY_CLAIM đạt và khớp, xem ekyc.http)
-POST {{baseUrl}}/handover/turns/{{turnId}}/identity/complete
-Authorization: Bearer {{token}}
+### 4a) Xác minh danh tính người nhận: không còn bước eKYC. Người nhận nộp ảnh CCCD và giấy tờ, Verifier duyệt thì lượt sang READY_TO_ACCEPT (xem handover-documents.http).
 
 ### 5) Đồng ý nhận (mở quyền xem và tải 30 ngày)
 # @name accept

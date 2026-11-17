@@ -31,7 +31,7 @@ public interface IDevToolsService
 
     /// <summary>
     /// Đưa tài khoản về lúc vừa đăng ký và đăng nhập được: xóa toàn bộ dữ liệu eKYC (lượt xác minh, đồng ý chụp ảnh,
-    /// danh tính đã gắn, mẫu khuôn mặt) và xóa hẳn kho của tài khoản cùng mọi dữ liệu trong kho (tài sản, gói, người nhận,
+    /// danh tính đã gắn) và xóa hẳn kho của tài khoản cùng mọi dữ liệu trong kho (tài sản, gói, người nhận,
     /// Executor, kế hoạch, điểm danh, hồ sơ chứng tử, báo còn sống, bàn giao, thanh toán) và các tệp mã hóa liên quan.
     /// Email, mật khẩu, vai trò và vai trò Executor ở kho người khác giữ nguyên. Không có gì để xóa thì không ghi nhật ký.
     /// Lỗi: 400 VALIDATION_ERROR, 404 USER_NOT_FOUND (người gọi không phải Admin hoặc không có tài khoản với email này).

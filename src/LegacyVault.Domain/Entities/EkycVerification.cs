@@ -7,7 +7,7 @@ namespace LegacyVault.Domain.Entities;
 /// </summary>
 /// <remarks>
 /// - Chỉ lưu KẾT QUẢ. Không lưu ảnh giấy tờ, ảnh khuôn mặt, vector đặc trưng; ảnh chỉ đi qua dịch vụ eKYC
-///   rồi bị bỏ. (Vector của Owner đăng ký đạt nằm ở bảng riêng OwnerFaceTemplates, mã hóa, không ở đây.) Họ tên, ngày sinh, địa chỉ đọc từ giấy tờ chỉ trả cho FE một lần, không ghi DB.
+///   rồi bị bỏ. Họ tên, ngày sinh, địa chỉ đọc từ giấy tờ chỉ trả cho FE một lần, không ghi DB.
 /// - Chỉ 4 số cuối CCCD để dạng rõ (giống Beneficiary.CitizenIdLast4), đủ để đối chiếu mà không định danh được.
 /// - DocumentToken là mã tham chiếu của dịch vụ eKYC (giữ khuôn mặt trên giấy tờ trong RAM của dịch vụ đó,
 ///   tối đa 30 phút). Chỉ server biết, không trả cho FE, và bị xóa ngay khi đã so khớp (SEC-04).
@@ -25,15 +25,6 @@ public class EkycVerification
 
     /// <summary>Mục đích của lượt eKYC, lấy từ lần đồng ý gần nhất trước khi chụp (EKYC-01, EKYC-03).</summary>
     public EkycPurpose Purpose { get; set; }
-
-    /// <summary>
-    /// Lượt bàn giao đang đối chiếu khi Purpose là BeneficiaryClaim (EKYC-02); null ở mục đích khác.
-    /// Không đặt khóa ngoại để module eKYC không phụ thuộc bảng của luồng bàn giao.
-    /// </summary>
-    public Guid? HandoverTurnId { get; set; }
-
-    /// <summary>Kết quả đối chiếu với người được chỉ định; NotChecked khi không có gì để đối chiếu (MATCH-01..05).</summary>
-    public EkycIdentityMatch IdentityMatch { get; set; }
 
     /// <summary>
     /// true khi đã đọc mặt sau và mã định danh trong MRZ trùng 4 số cuối mặt trước, tức hai mặt cùng một thẻ (EKYC-04).

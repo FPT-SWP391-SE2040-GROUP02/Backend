@@ -8,7 +8,7 @@ Nó nằm ở file riêng thay vì `api-contract.md` để không xung đột kh
 **Có:** kiểm link mời, nhận lượt, đồng ý/từ chối, xem danh sách tài sản, tải từng tài sản (nội dung luôn được kiểm toàn vẹn trước khi gửi),
 job hết hạn, trang web `/receive`.
 
-**Chưa có (làm ở giai đoạn sau):** xác minh danh tính eKYC, gọi video, Executor xác nhận, xác nhận qua đời (F2B), lưu giữ/xóa dữ liệu.
+**Chưa có (làm ở giai đoạn sau):** gọi video, Executor xác nhận, xác nhận qua đời (F2B), lưu giữ/xóa dữ liệu.
 
 ## 2. Mở bàn giao: chưa có endpoint
 
@@ -26,7 +26,7 @@ Cấu hình `Handover:RequireIdentityVerification`:
 
 | Giá trị | Hiệu lực |
 |---|---|
-| `true` (mặc định trong code) | `claim` dừng ở `IDENTITY_IN_PROGRESS`; người nhận làm eKYC (mục đích `BENEFICIARY_CLAIM`, kèm `handoverTurnId`, xem `api-contract.md` mục 6.10) rồi gọi `POST turns/{turnId}/identity/complete` để sang `READY_TO_ACCEPT`. Nhóm đã bỏ bước gọi video: xác minh eKYC ở bước này thay cho việc gọi video và Executor kết luận "đúng người". |
+| `true` (mặc định trong code) | `claim` dừng ở `IDENTITY_IN_PROGRESS`; người nhận nộp ảnh CCCD và giấy tờ, Verifier duyệt hồ sơ thì lượt sang `READY_TO_ACCEPT` (xem `HandoverSubmissionService` và `HandoverSubmissionReviewService`). eKYC khuôn mặt chỉ dành cho Chủ kho, không dùng cho người nhận. |
 | `false` | `claim` đi thẳng tới `READY_TO_ACCEPT` và lượt có `identityBypassed: true`. **Chỉ hợp lệ ở môi trường Development**: ở môi trường khác API không khởi động (`OptionsValidationException`). |
 
 `appsettings.Development.json` đặt `false` để bạn thử được. Lúc khởi động API ghi một dòng log cho biết đang bật hay bỏ qua.
@@ -68,7 +68,6 @@ Tiền tố `/api/v1/handover`. Tất cả cần `Authorization: Bearer` trừ e
 | 2a | `POST turns/{turnId}/claim` | Nhận lượt ngay trong app (FE gọi khi người nhận bấm "Đồng ý nhận" / "Từ chối nhận" ở thẻ thư mời, không có nút nhận riêng). Dùng chung mọi bước kiểm của endpoint 2 (đã có người nhận `409 HANDOVER_ALREADY_CLAIMED`, chủ kho `OWNER_CANNOT_CLAIM`, kế hoạch, trạng thái, hold) và kiểm email. Cùng người gọi lại: trả trạng thái hiện tại, không ghi gì. Id lạ: `404 HANDOVER_NOT_FOUND`. |
 | 3 | `GET turns/me` | Các lượt tôi đã nhận, mới nhất trước. |
 | 4 | `GET turns/{turnId}` | Một lượt của tôi. |
-| 4a | `POST turns/{turnId}/identity/complete` | Chốt xác minh danh tính: lượt `IDENTITY_IN_PROGRESS` sang `READY_TO_ACCEPT` (đặt hạn quyết định 7 ngày) khi lượt eKYC mới nhất của tôi cho đúng lượt này đã `PASSED` và `identityMatch = MATCHED`. Gọi lặp khi đã `READY_TO_ACCEPT` trả lại lượt, không đổi hạn. Trả `HandoverTurn`. Không tự đóng lượt khi sai người. |
 | 5 | `POST turns/{turnId}/accept` | Đồng ý: tạo grant 30 ngày. Gọi lặp trả lại cùng grant. |
 | 6 | `POST turns/{turnId}/decline` | Từ chối. |
 | 7 | `GET grants/{grantId}/assets` | Danh sách tài sản trong snapshot. |
@@ -115,7 +114,7 @@ Lỗi trả `application/problem+json` có trường `code` (UPPER_SNAKE) và đ
 | `HANDOVER_NOT_FOUND` | 404 | Lượt/grant/tài sản không tồn tại **hoặc không phải của bạn** (cùng một lỗi, không lộ sự tồn tại, SEC-04). |
 | `HANDOVER_ALREADY_CLAIMED` | 409 | Lượt đã được tài khoản khác nhận. |
 | `HANDOVER_EMAIL_MISMATCH` | 403 | Email tài khoản không trùng email người nhận của lượt (nhận qua link hoặc qua `turns/{turnId}/claim`). Kèm `invitedEmailMasked` (email được mời đã che bớt, ví dụ `m•••••h@example.com`; không có khi lượt không có email). |
-| `HANDOVER_NOT_ALLOWED` | 409 | `reason`: `OWNER_CANNOT_CLAIM`, `STAFF_CANNOT_CLAIM`, `PLAN_NOT_IN_HANDOVER`, `WRONG_STATE`, `PLAN_NOT_READY`, `NOTHING_TO_HAND_OVER`; ở `identity/complete` thêm `IDENTITY_NOT_VERIFIED` (chưa eKYC cho lượt này), `IDENTITY_NOT_FINISHED` (chưa so khớp mặt), `IDENTITY_FAILED`, `IDENTITY_NEEDS_REVIEW`, `IDENTITY_WRONG_PERSON`. |
+| `HANDOVER_NOT_ALLOWED` | 409 | `reason`: `OWNER_CANNOT_CLAIM`, `STAFF_CANNOT_CLAIM`, `PLAN_NOT_IN_HANDOVER`, `WRONG_STATE`, `PLAN_NOT_READY`, `NOTHING_TO_HAND_OVER`. |
 | `HANDOVER_DECISION_EXPIRED` | 409 | Quá hạn 7 ngày quyết định. |
 | `GRANT_NOT_ACTIVE` | 403 | `reason`: `EXPIRED`, `BLOCKED`, `REVOKED`, `PLAN_NOT_ACTIVE`. |
 | `CONTENT_INTEGRITY_FAILED` | 500 | Nội dung không qua kiểm toàn vẹn. |

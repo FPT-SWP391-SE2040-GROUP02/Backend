@@ -47,15 +47,6 @@ public sealed class FakeEkycVerificationRepository : IEkycVerificationRepository
         return Task.FromResult(latest);
     }
 
-    public Task<EkycVerification?> FindLatestByHandoverTurnAsync(Guid userId, Guid handoverTurnId, CancellationToken ct)
-    {
-        EkycVerification? latest = Verifications
-            .Where(v => v.UserId == userId && v.HandoverTurnId == handoverTurnId)
-            .OrderByDescending(v => v.CreatedAt)
-            .FirstOrDefault();
-        return Task.FromResult(latest);
-    }
-
     public void Add(EkycVerification verification)
     {
         Verifications.Add(verification);
@@ -78,25 +69,6 @@ public sealed class FakeEkycConsentRepository : IEkycConsentRepository
     public void Add(EkycConsent consent)
     {
         Consents.Add(consent);
-    }
-}
-
-public sealed class FakeOwnerFaceTemplateRepository : IOwnerFaceTemplateRepository
-{
-    public List<OwnerFaceTemplate> Templates { get; } = new List<OwnerFaceTemplate>();
-
-    public Task<OwnerFaceTemplate?> FindLatestByUserIdAsync(Guid userId, CancellationToken ct)
-    {
-        OwnerFaceTemplate? latest = Templates
-            .Where(t => t.UserId == userId)
-            .OrderByDescending(t => t.Version)
-            .FirstOrDefault();
-        return Task.FromResult(latest);
-    }
-
-    public void Add(OwnerFaceTemplate template)
-    {
-        Templates.Add(template);
     }
 }
 
@@ -124,35 +96,15 @@ public sealed class FakeOwnerIdentityRepository : IOwnerIdentityRepository
     }
 }
 
-/// <summary>Bộ mã hóa mẫu khuôn mặt thật (khóa ngẫu nhiên) để test kiểm cả vòng mã hóa lẫn giải mã.</summary>
-public static class FaceTemplateTestSupport
+/// <summary>Bộ mã hóa danh tính Owner thật (khóa ngẫu nhiên) để test kiểm cả vòng mã hóa lẫn giải mã.</summary>
+public static class OwnerIdentityTestSupport
 {
-    public static FaceTemplateProtector CreateProtector()
-    {
-        AssetEncryptionSettings settings = new AssetEncryptionSettings();
-        settings.ActiveKeyId = "test-key";
-        settings.Keys["test-key"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        return new FaceTemplateProtector(new DataKeyProtector(Options.Create(settings)));
-    }
-
     public static OwnerIdentityProtector CreateIdentityProtector()
     {
         AssetEncryptionSettings settings = new AssetEncryptionSettings();
         settings.ActiveKeyId = "test-key";
         settings.Keys["test-key"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         return new OwnerIdentityProtector(new DataKeyProtector(Options.Create(settings)));
-    }
-
-    /// <summary>Vector 128 số xác định theo seed; hai seed khác nhau cho hai vector gần như trực giao.</summary>
-    public static float[] Vector(int seed)
-    {
-        Random random = new Random(seed);
-        float[] values = new float[EkycRules.FaceEmbeddingLength];
-        for (int index = 0; index < values.Length; index++)
-        {
-            values[index] = (float)(random.NextDouble() * 2 - 1);
-        }
-        return values;
     }
 }
 
@@ -301,17 +253,6 @@ public sealed class FakeEkycClient : IEkycClient
 
     public List<string> DeletedTokens { get; } = new List<string>();
 
-    public EkycFaceEmbedding Embedding { get; set; } = new EkycFaceEmbedding
-    {
-        ModelName = "sface",
-        Values = FaceTemplateTestSupport.Vector(1),
-    };
-
-    /// <summary>Đặt để mô phỏng dịch vụ không trả được vector (503, ảnh không có đúng một mặt...).</summary>
-    public AppException? EmbeddingError { get; set; }
-
-    public int EmbeddingCalls { get; private set; }
-
     public double? LastThreshold { get; private set; }
 
     public Task<EkycDocumentReading> ReadFrontAsync(byte[] image, string fileName, string contentType, CancellationToken ct)
@@ -340,15 +281,5 @@ public sealed class FakeEkycClient : IEkycClient
     {
         DeletedTokens.Add(documentToken);
         return Task.CompletedTask;
-    }
-
-    public Task<EkycFaceEmbedding> GetFaceEmbeddingAsync(byte[] image, string fileName, string contentType, CancellationToken ct)
-    {
-        EmbeddingCalls++;
-        if (EmbeddingError != null)
-        {
-            throw EmbeddingError;
-        }
-        return Task.FromResult(Embedding);
     }
 }

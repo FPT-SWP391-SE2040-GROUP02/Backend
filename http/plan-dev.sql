@@ -35,11 +35,11 @@ WHERE VaultId = @VaultId;
 -- Mỗi lần chạy tạo một lượt Passed mới; chỉ chạy khi chủ động chuẩn bị lại dữ liệu thử.
 INSERT INTO dbo.EkycVerifications
 (
-    Id, UserId, Status, Purpose, IdentityMatch, BackSideChecked,
+    Id, UserId, Status, Purpose, BackSideChecked,
     LivenessPassed, SpoofCheckPassed, CitizenIdLast4, CreatedAt, CompletedAt
 )
 VALUES
 (
-    NEWID(), @OwnerId, N'Passed', N'OwnerEnrollment', N'NotChecked', 0,
+    NEWID(), @OwnerId, N'Passed', N'OwnerEnrollment', 0,
     1, 1, @CitizenIdLast4, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET()
 );

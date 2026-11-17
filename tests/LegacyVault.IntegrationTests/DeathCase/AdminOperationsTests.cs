@@ -60,8 +60,8 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Tạo một hold đang hiệu lực trực tiếp trong DB. Không còn API Admin đặt hold bằng tay; hold thật do hệ thống đặt
-    /// (Owner báo còn sống). Dùng để kiểm các bước chặn khi có hold mà không phải đi hết luồng báo còn sống.
+    /// Tạo một hold đang hiệu lực trực tiếp trong DB. Không còn API Admin đặt hold bằng tay và chưa có mã nào tự đặt hold.
+    /// Dùng để kiểm các bước chặn khi có hold.
     /// </summary>
     private async Task<Guid> SeedActiveHoldAsync(Guid vaultId)
     {

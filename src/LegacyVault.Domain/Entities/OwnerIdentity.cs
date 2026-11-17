@@ -9,7 +9,7 @@ namespace LegacyVault.Domain.Entities;
 /// - CCCD đủ 12 số, họ tên, ngày sinh, nơi cư trú nằm trong IdentityEncrypted (JSON, mã hóa envelope). Chỉ 4 số cuối để dạng rõ.
 ///   Nơi cư trú là bản người dùng đã xác nhận (rỗng nếu chưa xác nhận hoặc danh tính gắn trước khi có trường này); chưa có API nào trả ra.
 /// - Hồ sơ chứng tử phải đối chiếu với danh tính này (DEATH-13).
-/// - Tách riêng khỏi mẫu khuôn mặt (EKYC-29): danh tính được giữ cùng kho, không xóa.
+/// - Danh tính được giữ cùng kho, không xóa.
 /// - Mỗi tài khoản một dòng (unique theo UserId).
 /// </remarks>
 public class OwnerIdentity

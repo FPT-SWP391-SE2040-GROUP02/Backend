@@ -11,7 +11,7 @@ public class HoldResponse
 
     public Guid? TargetId { get; set; }
 
-    /// <summary>OWNER_ALIVE | DISPUTE | ADMIN.</summary>
+    /// <summary>DISPUTE | ADMIN.</summary>
     public string Type { get; set; } = string.Empty;
 
     /// <summary>ACTIVE | RELEASED.</summary>

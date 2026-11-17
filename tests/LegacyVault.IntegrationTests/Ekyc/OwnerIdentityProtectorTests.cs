@@ -10,7 +10,7 @@ namespace LegacyVault.IntegrationTests.Ekyc;
 /// <summary>Mã hóa danh tính Owner (DATA-02, EKYC-27): đúng chiều, không lộ bản rõ, phát hiện sửa/đổi chỗ.</summary>
 public sealed class OwnerIdentityProtectorTests
 {
-    private readonly OwnerIdentityProtector protector = FaceTemplateTestSupport.CreateIdentityProtector();
+    private readonly OwnerIdentityProtector protector = OwnerIdentityTestSupport.CreateIdentityProtector();
 
     private static OwnerIdentityData Data()
     {

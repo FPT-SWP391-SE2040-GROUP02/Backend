@@ -60,13 +60,12 @@ public sealed class EkycController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
-    public async Task<EkycDocumentResponse> SubmitDocument([FromForm] EkycDocumentForm form, CancellationToken ct)
+    public async Task<EkycDocumentResponse> SubmitDocument([FromForm] EkycImageForm form, CancellationToken ct)
     {
         IFormFile file = form.File!;
         await using (Stream content = file.OpenReadStream())
         {
-            return await ekycService.SubmitDocumentAsync(
-                content, file.FileName, file.ContentType, form.HandoverTurnId, ct);
+            return await ekycService.SubmitDocumentAsync(content, file.FileName, file.ContentType, ct);
         }
     }
 

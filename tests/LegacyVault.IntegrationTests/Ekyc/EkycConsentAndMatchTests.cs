@@ -15,7 +15,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Ekyc;
 
 /// <summary>
-/// eKYC: đồng ý trước khi chụp (EKYC-03), mặt sau (EKYC-04) và đối chiếu với người được chỉ định (MATCH-01..07),
+/// eKYC của Chủ kho: đồng ý trước khi chụp (EKYC-03), mặt sau (EKYC-04) và đối chiếu giấy tờ với danh tính đã gắn,
 /// bằng repository và dịch vụ eKYC giả, không cần DB.
 /// </summary>
 public sealed class EkycConsentAndMatchTests
@@ -25,11 +25,10 @@ public sealed class EkycConsentAndMatchTests
     private readonly FakeCurrentUser currentUser = new FakeCurrentUser();
     private readonly FakeEkycVerificationRepository repository = new FakeEkycVerificationRepository();
     private readonly FakeEkycConsentRepository consentRepository = new FakeEkycConsentRepository();
-    private readonly FakeHandoverRepository handoverRepository = new FakeHandoverRepository();
     private readonly FakeEkycBeneficiaryRepository beneficiaryRepository = new FakeEkycBeneficiaryRepository();
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly FakeEkycClient client = new FakeEkycClient();
-    private readonly IOwnerIdentityProtector identityProtector = FaceTemplateTestSupport.CreateIdentityProtector();
+    private readonly IOwnerIdentityProtector identityProtector = OwnerIdentityTestSupport.CreateIdentityProtector();
     private readonly FixedTimeProvider clock = new FixedTimeProvider(Now);
     private readonly EkycService service;
     private readonly Guid userId = Guid.NewGuid();
@@ -37,9 +36,9 @@ public sealed class EkycConsentAndMatchTests
     public EkycConsentAndMatchTests()
     {
         currentUser.UserId = userId;
-        service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
-            beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
-            new FakeOwnerIdentityRepository(), identityProtector, client, new FakeUnitOfWork(), clock, new InMemoryAssetContentStore(), new EkycOptions());
+        service = new EkycService(currentUser, repository, consentRepository,
+            beneficiaryRepository, protector, new FakeOwnerIdentityRepository(), identityProtector, client,
+            new FakeUnitOfWork(), clock, new InMemoryAssetContentStore(), new EkycOptions());
     }
 
     private static MemoryStream Image()
@@ -47,9 +46,9 @@ public sealed class EkycConsentAndMatchTests
         return new MemoryStream(new byte[] { 1, 2, 3 });
     }
 
-    private static BeneficiaryPersonalData Person()
+    private static OwnerIdentityData Person()
     {
-        return new BeneficiaryPersonalData
+        return new OwnerIdentityData
         {
             CitizenId = "079200012345",
             FullName = "Nguyễn Văn An",
@@ -79,36 +78,18 @@ public sealed class EkycConsentAndMatchTests
         });
     }
 
-    /// <summary>Dựng một lượt bàn giao đang ở bước xác minh danh tính, thuộc về người đang gọi.</summary>
-    private HandoverTurn AddTurn(HandoverTurnStatus status, Guid claimantId)
-    {
-        Beneficiary beneficiary = new Beneficiary { VaultId = Guid.NewGuid() };
-        beneficiaryRepository.Beneficiaries.Add(beneficiary);
-        protector.Data[beneficiary.Id] = Person();
-
-        HandoverTurn turn = new HandoverTurn
-        {
-            VaultId = beneficiary.VaultId,
-            BeneficiaryId = beneficiary.Id,
-            ClaimantUserId = claimantId,
-            Status = status,
-        };
-        handoverRepository.Turns.Add(turn);
-        return turn;
-    }
-
     [Fact]
     public async Task Consent_Recorded_WithPurposeVersionAndExpiry()
     {
         EkycConsentResponse response = await service.RecordConsentAsync(
-            new EkycConsentRequest { Purpose = "BENEFICIARY_CLAIM", NoticeVersion = EkycRules.NoticeVersion },
+            new EkycConsentRequest { Purpose = "OWNER_ENROLLMENT", NoticeVersion = EkycRules.NoticeVersion },
             CancellationToken.None);
 
-        Assert.Equal("BENEFICIARY_CLAIM", response.Purpose);
+        Assert.Equal("OWNER_ENROLLMENT", response.Purpose);
         Assert.Equal(Now + EkycRules.ConsentLifetime, response.ExpiresAt);
         EkycConsent saved = Assert.Single(consentRepository.Consents);
         Assert.Equal(userId, saved.UserId);
-        Assert.Equal(EkycPurpose.BeneficiaryClaim, saved.Purpose);
+        Assert.Equal(EkycPurpose.OwnerEnrollment, saved.Purpose);
         Assert.Equal(Now, saved.ConsentedAt);
     }
 
@@ -116,6 +97,9 @@ public sealed class EkycConsentAndMatchTests
     [InlineData("OwnerEnrollment", "2026-10-v1")]
     [InlineData("1", "2026-10-v1")]
     [InlineData("OWNER_ENROLLMENT", "cu")]
+    // Người nhận và báo còn sống đã bỏ khỏi eKYC: chỉ còn OWNER_ENROLLMENT.
+    [InlineData("BENEFICIARY_CLAIM", "2026-10-v1")]
+    [InlineData("OWNER_ALIVE", "2026-10-v1")]
     public async Task Consent_UnknownPurposeOrOldNotice_Rejected(string purpose, string noticeVersion)
     {
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.RecordConsentAsync(
@@ -129,7 +113,7 @@ public sealed class EkycConsentAndMatchTests
     public async Task Document_WithoutConsent_Conflict()
     {
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", null, CancellationToken.None));
+            Image(), "front.jpg", "image/jpeg", CancellationToken.None));
 
         Assert.Equal(ErrorCode.EkycConsentRequired, error.Code);
         Assert.Empty(repository.Verifications);
@@ -141,7 +125,7 @@ public sealed class EkycConsentAndMatchTests
         Consent(EkycPurpose.OwnerEnrollment, Now.AddMinutes(-31), EkycRules.NoticeVersion);
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", null, CancellationToken.None));
+            Image(), "front.jpg", "image/jpeg", CancellationToken.None));
 
         Assert.Equal(ErrorCode.EkycConsentRequired, error.Code);
     }
@@ -152,103 +136,23 @@ public sealed class EkycConsentAndMatchTests
         Consent(EkycPurpose.OwnerEnrollment, Now, "cu");
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", null, CancellationToken.None));
+            Image(), "front.jpg", "image/jpeg", CancellationToken.None));
 
         Assert.Equal(ErrorCode.EkycConsentRequired, error.Code);
     }
 
     [Fact]
-    public async Task Document_OwnerPurpose_StoresPurposeAndNotChecked()
+    public async Task Document_OwnerPurpose_StoresPurposeAndPendingVerification()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
 
         EkycDocumentResponse response = await service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+            Image(), "front.jpg", "image/jpeg", CancellationToken.None);
 
-        Assert.Equal("NOT_CHECKED", response.IdentityMatch);
+        Assert.True(response.CanMatchFace);
         EkycVerification saved = Assert.Single(repository.Verifications);
         Assert.Equal(EkycPurpose.OwnerEnrollment, saved.Purpose);
-        Assert.Equal(EkycIdentityMatch.NotChecked, saved.IdentityMatch);
-        Assert.Null(saved.HandoverTurnId);
-    }
-
-    [Fact]
-    public async Task Document_OwnerPurposeWithTurnId_Rejected()
-    {
-        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", Guid.NewGuid(), CancellationToken.None));
-
-        Assert.Equal(ErrorCode.ValidationError, error.Code);
-    }
-
-    [Fact]
-    public async Task Claim_WithoutTurnId_Rejected()
-    {
-        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", null, CancellationToken.None));
-
-        Assert.Equal(ErrorCode.ValidationError, error.Code);
-    }
-
-    [Fact]
-    public async Task Claim_SamePerson_Matched()
-    {
-        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, userId);
-        client.Reading = Reading("079200012345", "NGUYỄN  VĂN AN", "2000-02-01");
-
-        EkycDocumentResponse response = await service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", turn.Id, CancellationToken.None);
-
-        Assert.Equal("MATCHED", response.IdentityMatch);
-        EkycVerification saved = Assert.Single(repository.Verifications);
-        Assert.Equal(EkycPurpose.BeneficiaryClaim, saved.Purpose);
-        Assert.Equal(turn.Id, saved.HandoverTurnId);
-        Assert.Equal(EkycIdentityMatch.Matched, saved.IdentityMatch);
-    }
-
-    [Fact]
-    public async Task Claim_DifferentCitizenId_WrongPersonAndTurnUntouched()
-    {
-        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, userId);
-        client.Reading = Reading("079200099999", "NGUYỄN VĂN AN", "2000-02-01");
-
-        EkycDocumentResponse response = await service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", turn.Id, CancellationToken.None);
-
-        Assert.Equal("WRONG_PERSON", response.IdentityMatch);
-        // MATCH-05 chỉ ghi kết quả; đóng lượt là việc của luồng bàn giao, không phải của eKYC.
-        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
-    }
-
-    [Fact]
-    public async Task Claim_OtherUsersTurn_NotFound()
-    {
-        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, Guid.NewGuid());
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", turn.Id, CancellationToken.None));
-
-        Assert.Equal(ErrorCode.HandoverNotFound, error.Code);
-        Assert.Empty(repository.Verifications);
-    }
-
-    [Fact]
-    public async Task Claim_TurnNotInIdentityStep_Conflict()
-    {
-        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.ReadyToAccept, userId);
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.jpg", "image/jpeg", turn.Id, CancellationToken.None));
-
-        Assert.Equal(ErrorCode.HandoverNotAllowed, error.Code);
+        Assert.Equal(EkycStatus.Pending, saved.Status);
     }
 
     [Theory]
@@ -286,7 +190,7 @@ public sealed class EkycConsentAndMatchTests
     public void CompareIdentity_NameIsNfcNormalized()
     {
         // "ế" dựng sẵn (U+1EBF) và dạng tổ hợp (e + U+0302 + U+0301) phải coi là một.
-        BeneficiaryPersonalData person = Person();
+        OwnerIdentityData person = Person();
         person.FullName = "Trần Hiếu";
         EkycDocumentReading reading = Reading("079200012345", "Trần Hiếu", "01/02/2000");
 
@@ -299,7 +203,7 @@ public sealed class EkycConsentAndMatchTests
     [InlineData("  trịnh   văn an ", "Trinh Van An")]
     public void CompareIdentity_NameIgnoresDiacriticsAndD_Matched(string declaredName, string readName)
     {
-        BeneficiaryPersonalData person = Person();
+        OwnerIdentityData person = Person();
         person.FullName = declaredName;
         EkycDocumentReading reading = Reading("079200012345", readName, "01/02/2000");
 
@@ -310,7 +214,7 @@ public sealed class EkycConsentAndMatchTests
     public void CompareIdentity_NameWithDifferentLetters_StillNeedsReview()
     {
         // Bỏ dấu chỉ cứu lỗi sai dấu; mất hay sai chữ cái (Trịnh đọc thành Tịnh) vẫn phải kiểm tra lại.
-        BeneficiaryPersonalData person = Person();
+        OwnerIdentityData person = Person();
         person.FullName = "Trịnh Văn An";
         EkycDocumentReading reading = Reading("079200012345", "Tịnh Văn An", "01/02/2000");
 
@@ -321,7 +225,7 @@ public sealed class EkycConsentAndMatchTests
     public async Task Back_SameCard_SetsBackSideChecked()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
 
         EkycStatusResponse response = await service.SubmitBackAsync(
             Image(), "back.jpg", "image/jpeg", CancellationToken.None);
@@ -334,7 +238,7 @@ public sealed class EkycConsentAndMatchTests
     public async Task Back_ReturnsResidenceAddressFromBack_BeforeAnyConfirmation()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
         client.BackReading = new EkycBackReading { IdNumber = "079200012345", ResidenceAddress = "12 Đường Thử, Quận 1, TP. Hồ Chí Minh" };
 
         // Chưa gọi ConfirmDocumentAsync: mặt sau vẫn được nhận để người dùng có địa chỉ đối chiếu rồi mới xác nhận (BR-88).
@@ -349,7 +253,7 @@ public sealed class EkycConsentAndMatchTests
     public async Task Back_NoAddressOnBack_ReturnsEmptyAddress()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
         client.BackReading = new EkycBackReading { IdNumber = "079200012345", ResidenceAddress = string.Empty };
 
         EkycBackResponse response = await service.SubmitBackAsync(
@@ -362,7 +266,7 @@ public sealed class EkycConsentAndMatchTests
     public async Task Back_AddressIsNeverStoredOrReturnedByStatus()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
         client.BackReading = new EkycBackReading { IdNumber = "079200012345", ResidenceAddress = "Địa chỉ không được lưu" };
 
         await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
@@ -374,11 +278,11 @@ public sealed class EkycConsentAndMatchTests
         Assert.True(stored.BackSideChecked);
     }
 
-    private static EkycDocumentConfirmationRequest Confirmation(Guid id, string purpose = "OWNER_ENROLLMENT", Guid? turnId = null)
+    private static EkycDocumentConfirmationRequest Confirmation(Guid id, string purpose = "OWNER_ENROLLMENT")
     {
         return new EkycDocumentConfirmationRequest
         {
-            VerificationId = id, Purpose = purpose, HandoverTurnId = turnId,
+            VerificationId = id, Purpose = purpose,
             IdNumber = "079200012345", FullName = "Nguyễn Văn An",
             DateOfBirth = new DateOnly(2000, 2, 1), ResidenceAddress = "Địa chỉ thử nghiệm",
         };
@@ -388,11 +292,10 @@ public sealed class EkycConsentAndMatchTests
     public async Task Confirm_OwnerAcceptsCorrectedFieldsWithoutChangingVerification()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, default);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", default);
         EkycStatusResponse result = await service.ConfirmDocumentAsync(Confirmation(front.VerificationId!.Value), default);
         Assert.Equal(front.VerificationId, result.VerificationId);
         Assert.Equal("PENDING", result.Status);
-        Assert.Equal("NOT_CHECKED", result.IdentityMatch);
         Assert.False(result.BackSideChecked);
     }
 
@@ -400,7 +303,7 @@ public sealed class EkycConsentAndMatchTests
     public async Task Confirm_OwnerEnrollment_StoresConfirmedAddressEncryptedOnPendingIdentity()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, default);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", default);
         EkycVerification stored = Assert.Single(repository.Verifications);
         Assert.Equal(string.Empty, identityProtector.UnprotectPending(stored)!.ResidenceAddress);
 
@@ -419,7 +322,7 @@ public sealed class EkycConsentAndMatchTests
         // OCR đọc sai tên và ngày sinh; Owner sửa lại trên form thì bản sửa được lưu làm danh tính tạm.
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
         client.Reading = Reading("079200012345", "NGUYEN VAN AM", "2000-02-11");
-        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, default);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", default);
         EkycVerification stored = Assert.Single(repository.Verifications);
 
         EkycDocumentConfirmationRequest request = Confirmation(front.VerificationId!.Value);
@@ -431,54 +334,37 @@ public sealed class EkycConsentAndMatchTests
         Assert.Equal(EkycRules.NormalizeName("Nguyễn Văn An"), pending.FullName);
         Assert.Equal(new DateOnly(2000, 2, 1), pending.DateOfBirth);
         Assert.Equal("079200012345", pending.CitizenId);
-        Assert.Equal(EkycIdentityMatch.NotChecked, stored.IdentityMatch);
-    }
-
-    [Fact]
-    public async Task Confirm_AcceptsEditedDeclarationWithoutReplacingImageEvidence()
-    {
-        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, userId);
-        client.Reading = Reading("079200099999", "Sai OCR", "2000-02-01");
-        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", turn.Id, default);
-        EkycStatusResponse result = await service.ConfirmDocumentAsync(Confirmation(front.VerificationId!.Value, "BENEFICIARY_CLAIM", turn.Id), default);
-        Assert.Equal("WRONG_PERSON", result.IdentityMatch);
-        Assert.Equal("PENDING", result.Status);
-        Assert.Equal("9999", result.CitizenIdLast4);
-        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
-    }
-
-    [Fact]
-    public async Task Confirm_RejectsDeclarationNotMatchingBeneficiary()
-    {
-        Consent(EkycPurpose.BeneficiaryClaim, Now, EkycRules.NoticeVersion);
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.IdentityInProgress, userId);
-        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", turn.Id, default);
-        EkycDocumentConfirmationRequest request = Confirmation(front.VerificationId!.Value, "BENEFICIARY_CLAIM", turn.Id);
-        request.FullName = "Người khác";
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.ConfirmDocumentAsync(request, default));
-        Assert.Equal(ErrorCode.ValidationError, error.Code);
     }
 
     [Theory]
     [InlineData("stale")]
-    [InlineData("purpose")]
-    [InlineData("turn")]
     [InlineData("other-user")]
     [InlineData("expired")]
     public async Task Confirm_RejectsForeignStaleExpiredOrWrongContext(string scenario)
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, default);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", default);
         EkycDocumentConfirmationRequest request = Confirmation(front.VerificationId!.Value);
         EkycVerification verification = Assert.Single(repository.Verifications);
         if (scenario == "stale") request.VerificationId = Guid.NewGuid();
-        if (scenario == "purpose") request.Purpose = "OWNER_ALIVE";
-        if (scenario == "turn") request.HandoverTurnId = Guid.NewGuid();
         if (scenario == "other-user") verification.UserId = Guid.NewGuid();
         if (scenario == "expired") verification.DocumentTokenExpiresAt = Now;
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.ConfirmDocumentAsync(request, default));
         Assert.Equal(ErrorCode.EkycDocumentExpired, error.Code);
+    }
+
+    [Theory]
+    [InlineData("BENEFICIARY_CLAIM")]
+    [InlineData("OWNER_ALIVE")]
+    public async Task Confirm_RemovedPurpose_IsValidationError(string purpose)
+    {
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", default);
+        EkycDocumentConfirmationRequest request = Confirmation(front.VerificationId!.Value, purpose);
+
+        AppException error = await Assert.ThrowsAsync<AppException>(() => service.ConfirmDocumentAsync(request, default));
+
+        Assert.Equal(ErrorCode.ValidationError, error.Code);
     }
 
     [Theory]
@@ -503,7 +389,7 @@ public sealed class EkycConsentAndMatchTests
     public async Task Back_DifferentCard_RejectedAndNotChecked()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
         client.BackReading = new EkycBackReading { IdNumber = "079200019999" };
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitBackAsync(
@@ -517,7 +403,7 @@ public sealed class EkycConsentAndMatchTests
     public async Task Back_NoMrz_NotConclusiveButNotAnError()
     {
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
         client.BackReading = new EkycBackReading { IdNumber = string.Empty };
 
         EkycStatusResponse response = await service.SubmitBackAsync(

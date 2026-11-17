@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Globalization;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Ekyc;
@@ -22,11 +21,8 @@ public sealed class EkycService : IEkycService
     private readonly ICurrentUser currentUser;
     private readonly IEkycVerificationRepository verificationRepository;
     private readonly IEkycConsentRepository consentRepository;
-    private readonly IHandoverRepository handoverRepository;
     private readonly IBeneficiaryRepository beneficiaryRepository;
     private readonly IBeneficiaryDataProtector beneficiaryProtector;
-    private readonly IOwnerFaceTemplateRepository faceTemplateRepository;
-    private readonly IFaceTemplateProtector faceTemplateProtector;
     private readonly IOwnerIdentityRepository identityRepository;
     private readonly IOwnerIdentityProtector identityProtector;
     private readonly IEkycClient ekycClient;
@@ -39,11 +35,8 @@ public sealed class EkycService : IEkycService
         ICurrentUser currentUser,
         IEkycVerificationRepository verificationRepository,
         IEkycConsentRepository consentRepository,
-        IHandoverRepository handoverRepository,
         IBeneficiaryRepository beneficiaryRepository,
         IBeneficiaryDataProtector beneficiaryProtector,
-        IOwnerFaceTemplateRepository faceTemplateRepository,
-        IFaceTemplateProtector faceTemplateProtector,
         IOwnerIdentityRepository identityRepository,
         IOwnerIdentityProtector identityProtector,
         IEkycClient ekycClient,
@@ -55,11 +48,8 @@ public sealed class EkycService : IEkycService
         this.currentUser = currentUser;
         this.verificationRepository = verificationRepository;
         this.consentRepository = consentRepository;
-        this.handoverRepository = handoverRepository;
         this.beneficiaryRepository = beneficiaryRepository;
         this.beneficiaryProtector = beneficiaryProtector;
-        this.faceTemplateRepository = faceTemplateRepository;
-        this.faceTemplateProtector = faceTemplateProtector;
         this.identityRepository = identityRepository;
         this.identityProtector = identityProtector;
         this.ekycClient = ekycClient;
@@ -97,7 +87,7 @@ public sealed class EkycService : IEkycService
     }
 
     public async Task<EkycDocumentResponse> SubmitDocumentAsync(
-        Stream content, string fileName, string contentType, Guid? handoverTurnId, CancellationToken ct)
+        Stream content, string fileName, string contentType, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -112,25 +102,16 @@ public sealed class EkycService : IEkycService
         EkycPurpose purpose = consent.Purpose;
         await RequireNotVerifiedAsync(userId, purpose, ct);
 
-        // người được chỉ định lấy từ backend (lượt bàn giao đã ghim), không nhận từ FE.
-        BeneficiaryPersonalData? expected = await LoadExpectedPersonAsync(purpose, handoverTurnId, userId, ct);
-
         byte[] image = await ReadImageAsync(content, contentType, ct);
 
         // Đọc trước, hủy lượt cũ sau: ảnh lỗi thì lượt Pending đang có vẫn giữ nguyên.
-        EkycDocumentReading reading = await ActiveClient(expected).ReadFrontAsync(image, fileName, contentType, ct);
+        EkycDocumentReading reading = await ActiveClient().ReadFrontAsync(image, fileName, contentType, ct);
 
         // Owner đăng ký phải đọc được đủ CCCD, họ tên, ngày sinh, và đã gắn danh tính thì phải ra đúng danh tính đó.
         OwnerIdentityData? enrollmentIdentity = null;
         if (purpose == EkycPurpose.OwnerEnrollment && reading.DocumentToken != null)
         {
             enrollmentIdentity = await CheckEnrollmentIdentityAsync(userId, reading, ct);
-        }
-
-        EkycIdentityMatch identityMatch = EkycIdentityMatch.NotChecked;
-        if (expected != null)
-        {
-            identityMatch = EkycRules.CompareIdentity(reading, expected);
         }
 
         EkycVerification? previous = await verificationRepository.FindLatestByUserIdAsync(userId, ct);
@@ -153,7 +134,6 @@ public sealed class EkycService : IEkycService
             FullName = reading.FullName,
             DateOfBirth = reading.DateOfBirth,
             ResidenceAddress = reading.ResidenceAddress,
-            IdentityMatch = identityMatch.ToApiString(),
             Warnings = reading.Warnings,
         };
 
@@ -170,8 +150,6 @@ public sealed class EkycService : IEkycService
         verification.UserId = userId;
         verification.Status = EkycStatus.Pending;
         verification.Purpose = purpose;
-        verification.HandoverTurnId = handoverTurnId;
-        verification.IdentityMatch = identityMatch;
         verification.CitizenIdLast4 = EkycRules.GetCitizenIdLast4(reading.IdNumber);
         verification.DocumentToken = reading.DocumentToken;
         verification.DocumentTokenExpiresAt = now + EkycRules.DocumentTokenLifetime;
@@ -216,32 +194,16 @@ public sealed class EkycService : IEkycService
 
         EkycPurpose purpose = ParsePurpose(request.Purpose);
         EkycVerification verification = await RequirePendingVerificationAsync(userId, ct);
-        if (verification.Id != request.VerificationId || verification.Purpose != purpose ||
-            verification.HandoverTurnId != request.HandoverTurnId)
+        if (verification.Id != request.VerificationId || verification.Purpose != purpose)
         {
             throw new AppException(AppErrorType.Conflict, ErrorCode.EkycDocumentExpired,
                 "Lượt xác minh đã thay đổi. Vui lòng đọc lại mặt trước giấy tờ.");
         }
 
-        BeneficiaryPersonalData? expected = await LoadExpectedPersonAsync(purpose, request.HandoverTurnId, userId, ct);
-        if (expected != null)
-        {
-            EkycDocumentReading declaration = new()
-            {
-                IdNumber = request.IdNumber,
-                FullName = request.FullName.Trim(),
-                DateOfBirth = request.DateOfBirth!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            };
-            if (EkycRules.CompareIdentity(declaration, expected) != EkycIdentityMatch.Matched)
-            {
-                throw ValidationErrors.For("document", "Thông tin xác nhận chưa khớp hồ sơ người nhận. Kiểm tra lại giấy tờ.");
-            }
-        }
-
-        // Bản tự khai không nâng kết quả từ ảnh thành MATCHED. Owner đăng ký: họ tên, ngày sinh và nơi cư trú Owner xác nhận
-        // được lưu MÃ HÓA vào bản tạm danh tính để gắn vào OwnerIdentity khi lượt đạt, vì OCR hay đọc sai tên tiếng Việt và
-        // tên sai bị lưu thì lần eKYC sau không đối chiếu được. Số CCCD vẫn giữ theo OCR: kiểm tra trùng CCCD giữa các
-        // tài khoản và với người nhận đã chạy trên số đọc từ ảnh. Đã có danh tính gắn trước đó thì bản tạm không được dùng.
+        // Bản tự khai không nâng kết quả từ ảnh. Owner đăng ký: họ tên, ngày sinh và nơi cư trú Owner xác nhận được lưu
+        // MÃ HÓA vào bản tạm danh tính để gắn vào OwnerIdentity khi lượt đạt, vì OCR hay đọc sai tên tiếng Việt và tên sai
+        // bị lưu thì lần eKYC sau không đối chiếu được. Số CCCD vẫn giữ theo OCR: kiểm tra trùng CCCD giữa các tài khoản
+        // và với người nhận đã chạy trên số đọc từ ảnh. Đã có danh tính gắn trước đó thì bản tạm không được dùng.
         if (purpose == EkycPurpose.OwnerEnrollment)
         {
             OwnerIdentityData? pending = identityProtector.UnprotectPending(verification);
@@ -353,12 +315,6 @@ public sealed class EkycService : IEkycService
         // Tự so lại với ngưỡng của server, không tin cờ matched do dịch vụ ngoài trả về.
         if (comparison.Score >= threshold)
         {
-            // Owner đăng ký đạt thì tạo mẫu khuôn mặt từ chính selfie của phiên này, lưu cùng lần chốt kết quả.
-            // Lấy vector trước khi chốt: dịch vụ lỗi thì lượt vẫn Pending để thử lại, không có lượt đạt mà thiếu mẫu.
-            if (verification.Purpose == EkycPurpose.OwnerEnrollment)
-            {
-                await AddFaceTemplateAsync(userId, verification.Id, selfie, now, ct);
-            }
             await FinishAsync(verification, EkycStatus.Passed, now, ct);
         }
         else
@@ -373,33 +329,8 @@ public sealed class EkycService : IEkycService
     }
 
     /// <summary>
-    /// Tạo mẫu khuôn mặt Owner từ selfie của phiên thử thách đã đạt. Đã có mẫu thì giữ nguyên, không thay bằng
-    /// mẫu mới. Chỉ đánh dấu INSERT; lưu cùng lần FinishAsync.
-    /// </summary>
-    private async Task AddFaceTemplateAsync(
-        Guid userId, Guid verificationId, byte[] selfie, DateTimeOffset now, CancellationToken ct)
-    {
-        OwnerFaceTemplate? existing = await faceTemplateRepository.FindLatestByUserIdAsync(userId, ct);
-        if (existing != null)
-        {
-            return;
-        }
-
-        EkycFaceEmbedding embedding = await ActiveClient().GetFaceEmbeddingAsync(selfie, "liveness.jpg", "image/jpeg", ct);
-
-        OwnerFaceTemplate template = new OwnerFaceTemplate();
-        template.UserId = userId;
-        template.Version = 1;
-        template.ModelName = embedding.ModelName;
-        template.SourceVerificationId = verificationId;
-        template.CreatedAt = now;
-        faceTemplateProtector.Protect(template, embedding.Values);
-        faceTemplateRepository.Add(template);
-    }
-
-    /// <summary>
     /// Owner đã có lượt OWNER_ENROLLMENT mới nhất đạt thì khóa, không cho xác minh lại. Chưa đạt (chưa làm, đang chờ,
-    /// thất bại) thì cho tiếp tục. Các mục đích khác không khóa ở đây (người nhận bị khóa bởi trạng thái lượt bàn giao).
+    /// thất bại) thì cho tiếp tục.
     /// </summary>
     private async Task RequireNotVerifiedAsync(Guid userId, EkycPurpose purpose, CancellationToken ct)
     {
@@ -497,54 +428,15 @@ public sealed class EkycService : IEkycService
 
     /// <summary>
     /// Dịch vụ eKYC đang dùng: bình thường là dịch vụ Python; khi Admin "tạm ngừng eKYC" (công cụ thử nghiệm) thì là bản giả,
-    /// luôn đạt, đọc giấy tờ ra đúng người được chỉ định nên đối chiếu danh tính vẫn khớp.
+    /// luôn đạt, đọc giấy tờ ra một danh tính cố định theo tài khoản.
     /// </summary>
-    private IEkycClient ActiveClient(BeneficiaryPersonalData? expected = null)
+    private IEkycClient ActiveClient()
     {
         if (!ekycOptions.Paused)
         {
             return ekycClient;
         }
-        return new SimulatedEkycClient(expected, currentUser.RequireUserId());
-    }
-
-    /// <summary>
-    /// Lấy dữ liệu người được chỉ định của lượt bàn giao để đối chiếu (BeneficiaryClaim). Mục đích khác thì không có lượt.
-    /// Lượt của người khác hoặc không tồn tại đều trả 404.
-    /// </summary>
-    private async Task<BeneficiaryPersonalData?> LoadExpectedPersonAsync(
-        EkycPurpose purpose, Guid? handoverTurnId, Guid userId, CancellationToken ct)
-    {
-        if (purpose != EkycPurpose.BeneficiaryClaim)
-        {
-            if (handoverTurnId != null)
-            {
-                throw ValidationErrors.For("handoverTurnId", "Chỉ xác minh người nhận mới gửi kèm lượt bàn giao.");
-            }
-            return null;
-        }
-        if (handoverTurnId == null)
-        {
-            throw ValidationErrors.For("handoverTurnId", "Thiếu lượt bàn giao cần xác minh.");
-        }
-
-        HandoverTurn? turn = await handoverRepository.FindTurnByIdAsync(handoverTurnId.Value, ct);
-        if (turn == null || turn.ClaimantUserId != userId)
-        {
-            throw HandoverNotFound();
-        }
-        if (turn.Status != HandoverTurnStatus.IdentityInProgress)
-        {
-            throw new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed,
-                "Lượt này không ở bước xác minh danh tính.");
-        }
-
-        Beneficiary? beneficiary = await beneficiaryRepository.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
-        if (beneficiary == null)
-        {
-            throw HandoverNotFound();
-        }
-        return beneficiaryProtector.Unprotect(beneficiary);
+        return new SimulatedEkycClient(currentUser.RequireUserId());
     }
 
     /// <summary>
@@ -560,12 +452,6 @@ public sealed class EkycService : IEkycService
             }
         }
         throw ValidationErrors.For("purpose", "Mục đích xác minh không hợp lệ.");
-    }
-
-    private static AppException HandoverNotFound()
-    {
-        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound,
-            "Không tìm thấy nội dung bàn giao.");
     }
 
     /// <summary>

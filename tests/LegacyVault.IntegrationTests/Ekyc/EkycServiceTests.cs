@@ -20,7 +20,6 @@ public sealed class EkycServiceTests
     private readonly FakeCurrentUser currentUser = new FakeCurrentUser();
     private readonly FakeEkycVerificationRepository repository = new FakeEkycVerificationRepository();
     private readonly FakeEkycConsentRepository consentRepository = new FakeEkycConsentRepository();
-    private readonly FakeHandoverRepository handoverRepository = new FakeHandoverRepository();
     private readonly FakeEkycBeneficiaryRepository beneficiaryRepository = new FakeEkycBeneficiaryRepository();
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly FakeEkycClient client = new FakeEkycClient();
@@ -32,9 +31,9 @@ public sealed class EkycServiceTests
     public EkycServiceTests()
     {
         currentUser.UserId = userId;
-        service = new EkycService(currentUser, repository, consentRepository, handoverRepository,
-            beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
-            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore(), new EkycOptions());
+        service = new EkycService(currentUser, repository, consentRepository,
+            beneficiaryRepository, protector, new FakeOwnerIdentityRepository(),
+            OwnerIdentityTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore(), new EkycOptions());
 
         // Mặc định đã đồng ý cho mục đích OWNER_ENROLLMENT để các test cũ vẫn đi đúng luồng.
         AddConsent(EkycPurpose.OwnerEnrollment, Now);
@@ -67,7 +66,7 @@ public sealed class EkycServiceTests
     }
 
     [Fact]
-    public async Task Status_OwnerEnrollmentPassed_NewerOtherPurposeOrPendingDoesNotHideIt()
+    public async Task Status_OwnerEnrollmentPassed_NewerFailedOrPendingDoesNotHideIt()
     {
         EkycVerification passed = new EkycVerification
         {
@@ -87,7 +86,7 @@ public sealed class EkycServiceTests
         repository.Verifications.Add(new EkycVerification
         {
             UserId = userId,
-            Purpose = EkycPurpose.BeneficiaryClaim,
+            Purpose = EkycPurpose.OwnerEnrollment,
             Status = EkycStatus.Failed,
             CreatedAt = Now,
         });
@@ -99,25 +98,28 @@ public sealed class EkycServiceTests
     }
 
     [Fact]
-    public async Task Status_OwnerEnrollmentNeverStarted_ReturnsNotStartedEvenIfOtherPurposePassed()
+    public async Task Status_OwnerEnrollmentNeverStarted_ReturnsNotStarted()
     {
-        repository.Verifications.Add(new EkycVerification
-        {
-            UserId = userId,
-            Purpose = EkycPurpose.BeneficiaryClaim,
-            Status = EkycStatus.Passed,
-            CreatedAt = Now,
-        });
-
         EkycStatusResponse response = await service.GetMyStatusAsync("OWNER_ENROLLMENT", CancellationToken.None);
 
         Assert.Equal("NOT_STARTED", response.Status);
     }
 
+    [Theory]
+    [InlineData("BENEFICIARY_CLAIM")]
+    [InlineData("OWNER_ALIVE")]
+    public async Task Status_RemovedPurpose_IsValidationError(string purpose)
+    {
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => service.GetMyStatusAsync(purpose, CancellationToken.None));
+
+        Assert.Equal(ErrorCode.ValidationError, error.Code);
+    }
+
     [Fact]
     public async Task Document_SavesOnlyResultAndLast4()
     {
-        EkycDocumentResponse response = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        EkycDocumentResponse response = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
 
         Assert.True(response.CanMatchFace);
         Assert.Equal("NGUYEN VAN AN", response.FullName);
@@ -134,7 +136,7 @@ public sealed class EkycServiceTests
     {
         client.Reading = new EkycDocumentReading { IdNumber = "079200012345", DocumentToken = null };
 
-        EkycDocumentResponse response = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        EkycDocumentResponse response = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
 
         Assert.False(response.CanMatchFace);
         Assert.Null(response.VerificationId);
@@ -144,7 +146,7 @@ public sealed class EkycServiceTests
     [Fact]
     public async Task Document_Again_CancelsPreviousToken()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
         clock.Now = Now.AddMinutes(1);
         client.Reading = new EkycDocumentReading
         {
@@ -154,7 +156,7 @@ public sealed class EkycServiceTests
             DocumentToken = "token-2",
         };
 
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
 
         Assert.Equal(new List<string> { "token-1" }, client.DeletedTokens);
         Assert.Equal(2, repository.Verifications.Count);
@@ -166,7 +168,7 @@ public sealed class EkycServiceTests
     public async Task Document_WrongContentType_Rejected()
     {
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            Image(), "front.gif", "image/gif", null, CancellationToken.None));
+            Image(), "front.gif", "image/gif", CancellationToken.None));
 
         Assert.Equal(ErrorCode.EkycImageRejected, error.Code);
     }
@@ -177,7 +179,7 @@ public sealed class EkycServiceTests
         MemoryStream big = new MemoryStream(new byte[EkycRules.MaxImageBytes + 1]);
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.SubmitDocumentAsync(
-            big, "front.jpg", "image/jpeg", null, CancellationToken.None));
+            big, "front.jpg", "image/jpeg", CancellationToken.None));
 
         Assert.Equal(ErrorCode.FileTooLarge, error.Code);
     }
@@ -188,9 +190,9 @@ public sealed class EkycServiceTests
     {
         double customThreshold = 0.5;
         EkycService configured = new EkycService(
-            currentUser, repository, consentRepository, handoverRepository,
-            beneficiaryRepository, protector, new FakeOwnerFaceTemplateRepository(), FaceTemplateTestSupport.CreateProtector(),
-            new FakeOwnerIdentityRepository(), FaceTemplateTestSupport.CreateIdentityProtector(), client,
+            currentUser, repository, consentRepository,
+            beneficiaryRepository, protector, new FakeOwnerIdentityRepository(),
+            OwnerIdentityTestSupport.CreateIdentityProtector(), client,
             unitOfWork, clock, new InMemoryAssetContentStore(),
             new EkycOptions { MatchThreshold = customThreshold });
         repository.Verifications.Clear();
