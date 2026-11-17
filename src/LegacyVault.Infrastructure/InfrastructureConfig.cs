@@ -213,6 +213,7 @@ public static class InfrastructureConfig
         services.AddSingleton<IAssetContentStore>(provider => ChooseAssetContentStore(provider));
         // Mã hóa dữ liệu cá nhân của người nhận, dùng chung DataKeyProtector (DATA-02).
         services.AddSingleton<IBeneficiaryDataProtector, BeneficiaryDataProtector>();
+        services.AddSingleton<IRecipientDeclaredDataProtector, RecipientDeclaredDataProtector>();
     }
 
     /// <summary>Mã băm, token, email, job nền, bàn giao và hồ sơ chứng tử.</summary>
