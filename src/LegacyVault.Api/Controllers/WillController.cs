@@ -1,7 +1,9 @@
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace LegacyVault.Api.Controllers;
 
@@ -24,8 +26,10 @@ public sealed class WillController : ControllerBase
 
     /// <summary>
     /// Họ tên, ngày sinh, CCCD đủ 12 số của Chủ kho (kèm nơi thường trú) và của từng người nhận trong kho.
-    /// Chỉ Chủ kho của kho; người khác kể cả Admin → 404. Mỗi lần gọi thành công ghi nhật ký WILL_IDENTITY_VIEWED.
+    /// Cần PIN (header X-Vault-Pin) và bị giới hạn tần suất. Chỉ Chủ kho của kho; người khác kể cả Admin → 404. Mỗi lần gọi thành công ghi nhật ký WILL_IDENTITY_VIEWED.
     /// </summary>
+    [RequireVaultPin]
+    [EnableRateLimiting("plan-setup")]
     [HttpGet("identity")]
     [ProducesResponseType<WillIdentityResponse>(StatusCodes.Status200OK)]
     public Task<WillIdentityResponse> GetIdentity(Guid vaultId, CancellationToken ct)
