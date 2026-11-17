@@ -50,6 +50,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
     private readonly IOwnerIdentityReader? ownerIdentities;
     private readonly IBeneficiaryRepository? beneficiaries;
     private readonly IBeneficiaryDataProtector? beneficiaryProtector;
+    private readonly IRecipientDeclaredDataProtector? declaredProtector;
     private readonly IHandoverTemplateService? templates;
 
     public HandoverDocumentService(
@@ -67,8 +68,10 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         IOwnerIdentityReader? ownerIdentities = null,
         IBeneficiaryRepository? beneficiaries = null,
         IBeneficiaryDataProtector? beneficiaryProtector = null,
-        IHandoverTemplateService? templates = null)
+        IHandoverTemplateService? templates = null,
+        IRecipientDeclaredDataProtector? declaredProtector = null)
     {
+        this.declaredProtector = declaredProtector;
         this.templates = templates;
         this.currentUser = currentUser;
         this.handover = handover;
@@ -326,7 +329,31 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         response.Recipient.FullName = document.RecipientFullName;
         response.Recipient.BirthYear = document.RecipientBirthYear;
         response.Recipient.CitizenIdLast4 = document.RecipientCitizenIdLast4;
-        response.Recipient.CitizenId = await FindRecipientCitizenIdAsync(document, ct);
+        if (forVerifier && declaredProtector != null)
+        {
+            try
+            {
+                RecipientDeclaredData? claimed = declaredProtector.Unprotect(document.RecipientDeclaredProtected);
+                if (claimed != null)
+                {
+                    response.Recipient.ClaimedCitizenId = claimed.CitizenId;
+                    response.Recipient.ClaimedDateOfBirth = claimed.DateOfBirth;
+                }
+            }
+            catch (System.Security.Cryptography.CryptographicException)
+            {
+                // Không giải mã được (thiếu KEK, dữ liệu hỏng): để trống, giao diện dùng 4 số cuối.
+            }
+        }
+        BeneficiaryPersonalData? declared = await FindOwnerDeclaredAsync(document, ct);
+        response.Recipient.CitizenId = declared != null && !string.IsNullOrWhiteSpace(declared.CitizenId)
+            ? declared.CitizenId
+            : await FindRecipientCitizenIdAsync(document, ct);
+        if (forVerifier && declared != null)
+        {
+            response.Recipient.DeclaredFullName = declared.FullName;
+            response.Recipient.DeclaredDateOfBirth = declared.DateOfBirth == default ? null : declared.DateOfBirth;
+        }
         response.Recipient.ResidenceAddress = document.RecipientResidenceAddress;
         response.Recipient.SignedAt = document.RecipientSignedAt;
 
@@ -399,6 +426,35 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         catch (System.Security.Cryptography.CryptographicException)
         {
             return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Thông tin Chủ kho đã khai cho người nhận (giải mã từ hồ sơ người được chỉ định). Null khi chưa có người nhận ký,
+    /// thiếu dịch vụ giải mã hoặc không giải mã được.
+    /// </summary>
+    private async Task<BeneficiaryPersonalData?> FindOwnerDeclaredAsync(HandoverDocument document, CancellationToken ct)
+    {
+        if (document.RecipientSignedAt == null && string.IsNullOrWhiteSpace(document.RecipientCitizenIdLast4))
+        {
+            return null;
+        }
+        if (beneficiaries == null || beneficiaryProtector == null)
+        {
+            return null;
+        }
+        try
+        {
+            Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(document.VaultId, document.Turn.BeneficiaryId, ct);
+            if (beneficiary == null)
+            {
+                return null;
+            }
+            return beneficiaryProtector.Unprotect(beneficiary);
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return null;
         }
     }
 

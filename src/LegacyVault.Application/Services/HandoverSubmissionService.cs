@@ -36,6 +36,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
     private readonly IHandoverPaperWriter? paperWriter;
     private readonly IHandoverDocumentRepository? documents;
     private readonly IHandoverDocumentNotifier? notifier;
+    private readonly IRecipientDeclaredDataProtector? declaredProtector;
 
     public HandoverSubmissionService(
         ICurrentUser currentUser,
@@ -48,8 +49,10 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         TimeProvider timeProvider,
         IHandoverPaperWriter? paperWriter = null,
         IHandoverDocumentRepository? documents = null,
-        IHandoverDocumentNotifier? notifier = null)
+        IHandoverDocumentNotifier? notifier = null,
+        IRecipientDeclaredDataProtector? declaredProtector = null)
     {
+        this.declaredProtector = declaredProtector;
         this.currentUser = currentUser;
         this.handover = handover;
         this.submissions = submissions;
@@ -174,6 +177,13 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
                 document.RecipientFullName = request.FullName.Trim();
                 document.RecipientBirthYear = request.DateOfBirth!.Value.Year;
                 document.RecipientCitizenIdLast4 = submission.CitizenIdLast4;
+                if (declaredProtector != null)
+                {
+                    RecipientDeclaredData declaredData = new RecipientDeclaredData();
+                    declaredData.CitizenId = request.CitizenId;
+                    declaredData.DateOfBirth = request.DateOfBirth;
+                    document.RecipientDeclaredProtected = declaredProtector.Protect(declaredData);
+                }
                 document.RecipientResidenceAddress = HandoverDocumentRules.CleanAddress(request.ResidenceAddress);
                 document.RecipientSignedAt = now;
                 document.RecipientTermsVersion = HandoverDocumentRules.TermsVersion;

@@ -1413,6 +1413,13 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(4)
                         .HasColumnType("nvarchar(4)");
 
+                    b.Property<string>("RecipientDeclaredProtected")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("RecipientFullName")
                         .IsRequired()
                         .HasMaxLength(200)

@@ -68,6 +68,12 @@ public class HandoverDocument
 
     public string RecipientCitizenIdLast4 { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Số căn cước đầy đủ và ngày sinh đầy đủ người nhận đã gõ lúc ký, mã hóa envelope (xem IRecipientDeclaredDataProtector).
+    /// Chỉ để Người xét duyệt đối chiếu với ảnh căn cước. Rỗng với biên bản cũ hoặc khi chưa ký.
+    /// </summary>
+    public string RecipientDeclaredProtected { get; set; } = string.Empty;
+
     /// <summary>Nơi thường trú người nhận khai trên biên bản. Tạm thời chỉ lưu, chưa hiển thị.</summary>
     public string RecipientResidenceAddress { get; set; } = string.Empty;
 
