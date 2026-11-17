@@ -1,5 +1,4 @@
 using LegacyVault.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace LegacyVault.Infrastructure.Health;

@@ -10,9 +10,6 @@ public interface IHandoverDocumentNotifier
     /// <summary>Người nhận đã ký: báo Người xét duyệt đã duyệt hồ sơ chứng tử của kho.</summary>
     Task VerifierTurnAsync(HandoverDocument document, CancellationToken ct);
 
-    /// <summary>Người xét duyệt trả về: báo người nhận kèm lý do.</summary>
-    Task RecipientReturnedAsync(HandoverDocument document, string reason, CancellationToken ct);
-
     /// <summary>Biên bản hoàn tất: báo người nhận và Người thực thi.</summary>
     Task CompletedAsync(HandoverDocument document, CancellationToken ct);
 }
@@ -40,11 +37,6 @@ public sealed class HandoverDocumentNotifier : IHandoverDocumentNotifier
     {
         Guid? verifierId = await submissions.FindApprovingVerifierUserIdAsync(document.VaultId, ct);
         await SendToUserAsync(document, verifierId, HandoverDocumentNoticeKind.VerifierTurn, null, ct);
-    }
-
-    public async Task RecipientReturnedAsync(HandoverDocument document, string reason, CancellationToken ct)
-    {
-        await SendToUserAsync(document, document.Turn.ClaimantUserId, HandoverDocumentNoticeKind.RecipientReturned, reason, ct);
     }
 
     public async Task CompletedAsync(HandoverDocument document, CancellationToken ct)

@@ -92,11 +92,6 @@ public sealed class FakeBillingPriceSettings : IBillingPriceSettings
         get { return new int[] { 1, 3, 5 }; }
     }
 
-    public bool HasTierPrice(ServiceTier tier, int years)
-    {
-        return years == 1 || years == 3 || years == 5;
-    }
-
     public long GetTierPrice(ServiceTier tier, int years)
     {
         if (tier == ServiceTier.Xs)

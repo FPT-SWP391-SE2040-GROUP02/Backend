@@ -21,9 +21,6 @@ public interface IEkycOptions
     /// <summary>Ghi đè ngưỡng đang chạy (chỉ DevTools; giới hạn an toàn do phía gọi kiểm).</summary>
     void SetThreshold(double threshold);
 
-    /// <summary>Bỏ override, đưa CurrentThreshold về DefaultThreshold.</summary>
-    void ResetDefault();
-
     /// <summary>
     /// true khi Admin đã "tạm ngừng eKYC" bằng công cụ thử nghiệm: mọi bước eKYC dùng dịch vụ giả và luôn đạt.
     /// Chỉ ở bộ nhớ; khởi động lại là về false.

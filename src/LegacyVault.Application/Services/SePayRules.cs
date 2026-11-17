@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using LegacyVault.Domain.Entities;

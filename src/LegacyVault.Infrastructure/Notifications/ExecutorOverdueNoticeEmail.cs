@@ -1,4 +1,3 @@
-using System.Net;
 using LegacyVault.Application.Notifications;
 
 namespace LegacyVault.Infrastructure.Notifications;

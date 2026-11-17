@@ -435,13 +435,6 @@ public sealed class SystemSettingService : ISystemSettingService
         return setting.Value;
     }
 
-    public async Task<long> GetLongAsync(string key, long defaultValue, CancellationToken ct = default)
-    {
-        var setting = await GetByKeyAsync(key, ct);
-        if (setting == null || !setting.IsEnabled) return defaultValue;
-        return long.TryParse(setting.Value, out var val) ? val : defaultValue;
-    }
-
     public async Task<bool> GetBoolAsync(string key, bool defaultValue, CancellationToken ct = default)
     {
         var setting = await GetByKeyAsync(key, ct);

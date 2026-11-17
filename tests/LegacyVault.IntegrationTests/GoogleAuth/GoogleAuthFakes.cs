@@ -138,11 +138,6 @@ public sealed class FakeExternalLoginRepository(FakeUserRepository userRepositor
         return Task.FromResult(Logins.FirstOrDefault(l => l.UserId == userId && l.Provider == provider));
     }
 
-    public Task<List<ExternalLogin>> FindAllByUserAsync(Guid userId, CancellationToken ct)
-    {
-        return Task.FromResult(Logins.Where(l => l.UserId == userId).ToList());
-    }
-
     public Task<bool> TryAddAsync(ExternalLogin login, CancellationToken ct)
     {
         var duplicate = Logins.Any(l =>

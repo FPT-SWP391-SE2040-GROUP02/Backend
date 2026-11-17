@@ -248,22 +248,6 @@ public sealed class BillingService : IBillingService
         return order.ToResponse(bankSettings, now);
     }
 
-    public async Task<PaymentOrderResponse> ApplyPaymentAsync(Guid orderId, DateTimeOffset paidAt, CancellationToken ct)
-    {
-        // Serializable: đọc đơn, kho, quyền dịch vụ rồi ghi trong một transaction, để hai đơn khác nhau
-        // cùng ghi một quyền dịch vụ không mất cập nhật (VaultEntitlement không có concurrency token).
-        // Deadlock bị AppDbContext đổi thành 409 EDIT_CONFLICT; không thử lại phần ghi.
-        return await unitOfWork.ExecuteSerializableAsync(async () =>
-        {
-            PaymentOrder? found = await paymentOrderRepository.FindByIdAsync(orderId, ct);
-            if (found == null)
-            {
-                throw BillingRules.OrderNotFound();
-            }
-            return await GrantEntitlementAsync(found, paidAt, ct);
-        }, ct);
-    }
-
     public async Task<PaymentOrderResponse> DevPayAsync(Guid orderId, CancellationToken ct)
     {
         // lớp bảo vệ thứ hai ngoài việc route không được map ngoài Development. Tắt thì coi như không có đơn.

@@ -1,5 +1,4 @@
 using System.Globalization;
-using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;

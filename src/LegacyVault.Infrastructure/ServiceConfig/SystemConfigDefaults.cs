@@ -3,7 +3,6 @@ using LegacyVault.Infrastructure.Billing;
 using LegacyVault.Infrastructure.Ekyc;
 using LegacyVault.Infrastructure.Notifications;
 using LegacyVault.Infrastructure.Storage;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Infrastructure.ServiceConfig;
@@ -13,14 +12,12 @@ namespace LegacyVault.Infrastructure.ServiceConfig;
 /// </summary>
 public sealed class SystemConfigDefaults : ISystemConfigDefaults
 {
-    private readonly IConfiguration configuration;
     private readonly IOptions<EkycSettings> ekycOptions;
     private readonly IOptions<BillingSettings> billingOptions;
     private readonly IOptions<SmtpSettings> smtpOptions;
     private readonly IOptions<AssetStorageSettings> storageOptions;
 
     public SystemConfigDefaults(
-        IConfiguration configuration,
         IOptions<EkycSettings> ekycOptions,
         IOptions<BillingSettings> billingOptions,
         IOptions<SmtpSettings> smtpOptions,
@@ -28,7 +25,6 @@ public sealed class SystemConfigDefaults : ISystemConfigDefaults
     {
         this.smtpOptions = smtpOptions;
         this.storageOptions = storageOptions;
-        this.configuration = configuration;
         this.ekycOptions = ekycOptions;
         this.billingOptions = billingOptions;
     }

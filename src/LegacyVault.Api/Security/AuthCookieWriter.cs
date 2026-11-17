@@ -1,6 +1,5 @@
 using LegacyVault.Api.Config;
 using LegacyVault.Application.Dtos.Responses;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;

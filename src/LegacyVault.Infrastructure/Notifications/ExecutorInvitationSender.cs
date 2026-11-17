@@ -1,4 +1,3 @@
-using System.Net;
 using LegacyVault.Application.Notifications;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;

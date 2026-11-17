@@ -1,6 +1,5 @@
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Ekyc;
-using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 
 namespace LegacyVault.Application.Mappings;

@@ -32,13 +32,6 @@ public interface IBillingService
     Task<PaymentOrderResponse> GetOrderAsync(Guid orderId, CancellationToken ct);
 
     /// <summary>
-    /// Ghi nhận một đơn đã được thanh toán và cấp quyền dịch vụ đúng một lần (D8, PAY-04). Hàm dùng chung của dev-pay
-    /// và webhook SePay (H2): không cần người dùng đăng nhập, nên người gọi phải tự xác thực nguồn tiền.
-    /// paidAt là thời điểm tiền vào (PAY-06). Đơn đã Paid → trả lại đơn, không cấp lần hai.
-    /// </summary>
-    Task<PaymentOrderResponse> ApplyPaymentAsync(Guid orderId, DateTimeOffset paidAt, CancellationToken ct);
-
-    /// <summary>
     /// Giả lập trả tiền cho đơn của kho mình (D9). Chỉ hoạt động khi IBillingDevSettings bật (Development);
     /// ngoài ra trả 404 như không có đơn. Gọi đúng phần cấp quyền của ApplyPaymentAsync.
     /// </summary>

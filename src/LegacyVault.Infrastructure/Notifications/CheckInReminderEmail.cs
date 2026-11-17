@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Enums;
