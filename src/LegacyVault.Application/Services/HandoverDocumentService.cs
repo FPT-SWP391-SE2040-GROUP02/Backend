@@ -47,7 +47,6 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IAdministrativeUnitCatalog administrativeUnits;
-    private readonly IHandoverDocumentNotifier? notifier;
     private readonly IOwnerIdentityReader? ownerIdentities;
     private readonly IBeneficiaryRepository? beneficiaries;
     private readonly IBeneficiaryDataProtector? beneficiaryProtector;
@@ -65,7 +64,6 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IAdministrativeUnitCatalog administrativeUnits,
-        IHandoverDocumentNotifier? notifier = null,
         IOwnerIdentityReader? ownerIdentities = null,
         IBeneficiaryRepository? beneficiaries = null,
         IBeneficiaryDataProtector? beneficiaryProtector = null,
@@ -83,7 +81,6 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
         this.administrativeUnits = administrativeUnits;
-        this.notifier = notifier;
         this.ownerIdentities = ownerIdentities;
         this.beneficiaries = beneficiaries;
         this.beneficiaryProtector = beneficiaryProtector;

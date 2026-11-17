@@ -5,7 +5,7 @@ namespace LegacyVault.Application.Ekyc;
 /// <summary>
 /// Giá trị cấu hình mục "Ekyc" trong appsettings cho so khớp khuôn mặt, kèm override runtime cho DevTools.
 /// Application không tham chiếu IOptions nên đây chỉ là POCO; Infrastructure (InfrastructureConfig) bind
-/// POCO và đóng gói thành singleton <see cref="IEkycOptions"/> cho <c>EkycService</c> / <c>OwnerFaceVerifier</c>.
+/// POCO và đóng gói thành singleton <see cref="IEkycOptions"/> cho <c>EkycService</c>.
 /// </summary>
 public sealed class EkycOptions : IEkycOptions
 {
@@ -59,13 +59,5 @@ public sealed class EkycOptions : IEkycOptions
     public void SetPaused(bool paused)
     {
         _pausedOverride = paused;
-    }
-
-    public void ResetDefault()
-    {
-        lock (_overrideLock)
-        {
-            _runtimeOverride = null;
-        }
     }
 }

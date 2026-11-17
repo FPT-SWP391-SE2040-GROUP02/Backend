@@ -58,16 +58,6 @@ public static class DeathCaseRules
         return PlanRules.IsRunning(planStatus);
     }
 
-    /// <summary>hồ sơ còn chiếm suất "một hồ sơ mỗi kho" khi chưa bị từ chối (kể cả Draft).</summary>
-    public static bool IsOpen(DeathCaseStatus status)
-    {
-        if (status == DeathCaseStatus.Rejected)
-        {
-            return false;
-        }
-        return true;
-    }
-
     /// <summary>
     /// chỉ sửa được bản mới nhất chưa gửi, khi hồ sơ còn ở giai đoạn Executor được khai báo.
     /// Bản đã có SubmittedAt không bao giờ sửa.

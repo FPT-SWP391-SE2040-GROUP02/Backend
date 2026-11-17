@@ -66,12 +66,6 @@ public static class CheckInRules
         return DueReminderKeys[position - 1];
     }
 
-    /// <summary>Số ngày mặc định của thư nhắc trước hạn thứ position (1 đến 5), dùng khi chưa có dòng cấu hình.</summary>
-    public static int DueReminderDefaultDays(int position)
-    {
-        return DueReminderDefaults[position - 1];
-    }
-
     /// <summary>Số thư nhắc trước hạn gửi chủ kho, Admin đặt, từ 1 đến 5.</summary>
     public static int DueReminderCount
     {

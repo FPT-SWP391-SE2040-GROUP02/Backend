@@ -62,11 +62,6 @@ public static class SystemSettingRules
         get { return RelationDefaults.Keys; }
     }
 
-    public static long RelationDefault(string key)
-    {
-        return RelationDefaults[key];
-    }
-
     private static Dictionary<string, IntegerRule> BuildIntegerRules()
     {
         Dictionary<string, IntegerRule> rules = new Dictionary<string, IntegerRule>();

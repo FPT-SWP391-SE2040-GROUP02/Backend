@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
 using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Domain.Enums;
-using MailKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.DependencyInjection;

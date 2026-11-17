@@ -2,7 +2,6 @@ using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
-using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 

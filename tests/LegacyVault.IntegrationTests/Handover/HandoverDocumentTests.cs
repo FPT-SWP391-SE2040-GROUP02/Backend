@@ -76,12 +76,6 @@ public sealed class FakeDocumentNotifier : IHandoverDocumentNotifier
         return Task.CompletedTask;
     }
 
-    public Task RecipientReturnedAsync(HandoverDocument document, string reason, CancellationToken ct)
-    {
-        Events.Add("recipient-returned:" + reason);
-        return Task.CompletedTask;
-    }
-
     public Task CompletedAsync(HandoverDocument document, CancellationToken ct)
     {
         Events.Add("completed");
@@ -223,7 +217,7 @@ public sealed class HandoverDocumentTests
             users, vaults, beneficiaries, protector, renderer, deathCases, store, new AdministrativeUnitCatalog());
         documentService = new HandoverDocumentService(
             currentUser, handover, documents, vaults, users, executorReader, deathCases, deathCaseProtector, unitOfWork, time,
-            new AdministrativeUnitCatalog(), notifier, ownerAddresses);
+            new AdministrativeUnitCatalog(), ownerAddresses);
         submitService = new HandoverSubmissionService(
             currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time, writer, documents, notifier);
         reviewService = new HandoverSubmissionReviewService(

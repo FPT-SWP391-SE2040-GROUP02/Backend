@@ -61,20 +61,17 @@ public sealed class HoldService : IHoldService
     private readonly ICurrentUser currentUser;
     private readonly IUserRepository users;
     private readonly IHoldRepository holds;
-    private readonly IAuditLogRepository audit;
     private readonly TimeProvider timeProvider;
 
     public HoldService(
         ICurrentUser currentUser,
         IUserRepository users,
         IHoldRepository holds,
-        IAuditLogRepository audit,
         TimeProvider timeProvider)
     {
         this.currentUser = currentUser;
         this.users = users;
         this.holds = holds;
-        this.audit = audit;
         this.timeProvider = timeProvider;
     }
 

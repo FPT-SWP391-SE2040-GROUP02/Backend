@@ -16,9 +16,6 @@ namespace LegacyVault.Infrastructure.Security;
 /// </remarks>
 public sealed class BeneficiaryDataProtector : IBeneficiaryDataProtector
 {
-    private const string IdentityPart = "identity";
-    private const string ContactPart = "contact";
-
     private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 
     private readonly DataKeyProtector dataKeyProtector;

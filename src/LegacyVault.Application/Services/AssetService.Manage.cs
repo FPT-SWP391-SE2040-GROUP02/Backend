@@ -1,10 +1,8 @@
 using System.Security.Cryptography;
-using System.Text;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
-using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;

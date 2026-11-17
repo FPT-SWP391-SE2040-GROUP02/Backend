@@ -1,6 +1,5 @@
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
-using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 

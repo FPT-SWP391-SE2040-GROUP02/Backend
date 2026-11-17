@@ -1,8 +1,6 @@
-using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
-using LegacyVault.Application.Services;
 using LegacyVault.Infrastructure.Ekyc;
 using LegacyVault.Infrastructure.Jobs;
 using LegacyVault.Infrastructure.Notifications;
@@ -24,7 +22,6 @@ public static class DeathCaseConfig
     {
         services.AddScoped<IDeathCaseRepository, DeathCaseRepository>();
         services.AddScoped<IDeathCaseReviewRepository, DeathCaseReviewRepository>();
-        services.AddScoped<IOwnerFaceVerifier, OwnerFaceVerifier>();
         services.AddScoped<IDeathCaseAssignmentRepository, DeathCaseAssignmentRepository>();
         // AI nhận diện trang giấy có phải giấy chứng tử khi Executor gửi hồ sơ.
         // DEATH-03: bộ đếm nhập sai mật khẩu xác nhận duyệt/từ chối của Verifier.

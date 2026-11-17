@@ -28,13 +28,6 @@ public sealed class ExternalLoginRepository : IExternalLoginRepository
             .FirstOrDefaultAsync(e => e.UserId == userId && e.Provider == provider, ct);
     }
 
-    public Task<List<ExternalLogin>> FindAllByUserAsync(Guid userId, CancellationToken ct)
-    {
-        return _db.ExternalLogins
-            .Where(e => e.UserId == userId)
-            .ToListAsync(ct);
-    }
-
     public async Task<bool> TryAddAsync(ExternalLogin login, CancellationToken ct)
     {
         // Nếu login.User là user MỚI (chưa có trong DB) thì EF thêm luôn user đó trong cùng lần lưu.
