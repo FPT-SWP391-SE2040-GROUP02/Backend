@@ -58,14 +58,14 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
         Assert.Equal(1, body.GetProperty("verificationsRemoved").GetInt32());
         Assert.Equal(1, body.GetProperty("consentsRemoved").GetInt32());
         Assert.True(body.GetProperty("identityRemoved").GetBoolean());
-        Assert.Equal(1, body.GetProperty("faceTemplatesRemoved").GetInt32());
+        // Mẫu khuôn mặt đã bỏ; trường giữ lại cho FE cũ luôn là 0.
+        Assert.Equal(0, body.GetProperty("faceTemplatesRemoved").GetInt32());
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Assert.Equal(0, await db.Set<EkycVerification>().CountAsync(v => v.UserId == target.Id));
             Assert.Equal(0, await db.Set<EkycConsent>().CountAsync(c => c.UserId == target.Id));
             Assert.Equal(0, await db.Set<OwnerIdentity>().CountAsync(i => i.UserId == target.Id));
-            Assert.Equal(0, await db.Set<OwnerFaceTemplate>().CountAsync(t => t.UserId == target.Id));
             Assert.True(await db.Set<User>().AnyAsync(u => u.Id == target.Id));
             // Tài khoản khác không bị đụng tới.
             Assert.Equal(1, await db.Set<EkycVerification>().CountAsync(v => v.UserId == other.Id));
@@ -106,6 +106,8 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(response);
         Assert.True(body.GetProperty("vaultRemoved").GetBoolean());
         Assert.True(body.GetProperty("identityRemoved").GetBoolean());
+        // Mẫu khuôn mặt đã bỏ; trường giữ lại cho FE cũ luôn là 0.
+        Assert.Equal(0, body.GetProperty("faceTemplatesRemoved").GetInt32());
         Assert.True(body.GetProperty("filesRemoved").GetInt32() >= 1);
         Assert.False(File.Exists(StoragePath(assetKey)));
 
@@ -222,7 +224,7 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
         return Path.Combine(Path.GetFullPath(factory.StorageRoot), storageKey[^2..], storageKey);
     }
 
-    /// <summary>Một lượt eKYC đã đạt, một lần đồng ý, danh tính và mẫu khuôn mặt giả (dữ liệu mã hóa giả, không có định danh thật).</summary>
+    /// <summary>Một lượt eKYC đã đạt, một lần đồng ý và danh tính giả (dữ liệu mã hóa giả, không có định danh thật).</summary>
     private Task AddEkycDataAsync(Guid userId)
     {
         return ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -232,7 +234,6 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             verification.UserId = userId;
             verification.Purpose = EkycPurpose.OwnerEnrollment;
             verification.Status = EkycStatus.Passed;
-            verification.IdentityMatch = EkycIdentityMatch.NotChecked;
             verification.CitizenIdLast4 = "1234";
             verification.CreatedAt = now;
             verification.CompletedAt = now;
@@ -254,18 +255,6 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             identity.IdentityEncrypted = new byte[] { 2 };
             identity.CreatedAt = now;
             db.Add(identity);
-
-            OwnerFaceTemplate template = new OwnerFaceTemplate();
-            template.UserId = userId;
-            template.Version = 1;
-            template.ModelName = "test";
-            template.Dimension = 128;
-            template.SourceVerificationId = verification.Id;
-            template.EncryptionKeyId = "test";
-            template.WrappedDataKey = new byte[] { 1 };
-            template.EmbeddingEncrypted = new byte[] { 2 };
-            template.CreatedAt = now;
-            db.Add(template);
 
             await db.SaveChangesAsync();
         });

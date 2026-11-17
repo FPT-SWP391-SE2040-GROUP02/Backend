@@ -16,7 +16,9 @@ public class DevEkycResetResponse
     /// <summary>Có xóa danh tính đã gắn của Owner hay không.</summary>
     public bool IdentityRemoved { get; set; }
 
-    /// <summary>Số phiên bản mẫu khuôn mặt của Owner đã xóa.</summary>
+    /// <summary>
+    /// Luôn 0: mẫu khuôn mặt Owner đã bỏ. Giữ trường để Frontend cũ (schema bắt buộc trường này) không lỗi; xóa khi FE bỏ trường.
+    /// </summary>
     public int FaceTemplatesRemoved { get; set; }
 
     /// <summary>Có xóa kho của tài khoản (kèm mọi dữ liệu trong kho) hay không; false khi tài khoản chưa có kho.</summary>

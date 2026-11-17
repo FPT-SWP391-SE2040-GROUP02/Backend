@@ -87,7 +87,6 @@ public sealed class EkycPauseFlowTests : IAsyncLifetime
             Assert.Equal(EkycStatus.Passed,
                 (await db.Set<EkycVerification>().SingleAsync(v => v.UserId == owner.Id)).Status);
             Assert.True(await db.Set<OwnerIdentity>().AnyAsync(i => i.UserId == owner.Id));
-            Assert.True(await db.Set<OwnerFaceTemplate>().AnyAsync(t => t.UserId == owner.Id));
             Assert.Equal(1, await db.Set<AuditLog>().CountAsync(l => l.Action == AuditAction.DevToggleEkycPause));
         });
     }

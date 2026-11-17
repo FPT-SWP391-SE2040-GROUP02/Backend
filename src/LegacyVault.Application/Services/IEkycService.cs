@@ -10,7 +10,7 @@ namespace LegacyVault.Application.Services;
 /// Luật chung:
 /// - Người dùng lấy từ token (SEC-04), không nhận userId từ FE. Ngưỡng so khớp do server cố định.
 /// - Chỉ lưu kết quả, không lưu ảnh (xem EkycVerification). Ảnh chỉ nhận JPEG/PNG, tối đa 8 MiB.
-/// - eKYC chỉ là bằng chứng hỗ trợ; không tự quyết định xác minh người nhận ở giai đoạn C của luồng bàn giao.
+/// - Chỉ phục vụ xác minh danh tính của Chủ kho (mục đích OWNER_ENROLLMENT).
 /// Lỗi chung: 401 SESSION_EXPIRED, 400 EKYC_IMAGE_REJECTED, 413 FILE_TOO_LARGE, 503 EKYC_SERVICE_UNAVAILABLE.
 /// </remarks>
 public interface IEkycService
@@ -28,15 +28,11 @@ public interface IEkycService
     /// <summary>
     /// Đọc mặt trước giấy tờ và giữ khuôn mặt trên thẻ để so khớp. Mỗi lần gọi là một lượt eKYC mới,
     /// lượt Pending trước đó bị hủy.
-    /// Mục đích BENEFICIARY_CLAIM bắt buộc kèm handoverTurnId và được đối chiếu với người được chỉ định của lượt đó
-    /// (EKYC-02, MATCH-01..05); mục đích khác không được gửi kèm lượt. Kết quả đối chiếu chỉ ghi lại, không tự đóng lượt.
     /// Lỗi: 409 EKYC_CONSENT_REQUIRED (chưa đồng ý hoặc đã quá hạn), 400 EKYC_IMAGE_REJECTED (ảnh sai định dạng,
-    /// rỗng, nhầm mặt thẻ), 400 VALIDATION_ERROR (thiếu hoặc thừa handoverTurnId),
-    /// 404 HANDOVER_NOT_FOUND (lượt không tồn tại hoặc không phải của người gọi),
-    /// 409 HANDOVER_NOT_ALLOWED (lượt không ở bước xác minh danh tính).
+    /// rỗng, nhầm mặt thẻ).
     /// </summary>
     Task<EkycDocumentResponse> SubmitDocumentAsync(
-        Stream content, string fileName, string contentType, Guid? handoverTurnId, CancellationToken ct);
+        Stream content, string fileName, string contentType, CancellationToken ct);
 
     /// <summary>
     /// Gửi mặt sau của chính tấm thẻ vừa đọc mặt trước (EKYC-04). Mã trong MRZ mặt sau phải trùng 4 số cuối mặt
@@ -68,8 +64,6 @@ public interface IEkycService
     /// <summary>
     /// Chốt thử thách: lấy selfie của chính phiên đã đạt (EKYC-13) rồi so khớp với khuôn mặt trên thẻ. Chống giả mạo
     /// và động tác phải đạt riêng từng cái trong phiên (EKYC-14). Mỗi lượt chỉ so khớp một lần.
-    /// Lượt OWNER_ENROLLMENT đạt thì tạo luôn mẫu khuôn mặt Owner từ selfie của phiên (EKYC-22) nếu Owner chưa có mẫu
-    /// (EKYC-23); không lấy được vector (dịch vụ lỗi, ảnh không có đúng một mặt) thì lượt giữ nguyên Pending để thử lại.
     /// Lỗi: 409 EKYC_DOCUMENT_EXPIRED, 409 EKYC_LIVENESS_REQUIRED, 409 EKYC_LIVENESS_NOT_PASSED (chưa làm xong
     /// động tác hoặc chống giả mạo chưa đạt), 503 EKYC_SERVICE_UNAVAILABLE.
     /// </summary>
@@ -80,7 +74,7 @@ public interface IEkycService
 
     /// <summary>
     /// Kết quả eKYC theo đúng một mục đích (UPPER_SNAKE_CASE). Với OWNER_ENROLLMENT, đã từng đạt thì trả lượt đạt gần nhất:
-    /// Owner xác minh một lần, lượt khác (điểm danh, người nhận) hay chụp lại giữa chừng không làm mất kết quả đó.
+    /// Owner xác minh một lần, chụp lại giữa chừng không làm mất kết quả đó.
     /// Mục đích không hợp lệ: 400. Chưa từng làm: Status NOT_STARTED.
     /// </summary>
     Task<EkycStatusResponse> GetMyStatusAsync(string? purpose, CancellationToken ct);

@@ -373,7 +373,7 @@ public static class InfrastructureConfig
         services.AddScoped<IExternalLoginLinkTicketRepository, ExternalLoginLinkTicketRepository>();
     }
 
-    /// <summary>Gọi dịch vụ eKYC, mẫu khuôn mặt và danh tính Owner.</summary>
+    /// <summary>Gọi dịch vụ eKYC và danh tính Owner.</summary>
     private static void AddEkyc(IServiceCollection services, IConfiguration configuration)
     {
         // eKYC: gọi dịch vụ Python riêng qua HTTP. Chưa cấu hình Ekyc:BaseUrl thì mọi lệnh eKYC trả 503.
@@ -415,9 +415,6 @@ public static class InfrastructureConfig
             });
         services.AddSingleton<IEkycOptions>(
             provider => provider.GetRequiredService<IOptions<EkycOptions>>().Value);
-        // Mẫu khuôn mặt Owner (EKYC-22, PRIV-03): vector mã hóa envelope, dùng chung DataKeyProtector của tài sản.
-        services.AddScoped<IOwnerFaceTemplateRepository, OwnerFaceTemplateRepository>();
-        services.AddSingleton<IFaceTemplateProtector, FaceTemplateProtector>();
         // Danh tính đã gắn của Owner (EKYC-27, DATA-02): CCCD đủ 12 số, họ tên, ngày sinh mã hóa envelope.
         services.AddScoped<IOwnerIdentityRepository, OwnerIdentityRepository>();
         services.AddSingleton<IOwnerIdentityProtector, OwnerIdentityProtector>();

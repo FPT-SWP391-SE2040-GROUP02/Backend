@@ -48,7 +48,7 @@ public sealed class EkycOwnerIdentityRulesTests
     }
 
     [Fact]
-    public void Compare_UsesSameRulesAsBeneficiary()
+    public void Compare_FollowsMatchRules()
     {
         Assert.Equal(EkycIdentityMatch.Matched,
             EkycRules.CompareIdentity(Reading("079200012345", "nguyen van an", "2000-02-01"), Expected()));

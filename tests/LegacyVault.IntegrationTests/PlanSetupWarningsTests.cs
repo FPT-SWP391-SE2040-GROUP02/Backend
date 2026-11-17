@@ -54,50 +54,13 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task EKYC01_OwnerEnrollmentPassed_NewerBeneficiaryClaimFailed_NoOwnerEkycRequired()
+    public async Task EKYC01_OwnerEnrollmentPassed_NewerOwnerEnrollmentFailed_NoOwnerEkycRequired()
     {
         // Chuẩn bị
         (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
         DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
         await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Passed, createdAt);
-        await AddVerificationAsync(ownerId, EkycPurpose.BeneficiaryClaim, EkycStatus.Failed, createdAt.AddMinutes(1));
-
-        // Hành động
-        HttpResponseMessage response = await owner.GetAsync($"/api/v1/vaults/{vaultId}/plan-setup");
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        PlanSetupResponse? setup = await response.Content.ReadFromJsonAsync<PlanSetupResponse>();
-        Assert.NotNull(setup);
-        Assert.DoesNotContain("OWNER_EKYC_REQUIRED", setup.MissingRequirements);
-    }
-
-    [SqlFact]
-    public async Task AC46_OnlyBeneficiaryClaimPassed_OwnerEkycRequired()
-    {
-        // Chuẩn bị
-        (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
-        DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
-        await AddVerificationAsync(ownerId, EkycPurpose.BeneficiaryClaim, EkycStatus.Passed, createdAt);
-
-        // Hành động
-        HttpResponseMessage response = await owner.GetAsync($"/api/v1/vaults/{vaultId}/plan-setup");
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        PlanSetupResponse? setup = await response.Content.ReadFromJsonAsync<PlanSetupResponse>();
-        Assert.NotNull(setup);
-        Assert.Contains("OWNER_EKYC_REQUIRED", setup.MissingRequirements);
-    }
-
-    [SqlFact]
-    public async Task EKYC01_NewerOwnerAliveFailed_DoesNotHideOwnerEnrollment()
-    {
-        // Chuẩn bị
-        (HttpClient owner, Guid vaultId, Guid ownerId) = await PrepareAsync();
-        DateTimeOffset createdAt = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
-        await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Passed, createdAt);
-        await AddVerificationAsync(ownerId, EkycPurpose.OwnerAlive, EkycStatus.Failed, createdAt.AddMinutes(1));
+        await AddVerificationAsync(ownerId, EkycPurpose.OwnerEnrollment, EkycStatus.Failed, createdAt.AddMinutes(1));
 
         // Hành động
         HttpResponseMessage response = await owner.GetAsync($"/api/v1/vaults/{vaultId}/plan-setup");
@@ -320,7 +283,6 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
                 Status = status,
                 CreatedAt = createdAt,
                 CompletedAt = createdAt,
-                IdentityMatch = EkycIdentityMatch.NotChecked,
                 CitizenIdLast4 = "",
             };
             if (status == EkycStatus.Passed)

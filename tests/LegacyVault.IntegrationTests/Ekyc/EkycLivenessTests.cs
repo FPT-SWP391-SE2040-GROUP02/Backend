@@ -21,7 +21,6 @@ public sealed class EkycLivenessTests
     private readonly FakeEkycVerificationRepository repository = new FakeEkycVerificationRepository();
     private readonly FakeEkycConsentRepository consentRepository = new FakeEkycConsentRepository();
     private readonly FakeEkycClient client = new FakeEkycClient();
-    private readonly FakeOwnerFaceTemplateRepository templateRepository = new FakeOwnerFaceTemplateRepository();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider clock = new FixedTimeProvider(Now);
     private readonly EkycService service;
@@ -30,10 +29,9 @@ public sealed class EkycLivenessTests
     public EkycLivenessTests()
     {
         currentUser.UserId = userId;
-        service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
-            new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), templateRepository,
-            FaceTemplateTestSupport.CreateProtector(), new FakeOwnerIdentityRepository(),
-            FaceTemplateTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore(), new EkycOptions());
+        service = new EkycService(currentUser, repository, consentRepository,
+            new FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector(), new FakeOwnerIdentityRepository(),
+            OwnerIdentityTestSupport.CreateIdentityProtector(), client, unitOfWork, clock, new InMemoryAssetContentStore(), new EkycOptions());
         consentRepository.Consents.Add(new EkycConsent
         {
             UserId = userId,
@@ -51,7 +49,7 @@ public sealed class EkycLivenessTests
     /// <summary>Đọc đủ hai mặt giấy tờ: điều kiện để bắt đầu thử thách camera.</summary>
     private async Task ReadFrontAsync()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
         await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
     }
 
@@ -88,7 +86,7 @@ public sealed class EkycLivenessTests
     [Fact]
     public async Task Start_WithoutBackSide_BackRequired()
     {
-        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
 
         AppException error = await Assert.ThrowsAsync<AppException>(
             () => service.StartLivenessAsync(CancellationToken.None));

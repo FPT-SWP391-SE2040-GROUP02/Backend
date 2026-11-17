@@ -77,7 +77,7 @@ Mỗi chỉ định (một gói cho một người nhận) là một **lượt**
 Các bước:
 
 1. Lời mời gửi qua email (lưu lượt trước, gửi sau; lỗi thì thử lại tối đa 5 lần rồi mở sự cố `NOTIFICATION_FAILED`). Người thực thi có thể gửi lại lời mời thủ công.
-2. Người nhận xác minh danh tính bằng eKYC mục đích `BENEFICIARY_CLAIM`: họ tên, CCCD, ngày sinh đọc từ giấy phải khớp thông tin Chủ kho đã khai (`MATCHED`, `NEEDS_REVIEW`, `WRONG_PERSON`). `NEEDS_REVIEW` thì Verifier xem xét khi duyệt biên bản. Ở môi trường Development có công tắc `Handover:RequireIdentityVerification = false` để bỏ qua bước này.
+2. Người nhận xác minh danh tính bằng hồ sơ CCCD và giấy tờ tự nộp; Verifier đối chiếu rồi duyệt thì lượt sang `READY_TO_ACCEPT` (không dùng eKYC khuôn mặt cho người nhận). Ở môi trường Development có công tắc `Handover:RequireIdentityVerification = false` để bỏ qua bước này.
 3. **Khóa mở gói:** nếu kho đã được Chủ kho cấp khóa cho Người thực thi thì người nhận phải nhập đúng khóa đó (`POST turns/{id}/verify-key`) trước khi đồng ý. Sai 5 lần thì khóa lượt, cần Người thực thi hoặc Admin xử lý. Kho chưa cấp khóa thì bỏ qua bước này. Chủ kho cấp lại được khi Người thực thi quên khóa; mảnh khóa cũ hết hiệu lực. DB chỉ lưu băm SHA-256 có muối.
 4. Người nhận đồng ý hoặc từ chối. Đồng ý thì có quyền xem và tải từng tài sản trong 30 ngày.
 5. Kế hoạch tự chuyển `CLOSED` khi mọi lượt kết thúc; job lưu và xóa dọn nội dung sau thời hạn lưu.
@@ -101,16 +101,14 @@ Các bước:
 
 - Dịch vụ eKYC là chương trình Python riêng; backend chỉ lưu kết quả, không lưu ảnh giấy tờ thô.
 - Chuỗi bước: đồng ý (`consent`, phiên bản thông báo `2026-10-v1`) → chụp mặt trước (`document`) → xác nhận bản khai (`document/confirm`) → chụp mặt sau (`document-back`) → thử thách camera (`liveness/start`, `liveness/frame`, `liveness/complete`) → kết quả `PASSED` hoặc `FAILED`. Mỗi lượt so khớp một lần.
-- Ba mục đích: `OWNER_ENROLLMENT` (Chủ kho, một lần, gắn danh tính đã mã hóa và mẫu khuôn mặt), `BENEFICIARY_CLAIM` (người nhận, đối chiếu với người được chỉ định), `OWNER_ALIVE` (còn trong enum nhưng luồng "Tôi còn sống" đã gỡ).
+- Một mục đích duy nhất: `OWNER_ENROLLMENT` (Chủ kho, một lần, gắn danh tính đã mã hóa). Mục đích `BENEFICIARY_CLAIM`, `OWNER_ALIVE` và bảng mẫu khuôn mặt `OwnerFaceTemplates` đã bỏ (migration `RemoveEkycLeftovers`).
 - Số CCCD không được trùng giữa các tài khoản Chủ kho và không được trùng người nhận của chính Chủ kho đó.
 
 ### Tạm ngừng eKYC (mới, để chạy thử)
 
 - Admin vào **Công cụ thử nghiệm** bấm **Tạm ngừng eKYC**. Chỉ có ở Development hoặc Staging (môi trường khác trả 404), chỉ Admin dùng được, chỉ ở bộ nhớ máy chủ (khởi động lại là về tắt), có ghi nhật ký `DEV_TOGGLE_EKYC_PAUSE`.
-- Khi bật: mọi lời gọi tới dịch vụ eKYC Python được thay bằng bản giả luôn đạt. Phần lưu kết quả, danh tính, mẫu khuôn mặt vẫn chạy như thật.
-  - Người nhận: giấy tờ đọc ra đúng họ tên, CCCD, ngày sinh Chủ kho đã khai nên đối chiếu ra `MATCHED`.
+- Khi bật: mọi lời gọi tới dịch vụ eKYC Python được thay bằng bản giả luôn đạt. Phần lưu kết quả và danh tính vẫn chạy như thật.
   - Chủ kho: nhận một số CCCD thử 12 số (bắt đầu 079) tính từ mã tài khoản, nên mỗi tài khoản một số khác nhau; họ tên thử "NGUYEN VAN THU NGHIEM".
-  - Kiểm tra khuôn mặt Chủ kho với mẫu đã lưu: coi như khớp.
 - Dữ liệu tạo ra khi đang tạm ngừng là dữ liệu thử, không dùng cho môi trường thật. Nhớ tắt sau khi thử.
 
 ## 10. Tham số Admin chỉnh được (khóa và mặc định)

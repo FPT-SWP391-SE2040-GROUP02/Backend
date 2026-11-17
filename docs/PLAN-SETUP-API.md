@@ -60,7 +60,7 @@ PlanSetupFlowTests exercise real HTTP/SQL against isolated GUID test databases, 
 - **ASSET-03 / AC-68:** `assetsOutsideContainer` sắp theo `CreatedAt`, rồi `Id`, tăng dần. Tài sản trong gói `DRAFT` đã được tính ở `containers[].assetCount`, không lặp lại trong danh sách này. Gói lưu trữ đã gỡ các liên kết tài sản. Hai danh sách không phân trang.
 - **SETUP-10:** chỉ bỏ `NO_BACKUP_EXECUTOR` khi có Executor vai trò Backup trong danh sách đã chấp nhận, đúng scope version hiện hành, có tài khoản hoạt động, email đã xác minh và khác Owner. Backup mới được mời (`INVITED`) vẫn có cảnh báo.
 - **Cảnh báo không chặn kích hoạt:** `warnings` không được thêm vào `missingRequirements`, không đổi cách tính `canActivate` hay điều kiện của `POST /activate`. Nếu Executor chính cũng là người nhận và thiếu Backup độc lập đủ điều kiện, mã chặn `BACKUP_EXECUTOR_REQUIRED` vẫn có thể xuất hiện cùng cảnh báo `NO_BACKUP_EXECUTOR`.
-- **EKYC-01 / AC-46:** `OWNER_EKYC_REQUIRED` xét lượt mới nhất theo `CreatedAt`, rồi `Id`, giảm dần, có mục đích `OWNER_ENROLLMENT` và yêu cầu lượt đó `PASSED`. Lượt `BENEFICIARY_CLAIM` hoặc `OWNER_ALIVE` mới hơn không thay thế kết quả này. Dữ liệu dev cũ có mục đích mặc định OwnerEnrollment vẫn được tính, kể cả chưa có cờ liveness.
+- **EKYC-01 / AC-46:** `OWNER_EKYC_REQUIRED` xét lượt mới nhất theo `CreatedAt`, rồi `Id`, giảm dần, có mục đích `OWNER_ENROLLMENT` và yêu cầu lượt đó `PASSED`. Mục đích eKYC duy nhất còn lại là `OWNER_ENROLLMENT` (hai mục đích cũ đã bỏ). Dữ liệu dev cũ có mục đích mặc định OwnerEnrollment vẫn được tính, kể cả chưa có cờ liveness.
 
 Ví dụ GET rút gọn, giả định các điều kiện kích hoạt khác đã đủ:
 

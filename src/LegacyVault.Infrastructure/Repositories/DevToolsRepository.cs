@@ -92,18 +92,7 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         return context.Set<OwnerIdentity>().FirstOrDefaultAsync(i => i.UserId == userId, ct);
     }
 
-    public Task<List<OwnerFaceTemplate>> ListOwnerFaceTemplatesAsync(Guid userId, CancellationToken ct)
-    {
-        return context.Set<OwnerFaceTemplate>()
-            .Where(t => t.UserId == userId)
-            .OrderBy(t => t.Version)
-            .ThenBy(t => t.Id)
-            .ToListAsync(ct);
-    }
-
-    public void RemoveEkycData(
-        List<EkycVerification> verifications, List<EkycConsent> consents,
-        OwnerIdentity? identity, List<OwnerFaceTemplate> faceTemplates)
+    public void RemoveEkycData(List<EkycVerification> verifications, List<EkycConsent> consents, OwnerIdentity? identity)
     {
         context.Set<EkycVerification>().RemoveRange(verifications);
         context.Set<EkycConsent>().RemoveRange(consents);
@@ -111,7 +100,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         {
             context.Set<OwnerIdentity>().Remove(identity);
         }
-        context.Set<OwnerFaceTemplate>().RemoveRange(faceTemplates);
     }
 
     public async Task<Guid?> FindVaultIdByOwnerAsync(Guid ownerId, CancellationToken ct)
@@ -126,7 +114,7 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         return vault.Id;
     }
 
-    public async Task<List<string>> ListVaultStorageKeysAsync(Guid vaultId, Guid ownerId, CancellationToken ct)
+    public async Task<List<string>> ListVaultStorageKeysAsync(Guid vaultId, CancellationToken ct)
     {
         List<string> keys = new List<string>();
 
@@ -146,29 +134,17 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .ToListAsync(ct);
         AddKeys(keys, fileKeys);
 
-        var turnIds = context.Set<HandoverTurn>().Where(t => t.VaultId == vaultId).Select(t => t.Id);
-        List<string?> claimImageKeys = await context.Set<EkycVerification>()
-            .AsNoTracking()
-            .Where(e => e.HandoverTurnId != null && turnIds.Contains(e.HandoverTurnId.Value) && e.UserId != ownerId)
-            .Select(e => e.PendingDocumentImageStorageKey)
-            .ToListAsync(ct);
-        AddKeys(keys, claimImageKeys);
-
         return keys;
     }
 
-    public async Task DeleteVaultAsync(Guid vaultId, Guid ownerId, CancellationToken ct)
+    public async Task DeleteVaultAsync(Guid vaultId, CancellationToken ct)
     {
-        // Bàn giao: nhật ký tải → quyền tải → tài sản đã ghim → eKYC người nhận của lượt → lượt.
+        // Bàn giao: nhật ký tải → quyền tải → tài sản đã ghim → lượt.
         var turnIds = context.Set<HandoverTurn>().Where(t => t.VaultId == vaultId).Select(t => t.Id);
         var grantIds = context.Set<HandoverGrant>().Where(g => turnIds.Contains(g.TurnId)).Select(g => g.Id);
         await context.Set<HandoverAccessLog>().Where(l => grantIds.Contains(l.GrantId)).ExecuteDeleteAsync(ct);
         await context.Set<HandoverGrant>().Where(g => turnIds.Contains(g.TurnId)).ExecuteDeleteAsync(ct);
         await context.Set<HandoverSnapshotItem>().Where(i => turnIds.Contains(i.TurnId)).ExecuteDeleteAsync(ct);
-        // eKYC của Owner do service xóa qua theo dõi thay đổi; ở đây chỉ xóa lượt eKYC của người nhận.
-        await context.Set<EkycVerification>()
-            .Where(e => e.HandoverTurnId != null && turnIds.Contains(e.HandoverTurnId.Value) && e.UserId != ownerId)
-            .ExecuteDeleteAsync(ct);
         await context.Set<HandoverTurn>().Where(t => t.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
         // Hồ sơ chứng tử: quyết định → phân công → cờ → trang giấy → bản khai → thông báo → lời báo còn sống → hồ sơ.

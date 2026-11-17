@@ -514,31 +514,6 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Sec83_Quote_EkycForOtherPurpose_DoesNotCount()
-    {
-        // Chuẩn bị: eKYC đạt nhưng mục đích BeneficiaryClaim (EKYC-01)
-        (HttpClient client, _, Guid ownerId) = await CreateFreeVaultAsync(ekycDaysAgo: null);
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            EkycVerification verification = new EkycVerification();
-            verification.UserId = ownerId;
-            verification.Purpose = EkycPurpose.BeneficiaryClaim;
-            verification.Status = EkycStatus.Passed;
-            verification.CreatedAt = DateTimeOffset.UtcNow;
-            verification.CompletedAt = DateTimeOffset.UtcNow;
-            db.EkycVerifications.Add(verification);
-            await db.SaveChangesAsync();
-        });
-
-        // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
-
-        // Kiểm tra
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
-        Assert.Equal("OWNER_EKYC_REQUIRED", problem.GetProperty("reason").GetString());
-    }
-
-    [SqlFact]
     public async Task Sec83_Quote_PlanLocked_ReturnsPlanLocked()
     {
         PlanStatus[] lockedStatuses = new PlanStatus[]

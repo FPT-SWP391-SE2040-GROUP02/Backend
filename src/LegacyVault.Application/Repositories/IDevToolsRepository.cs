@@ -27,9 +27,6 @@ public interface IDevToolsRepository
     /// <summary>Danh tính đã gắn của Owner, có theo dõi thay đổi; null khi chưa có.</summary>
     Task<OwnerIdentity?> FindOwnerIdentityAsync(Guid userId, CancellationToken ct);
 
-    /// <summary>Mọi phiên bản mẫu khuôn mặt của Owner, có theo dõi thay đổi để xóa.</summary>
-    Task<List<OwnerFaceTemplate>> ListOwnerFaceTemplatesAsync(Guid userId, CancellationToken ct);
-
     /// <summary>Một kho kèm kế hoạch và quyền dịch vụ, có theo dõi thay đổi để cập nhật.</summary>
     Task<Vault?> FindVaultWithEntitlementAsync(Guid vaultId, CancellationToken ct);
 
@@ -37,23 +34,20 @@ public interface IDevToolsRepository
     Task<List<PaymentOrder>> ListPendingPaymentOrdersAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>Đánh dấu xóa dữ liệu eKYC; lưu khi gọi IUnitOfWork.SaveChangesAsync.</summary>
-    void RemoveEkycData(
-        List<EkycVerification> verifications, List<EkycConsent> consents,
-        OwnerIdentity? identity, List<OwnerFaceTemplate> faceTemplates);
+    void RemoveEkycData(List<EkycVerification> verifications, List<EkycConsent> consents, OwnerIdentity? identity);
 
     /// <summary>Id kho của Owner; null khi tài khoản chưa tạo kho.</summary>
     Task<Guid?> FindVaultIdByOwnerAsync(Guid ownerId, CancellationToken ct);
 
     /// <summary>
-    /// Khóa lưu trữ của mọi tệp mã hóa gắn với kho: tài sản, trang giấy chứng tử, ảnh selfie báo còn sống,
-    /// ảnh CCCD tạm của người nhận trong các lượt bàn giao. Không trùng lặp.
+    /// Khóa lưu trữ của mọi tệp mã hóa gắn với kho: tài sản, trang giấy chứng tử, ảnh selfie báo còn sống. Không trùng lặp.
     /// </summary>
-    Task<List<string>> ListVaultStorageKeysAsync(Guid vaultId, Guid ownerId, CancellationToken ct);
+    Task<List<string>> ListVaultStorageKeysAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>
     /// Xóa ngay kho và mọi dữ liệu gắn với kho, theo thứ tự khóa ngoại (bảng con trước).
     /// Chạy lệnh DELETE trực tiếp, không qua theo dõi thay đổi; cần gọi trong transaction của service.
     /// Không xóa tệp trong kho lưu trữ.
     /// </summary>
-    Task DeleteVaultAsync(Guid vaultId, Guid ownerId, CancellationToken ct);
+    Task DeleteVaultAsync(Guid vaultId, CancellationToken ct);
 }

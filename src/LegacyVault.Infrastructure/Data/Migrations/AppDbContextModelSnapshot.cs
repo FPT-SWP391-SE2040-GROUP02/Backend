@@ -885,14 +885,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<double?>("FaceMatchScore")
                         .HasColumnType("float");
 
-                    b.Property<Guid?>("HandoverTurnId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("IdentityMatch")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
                     b.Property<bool>("LivenessPassed")
                         .HasColumnType("bit");
 
@@ -2015,10 +2007,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.HasIndex("VaultId", "Status");
 
-                    b.HasIndex("VaultId", "Type", "Scope", "TargetId")
-                        .IsUnique()
-                        .HasFilter("[Status] = 'Active' AND [Type] = 'OwnerAlive'");
-
                     b.ToTable("Holds", (string)null);
                 });
 
@@ -2055,57 +2043,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasIndex("IpRange", "WindowStartedAt");
 
                     b.ToTable("LoginThrottles", (string)null);
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.OwnerFaceTemplate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("Dimension")
-                        .HasColumnType("int");
-
-                    b.Property<byte[]>("EmbeddingEncrypted")
-                        .IsRequired()
-                        .HasColumnType("varbinary(max)");
-
-                    b.Property<string>("EncryptionKeyId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(64)");
-
-                    b.Property<string>("ModelName")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(32)");
-
-                    b.Property<Guid>("SourceVerificationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("int");
-
-                    b.Property<byte[]>("WrappedDataKey")
-                        .IsRequired()
-                        .HasMaxLength(60)
-                        .HasColumnType("binary(60)")
-                        .IsFixedLength();
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "Version")
-                        .IsUnique();
-
-                    b.ToTable("OwnerFaceTemplates", (string)null);
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.OwnerIdentity", b =>
@@ -3384,17 +3321,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasForeignKey("VaultId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.OwnerFaceTemplate", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.OwnerIdentity", b =>

@@ -10,8 +10,6 @@ public sealed class EkycDocumentConfirmationRequest
     [Required]
     public string Purpose { get; set; } = string.Empty;
 
-    public Guid? HandoverTurnId { get; set; }
-
     [Required, RegularExpression("^[0-9]{12}$")]
     public string IdNumber { get; set; } = string.Empty;
 

@@ -26,7 +26,7 @@ public sealed class OwnerIdentityBindingTests
     private readonly FakeEkycBeneficiaryRepository beneficiaries = new FakeEkycBeneficiaryRepository();
     private readonly FakeBeneficiaryDataProtector beneficiaryProtector = new FakeBeneficiaryDataProtector();
     private readonly FakeOwnerIdentityRepository identities = new FakeOwnerIdentityRepository();
-    private readonly OwnerIdentityProtector identityProtector = FaceTemplateTestSupport.CreateIdentityProtector();
+    private readonly OwnerIdentityProtector identityProtector = OwnerIdentityTestSupport.CreateIdentityProtector();
     private readonly FakeEkycClient client = new FakeEkycClient();
     private readonly FixedTimeProvider clock = new FixedTimeProvider(Now);
     private readonly InMemoryAssetContentStore contentStore = new InMemoryAssetContentStore();
@@ -36,9 +36,8 @@ public sealed class OwnerIdentityBindingTests
     public OwnerIdentityBindingTests()
     {
         currentUser.UserId = userId;
-        service = new EkycService(currentUser, repository, consentRepository, new FakeHandoverRepository(),
-            beneficiaries, beneficiaryProtector, new FakeOwnerFaceTemplateRepository(),
-            FaceTemplateTestSupport.CreateProtector(), identities, identityProtector, client,
+        service = new EkycService(currentUser, repository, consentRepository,
+            beneficiaries, beneficiaryProtector, identities, identityProtector, client,
             new FakeUnitOfWork(), clock, contentStore, new EkycOptions());
         AddConsent(EkycPurpose.OwnerEnrollment);
     }
@@ -72,7 +71,7 @@ public sealed class OwnerIdentityBindingTests
 
     private Task<EkycDocumentResponse> SubmitDocumentAsync()
     {
-        return service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        return service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
     }
 
     /// <summary>Đăng ký trọn vẹn một lượt (đọc giấy tờ → thử thách camera → chốt) với danh tính mặc định của FakeEkycClient.</summary>
@@ -298,19 +297,6 @@ public sealed class OwnerIdentityBindingTests
         Assert.Empty(repository.Verifications);
     }
 
-    [Fact]
-    public async Task OtherPurpose_DoesNotNeedOrKeepIdentity()
-    {
-        AddConsent(EkycPurpose.OwnerAlive);
-        consentRepository.Consents[1].ConsentedAt = Now.AddSeconds(1);
-        client.Reading = Reading(string.Empty, string.Empty, string.Empty, "token-5");
-
-        await SubmitDocumentAsync();
-
-        EkycVerification verification = Assert.Single(repository.Verifications);
-        Assert.Null(verification.EnrollmentIdentityEncrypted);
-    }
-
     /// <summary>Ảnh có chữ ký JPEG thật (BR-48 sửa: chỉ lưu ảnh JPEG/PNG/WebP theo nội dung).</summary>
     private static byte[] JpegBytes()
     {
@@ -319,7 +305,7 @@ public sealed class OwnerIdentityBindingTests
 
     private Task<EkycDocumentResponse> SubmitJpegDocumentAsync()
     {
-        return service.SubmitDocumentAsync(new MemoryStream(JpegBytes()), "front.jpg", "image/jpeg", null, CancellationToken.None);
+        return service.SubmitDocumentAsync(new MemoryStream(JpegBytes()), "front.jpg", "image/jpeg", CancellationToken.None);
     }
 
     [Fact]
@@ -381,19 +367,6 @@ public sealed class OwnerIdentityBindingTests
     public async Task Document_NotAnImageByContent_KeepsNoImage()
     {
         await SubmitDocumentAsync();
-
-        Assert.Null(Assert.Single(repository.Verifications).PendingDocumentImageStorageKey);
-        Assert.Empty(contentStore.Contents);
-    }
-
-    [Fact]
-    public async Task OtherPurpose_DoesNotKeepDocumentImage()
-    {
-        AddConsent(EkycPurpose.OwnerAlive);
-        consentRepository.Consents[1].ConsentedAt = Now.AddSeconds(1);
-        client.Reading = Reading(string.Empty, string.Empty, string.Empty, "token-5");
-
-        await SubmitJpegDocumentAsync();
 
         Assert.Null(Assert.Single(repository.Verifications).PendingDocumentImageStorageKey);
         Assert.Empty(contentStore.Contents);

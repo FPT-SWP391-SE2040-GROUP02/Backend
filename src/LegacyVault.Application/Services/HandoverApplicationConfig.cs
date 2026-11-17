@@ -18,7 +18,6 @@ public static class HandoverApplicationConfig
         services.AddScoped<IHandoverDownloadService, HandoverDownloadService>();
         services.AddScoped<IHandoverJob, HandoverJob>();
         services.AddScoped<IHandoverInvitationRetryJob, HandoverInvitationRetryJob>();
-        services.AddScoped<IHandoverIdentityService, HandoverIdentityService>();
         services.AddScoped<IHandoverKeyMailService, HandoverKeyMailService>();
         services.AddScoped<IExecutorDeclinePaperService, ExecutorDeclinePaperService>();
         return services;
