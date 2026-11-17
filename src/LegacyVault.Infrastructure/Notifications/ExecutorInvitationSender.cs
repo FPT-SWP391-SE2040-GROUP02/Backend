@@ -1,3 +1,4 @@
+using System.Globalization;
 using LegacyVault.Application.Notifications;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -111,7 +112,7 @@ public sealed class ExecutorInvitationSender(
             "Anh/chị có thể nhận lời hoặc từ chối. Chủ kho sẽ được báo lại lựa chọn của anh/chị."));
 
         string notice = "Lời mời có hiệu lực đến "
-            + expiresAt.ToOffset(TimeSpan.FromHours(7)).ToString("HH:mm 'ngày' dd/MM/yyyy")
+            + expiresAt.ToOffset(TimeSpan.FromHours(7)).ToString("HH:mm 'ngày' dd/MM/yyyy", CultureInfo.InvariantCulture)
             + ". Không chuyển tiếp liên kết này cho người khác.";
         if (hasOwner && !assignedByAdmin)
         {

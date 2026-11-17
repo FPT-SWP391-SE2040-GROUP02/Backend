@@ -14,5 +14,11 @@ public class DevClockResponse
     /// <summary>REAL_TIME (thời gian thực) | SHIFTED (đã tua, chưa về thời gian hiện tại).</summary>
     public string ClockState { get; set; } = string.Empty;
 
+    /// <summary>Số thư nhắc trễ tối đa của kỳ đang mở (chốt lúc mở kỳ); không có kỳ đang mở thì null.</summary>
+    public int? MaxLateReminders { get; set; }
+
+    /// <summary>Số ngày giữa hai thư nhắc trễ của kỳ đang mở; không có kỳ đang mở thì null.</summary>
+    public int? LateReminderGapDays { get; set; }
+
     public List<DevMilestoneResponse> Milestones { get; set; } = new List<DevMilestoneResponse>();
 }

@@ -15,6 +15,12 @@ public static class DevToolsRules
     public const string ServiceExpired = "SERVICE_EXPIRED";
     public const string RecipientDecisionEnded = "RECIPIENT_DECISION_ENDED";
 
+    /// <summary>Tiền tố mốc thư nhắc trước hạn thứ n (DUE_REMINDER_1 là thư xa hạn nhất).</summary>
+    public const string DueReminderPrefix = "DUE_REMINDER_";
+
+    /// <summary>Tiền tố mốc thư nhắc trễ lần n, từ lần 2 (lần 1 gửi đúng lúc quá hạn nên là mốc CHECKIN_OVERDUE).</summary>
+    public const string LateReminderPrefix = "LATE_REMINDER_";
+
     public const string Available = "AVAILABLE";
     public const string Passed = "PASSED";
     public const string NotApplicable = "NOT_APPLICABLE";
@@ -61,15 +67,126 @@ public static class DevToolsRules
         return lastCheckInAt;
     }
 
-    /// <summary>Thứ tự mốc hiển thị trên màn hình, từ trên xuống.</summary>
+    /// <summary>Thứ tự mốc với số thư nhắc tối đa (5 thư trước hạn, 5 thư nhắc trễ); dùng để kiểm tên mốc.</summary>
     public static List<string> AllMilestones()
     {
+        return AllMilestones(CheckInRules.MaxDueRemindersLimit, CheckInRules.MaxLateRemindersLimit);
+    }
+
+    /// <summary>
+    /// Thứ tự mốc hiển thị trên màn hình, từ trên xuống: các thư nhắc trước hạn, quá hạn (thư nhắc trễ lần 1),
+    /// các thư nhắc trễ còn lại, hết thời gian chờ, hết hạn dịch vụ, hết hạn quyết định của người nhận.
+    /// </summary>
+    public static List<string> AllMilestones(int dueReminders, int maxLateReminders)
+    {
         List<string> keys = new List<string>();
+        for (int i = 1; i <= dueReminders && i <= CheckInRules.MaxDueRemindersLimit; i++)
+        {
+            keys.Add(DueReminderPrefix + i);
+        }
         keys.Add(CheckInOverdue);
+        for (int i = 2; i <= maxLateReminders && i <= CheckInRules.MaxLateRemindersLimit; i++)
+        {
+            keys.Add(LateReminderPrefix + i);
+        }
         keys.Add(GraceEnded);
         keys.Add(ServiceExpired);
         keys.Add(RecipientDecisionEnded);
         return keys;
+    }
+
+    /// <summary>
+    /// Mốc thư nhắc của một tên mốc: DUE_REMINDER_n là thư trước hạn thứ n, CHECKIN_OVERDUE là thư nhắc trễ lần 1,
+    /// LATE_REMINDER_n là thư nhắc trễ lần n. Tên mốc khác (hoặc số ngoài khoảng) → null.
+    /// </summary>
+    public static CheckInReminderKind? ReminderKindOf(string key)
+    {
+        if (key == CheckInOverdue)
+        {
+            return CheckInReminderKind.LateReminder1;
+        }
+        int number = NumberAfter(key, DueReminderPrefix);
+        if (number >= 1 && number <= CheckInRules.MaxDueRemindersLimit)
+        {
+            return CheckInTimeline.DueReminderKind(number);
+        }
+        number = NumberAfter(key, LateReminderPrefix);
+        if (number >= 2 && number <= CheckInRules.MaxLateRemindersLimit)
+        {
+            return CheckInTimeline.LateReminderKind(number);
+        }
+        return null;
+    }
+
+    private static int NumberAfter(string key, string prefix)
+    {
+        if (!key.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return 0;
+        }
+        int number;
+        if (int.TryParse(key.Substring(prefix.Length), out number))
+        {
+            return number;
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Khoảng cần dời cả kỳ điểm danh về quá khứ để mốc nhắc vừa tới (trước thời điểm hiện tại một chút).
+    /// Dời lúc bắt đầu, hạn và hết thời gian chờ cùng một khoảng nên lịch nhắc của kỳ giữ nguyên.
+    /// Mốc đã tới thì trả TimeSpan.Zero.
+    /// </summary>
+    public static TimeSpan ShiftToReach(DateTimeOffset milestoneAt, DateTimeOffset now)
+    {
+        DateTimeOffset target = now - PastMargin;
+        if (milestoneAt <= target)
+        {
+            return TimeSpan.Zero;
+        }
+        return milestoneAt - target;
+    }
+
+    /// <summary>
+    /// Mốc thư nhắc (trước hạn hoặc nhắc trễ) của kỳ đang mở: tua được khi kế hoạch còn ở giai đoạn điểm danh và mốc
+    /// chưa tới; đã tới mốc hoặc đã qua giai đoạn điểm danh là đã qua. dueDaysBeforeDue là số ngày của các thư trước hạn.
+    /// </summary>
+    public static DevMilestoneResponse EvaluateReminder(
+        string key, PlanStatus status, CheckInPeriod? openPeriod, DateTimeOffset now, IReadOnlyList<int> dueDaysBeforeDue)
+    {
+        CheckInReminderKind kind = ReminderKindOf(key)!.Value;
+        int duePosition = CheckInTimeline.DueReminderPosition(kind);
+        DevMilestoneResponse result;
+        if (status == PlanStatus.AwaitingCheck || IsBeyondCheckIn(status))
+        {
+            result = Build(key, Passed, string.Empty);
+        }
+        else if ((status != PlanStatus.Active && status != PlanStatus.CheckinOverdue) || openPeriod == null)
+        {
+            result = Build(key, NotApplicable, "Kế hoạch chưa kích hoạt nên chưa có kỳ điểm danh.");
+        }
+        else if (duePosition > 0 && status != PlanStatus.Active)
+        {
+            result = Build(key, Passed, string.Empty);
+        }
+        else
+        {
+            DateTimeOffset at = CheckInTimeline.MilestoneAt(
+                kind, openPeriod.DueAt, openPeriod.LateReminderGapDays, dueDaysBeforeDue);
+            if (at <= now)
+            {
+                result = Build(key, Passed, string.Empty);
+            }
+            else
+            {
+                result = Build(key, Available, string.Empty);
+            }
+        }
+        if (duePosition > 0 && duePosition <= dueDaysBeforeDue.Count)
+        {
+            result.DaysBeforeDue = dueDaysBeforeDue[duePosition - 1];
+        }
+        return result;
     }
 
     public static bool IsKnownMilestone(string key)

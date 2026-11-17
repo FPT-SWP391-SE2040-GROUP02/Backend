@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using LegacyVault.Application.Services;
 using Microsoft.Extensions.Configuration;
@@ -23,7 +24,7 @@ public sealed class ExecutorReminderSender(SmtpMailSender sender, IOptions<SmtpS
         {
             return false;
         }
-        string deadline = expiresAt.ToOffset(VietnamOffset).ToString("HH:mm 'ngày' dd/MM/yyyy");
+        string deadline = expiresAt.ToOffset(VietnamOffset).ToString("HH:mm 'ngày' dd/MM/yyyy", CultureInfo.InvariantCulture);
         string text = $"Bạn có lời mời làm Executor trên LegacyVault chưa trả lời, hết hạn lúc {deadline}. "
             + "Hãy mở liên kết trong thư mời trước đó để chấp nhận hoặc từ chối; nếu không còn thư đó, nhờ người mời gửi lại lời mời. "
             + "Bỏ qua thư này nếu bạn không biết người mời.";

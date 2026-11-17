@@ -16,8 +16,8 @@ public sealed class JwtTokenService : ITokenService
     private readonly JwtSettings _settings;
     private readonly TimeProvider _timeProvider;
 
-    /// <param name="timeProvider">Đồng hồ đăng nhập (AuthClock): mặc định giờ thật, không theo nút Tua thời gian.</param>
-    public JwtTokenService(IOptions<JwtSettings> options, [FromKeyedServices(AuthClock.ServiceKey)] TimeProvider timeProvider)
+    /// <param name="timeProvider">Đồng hồ hệ thống.</param>
+    public JwtTokenService(IOptions<JwtSettings> options, TimeProvider timeProvider)
     {
         _settings = options.Value;
         _timeProvider = timeProvider;

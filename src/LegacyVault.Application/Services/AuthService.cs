@@ -36,8 +36,7 @@ public sealed class AuthService : IAuthService
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         ICurrentUser currentUser,
-        // Đồng hồ đăng nhập: mặc định giờ thật, không theo nút Tua thời gian (xem AuthClock).
-        [FromKeyedServices(AuthClock.ServiceKey)] TimeProvider timeProvider,
+        TimeProvider timeProvider,
         ITwoFactorService? twoFactorService = null,
         ISessionRevocationValidator? sessionValidator = null,
         ILogger<AuthService>? logger = null,
