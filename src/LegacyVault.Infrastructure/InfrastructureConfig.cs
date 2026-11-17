@@ -48,18 +48,10 @@ public static class InfrastructureConfig
         return services;
     }
 
-    /// <summary>Đồng hồ thật hoặc đồng hồ ảo để demo, và công cụ chạy job một lần.</summary>
+    /// <summary>Đồng hồ hệ thống: luôn là giờ thật. Demo chuyển trạng thái bằng Công cụ thử nghiệm (dời hạn của từng kho).</summary>
     private static void AddClocks(IServiceCollection services)
     {
-        // Đồng hồ: Development/Staging dùng DemoClock (nút "Tua thời gian" để demo), môi trường khác giữ TimeProvider.System.
-        services.AddSingleton<DemoClock>();
-        services.AddSingleton<TimeProvider>(provider => ChooseTimeProvider(provider));
-        services.AddSingleton<IDemoClock>(provider => ChooseDemoClock(provider));
-        // Đồng hồ của phần đăng nhập: giờ thật, hoặc giờ ảo khi Admin bật Time.AuthFollowsDemoClock (xem AuthClock).
-        services.AddKeyedSingleton<TimeProvider>(AuthClock.ServiceKey, (provider, key) => CreateAuthClock(provider));
-        services.AddHostedService<DemoClockLoader>();
-        services.AddScoped<IDemoClockRepository, DemoClockRepository>();
-        services.AddScoped<IDemoJobRunner, DemoJobRunner>();
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
     }
 
     /// <summary>Chuỗi kết nối, AppDbContext, kiểm tra sức khỏe và IUnitOfWork.</summary>
@@ -350,11 +342,11 @@ public static class InfrastructureConfig
                 };
             });
 
-        // Kiểm hạn token theo cùng đồng hồ với lúc tạo token (AuthClock): mặc định giờ thật nên tua thời gian không làm văng phiên.
+        // Kiểm hạn token theo cùng đồng hồ với lúc tạo token.
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<IServiceProvider>((options, provider) =>
             {
-                TimeProvider timeProvider = provider.GetRequiredKeyedService<TimeProvider>(AuthClock.ServiceKey);
+                TimeProvider timeProvider = provider.GetRequiredService<TimeProvider>();
                 options.TokenValidationParameters.LifetimeValidator =
                     (notBefore, expires, token, parameters) => ValidateTokenLifetime(timeProvider, notBefore, expires, parameters);
             });
@@ -461,41 +453,6 @@ public static class InfrastructureConfig
             throw expired;
         }
         return true;
-    }
-
-    /// <summary>Chỉ Development và Staging được dùng đồng hồ DEMO; Production luôn dùng giờ thật.</summary>
-    private static bool IsDemoClockEnvironment(IServiceProvider provider)
-    {
-        IHostEnvironment environment = provider.GetRequiredService<IHostEnvironment>();
-        if (environment.IsDevelopment() || environment.IsEnvironment("Staging"))
-        {
-            return true;
-        }
-        return false;
-    }
-
-    private static TimeProvider ChooseTimeProvider(IServiceProvider provider)
-    {
-        if (IsDemoClockEnvironment(provider))
-        {
-            return provider.GetRequiredService<DemoClock>();
-        }
-        return TimeProvider.System;
-    }
-
-    private static TimeProvider CreateAuthClock(IServiceProvider provider)
-    {
-        TimeProvider systemClock = provider.GetRequiredService<TimeProvider>();
-        return new AuthClock(systemClock);
-    }
-
-    private static IDemoClock ChooseDemoClock(IServiceProvider provider)
-    {
-        if (IsDemoClockEnvironment(provider))
-        {
-            return provider.GetRequiredService<DemoClock>();
-        }
-        return new DisabledDemoClock();
     }
 
     private static IAssetContentStore ChooseAssetContentStore(IServiceProvider provider)

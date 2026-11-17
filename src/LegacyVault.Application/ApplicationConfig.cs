@@ -78,8 +78,6 @@ public static class ApplicationConfig
         services.AddScoped<IExtraMailJob, ExtraMailJob>();
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsService, DevToolsService>();
-        // Nút "Tua thời gian" để demo (controller chỉ mở ở Development/Staging)
-        services.AddScoped<IDemoClockService, DemoClockService>();
         // Chế độ bảo trì: chặn tài khoản không phải Admin ở đăng nhập, làm mới phiên và middleware API
         services.AddScoped<MaintenanceModeGuard>();
         return services;

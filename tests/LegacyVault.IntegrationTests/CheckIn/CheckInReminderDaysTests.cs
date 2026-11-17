@@ -322,30 +322,6 @@ public sealed class CheckInReminderDaysTests
     }
 
     [Fact]
-    public void DemoClock_CustomDays_MilestonesFollowTheAdminSetting()
-    {
-        // Chuẩn bị
-        DemoOpenPeriod period = new DemoOpenPeriod();
-        period.DueAt = Due;
-        period.GraceEndsAt = GraceEnds;
-        period.MaxLateReminders = 3;
-        period.LateReminderGapDays = 3;
-        List<DemoOpenPeriod> periods = new List<DemoOpenPeriod> { period };
-        List<DemoDeadline> milestones = new List<DemoDeadline>();
-
-        // Hành động
-        WithSettings(Days("3", "1"), () =>
-        {
-            milestones = DemoClockRules.CheckInMilestones(periods, Start, Due);
-        });
-
-        // Kiểm tra: mốc thứ nhất là trước hạn 3 ngày chứ không phải 7 ngày.
-        Assert.Contains(milestones, m => m.At == Due.AddDays(-3));
-        Assert.Contains(milestones, m => m.At == Due.AddDays(-1));
-        Assert.DoesNotContain(milestones, m => m.At == Due.AddDays(-7));
-    }
-
-    [Fact]
     public void Email_CustomDays_SubjectsSayTheRealNumberOfDays()
     {
         // Hành động

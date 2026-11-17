@@ -70,13 +70,15 @@ public sealed class DevToolsService(
         bool runEntitlementExpiry = false;
         List<Guid> turnsToExpire = new List<Guid>();
 
-        if (key == DevToolsRules.CheckInOverdue || key == DevToolsRules.GraceEnded)
+        CheckInReminderKind? reminderKind = DevToolsRules.ReminderKindOf(key);
+        if (reminderKind != null || key == DevToolsRules.GraceEnded)
         {
             CheckInPeriod? period = await repository.FindOpenPeriodAsync(vault.Plan.Id, ct);
+            IReadOnlyList<int> dueDays = CheckInRules.DueReminderDays;
             DevMilestoneResponse state;
-            if (key == DevToolsRules.CheckInOverdue)
+            if (reminderKind != null)
             {
-                state = DevToolsRules.EvaluateCheckInOverdue(vault.Plan.Status, period, now);
+                state = DevToolsRules.EvaluateReminder(key, vault.Plan.Status, period, now, dueDays);
             }
             else
             {
@@ -84,10 +86,16 @@ public sealed class DevToolsService(
             }
             EnsureAvailable(state);
 
-            // Mốc 1 chỉ qua hạn điểm danh, thời gian chờ vẫn còn. Mốc 2 cho qua luôn thời gian chờ.
-            if (key == DevToolsRules.CheckInOverdue)
+            if (reminderKind != null)
             {
-                period!.DueAt = past;
+                // Mốc thư nhắc: dời cả kỳ về quá khứ đúng một khoảng để mốc này vừa tới. Lịch nhắc và thời gian chờ
+                // của kỳ giữ nguyên; job điểm danh gửi thư của mốc này (và sang quá hạn nếu đã tới hạn).
+                DateTimeOffset at = CheckInTimeline.MilestoneAt(
+                    reminderKind.Value, period!.DueAt, period.LateReminderGapDays, dueDays);
+                TimeSpan shift = DevToolsRules.ShiftToReach(at, now);
+                period.StartedAt = period.StartedAt - shift;
+                period.DueAt = period.DueAt - shift;
+                period.GraceEndsAt = period.GraceEndsAt - shift;
             }
             else
             {
@@ -460,7 +468,21 @@ public sealed class DevToolsService(
         response.PlanStatus = status.ToApiString();
         response.CheckInState = DevToolsRules.GetCheckInState(status, period, now);
         response.ClockState = DevToolsRules.GetClockState(latestClockAction);
-        response.Milestones.Add(DevToolsRules.EvaluateCheckInOverdue(status, period, now));
+        IReadOnlyList<int> dueDays = CheckInRules.DueReminderDays;
+        int maxLate = CheckInRules.MaxLateReminders;
+        if (period != null)
+        {
+            maxLate = period.MaxLateReminders;
+            response.MaxLateReminders = period.MaxLateReminders;
+            response.LateReminderGapDays = period.LateReminderGapDays;
+        }
+        foreach (string key in DevToolsRules.AllMilestones(dueDays.Count, maxLate))
+        {
+            if (DevToolsRules.ReminderKindOf(key) != null)
+            {
+                response.Milestones.Add(DevToolsRules.EvaluateReminder(key, status, period, now, dueDays));
+            }
+        }
         response.Milestones.Add(DevToolsRules.EvaluateGraceEnded(status, period, now));
         response.Milestones.Add(DevToolsRules.EvaluateServiceExpired(vault.Entitlement));
         List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);

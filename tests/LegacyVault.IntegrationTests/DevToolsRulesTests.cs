@@ -112,11 +112,79 @@ public sealed class DevToolsRulesTests
     }
 
     [Fact]
-    public void IsKnownMilestone_AcceptsOnlyFourKeys()
+    public void IsKnownMilestone_AcceptsReminderKeysWithinLimits()
     {
         // Kiểm tra
         Assert.True(DevToolsRules.IsKnownMilestone(DevToolsRules.CheckInOverdue));
+        Assert.True(DevToolsRules.IsKnownMilestone("DUE_REMINDER_1"));
+        Assert.True(DevToolsRules.IsKnownMilestone("LATE_REMINDER_5"));
+        Assert.False(DevToolsRules.IsKnownMilestone("LATE_REMINDER_1"));
+        Assert.False(DevToolsRules.IsKnownMilestone("DUE_REMINDER_6"));
         Assert.False(DevToolsRules.IsKnownMilestone("TOMORROW"));
+    }
+
+    [Fact]
+    public void AllMilestones_FollowsReminderCounts()
+    {
+        // Hành động
+        List<string> keys = DevToolsRules.AllMilestones(2, 3);
+
+        // Kiểm tra
+        Assert.Equal(new List<string>
+        {
+            "DUE_REMINDER_1", "DUE_REMINDER_2", "CHECKIN_OVERDUE", "LATE_REMINDER_2", "LATE_REMINDER_3",
+            "GRACE_ENDED", "SERVICE_EXPIRED", "RECIPIENT_DECISION_ENDED",
+        }, keys);
+    }
+
+    [Fact]
+    public void Reminder_DueReminderAhead_IsAvailableWithDays()
+    {
+        // Chuẩn bị: hạn còn 10 ngày, thư trước hạn 7 ngày chưa tới.
+        CheckInPeriod period = Period(10, 19);
+
+        // Hành động
+        DevMilestoneResponse result = DevToolsRules.EvaluateReminder(
+            "DUE_REMINDER_1", PlanStatus.Active, period, Now, new int[] { 7, 1 });
+
+        // Kiểm tra
+        Assert.Equal(DevToolsRules.Available, result.State);
+        Assert.Equal(7, result.DaysBeforeDue);
+    }
+
+    [Fact]
+    public void Reminder_DueReminderWhenOverdue_IsPassed()
+    {
+        // Hành động
+        DevMilestoneResponse result = DevToolsRules.EvaluateReminder(
+            "DUE_REMINDER_2", PlanStatus.CheckinOverdue, Period(-1, 8), Now, new int[] { 7, 1 });
+
+        // Kiểm tra
+        Assert.Equal(DevToolsRules.Passed, result.State);
+    }
+
+    [Fact]
+    public void Reminder_SecondLateReminderAfterGap_IsPassed()
+    {
+        // Chuẩn bị: quá hạn 4 ngày, thư nhắc trễ cách nhau 3 ngày nên lần 2 đã tới, lần 3 chưa.
+        CheckInPeriod period = Period(-4, 5);
+
+        // Kiểm tra
+        Assert.Equal(DevToolsRules.Passed, DevToolsRules.EvaluateReminder(
+            "LATE_REMINDER_2", PlanStatus.CheckinOverdue, period, Now, new int[] { 7, 1 }).State);
+        Assert.Equal(DevToolsRules.Available, DevToolsRules.EvaluateReminder(
+            "LATE_REMINDER_3", PlanStatus.CheckinOverdue, period, Now, new int[] { 7, 1 }).State);
+    }
+
+    [Fact]
+    public void ShiftToReach_MovesMilestoneJustBeforeNow()
+    {
+        // Hành động
+        TimeSpan shift = DevToolsRules.ShiftToReach(Now.AddDays(3), Now);
+
+        // Kiểm tra
+        Assert.Equal(Now - DevToolsRules.PastMargin, Now.AddDays(3) - shift);
+        Assert.Equal(TimeSpan.Zero, DevToolsRules.ShiftToReach(Now.AddDays(-1), Now));
     }
 
     [Fact]

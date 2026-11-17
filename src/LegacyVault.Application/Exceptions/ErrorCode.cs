@@ -117,8 +117,6 @@ public enum ErrorCode
     SettingNotFound,
     /// <summary>503: hệ thống đang bảo trì, chỉ tài khoản Quản trị viên được đăng nhập và gọi API.</summary>
     MaintenanceMode,
-    /// <summary>409: đang có một lần tua thời gian (DEMO) khác chạy, chờ xong rồi thử lại.</summary>
-    DemoClockBusy,
     /// <summary>404: mã tỉnh/thành phố không có trong danh mục đơn vị hành chính.</summary>
     AdministrativeUnitNotFound,
     /// <summary>403: tài khoản đang đăng nhập không đúng email mà Chủ kho đã mời nhận gói; kèm invitedEmailMasked (email đã che bớt).</summary>
