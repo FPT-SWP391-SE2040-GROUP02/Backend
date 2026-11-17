@@ -20,13 +20,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .ToListAsync(ct);
     }
 
-    public Task<Vault?> FindVaultAsync(Guid vaultId, CancellationToken ct)
-    {
-        return context.Set<Vault>()
-            .Include(v => v.Plan)
-            .FirstOrDefaultAsync(v => v.Id == vaultId, ct);
-    }
-
     public Task<Vault?> FindVaultWithEntitlementAsync(Guid vaultId, CancellationToken ct)
     {
         return context.Set<Vault>()
@@ -57,15 +50,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
     {
         return context.Set<CheckInSchedule>()
             .Where(s => s.PlanId == planId)
-            .FirstOrDefaultAsync(ct);
-    }
-
-    public Task<DeathCase?> FindOpenDeathCaseAsync(Guid vaultId, CancellationToken ct)
-    {
-        return context.Set<DeathCase>()
-            .Where(d => d.VaultId == vaultId && d.ClosedAt == null && d.Status != DeathCaseStatus.Rejected)
-            .OrderByDescending(d => d.CreatedAt)
-            .ThenBy(d => d.Id)
             .FirstOrDefaultAsync(ct);
     }
 

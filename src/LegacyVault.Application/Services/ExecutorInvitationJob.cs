@@ -1,4 +1,3 @@
-using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;

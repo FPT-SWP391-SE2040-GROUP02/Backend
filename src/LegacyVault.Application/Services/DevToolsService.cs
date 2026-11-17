@@ -280,7 +280,7 @@ public sealed class DevToolsService(
                 $"Ngưỡng so khớp phải nằm trong dải an toàn từ {DevToolsRules.EkycThresholdMin:0.00} đến {DevToolsRules.EkycThresholdMax:0.00}.");
         }
 
-        // Override runtime trong bộ nhớ: EkycService/OwnerFaceVerifier đọc CurrentThreshold sau thay đổi;
+        // Override runtime trong bộ nhớ: EkycService đọc CurrentThreshold sau thay đổi;
         // không ghi DB nên khởi động lại là về DefaultThreshold.
         double previous = ekycOptions.CurrentThreshold;
         ekycOptions.SetThreshold(threshold);

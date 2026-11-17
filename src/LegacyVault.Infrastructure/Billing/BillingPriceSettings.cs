@@ -145,15 +145,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         return slots.Value;
     }
 
-    public bool HasTierPrice(ServiceTier tier, int years)
-    {
-        if (!saleYears.Contains(years))
-        {
-            return false;
-        }
-        return SectionOf(tier).Get(years) > 0;
-    }
-
     public long GetTierPrice(ServiceTier tier, int years)
     {
         BillingTierPricesSection section = SectionOf(tier);

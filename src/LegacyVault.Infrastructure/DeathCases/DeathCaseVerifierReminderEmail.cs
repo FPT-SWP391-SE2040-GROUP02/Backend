@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net;
 using LegacyVault.Infrastructure.Notifications;
 
 namespace LegacyVault.Infrastructure.DeathCases;

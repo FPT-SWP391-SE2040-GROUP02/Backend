@@ -27,22 +27,4 @@ public static class PlanCodes
         }
         return Free;
     }
-
-    /// <summary>Hạng enum tương ứng với một mã gói: gói gốc giữ hạng riêng, mọi gói khác là Custom.</summary>
-    public static ServiceTier TierOf(string planCode)
-    {
-        if (planCode == Xs)
-        {
-            return ServiceTier.Xs;
-        }
-        if (planCode == XsMax)
-        {
-            return ServiceTier.XsMax;
-        }
-        if (planCode == Free)
-        {
-            return ServiceTier.Free;
-        }
-        return ServiceTier.Custom;
-    }
 }

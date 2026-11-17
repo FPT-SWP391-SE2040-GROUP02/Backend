@@ -58,28 +58,8 @@ public static class BillingPrices
     /// <summary>Lượt eKYC Owner phải đạt trong vòng 90 ngày mới được mua mới (§8.3).</summary>
     public static readonly TimeSpan OwnerEkycValidity = TimeSpan.FromDays(90);
 
-    /// <summary>Các số năm được bán.</summary>
-    public static readonly int[] SupportedYears = new int[] { 1, 3, 5 };
-
     /// <summary>Các hạng được bán; Free không có đơn (§8.1).</summary>
     public static readonly ServiceTier[] SellableTiers = new ServiceTier[] { ServiceTier.Xs, ServiceTier.XsMax };
-
-    public static bool IsSellableTier(ServiceTier tier)
-    {
-        return tier == ServiceTier.Xs || tier == ServiceTier.XsMax;
-    }
-
-    public static bool IsSupportedYears(int years)
-    {
-        for (int i = 0; i < SupportedYears.Length; i++)
-        {
-            if (SupportedYears[i] == years)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
 
     /// <summary>Dung lượng theo hạng. Free hoặc hạng lạ → ArgumentOutOfRangeException.</summary>
     public static long GetStorageQuotaBytes(ServiceTier tier)

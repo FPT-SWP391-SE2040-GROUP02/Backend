@@ -38,9 +38,6 @@ public interface IBillingPriceSettings
     /// <summary>Các kỳ (số năm) đang bán, tăng dần. Admin thêm, bớt hoặc tạm ngừng từng kỳ.</summary>
     IReadOnlyList<int> SaleYears { get; }
 
-    /// <summary>true khi kỳ này đang bán và hạng này có giá cho kỳ đó.</summary>
-    bool HasTierPrice(ServiceTier tier, int years);
-
     /// <summary>Dung lượng của hạng theo cấu hình hiện hành (Admin chỉnh được). Hạng không bán → ArgumentOutOfRangeException.</summary>
     long GetStorageQuotaBytes(ServiceTier tier);
 
