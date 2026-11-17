@@ -27,8 +27,7 @@ public sealed class LoginSessionIssuer
         IRefreshTokenRepository refreshTokenRepository,
         ITokenService tokenService,
         IUnitOfWork unitOfWork,
-        // Đồng hồ đăng nhập: mặc định giờ thật, không theo nút Tua thời gian (xem AuthClock).
-        [FromKeyedServices(AuthClock.ServiceKey)] TimeProvider timeProvider,
+        TimeProvider timeProvider,
         MaintenanceModeGuard? maintenanceGuard = null)
     {
         _refreshTokenRepository = refreshTokenRepository;

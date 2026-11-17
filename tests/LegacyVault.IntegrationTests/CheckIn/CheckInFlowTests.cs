@@ -358,6 +358,81 @@ public sealed class CheckInFlowTests : IAsyncLifetime
         }
     }
 
+    [SqlFact]
+    public async Task DevTools_StepThroughReminders_SendsEachReminderInOrder()
+    {
+        // Chuẩn bị: kế hoạch đang chạy, Owner vừa điểm danh để mở kỳ mới; Admin mở Công cụ thử nghiệm.
+        (HttpClient client, Guid vaultId, Guid planId) = await CreateVaultWithPlanAsync(PlanStatus.Active);
+        await client.PostAsync("/api/v1/check-ins", null);
+        Guid periodId = await FindOpenPeriodIdAsync(planId);
+        User admin = await LegacyVault.IntegrationTests.DeathCases.DeathCaseTestData.AddUserAsync(
+            factory, UserRole.Admin, UserStatus.Active);
+        HttpClient adminClient = factory.CreateClient();
+        ApiTestHelpers.AuthorizeAs(adminClient, factory.Services, admin);
+        string clockUrl = $"/api/v1/admin/dev-tools/vaults/{vaultId}/clock";
+        string travelUrl = $"/api/v1/admin/dev-tools/vaults/{vaultId}/time-travel";
+
+        // Kiểm tra: danh sách mốc có hai thư trước hạn, quá hạn, hai thư nhắc trễ còn lại rồi tới hết thời gian chờ.
+        JsonElement clock = await ApiTestHelpers.ReadJsonAsync(await adminClient.GetAsync(clockUrl));
+        List<string> keys = new List<string>();
+        foreach (JsonElement milestone in clock.GetProperty("milestones").EnumerateArray())
+        {
+            keys.Add(milestone.GetProperty("key").GetString()!);
+        }
+        Assert.Equal(new List<string>
+        {
+            "DUE_REMINDER_1", "DUE_REMINDER_2", "CHECKIN_OVERDUE", "LATE_REMINDER_2", "LATE_REMINDER_3",
+            "GRACE_ENDED", "SERVICE_EXPIRED", "RECIPIENT_DECISION_ENDED",
+        }, keys);
+        Assert.Equal(7, clock.GetProperty("milestones")[0].GetProperty("daysBeforeDue").GetInt32());
+        Assert.Equal(3, clock.GetProperty("maxLateReminders").GetInt32());
+
+        // Hành động 1: thư nhắc trước hạn 7 ngày.
+        HttpResponseMessage first = await adminClient.PostAsJsonAsync(travelUrl, new { milestone = "DUE_REMINDER_1" });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        await AssertLatestSentAsync(periodId, CheckInReminderKind.DueInSevenDays, PlanStatus.Active);
+
+        // Hành động 2: quá hạn, thư nhắc trễ lần 1.
+        await adminClient.PostAsJsonAsync(travelUrl, new { milestone = "CHECKIN_OVERDUE" });
+        await AssertLatestSentAsync(periodId, CheckInReminderKind.LateReminder1, PlanStatus.CheckinOverdue);
+
+        // Hành động 3: thư nhắc trễ lần 2, vẫn còn thời gian chờ.
+        JsonElement after = await ApiTestHelpers.ReadJsonAsync(
+            await adminClient.PostAsJsonAsync(travelUrl, new { milestone = "LATE_REMINDER_2" }));
+        await AssertLatestSentAsync(periodId, CheckInReminderKind.LateReminder2, PlanStatus.CheckinOverdue);
+        Assert.Equal("PASSED", FindState(after, "LATE_REMINDER_2"));
+        Assert.Equal("AVAILABLE", FindState(after, "LATE_REMINDER_3"));
+        Assert.Equal("AVAILABLE", FindState(after, "GRACE_ENDED"));
+
+        // Mốc đã qua thì không tua lại được.
+        HttpResponseMessage again = await adminClient.PostAsJsonAsync(travelUrl, new { milestone = "DUE_REMINDER_2" });
+        await ApiTestHelpers.AssertProblemAsync(again, HttpStatusCode.Conflict, "DEV_TOOL_NOT_ALLOWED");
+    }
+
+    private async Task AssertLatestSentAsync(Guid periodId, CheckInReminderKind kind, PlanStatus planStatus)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            CheckInPeriod period = await db.CheckInPeriods.AsNoTracking().Include(p => p.Plan)
+                .SingleAsync(p => p.Id == periodId);
+            Assert.Equal(planStatus, period.Plan.Status);
+            Assert.True(await db.CheckInReminders.AnyAsync(
+                r => r.PeriodId == periodId && r.Kind == kind && r.Status == CheckInReminderStatus.Sent));
+        });
+    }
+
+    private static string FindState(JsonElement clock, string key)
+    {
+        foreach (JsonElement milestone in clock.GetProperty("milestones").EnumerateArray())
+        {
+            if (milestone.GetProperty("key").GetString() == key)
+            {
+                return milestone.GetProperty("state").GetString()!;
+            }
+        }
+        throw new Xunit.Sdk.XunitException("Không thấy mốc " + key);
+    }
+
     private async Task SetPeriodDatesAsync(Guid planId, DateTimeOffset startedAt, DateTimeOffset dueAt, DateTimeOffset graceEndsAt)
     {
         await ApiTestHelpers.WithDbAsync(factory, async db =>

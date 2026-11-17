@@ -40,7 +40,6 @@ public static class SystemSettingRules
     {
         "Features.MaintenanceMode",
         "Time.DemoSeconds",
-        AuthClock.FollowDemoSettingKey,
     };
 
     /// <summary>Giá trị mặc định của các khóa nằm trong cặp phải đi cùng nhau, dùng khi chưa có dòng hoặc dòng bị tắt.</summary>
