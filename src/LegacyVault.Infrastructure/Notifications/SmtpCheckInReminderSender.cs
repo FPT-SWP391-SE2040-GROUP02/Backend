@@ -24,6 +24,6 @@ public sealed class SmtpCheckInReminderSender : ICheckInReminderSender
         DateTimeOffset dueAt, DateTimeOffset graceEndsAt, CancellationToken ct)
     {
         EmailContent content = CheckInReminderEmail.Build(kind, fullName, dueAt, graceEndsAt, checkInUrl);
-        return mailSender.SendAsync(toEmail, fullName, content, ct);
+        return mailSender.SendAsync(toEmail, fullName, content.Subject, content.TextBody, content.HtmlBody, ct);
     }
 }

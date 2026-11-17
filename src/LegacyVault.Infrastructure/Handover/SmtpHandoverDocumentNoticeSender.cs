@@ -21,6 +21,6 @@ public sealed class SmtpHandoverDocumentNoticeSender : IHandoverDocumentNoticeSe
     public Task SendAsync(HandoverDocumentNotice notice, CancellationToken ct)
     {
         EmailContent content = HandoverDocumentNoticeEmail.Build(notice, appUrl);
-        return mailSender.SendAsync(notice.ToEmail, notice.FullName, content, ct);
+        return mailSender.SendAsync(notice.ToEmail, notice.FullName, content.Subject, content.TextBody, content.HtmlBody, ct);
     }
 }

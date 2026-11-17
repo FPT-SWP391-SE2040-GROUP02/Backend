@@ -23,6 +23,6 @@ public sealed class SmtpCheckInOverdueNoticeSender : ICheckInOverdueNoticeSender
     {
         string link = clientUrl + "/executor?vault=" + notice.VaultId.ToString();
         EmailContent email = ExecutorOverdueNoticeEmail.Build(notice.FullName, link, false);
-        return mailSender.SendAsync(notice.ToEmail, notice.FullName, email, ct);
+        return mailSender.SendAsync(notice.ToEmail, notice.FullName, email.Subject, email.TextBody, email.HtmlBody, ct);
     }
 }

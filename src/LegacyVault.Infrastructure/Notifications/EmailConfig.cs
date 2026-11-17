@@ -105,7 +105,6 @@ public static class EmailConfig
         services.AddHostedService<EmailStartupLogger>();
         services.AddSingleton<ICheckInReminderSender>(provider => ChooseReminderSender(provider));
         services.AddSingleton<ICheckInOverdueNoticeSender>(provider => ChooseOverdueNoticeSender(provider));
-        services.AddSingleton<IExtraMailSender>(provider => ChooseExtraMailSender(provider));
         services.AddSingleton<IEmailSender>(provider => ChooseVerificationSender(provider));
         return services;
     }
@@ -126,15 +125,6 @@ public static class EmailConfig
             return ActivatorUtilities.CreateInstance<SmtpCheckInOverdueNoticeSender>(provider);
         }
         return ActivatorUtilities.CreateInstance<LogCheckInOverdueNoticeSender>(provider);
-    }
-
-    private static IExtraMailSender ChooseExtraMailSender(IServiceProvider provider)
-    {
-        if (IsConfigured(provider))
-        {
-            return ActivatorUtilities.CreateInstance<SmtpExtraMailSender>(provider);
-        }
-        return ActivatorUtilities.CreateInstance<LogExtraMailSender>(provider);
     }
 
     private static IEmailSender ChooseVerificationSender(IServiceProvider provider)

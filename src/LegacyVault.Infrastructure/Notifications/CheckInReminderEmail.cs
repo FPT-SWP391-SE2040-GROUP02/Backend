@@ -1,5 +1,4 @@
 using System.Globalization;
-using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Enums;
 
@@ -21,45 +20,25 @@ public static class CheckInReminderEmail
     {
         string due = FormatVietnamTime(dueAt);
         string graceEnds = FormatVietnamTime(graceEndsAt);
-        string key = KeyFor(kind);
+        (string subject, string paragraph) = DefaultText(kind, due, graceEnds);
+        const string buttonText = "Điểm danh ngay";
+        const string note =
+            "Lưu ý: đăng nhập hoặc thanh toán không được tính là điểm danh. Email này không chứa nội dung tài sản của bạn.";
 
-        Dictionary<string, string> tokens = new Dictionary<string, string>();
-        tokens["TEN_NGUOI_NHAN"] = fullName;
-        tokens["HAN_DIEM_DANH"] = due;
-        tokens["HET_THOI_GIAN_CHO"] = graceEnds;
-        EmailParts parts = EmailTemplateOverrides.Apply(key, DefaultParts(kind, due, graceEnds), tokens);
-
-        string text = $"Xin chào {fullName},\n\n{parts.Body}\n\n{parts.ButtonText}: {checkInUrl}\n\n{parts.Note}\n";
+        string text = $"Xin chào {fullName},\n\n{paragraph}\n\n{buttonText}: {checkInUrl}\n\n{note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(
-            parts.Title,
+            subject,
             fullName,
-            parts.Body,
+            paragraph,
             checkInUrl,
-            parts.ButtonText,
-            parts.Note,
+            buttonText,
+            note,
             "Nhắc điểm danh");
-        return new EmailContent(parts.Subject, text, html, key);
+        return new EmailContent(subject, text, html);
     }
 
-    public static string KeyFor(CheckInReminderKind kind)
-    {
-        switch (kind)
-        {
-            case CheckInReminderKind.DueInSevenDays:
-                return EmailTemplateCatalog.CheckInDueFirst;
-            case CheckInReminderKind.DueInOneDay:
-            case CheckInReminderKind.DueReminder3:
-            case CheckInReminderKind.DueReminder4:
-            case CheckInReminderKind.DueReminder5:
-                // Từ thư thứ hai trở đi dùng chung một mẫu "sắp tới hạn"; số ngày trong chữ gốc lấy theo từng thư.
-                return EmailTemplateCatalog.CheckInDueSecond;
-            default:
-                return EmailTemplateCatalog.CheckInLate;
-        }
-    }
-
-    /// <summary>Chữ gốc của từng mốc; due và graceEnds là chữ đã định dạng (hoặc biến khi lấy mẫu).</summary>
-    public static EmailParts DefaultParts(CheckInReminderKind kind, string due, string graceEnds)
+    /// <summary>Chữ của từng mốc; due và graceEnds là chữ đã định dạng.</summary>
+    private static (string Subject, string Paragraph) DefaultText(CheckInReminderKind kind, string due, string graceEnds)
     {
         string subject;
         string paragraph;
@@ -113,12 +92,7 @@ public static class CheckInReminderEmail
                 break;
         }
 
-        return new EmailParts(
-            subject,
-            subject,
-            paragraph,
-            "Điểm danh ngay",
-            "Lưu ý: đăng nhập hoặc thanh toán không được tính là điểm danh. Email này không chứa nội dung tài sản của bạn.");
+        return (subject, paragraph);
     }
 
     private static string FormatVietnamTime(DateTimeOffset value)
