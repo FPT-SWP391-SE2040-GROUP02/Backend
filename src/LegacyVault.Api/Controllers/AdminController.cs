@@ -1,7 +1,10 @@
+using LegacyVault.Api.Exceptions;
+using LegacyVault.Api.Handover;
 using LegacyVault.Api.Models;
 using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,10 +26,12 @@ public sealed class AdminController : ControllerBase
     private readonly IHoldService holdService;
     private readonly IPlanSetupService planSetupService;
     private readonly INotaryCardService notaryCardService;
+    private readonly ILogger<AdminController> logger;
 
     public AdminController(IAdminService adminService, IHoldService holdService,
-        IPlanSetupService planSetupService, INotaryCardService notaryCardService)
+        IPlanSetupService planSetupService, INotaryCardService notaryCardService, ILogger<AdminController> logger)
     {
+        this.logger = logger;
         this.planSetupService = planSetupService;
         this.notaryCardService = notaryCardService;
         this.adminService = adminService;
@@ -68,6 +73,57 @@ public sealed class AdminController : ControllerBase
         await using Stream content = file.OpenReadStream();
         await notaryCardService.UploadAsync(userId, content, file.Length, ct);
         return NoContent();
+    }
+
+    /// <summary>Admin xem ảnh thẻ của một Người xét duyệt hoặc Người thực thi hệ thống (nội dung ảnh, không phải JSON). 404 khi chưa có.</summary>
+    [HttpGet("users/{userId:guid}/notary-card")]
+    [Produces("image/jpeg", "image/png", "image/webp", "application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetNotaryCard(Guid userId, CancellationToken ct)
+    {
+        PreparedDownload download;
+        try
+        {
+            download = await notaryCardService.PrepareForAdminAsync(userId, ct);
+        }
+        catch (ContentIntegrityException)
+        {
+            logger.LogError("Ảnh thẻ công chứng viên không qua kiểm toàn vẹn");
+
+            ProblemDetails problem = GlobalExceptionHandler.Problem(
+                StatusCodes.Status500InternalServerError, ErrorCode.ContentIntegrityFailed,
+                "Ảnh thẻ không vượt qua kiểm tra toàn vẹn nên không thể tải.");
+            problem.Extensions["traceId"] = HttpContext.TraceIdentifier;
+
+            ObjectResult result = new ObjectResult(problem);
+            result.StatusCode = StatusCodes.Status500InternalServerError;
+            result.ContentTypes.Add("application/problem+json");
+            return result;
+        }
+
+        return new AvatarFileResult(download);
+    }
+
+    /// <summary>Email đã có tài khoản dùng chưa. Form tạo tài khoản gọi ở bước đầu để báo trùng sớm.</summary>
+    [HttpGet("users/email-available")]
+    [ProducesResponseType<EmailAvailabilityResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<EmailAvailabilityResponse> CheckEmailAvailable([FromQuery] string? email, CancellationToken ct)
+    {
+        return adminService.CheckEmailAvailableAsync(email, ct);
+    }
+
+    /// <summary>Số điện thoại đã có tài khoản dùng chưa. Form tạo tài khoản gọi ở bước đầu để báo trùng sớm.</summary>
+    [HttpGet("users/phone-available")]
+    [ProducesResponseType<PhoneAvailabilityResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<PhoneAvailabilityResponse> CheckPhoneAvailable([FromQuery] string? phone, CancellationToken ct)
+    {
+        return adminService.CheckPhoneAvailableAsync(phone, ct);
     }
 
     [HttpGet("users")]

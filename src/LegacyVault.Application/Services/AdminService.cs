@@ -48,6 +48,17 @@ public interface IAdminService
     /// <summary>Admin tạo tài khoản hệ thống mới (Verifier, Executor, Admin). Kích hoạt ngay.</summary>
     Task<AdminUserResponse> CreateUserAsync(CreateAdminUserRequest request, CancellationToken ct);
 
+    /// <summary>
+    /// Số điện thoại này đã thuộc một tài khoản nào chưa (mọi vai trò), để form tạo tài khoản báo ngay ở bước đầu.
+    /// Chuẩn hóa giống lúc tạo. Lỗi: 400 VALIDATION_ERROR (trống, quá 20 ký tự), 404 (không phải Admin).
+    /// </summary>
+    Task<PhoneAvailabilityResponse> CheckPhoneAvailableAsync(string? phone, CancellationToken ct);
+
+    /// <summary>
+    /// Email này đã thuộc một tài khoản nào chưa (mọi vai trò), để form tạo tài khoản báo ngay ở bước đầu.
+    /// Chuẩn hóa (cắt khoảng trắng, chữ thường) giống lúc tạo. Lỗi: 400 VALIDATION_ERROR (trống), 404 (không phải Admin).
+    /// </summary>
+    Task<EmailAvailabilityResponse> CheckEmailAvailableAsync(string? email, CancellationToken ct);
 }
 
 /// <remarks>
@@ -485,6 +496,28 @@ public sealed class AdminService : IAdminService
     }
 
 
+    public async Task<EmailAvailabilityResponse> CheckEmailAvailableAsync(string? email, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        string normalized = (email ?? string.Empty).Trim().ToLowerInvariant();
+        if (normalized.Length == 0)
+        {
+            throw ValidationErrors.For("email", "Vui lòng nhập địa chỉ email.");
+        }
+        EmailAvailabilityResponse response = new EmailAvailabilityResponse();
+        response.Available = await users.FindByEmailAsync(normalized, ct) == null;
+        return response;
+    }
+
+    public async Task<PhoneAvailabilityResponse> CheckPhoneAvailableAsync(string? phone, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+        string normalized = PhoneRules.NormalizeContactPhone(phone, "phone");
+        PhoneAvailabilityResponse response = new PhoneAvailabilityResponse();
+        response.Available = !await users.PhoneExistsAsync(normalized, null, ct);
+        return response;
+    }
+
     public async Task<AdminUserResponse> CreateUserAsync(CreateAdminUserRequest request, CancellationToken ct)
     {
         Guid adminId = await RequireAdminAsync(ct);
@@ -523,8 +556,14 @@ public sealed class AdminService : IAdminService
                 "Địa chỉ email này đã được sử dụng.");
         }
 
-        // Số không bắt buộc ở đây; có thì chuẩn hóa giống đăng ký để so trùng đúng, và mỗi số chỉ thuộc một tài khoản.
-        string? phone = string.IsNullOrWhiteSpace(request.Phone) ? null : PhoneRules.NormalizeContactPhone(request.Phone, "phone");
+        // Người thực thi bắt buộc có số: thư gửi người nhận ghi số này để họ gọi hỏi. Vai trò khác không bắt buộc.
+        if (targetRole == UserRole.Executor && string.IsNullOrWhiteSpace(request.Phone))
+        {
+            throw ValidationErrors.For("phone", PhoneRules.RequiredMessage);
+        }
+
+        // Có số thì chuẩn hóa giống đăng ký để so trùng đúng, và mỗi số chỉ thuộc một tài khoản.
+        string? phone =string.IsNullOrWhiteSpace(request.Phone) ? null : PhoneRules.NormalizeContactPhone(request.Phone, "phone");
         if (phone != null && await users.PhoneExistsAsync(phone, null, ct))
         {
             throw PhoneRules.AlreadyUsed("phone");

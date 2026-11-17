@@ -110,6 +110,23 @@ public sealed class NotaryCardService : INotaryCardService
     public async Task<PreparedDownload> PrepareAsync(CancellationToken ct)
     {
         User user = await RequireCardHolderAsync(ct);
+        return await PrepareFromAsync(user, ct);
+    }
+
+    public async Task<PreparedDownload> PrepareForAdminAsync(Guid userId, CancellationToken ct)
+    {
+        await RequireAdminAsync(ct);
+
+        User? target = await userRepository.FindByIdAsync(userId, ct);
+        if (target == null || (target.Role != UserRole.Verifier && target.Role != UserRole.Executor))
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Không tìm thấy tài khoản.");
+        }
+        return await PrepareFromAsync(target, ct);
+    }
+
+    private async Task<PreparedDownload> PrepareFromAsync(User user, CancellationToken ct)
+    {
         if (user.NotaryCardStorageKey == null || user.NotaryCardWrappedDataKey == null)
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Chưa có ảnh thẻ công chứng viên.");

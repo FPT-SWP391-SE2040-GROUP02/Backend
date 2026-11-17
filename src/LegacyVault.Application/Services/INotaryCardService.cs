@@ -20,4 +20,10 @@ public interface INotaryCardService
     /// 404 khi chưa có ảnh hoặc vai trò không có ảnh thẻ.
     /// </summary>
     Task<PreparedDownload> PrepareAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Admin xem ảnh thẻ của một Người xét duyệt hoặc Người thực thi hệ thống, đã giải mã và kiểm toàn vẹn.
+    /// 404 khi không phải Admin, không có tài khoản, tài khoản không phải hai vai trò trên, hoặc chưa có ảnh.
+    /// </summary>
+    Task<PreparedDownload> PrepareForAdminAsync(Guid userId, CancellationToken ct);
 }

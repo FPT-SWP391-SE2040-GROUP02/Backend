@@ -129,6 +129,7 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         HttpResponseMessage create = await client.PostAsJsonAsync("/api/v1/admin/users", new
         {
             fullName = "Người Thực Thi", email = email, password = "MatKhauThu123!", role = "EXECUTOR",
+            phone = "09" + Random.Shared.Next(10_000_000, 99_999_999),
             lawyerCardNumber = " LS-TEST-001 ", executorRoleTitle = "Luật sư thi hành di chúc", legalOrganization = "Đoàn Luật sư thử nghiệm",
         });
         HttpResponseMessage grant = await client.PutAsJsonAsync($"/api/v1/admin/users/{plain.Id}/role",
@@ -202,6 +203,78 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task EmailAvailable_ReportsTakenEmails_NormalizedLikeCreate_AndRejectsNonAdmin()
+    {
+        (User _, HttpClient admin) = await AddAdminAsync();
+        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        string free = "moi-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
+
+        // Email đã có (kể cả gõ hoa và thừa khoảng trắng) là không dùng được; email mới thì dùng được
+        string typed = "  " + plain.Email.ToUpperInvariant() + " ";
+        JsonElement taken = await ApiTestHelpers.ReadJsonAsync(await admin.GetAsync($"/api/v1/admin/users/email-available?email={Uri.EscapeDataString(typed)}"));
+        JsonElement open = await ApiTestHelpers.ReadJsonAsync(await admin.GetAsync($"/api/v1/admin/users/email-available?email={Uri.EscapeDataString(free)}"));
+        Assert.False(taken.GetProperty("available").GetBoolean());
+        Assert.True(open.GetProperty("available").GetBoolean());
+
+        // Trống: 400; không phải Admin: 404
+        await ApiTestHelpers.AssertProblemAsync(await admin.GetAsync("/api/v1/admin/users/email-available?email="), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(HttpStatusCode.NotFound, (await ClientFor(plain).GetAsync($"/api/v1/admin/users/email-available?email={Uri.EscapeDataString(free)}")).StatusCode);
+    }
+
+    [SqlFact]
+    public async Task PhoneAvailable_ReportsTakenNumbers_NormalizedLikeCreate_AndRejectsNonAdmin()
+    {
+        (User _, HttpClient admin) = await AddAdminAsync();
+        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        string phone = "09" + Random.Shared.Next(10_000_000, 99_999_999);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Users.Where(u => u.Id == plain.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.Phone, phone));
+        });
+        string spaced = phone.Substring(0, 4) + " " + phone.Substring(4, 3) + "-" + phone.Substring(7);
+        string free = "08" + Random.Shared.Next(10_000_000, 99_999_999);
+
+        // Số đã có (kể cả gõ có dấu cách, gạch nối) là không dùng được; số mới thì dùng được
+        JsonElement taken = await ApiTestHelpers.ReadJsonAsync(await admin.GetAsync($"/api/v1/admin/users/phone-available?phone={Uri.EscapeDataString(spaced)}"));
+        JsonElement open = await ApiTestHelpers.ReadJsonAsync(await admin.GetAsync($"/api/v1/admin/users/phone-available?phone={free}"));
+        Assert.False(taken.GetProperty("available").GetBoolean());
+        Assert.True(open.GetProperty("available").GetBoolean());
+
+        // Trống: 400; không phải Admin: 404
+        await ApiTestHelpers.AssertProblemAsync(await admin.GetAsync("/api/v1/admin/users/phone-available?phone="), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(HttpStatusCode.NotFound, (await ClientFor(plain).GetAsync($"/api/v1/admin/users/phone-available?phone={free}")).StatusCode);
+    }
+
+    [SqlFact]
+    public async Task AdminViewsNotaryCard_OnlyAfterUpload_AndOnlyForVerifierOrExecutor()
+    {
+        (User _, HttpClient admin) = await AddAdminAsync();
+        User verifier = await DeathCaseTestData.AddVerifierAsync(factory);
+        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+
+        // Chưa nộp ảnh: 404; tài khoản thường: 404; người không phải Admin: 404
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/v1/admin/users/{verifier.Id}/notary-card")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/v1/admin/users/{plain.Id}/notary-card")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await ClientFor(plain).GetAsync($"/api/v1/admin/users/{verifier.Id}/notary-card")).StatusCode);
+
+        byte[] png = new byte[300];
+        Array.Copy(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, png, 8);
+        using (MultipartFormDataContent form = new MultipartFormDataContent())
+        {
+            ByteArrayContent file = new ByteArrayContent(png);
+            file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+            form.Add(file, "file", "the.png");
+            Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsync($"/api/v1/admin/users/{verifier.Id}/notary-card", form)).StatusCode);
+        }
+
+        // Đã nộp: Admin xem lại được đúng ảnh
+        HttpResponseMessage content = await admin.GetAsync($"/api/v1/admin/users/{verifier.Id}/notary-card");
+        Assert.Equal(HttpStatusCode.OK, content.StatusCode);
+        Assert.Equal("image/png", content.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(png, await content.Content.ReadAsByteArrayAsync());
+    }
+
+    [SqlFact]
     public async Task AdminCreatesExecutorWithoutPassword_InvitesByEmail_AndAdminStillNeedsPassword()
     {
         // Chuẩn bị
@@ -210,7 +283,7 @@ public sealed class AdminOperationsTests : IAsyncLifetime
 
         // Hành động: không đặt mật khẩu cho Người thực thi; Quản trị viên mới thì thiếu mật khẩu là lỗi
         HttpResponseMessage invite = await client.PostAsJsonAsync("/api/v1/admin/users",
-            new { fullName = "Người Được Mời", email = email, role = "EXECUTOR" });
+            new { fullName = "Người Được Mời", email = email, role = "EXECUTOR", phone = "09" + Random.Shared.Next(10_000_000, 99_999_999) });
         HttpResponseMessage adminNoPassword = await client.PostAsJsonAsync("/api/v1/admin/users",
             new { fullName = "Admin Mới", email = "a-" + email, role = "ADMIN" });
 
@@ -223,6 +296,28 @@ public sealed class AdminOperationsTests : IAsyncLifetime
             Assert.Null(created.EmailVerifiedAt);
             Assert.Equal(1, await db.Set<PasswordResetToken>().CountAsync(t => t.UserId == created.Id && t.UsedAt == null));
             Assert.False(await db.Users.AnyAsync(u => u.Email == "a-" + email));
+        });
+    }
+
+    [SqlFact]
+    public async Task AdminCreatesExecutorWithoutPhone_IsRejected_ButVerifierWithoutPhoneIsAllowed()
+    {
+        // Chuẩn bị
+        (User _, HttpClient client) = await AddAdminAsync();
+        string email = "khong-sdt-" + Guid.NewGuid().ToString("N") + "@legacyvault.test";
+
+        // Hành động: Người thực thi thiếu số bị chặn; Người xét duyệt thiếu số vẫn tạo được
+        HttpResponseMessage executor = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Người Thực Thi", email = email, role = "EXECUTOR" });
+        HttpResponseMessage verifier = await client.PostAsJsonAsync("/api/v1/admin/users",
+            new { fullName = "Người Xét Duyệt", email = "v-" + email, role = "VERIFIER" });
+
+        // Kiểm tra
+        await ApiTestHelpers.AssertProblemAsync(executor, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(HttpStatusCode.Created, verifier.StatusCode);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.False(await db.Users.AnyAsync(u => u.Email == email));
         });
     }
 
