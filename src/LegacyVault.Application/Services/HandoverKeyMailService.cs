@@ -70,11 +70,13 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
             throw new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound,
                 "Không tìm thấy nội dung bàn giao.");
         }
-        if (vault.Plan.Status != PlanStatus.HandoverInProgress)
+        if (vault.Plan.Status != PlanStatus.HandoverInProgress && vault.Plan.Status != PlanStatus.Closed)
         {
             throw NotAllowed(AppErrorType.Conflict, "PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
-        if (HandoverRules.IsTerminal(turn.Status) || turn.KeyVerifiedAt != null)
+        // Lượt đã nhận (HandoverCommitted) vẫn cần mã cho tới khi người nhận nhập (khớp VerifyKeyAsync); các lượt kết thúc khác thì không.
+        bool committedWithoutKey = turn.Status == HandoverTurnStatus.HandoverCommitted && turn.KeyVerifiedAt == null;
+        if ((HandoverRules.IsTerminal(turn.Status) && !committedWithoutKey) || turn.KeyVerifiedAt != null)
         {
             throw NotAllowed(AppErrorType.Conflict, "WRONG_STATE", "Lượt này đã kết thúc hoặc người nhận đã nhập khóa.");
         }

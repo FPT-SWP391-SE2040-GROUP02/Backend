@@ -289,6 +289,19 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task ExecutorCanStillReadTheKeyOnceTheLastRecipientAcceptedAndThePlanIsClosed()
+    {
+        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        await SeedKeyAsync(vault.VaultId);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.Closed);
+
+        HttpResponseMessage response = await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [SqlFact]
     public async Task OwnerStrangerAndNotYetAcceptedExecutorCannotReadTheKey()
     {
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);

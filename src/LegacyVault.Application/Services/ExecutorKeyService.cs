@@ -84,8 +84,9 @@ public sealed class ExecutorKeyService : IExecutorKeyService
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
         }
 
-        // Mã chỉ xem được sau khi hồ sơ được duyệt và bàn giao đã bắt đầu (kế hoạch HandoverInProgress).
-        if (vault.Plan.Status != PlanStatus.HandoverInProgress)
+        // Mã chỉ xem được sau khi hồ sơ được duyệt và bàn giao đã bắt đầu (kế hoạch HandoverInProgress). Closed vẫn cho xem:
+        // lượt cuối được nhận thì kế hoạch tự đóng, mà người nhận còn phải nhập mã mới tải được (VerifyKeyAsync cho phép lượt đã nhận).
+        if (vault.Plan.Status != PlanStatus.HandoverInProgress && vault.Plan.Status != PlanStatus.Closed)
         {
             Dictionary<string, object?> extensions = new Dictionary<string, object?>();
             extensions["reason"] = "HANDOVER_NOT_STARTED";

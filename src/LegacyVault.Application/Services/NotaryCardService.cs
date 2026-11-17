@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
@@ -94,6 +96,60 @@ public sealed class NotaryCardService : INotaryCardService
         }
 
         await TryDeleteStoredAsync(oldStorageKey);
+    }
+
+    public async Task<NotaryCardStatusResponse> GetStatusAsync(CancellationToken ct)
+    {
+        User user = await RequireCardHolderAsync(ct);
+        NotaryCardStatusResponse response = new NotaryCardStatusResponse();
+        response.HasCard = user.NotaryCardStorageKey != null;
+        response.UploadedAt = user.NotaryCardUploadedAt;
+        return response;
+    }
+
+    public async Task<PreparedDownload> PrepareAsync(CancellationToken ct)
+    {
+        User user = await RequireCardHolderAsync(ct);
+        if (user.NotaryCardStorageKey == null || user.NotaryCardWrappedDataKey == null)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Chưa có ảnh thẻ công chứng viên.");
+        }
+
+        StoredContent stored = new StoredContent();
+        stored.StorageKey = user.NotaryCardStorageKey;
+        stored.SizeBytes = user.NotaryCardSizeBytes ?? 0;
+        stored.EncryptionKeyId = user.NotaryCardEncryptionKeyId ?? string.Empty;
+        stored.WrappedDataKey = user.NotaryCardWrappedDataKey;
+
+        // Lượt 1: giải mã vào Stream.Null để kiểm kích thước và SHA-256 trước khi gửi byte đầu tiên.
+        try
+        {
+            await contentStore.CopyToAsync(stored, Stream.Null, ct);
+        }
+        catch (Exception ex) when (ex is CryptographicException || ex is IOException)
+        {
+            throw new ContentIntegrityException("Ảnh thẻ không vượt qua kiểm tra toàn vẹn.", ex);
+        }
+
+        PreparedDownload download = new PreparedDownload();
+        download.FileName = "notary-card";
+        download.ContentType = user.NotaryCardContentType ?? "application/octet-stream";
+        download.Length = stored.SizeBytes;
+        download.WriteToAsync = (destination, token) => contentStore.CopyToAsync(stored, destination, token);
+        return download;
+    }
+
+    /// <summary>Vai trò kiểm từ DB (ROLE-04): chỉ Người xét duyệt hoặc Người thực thi hệ thống đang hoạt động, còn lại 404.</summary>
+    private async Task<User> RequireCardHolderAsync(CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        User? user = await userRepository.FindByIdAsync(userId, ct);
+        if (user == null || user.Status != UserStatus.Active
+            || (user.Role != UserRole.Verifier && user.Role != UserRole.Executor))
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Không tìm thấy tài khoản.");
+        }
+        return user;
     }
 
     /// <summary>Không phải Admin đang hoạt động thì 404 như khu vực không tồn tại (SEC-04).</summary>
