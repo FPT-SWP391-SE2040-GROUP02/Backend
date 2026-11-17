@@ -135,6 +135,7 @@ public static class InfrastructureConfig
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
         services.AddScoped<IVaultPinRepository, VaultPinRepository>();
         services.AddScoped<IExecutorKeyShardRepository, ExecutorKeyShardRepository>();
+        services.AddScoped<IWillVersionRepository, WillVersionRepository>();
         services.AddScoped<ICheckInRepository, CheckInRepository>();
         services.AddScoped<IEntitlementExpiryRepository, EntitlementExpiryRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();

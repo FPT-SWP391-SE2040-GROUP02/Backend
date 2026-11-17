@@ -214,6 +214,8 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
 
         // Cuối cùng: PIN, quyền dịch vụ, kế hoạch, nhật ký của kho, kho.
         await context.Set<VaultPin>().Where(p => p.VaultId == vaultId).ExecuteDeleteAsync(ct);
+        // Các phiên bản di chúc số đã ký: có khóa ngoại tới Vaults nên phải xóa trước kho.
+        await context.Set<WillVersion>().Where(w => w.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<VaultEntitlement>().Where(e => e.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<HandoverPlan>().Where(p => p.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<AuditLog>().Where(l => l.VaultId == vaultId).ExecuteDeleteAsync(ct);

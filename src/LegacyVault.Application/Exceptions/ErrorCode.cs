@@ -125,6 +125,8 @@ public enum ErrorCode
     HandoverEmailMismatch,
     /// <summary>400: chỉ được chỉ định Người thực thi hệ thống đã được xác minh.</summary>
     OnlySystemExecutorsAllowed,
+    /// <summary>409: chỉ ký lại di chúc được khi kế hoạch đang chạy.</summary>
+    WillSignNotAllowed,
 }
 
 /// <summary>Giá trị trường <c>reason</c> đi kèm VAULT_NOT_EDITABLE (cũng trả dạng UPPER_SNAKE_CASE).</summary>

@@ -28,6 +28,12 @@ public interface IPlanSetupService
     /// </summary>
     Task<ExecutorInvitationResponse> RespondByIdAsync(Guid invitationId, RespondMyExecutorInvitationRequest request, CancellationToken ct);
     Task<PlanSetupResponse> ActivateAsync(Guid vaultId, ActivatePlanRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Chủ kho ký lại di chúc (PIN kiểm ở filter) khi kế hoạch đang chạy và có thay đổi chưa ký: tạo phiên bản di chúc mới.
+    /// Không có thay đổi thì trả nguyên trạng, không tạo phiên bản. configVersion cũ → 409 EDIT_CONFLICT.
+    /// </summary>
+    Task<PlanSetupResponse> SignWillAsync(Guid vaultId, SignWillRequest request, CancellationToken ct);
     Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct);
 
     /// <summary>
@@ -50,7 +56,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
     TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
     ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector,
-    ISigningPasswordChecker signingPasswordChecker, IEmailBounceStore bounces) : IPlanSetupService
+    ISigningPasswordChecker signingPasswordChecker, IEmailBounceStore bounces,
+    IWillVersionRepository willVersions) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-10-30";
     public const string ScopeVersion = "executor-2026-10-15";
@@ -490,12 +497,71 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             await scheduler.StartFirstPeriodAsync(vault.Plan, ct);
             // Mã mở gói do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
             await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
+            // Ký bằng PIN cũng là lúc chụp lại cấu hình: bàn giao chỉ theo bản ký này cho tới khi Chủ kho ký lại.
+            List<Container> signedContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
+            await AddWillVersionAsync(vault, signedContainers, now, ct);
             audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.PlanActivated,
                 AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
             await unitOfWork.SaveChangesAsync(ct);
             markActivated();
             return await BuildAsync(vault, ct);
         }, ct);
+
+    public Task<PlanSetupResponse> SignWillAsync(Guid vaultId, SignWillRequest request, CancellationToken ct)
+    {
+        return unitOfWork.ExecuteSerializableAsync(async () =>
+        {
+            Vault vault = await OwnedAsync(vaultId, ct);
+            await UsableUserAsync(vault.OwnerId, ct);
+            if (!PlanRules.IsRunning(vault.Plan.Status))
+            {
+                throw new AppException(AppErrorType.Conflict, ErrorCode.WillSignNotAllowed,
+                    "Chỉ ký lại di chúc được khi kế hoạch đang chạy.");
+            }
+            if (request.ConfigVersion != vault.Plan.ConfigVersion)
+            {
+                throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
+                    "Cấu hình kế hoạch đã thay đổi. Tải lại trước khi ký.");
+            }
+
+            List<Container> openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
+            WillVersion? latest = await willVersions.FindLatestByVaultIdAsync(vault.Id, ct);
+            if (latest != null)
+            {
+                WillSnapshot signed = WillVersionRules.FromJson(latest.SnapshotJson);
+                WillSnapshot current = WillVersionRules.BuildSnapshot(openContainers);
+                UnsignedWillChangesResponse changes = WillVersionRules.Compare(signed, current);
+                if (!WillVersionRules.HasChanges(changes))
+                {
+                    // Gọi lặp hoặc không có gì mới để ký: trả nguyên trạng, không tạo phiên bản.
+                    return await BuildAsync(vault, ct);
+                }
+            }
+
+            DateTimeOffset now = time.GetUtcNow();
+            WillVersion created = await AddWillVersionAsync(vault, openContainers, now, ct);
+            audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.WillResigned,
+                AuditTargetType.Vault, vault.Id, created.VersionNo, AuditOutcome.Succeeded, null, now));
+            await unitOfWork.SaveChangesAsync(ct);
+            return await BuildAsync(vault, ct);
+        }, ct);
+    }
+
+    /// <summary>Tạo phiên bản di chúc kế tiếp từ cấu hình hiện tại (chưa lưu; người gọi SaveChanges cùng thao tác chính).</summary>
+    private async Task<WillVersion> AddWillVersionAsync(
+        Vault vault, List<Container> openContainers, DateTimeOffset now, CancellationToken ct)
+    {
+        WillVersion? latest = await willVersions.FindLatestByVaultIdAsync(vault.Id, ct);
+        int nextNo = 1;
+        if (latest != null)
+        {
+            nextNo = latest.VersionNo + 1;
+        }
+        WillSnapshot snapshot = WillVersionRules.BuildSnapshot(openContainers);
+        WillVersion version = WillVersionRules.CreateVersion(vault.Id, nextNo, vault.Plan.ConfigVersion, snapshot, now);
+        willVersions.Add(version);
+        return version;
+    }
 
     private async Task<Vault> OwnedAsync(Guid id, CancellationToken ct) =>
         VaultRules.EnsureOwnedBy(await vaults.FindByIdAsync(id, ct), currentUser.RequireUserId());
@@ -636,12 +702,31 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             ownerFullName = user.FullName;
             ownerEmail = user.Email;
         }
+        int? willVersionNo = null;
+        DateTimeOffset? willSignedAt = null;
+        bool hasUnsignedChanges = false;
+        UnsignedWillChangesResponse unsignedChanges = WillVersionRules.NoChanges();
+        WillVersion? latestWill = await willVersions.FindLatestByVaultIdAsync(vault.Id, ct);
+        if (latestWill != null)
+        {
+            willVersionNo = latestWill.VersionNo;
+            willSignedAt = latestWill.SignedAt;
+            // Chỉ kế hoạch đang chạy mới có "thay đổi chưa ký"; kế hoạch nháp sẽ ký lại khi kích hoạt.
+            if (PlanRules.IsRunning(vault.Plan.Status))
+            {
+                WillSnapshot signedSnapshot = WillVersionRules.FromJson(latestWill.SnapshotJson);
+                WillSnapshot currentSnapshot = WillVersionRules.BuildSnapshot(openContainers);
+                unsignedChanges = WillVersionRules.Compare(signedSnapshot, currentSnapshot);
+                hasUnsignedChanges = WillVersionRules.HasChanges(unsignedChanges);
+            }
+        }
         // Cảnh báo duy nhất trước đây là NO_BACKUP_EXECUTOR; đã bỏ Executor dự phòng nên giữ mảng rỗng cho đúng hợp đồng API.
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
             executorItems,
             PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>(),
-            ownerFullName, ownerEmail, vault.Plan.ActivatedAt, recipients);
+            ownerFullName, ownerEmail, vault.Plan.ActivatedAt, recipients,
+            willVersionNo, willSignedAt, hasUnsignedChanges, unsignedChanges);
     }
 
     /// <summary>

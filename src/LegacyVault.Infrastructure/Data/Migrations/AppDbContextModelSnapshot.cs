@@ -2998,6 +2998,36 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("VerifierSigningGuards", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.WillVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ConfigVersion")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("SignedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("VaultId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VersionNo")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VaultId", "VersionNo")
+                        .IsUnique();
+
+                    b.ToTable("WillVersions", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.Asset", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.Vault", "Vault")
@@ -3486,6 +3516,15 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasOne("LegacyVault.Domain.Entities.User", null)
                         .WithOne()
                         .HasForeignKey("LegacyVault.Domain.Entities.VerifierSigningGuard", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.WillVersion", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Vault", null)
+                        .WithMany()
+                        .HasForeignKey("VaultId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

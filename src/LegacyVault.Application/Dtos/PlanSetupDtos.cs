@@ -16,7 +16,9 @@ public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, boo
     string ExecutorScopeText, List<ExecutorInvitationResponse> Executors,
     List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings,
     string OwnerFullName = "", string OwnerEmail = "",
-    DateTimeOffset? ActivatedAt = null, List<PlanSetupRecipientResponse>? Recipients = null);
+    DateTimeOffset? ActivatedAt = null, List<PlanSetupRecipientResponse>? Recipients = null,
+    int? WillVersion = null, DateTimeOffset? WillSignedAt = null, bool HasUnsignedChanges = false,
+    UnsignedWillChangesResponse? UnsignedChanges = null);
 
 /// <summary>Một gói của người nhận trên màn kích hoạt (chỉ tên, số tài sản và trạng thái, không có nội dung).</summary>
 public sealed record PlanSetupRecipientContainerResponse(Guid Id, string Name, int AssetCount, string Status);

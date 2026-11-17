@@ -100,3 +100,25 @@ Content-Type: application/json
   "policyVersion": "setup-2026-10-15",
   "acknowledgePolicy": true
 }
+
+### Owner xem số thay đổi chưa ký so với bản di chúc đã ký gần nhất
+# willVersion / willSignedAt: phiên bản ký gần nhất (null nếu chưa có). hasUnsignedChanges + unsignedChanges chỉ là số đếm.
+# Bàn giao chỉ theo bản ký gần nhất: phần thêm/đổi chưa ký lại sẽ bị bỏ qua, phần đã xóa không bàn giao.
+GET {{baseUrl}}/vaults/{{vaultId}}/plan-setup
+Authorization: Bearer {{ownerToken}}
+
+### Owner ký lại di chúc bằng PIN — 200; không có thay đổi chưa ký thì trả nguyên trạng, không tạo phiên bản mới
+# configVersion lấy từ GET mới nhất; bản cũ trả 409 EDIT_CONFLICT. Kế hoạch chưa chạy: 409 WILL_SIGN_NOT_ALLOWED.
+POST {{baseUrl}}/vaults/{{vaultId}}/will/sign
+Authorization: Bearer {{ownerToken}}
+X-Vault-Pin: <PIN 6 số>
+Content-Type: application/json
+
+{
+  "configVersion": {{configVersion}}
+}
+
+### Owner xem danh tính đầy đủ (Chủ kho và người nhận) để lập di chúc — 200, Cache-Control: no-store
+# owner = null nếu Chủ kho chưa có danh tính eKYC đã gắn. Mỗi lần gọi ghi nhật ký WILL_IDENTITY_VIEWED. Người khác/Admin: 404.
+GET {{baseUrl}}/vaults/{{vaultId}}/will/identity
+Authorization: Bearer {{ownerToken}}

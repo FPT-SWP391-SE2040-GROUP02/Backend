@@ -19,6 +19,7 @@ public sealed class HandoverStarter : IHandoverStarter
 
     private readonly IHandoverContactReader? contactReader;
     private readonly ExecutorKeyIssuer? keyIssuer;
+    private readonly IWillVersionRepository? willVersions;
 
     public HandoverStarter(
         IVaultRepository vaults,
@@ -29,8 +30,10 @@ public sealed class HandoverStarter : IHandoverStarter
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IHandoverContactReader? contactReader = null,
-        ExecutorKeyIssuer? keyIssuer = null)
+        ExecutorKeyIssuer? keyIssuer = null,
+        IWillVersionRepository? willVersions = null)
     {
+        this.willVersions = willVersions;
         this.contactReader = contactReader;
         this.keyIssuer = keyIssuer;
         this.vaults = vaults;
@@ -81,6 +84,19 @@ public sealed class HandoverStarter : IHandoverStarter
         }
 
         List<Designation> designations = await handover.FindStartableDesignationsAsync(vaultId, ct);
+
+        // Bàn giao chỉ theo bản di chúc ký gần nhất: phần thêm/đổi sau khi ký (chưa ký lại) bị bỏ qua, phần đã xóa vốn không
+        // còn trong cấu hình hiện tại. Kế hoạch chưa có phiên bản ký nào (dữ liệu cũ) giữ cách cũ: theo cấu hình hiện tại.
+        WillSnapshot? signedWill = null;
+        if (willVersions != null)
+        {
+            WillVersion? latestWill = await willVersions.FindLatestByVaultIdAsync(vaultId, ct);
+            if (latestWill != null)
+            {
+                signedWill = WillVersionRules.FromJson(latestWill.SnapshotJson);
+                designations = WillVersionRules.FilterDesignations(signedWill, designations);
+            }
+        }
         if (designations.Count == 0)
         {
             throw NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
@@ -96,6 +112,12 @@ public sealed class HandoverStarter : IHandoverStarter
 
         foreach (Designation designation in designations)
         {
+            HashSet<Guid>? allowedAssetIds = null;
+            if (signedWill != null)
+            {
+                allowedAssetIds = WillVersionRules.SignedAssetIds(signedWill, designation.ContainerId);
+            }
+
             OpaqueToken token = tokens.CreateOpaqueToken();
 
             HandoverTurn turn = new HandoverTurn();
@@ -110,7 +132,12 @@ public sealed class HandoverStarter : IHandoverStarter
             turn.InvitedAt = now;
             turn.ResponseDeadline = now + HandoverRules.ResponseWindow;
             turn.CreatedAt = now;
-            turn.Items = BuildSnapshot(turn, designation.Container);
+            turn.Items = BuildSnapshot(turn, designation.Container, allowedAssetIds);
+            if (signedWill != null && turn.Items.Count == 0)
+            {
+                // Tất cả tài sản của gói trong bản ký đã bị gỡ (tài sản hiện có đều là thêm sau khi ký): không có gì để bàn giao.
+                continue;
+            }
 
             handover.AddTurn(turn);
             turns.Add(turn);
@@ -128,6 +155,11 @@ public sealed class HandoverStarter : IHandoverStarter
                 invitation.OwnerMessage = data.Message;
                 invitations.Add(invitation);
             }
+        }
+
+        if (turns.Count == 0)
+        {
+            throw NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
         }
 
         // Bắt đầu bàn giao thì Người thực thi đọc được mã: đảm bảo kho có mã đọc được (chưa có hoặc chỉ có hash thì tạo mới).
@@ -174,14 +206,22 @@ public sealed class HandoverStarter : IHandoverStarter
         return result;
     }
 
-    /// <summary>Ghim từng tài sản trong gói (snapshot: sửa tài sản sau này không đổi lượt).</summary>
-    private static List<HandoverSnapshotItem> BuildSnapshot(HandoverTurn turn, Container container)
+    /// <summary>
+    /// Ghim từng tài sản trong gói (snapshot: sửa tài sản sau này không đổi lượt). allowedAssetIds khác null thì chỉ ghim
+    /// tài sản có trong bản di chúc đã ký; null là cách cũ (ghim mọi tài sản hiện có).
+    /// </summary>
+    private static List<HandoverSnapshotItem> BuildSnapshot(
+        HandoverTurn turn, Container container, HashSet<Guid>? allowedAssetIds)
     {
         List<HandoverSnapshotItem> items = new List<HandoverSnapshotItem>();
         int position = 0;
 
         foreach (ContainerAsset link in container.Assets.OrderBy(a => a.AddedAt).ThenBy(a => a.Id))
         {
+            if (allowedAssetIds != null && !allowedAssetIds.Contains(link.AssetId))
+            {
+                continue;
+            }
             Asset asset = link.Asset;
             HandoverSnapshotItem item = new HandoverSnapshotItem();
             item.TurnId = turn.Id;
