@@ -187,9 +187,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("varbinary(max)");
 
-                    b.Property<DateTimeOffset?>("MinorAcknowledgedAt")
-                        .HasColumnType("datetimeoffset");
-
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .IsConcurrencyToken()
                         .HasColumnType("datetimeoffset");
@@ -793,9 +790,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 

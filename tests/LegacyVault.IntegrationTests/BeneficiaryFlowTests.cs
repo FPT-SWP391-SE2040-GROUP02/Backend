@@ -212,11 +212,11 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
             new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, email = Email, phone = "0901 234.567" });
 
-        // Kiểm tra: lưu được ngay; không còn nhãn isMinor, minorAcknowledgedAt luôn null với hồ sơ mới.
+        // Kiểm tra: lưu được ngay; không còn nhãn isMinor và không còn trường minorAcknowledgedAt.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         JsonElement created = await ApiTestHelpers.ReadJsonAsync(response);
         Assert.False(created.TryGetProperty("isMinor", out _));
-        Assert.Equal(JsonValueKind.Null, created.GetProperty("minorAcknowledgedAt").ValueKind);
+        Assert.False(created.TryGetProperty("minorAcknowledgedAt", out _));
         Assert.Equal("0901234567", created.GetProperty("phone").GetString());
         Assert.Equal(Email, created.GetProperty("email").GetString());
     }
@@ -232,10 +232,10 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
             new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, email = Email, phone = "0901 234.567", confirmMinor = true });
 
-        // Kiểm tra: trường thừa bị bỏ qua, không lỗi và không ghi dấu xác nhận.
+        // Kiểm tra: trường thừa bị bỏ qua, không lỗi.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         JsonElement created = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.Equal(JsonValueKind.Null, created.GetProperty("minorAcknowledgedAt").ValueKind);
+        Assert.False(created.TryGetProperty("minorAcknowledgedAt", out _));
     }
 
     [SqlFact]
