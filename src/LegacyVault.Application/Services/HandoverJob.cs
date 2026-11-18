@@ -8,6 +8,11 @@ namespace LegacyVault.Application.Services;
 /// TIME-04, TIME-09: kế hoạch đang bị chặn (Blocked) hoặc kho có hold thì đồng hồ tạm dừng: job không chuyển lượt hay grant
 /// sang hết hạn. Khi hold được gỡ, HandoverClockRules.ExtendAfterPause dời các hạn đang chạy đúng bằng thời gian đã dừng.
 /// </remarks>
+// Job chạy nền xử lý các mốc hết hạn của bàn giao, mỗi loại hai bước: tìm id rồi xử lý từng id.
+//   1. Quá hạn phản hồi thư mời ..... FindExpiredResponseTurnIdsAsync, ProcessResponseExpiryAsync
+//   2. Quá hạn quyết định (luồng cũ) . FindExpiredDecisionTurnIdsAsync, ProcessDecisionExpiryAsync
+//   3. Hết hạn quyền tải ............ FindExpiredGrantIdsAsync, ProcessGrantExpiryAsync
+// Kho đang bị giữ thì đồng hồ dừng: job bỏ qua, không đổi gì.
 public sealed class HandoverJob : IHandoverJob
 {
     private readonly IVaultRepository vaults;
@@ -54,8 +59,10 @@ public sealed class HandoverJob : IHandoverJob
         return handover.FindExpiredGrantIdsAsync(timeProvider.GetUtcNow(), ct);
     }
 
+    // Lượt quá hạn phản hồi: đánh dấu đã quá hạn (người nhận vẫn nhận lượt được sau đó).
     public async Task ProcessResponseExpiryAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải còn ở trạng thái đã mời và thật sự quá hạn; kho bị giữ thì bỏ qua
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
         DateTimeOffset now = timeProvider.GetUtcNow();
         if (turn == null || turn.Status != HandoverTurnStatus.Invited || !HandoverRules.IsExpired(turn.ResponseDeadline, now))
@@ -69,13 +76,16 @@ public sealed class HandoverJob : IHandoverJob
         }
 
         // Chưa kết thúc: người nhận vẫn có thể nhận lượt sau hạn này, nên không đóng kế hoạch.
+        // 2. Đổi trạng thái rồi lưu
         turn.Status = HandoverTurnStatus.InitialResponseExpired;
         turn.UpdatedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
     }
 
+    // Luồng cũ: lượt quá hạn quyết định thì kết thúc; đóng kế hoạch nếu mọi lượt đã xong.
     public async Task ProcessDecisionExpiryAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải đang chờ quyết định và thật sự quá hạn; kho bị giữ thì bỏ qua
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
         DateTimeOffset now = timeProvider.GetUtcNow();
         if (turn == null || turn.Status != HandoverTurnStatus.ReadyToAccept)
@@ -93,6 +103,7 @@ public sealed class HandoverJob : IHandoverJob
             return;
         }
 
+        // 2. Kết thúc lượt, đóng kế hoạch nếu mọi lượt đã xong, rồi lưu
         turn.Status = HandoverTurnStatus.DecisionExpired;
         turn.EndedAt = now;
         turn.UpdatedAt = now;
@@ -106,8 +117,10 @@ public sealed class HandoverJob : IHandoverJob
         await unitOfWork.SaveChangesAsync(ct);
     }
 
+    // Quyền tải hết hạn: đánh dấu hết hạn.
     public async Task ProcessGrantExpiryAsync(Guid grantId, CancellationToken ct)
     {
+        // 1. Quyền phải còn hiệu lực và thật sự quá hạn; kho bị giữ thì bỏ qua
         HandoverGrant? grant = await handover.FindGrantByIdAsync(grantId, ct);
         DateTimeOffset now = timeProvider.GetUtcNow();
         if (grant == null || grant.Status != HandoverGrantStatus.Active || !HandoverRules.IsExpired(grant.ExpiresAt, now))
@@ -120,6 +133,7 @@ public sealed class HandoverJob : IHandoverJob
             return;
         }
 
+        // 2. Đổi trạng thái rồi lưu
         grant.Status = HandoverGrantStatus.Expired;
         grant.EndedAt = now;
         await unitOfWork.SaveChangesAsync(ct);
