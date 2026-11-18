@@ -141,14 +141,34 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
 
         // 2. Lấy thông tin ảnh đã lưu mã hóa rồi chuẩn bị giải mã để trả về
-        StoredContent stored = new StoredContent();
-        stored.StorageKey = front ? submission.FrontImageStorageKey : submission.BackImageStorageKey;
-        stored.SizeBytes = front ? submission.FrontImageSizeBytes : submission.BackImageSizeBytes;
-        stored.EncryptionKeyId = front ? submission.FrontImageEncryptionKeyId : submission.BackImageEncryptionKeyId;
-        stored.WrappedDataKey = front ? submission.FrontImageWrappedDataKey : submission.BackImageWrappedDataKey;
-        string contentType = front ? submission.FrontImageContentType : submission.BackImageContentType;
-        return await IdentityImageStorage.PrepareAsync(
-            contentStore, stored, contentType, front ? "cccd-mat-truoc" : "cccd-mat-sau", ct);
+        StoredContent stored;
+        string contentType;
+        string fileName;
+        if (front)
+        {
+            stored = new StoredContent
+            {
+                StorageKey = submission.FrontImageStorageKey,
+                SizeBytes = submission.FrontImageSizeBytes,
+                EncryptionKeyId = submission.FrontImageEncryptionKeyId,
+                WrappedDataKey = submission.FrontImageWrappedDataKey
+            };
+            contentType = submission.FrontImageContentType;
+            fileName = "cccd-mat-truoc";
+        }
+        else
+        {
+            stored = new StoredContent
+            {
+                StorageKey = submission.BackImageStorageKey,
+                SizeBytes = submission.BackImageSizeBytes,
+                EncryptionKeyId = submission.BackImageEncryptionKeyId,
+                WrappedDataKey = submission.BackImageWrappedDataKey
+            };
+            contentType = submission.BackImageContentType;
+            fileName = "cccd-mat-sau";
+        }
+        return await IdentityImageStorage.PrepareAsync(contentStore, stored, contentType, fileName, ct);
     }
 
     // Luồng cũ: duyệt hồ sơ của lượt không có biên bản; lượt sang chờ người nhận quyết định.
@@ -308,7 +328,15 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         string? paperKey = null;
         if (paperWriter != null)
         {
-            paperKey = await paperWriter.WriteAsync(submission, turn, userId, now, ct, document);
+            HandoverPaperRequest paperRequest = new HandoverPaperRequest
+            {
+                Submission = submission,
+                Turn = turn,
+                ReviewerId = userId,
+                ReviewedAt = now,
+                Document = document
+            };
+            paperKey = await paperWriter.WriteAsync(paperRequest, ct);
         }
 
         // 6. Ghi nhật ký rồi lưu một lần; lưu lỗi thì xóa ảnh văn bản vừa dựng
@@ -346,7 +374,14 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         {
             return null;
         }
-        return await paperWriter.WriteAsync(submission, submission.Turn, reviewerId, now, ct);
+        HandoverPaperRequest paperRequest = new HandoverPaperRequest
+        {
+            Submission = submission,
+            Turn = submission.Turn,
+            ReviewerId = reviewerId,
+            ReviewedAt = now
+        };
+        return await paperWriter.WriteAsync(paperRequest, ct);
     }
 
     // Bước 5: Người xét duyệt yêu cầu người nhận bổ sung, kèm lý do.
@@ -401,6 +436,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         return submission.ToVerifierDetail();
     }
 
+    /// <summary>Người đang đăng nhập phải là Người xét duyệt còn hoạt động; không thì ném lỗi phiên hết hạn, tài khoản bị khóa hoặc sai vai trò. Trả về mã người dùng.</summary>
     private async Task<Guid> RequireActiveVerifierAsync(CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
@@ -423,7 +459,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         return userId;
     }
 
-    /// <summary>Verifier hợp lệ và là người đã duyệt hồ sơ chứng tử của kho; không thì 404 như hồ sơ không tồn tại (SEC-04).</summary>
+    /// <summary>Verifier hợp lệ và là người đã duyệt hồ sơ chứng tử của kho; không thì 404 như hồ sơ không tồn tại.</summary>
     private async Task<HandoverSubmission> LoadForVerifierAsync(Guid submissionId, CancellationToken ct)
     {
         Guid userId = await RequireActiveVerifierAsync(ct);
@@ -435,6 +471,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         return submission;
     }
 
+    /// <summary>Kho của lượt phải còn trong giai đoạn bàn giao và không bị giữ; không thì ném lỗi không được phép.</summary>
     private async Task<Vault> RequireVaultInHandoverAsync(HandoverTurn turn, CancellationToken ct)
     {
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
@@ -453,6 +490,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         return vault;
     }
 
+    /// <summary>Lỗi 404 dùng chung cho hồ sơ không có, hồ sơ của kho khác và hồ sơ Người xét duyệt không được xem.</summary>
     private static AppException SubmissionNotFound()
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy hồ sơ người nhận.");

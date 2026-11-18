@@ -86,7 +86,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         }
 
         // 3. Đọc lựa chọn; phải tick đã đọc điều khoản, và tick tự nguyện nếu từ chối
-        HandoverSubmissionKind kind = request.Kind == "DECLINE" ? HandoverSubmissionKind.Decline : HandoverSubmissionKind.Accept;
+        HandoverSubmissionKind kind = HandoverDocumentRules.ParseKind(request.Kind);
         if (!request.Acknowledged)
         {
             throw ValidationErrors.For("acknowledged", "Vui lòng xác nhận đã đọc điều khoản của lựa chọn này.");
@@ -139,10 +139,12 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
 
         // 7. Tạo hồ sơ mới: chỉ giữ 4 số cuối căn cước và ba kết quả đối chiếu tên, số căn cước, ngày sinh
         DateTimeOffset now = timeProvider.GetUtcNow();
-        HandoverSubmission submission = new HandoverSubmission();
-        submission.TurnId = turn.Id;
-        submission.Kind = kind;
-        submission.Status = HandoverSubmissionStatus.Submitted;
+        HandoverSubmission submission = new HandoverSubmission
+        {
+            TurnId = turn.Id,
+            Kind = kind,
+            Status = HandoverSubmissionStatus.Submitted
+        };
         submission.NameMatches = EkycRules.NormalizeNameForCompare(request.FullName)
             == EkycRules.NormalizeNameForCompare(expected.FullName);
         submission.CitizenIdMatches = string.Equals(request.CitizenId, expected.CitizenId, StringComparison.Ordinal);
@@ -194,9 +196,11 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
                 document.RecipientCitizenIdLast4 = submission.CitizenIdLast4;
                 if (declaredProtector != null)
                 {
-                    RecipientDeclaredData declaredData = new RecipientDeclaredData();
-                    declaredData.CitizenId = request.CitizenId;
-                    declaredData.DateOfBirth = request.DateOfBirth;
+                    RecipientDeclaredData declaredData = new RecipientDeclaredData
+                    {
+                        CitizenId = request.CitizenId,
+                        DateOfBirth = request.DateOfBirth
+                    };
                     document.RecipientDeclaredProtected = declaredProtector.Protect(declaredData);
                 }
                 document.RecipientResidenceAddress = HandoverDocumentRules.CleanAddress(request.ResidenceAddress);
@@ -229,7 +233,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         {
             await notifier.VerifierTurnAsync(document, ct);
         }
-        return ToResponse(submission);
+        return submission.ToResponse();
     }
 
     /// <summary>
@@ -244,7 +248,8 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         }
         try
         {
-            return await paperWriter.WriteAsync(submission, turn, null, null, ct);
+            HandoverPaperRequest paperRequest = new HandoverPaperRequest { Submission = submission, Turn = turn };
+            return await paperWriter.WriteAsync(paperRequest, ct);
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
@@ -260,18 +265,10 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
         // 2. Trả hồ sơ mới nhất, chưa nộp thì null
         HandoverSubmission? latest = await submissions.FindLatestByTurnAsync(turn.Id, ct);
-        return latest == null ? null : ToResponse(latest);
-    }
-
-    internal static HandoverSubmissionResponse ToResponse(HandoverSubmission submission)
-    {
-        HandoverSubmissionResponse response = new HandoverSubmissionResponse();
-        response.Id = submission.Id;
-        response.TurnId = submission.TurnId;
-        response.Kind = submission.Kind.ToApiString();
-        response.Status = submission.Status.ToApiString();
-        response.SupplementReason = submission.SupplementReason;
-        response.CreatedAt = submission.CreatedAt;
-        return response;
+        if (latest == null)
+        {
+            return null;
+        }
+        return latest.ToResponse();
     }
 }
