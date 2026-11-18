@@ -9,6 +9,7 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+/// <summary>Biên bản bàn giao của người nhận: tạo biên bản cho một lượt, xem và liệt kê theo từng vai (người nhận, Người thực thi, Người xét duyệt).</summary>
 public interface IHandoverDocumentService
 {
     /// <summary>
@@ -43,6 +44,7 @@ public interface IHandoverDocumentService
 //   Người thực thi (chỉ xem lại): ListForExecutorAsync, GetForExecutorAsync
 //   Người xét duyệt (mục Biên Bản): ListForVerifierAsync
 // Người nhận ký ở HandoverSubmissionService.SubmitAsync; Người xét duyệt gửi ở HandoverSubmissionReviewService.CompleteAsync.
+/// <summary>Biên bản bàn giao: tạo biên bản cho một lượt (Phần 1 về Chủ kho chép từ hồ sơ chứng tử đã duyệt) và đọc lại theo từng vai.</summary>
 public sealed class HandoverDocumentService : IHandoverDocumentService
 {
     private readonly ICurrentUser currentUser;

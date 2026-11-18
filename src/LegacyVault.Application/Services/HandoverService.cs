@@ -18,6 +18,7 @@ namespace LegacyVault.Application.Services;
 // Luồng cũ, chỉ cho lượt không có biên bản: AcceptAsync (đồng ý nhận), DeclineAsync (từ chối nhận).
 // Luồng Biên Bản kết thúc lượt ở HandoverSubmissionReviewService.CompleteAsync, không đi qua hai hàm này.
 // Các hàm private ở cuối tệp là phần kiểm và dựng kết quả dùng chung.
+/// <summary>Luồng của người nhận: xem lời mời, nhận lượt, nhập khóa, xem tài sản, xác nhận đã nhận đủ, cùng luồng đồng ý hoặc từ chối cũ.</summary>
 public sealed class HandoverService : IHandoverService
 {
     /// <summary>Số lần nhập sai khóa mở gói tối đa trước khi khóa lượt.</summary>

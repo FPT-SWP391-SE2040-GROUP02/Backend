@@ -1,5 +1,6 @@
 namespace LegacyVault.Application.Services;
 
+/// <summary>Kết quả một lần mở bàn giao: số lượt hiện có và số lời mời đã gửi hoặc gửi lỗi.</summary>
 public sealed class HandoverStartResult
 {
     public Guid PlanId { get; set; }

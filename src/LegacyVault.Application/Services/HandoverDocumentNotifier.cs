@@ -15,6 +15,7 @@ public interface IHandoverDocumentNotifier
     Task CompletedAsync(HandoverDocument document, CancellationToken ct);
 }
 
+/// <summary>Gửi thư báo về biên bản: báo Người xét duyệt khi người nhận đã ký, báo người nhận và Người thực thi khi biên bản hoàn tất.</summary>
 public sealed class HandoverDocumentNotifier : IHandoverDocumentNotifier
 {
     private readonly IHandoverDocumentNoticeSender sender;

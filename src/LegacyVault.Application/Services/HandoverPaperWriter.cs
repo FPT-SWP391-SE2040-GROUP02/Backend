@@ -21,6 +21,7 @@ public interface IHandoverPaperWriter
     Task<string?> WriteAsync(HandoverPaperRequest request, CancellationToken ct);
 }
 
+/// <summary>Dựng ảnh văn bản (biên bản đồng ý hoặc văn bản từ chối) của một hồ sơ người nhận rồi lưu mã hóa.</summary>
 public sealed class HandoverPaperWriter : IHandoverPaperWriter
 {
     private readonly IUserRepository users;

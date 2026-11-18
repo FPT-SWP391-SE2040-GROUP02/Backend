@@ -42,6 +42,7 @@ public interface IHandoverTemplateService
     Task<ResolvedHandoverTemplate> ResolveAsync(string versionKey, CancellationToken ct);
 }
 
+/// <summary>Mẫu biên bản của Admin: lưu phiên bản mới, đọc phiên bản đã lưu và tra mẫu theo khóa phiên bản.</summary>
 public sealed class HandoverTemplateService : IHandoverTemplateService
 {
     public const int MaxParagraphs = 60;

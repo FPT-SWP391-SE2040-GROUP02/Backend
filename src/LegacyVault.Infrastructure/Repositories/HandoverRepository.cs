@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegacyVault.Infrastructure.Repositories;
 
+/// <summary>Đọc và ghi lượt, quyền tải và nhật ký tải của luồng bàn giao (EF Core).</summary>
 /// <remarks>
 /// Dùng context.Set&lt;T&gt;() thay vì DbSet trên AppDbContext để không sửa AppDbContext
 /// (giảm xung đột khi gộp với các nhánh khác cùng thêm DbSet).

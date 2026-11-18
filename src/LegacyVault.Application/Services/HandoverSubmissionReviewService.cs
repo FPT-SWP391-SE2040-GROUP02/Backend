@@ -10,6 +10,7 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+/// <summary>Người xét duyệt kiểm tra hồ sơ người nhận: xem danh sách và ảnh, gửi biên bản đã ký hoặc yêu cầu bổ sung.</summary>
 public interface IHandoverSubmissionReviewService
 {
     /// <summary>Hồ sơ người nhận đang chờ tôi duyệt (chỉ kho mà tôi đã duyệt hồ sơ chứng tử).</summary>
@@ -44,6 +45,7 @@ public interface IHandoverSubmissionReviewService
 //   5. Yêu cầu bổ sung ..................... RequestSupplementAsync
 // Luồng cũ, chỉ cho lượt không có biên bản: ApproveAsync (lượt sang chờ người nhận quyết định).
 // Mọi nút đều qua LoadForVerifierAsync: chỉ Người xét duyệt đã duyệt hồ sơ chứng tử của kho mới thấy hồ sơ.
+/// <summary>Người xét duyệt kiểm tra hồ sơ người nhận. Chỉ Người xét duyệt đã duyệt hồ sơ chứng tử của kho mới thấy hồ sơ của kho đó.</summary>
 public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewService
 {
     private readonly ICurrentUser currentUser;

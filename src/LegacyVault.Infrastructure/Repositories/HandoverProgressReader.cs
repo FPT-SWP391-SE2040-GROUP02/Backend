@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegacyVault.Infrastructure.Repositories;
 
+/// <summary>Đọc gộp dữ liệu cho màn tiến độ bàn giao của Người thực thi (EF Core).</summary>
 /// <remarks>
 /// Chỉ truy cập dữ liệu, luật nằm ở HandoverProgressService. Dùng context.Set&lt;T&gt;()
 /// để không phải sửa AppDbContext. Mọi truy vấn AsNoTracking vì màn hình này chỉ đọc.

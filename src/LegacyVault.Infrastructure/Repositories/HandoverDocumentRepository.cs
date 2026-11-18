@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegacyVault.Infrastructure.Repositories;
 
+/// <summary>Đọc và ghi biên bản bàn giao (EF Core).</summary>
 public sealed class HandoverDocumentRepository : IHandoverDocumentRepository
 {
     private readonly AppDbContext context;

@@ -30,6 +30,7 @@ public interface IRetentionJob
     Task<RetentionRunResult> ProcessPlanAsync(Guid planId, CancellationToken ct);
 }
 
+/// <summary>Việc nền lưu và xóa dữ liệu sau bàn giao.</summary>
 /// <remarks>
 /// - Đồng hồ theo từng lượt (một chỉ định). Lý do giữ: còn trong 5 ngày phản hồi, claim đang xử lý, grant còn hạn,
 ///   Owner báo còn sống (kế hoạch BLOCKED). Tạm dừng lưu phần còn lại, không đặt lại 30 ngày.

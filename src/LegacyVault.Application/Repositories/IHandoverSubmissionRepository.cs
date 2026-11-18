@@ -2,6 +2,7 @@ using LegacyVault.Domain.Entities;
 
 namespace LegacyVault.Application.Repositories;
 
+/// <summary>Đọc và ghi hồ sơ người nhận (bảng HandoverSubmissions) và tra Người xét duyệt đã duyệt hồ sơ chứng tử của kho.</summary>
 public interface IHandoverSubmissionRepository
 {
     void Add(HandoverSubmission submission);

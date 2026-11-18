@@ -54,6 +54,7 @@ public class PendingInvitationResponse
     public DateTimeOffset InvitedAt { get; set; }
 }
 
+/// <summary>Một tài sản trong lượt bàn giao mà người nhận thấy: tên, loại, tên tệp, loại tệp và kích thước. Không có nội dung.</summary>
 public class HandoverItemResponse
 {
     public Guid Id { get; set; }
@@ -70,6 +71,7 @@ public class HandoverItemResponse
     public long SizeBytes { get; set; }
 }
 
+/// <summary>Quyền xem và tải của người nhận: trạng thái (đã tính cả trường hợp quá hạn) và hạn.</summary>
 public class HandoverGrantResponse
 {
     public Guid Id { get; set; }
@@ -80,11 +82,13 @@ public class HandoverGrantResponse
     public DateTimeOffset ExpiresAt { get; set; }
 }
 
+/// <summary>Tên gói tài sản của lượt bàn giao.</summary>
 public class HandoverContainerResponse
 {
     public string Name { get; set; } = string.Empty;
 }
 
+/// <summary>Một lượt bàn giao nhìn từ phía người nhận: trạng thái, các hạn, điều kiện khóa mở gói, gói và tài sản (khi đủ điều kiện), quyền tải.</summary>
 public class HandoverTurnResponse
 {
     public Guid Id { get; set; }
@@ -110,7 +114,7 @@ public class HandoverTurnResponse
     /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC.</summary>
     public bool IdentityConfirmedByExecutor { get; set; }
 
-    /// <summary>true: kho đã cấp khóa mở gói, người nhận phải nhập khóa do Người thực hiện đưa trước khi đồng ý.</summary>
+    /// <summary>true: kho đã cấp khóa mở gói, người nhận phải nhập khóa do Người thực thi đưa trước khi đồng ý.</summary>
     public bool KeyRequired { get; set; }
 
     /// <summary>true: người nhận đã nhập đúng khóa (hoặc không cần khóa).</summary>
@@ -131,6 +135,7 @@ public class HandoverTurnResponse
     public DateTimeOffset? ReceivedAllAt { get; set; }
 }
 
+/// <summary>Người xét duyệt đã duyệt hồ sơ chứng tử của kho: họ tên và số thẻ luật sư để người nhận tự kiểm chứng.</summary>
 public class HandoverReviewerResponse
 {
     public string FullName { get; set; } = string.Empty;

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegacyVault.Infrastructure.Repositories;
 
+/// <summary>Đọc và ghi các phiên bản mẫu biên bản (EF Core).</summary>
 public sealed class HandoverTemplateRepository : IHandoverTemplateRepository
 {
     private readonly AppDbContext context;

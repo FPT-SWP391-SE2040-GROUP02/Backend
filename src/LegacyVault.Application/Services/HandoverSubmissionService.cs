@@ -10,6 +10,7 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+/// <summary>Người nhận nộp hồ sơ (họ tên, căn cước, ảnh hai mặt) và ký biên bản, hoặc xem hồ sơ mới nhất của mình.</summary>
 public interface IHandoverSubmissionService
 {
     /// <summary>
@@ -28,6 +29,7 @@ public interface IHandoverSubmissionService
 //   2. Xem lại hồ sơ mới nhất đã nộp ................................................. GetLatestAsync
 // Lượt có biên bản: hồ sơ này là phần ký của người nhận, ảnh văn bản dựng lúc Người xét duyệt gửi.
 // Lượt không có biên bản (luồng cũ): ảnh văn bản dựng ngay lúc nộp (StorePaperAsync).
+/// <summary>Người nhận nộp hồ sơ: đối chiếu với dữ liệu Chủ kho đã khai, lưu ảnh mã hóa, ghi chữ ký vào biên bản và báo Người xét duyệt.</summary>
 public sealed class HandoverSubmissionService : IHandoverSubmissionService
 {
     private readonly ICurrentUser currentUser;

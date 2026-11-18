@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LegacyVault.Application.Dtos.Requests;
 
-/// <summary>Khóa mở gói do Người thực hiện đưa trực tiếp cho người nhận.</summary>
+/// <summary>Khóa mở gói do Người thực thi đưa trực tiếp cho người nhận.</summary>
 public class VerifyHandoverKeyRequest
 {
     [Required(ErrorMessage = "Vui lòng nhập khóa mở gói.")]

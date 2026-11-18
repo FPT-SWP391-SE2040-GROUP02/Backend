@@ -13,6 +13,7 @@ public sealed class PreparedDownload
     public Func<Stream, CancellationToken, Task> WriteToAsync { get; set; } = (stream, token) => Task.CompletedTask;
 }
 
+/// <summary>Chuẩn bị việc tải một tài sản bàn giao của người nhận.</summary>
 public interface IHandoverDownloadService
 {
     /// <summary>

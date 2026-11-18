@@ -20,6 +20,7 @@ public interface IHandoverInvitationRetryJob
     Task ProcessTurnAsync(Guid turnId, CancellationToken ct);
 }
 
+/// <summary>Việc nền gửi lại lời mời chưa giao được; mỗi lượt thử tối đa MaxAttempts lần, giãn cách tăng dần.</summary>
 /// <remarks>
 /// - Lượt phải còn Invited, chưa ai nhận và kế hoạch còn HandoverInProgress; kho có hold thì tạm dừng (không tính là lần lỗi).
 /// - DB chỉ giữ mã băm nên mỗi lần gửi lại là token mới; chỉ lưu mã băm mới sau khi email được nhận,

@@ -138,7 +138,7 @@ public sealed class HandoverController : ControllerBase
         return handoverService.AcceptAsync(turnId, ct);
     }
 
-    /// <summary>Nhập khóa mở gói do Người thực hiện đưa. Sai thì 403 HANDOVER_KEY_INVALID, quá giới hạn thì 423.</summary>
+    /// <summary>Nhập khóa mở gói do Người thực thi đưa. Sai thì 403 HANDOVER_KEY_INVALID, quá giới hạn thì 423.</summary>
     [HttpPost("turns/{turnId:guid}/verify-key")]
     [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]

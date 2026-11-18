@@ -36,7 +36,7 @@ public interface IHandoverService
     Task<HandoverTurnResponse> DeclineAsync(Guid turnId, CancellationToken ct);
 
     /// <summary>
-    /// Nhập khóa mở gói do Người thực hiện đưa. Đúng thì ghi nhận (gọi lặp an toàn); sai thì 403 HANDOVER_KEY_INVALID kèm
+    /// Nhập khóa mở gói do Người thực thi đưa. Đúng thì ghi nhận (gọi lặp an toàn); sai thì 403 HANDOVER_KEY_INVALID kèm
     /// attemptsRemaining; quá giới hạn thì 423 HANDOVER_KEY_LOCKED. Kho chưa cấp khóa thì không cần và trả lượt như cũ.
     /// </summary>
     Task<HandoverTurnResponse> VerifyKeyAsync(Guid turnId, string? key, CancellationToken ct);

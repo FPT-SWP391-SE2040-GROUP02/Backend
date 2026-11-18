@@ -53,6 +53,7 @@ public static class RetentionNoticeEmail
     }
 }
 
+/// <summary>Gửi thư mốc lưu dữ liệu thật qua SMTP.</summary>
 public sealed class SmtpRetentionNoticeSender : IRetentionNoticeSender
 {
     private readonly SmtpMailSender mailSender;

@@ -8,6 +8,7 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+/// <summary>Màn Tài sản của Người thực thi: các gói sẵn sàng của kho, chỉ có tên, không có nội dung tài sản.</summary>
 public sealed class ExecutorAssetService : IExecutorAssetService
 {
     private readonly ICurrentUser currentUser;
