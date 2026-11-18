@@ -36,7 +36,8 @@ public sealed class HandoverKeyTests
         Designation designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
         service = new HandoverService(
             currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(), new NoHoldReaderForTests(),
-            unitOfWork, time, keyShards);
+            unitOfWork, time, keyShards, new FakeHandoverSubmissionRepository(), new LegacyVault.IntegrationTests.Ekyc.FakeEkycBeneficiaryRepository(),
+            new FakeBeneficiaryDataProtector());
         turn = data.BuildTurn(container, designation, HandoverTurnStatus.ReadyToAccept, "t1", claimantId);
         turn.ReadyAt = Now;
         turn.DecisionDeadline = Now.AddDays(7);

@@ -27,10 +27,10 @@ public sealed class HandoverService : IHandoverService
     private readonly ITokenService tokens;
     private readonly IHandoverPolicy policy;
     private readonly IHoldReader holdReader;
-    private readonly IExecutorKeyShardRepository? keyShards;
-    private readonly IHandoverSubmissionRepository? submissions;
-    private readonly IBeneficiaryRepository? beneficiaries;
-    private readonly IBeneficiaryDataProtector? beneficiaryProtector;
+    private readonly IExecutorKeyShardRepository keyShards;
+    private readonly IHandoverSubmissionRepository submissions;
+    private readonly IBeneficiaryRepository beneficiaries;
+    private readonly IBeneficiaryDataProtector beneficiaryProtector;
 
     /// <summary>Số lần nhập sai khóa mở gói tối đa trước khi khóa lượt.</summary>
     public const int MaxKeyFailures = 5;
@@ -44,26 +44,13 @@ public sealed class HandoverService : IHandoverService
         IHandoverRepository handover,
         ITokenService tokens,
         IHandoverPolicy policy,
-        IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
-        : this(currentUser, users, vaults, handover, tokens, policy, new NoHoldReader(), unitOfWork, timeProvider)
-    {
-    }
-
-    public HandoverService(
-        ICurrentUser currentUser,
-        IUserRepository users,
-        IVaultRepository vaults,
-        IHandoverRepository handover,
-        ITokenService tokens,
-        IHandoverPolicy policy,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        IExecutorKeyShardRepository? keyShards = null,
-        IHandoverSubmissionRepository? submissions = null,
-        IBeneficiaryRepository? beneficiaries = null,
-        IBeneficiaryDataProtector? beneficiaryProtector = null)
+        IExecutorKeyShardRepository keyShards,
+        IHandoverSubmissionRepository submissions,
+        IBeneficiaryRepository beneficiaries,
+        IBeneficiaryDataProtector beneficiaryProtector)
     {
         this.beneficiaries = beneficiaries;
         this.beneficiaryProtector = beneficiaryProtector;
@@ -543,10 +530,6 @@ public sealed class HandoverService : IHandoverService
     /// <summary>Email người nhận của lượt (giải mã, chuẩn hóa trim + chữ thường); không có hoặc không đọc được thì null.</summary>
     private async Task<string?> FindRecipientEmailAsync(HandoverTurn turn, CancellationToken ct)
     {
-        if (beneficiaries == null || beneficiaryProtector == null)
-        {
-            return null;
-        }
         try
         {
             Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
@@ -618,10 +601,6 @@ public sealed class HandoverService : IHandoverService
     /// <summary>Họ tên người nhận Chủ kho đã nhập, giải mã để chào đúng người; không đọc được thì để trống, không làm hỏng màn hình.</summary>
     private async Task<string?> FindRecipientFullNameAsync(HandoverTurn turn, CancellationToken ct)
     {
-        if (beneficiaries == null || beneficiaryProtector == null)
-        {
-            return null;
-        }
         try
         {
             Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
@@ -659,16 +638,13 @@ public sealed class HandoverService : IHandoverService
         response.KeyVerified = !response.KeyRequired || turn.KeyVerifiedAt != null;
         response.ReceivedAllAt = turn.ReceivedAllAt;
         response.RecipientFullName = await FindRecipientFullNameAsync(turn, ct);
-        if (submissions != null)
+        var reviewer = await submissions.FindApprovingVerifierAsync(turn.VaultId, ct);
+        if (reviewer != null)
         {
-            var reviewer = await submissions.FindApprovingVerifierAsync(turn.VaultId, ct);
-            if (reviewer != null)
-            {
-                HandoverReviewerResponse reviewerResponse = new HandoverReviewerResponse();
-                reviewerResponse.FullName = reviewer.Value.FullName;
-                reviewerResponse.LawyerCardNumber = reviewer.Value.LawyerCardNumber;
-                response.Reviewer = reviewerResponse;
-            }
+            HandoverReviewerResponse reviewerResponse = new HandoverReviewerResponse();
+            reviewerResponse.FullName = reviewer.Value.FullName;
+            reviewerResponse.LawyerCardNumber = reviewer.Value.LawyerCardNumber;
+            response.Reviewer = reviewerResponse;
         }
 
         bool showContent = turn.Status == HandoverTurnStatus.ReadyToAccept
@@ -700,10 +676,6 @@ public sealed class HandoverService : IHandoverService
     /// <summary>Kho đã cấp khóa mở gói thì người nhận phải nhập khóa; chưa cấp thì bỏ qua.</summary>
     private async Task<bool> IsKeyRequiredAsync(HandoverTurn turn, CancellationToken ct)
     {
-        if (keyShards == null)
-        {
-            return false;
-        }
         return await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null;
     }
 
@@ -738,11 +710,7 @@ public sealed class HandoverService : IHandoverService
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
 
         // 2. Kho chưa cấp khóa, hoặc đã nhập đúng từ trước: không cần làm gì
-        ExecutorKeyShard? shard = null;
-        if (keyShards != null)
-        {
-            shard = await keyShards.FindByVaultIdAsync(turn.VaultId, ct);
-        }
+        ExecutorKeyShard? shard = await keyShards.FindByVaultIdAsync(turn.VaultId, ct);
         if (shard == null || turn.KeyVerifiedAt != null)
         {
             return await BuildTurnResponseAsync(turn, ct);

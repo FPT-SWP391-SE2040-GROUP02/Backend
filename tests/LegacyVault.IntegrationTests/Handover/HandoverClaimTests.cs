@@ -46,7 +46,7 @@ public sealed class HandoverClaimTests
 
         // Cần kho hồ sơ người nhận và bộ giải mã giả để kiểm email người nhận (D2).
         service = new HandoverService(currentUser, users, vaults, repository, new FakeTokenService(), policy, holdReader,
-            unitOfWork, time, null, null, beneficiaryRepository, protector);
+            unitOfWork, time, new HandoverKeyTests.FakeKeyShards(), new FakeHandoverSubmissionRepository(), beneficiaryRepository, protector);
     }
 
     /// <summary>Đưa hồ sơ người nhận của chỉ định vào kho giả để service đọc được email.</summary>
