@@ -83,7 +83,7 @@ public sealed class HandoverStarter : IHandoverStarter
 
         if (plan.Status != PlanStatus.DeathCaseOpen)
         {
-            throw NotAllowed("PLAN_NOT_READY", "Kế hoạch chưa ở trạng thái mở bàn giao.");
+            throw HandoverAccess.NotAllowed("PLAN_NOT_READY", "Kế hoạch chưa ở trạng thái mở bàn giao.");
         }
 
         // 3. Lấy các chỉ định gói cho người nhận, chỉ giữ phần có trong bản di chúc đã ký gần nhất
@@ -103,7 +103,7 @@ public sealed class HandoverStarter : IHandoverStarter
         }
         if (designations.Count == 0)
         {
-            throw NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
+            throw HandoverAccess.NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
         }
 
         // 4. Với mỗi chỉ định: tạo một lượt (token mời, hạn phản hồi, danh sách tài sản ghim lại) và soạn thư mời
@@ -164,7 +164,7 @@ public sealed class HandoverStarter : IHandoverStarter
 
         if (turns.Count == 0)
         {
-            throw NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
+            throw HandoverAccess.NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
         }
 
         // 5. Đảm bảo kho có khóa mở gói cho Người thực thi, chuyển kế hoạch sang đang bàn giao, lưu một lần
@@ -244,12 +244,5 @@ public sealed class HandoverStarter : IHandoverStarter
         }
 
         return items;
-    }
-
-    private static AppException NotAllowed(string reason, string message)
-    {
-        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["reason"] = reason;
-        return new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed, message, extensions);
     }
 }

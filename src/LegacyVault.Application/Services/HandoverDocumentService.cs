@@ -105,7 +105,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
         if (turn.Status != HandoverTurnStatus.IdentityInProgress)
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước lập biên bản.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước lập biên bản.");
         }
 
         // 2. Đã có biên bản: cùng lựa chọn thì trả lại; khác lựa chọn thì chỉ đổi được khi người nhận chưa nộp
@@ -118,7 +118,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
             {
                 if (!HandoverDocumentRules.CanChangeKind(existing))
                 {
-                    throw NotAllowed("DOCUMENT_STARTED", "Biên bản đã sang bước sau nên không đổi lựa chọn được.");
+                    throw HandoverAccess.NotAllowed("DOCUMENT_STARTED", "Biên bản đã sang bước sau nên không đổi lựa chọn được.");
                 }
                 existing.Kind = kind;
                 existing.UpdatedAt = now;
@@ -557,30 +557,15 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
     private async Task<bool> IsActiveExecutorAsync(Guid vaultId, Guid userId, CancellationToken ct)
     {
         Vault? vault = await vaults.FindByIdAsync(vaultId, ct);
-        if (vault == null || vault.OwnerId == userId)
+        if (vault == null)
         {
             return false;
         }
-        List<Executor> executors = await executorReader.GetActiveAsync(vaultId, ct);
-        foreach (Executor executor in executors)
-        {
-            if (executor.UserId == userId)
-            {
-                return true;
-            }
-        }
-        return false;
+        return await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct);
     }
 
     private static AppException NotFound()
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy biên bản.");
-    }
-
-    private static AppException NotAllowed(string reason, string message)
-    {
-        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["reason"] = reason;
-        return new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed, message, extensions);
     }
 }

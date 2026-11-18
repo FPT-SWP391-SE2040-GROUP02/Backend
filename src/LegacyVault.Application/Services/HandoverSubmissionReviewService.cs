@@ -168,20 +168,20 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         if (submission.Status != HandoverSubmissionStatus.Submitted)
         {
-            throw NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
         }
         if (documents != null && await documents.FindByTurnIdAsync(turn.Id, ct) != null)
         {
-            throw NotAllowed("USE_DOCUMENT", "Hồ sơ này thuộc một biên bản. Hãy kiểm tra thủ công rồi bấm gửi.");
+            throw HandoverAccess.NotAllowed("USE_DOCUMENT", "Hồ sơ này thuộc một biên bản. Hãy kiểm tra thủ công rồi bấm gửi.");
         }
         if (!(submission.NameMatches && submission.CitizenIdMatches && submission.DateOfBirthMatches))
         {
-            throw NotAllowed("FIELDS_MISMATCH", "Có trường không khớp thông tin Chủ kho đã khai. Chỉ yêu cầu bổ sung được.");
+            throw HandoverAccess.NotAllowed("FIELDS_MISMATCH", "Có trường không khớp thông tin Chủ kho đã khai. Chỉ yêu cầu bổ sung được.");
         }
         Vault vault = await RequireVaultInHandoverAsync(turn, ct);
         if (turn.Status != HandoverTurnStatus.IdentityInProgress)
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
         }
 
         // 3. Đánh dấu hồ sơ đã duyệt, lượt sang chờ quyết định, ghi người xác nhận danh tính
@@ -232,7 +232,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         if (document == null || handover == null)
         {
-            throw NotAllowed("NO_DOCUMENT", "Hồ sơ này không có biên bản để hoàn tất.");
+            throw HandoverAccess.NotAllowed("NO_DOCUMENT", "Hồ sơ này không có biên bản để hoàn tất.");
         }
 
         // 2. Các điều kiện: biên bản đang chờ Người xét duyệt và đúng hồ sơ này, tick đủ, đã xác nhận,
@@ -246,7 +246,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             || document.Status != HandoverDocumentStatus.WaitVerifier
             || document.SubmissionId != submission.Id)
         {
-            throw NotAllowed("WRONG_STATE", "Biên bản này không còn chờ bạn kiểm tra.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Biên bản này không còn chờ bạn kiểm tra.");
         }
         if (!HandoverDocumentRules.AllChecked(request.Checks))
         {
@@ -258,7 +258,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         if (turn.Status != HandoverTurnStatus.IdentityInProgress || turn.ClaimantUserId == null)
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước lập biên bản.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước lập biên bản.");
         }
         Vault vault = await RequireVaultInHandoverAsync(turn, ct);
 
@@ -365,11 +365,11 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         Guid userId = currentUser.RequireUserId();
         if (submission.Status != HandoverSubmissionStatus.Submitted)
         {
-            throw NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
         }
         if (submission.Turn.Status != HandoverTurnStatus.IdentityInProgress)
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
         }
 
         // 3. Đánh dấu hồ sơ cần bổ sung; biên bản (nếu có) trả về người nhận để sửa Phần 2 và ký lại
@@ -444,11 +444,11 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         if (vault.Plan.Status != PlanStatus.HandoverInProgress)
         {
-            throw NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
+            throw HandoverAccess.NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
         if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
         {
-            throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa duyệt được.");
+            throw HandoverAccess.NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa duyệt được.");
         }
         return vault;
     }
@@ -456,12 +456,5 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     private static AppException SubmissionNotFound()
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy hồ sơ người nhận.");
-    }
-
-    private static AppException NotAllowed(string reason, string message)
-    {
-        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["reason"] = reason;
-        return new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed, message, extensions);
     }
 }
