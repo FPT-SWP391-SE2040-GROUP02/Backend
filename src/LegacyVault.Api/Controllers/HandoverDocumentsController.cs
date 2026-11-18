@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>Biên bản đồng ý nhận và văn bản từ chối, nhìn từ phía người nhận.</summary>
-/// <remarks>Chỉ người đã nhận lượt này; lượt của người khác hoặc id lạ cùng một lỗi 404 (SEC-04).</remarks>
+/// <remarks>Chỉ người đã nhận lượt này; lượt của người khác hoặc id lạ cùng một lỗi 404.</remarks>
 [ApiController]
 [Authorize]
 [Route("api/v1/handover")]

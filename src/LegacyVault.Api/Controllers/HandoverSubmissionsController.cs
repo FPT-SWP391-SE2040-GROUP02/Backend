@@ -21,7 +21,7 @@ public sealed class SubmitHandoverSubmissionForm : SubmitHandoverSubmissionReque
 }
 
 /// <summary>Người nhận nộp hồ sơ (Chấp nhận hoặc Từ chối kèm ảnh căn cước) và xem trạng thái hồ sơ của lượt mình.</summary>
-/// <remarks>Chỉ người đã nhận lượt này; lượt của người khác hoặc id lạ cùng một lỗi 404 (SEC-04).</remarks>
+/// <remarks>Chỉ người đã nhận lượt này; lượt của người khác hoặc id lạ cùng một lỗi 404.</remarks>
 [ApiController]
 [Authorize]
 [Route("api/v1/handover/turns/{turnId:guid}/submission")]
@@ -69,6 +69,7 @@ public sealed class HandoverSubmissionsController : ControllerBase
         return latest;
     }
 
+    /// <summary>Đọc một ảnh tải lên vào bộ nhớ; ảnh lớn hơn giới hạn thì trả 413.</summary>
     private static async Task<byte[]> ReadAsync(IFormFile file, CancellationToken ct)
     {
         if (file.Length > EkycRules.MaxImageBytes)
@@ -112,6 +113,7 @@ public sealed class VerifierHandoverSubmissionsController : ControllerBase
         return reviewService.ListPendingAsync(ct);
     }
 
+    /// <summary>Người xét duyệt xem chi tiết một hồ sơ chờ kiểm tra: kết quả so khớp với dữ liệu Chủ kho đã khai.</summary>
     [HttpGet("{submissionId:guid}")]
     [ProducesResponseType<VerifierHandoverSubmissionResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
