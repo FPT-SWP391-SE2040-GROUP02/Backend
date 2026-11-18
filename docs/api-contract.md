@@ -515,7 +515,6 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
   "dateOfBirth": "1990-05-20",
   "email": "an.nguyen@example.com",
   "phone": "0901234567",
-  "minorAcknowledgedAt": null,
   "containerIds": [],
   "createdAt": "2026-10-14T08:00:00+00:00",
   "updatedAt": null,
@@ -532,7 +531,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **Liên hệ:** cần ít nhất `email` hoặc `phone`. Khi tạo, `""` coi như không có. Khi sửa, `null`/không gửi = giữ nguyên, `""` = xóa. Email được đổi sang chữ thường; số điện thoại bỏ khoảng trắng, dấu chấm, dấu gạch, phải có 9–15 chữ số (cho phép `+` đầu).
 - **Email nhân sự:** `email` trùng một tài khoản role `EXECUTOR`/`VERIFIER`/`ADMIN` (khi tạo hoặc sửa) → `400 VALIDATION_ERROR` ở trường `email`: "Email này thuộc tài khoản nhân sự của LegacyVault nên không thể làm người nhận."
 - **Trùng CCCD trong kho:** cùng CCCD, cùng họ tên (không phân biệt hoa thường, bỏ khoảng trắng thừa) và cùng ngày sinh → **200** trả hồ sơ cũ, không đổi gì (kể cả liên hệ). Khác họ tên hoặc ngày sinh → `409 BENEFICIARY_IDENTITY_CONFLICT` kèm `beneficiaryId`; FE mở hồ sơ đó cho Owner sửa cho thống nhất.
-- **Tuổi:** không kiểm tra và không trả nhãn tuổi (đã bỏ `isMinor`). `minorAcknowledgedAt` không còn dùng (hồ sơ mới luôn `null`). Trường `confirmMinor` của FE cũ nếu còn gửi sẽ bị bỏ qua, không lỗi. Ngày sinh ở tương lai → 400.
+- **Tuổi:** không kiểm tra và không trả nhãn tuổi (đã bỏ `isMinor`). Không còn trường `minorAcknowledgedAt`. Trường `confirmMinor` của FE cũ nếu còn gửi sẽ bị bỏ qua, không lỗi. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
 - `containerIds`: các gói đang có người này, theo thứ tự gắn; rỗng khi chưa ở gói nào.
 - **Giới hạn số hồ sơ:** số hồ sơ của kho (tính cả hồ sơ chưa ở gói nào) không vượt tổng suất `beneficiarySlots`. Tạo hồ sơ mới khi đã đủ → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots` (số hồ sơ hiện có) và `maxSlots`; FE gợi ý mua thêm suất hoặc xóa hồ sơ chưa dùng. Gửi lại đúng người đã có (trùng CCCD, cùng họ tên và ngày sinh) vẫn **200** dù đã đủ. FE lấy số hồ sơ từ `totalCount` của danh sách.
