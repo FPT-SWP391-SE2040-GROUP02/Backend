@@ -7,6 +7,10 @@ public static class HandoverTemplateDefaults
     public const string DefaultDeclineNotice =
         "Nếu một người nhận từ chối nhận, phần tài sản của gói bàn giao đó sẽ bị xóa hoàn toàn khỏi hệ thống và không thể khôi phục.";
 
+    /// <summary>Điều khoản của văn bản từ chối: người từ chối biết phần tài sản điện tử sẽ bị xóa, không khôi phục được.</summary>
+    public const string DeclineDeletionClause =
+        "- Tôi hiểu và đồng ý rằng khi tôi từ chối nhận, phần tài sản điện tử của gói bàn giao nêu trên sẽ bị xóa hoàn toàn khỏi hệ thống và không thể khôi phục.";
+
     /// <summary>Bộ mẫu gốc gồm biên bản đồng ý, văn bản từ chối và câu báo từ chối.</summary>
     public static HandoverTemplateContent Create()
     {
@@ -79,6 +83,7 @@ public static class HandoverTemplateDefaults
         list.Add(new TemplateParagraph(
             "- Việc từ chối nhận tài sản thừa kế này không nhằm trốn tránh việc thực hiện nghĩa vụ tài sản của mình đối với người khác theo Điều 620 Bộ luật Dân sự 2015.",
             TemplateParagraph.AlignLeft, false));
+        list.Add(new TemplateParagraph(DeclineDeletionClause, TemplateParagraph.AlignLeft, false));
         list.Add(new TemplateParagraph(
             "- Tôi đã đọc nội dung Văn bản này, đã hiểu rõ trách nhiệm pháp lý của mình khi lập và ký/điểm chỉ vào Văn bản này.",
             TemplateParagraph.AlignLeft, false));

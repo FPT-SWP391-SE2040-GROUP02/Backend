@@ -163,6 +163,7 @@ public sealed class QuestPdfHandoverPaperRenderer : IHandoverPaperRenderer
         Para(column, "- Những thông tin về nhân thân, về tài sản đã ghi trong văn bản này là đúng sự thật.");
         Para(column,
             "- Việc từ chối nhận tài sản thừa kế này không nhằm trốn tránh việc thực hiện nghĩa vụ tài sản của mình đối với người khác theo Điều 620 Bộ luật Dân sự 2015.");
+        Para(column, HandoverTemplateDefaults.DeclineDeletionClause);
         Para(column,
             "- Tôi đã đọc nội dung Văn bản này, đã hiểu rõ trách nhiệm pháp lý của mình khi lập và ký/điểm chỉ vào Văn bản này.");
         if (data.HasSignatures)
