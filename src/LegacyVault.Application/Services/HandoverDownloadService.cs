@@ -51,7 +51,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         HandoverGrant? grant = await handover.FindGrantByIdAsync(grantId, ct);
         if (grant == null || grant.UserId != userId)
         {
-            throw HandoverNotFound();
+            throw HandoverAccess.NotFound();
         }
 
         HandoverTurn turn = grant.Turn;
@@ -59,7 +59,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
         if (item == null || vault == null)
         {
-            throw HandoverNotFound();
+            throw HandoverAccess.NotFound();
         }
 
         // 3. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kho đang bị giữ, hoặc chưa nhập khóa mở gói.
@@ -162,11 +162,5 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         }
 
         return item.Name;
-    }
-
-    private static AppException HandoverNotFound()
-    {
-        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound,
-            "Không tìm thấy nội dung bàn giao.");
     }
 }

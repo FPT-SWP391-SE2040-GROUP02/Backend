@@ -136,7 +136,7 @@ public sealed class HandoverService : IHandoverService
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
         if (turn == null)
         {
-            throw HandoverNotFound();
+            throw HandoverAccess.NotFound();
         }
 
         // 3. Kiểm điều kiện, gắn lượt cho người này rồi lưu (xem ClaimTurnAsync)
@@ -250,28 +250,28 @@ public sealed class HandoverService : IHandoverService
 
         if (vault.OwnerId == userId)
         {
-            throw NotAllowed("OWNER_CANNOT_CLAIM", "Chủ kho không thể nhận tài sản của chính mình.");
+            throw HandoverAccess.NotAllowed("OWNER_CANNOT_CLAIM", "Chủ kho không thể nhận tài sản của chính mình.");
         }
 
         // Tài khoản nhân sự (Executor, Verifier, Admin) xử lý hồ sơ bàn giao nên không được nhận tài sản.
         if (user.Role == UserRole.Executor || user.Role == UserRole.Verifier || user.Role == UserRole.Admin)
         {
-            throw NotAllowed("STAFF_CANNOT_CLAIM", "Tài khoản nhân sự không thể nhận tài sản bàn giao.");
+            throw HandoverAccess.NotAllowed("STAFF_CANNOT_CLAIM", "Tài khoản nhân sự không thể nhận tài sản bàn giao.");
         }
 
         if (vault.Plan.Status != PlanStatus.HandoverInProgress)
         {
-            throw NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
+            throw HandoverAccess.NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
 
         if (!HandoverRules.CanClaim(turn.Status))
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này không còn nhận được.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không còn nhận được.");
         }
 
         if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
         {
-            throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa nhận được lượt này.");
+            throw HandoverAccess.NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa nhận được lượt này.");
         }
 
         // D2: đúng email mới được nhận (tài khoản đã xác minh email ở EnsureAccountUsableAsync).
@@ -322,7 +322,7 @@ public sealed class HandoverService : IHandoverService
     {
         // 1. Lượt phải thuộc người đang đăng nhập; không thì báo không tìm thấy
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
 
         // 2. Trả trạng thái hiện tại của lượt
         return await BuildTurnResponseAsync(turn, ct);
@@ -333,7 +333,7 @@ public sealed class HandoverService : IHandoverService
     {
         // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
 
         // 2. Bấm lặp: đã đồng ý rồi thì trả lại đúng grant cũ, không tạo thêm và không ghi gì.
         if (turn.Status == HandoverTurnStatus.HandoverCommitted && turn.Grant != null)
@@ -373,7 +373,7 @@ public sealed class HandoverService : IHandoverService
     {
         // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
 
         // 2. Bấm lặp: đã từ chối rồi thì trả trạng thái hiện tại
         if (turn.Status == HandoverTurnStatus.Declined)
@@ -407,14 +407,14 @@ public sealed class HandoverService : IHandoverService
         HandoverGrant? grant = await handover.FindGrantByIdAsync(grantId, ct);
         if (grant == null || grant.UserId != userId)
         {
-            throw HandoverNotFound();
+            throw HandoverAccess.NotFound();
         }
 
         HandoverTurn turn = grant.Turn;
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
         if (vault == null)
         {
-            throw HandoverNotFound();
+            throw HandoverAccess.NotFound();
         }
 
         // 3. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kế hoạch không còn chạy, hoặc kho đang bị giữ
@@ -446,22 +446,22 @@ public sealed class HandoverService : IHandoverService
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
         if (vault == null)
         {
-            throw HandoverNotFound();
+            throw HandoverAccess.NotFound();
         }
 
         if (vault.Plan.Status != PlanStatus.HandoverInProgress)
         {
-            throw NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
+            throw HandoverAccess.NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
 
         if (turn.Status != HandoverTurnStatus.ReadyToAccept)
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để quyết định.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để quyết định.");
         }
 
         if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
         {
-            throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa quyết định được.");
+            throw HandoverAccess.NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa quyết định được.");
         }
 
         // Đúng giây hạn là hết hạn, kể cả khi job chưa kịp chạy (TIME-02).
@@ -587,17 +587,6 @@ public sealed class HandoverService : IHandoverService
         return turn;
     }
 
-    /// <summary>Lượt của người đang đăng nhập; id lạ và lượt của người khác cho cùng một lỗi (SEC-04).</summary>
-    private async Task<HandoverTurn> FindMyTurnAsync(Guid turnId, Guid userId, CancellationToken ct)
-    {
-        HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
-        if (turn == null || turn.ClaimantUserId != userId)
-        {
-            throw HandoverNotFound();
-        }
-        return turn;
-    }
-
     /// <summary>Họ tên người nhận Chủ kho đã nhập, giải mã để chào đúng người; không đọc được thì để trống, không làm hỏng màn hình.</summary>
     private async Task<string?> FindRecipientFullNameAsync(HandoverTurn turn, CancellationToken ct)
     {
@@ -684,12 +673,12 @@ public sealed class HandoverService : IHandoverService
     {
         // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
 
         // 2. Chỉ xác nhận được khi lượt đã bàn giao và có quyền tải
         if (turn.Status != HandoverTurnStatus.HandoverCommitted || turn.Grant == null)
         {
-            throw NotAllowed("NOT_COMMITTED", "Chỉ xác nhận đã nhận đủ sau khi đồng ý nhận tài sản.");
+            throw HandoverAccess.NotAllowed("NOT_COMMITTED", "Chỉ xác nhận đã nhận đủ sau khi đồng ý nhận tài sản.");
         }
         // 3. Ghi mốc nhận đủ một lần; bấm lặp thì giữ mốc cũ
         if (turn.ReceivedAllAt == null)
@@ -707,7 +696,7 @@ public sealed class HandoverService : IHandoverService
     {
         // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
 
         // 2. Kho chưa cấp khóa, hoặc đã nhập đúng từ trước: không cần làm gì
         ExecutorKeyShard? shard = await keyShards.FindByVaultIdAsync(turn.VaultId, ct);
@@ -718,7 +707,7 @@ public sealed class HandoverService : IHandoverService
         // 3. Lượt phải đã sẵn sàng hoặc đã bàn giao, và chưa bị khóa vì sai quá số lần
         if (turn.Status != HandoverTurnStatus.ReadyToAccept && turn.Status != HandoverTurnStatus.HandoverCommitted)
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để nhập khóa.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để nhập khóa.");
         }
         if (turn.KeyFailedCount >= MaxKeyFailures)
         {
@@ -750,18 +739,5 @@ public sealed class HandoverService : IHandoverService
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverInvitationInvalid,
             "Liên kết mời không hợp lệ.");
-    }
-
-    private static AppException HandoverNotFound()
-    {
-        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound,
-            "Không tìm thấy nội dung bàn giao.");
-    }
-
-    private static AppException NotAllowed(string reason, string message)
-    {
-        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["reason"] = reason;
-        return new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed, message, extensions);
     }
 }

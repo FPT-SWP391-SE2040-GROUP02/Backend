@@ -77,12 +77,12 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
     {
         // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
 
         // 2. Lượt phải đang ở bước nộp hồ sơ người nhận
         if (turn.Status != HandoverTurnStatus.IdentityInProgress)
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước nộp hồ sơ người nhận.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước nộp hồ sơ người nhận.");
         }
 
         // 3. Đọc lựa chọn; phải tick đã đọc điều khoản, và tick tự nguyện nếu từ chối
@@ -115,7 +115,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         {
             if (document.Status != HandoverDocumentStatus.WaitRecipient)
             {
-                throw NotAllowed("DOCUMENT_NOT_READY", "Biên bản chưa đến lượt bạn điền và ký.");
+                throw HandoverAccess.NotAllowed("DOCUMENT_NOT_READY", "Biên bản chưa đến lượt bạn điền và ký.");
             }
             if (document.Kind != kind)
             {
@@ -127,14 +127,14 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
         if (beneficiary == null)
         {
-            throw HandoverNotFound();
+            throw HandoverAccess.NotFound();
         }
         BeneficiaryPersonalData expected = protector.Unprotect(beneficiary);
 
         HandoverSubmission? latest = await submissions.FindLatestByTurnAsync(turn.Id, ct);
         if (latest != null && latest.Status == HandoverSubmissionStatus.Approved)
         {
-            throw NotAllowed("ALREADY_APPROVED", "Hồ sơ của bạn đã được duyệt.");
+            throw HandoverAccess.NotAllowed("ALREADY_APPROVED", "Hồ sơ của bạn đã được duyệt.");
         }
 
         // 7. Tạo hồ sơ mới: chỉ giữ 4 số cuối căn cước và ba kết quả đối chiếu tên, số căn cước, ngày sinh
@@ -257,7 +257,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
     {
         // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
         // 2. Trả hồ sơ mới nhất, chưa nộp thì null
         HandoverSubmission? latest = await submissions.FindLatestByTurnAsync(turn.Id, ct);
         return latest == null ? null : ToResponse(latest);
@@ -273,28 +273,5 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         response.SupplementReason = submission.SupplementReason;
         response.CreatedAt = submission.CreatedAt;
         return response;
-    }
-
-    /// <summary>Lượt của người đang đăng nhập; id lạ và lượt của người khác cho cùng một lỗi (SEC-04).</summary>
-    private async Task<HandoverTurn> FindMyTurnAsync(Guid turnId, Guid userId, CancellationToken ct)
-    {
-        HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
-        if (turn == null || turn.ClaimantUserId != userId)
-        {
-            throw HandoverNotFound();
-        }
-        return turn;
-    }
-
-    private static AppException HandoverNotFound()
-    {
-        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy nội dung bàn giao.");
-    }
-
-    private static AppException NotAllowed(string reason, string message)
-    {
-        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["reason"] = reason;
-        return new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed, message, extensions);
     }
 }
