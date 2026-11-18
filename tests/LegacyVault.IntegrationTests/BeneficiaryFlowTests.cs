@@ -202,9 +202,9 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Beneficiary_MinorIsSavedWithoutConfirmation()
+    public async Task Beneficiary_UnderEighteenIsRejected()
     {
-        // Chuẩn bị: người nhận 10 tuổi. Đã bỏ SETUP-19 nên không cần xác nhận gì.
+        // Chuẩn bị: người nhận 10 tuổi.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         string tenYearsAgo = TodayInVietnam().AddYears(-10).ToString("yyyy-MM-dd");
 
@@ -212,30 +212,63 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
             new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, email = Email, phone = "0901 234.567" });
 
-        // Kiểm tra: lưu được ngay; không còn nhãn isMinor và không còn trường minorAcknowledgedAt.
+        // Kiểm tra: 400 ở trường dateOfBirth và không tạo hồ sơ nào.
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(problem.GetProperty("errors").TryGetProperty("dateOfBirth", out _));
+        Assert.Equal(0, await CountBeneficiariesAsync(vaultId));
+    }
+
+    [SqlFact]
+    public async Task Beneficiary_TurningEighteenTodayIsAccepted()
+    {
+        // Chuẩn bị: hôm nay đúng tròn 18 tuổi (biên được phép).
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        string exactlyEighteen = TodayInVietnam().AddYears(-18).ToString("yyyy-MM-dd");
+
+        // Hành động
+        HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = exactlyEighteen, email = Email, phone = "0901 234.567" });
+
+        // Kiểm tra
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         JsonElement created = await ApiTestHelpers.ReadJsonAsync(response);
         Assert.False(created.TryGetProperty("isMinor", out _));
-        Assert.False(created.TryGetProperty("minorAcknowledgedAt", out _));
         Assert.Equal("0901234567", created.GetProperty("phone").GetString());
         Assert.Equal(Email, created.GetProperty("email").GetString());
     }
 
     [SqlFact]
-    public async Task Beneficiary_LegacyConfirmMinorFieldIsIgnored()
+    public async Task Beneficiary_OneDayShortOfEighteenIsRejected()
     {
-        // Chuẩn bị: FE cũ còn gửi confirmMinor = true dù API không còn trường này.
+        // Chuẩn bị: ngày mai mới tròn 18 tuổi (thiếu đúng một ngày).
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        string tenYearsAgo = TodayInVietnam().AddYears(-10).ToString("yyyy-MM-dd");
+        string oneDayShort = TodayInVietnam().AddYears(-18).AddDays(1).ToString("yyyy-MM-dd");
 
         // Hành động
         HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
-            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, email = Email, phone = "0901 234.567", confirmMinor = true });
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = oneDayShort, email = Email });
 
-        // Kiểm tra: trường thừa bị bỏ qua, không lỗi.
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        JsonElement created = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.False(created.TryGetProperty("minorAcknowledgedAt", out _));
+        // Kiểm tra
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(problem.GetProperty("errors").TryGetProperty("dateOfBirth", out _));
+    }
+
+    [SqlFact]
+    public async Task Beneficiary_EditChangingBirthDateToUnderEighteenIsRejected()
+    {
+        // Chuẩn bị: hồ sơ người lớn hợp lệ.
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
+        string url = $"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}";
+        string tenYearsAgo = TodayInVietnam().AddYears(-10).ToString("yyyy-MM-dd");
+
+        // Hành động: đổi ngày sinh thành 10 tuổi.
+        HttpResponseMessage put = await client.PutAsJsonAsync(url,
+            new { etag = created.GetProperty("etag").GetString(), fullName = FullName, dateOfBirth = tenYearsAgo, email = Email });
+
+        // Kiểm tra: bị từ chối ở trường dateOfBirth.
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(put, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(problem.GetProperty("errors").TryGetProperty("dateOfBirth", out _));
     }
 
     [SqlFact]

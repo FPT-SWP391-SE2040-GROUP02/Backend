@@ -25,6 +25,9 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     /// <summary>Ngày sinh và tuổi tính theo giờ Việt Nam (UTC+07:00).</summary>
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
+    /// <summary>Tuổi tối thiểu của người nhận (đủ năng lực hành vi dân sự đầy đủ).</summary>
+    private const int MinimumRecipientAge = 18;
+
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
     private readonly IBeneficiaryRepository beneficiaryRepository;
@@ -114,6 +117,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vault.Id;
         EnsureDateOfBirthNotInFuture(data.DateOfBirth, today);
+        EnsureAdult(data.DateOfBirth, today);
 
         // hồ sơ chung trong kho, một số CCCD chỉ có một hồ sơ.
         MatchedBeneficiary? existing = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
@@ -315,6 +319,11 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         DateTimeOffset now = timeProvider.GetUtcNow();
         DateOnly today = GetTodayInVietnam();
         EnsureDateOfBirthNotInFuture(updated.DateOfBirth, today);
+        // Chỉ kiểm tuổi khi ngày sinh được đổi, để hồ sơ cũ chưa đủ tuổi vẫn sửa được các trường khác.
+        if (updated.DateOfBirth != current.DateOfBirth)
+        {
+            EnsureAdult(updated.DateOfBirth, today);
+        }
 
         bool changed = !string.Equals(updated.FullName, current.FullName, StringComparison.Ordinal)
             || updated.DateOfBirth != current.DateOfBirth
@@ -489,15 +498,25 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         return DateOnly.FromDateTime(nowInVietnam.DateTime);
     }
 
-    /// <summary>
-    /// Ngày sinh không được ở tương lai (400). Không kiểm tuổi: người nhận dưới 18 tuổi vẫn lưu bình thường
-    /// (đã bỏ SETUP-19 / AC-105).
-    /// </summary>
+    /// <summary>Ngày sinh không được ở tương lai (400).</summary>
     private static void EnsureDateOfBirthNotInFuture(DateOnly dateOfBirth, DateOnly today)
     {
         if (dateOfBirth > today)
         {
             throw ValidationErrors.For("dateOfBirth", "Ngày sinh không được ở tương lai.");
+        }
+    }
+
+    /// <summary>
+    /// Người nhận phải đủ 18 tuổi tính đến hôm nay (giờ Việt Nam). Đủ tuổi khi ngày sinh không muộn hơn
+    /// ngày này của 18 năm trước (AddYears xử lý đúng 29/2). Thiếu tuổi thì 400 ở trường dateOfBirth.
+    /// </summary>
+    private static void EnsureAdult(DateOnly dateOfBirth, DateOnly today)
+    {
+        DateOnly latestAllowed = today.AddYears(-MinimumRecipientAge);
+        if (dateOfBirth > latestAllowed)
+        {
+            throw ValidationErrors.For("dateOfBirth", "Người nhận phải đủ 18 tuổi.");
         }
     }
 
