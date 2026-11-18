@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Việc nền gửi lại lời mời F3 chưa giao được (OPS-04): lần gửi đầu lỗi, hoặc tiến trình dừng sau khi lưu lượt
+/// Việc nền gửi lại lời mời F3 chưa giao được: lần gửi đầu lỗi, hoặc tiến trình dừng sau khi lưu lượt
 /// nhưng trước khi gửi thư. Mỗi hàm Process* đọc lại dữ liệu và kiểm lại điều kiện nên chạy lặp là an toàn.
 /// </summary>
 public interface IHandoverInvitationRetryJob
@@ -22,12 +22,12 @@ public interface IHandoverInvitationRetryJob
 
 /// <remarks>
 /// - Lượt phải còn Invited, chưa ai nhận và kế hoạch còn HandoverInProgress; kho có hold thì tạm dừng (không tính là lần lỗi).
-/// - DB chỉ giữ mã băm nên mỗi lần gửi lại là token mới (INVITE-01); chỉ lưu mã băm mới sau khi email được nhận,
+/// - DB chỉ giữ mã băm nên mỗi lần gửi lại là token mới; chỉ lưu mã băm mới sau khi email được nhận,
 ///   nên gửi lỗi thì link cũ còn nguyên. Lượt có RowVersion nên hai tiến trình cùng xử lý thì bên lưu sau bị xung đột.
-/// - INVITE-04: lời mời chưa từng giao được thì hạn phản hồi bắt đầu tính từ lần giao thành công đầu tiên.
+/// - Lời mời chưa từng giao được thì hạn phản hồi bắt đầu tính từ lần giao thành công đầu tiên.
 /// - Giãn cách giữa các lần thử tăng dần (5 phút nhân số lần lỗi); đủ 5 lần lỗi hoặc người nhận không có email
 ///   thì ngừng thử và ghi log cảnh báo.
-/// - Log không chứa email, token hay tên gói (OPS-04, SEC-07).
+/// - Log không chứa email, token hay tên gói.
 /// </remarks>
 public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
 {
@@ -136,16 +136,18 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         }
 
         // 4. Soạn thư mời với token mới và hạn phản hồi mới
-        // INVITE-04: chưa từng giao được thì hạn phản hồi tính từ lần giao thành công đầu tiên.
+        // Chưa từng giao được thì hạn phản hồi tính từ lần giao thành công đầu tiên.
         DateTimeOffset responseDeadline = now + HandoverRules.ResponseWindow;
         OpaqueToken token = tokens.CreateOpaqueToken();
-        HandoverInvitation invitation = new HandoverInvitation();
-        invitation.TurnId = turn.Id;
-        invitation.ToEmail = email;
-        invitation.FullName = fullName;
-        invitation.Token = token.Value;
-        invitation.ResponseDeadline = responseDeadline;
-        invitation.OwnerMessage = ownerMessage;
+        HandoverInvitation invitation = new HandoverInvitation
+        {
+            TurnId = turn.Id,
+            ToEmail = email,
+            FullName = fullName,
+            Token = token.Value,
+            ResponseDeadline = responseDeadline,
+            OwnerMessage = ownerMessage
+        };
         if (contactReader != null)
         {
             invitation.ApplyContacts(await contactReader.FindAsync(vault.Id, ct));
@@ -182,6 +184,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         await unitOfWork.SaveChangesAsync(ct);
     }
 
+    /// <summary>Đã đủ thời gian chờ giữa hai lần thử chưa: lần thứ n phải chờ n lần BackoffStep kể từ lần thử trước. Chưa thử lần nào thì được thử ngay.</summary>
     private static bool BackoffElapsed(HandoverTurn turn, DateTimeOffset now)
     {
         if (turn.InvitationLastAttemptAt == null || turn.InvitationAttempts <= 0)

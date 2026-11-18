@@ -1,7 +1,7 @@
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Việc nền của giai đoạn nhận tài sản: chuyển lượt/grant quá hạn (TIME-05).
+/// Việc nền của giai đoạn nhận tài sản: chuyển lượt/grant quá hạn.
 /// Mỗi hàm Process* đọc lại dữ liệu và kiểm lại điều kiện nên chạy lặp là an toàn.
 /// </summary>
 public interface IHandoverJob
