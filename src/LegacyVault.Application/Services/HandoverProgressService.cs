@@ -42,16 +42,8 @@ public sealed class HandoverProgressService : IHandoverProgressService
     {
         // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
-        if (deathCase == null)
-        {
-            throw HandoverAccess.DeathCaseNotFound();
-        }
-        Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
-        if (vault == null || !await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct))
-        {
-            throw HandoverAccess.DeathCaseNotFound();
-        }
+        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+            progressReader, vaultRepository, executorReader, caseId, userId, ct);
 
         // 2. Chưa duyệt hồ sơ chứng tử thì chưa có lượt nào để theo dõi
         HandoverProgressResponse response = new HandoverProgressResponse();

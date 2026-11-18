@@ -41,6 +41,27 @@ public static class HandoverAccess
         return false;
     }
 
+    /// <summary>
+    /// Hồ sơ chứng tử và kho cho các màn của Người thực thi. Không thấy hồ sơ, không thấy kho, hoặc người gọi không phải
+    /// Người thực thi đang hiệu lực thì cùng một lỗi không tìm thấy hồ sơ, để không lộ hồ sơ nào có thật.
+    /// </summary>
+    public static async Task<(DeathCase DeathCase, Vault Vault)> FindCaseForExecutorAsync(
+        IHandoverProgressReader progressReader, IVaultRepository vaults, IExecutorReader executorReader,
+        Guid caseId, Guid userId, CancellationToken ct)
+    {
+        DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
+        if (deathCase == null)
+        {
+            throw DeathCaseNotFound();
+        }
+        Vault? vault = await vaults.FindByIdAsync(deathCase.VaultId, ct);
+        if (vault == null || !await IsActiveExecutorAsync(executorReader, vault, userId, ct))
+        {
+            throw DeathCaseNotFound();
+        }
+        return (deathCase, vault);
+    }
+
     /// <summary>Không tìm thấy lượt, quyền tải hay tài sản bàn giao (dùng chung cho cả trường hợp không có quyền xem).</summary>
     public static AppException NotFound()
     {

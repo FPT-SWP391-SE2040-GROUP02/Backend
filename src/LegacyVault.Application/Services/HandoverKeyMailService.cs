@@ -55,16 +55,8 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
     {
         // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
-        if (deathCase == null)
-        {
-            throw HandoverAccess.DeathCaseNotFound();
-        }
-        Vault? vault = await vaults.FindByIdAsync(deathCase.VaultId, ct);
-        if (vault == null || !await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct))
-        {
-            throw HandoverAccess.DeathCaseNotFound();
-        }
+        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+            progressReader, vaults, executorReader, caseId, userId, ct);
 
         // 2. Lượt phải thuộc kho này; kế hoạch đang bàn giao hoặc đã đóng; lượt còn cần khóa
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);

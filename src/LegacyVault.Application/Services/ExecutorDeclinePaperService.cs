@@ -46,12 +46,8 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
     {
         // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
-        Vault? vault = deathCase == null ? null : await vaults.FindByIdAsync(deathCase.VaultId, ct);
-        if (deathCase == null || vault == null || !await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct))
-        {
-            throw new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
-        }
+        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+            progressReader, vaults, executorReader, caseId, userId, ct);
 
         // 2. Lượt phải thuộc kho này và đã kết thúc bằng đồng ý hoặc từ chối
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
