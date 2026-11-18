@@ -3,14 +3,14 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Một lượt bàn giao: một chỉ định (gói + người nhận) đi qua các bước nhận tài sản (bảng HandoverTurns), SRS §7.
+/// Một lượt bàn giao: một chỉ định (gói + người nhận) đi qua các bước nhận tài sản (bảng HandoverTurns).
 /// </summary>
 /// <remarks>
-/// - Mỗi người nhận đi riêng, lượt này không phụ thuộc lượt khác (JOINT-01).
-/// - Chỉ lưu MÃ BĂM của token trong link mời (INVITE-01); token gốc chỉ nằm trong email.
-/// - ContainerName và các HandoverSnapshotItem được CHÉP lúc ghim, nên đổi tên gói hay tài sản sau đó không đổi bản ghim (DATA-01).
+/// - Mỗi người nhận đi riêng, lượt này không phụ thuộc lượt khác.
+/// - Chỉ lưu MÃ BĂM của token trong link mời; token gốc chỉ nằm trong email.
+/// - ContainerName và các HandoverSnapshotItem được CHÉP lúc ghim, nên đổi tên gói hay tài sản sau đó không đổi bản ghim.
 /// - RowVersion là concurrency token (giống @Version của Hibernate): hai thao tác cùng sửa một lượt thì bên lưu sau bị báo xung đột.
-/// - DB chỉ cho một lượt đang hiệu lực (hoặc đã nhận) cho mỗi chỉ định (DATA-04) bằng chỉ mục unique có lọc.
+/// - DB chỉ cho một lượt đang hiệu lực (hoặc đã nhận) cho mỗi chỉ định bằng chỉ mục unique có lọc.
 /// </remarks>
 public class HandoverTurn
 {
@@ -39,10 +39,10 @@ public class HandoverTurn
     /// <summary>Hạn phản hồi: InvitedAt + 5 ngày.</summary>
     public DateTimeOffset ResponseDeadline { get; set; }
 
-    /// <summary>Chỉ đặt khi máy chủ email đã nhận thư mời; null nghĩa là chưa gửi được (INVITE-04).</summary>
+    /// <summary>Chỉ đặt khi máy chủ email đã nhận thư mời; null nghĩa là chưa gửi được.</summary>
     public DateTimeOffset? InvitationSentAt { get; set; }
 
-    /// <summary>Số lần gửi lời mời tự động thất bại (OPS-04). Đủ 5 lần thì ngừng thử và ghi log cảnh báo.</summary>
+    /// <summary>Số lần gửi lời mời tự động thất bại. Đủ 5 lần thì ngừng thử và ghi log cảnh báo.</summary>
     public int InvitationAttempts { get; set; }
 
     /// <summary>Lần gửi lời mời gần nhất bị lỗi; dùng để giãn cách giữa các lần thử lại.</summary>
@@ -60,7 +60,7 @@ public class HandoverTurn
     public bool IdentityBypassed { get; set; }
 
     /// <summary>
-    /// Executor đã xác nhận đúng người bằng tay thay cho eKYC (BR-122); null khi không có xác nhận này.
+    /// Executor đã xác nhận đúng người bằng tay thay cho eKYC; null khi không có xác nhận này.
     /// Cùng với IdentityConfirmedAt để truy lại ai đã bảo lãnh người nhận khi có tranh chấp.
     /// </summary>
     public Guid? IdentityConfirmedByUserId { get; set; }
@@ -94,7 +94,7 @@ public class HandoverTurn
 
     public DateTimeOffset? UpdatedAt { get; set; }
 
-    /// <summary>RETENTION-01..09: trạng thái lưu dữ liệu của lượt.</summary>
+    /// <summary>Trạng thái lưu dữ liệu của lượt.</summary>
     public RetentionStatus RetentionStatus { get; set; }
 
     /// <summary>Lúc đồng hồ lưu bắt đầu lần đầu (retention_started_at); không đổi khi tạm dừng rồi chạy lại.</summary>
@@ -103,10 +103,10 @@ public class HandoverTurn
     /// <summary>Hạn lưu hiện tại (retention_deadline) khi đang chạy; null khi chưa chạy hoặc đang tạm dừng.</summary>
     public DateTimeOffset? RetentionDeadline { get; set; }
 
-    /// <summary>Số giây còn lại khi tạm dừng (RETENTION-04): chạy lại thì cộng phần này, không đặt lại 30 ngày.</summary>
+    /// <summary>Số giây còn lại khi tạm dừng: chạy lại thì cộng phần này, không đặt lại 30 ngày.</summary>
     public long? RetentionRemainingSeconds { get; set; }
 
-    /// <summary>Mốc nhắc đã gửi: 0 chưa, 1 lúc bắt đầu, 2 còn 7 ngày, 3 còn 24 giờ (RETENTION-05, §7.7 bước 5).</summary>
+    /// <summary>Mốc nhắc đã gửi: 0 chưa, 1 lúc bắt đầu, 2 còn 7 ngày, 3 còn 24 giờ.</summary>
     public int RetentionNoticeStage { get; set; }
 
     /// <summary>Lúc dọn dữ liệu xong (tombstone); null khi chưa dọn.</summary>

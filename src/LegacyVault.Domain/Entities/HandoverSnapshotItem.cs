@@ -3,7 +3,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Một tài sản được ghim cho một lượt bàn giao (bảng HandoverSnapshotItems), SRS DATA-01.
+/// Một tài sản được ghim cho một lượt bàn giao (bảng HandoverSnapshotItems).
 /// </summary>
 /// <remarks>
 /// Các trường chép từ tài sản lúc ghim để đổi tên sau đó không ảnh hưởng; nội dung tải theo AssetId.

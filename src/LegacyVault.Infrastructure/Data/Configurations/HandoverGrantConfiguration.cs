@@ -20,7 +20,7 @@ public sealed class HandoverGrantConfiguration : IEntityTypeConfiguration<Handov
         builder.Property(g => g.RowVersion)
             .IsRowVersion();
 
-        // DATA-04: một lượt chỉ có một grant, kể cả khi hai yêu cầu nhận chạy song song.
+        // Một lượt chỉ có một grant, kể cả khi hai yêu cầu nhận chạy song song.
         builder.HasIndex(g => g.TurnId)
             .IsUnique();
 

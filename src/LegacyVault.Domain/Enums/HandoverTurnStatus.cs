@@ -1,11 +1,11 @@
 namespace LegacyVault.Domain.Enums;
 
 /// <summary>
-/// Trạng thái một lượt bàn giao (SRS §11.1). Giá trị lưu trong DB là tên enum; không đổi tên giá trị đã có.
+/// Trạng thái một lượt bàn giao. Giá trị lưu trong DB là tên enum; không đổi tên giá trị đã có.
 /// </summary>
 /// <remarks>
 /// Kết thúc (terminal): HandoverCommitted, Declined, DecisionExpired, Cancelled, Lapsed.
-/// Còn lại là "đang hiệu lực", kể cả InitialResponseExpired vì link vẫn dùng được (SRS §7.1).
+/// Còn lại là "đang hiệu lực", kể cả InitialResponseExpired vì link vẫn dùng được.
 /// </remarks>
 public enum HandoverTurnStatus
 {
