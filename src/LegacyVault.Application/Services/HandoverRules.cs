@@ -3,17 +3,26 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Hằng số và luật trạng thái thuần của giai đoạn nhận tài sản (SRS §6.3, TIME-02).</summary>
+/// <summary>Hạn thời gian và luật chuyển trạng thái thuần của giai đoạn nhận tài sản; không đọc hay ghi cơ sở dữ liệu.</summary>
 public static class HandoverRules
 {
-    /// <summary>Hạn phản hồi lời mời, tính từ lúc mời (INVITE-02).</summary>
-    public static TimeSpan ResponseWindow => RuntimeSettings.Days("Handover.ResponseWindowDays", 5);
+    /// <summary>Hạn phản hồi lời mời, tính từ lúc mời. Admin chỉnh bằng khóa Handover.ResponseWindowDays (mặc định 5 ngày).</summary>
+    public static TimeSpan ResponseWindow
+    {
+        get { return RuntimeSettings.Days("Handover.ResponseWindowDays", 5); }
+    }
 
-    /// <summary>Hạn quyết định đồng ý/từ chối, tính từ lúc sẵn sàng nhận (ACCEPT-02).</summary>
-    public static TimeSpan DecisionWindow => RuntimeSettings.Days("Handover.DecisionWindowDays", 7);
+    /// <summary>Hạn quyết định của luồng cũ, tính từ lúc sẵn sàng nhận. Khóa Handover.DecisionWindowDays (mặc định 7 ngày).</summary>
+    public static TimeSpan DecisionWindow
+    {
+        get { return RuntimeSettings.Days("Handover.DecisionWindowDays", 7); }
+    }
 
-    /// <summary>Thời hạn quyền xem và tải, tính từ lúc đồng ý (DOWNLOAD-01).</summary>
-    public static TimeSpan GrantWindow => RuntimeSettings.Days("Handover.GrantWindowDays", 30);
+    /// <summary>Thời hạn quyền xem và tải, tính từ lúc đồng ý. Khóa Handover.GrantWindowDays (mặc định 30 ngày).</summary>
+    public static TimeSpan GrantWindow
+    {
+        get { return RuntimeSettings.Days("Handover.GrantWindowDays", 30); }
+    }
 
     /// <summary>Lượt đã kết thúc, không đổi trạng thái nữa.</summary>
     public static bool IsTerminal(HandoverTurnStatus status)
@@ -31,7 +40,7 @@ public static class HandoverRules
         }
     }
 
-    /// <summary>Lượt còn cho phép người nhận "nhận lượt" (quá hạn phản hồi vẫn nhận được, CLAIM-02).</summary>
+    /// <summary>Lượt còn cho phép người nhận "nhận lượt" (quá hạn phản hồi vẫn nhận được).</summary>
     public static bool CanClaim(HandoverTurnStatus status)
     {
         return status == HandoverTurnStatus.Invited || status == HandoverTurnStatus.InitialResponseExpired;
@@ -70,13 +79,15 @@ public static class HandoverRules
     /// </summary>
     public static HandoverGrant CommitAccept(HandoverTurn turn, Guid recipientUserId, DateTimeOffset now)
     {
-        HandoverGrant grant = new HandoverGrant();
-        grant.TurnId = turn.Id;
-        grant.Turn = turn;
-        grant.UserId = recipientUserId;
-        grant.Status = HandoverGrantStatus.Active;
-        grant.GrantedAt = now;
-        grant.ExpiresAt = now + GrantWindow;
+        HandoverGrant grant = new HandoverGrant
+        {
+            TurnId = turn.Id,
+            Turn = turn,
+            UserId = recipientUserId,
+            Status = HandoverGrantStatus.Active,
+            GrantedAt = now,
+            ExpiresAt = now + GrantWindow
+        };
         turn.Grant = grant;
 
         turn.Status = HandoverTurnStatus.HandoverCommitted;
@@ -88,7 +99,7 @@ public static class HandoverRules
 
     /// <summary>
     /// Kết thúc lượt bằng việc từ chối. Nội dung của lượt bị xóa ngay thay vì chờ hết thời hạn lưu: hạn xóa đặt đúng lúc này,
-    /// job lưu giữ xóa ở vòng quét kế tiếp. Tài sản còn lượt khác tham chiếu thì giữ lại (RETENTION-02).
+    /// job lưu giữ xóa ở vòng quét kế tiếp. Tài sản còn lượt khác tham chiếu thì giữ lại.
     /// </summary>
     public static void MarkDeclined(HandoverTurn turn, DateTimeOffset now)
     {

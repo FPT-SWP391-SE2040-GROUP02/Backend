@@ -87,13 +87,14 @@ public sealed class FakeHandoverSubmissionRepository : IHandoverSubmissionReposi
     /// <summary>Người xét duyệt (họ tên, số thẻ) theo kho, đặt sẵn trong test.</summary>
     public Dictionary<Guid, (string FullName, string? Card)> Reviewers { get; } = new Dictionary<Guid, (string, string?)>();
 
-    public Task<(string FullName, string? LawyerCardNumber)?> FindApprovingVerifierAsync(Guid vaultId, CancellationToken ct)
+    public Task<ApprovingVerifierRow?> FindApprovingVerifierAsync(Guid vaultId, CancellationToken ct)
     {
         if (Reviewers.TryGetValue(vaultId, out var row))
         {
-            return Task.FromResult<(string FullName, string? LawyerCardNumber)?>((row.FullName, row.Card));
+            ApprovingVerifierRow found = new ApprovingVerifierRow { FullName = row.FullName, LawyerCardNumber = row.Card };
+            return Task.FromResult<ApprovingVerifierRow?>(found);
         }
-        return Task.FromResult<(string FullName, string? LawyerCardNumber)?>(null);
+        return Task.FromResult<ApprovingVerifierRow?>(null);
     }
 
     public Task<Guid?> FindApprovingVerifierUserIdAsync(Guid vaultId, CancellationToken ct)

@@ -20,6 +20,9 @@ namespace LegacyVault.Application.Services;
 // Các hàm private ở cuối tệp là phần kiểm và dựng kết quả dùng chung.
 public sealed class HandoverService : IHandoverService
 {
+    /// <summary>Số lần nhập sai khóa mở gói tối đa trước khi khóa lượt.</summary>
+    public const int MaxKeyFailures = 5;
+
     private readonly ICurrentUser currentUser;
     private readonly IUserRepository users;
     private readonly IVaultRepository vaults;
@@ -31,9 +34,6 @@ public sealed class HandoverService : IHandoverService
     private readonly IHandoverSubmissionRepository submissions;
     private readonly IBeneficiaryRepository beneficiaries;
     private readonly IBeneficiaryDataProtector beneficiaryProtector;
-
-    /// <summary>Số lần nhập sai khóa mở gói tối đa trước khi khóa lượt.</summary>
-    public const int MaxKeyFailures = 5;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
@@ -52,8 +52,6 @@ public sealed class HandoverService : IHandoverService
         IBeneficiaryRepository beneficiaries,
         IBeneficiaryDataProtector beneficiaryProtector)
     {
-        this.beneficiaries = beneficiaries;
-        this.beneficiaryProtector = beneficiaryProtector;
         this.currentUser = currentUser;
         this.users = users;
         this.vaults = vaults;
@@ -63,6 +61,8 @@ public sealed class HandoverService : IHandoverService
         this.holdReader = holdReader;
         this.keyShards = keyShards;
         this.submissions = submissions;
+        this.beneficiaries = beneficiaries;
+        this.beneficiaryProtector = beneficiaryProtector;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
     }
@@ -82,9 +82,11 @@ public sealed class HandoverService : IHandoverService
         }
 
         // 3. Dựng kết quả: link hợp lệ, email được mời, đã có tài khoản chưa, tên Chủ kho
-        InvitationStatusResponse response = new InvitationStatusResponse();
-        response.Valid = true;
-        response.ResponseExpired = responseExpired;
+        InvitationStatusResponse response = new InvitationStatusResponse
+        {
+            Valid = true,
+            ResponseExpired = responseExpired
+        };
 
         // Chỉ trả email đã che bớt và cờ "đã có tài khoản": link công khai không được lộ email đầy đủ.
         string? invitedEmail = await FindRecipientEmailAsync(turn, ct);
@@ -145,7 +147,7 @@ public sealed class HandoverService : IHandoverService
 
     /// <summary>
     /// Lời mời nhận gói đang chờ tài khoản này: lượt chưa ai nhận, còn nhận được, kế hoạch đang bàn giao, kho không bị giữ,
-    /// không phải kho của chính mình và email người nhận trùng email đã xác minh của tài khoản (D2).
+    /// không phải kho của chính mình và email người nhận trùng email đã xác minh của tài khoản.
     /// </summary>
     /// <remarks>
     /// Email người nhận nằm trong dữ liệu mã hóa (Beneficiary.ContactEncrypted), không có cột băm để tra, nên phải lấy các lượt
@@ -211,11 +213,13 @@ public sealed class HandoverService : IHandoverService
                 ownerName = owner.FullName;
             }
 
-            PendingInvitationResponse item = new PendingInvitationResponse();
-            item.TurnId = turn.Id;
-            item.ContainerName = turn.ContainerName;
-            item.OwnerFullName = ownerName;
-            item.InvitedAt = turn.InvitedAt;
+            PendingInvitationResponse item = new PendingInvitationResponse
+            {
+                TurnId = turn.Id,
+                ContainerName = turn.ContainerName,
+                OwnerFullName = ownerName,
+                InvitedAt = turn.InvitedAt
+            };
             result.Add(item);
         }
         return result;
@@ -274,14 +278,14 @@ public sealed class HandoverService : IHandoverService
             throw HandoverAccess.NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa nhận được lượt này.");
         }
 
-        // D2: đúng email mới được nhận (tài khoản đã xác minh email ở EnsureAccountUsableAsync).
+        // Đúng email mới được nhận (tài khoản đã xác minh email ở EnsureAccountUsableAsync).
         await EnsureEmailMatchesAsync(user, turn, ct);
 
         // 3. Gắn lượt cho người này
         turn.ClaimantUserId = userId;
         turn.ClaimedAt = now;
         turn.UpdatedAt = now;
-        // Chạm kế hoạch để RowVersion của nó chặn nhận lượt chạy cùng lúc với báo còn sống (ALIVE-01).
+        // Chạm kế hoạch để RowVersion của nó chặn việc nhận lượt chạy cùng lúc với thao tác khác trên kế hoạch.
         vault.Plan.UpdatedAt = now;
 
         // 4. Chuyển lượt sang bước xác minh danh tính (người nhận nộp hồ sơ và biên bản)
@@ -464,7 +468,7 @@ public sealed class HandoverService : IHandoverService
             throw HandoverAccess.NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa quyết định được.");
         }
 
-        // Đúng giây hạn là hết hạn, kể cả khi job chưa kịp chạy (TIME-02).
+        // Đúng giây hạn là hết hạn, kể cả khi job chưa kịp chạy.
         if (turn.DecisionDeadline != null && HandoverRules.IsExpired(turn.DecisionDeadline.Value, now))
         {
             throw new AppException(AppErrorType.Conflict, ErrorCode.HandoverDecisionExpired,
@@ -481,6 +485,7 @@ public sealed class HandoverService : IHandoverService
         HandoverRules.CloseIfAllTerminal(plan, turns, now);
     }
 
+    /// <summary>Tài khoản phải tồn tại, đang hoạt động và đã xác minh email thì mới được nhận tài sản.</summary>
     private async Task<User> EnsureAccountUsableAsync(Guid userId, CancellationToken ct)
     {
         User? user = await users.FindByIdAsync(userId, ct);
@@ -506,7 +511,7 @@ public sealed class HandoverService : IHandoverService
     }
 
     /// <summary>
-    /// D2: email tài khoản (chuẩn hóa) phải trùng email người nhận của lượt. Sai thì 403 HANDOVER_EMAIL_MISMATCH kèm email được mời
+    /// Email tài khoản (chuẩn hóa) phải trùng email người nhận của lượt. Sai thì 403 HANDOVER_EMAIL_MISMATCH kèm email được mời
     /// đã che bớt, không lộ email đầy đủ.
     /// </summary>
     private async Task EnsureEmailMatchesAsync(User user, HandoverTurn turn, CancellationToken ct)
@@ -556,6 +561,7 @@ public sealed class HandoverService : IHandoverService
         return NormalizeEmail(recipient.Email);
     }
 
+    /// <summary>Email dùng để so sánh: bỏ khoảng trắng hai đầu và đổi sang chữ thường.</summary>
     private static string NormalizeEmail(string email)
     {
         return email.Trim().ToLowerInvariant();
@@ -582,6 +588,7 @@ public sealed class HandoverService : IHandoverService
         return localPart.Substring(0, 1) + hidden + lastChar + domain;
     }
 
+    /// <summary>Tìm lượt theo token trong link: băm token rồi tra theo bản băm; không thấy thì báo link không hợp lệ.</summary>
     private async Task<HandoverTurn> FindTurnByTokenAsync(string token, CancellationToken ct)
     {
         string hash = tokens.HashOpaqueToken(token);
@@ -604,30 +611,37 @@ public sealed class HandoverService : IHandoverService
         return recipient.FullName.Trim();
     }
 
+    /// <summary>
+    /// Dựng dữ liệu một lượt để trả về màn hình: trạng thái, các hạn, có cần khóa mở gói không, Người xét duyệt,
+    /// danh sách tài sản (chỉ khi lượt đã sẵn sàng hoặc đã bàn giao) và quyền tải.
+    /// </summary>
     private async Task<HandoverTurnResponse> BuildTurnResponseAsync(HandoverTurn turn, CancellationToken ct)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
 
-        HandoverTurnResponse response = new HandoverTurnResponse();
-        response.Id = turn.Id;
-        response.Status = turn.Status.ToApiString();
-        response.ServerTime = now;
-        response.InvitedAt = turn.InvitedAt;
-        response.ResponseDeadline = turn.ResponseDeadline;
-        response.DecisionDeadline = turn.DecisionDeadline;
-        response.IdentityBypassed = turn.IdentityBypassed;
-        response.IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null;
-        response.KeyRequired = await IsKeyRequiredAsync(turn, ct);
+        HandoverTurnResponse response = new HandoverTurnResponse
+        {
+            Id = turn.Id,
+            Status = turn.Status.ToApiString(),
+            ServerTime = now,
+            InvitedAt = turn.InvitedAt,
+            ResponseDeadline = turn.ResponseDeadline,
+            DecisionDeadline = turn.DecisionDeadline,
+            IdentityBypassed = turn.IdentityBypassed,
+            IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null,
+            KeyRequired = await IsKeyRequiredAsync(turn, ct)
+        };
         response.KeyVerified = !response.KeyRequired || turn.KeyVerifiedAt != null;
         response.ReceivedAllAt = turn.ReceivedAllAt;
         response.RecipientFullName = await FindRecipientFullNameAsync(turn, ct);
-        var reviewer = await submissions.FindApprovingVerifierAsync(turn.VaultId, ct);
+        ApprovingVerifierRow? reviewer = await submissions.FindApprovingVerifierAsync(turn.VaultId, ct);
         if (reviewer != null)
         {
-            HandoverReviewerResponse reviewerResponse = new HandoverReviewerResponse();
-            reviewerResponse.FullName = reviewer.Value.FullName;
-            reviewerResponse.LawyerCardNumber = reviewer.Value.LawyerCardNumber;
-            response.Reviewer = reviewerResponse;
+            response.Reviewer = new HandoverReviewerResponse
+            {
+                FullName = reviewer.FullName,
+                LawyerCardNumber = reviewer.LawyerCardNumber
+            };
         }
 
         bool showContent = turn.Status == HandoverTurnStatus.ReadyToAccept
@@ -646,10 +660,12 @@ public sealed class HandoverService : IHandoverService
 
         if (turn.Grant != null)
         {
-            HandoverGrantResponse grant = new HandoverGrantResponse();
-            grant.Id = turn.Grant.Id;
-            grant.Status = HandoverRules.EffectiveGrantStatus(turn.Grant, now).ToApiString();
-            grant.ExpiresAt = turn.Grant.ExpiresAt;
+            HandoverGrantResponse grant = new HandoverGrantResponse
+            {
+                Id = turn.Grant.Id,
+                Status = HandoverRules.EffectiveGrantStatus(turn.Grant, now).ToApiString(),
+                ExpiresAt = turn.Grant.ExpiresAt
+            };
             response.Grant = grant;
         }
 
@@ -711,7 +727,12 @@ public sealed class HandoverService : IHandoverService
 
         // 4. Khóa đúng: ghi mốc đã nhập khóa, lưu rồi trả trạng thái mới
         DateTimeOffset now = timeProvider.GetUtcNow();
-        if (ExecutorKeyRules.Matches(turn.VaultId, shard.Version, key ?? string.Empty, shard.ShardHash))
+        string enteredKey = string.Empty;
+        if (key != null)
+        {
+            enteredKey = key;
+        }
+        if (ExecutorKeyRules.Matches(turn.VaultId, shard.Version, enteredKey, shard.ShardHash))
         {
             turn.KeyVerifiedAt = now;
             turn.UpdatedAt = now;
@@ -729,6 +750,7 @@ public sealed class HandoverService : IHandoverService
         throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverKeyInvalid, "Khóa mở gói chưa đúng.", extensions);
     }
 
+    /// <summary>Lỗi 404: link mời không hợp lệ.</summary>
     private static AppException InvitationInvalid()
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverInvitationInvalid,

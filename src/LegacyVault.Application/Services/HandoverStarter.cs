@@ -17,6 +17,8 @@ public sealed class HandoverStarter : IHandoverStarter
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
+    // Ba phụ thuộc dưới đây luôn có khi chạy thật (đăng ký đủ ở HandoverApplicationConfig).
+    // Chỉ một số test bỏ trống (null) để khỏi phải dựng thêm; bỏ trống thì bước tương ứng được bỏ qua.
     private readonly IHandoverContactReader? contactReader;
     private readonly ExecutorKeyIssuer? keyIssuer;
     private readonly IWillVersionRepository? willVersions;
@@ -59,8 +61,8 @@ public sealed class HandoverStarter : IHandoverStarter
         DateTimeOffset now = timeProvider.GetUtcNow();
 
         // 2. Đã mở bàn giao rồi thì trả kết quả cũ; kế hoạch phải đang ở trạng thái mở hồ sơ chứng tử
-        // Gọi lặp (F2B retry) không tạo lượt mới và không gửi lại lời mời.
-        // Lượt đã hủy (Owner còn sống, ALIVE-06) chỉ còn là lịch sử, không tính là đã bắt đầu: nếu tính thì hồ sơ chứng tử
+        // Gọi lặp (ví dụ Verifier bấm duyệt lại) không tạo lượt mới và không gửi lại lời mời.
+        // Lượt đã hủy (Cancelled) chỉ còn là lịch sử, không tính là đã bắt đầu: nếu tính thì hồ sơ chứng tử
         // mới của cùng kho không bao giờ mở được bàn giao. Chỉ mục UX_HandoverTurns_ActivePerDesignation không tính lượt
         // Cancelled nên lượt mới cho cùng chỉ định không bị chặn ở database.
         List<HandoverTurn> existing = await handover.FindTurnsByPlanAsync(plan.Id, ct);
@@ -74,10 +76,12 @@ public sealed class HandoverStarter : IHandoverStarter
         }
         if (startedTurnCount > 0)
         {
-            HandoverStartResult already = new HandoverStartResult();
-            already.PlanId = plan.Id;
-            already.TurnCount = startedTurnCount;
-            already.AlreadyStarted = true;
+            HandoverStartResult already = new HandoverStartResult
+            {
+                PlanId = plan.Id,
+                TurnCount = startedTurnCount,
+                AlreadyStarted = true
+            };
             return already;
         }
 
@@ -108,7 +112,7 @@ public sealed class HandoverStarter : IHandoverStarter
 
         // 4. Với mỗi chỉ định: tạo một lượt (token mời, hạn phản hồi, danh sách tài sản ghim lại) và soạn thư mời
         List<HandoverInvitation> invitations = new List<HandoverInvitation>();
-        List<HandoverTurn> turns = new List<HandoverTurn>();
+        Dictionary<Guid, HandoverTurn> turnsById = new Dictionary<Guid, HandoverTurn>();
         HandoverContactInfo? contacts = null;
         if (contactReader != null)
         {
@@ -125,18 +129,20 @@ public sealed class HandoverStarter : IHandoverStarter
 
             OpaqueToken token = tokens.CreateOpaqueToken();
 
-            HandoverTurn turn = new HandoverTurn();
-            turn.VaultId = vaultId;
-            turn.PlanId = plan.Id;
-            turn.ContainerId = designation.ContainerId;
-            turn.ContainerName = designation.Container.Name;
-            turn.DesignationId = designation.Id;
-            turn.BeneficiaryId = designation.BeneficiaryId;
-            turn.Status = HandoverTurnStatus.Invited;
-            turn.InvitationTokenHash = token.Hash;
-            turn.InvitedAt = now;
-            turn.ResponseDeadline = now + HandoverRules.ResponseWindow;
-            turn.CreatedAt = now;
+            HandoverTurn turn = new HandoverTurn
+            {
+                VaultId = vaultId,
+                PlanId = plan.Id,
+                ContainerId = designation.ContainerId,
+                ContainerName = designation.Container.Name,
+                DesignationId = designation.Id,
+                BeneficiaryId = designation.BeneficiaryId,
+                Status = HandoverTurnStatus.Invited,
+                InvitationTokenHash = token.Hash,
+                InvitedAt = now,
+                ResponseDeadline = now + HandoverRules.ResponseWindow,
+                CreatedAt = now
+            };
             turn.Items = BuildSnapshot(turn, designation.Container, allowedAssetIds);
             if (signedWill != null && turn.Items.Count == 0)
             {
@@ -145,24 +151,26 @@ public sealed class HandoverStarter : IHandoverStarter
             }
 
             handover.AddTurn(turn);
-            turns.Add(turn);
+            turnsById[turn.Id] = turn;
 
             BeneficiaryPersonalData data = protector.Unprotect(designation.Beneficiary);
             if (!string.IsNullOrWhiteSpace(data.Email))
             {
-                HandoverInvitation invitation = new HandoverInvitation();
-                invitation.TurnId = turn.Id;
-                invitation.ToEmail = data.Email;
-                invitation.FullName = data.FullName;
-                invitation.Token = token.Value;
-                invitation.ResponseDeadline = turn.ResponseDeadline;
+                HandoverInvitation invitation = new HandoverInvitation
+                {
+                    TurnId = turn.Id,
+                    ToEmail = data.Email,
+                    FullName = data.FullName,
+                    Token = token.Value,
+                    ResponseDeadline = turn.ResponseDeadline
+                };
                 invitation.ApplyContacts(contacts);
                 invitation.OwnerMessage = data.Message;
                 invitations.Add(invitation);
             }
         }
 
-        if (turns.Count == 0)
+        if (turnsById.Count == 0)
         {
             throw HandoverAccess.NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
         }
@@ -180,18 +188,20 @@ public sealed class HandoverStarter : IHandoverStarter
 
         await unitOfWork.SaveChangesAsync(ct);
 
-        HandoverStartResult result = new HandoverStartResult();
-        result.PlanId = plan.Id;
-        result.TurnCount = turns.Count;
+        HandoverStartResult result = new HandoverStartResult
+        {
+            PlanId = plan.Id,
+            TurnCount = turnsById.Count
+        };
 
         // 6. Gửi thư mời; thư lỗi được ghi số lần thử để job gửi lại, rồi lưu kết quả gửi
-        // Gửi sau khi đã lưu: lỗi gửi không làm mất lượt (INVITE-01), chỉ để InvitationSentAt = null.
+        // Gửi sau khi đã lưu: lỗi gửi không làm mất lượt, chỉ để InvitationSentAt = null.
         foreach (HandoverInvitation invitation in invitations)
         {
             try
             {
                 await sender.SendAsync(invitation, ct);
-                HandoverTurn sentTurn = turns.First(t => t.Id == invitation.TurnId);
+                HandoverTurn sentTurn = turnsById[invitation.TurnId];
                 sentTurn.InvitationSentAt = timeProvider.GetUtcNow();
                 result.InvitationsSent++;
             }
@@ -199,7 +209,7 @@ public sealed class HandoverStarter : IHandoverStarter
             {
                 result.InvitationsFailed++;
                 // Ghi nhận lần thử lỗi để job gửi lại (HandoverInvitationRetryJob) biết đã thử và giãn cách đúng.
-                HandoverTurn failedTurn = turns.First(t => t.Id == invitation.TurnId);
+                HandoverTurn failedTurn = turnsById[invitation.TurnId];
                 failedTurn.InvitationAttempts = failedTurn.InvitationAttempts + 1;
                 failedTurn.InvitationLastAttemptAt = timeProvider.GetUtcNow();
             }
@@ -230,15 +240,17 @@ public sealed class HandoverStarter : IHandoverStarter
                 continue;
             }
             Asset asset = link.Asset;
-            HandoverSnapshotItem item = new HandoverSnapshotItem();
-            item.TurnId = turn.Id;
-            item.AssetId = asset.Id;
-            item.Name = asset.Name;
-            item.Kind = asset.Kind;
-            item.FileName = asset.FileName;
-            item.ContentType = asset.ContentType;
-            item.SizeBytes = asset.SizeBytes;
-            item.Position = position;
+            HandoverSnapshotItem item = new HandoverSnapshotItem
+            {
+                TurnId = turn.Id,
+                AssetId = asset.Id,
+                Name = asset.Name,
+                Kind = asset.Kind,
+                FileName = asset.FileName,
+                ContentType = asset.ContentType,
+                SizeBytes = asset.SizeBytes,
+                Position = position
+            };
             items.Add(item);
             position++;
         }

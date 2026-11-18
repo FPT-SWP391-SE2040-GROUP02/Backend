@@ -53,6 +53,7 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
         this.users = users;
     }
 
+    /// <summary>Nút "Kiểm tra" ở trang lời mời: đối chiếu mã hồ sơ và 4 số cuối căn cước, tối đa 5 lần sai mỗi lượt.</summary>
     public async Task<InvitationMailCheckResponse> CheckAsync(
         string token, string caseCode, string citizenIdLast4, CancellationToken ct)
     {
@@ -111,8 +112,14 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
         response.AttemptsLeft = MaxAttempts;
         response.ContainerName = turn.ContainerName;
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
-        User? owner = vault == null ? null : await users.FindByIdAsync(vault.OwnerId, ct);
-        response.OwnerFullName = owner?.FullName;
+        if (vault != null)
+        {
+            User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+            if (owner != null)
+            {
+                response.OwnerFullName = owner.FullName;
+            }
+        }
         return response;
     }
 }

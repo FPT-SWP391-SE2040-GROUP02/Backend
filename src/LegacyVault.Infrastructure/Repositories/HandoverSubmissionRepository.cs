@@ -53,20 +53,17 @@ public sealed class HandoverSubmissionRepository : IHandoverSubmissionRepository
         return context.Set<HandoverSubmission>().Where(s => turnIds.Contains(s.TurnId)).ToListAsync(ct);
     }
 
-    public async Task<(string FullName, string? LawyerCardNumber)?> FindApprovingVerifierAsync(Guid vaultId, CancellationToken ct)
+    public async Task<ApprovingVerifierRow?> FindApprovingVerifierAsync(Guid vaultId, CancellationToken ct)
     {
-        var row = await context.Set<DeathCaseDecision>()
+        ApprovingVerifierRow? row = await context.Set<DeathCaseDecision>()
             .AsNoTracking()
             .Where(d => d.Kind == DeathCaseDecisionKind.Approved
                 && context.Set<DeathCase>().Any(c => c.Id == d.CaseId && c.VaultId == vaultId))
             .OrderByDescending(d => d.DecidedAt)
-            .Join(context.Set<User>(), d => d.VerifierUserId, u => u.Id, (d, u) => new { u.FullName, u.LawyerCardNumber })
+            .Join(context.Set<User>(), d => d.VerifierUserId, u => u.Id,
+                (d, u) => new ApprovingVerifierRow { FullName = u.FullName, LawyerCardNumber = u.LawyerCardNumber })
             .FirstOrDefaultAsync(ct);
-        if (row == null)
-        {
-            return null;
-        }
-        return (row.FullName, row.LawyerCardNumber);
+        return row;
     }
 
     public async Task<Guid?> FindApprovingVerifierUserIdAsync(Guid vaultId, CancellationToken ct)

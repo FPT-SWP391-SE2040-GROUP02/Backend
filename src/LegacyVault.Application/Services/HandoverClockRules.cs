@@ -4,7 +4,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Luật thuần dời hạn của giai đoạn nhận tài sản sau khi hold được gỡ (TIME-04, TIME-09).
+/// Luật thuần dời hạn của giai đoạn nhận tài sản sau khi hold được gỡ.
 /// Trong lúc có hold, HandoverJob không cho lượt hay grant hết hạn; khi gỡ hold, các hạn còn chạy được dời đúng bằng
 /// thời gian đã dừng để người nhận vẫn còn đủ phần thời gian còn lại, không đặt lại từ đầu.
 /// </summary>
@@ -17,14 +17,25 @@ public static class HandoverClockRules
     public static DateTimeOffset FindPauseStart(Hold released, IEnumerable<Hold> vaultHolds, DateTimeOffset now)
     {
         DateTimeOffset start = released.CreatedAt;
-        List<Hold> others = vaultHolds.Where(h => h.Id != released.Id).ToList();
+        List<Hold> others = new List<Hold>();
+        foreach (Hold hold in vaultHolds)
+        {
+            if (hold.Id != released.Id)
+            {
+                others.Add(hold);
+            }
+        }
         bool changed = true;
         while (changed)
         {
             changed = false;
             foreach (Hold other in others)
             {
-                DateTimeOffset otherEnd = other.ReleasedAt ?? now;
+                DateTimeOffset otherEnd = now;
+                if (other.ReleasedAt != null)
+                {
+                    otherEnd = other.ReleasedAt.Value;
+                }
                 if (other.CreatedAt < start && otherEnd >= start)
                 {
                     start = other.CreatedAt;
@@ -78,6 +89,7 @@ public static class HandoverClockRules
         return shifted;
     }
 
+    /// <summary>Dời hạn quyền tải của lượt đã nhận thêm đúng thời gian đã dừng. Trả 1 nếu đã dời, 0 nếu không cần.</summary>
     private static int ShiftGrant(HandoverTurn turn, DateTimeOffset pausedFrom, TimeSpan paused)
     {
         HandoverGrant? grant = turn.Grant;
