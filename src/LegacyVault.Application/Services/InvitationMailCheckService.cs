@@ -56,7 +56,6 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
     public async Task<InvitationMailCheckResponse> CheckAsync(
         string token, string caseCode, string citizenIdLast4, CancellationToken ct)
     {
-        // 1. Tìm lượt theo token trong link; token sai thì báo link không hợp lệ
         HandoverTurn? turn = await handover.FindTurnByTokenHashAsync(tokens.HashOpaqueToken(token), ct);
         if (turn == null)
         {
@@ -64,7 +63,6 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
                 "Liên kết mời không hợp lệ.");
         }
 
-        // 2. Đã sai đủ số lần cho phép thì khóa
         int used = Failures.GetOrAdd(turn.Id, 0);
         if (used >= MaxAttempts)
         {
@@ -72,7 +70,6 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
                 "Bạn đã thử quá số lần cho phép. Hãy gọi số điện thoại công ty ghi trong thư để xác minh.");
         }
 
-        // 3. Mã hồ sơ đúng lấy từ hồ sơ chứng tử, 4 số cuối căn cước đúng lấy từ thông tin Chủ kho đã khai
         string wantedCode = string.Empty;
         DeathCase? deathCase = await deathCases.FindOpenByVaultIdAsync(turn.VaultId, ct);
         if (deathCase != null)
@@ -90,13 +87,11 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
             }
         }
 
-        // 4. So khớp: mã hồ sơ không phân biệt hoa thường, 4 số cuối so chính xác
         bool matched = wantedCode.Length > 0 && wantedLast4.Length > 0
             && string.Equals(caseCode.Trim(), wantedCode, StringComparison.OrdinalIgnoreCase)
             && string.Equals(citizenIdLast4.Trim(), wantedLast4, StringComparison.Ordinal);
 
         InvitationMailCheckResponse response = new InvitationMailCheckResponse();
-        // 5. Sai: cộng một lần sai và trả số lần còn lại
         if (!matched)
         {
             int total = Failures.AddOrUpdate(turn.Id, 1, (_, current) => current + 1);
@@ -105,7 +100,6 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
             return response;
         }
 
-        // 6. Đúng: xóa bộ đếm sai, trả tên gói và tên Chủ kho
         Failures.TryRemove(turn.Id, out _);
         response.Verified = true;
         response.AttemptsLeft = MaxAttempts;

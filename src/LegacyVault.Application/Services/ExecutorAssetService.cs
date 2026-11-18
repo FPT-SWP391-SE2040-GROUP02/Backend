@@ -30,18 +30,15 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         this.beneficiaryProtector = beneficiaryProtector;
     }
 
-    // Màn Tài sản của Người thực thi: các gói sẵn sàng của kho, mỗi gói kèm người nhận và tên tài sản (không có nội dung).
     public async Task<List<ExecutorVaultPackageResponse>> ListPackagesAsync(Guid vaultId, CancellationToken ct)
     {
-        // 1. Người gọi phải là Người thực thi đang phụ trách kho; không thì báo không tìm thấy kho
         Guid userId = currentUser.RequireUserId();
         Vault? vault = await vaultRepository.FindByIdAsync(vaultId, ct);
-        if (vault == null || !await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct))
+        if (vault == null || !await IsActiveExecutorAsync(vault, userId, ct))
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
         }
 
-        // 2. Lấy các gói sẵn sàng rồi dựng kết quả từng gói (bỏ tài sản đã bị xóa nội dung)
         List<Container> packages = await assetReader.FindReadyPackagesAsync(vault.Id, ct);
         List<ExecutorVaultPackageResponse> responses = new List<ExecutorVaultPackageResponse>();
         foreach (Container package in packages)
@@ -107,5 +104,22 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         {
             return null;
         }
+    }
+
+    private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
+    {
+        if (vault.OwnerId == userId)
+        {
+            return false;
+        }
+        List<Executor> executors = await executorReader.GetActiveAsync(vault.Id, ct);
+        foreach (Executor executor in executors)
+        {
+            if (executor.UserId == userId)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }

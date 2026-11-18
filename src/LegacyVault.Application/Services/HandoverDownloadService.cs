@@ -8,8 +8,6 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-// Người nhận bấm "Tải" một tài sản đã được bàn giao (PrepareAsync).
-// Mọi lần tải, kể cả bị từ chối hay hỏng, đều ghi nhật ký truy cập (chỉ id và kết quả).
 public sealed class HandoverDownloadService : IHandoverDownloadService
 {
     private readonly ICurrentUser currentUser;
@@ -17,9 +15,20 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
     private readonly IHandoverRepository handover;
     private readonly IAssetContentStore contentStore;
     private readonly IHoldReader holdReader;
-    private readonly IExecutorKeyShardRepository keyShards;
+    private readonly IExecutorKeyShardRepository? keyShards;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
+
+    public HandoverDownloadService(
+        ICurrentUser currentUser,
+        IVaultRepository vaults,
+        IHandoverRepository handover,
+        IAssetContentStore contentStore,
+        IUnitOfWork unitOfWork,
+        TimeProvider timeProvider)
+        : this(currentUser, vaults, handover, contentStore, new NoHoldReader(), unitOfWork, timeProvider)
+    {
+    }
 
     public HandoverDownloadService(
         ICurrentUser currentUser,
@@ -29,7 +38,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        IExecutorKeyShardRepository keyShards)
+        IExecutorKeyShardRepository? keyShards = null)
     {
         this.currentUser = currentUser;
         this.vaults = vaults;
@@ -43,15 +52,13 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
 
     public async Task<PreparedDownload> PrepareAsync(Guid grantId, Guid itemId, CancellationToken ct)
     {
-        // 1. Người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
 
-        // 2. Tìm quyền tải và tài sản trong gói; không phải của mình thì báo không tìm thấy
         // Grant lạ và grant của người khác cho cùng một lỗi, không ghi nhật ký (SEC-04).
         HandoverGrant? grant = await handover.FindGrantByIdAsync(grantId, ct);
         if (grant == null || grant.UserId != userId)
         {
-            throw HandoverAccess.NotFound();
+            throw HandoverNotFound();
         }
 
         HandoverTurn turn = grant.Turn;
@@ -59,11 +66,9 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
         if (item == null || vault == null)
         {
-            throw HandoverAccess.NotFound();
+            throw HandoverNotFound();
         }
 
-        // 3. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kho đang bị giữ, hoặc chưa nhập khóa mở gói.
-        //    Bị chặn thì ghi nhật ký và báo lý do
         DateTimeOffset now = timeProvider.GetUtcNow();
         string? deniedReason = HandoverRules.GrantDeniedReason(grant, vault.Plan.Status, now);
         if (deniedReason == null && await holdReader.HasActiveHoldAsync(vault.Id, ct))
@@ -71,7 +76,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
             // Hold đang hiệu lực chặn tải (SRS §6.4), kể cả hold Admin đặt không đổi trạng thái grant.
             deniedReason = "HOLD_ACTIVE";
         }
-        if (deniedReason == null && turn.KeyVerifiedAt == null
+        if (deniedReason == null && turn.KeyVerifiedAt == null && keyShards != null
             && await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null)
         {
             // Người nhận phải nhập khóa mở gói do Người thực thi đưa trước khi tải.
@@ -87,7 +92,6 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
                 "Quyền tải tài sản không còn hiệu lực.", extensions);
         }
 
-        // 4. Nội dung phải còn: không thấy tài sản hoặc đã bị xóa theo hạn lưu thì báo lỗi
         Asset? asset = await handover.FindAssetAsync(item.AssetId, ct);
         if (asset == null)
         {
@@ -103,7 +107,6 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
                 "Nội dung đã được xóa theo chính sách lưu dữ liệu.", deleted);
         }
 
-        // 5. Giải mã thử một lượt để chắc tệp không hỏng, ghi nhật ký thành công
         StoredContent stored = new StoredContent();
         stored.StorageKey = asset.StorageKey;
         stored.SizeBytes = asset.SizeBytes;
@@ -124,7 +127,6 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
 
         await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.Succeeded, now, ct);
 
-        // 6. Trả thông tin tệp; nội dung được giải mã lần nữa khi ghi ra response
         PreparedDownload download = new PreparedDownload();
         download.FileName = ResolveFileName(item);
         download.ContentType = item.ContentType;
@@ -162,5 +164,11 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         }
 
         return item.Name;
+    }
+
+    private static AppException HandoverNotFound()
+    {
+        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound,
+            "Không tìm thấy nội dung bàn giao.");
     }
 }

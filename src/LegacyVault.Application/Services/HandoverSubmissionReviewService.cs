@@ -36,14 +36,6 @@ public interface IHandoverSubmissionReviewService
         Guid submissionId, RequestHandoverSupplementRequest request, CancellationToken ct);
 }
 
-// Người xét duyệt kiểm tra hồ sơ người nhận, các nút theo thứ tự trên màn /notary/recipients:
-//   1. Danh sách hồ sơ chờ kiểm tra ........ ListPendingAsync
-//   2. Mở một hồ sơ ........................ GetAsync
-//   3. Xem ảnh căn cước mặt trước, mặt sau .. PrepareImageAsync
-//   4. Gửi biên bản (luồng Biên Bản) ....... CompleteAsync: kết thúc lượt ngay
-//   5. Yêu cầu bổ sung ..................... RequestSupplementAsync
-// Luồng cũ, chỉ cho lượt không có biên bản: ApproveAsync (lượt sang chờ người nhận quyết định).
-// Mọi nút đều qua LoadForVerifierAsync: chỉ Người xét duyệt đã duyệt hồ sơ chứng tử của kho mới thấy hồ sơ.
 public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewService
 {
     private readonly ICurrentUser currentUser;
@@ -90,25 +82,22 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         this.notifier = notifier;
     }
 
-    // Bước 1: danh sách hồ sơ người nhận đang chờ Người xét duyệt này.
     public async Task<List<VerifierHandoverSubmissionSummaryResponse>> ListPendingAsync(CancellationToken ct)
     {
-        // 1. Phải là Người xét duyệt đang hoạt động, rồi lấy các hồ sơ chờ của họ
         Guid userId = await RequireActiveVerifierAsync(ct);
         List<HandoverSubmission> pending = await submissions.ListPendingForVerifierAsync(userId, ct);
-        // 2. Dựng một dòng tóm tắt cho mỗi hồ sơ
         List<VerifierHandoverSubmissionSummaryResponse> list = new List<VerifierHandoverSubmissionSummaryResponse>();
         foreach (HandoverSubmission submission in pending)
         {
-            list.Add(submission.ToVerifierSummary());
+            VerifierHandoverSubmissionSummaryResponse row = new VerifierHandoverSubmissionSummaryResponse();
+            FillSummary(row, submission);
+            list.Add(row);
         }
         return list;
     }
 
-    // Bước 2: mở một hồ sơ để kiểm tra.
     public async Task<VerifierHandoverSubmissionResponse> GetAsync(Guid submissionId, CancellationToken ct)
     {
-        // 1. Tìm hồ sơ; không thuộc Người xét duyệt này thì báo không tìm thấy
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
         // Hồ sơ thuộc biên bản thì trả kèm Id biên bản (DocumentId) để FE lấy họ tên, số căn cước, năm sinh, nơi thường trú
         // của người nhận hiện cho Người xét duyệt đối chiếu với ảnh.
@@ -117,16 +106,14 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             HandoverDocument? document = await documents.FindByTurnIdAsync(submission.TurnId, ct);
             if (document != null)
             {
-                return submission.ToVerifierDetail(document);
+                return ToDetail(submission, document);
             }
         }
-        return submission.ToVerifierDetail();
+        return ToDetail(submission);
     }
 
-    // Bước 3: xem ảnh căn cước một mặt (front hoặc back).
     public async Task<PreparedDownload> PrepareImageAsync(Guid submissionId, string side, CancellationToken ct)
     {
-        // 1. Tìm hồ sơ và kiểm mặt ảnh hợp lệ
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
         bool front = string.Equals(side, "front", StringComparison.OrdinalIgnoreCase);
         if (!front && !string.Equals(side, "back", StringComparison.OrdinalIgnoreCase))
@@ -140,7 +127,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             throw SubmissionNotFound();
         }
 
-        // 2. Lấy thông tin ảnh đã lưu mã hóa rồi chuẩn bị giải mã để trả về
         StoredContent stored = new StoredContent();
         stored.StorageKey = front ? submission.FrontImageStorageKey : submission.BackImageStorageKey;
         stored.SizeBytes = front ? submission.FrontImageSizeBytes : submission.BackImageSizeBytes;
@@ -151,40 +137,35 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             contentStore, stored, contentType, front ? "cccd-mat-truoc" : "cccd-mat-sau", ct);
     }
 
-    // Luồng cũ: duyệt hồ sơ của lượt không có biên bản; lượt sang chờ người nhận quyết định.
     public async Task<VerifierHandoverSubmissionResponse> ApproveAsync(Guid submissionId, CancellationToken ct)
     {
-        // 1. Tìm hồ sơ và lượt của nó
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = submission.Turn;
 
-        // 2. Các điều kiện: chưa duyệt, đang chờ duyệt, không thuộc biên bản, ba trường đều khớp,
-        //    kế hoạch đang bàn giao, kho không bị giữ, lượt đang ở bước xác minh
         // Bấm lặp: đã duyệt rồi thì trả lại kết quả cũ.
         if (submission.Status == HandoverSubmissionStatus.Approved)
         {
-            return submission.ToVerifierDetail();
+            return ToDetail(submission);
         }
         if (submission.Status != HandoverSubmissionStatus.Submitted)
         {
-            throw HandoverAccess.NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
+            throw NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
         }
         if (documents != null && await documents.FindByTurnIdAsync(turn.Id, ct) != null)
         {
-            throw HandoverAccess.NotAllowed("USE_DOCUMENT", "Hồ sơ này thuộc một biên bản. Hãy kiểm tra thủ công rồi bấm gửi.");
+            throw NotAllowed("USE_DOCUMENT", "Hồ sơ này thuộc một biên bản. Hãy kiểm tra thủ công rồi bấm gửi.");
         }
         if (!(submission.NameMatches && submission.CitizenIdMatches && submission.DateOfBirthMatches))
         {
-            throw HandoverAccess.NotAllowed("FIELDS_MISMATCH", "Có trường không khớp thông tin Chủ kho đã khai. Chỉ yêu cầu bổ sung được.");
+            throw NotAllowed("FIELDS_MISMATCH", "Có trường không khớp thông tin Chủ kho đã khai. Chỉ yêu cầu bổ sung được.");
         }
         Vault vault = await RequireVaultInHandoverAsync(turn, ct);
         if (turn.Status != HandoverTurnStatus.IdentityInProgress)
         {
-            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
+            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
         }
 
-        // 3. Đánh dấu hồ sơ đã duyệt, lượt sang chờ quyết định, ghi người xác nhận danh tính
         DateTimeOffset now = timeProvider.GetUtcNow();
         submission.Status = HandoverSubmissionStatus.Approved;
         submission.ReviewedByUserId = userId;
@@ -200,7 +181,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         // Văn bản đã được dựng lúc người nhận nộp; chỉ dựng bù cho hồ sơ cũ nộp trước khi có bước đó.
         string? paperKey = await StoreMissingPaperAsync(submission, userId, now, ct);
 
-        // 4. Ghi nhật ký rồi lưu một lần; lưu lỗi thì xóa ảnh văn bản vừa dựng
         auditLogs.Add(AuditRules.Create(
             turn.VaultId, userId, AuditActorRole.Verifier, AuditAction.HandoverSubmissionApproved,
             AuditTargetType.HandoverTurn, turn.Id, null, AuditOutcome.Succeeded, null, now));
@@ -213,14 +193,12 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             await IdentityImageStorage.TryDeleteAsync(contentStore, paperKey);
             throw;
         }
-        return submission.ToVerifierDetail();
+        return ToDetail(submission);
     }
 
-    // Bước 4: Người xét duyệt tick đủ các mục kiểm tra, xác nhận trách nhiệm và bấm gửi biên bản.
     public async Task<VerifierHandoverSubmissionResponse> CompleteAsync(
         Guid submissionId, ApproveHandoverDocumentRequest request, CancellationToken ct)
     {
-        // 1. Tìm hồ sơ, lượt và biên bản của lượt; không có biên bản thì không hoàn tất được
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = submission.Turn;
@@ -232,21 +210,19 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         if (document == null || handover == null)
         {
-            throw HandoverAccess.NotAllowed("NO_DOCUMENT", "Hồ sơ này không có biên bản để hoàn tất.");
+            throw NotAllowed("NO_DOCUMENT", "Hồ sơ này không có biên bản để hoàn tất.");
         }
 
-        // 2. Các điều kiện: biên bản đang chờ Người xét duyệt và đúng hồ sơ này, tick đủ, đã xác nhận,
-        //    lượt đang ở bước lập biên bản, kế hoạch đang bàn giao, kho không bị giữ
         // Bấm lặp: đã hoàn tất rồi thì trả lại kết quả cũ.
         if (document.Status == HandoverDocumentStatus.Completed && submission.Status == HandoverSubmissionStatus.Approved)
         {
-            return submission.ToVerifierDetail(document);
+            return ToDetail(submission, document);
         }
         if (submission.Status != HandoverSubmissionStatus.Submitted
             || document.Status != HandoverDocumentStatus.WaitVerifier
             || document.SubmissionId != submission.Id)
         {
-            throw HandoverAccess.NotAllowed("WRONG_STATE", "Biên bản này không còn chờ bạn kiểm tra.");
+            throw NotAllowed("WRONG_STATE", "Biên bản này không còn chờ bạn kiểm tra.");
         }
         if (!HandoverDocumentRules.AllChecked(request.Checks))
         {
@@ -258,11 +234,10 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         if (turn.Status != HandoverTurnStatus.IdentityInProgress || turn.ClaimantUserId == null)
         {
-            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước lập biên bản.");
+            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước lập biên bản.");
         }
         Vault vault = await RequireVaultInHandoverAsync(turn, ct);
 
-        // 3. Đánh dấu hồ sơ đã duyệt, biên bản hoàn tất, ghi người xác nhận danh tính
         DateTimeOffset now = timeProvider.GetUtcNow();
         submission.Status = HandoverSubmissionStatus.Approved;
         submission.ReviewedByUserId = userId;
@@ -282,7 +257,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống.
         vault.Plan.UpdatedAt = now;
 
-        // 4. Kết thúc lượt: Chấp nhận thì tạo quyền tải, Từ chối thì ghi nhận từ chối; đóng kế hoạch nếu mọi lượt đã xong
         // Kết thúc lượt ngay: không còn bước đồng ý hay từ chối riêng sau khi Người xét duyệt gửi.
         if (document.Kind == HandoverSubmissionKind.Accept)
         {
@@ -296,7 +270,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
         HandoverRules.CloseIfAllTerminal(vault.Plan, turns, now);
 
-        // 5. Xóa khóa ảnh căn cước khỏi bản ghi, dựng ảnh văn bản đã ký
         // Ảnh căn cước chỉ để đối chiếu nên xóa ngay khi biên bản hoàn tất: khóa trong bản ghi bị xóa trắng trước khi lưu.
         string frontKey = submission.FrontImageStorageKey;
         string backKey = submission.BackImageStorageKey;
@@ -311,7 +284,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             paperKey = await paperWriter.WriteAsync(submission, turn, userId, now, ct, document);
         }
 
-        // 6. Ghi nhật ký rồi lưu một lần; lưu lỗi thì xóa ảnh văn bản vừa dựng
         auditLogs.Add(AuditRules.Create(
             turn.VaultId, userId, AuditActorRole.Verifier, AuditAction.HandoverSubmissionApproved,
             AuditTargetType.HandoverTurn, turn.Id, null, AuditOutcome.Succeeded, null, now));
@@ -324,7 +296,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             await IdentityImageStorage.TryDeleteAsync(contentStore, paperKey);
             throw;
         }
-        // 7. Sau khi lưu: xóa tệp ảnh căn cước, báo các bên, trả kết quả
         await IdentityImageStorage.TryDeleteAsync(contentStore, frontKey);
         await IdentityImageStorage.TryDeleteAsync(contentStore, backKey);
 
@@ -332,7 +303,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         {
             await notifier.CompletedAsync(document, ct);
         }
-        return submission.ToVerifierDetail(document);
+        return ToDetail(submission, document);
     }
 
     /// <summary>
@@ -349,30 +320,26 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         return await paperWriter.WriteAsync(submission, submission.Turn, reviewerId, now, ct);
     }
 
-    // Bước 5: Người xét duyệt yêu cầu người nhận bổ sung, kèm lý do.
     public async Task<VerifierHandoverSubmissionResponse> RequestSupplementAsync(
         Guid submissionId, RequestHandoverSupplementRequest request, CancellationToken ct)
     {
-        // 1. Lý do không được để trống
         string reason = request.Reason.Trim();
         if (reason.Length == 0)
         {
             throw ValidationErrors.For("reason", "Vui lòng nhập lý do yêu cầu bổ sung.");
         }
 
-        // 2. Tìm hồ sơ; hồ sơ phải đang chờ duyệt và lượt đang ở bước xác minh
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
         Guid userId = currentUser.RequireUserId();
         if (submission.Status != HandoverSubmissionStatus.Submitted)
         {
-            throw HandoverAccess.NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
+            throw NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
         }
         if (submission.Turn.Status != HandoverTurnStatus.IdentityInProgress)
         {
-            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
+            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước xác minh danh tính.");
         }
 
-        // 3. Đánh dấu hồ sơ cần bổ sung; biên bản (nếu có) trả về người nhận để sửa Phần 2 và ký lại
         DateTimeOffset now = timeProvider.GetUtcNow();
         submission.Status = HandoverSubmissionStatus.SupplementRequested;
         submission.SupplementReason = reason;
@@ -393,12 +360,11 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         submission.ReviewedAt = now;
         submission.UpdatedAt = now;
 
-        // 4. Ghi nhật ký, lưu một lần, trả kết quả
         auditLogs.Add(AuditRules.Create(
             submission.Turn.VaultId, userId, AuditActorRole.Verifier, AuditAction.HandoverSubmissionSupplementRequested,
             AuditTargetType.HandoverTurn, submission.Turn.Id, null, AuditOutcome.Succeeded, null, now));
         await unitOfWork.SaveChangesAsync(ct);
-        return submission.ToVerifierDetail();
+        return ToDetail(submission);
     }
 
     private async Task<Guid> RequireActiveVerifierAsync(CancellationToken ct)
@@ -444,17 +410,67 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         if (vault.Plan.Status != PlanStatus.HandoverInProgress)
         {
-            throw HandoverAccess.NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
+            throw NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
         if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
         {
-            throw HandoverAccess.NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa duyệt được.");
+            throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa duyệt được.");
         }
         return vault;
+    }
+
+    private static void FillSummary(VerifierHandoverSubmissionSummaryResponse response, HandoverSubmission submission)
+    {
+        response.Id = submission.Id;
+        response.TurnId = submission.TurnId;
+        response.ContainerName = submission.Turn.ContainerName;
+        response.Kind = submission.Kind.ToApiString();
+        response.AllMatch = submission.NameMatches && submission.CitizenIdMatches && submission.DateOfBirthMatches;
+        response.SubmittedAt = submission.CreatedAt;
+    }
+
+    /// <summary>Chi tiết hồ sơ thuộc một biên bản: duyệt được khi biên bản đang chờ Người xét duyệt, không còn chặn theo kết quả đối chiếu tự động.</summary>
+    private static VerifierHandoverSubmissionResponse ToDetail(HandoverSubmission submission, HandoverDocument document)
+    {
+        VerifierHandoverSubmissionResponse response = ToDetail(submission);
+        response.DocumentId = document.Id;
+        bool waiting = submission.Status == HandoverSubmissionStatus.Submitted
+            && document.Status == HandoverDocumentStatus.WaitVerifier
+            && submission.Turn.Status == HandoverTurnStatus.IdentityInProgress;
+        response.CanApprove = waiting;
+        response.CanRequestSupplement = waiting;
+        return response;
+    }
+
+    private static VerifierHandoverSubmissionResponse ToDetail(HandoverSubmission submission)
+    {
+        VerifierHandoverSubmissionResponse response = new VerifierHandoverSubmissionResponse();
+        FillSummary(response, submission);
+        response.Status = submission.Status.ToApiString();
+        response.NameMatches = submission.NameMatches;
+        response.CitizenIdMatches = submission.CitizenIdMatches;
+        response.DateOfBirthMatches = submission.DateOfBirthMatches;
+        response.CitizenIdLast4 = submission.CitizenIdLast4;
+        response.Acknowledged = submission.Acknowledged;
+        response.VoluntaryDecline = submission.VoluntaryDecline;
+        response.SupplementReason = submission.SupplementReason;
+        response.ItemCount = submission.Turn.Items.Count;
+        bool waiting = submission.Status == HandoverSubmissionStatus.Submitted
+            && submission.Turn.Status == HandoverTurnStatus.IdentityInProgress;
+        response.CanApprove = waiting && response.AllMatch;
+        response.CanRequestSupplement = waiting;
+        return response;
     }
 
     private static AppException SubmissionNotFound()
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy hồ sơ người nhận.");
+    }
+
+    private static AppException NotAllowed(string reason, string message)
+    {
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["reason"] = reason;
+        return new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed, message, extensions);
     }
 }
