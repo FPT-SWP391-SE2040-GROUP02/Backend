@@ -84,8 +84,10 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         return handover.FindUndeliveredInvitationTurnIdsAsync(createdBefore, MaxAttempts, ct);
     }
 
+    // Gửi lại thư mời cho một lượt chưa gửi được (tối đa MaxAttempts lần, cách nhau tăng dần).
     public async Task ProcessTurnAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải còn chờ: chưa gửi được, chưa ai nhận, chưa hết lượt thử, đã đủ thời gian chờ
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
         DateTimeOffset now = timeProvider.GetUtcNow();
         if (turn == null || turn.Status != HandoverTurnStatus.Invited || turn.InvitationSentAt != null
@@ -98,6 +100,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
             return;
         }
 
+        // 2. Kế hoạch phải đang bàn giao; kho đang bị giữ thì tạm dừng
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
         if (vault == null || vault.Plan.Status != PlanStatus.HandoverInProgress)
         {
@@ -109,6 +112,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
             return;
         }
 
+        // 3. Lấy email người nhận; không có email thì ngừng thử và ghi cảnh báo
         string? email = null;
         string fullName = string.Empty;
         string? ownerMessage = null;
@@ -131,6 +135,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
             return;
         }
 
+        // 4. Soạn thư mời với token mới và hạn phản hồi mới
         // INVITE-04: chưa từng giao được thì hạn phản hồi tính từ lần giao thành công đầu tiên.
         DateTimeOffset responseDeadline = now + HandoverRules.ResponseWindow;
         OpaqueToken token = tokens.CreateOpaqueToken();
@@ -148,6 +153,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
 
         try
         {
+            // 5. Gửi thư; lỗi thì tăng số lần thử, giữ link cũ, lưu và dừng
             await sender.SendAsync(invitation, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -168,6 +174,7 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
             return;
         }
 
+        // 6. Gửi được: thay token, ghi mốc đã gửi và hạn phản hồi mới, lưu
         turn.InvitationTokenHash = token.Hash;
         turn.InvitationSentAt = now;
         turn.ResponseDeadline = responseDeadline;
