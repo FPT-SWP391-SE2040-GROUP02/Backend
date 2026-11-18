@@ -281,15 +281,30 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     public Task<ExecutorInvitationResponse> RespondAsync(RespondExecutorInvitationRequest request, CancellationToken ct)
     {
-        return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion, request.Password,
-            responder => FindTokenAsync(request.Token, ct), ct);
+        // Cửa theo token trong link mail: có token, không có id.
+        return RespondCoreAsync(request.Token, null, request.Accept, request.AcknowledgeScope, request.ScopeVersion,
+            request.Password, ct);
     }
 
     public Task<ExecutorInvitationResponse> RespondByIdAsync(
         Guid invitationId, RespondMyExecutorInvitationRequest request, CancellationToken ct)
     {
-        return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion, request.Password,
-            responder => FindMyInvitationAsync(invitationId, responder, ct), ct);
+        // Cửa theo id từ trang "Lời mời của tôi": có id, không có token.
+        return RespondCoreAsync(null, invitationId, request.Accept, request.AcknowledgeScope, request.ScopeVersion,
+            request.Password, ct);
+    }
+
+    /// <summary>
+    /// Hai cửa trả lời chỉ khác cách tìm lời mời: có id thì tìm theo id (đúng email người gọi), không thì tìm theo token.
+    /// Phần luật kiểm tra phía sau dùng chung.
+    /// </summary>
+    private async Task<Executor> FindInvitationAsync(string? token, Guid? invitationId, User responder, CancellationToken ct)
+    {
+        if (invitationId.HasValue)
+        {
+            return await FindMyInvitationAsync(invitationId.Value, responder, ct);
+        }
+        return await FindTokenAsync(token ?? string.Empty, ct);
     }
 
     public async Task<MyExecutorInvitationsResponse> ListMyInvitationsAsync(CancellationToken ct)
@@ -345,8 +360,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     /// giao dịch serializable thì lỗi ném ra sẽ hoàn tác luôn bộ đếm. Chỉ kiểm khi lời mời còn hợp lệ cho người này,
     /// để link sai/hết hạn không làm tốn lượt thử; các luật còn lại vẫn được kiểm lại đầy đủ trong giao dịch.
     /// </summary>
-    private async Task<ExecutorInvitationResponse> RespondCoreAsync(bool accept, bool acknowledgeScope, string scopeVersion,
-        string? password, Func<User, Task<Executor>> findInvitation, CancellationToken ct)
+    private async Task<ExecutorInvitationResponse> RespondCoreAsync(string? token, Guid? invitationId, bool accept,
+        bool acknowledgeScope, string scopeVersion, string? password, CancellationToken ct)
     {
         if (accept)
         {
@@ -361,7 +376,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 throw ValidationErrors.For("password", "Nhập mật khẩu tài khoản để ký nhận vai Người thực thi.");
             }
 
-            Executor pending = await findInvitation(signer);
+            Executor pending = await FindInvitationAsync(token, invitationId, signer, ct);
             DateTimeOffset checkTime = time.GetUtcNow();
             bool emailMatches = string.Equals(signer.Email?.Trim(), pending.InviteeEmail?.Trim(), StringComparison.OrdinalIgnoreCase);
             bool belongsToSigner = !pending.UserId.HasValue || pending.UserId == currentUserId;
@@ -371,11 +386,11 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 await signingPasswordChecker.CheckAsync(signer, password, checkTime, ct);
             }
         }
-        return await RespondInTransactionAsync(accept, acknowledgeScope, scopeVersion, findInvitation, ct);
+        return await RespondInTransactionAsync(token, invitationId, accept, acknowledgeScope, scopeVersion, ct);
     }
 
-    private Task<ExecutorInvitationResponse> RespondInTransactionAsync(bool accept, bool acknowledgeScope, string scopeVersion,
-        Func<User, Task<Executor>> findInvitation, CancellationToken ct) =>
+    private Task<ExecutorInvitationResponse> RespondInTransactionAsync(string? token, Guid? invitationId, bool accept,
+        bool acknowledgeScope, string scopeVersion, CancellationToken ct) =>
         unitOfWork.ExecuteSerializableAsync(async () =>
         {
             Guid userId = currentUser.RequireUserId();
@@ -384,7 +399,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             {
                 throw new AppException(AppErrorType.Validation, ErrorCode.PolicyAcknowledgementRequired, "Cần đọc và xác nhận phạm vi nhiệm vụ hiện hành.");
             }
-            Executor item = await findInvitation(responder);
+            Executor item = await FindInvitationAsync(token, invitationId, responder, ct);
             Vault vault = await vaults.FindByIdAsync(item.VaultId, ct) ?? throw InvalidInvitation();
             if (vault.OwnerId == userId)
             {
