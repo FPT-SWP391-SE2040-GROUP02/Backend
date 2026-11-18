@@ -1,3 +1,4 @@
+using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
@@ -33,18 +34,21 @@ public sealed class HandoverDocumentNotifier : IHandoverDocumentNotifier
         this.submissions = submissions;
     }
 
+    /// <summary>Người nhận đã ký: báo cho Người xét duyệt đã duyệt hồ sơ chứng tử của kho.</summary>
     public async Task VerifierTurnAsync(HandoverDocument document, CancellationToken ct)
     {
         Guid? verifierId = await submissions.FindApprovingVerifierUserIdAsync(document.VaultId, ct);
-        await SendToUserAsync(document, verifierId, HandoverDocumentNoticeKind.VerifierTurn, null, ct);
+        await SendToUserAsync(document, verifierId, HandoverDocumentNoticeKind.VerifierTurn, ct);
     }
 
+    /// <summary>Biên bản hoàn tất: báo cho người nhận và cho Người thực thi của kho.</summary>
     public async Task CompletedAsync(HandoverDocument document, CancellationToken ct)
     {
-        await SendToUserAsync(document, document.Turn.ClaimantUserId, HandoverDocumentNoticeKind.Completed, null, ct);
+        await SendToUserAsync(document, document.Turn.ClaimantUserId, HandoverDocumentNoticeKind.Completed, ct);
         await SendToExecutorsAsync(document, HandoverDocumentNoticeKind.Completed, ct);
     }
 
+    /// <summary>Báo cho mọi Người thực thi đang hiệu lực của kho; không đọc được danh sách thì bỏ qua.</summary>
     private async Task SendToExecutorsAsync(HandoverDocument document, HandoverDocumentNoticeKind kind, CancellationToken ct)
     {
         List<Executor> executors;
@@ -58,12 +62,13 @@ public sealed class HandoverDocumentNotifier : IHandoverDocumentNotifier
         }
         foreach (Executor executor in executors)
         {
-            await SendToUserAsync(document, executor.UserId, kind, null, ct);
+            await SendToUserAsync(document, executor.UserId, kind, ct);
         }
     }
 
+    /// <summary>Gửi thư báo biên bản cho một người. Không có người nhận hoặc gửi lỗi thì bỏ qua, không ném lỗi.</summary>
     private async Task SendToUserAsync(
-        HandoverDocument document, Guid? userId, HandoverDocumentNoticeKind kind, string? reason, CancellationToken ct)
+        HandoverDocument document, Guid? userId, HandoverDocumentNoticeKind kind, CancellationToken ct)
     {
         if (userId == null)
         {
@@ -76,14 +81,15 @@ public sealed class HandoverDocumentNotifier : IHandoverDocumentNotifier
             {
                 return;
             }
-            HandoverDocumentNotice notice = new HandoverDocumentNotice();
-            notice.Kind = kind;
-            notice.ToEmail = user.Email;
-            notice.FullName = user.FullName;
-            notice.DocumentKind = document.Kind == HandoverSubmissionKind.Accept ? "ACCEPT" : "DECLINE";
-            notice.DocumentCode = HandoverDocumentRules.Code(document.Id);
-            notice.RecipientName = document.RecipientFullName;
-            notice.Reason = reason;
+            HandoverDocumentNotice notice = new HandoverDocumentNotice
+            {
+                Kind = kind,
+                ToEmail = user.Email,
+                FullName = user.FullName,
+                DocumentKind = document.Kind.ToApiString(),
+                DocumentCode = HandoverDocumentRules.Code(document.Id),
+                RecipientName = document.RecipientFullName
+            };
             await sender.SendAsync(notice, ct);
         }
         catch (Exception) when (!ct.IsCancellationRequested)
