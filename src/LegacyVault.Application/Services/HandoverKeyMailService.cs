@@ -50,20 +50,15 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         this.timeProvider = timeProvider;
     }
 
+    // Nút "Gửi khóa qua email" của Người thực thi cho một lượt.
     public async Task<SendHandoverKeyResponse> SendAsync(Guid caseId, Guid turnId, string? key, CancellationToken ct)
     {
+        // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
-        if (deathCase == null)
-        {
-            throw CaseNotFound();
-        }
-        Vault? vault = await vaults.FindByIdAsync(deathCase.VaultId, ct);
-        if (vault == null || !await IsActiveExecutorAsync(vault, userId, ct))
-        {
-            throw CaseNotFound();
-        }
+        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+            progressReader, vaults, executorReader, caseId, userId, ct);
 
+        // 2. Lượt phải thuộc kho này; kế hoạch đang bàn giao hoặc đã đóng; lượt còn cần khóa
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
         if (turn == null || turn.PlanId != deathCase.PlanId || turn.VaultId != vault.Id)
         {
@@ -81,6 +76,7 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
             throw NotAllowed(AppErrorType.Conflict, "WRONG_STATE", "Lượt này đã kết thúc hoặc người nhận đã nhập khóa.");
         }
 
+        // 3. Kho phải đã cấp khóa và khóa Người thực thi nhập phải đúng
         ExecutorKeyShard? shard = await keyShards.FindByVaultIdAsync(vault.Id, ct);
         if (shard == null)
         {
@@ -91,6 +87,7 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
             throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverKeyInvalid, "Khóa mở gói chưa đúng.");
         }
 
+        // 4. Lấy email người nhận; không có email thì không gửi được
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, turn.BeneficiaryId, ct);
         string? email = null;
         string fullName = string.Empty;
@@ -105,6 +102,7 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
             throw NotAllowed(AppErrorType.Conflict, "NO_EMAIL", "Người nhận chưa có email để gửi khóa.");
         }
 
+        // 5. Gửi thư chứa khóa; lỗi gửi thì báo thử lại, không ghi chi tiết vì thư có khóa
         HandoverKeyMail mail = new HandoverKeyMail();
         mail.TurnId = turn.Id;
         mail.ToEmail = email;
@@ -125,32 +123,11 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
                 "Chưa gửi được khóa lúc này. Vui lòng thử lại sau.");
         }
 
+        // 6. Trả thời điểm đã gửi
         SendHandoverKeyResponse response = new SendHandoverKeyResponse();
         response.TurnId = turn.Id;
         response.SentAt = timeProvider.GetUtcNow();
         return response;
-    }
-
-    private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
-    {
-        if (vault.OwnerId == userId)
-        {
-            return false;
-        }
-        List<Executor> executors = await executorReader.GetActiveAsync(vault.Id, ct);
-        foreach (Executor executor in executors)
-        {
-            if (executor.UserId == userId)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static AppException CaseNotFound()
-    {
-        return new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
     }
 
     private static AppException NotAllowed(AppErrorType type, string reason, string message)

@@ -41,16 +41,15 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
         this.contentStore = contentStore;
     }
 
+    // Người thực thi tải ảnh biên bản đồng ý hoặc văn bản từ chối đã duyệt của một lượt.
     public async Task<PreparedDownload> PrepareAsync(Guid caseId, Guid turnId, CancellationToken ct)
     {
+        // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
-        Vault? vault = deathCase == null ? null : await vaults.FindByIdAsync(deathCase.VaultId, ct);
-        if (deathCase == null || vault == null || !await IsActiveExecutorAsync(vault, userId, ct))
-        {
-            throw new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
-        }
+        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+            progressReader, vaults, executorReader, caseId, userId, ct);
 
+        // 2. Lượt phải thuộc kho này và đã kết thúc bằng đồng ý hoặc từ chối
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
         if (turn == null || turn.PlanId != deathCase.PlanId || turn.VaultId != vault.Id
             || (turn.Status != HandoverTurnStatus.Declined && turn.Status != HandoverTurnStatus.HandoverCommitted))
@@ -58,6 +57,7 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
             throw PaperNotFound();
         }
 
+        // 3. Hồ sơ mới nhất phải đã duyệt, đúng loại với kết quả lượt và đã có ảnh văn bản
         HandoverSubmission? submission = await submissions.FindLatestByTurnAsync(turn.Id, ct);
         HandoverSubmissionKind expected = turn.Status == HandoverTurnStatus.Declined
             ? HandoverSubmissionKind.Decline
@@ -68,29 +68,13 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
             throw PaperNotFound();
         }
 
+        // 4. Chuẩn bị giải mã ảnh văn bản để tải về
         StoredContent stored = new StoredContent();
         stored.StorageKey = submission.PaperStorageKey;
         stored.SizeBytes = submission.PaperSizeBytes;
         stored.EncryptionKeyId = submission.PaperEncryptionKeyId;
         stored.WrappedDataKey = submission.PaperWrappedDataKey;
         return await IdentityImageStorage.PrepareAsync(contentStore, stored, "image/png", expected == HandoverSubmissionKind.Decline ? "van-ban-tu-choi.png" : "bien-ban-dong-y.png", ct);
-    }
-
-    private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
-    {
-        if (vault.OwnerId == userId)
-        {
-            return false;
-        }
-        List<Executor> executors = await executorReader.GetActiveAsync(vault.Id, ct);
-        foreach (Executor executor in executors)
-        {
-            if (executor.UserId == userId)
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static AppException PaperNotFound()
