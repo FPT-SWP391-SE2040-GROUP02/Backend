@@ -527,27 +527,33 @@ public sealed class HandoverService : IHandoverService
             "Lời mời này gửi tới một email khác. Hãy đăng nhập bằng đúng email được mời.", extensions);
     }
 
-    /// <summary>Email người nhận của lượt (giải mã, chuẩn hóa trim + chữ thường); không có hoặc không đọc được thì null.</summary>
-    private async Task<string?> FindRecipientEmailAsync(HandoverTurn turn, CancellationToken ct)
+    /// <summary>Thông tin Chủ kho đã khai cho người nhận của lượt, đã giải mã; không có hoặc không giải mã được thì null.</summary>
+    private async Task<BeneficiaryPersonalData?> ReadRecipientAsync(HandoverTurn turn, CancellationToken ct)
     {
+        Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
+        if (beneficiary == null)
+        {
+            return null;
+        }
         try
         {
-            Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
-            if (beneficiary == null)
-            {
-                return null;
-            }
-            string? email = beneficiaryProtector.Unprotect(beneficiary).Email;
-            if (string.IsNullOrWhiteSpace(email))
-            {
-                return null;
-            }
-            return NormalizeEmail(email);
+            return beneficiaryProtector.Unprotect(beneficiary);
         }
         catch (System.Security.Cryptography.CryptographicException)
         {
             return null;
         }
+    }
+
+    /// <summary>Email người nhận của lượt (chuẩn hóa trim + chữ thường); không có hoặc không đọc được thì null.</summary>
+    private async Task<string?> FindRecipientEmailAsync(HandoverTurn turn, CancellationToken ct)
+    {
+        BeneficiaryPersonalData? recipient = await ReadRecipientAsync(turn, ct);
+        if (recipient == null || string.IsNullOrWhiteSpace(recipient.Email))
+        {
+            return null;
+        }
+        return NormalizeEmail(recipient.Email);
     }
 
     private static string NormalizeEmail(string email)
@@ -590,24 +596,12 @@ public sealed class HandoverService : IHandoverService
     /// <summary>Họ tên người nhận Chủ kho đã nhập, giải mã để chào đúng người; không đọc được thì để trống, không làm hỏng màn hình.</summary>
     private async Task<string?> FindRecipientFullNameAsync(HandoverTurn turn, CancellationToken ct)
     {
-        try
-        {
-            Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
-            if (beneficiary == null)
-            {
-                return null;
-            }
-            string name = beneficiaryProtector.Unprotect(beneficiary).FullName;
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return null;
-            }
-            return name.Trim();
-        }
-        catch (System.Security.Cryptography.CryptographicException)
+        BeneficiaryPersonalData? recipient = await ReadRecipientAsync(turn, ct);
+        if (recipient == null || string.IsNullOrWhiteSpace(recipient.FullName))
         {
             return null;
         }
+        return recipient.FullName.Trim();
     }
 
     private async Task<HandoverTurnResponse> BuildTurnResponseAsync(HandoverTurn turn, CancellationToken ct)
