@@ -6,7 +6,7 @@ namespace LegacyVault.Application.Repositories;
 /// Truy cập các bảng bàn giao: HandoverTurns, HandoverSnapshotItems, HandoverGrants, HandoverAccessLogs.
 /// </summary>
 /// <remarks>
-/// Repository chỉ đánh dấu Add/sửa; service gọi IUnitOfWork.SaveChangesAsync một lần ở cuối use case (STATE-02).
+/// Repository chỉ đánh dấu Add/sửa; service gọi IUnitOfWork.SaveChangesAsync một lần ở cuối use case.
 /// Các hàm "có theo dõi" trả entity mà sửa xong rồi SaveChanges là lưu.
 /// </remarks>
 public interface IHandoverRepository
