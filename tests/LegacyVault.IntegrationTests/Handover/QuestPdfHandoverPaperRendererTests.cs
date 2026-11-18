@@ -6,17 +6,17 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>Văn bản từ chối: dựng được ảnh PNG hợp lệ từ dữ liệu hệ thống đã giữ.</summary>
-public sealed class QuestPdfDeclinePaperRendererTests
+public sealed class QuestPdfHandoverPaperRendererTests
 {
     [Fact]
     public void Render_ProducesPngBytes()
     {
-        DeclinePaperData data = new DeclinePaperData
+        HandoverPaperData data = new HandoverPaperData
         {
             TurnCode = "AB12CD34",
             ContainerName = "Gói gia đình",
             OwnerFullName = "Nguyễn Văn A",
-            DeclinerFullName = "Trần Minh Anh",
+            RecipientFullName = "Trần Minh Anh",
             CitizenIdLast4 = "1234",
             SubmittedAt = new DateTimeOffset(2026, 11, 9, 3, 0, 0, TimeSpan.Zero),
             NameMatches = true,
@@ -27,7 +27,7 @@ public sealed class QuestPdfDeclinePaperRendererTests
             ReviewedAt = new DateTimeOffset(2026, 11, 9, 4, 0, 0, TimeSpan.Zero),
         };
 
-        byte[] image = new QuestPdfDeclinePaperRenderer().Render(data);
+        byte[] image = new QuestPdfHandoverPaperRenderer().Render(data);
 
         Assert.True(image.Length > 500);
         Assert.Equal("PNG", Encoding.ASCII.GetString(image, 1, 3));
@@ -36,12 +36,12 @@ public sealed class QuestPdfDeclinePaperRendererTests
     [Fact]
     public void Render_Acceptance_ProducesPngBytes()
     {
-        DeclinePaperData data = new DeclinePaperData
+        HandoverPaperData data = new HandoverPaperData
         {
             TurnCode = "AB12CD34",
             ContainerName = "Gói gia đình",
             OwnerFullName = "Nguyễn Văn A",
-            DeclinerFullName = "Trần Minh Anh",
+            RecipientFullName = "Trần Minh Anh",
             CitizenIdLast4 = "1234",
             SubmittedAt = new DateTimeOffset(2026, 11, 9, 3, 0, 0, TimeSpan.Zero),
             NameMatches = true,
@@ -53,7 +53,7 @@ public sealed class QuestPdfDeclinePaperRendererTests
             IsAcceptance = true,
         };
 
-        byte[] image = new QuestPdfDeclinePaperRenderer().Render(data);
+        byte[] image = new QuestPdfHandoverPaperRenderer().Render(data);
 
         Assert.True(image.Length > 500);
         Assert.Equal("PNG", Encoding.ASCII.GetString(image, 1, 3));
@@ -63,14 +63,14 @@ public sealed class QuestPdfDeclinePaperRendererTests
     public void DeathSentence_PrintsDatesAndPlaceInTheAgreedWording()
     {
         // Chuẩn bị
-        DeclinePaperData data = new DeclinePaperData();
+        HandoverPaperData data = new HandoverPaperData();
         data.DateOfDeath = new DateOnly(2026, 11, 5);
         data.DeathCertificateIssuedOn = new DateOnly(2026, 11, 7);
         data.DeathRegistrationPlace = "UBND phường Bến Thành, Thành phố Hồ Chí Minh";
         data.CertificateNumber = "0456/2026";
 
         // Hành động
-        string sentence = QuestPdfDeclinePaperRenderer.DeathSentence(data);
+        string sentence = QuestPdfHandoverPaperRenderer.DeathSentence(data);
 
         // Kiểm tra: đúng câu đã chốt, không còn phần "số ..." của số giấy chứng tử
         Assert.Equal(
@@ -85,10 +85,10 @@ public sealed class QuestPdfDeclinePaperRendererTests
     public void DeathSentence_PrintsDottedLinesWhenDataIsMissing()
     {
         // Chuẩn bị: hồ sơ chưa có ngày mất, ngày đăng ký và nơi đăng ký
-        DeclinePaperData data = new DeclinePaperData();
+        HandoverPaperData data = new HandoverPaperData();
 
         // Hành động
-        string sentence = QuestPdfDeclinePaperRenderer.DeathSentence(data);
+        string sentence = QuestPdfHandoverPaperRenderer.DeathSentence(data);
 
         // Kiểm tra
         Assert.Equal(
@@ -100,11 +100,11 @@ public sealed class QuestPdfDeclinePaperRendererTests
     public void Render_WithDeathRegistrationPlace_ProducesPngBytes()
     {
         // Chuẩn bị
-        DeclinePaperData data = new DeclinePaperData();
+        HandoverPaperData data = new HandoverPaperData();
         data.TurnCode = "AB12CD34";
         data.ContainerName = "Gói gia đình";
         data.OwnerFullName = "Nguyễn Văn A";
-        data.DeclinerFullName = "Trần Minh Anh";
+        data.RecipientFullName = "Trần Minh Anh";
         data.CitizenIdLast4 = "1234";
         data.SubmittedAt = new DateTimeOffset(2026, 11, 9, 3, 0, 0, TimeSpan.Zero);
         data.DateOfDeath = new DateOnly(2026, 11, 5);
@@ -113,9 +113,9 @@ public sealed class QuestPdfDeclinePaperRendererTests
 
         // Hành động: cả văn bản từ chối và biên bản đồng ý đều dựng được
         data.IsAcceptance = false;
-        byte[] decline = new QuestPdfDeclinePaperRenderer().Render(data);
+        byte[] decline = new QuestPdfHandoverPaperRenderer().Render(data);
         data.IsAcceptance = true;
-        byte[] acceptance = new QuestPdfDeclinePaperRenderer().Render(data);
+        byte[] acceptance = new QuestPdfHandoverPaperRenderer().Render(data);
 
         // Kiểm tra
         Assert.Equal("PNG", Encoding.ASCII.GetString(decline, 1, 3));

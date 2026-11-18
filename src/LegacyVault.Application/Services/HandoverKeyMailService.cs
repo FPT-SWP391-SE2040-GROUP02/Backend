@@ -8,9 +8,10 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+/// <summary>Người thực thi gửi khóa mở gói qua email cho người nhận của một lượt.</summary>
 /// <remarks>
-/// - Khóa mở gói không lưu ở đâu, DB chỉ có mã băm; Người thực hiện nhập lại khóa mình đang giữ, Backend băm để kiểm rồi mới gửi.
-/// - Email người nhận chỉ giải mã ở đây để gửi; Người thực hiện không thấy email.
+/// - Khóa mở gói không lưu ở đâu, DB chỉ có mã băm; Người thực thi nhập lại khóa mình đang giữ, Backend băm để kiểm rồi mới gửi.
+/// - Email người nhận chỉ giải mã ở đây để gửi; Người thực thi không thấy email.
 /// - Khóa đi bằng thư riêng, tách khỏi thư lời mời, nên người chỉ có một trong hai thư thì chưa mở được gói.
 /// </remarks>
 public sealed class HandoverKeyMailService : IHandoverKeyMailService

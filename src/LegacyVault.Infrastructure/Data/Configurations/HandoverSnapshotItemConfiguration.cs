@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LegacyVault.Infrastructure.Data.Configurations;
 
+/// <summary>Cấu hình bảng HandoverSnapshotItems (tài sản được ghim cho một lượt).</summary>
 public sealed class HandoverSnapshotItemConfiguration : IEntityTypeConfiguration<HandoverSnapshotItem>
 {
     public void Configure(EntityTypeBuilder<HandoverSnapshotItem> builder)

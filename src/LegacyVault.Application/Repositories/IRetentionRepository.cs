@@ -14,7 +14,7 @@ public interface IRetentionRepository
     /// <summary>Các tài sản theo Id (chỉ tài sản còn nội dung).</summary>
     Task<List<Asset>> FindLiveAssetsAsync(List<Guid> assetIds, CancellationToken ct);
 
-    /// <summary>Mọi tài sản còn nội dung của kho (dùng khi đóng kho, SETUP-18).</summary>
+    /// <summary>Mọi tài sản còn nội dung của kho (dùng khi đóng kho).</summary>
     Task<List<Asset>> FindLiveAssetsOfVaultAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>Tài sản đã hủy khóa nhưng tệp chưa xóa được khỏi kho lưu trữ (thử lại).</summary>

@@ -10,24 +10,12 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-public interface IHandoverSubmissionService
-{
-    /// <summary>
-    /// Người nhận nộp hồ sơ (Chấp nhận hoặc Từ chối, thông tin khai trên văn bản mẫu và ảnh căn cước hai mặt) cho Người xét duyệt.
-    /// Chỉ khi lượt đang ở bước xác minh danh tính. Nộp lại thì bản cũ bị thay thế.
-    /// </summary>
-    Task<HandoverSubmissionResponse> SubmitAsync(
-        Guid turnId, SubmitHandoverSubmissionRequest request, byte[] frontImage, byte[] backImage, CancellationToken ct);
-
-    /// <summary>Hồ sơ mới nhất của lượt này; null khi chưa nộp.</summary>
-    Task<HandoverSubmissionResponse?> GetLatestAsync(Guid turnId, CancellationToken ct);
-}
-
 // Người nhận nộp hồ sơ ở bước xác minh danh tính, theo thứ tự:
 //   1. Nộp hồ sơ (Chấp nhận hoặc Từ chối, thông tin khai, ảnh căn cước hai mặt) ... SubmitAsync
 //   2. Xem lại hồ sơ mới nhất đã nộp ................................................. GetLatestAsync
 // Lượt có biên bản: hồ sơ này là phần ký của người nhận, ảnh văn bản dựng lúc Người xét duyệt gửi.
 // Lượt không có biên bản (luồng cũ): ảnh văn bản dựng ngay lúc nộp (StorePaperAsync).
+/// <summary>Người nhận nộp hồ sơ: đối chiếu với dữ liệu Chủ kho đã khai, lưu ảnh mã hóa, ghi chữ ký vào biên bản và báo Người xét duyệt.</summary>
 public sealed class HandoverSubmissionService : IHandoverSubmissionService
 {
     private readonly ICurrentUser currentUser;

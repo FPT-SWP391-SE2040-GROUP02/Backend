@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 
 namespace LegacyVault.Application.Services;
 
+/// <summary>Màn tiến độ bàn giao của Người thực thi: tình trạng từng lượt của từng người nhận.</summary>
 public sealed class HandoverProgressService : IHandoverProgressService
 {
     private readonly ICurrentUser currentUser;

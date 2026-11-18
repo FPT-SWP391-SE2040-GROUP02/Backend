@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Infrastructure.Handover;
 
+/// <summary>Đọc công tắc yêu cầu xác minh danh tính từ mục Handover trong cấu hình.</summary>
 public sealed class HandoverPolicy : IHandoverPolicy
 {
     private readonly IOptions<HandoverSettings> options;

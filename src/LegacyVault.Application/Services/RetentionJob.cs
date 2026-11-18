@@ -8,28 +8,7 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Kết quả một lần xử lý kế hoạch của job lưu dữ liệu (để log/test).</summary>
-public sealed class RetentionRunResult
-{
-    public int TurnsDeleted { get; set; }
-
-    public int AssetsShredded { get; set; }
-
-    public int NoticesSent { get; set; }
-
-    public bool VaultClosed { get; set; }
-}
-
 /// <summary>Việc nền lưu và xóa dữ liệu sau bàn giao.</summary>
-public interface IRetentionJob
-{
-    /// <summary>Id các kế hoạch cần xét lưu và xóa trong lần quét này (mỗi lần tối đa một lô).</summary>
-    Task<List<Guid>> FindPlanIdsAsync(CancellationToken ct);
-
-    /// <summary>Xử lý một kế hoạch; đọc lại và kiểm lại mọi điều kiện nên chạy lặp an toàn.</summary>
-    Task<RetentionRunResult> ProcessPlanAsync(Guid planId, CancellationToken ct);
-}
-
 /// <remarks>
 /// - Đồng hồ theo từng lượt (một chỉ định). Lý do giữ: còn trong 5 ngày phản hồi, claim đang xử lý, grant còn hạn,
 ///   Owner báo còn sống (kế hoạch BLOCKED). Tạm dừng lưu phần còn lại, không đặt lại 30 ngày.

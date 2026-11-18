@@ -21,12 +21,12 @@ public sealed class ExecutorHandoverController : ControllerBase
 {
     private readonly IHandoverProgressService handoverProgressService;
     private readonly IHandoverKeyMailService handoverKeyMailService;
-    private readonly IExecutorDeclinePaperService declinePaperService;
+    private readonly IExecutorHandoverPaperService declinePaperService;
 
     public ExecutorHandoverController(
         IHandoverProgressService handoverProgressService,
         IHandoverKeyMailService handoverKeyMailService,
-        IExecutorDeclinePaperService declinePaperService)
+        IExecutorHandoverPaperService declinePaperService)
     {
         this.declinePaperService = declinePaperService;
         this.handoverKeyMailService = handoverKeyMailService;
@@ -56,14 +56,14 @@ public sealed class ExecutorHandoverController : ControllerBase
     [Produces("image/png", "application/json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetDeclinePaper(Guid caseId, Guid turnId, CancellationToken ct)
+    public async Task<IActionResult> GetHandoverPaper(Guid caseId, Guid turnId, CancellationToken ct)
     {
         PreparedDownload download = await declinePaperService.PrepareAsync(caseId, turnId, ct);
         return new IdentityImageResult(download);
     }
 
     /// <summary>
-    /// Người thực hiện gửi khóa mở gói cho người nhận của lượt qua email đã lưu. Body là khóa mình đang giữ để Backend kiểm;
+    /// Người thực thi gửi khóa mở gói cho người nhận của lượt qua email đã lưu. Body là khóa mình đang giữ để Backend kiểm;
     /// khóa sai trả 403 HANDOVER_KEY_INVALID. Khóa không được lưu và không có trong phản hồi.
     /// </summary>
     [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/send-key")]

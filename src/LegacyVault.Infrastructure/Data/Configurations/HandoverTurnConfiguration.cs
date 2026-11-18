@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LegacyVault.Infrastructure.Data.Configurations;
 
+/// <summary>Cấu hình bảng HandoverTurns (lượt bàn giao).</summary>
 public sealed class HandoverTurnConfiguration : IEntityTypeConfiguration<HandoverTurn>
 {
     public void Configure(EntityTypeBuilder<HandoverTurn> builder)

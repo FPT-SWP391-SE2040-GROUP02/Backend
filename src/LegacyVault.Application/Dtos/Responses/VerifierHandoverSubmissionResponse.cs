@@ -1,42 +1,5 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
-/// <summary>Hồ sơ người nhận nhìn từ phía người nhận: trạng thái và lý do cần bổ sung (không có kết quả đối chiếu).</summary>
-public class HandoverSubmissionResponse
-{
-    public Guid Id { get; set; }
-
-    public Guid TurnId { get; set; }
-
-    /// <summary>ACCEPT | DECLINE.</summary>
-    public string Kind { get; set; } = string.Empty;
-
-    /// <summary>SUBMITTED | SUPPLEMENT_REQUESTED | APPROVED | SUPERSEDED.</summary>
-    public string Status { get; set; } = string.Empty;
-
-    /// <summary>Có khi Người xét duyệt yêu cầu bổ sung.</summary>
-    public string? SupplementReason { get; set; }
-
-    public DateTimeOffset CreatedAt { get; set; }
-}
-
-/// <summary>Một dòng trong hàng chờ duyệt hồ sơ người nhận của Người xét duyệt.</summary>
-public class VerifierHandoverSubmissionSummaryResponse
-{
-    public Guid Id { get; set; }
-
-    public Guid TurnId { get; set; }
-
-    public string ContainerName { get; set; } = string.Empty;
-
-    /// <summary>ACCEPT | DECLINE.</summary>
-    public string Kind { get; set; } = string.Empty;
-
-    /// <summary>true khi cả ba trường (họ tên, số căn cước, ngày sinh) khớp thông tin Chủ kho đã khai.</summary>
-    public bool AllMatch { get; set; }
-
-    public DateTimeOffset SubmittedAt { get; set; }
-}
-
 /// <summary>Chi tiết một hồ sơ người nhận cho Người xét duyệt. Không có họ tên, ngày sinh hay số căn cước đầy đủ.</summary>
 public class VerifierHandoverSubmissionResponse : VerifierHandoverSubmissionSummaryResponse
 {

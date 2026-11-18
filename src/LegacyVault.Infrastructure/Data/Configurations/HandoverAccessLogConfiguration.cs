@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LegacyVault.Infrastructure.Data.Configurations;
 
+/// <summary>Cấu hình bảng HandoverAccessLogs (nhật ký tải tài sản).</summary>
 public sealed class HandoverAccessLogConfiguration : IEntityTypeConfiguration<HandoverAccessLog>
 {
     public void Configure(EntityTypeBuilder<HandoverAccessLog> builder)

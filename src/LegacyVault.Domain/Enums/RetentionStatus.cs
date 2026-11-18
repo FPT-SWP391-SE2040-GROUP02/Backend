@@ -1,7 +1,7 @@
 namespace LegacyVault.Domain.Enums;
 
-/// <summary>Trạng thái lưu dữ liệu của một lượt bàn giao (SRS §7.7, §11.1 "Lưu dữ liệu").</summary>
-/// <remarks>DELETION_ELIGIBLE của SRS chỉ là bước chuyển trong job (tới hạn và kiểm lại đủ điều kiện thì xóa ngay), không lưu.</remarks>
+/// <summary>Trạng thái lưu dữ liệu của một lượt bàn giao.</summary>
+/// <remarks>Bước "đủ điều kiện xóa" chỉ là bước chuyển trong job (tới hạn và kiểm lại đủ điều kiện thì xóa ngay), không lưu.</remarks>
 public enum RetentionStatus
 {
     /// <summary>Chưa đủ điều kiện bắt đầu đồng hồ (còn trong hạn phản hồi, claim đang xử lý, grant còn hạn...).</summary>

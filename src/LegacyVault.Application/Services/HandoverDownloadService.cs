@@ -10,6 +10,7 @@ namespace LegacyVault.Application.Services;
 
 // Người nhận bấm "Tải" một tài sản đã được bàn giao (PrepareAsync).
 // Mọi lần tải, kể cả bị từ chối hay hỏng, đều ghi nhật ký truy cập (chỉ id và kết quả).
+/// <summary>Cho người nhận tải một tài sản của lượt đã nhận: kiểm quyền, kiểm tính toàn vẹn rồi giải mã thẳng ra response, mỗi lần tải ghi nhật ký.</summary>
 public sealed class HandoverDownloadService : IHandoverDownloadService
 {
     private readonly ICurrentUser currentUser;

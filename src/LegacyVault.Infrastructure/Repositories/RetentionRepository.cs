@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegacyVault.Infrastructure.Repositories;
 
+/// <summary>Đọc và ghi dữ liệu cho việc nền lưu và xóa sau bàn giao (EF Core).</summary>
 public sealed class RetentionRepository : IRetentionRepository
 {
     private readonly AppDbContext context;

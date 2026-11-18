@@ -5,29 +5,14 @@ using LegacyVault.Domain.Entities;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>
-/// Dựng ảnh văn bản của một hồ sơ người nhận (văn bản từ chối hoặc biên bản đồng ý) và gắn vào hồ sơ.
-/// </summary>
-public interface IHandoverPaperWriter
-{
-    /// <summary>
-    /// Dựng ảnh, lưu mã hóa và gán các cột Paper* của hồ sơ. Trả khóa lưu để người gọi xóa bù khi lưu bản ghi thất bại;
-    /// trả null khi thiếu dữ liệu để dựng (không có hồ sơ người nhận, hoặc có người xét duyệt mà không tìm thấy họ).
-    /// </summary>
-    /// <remarks>
-    /// Có Document thì dựng từ biên bản đã ký (họ tên người nhận, số giấy chứng tử, ngày, chữ ký của người nhận và Người xét duyệt);
-    /// không có thì dựng như luồng cũ từ hồ sơ người nhận và hồ sơ chứng tử.
-    /// </remarks>
-    Task<string?> WriteAsync(HandoverPaperRequest request, CancellationToken ct);
-}
-
+/// <summary>Dựng ảnh văn bản (biên bản đồng ý hoặc văn bản từ chối) của một hồ sơ người nhận rồi lưu mã hóa.</summary>
 public sealed class HandoverPaperWriter : IHandoverPaperWriter
 {
     private readonly IUserRepository users;
     private readonly IVaultRepository vaults;
     private readonly IBeneficiaryRepository beneficiaries;
     private readonly IBeneficiaryDataProtector protector;
-    private readonly IDeclinePaperRenderer renderer;
+    private readonly IHandoverPaperRenderer renderer;
     private readonly IDeathCaseRepository deathCases;
     private readonly IAssetContentStore contentStore;
     private readonly IAdministrativeUnitCatalog administrativeUnits;
@@ -40,7 +25,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         IVaultRepository vaults,
         IBeneficiaryRepository beneficiaries,
         IBeneficiaryDataProtector protector,
-        IDeclinePaperRenderer renderer,
+        IHandoverPaperRenderer renderer,
         IDeathCaseRepository deathCases,
         IAssetContentStore contentStore,
         IAdministrativeUnitCatalog administrativeUnits,
@@ -95,7 +80,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         }
 
         // 4. Điền dữ liệu in chung cho cả hai loại văn bản
-        DeclinePaperData data = new DeclinePaperData
+        HandoverPaperData data = new HandoverPaperData
         {
             IsAcceptance = submission.Kind == HandoverSubmissionKind.Accept,
             TurnCode = submission.TurnId.ToString("N").Substring(24).ToUpperInvariant(),
@@ -127,7 +112,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         if (document != null)
         {
             data.OwnerFullName = document.OwnerFullName;
-            data.DeclinerFullName = document.RecipientFullName;
+            data.RecipientFullName = document.RecipientFullName;
             data.DateOfDeath = document.DateOfDeath;
             data.DeathCertificateIssuedOn = document.CertificateIssuedOn;
             data.DeathRegistrationPlace = document.DeathRegistrationPlace;
@@ -143,7 +128,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         {
             if (personal != null)
             {
-                data.DeclinerFullName = personal.FullName;
+                data.RecipientFullName = personal.FullName;
             }
             await FillDeathDatesAsync(data, turn.VaultId, ct);
         }
@@ -163,7 +148,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
     /// Điền các đoạn chữ của mẫu vào dữ liệu dựng: biên bản đã tạo dùng đúng mẫu ghi trên biên bản (TemplateVersion), luồng cũ không có
     /// biên bản thì dùng mẫu đang áp dụng. Không có dịch vụ mẫu thì để trống để bộ dựng dùng chữ cố định.
     /// </summary>
-    private async Task FillTemplateAsync(DeclinePaperData data, HandoverDocument? document, CancellationToken ct)
+    private async Task FillTemplateAsync(HandoverPaperData data, HandoverDocument? document, CancellationToken ct)
     {
         if (templates == null)
         {
@@ -187,7 +172,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
     }
 
     /// <summary>Ngày mất, ngày đăng ký khai tử và nơi đăng ký in lên văn bản; không có hồ sơ hoặc chưa đủ dữ liệu thì để trống.</summary>
-    private async Task FillDeathDatesAsync(DeclinePaperData data, Guid vaultId, CancellationToken ct)
+    private async Task FillDeathDatesAsync(HandoverPaperData data, Guid vaultId, CancellationToken ct)
     {
         DeathCase? deathCase = await deathCases.FindOpenByVaultIdAsync(vaultId, ct);
         if (deathCase == null || deathCase.ReviewVersionNo == null)

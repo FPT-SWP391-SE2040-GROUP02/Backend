@@ -7,6 +7,7 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+/// <summary>Mở giai đoạn nhận tài sản của một kho: tạo lượt cho từng chỉ định, ghim tài sản và gửi lời mời.</summary>
 public sealed class HandoverStarter : IHandoverStarter
 {
     private readonly IVaultRepository vaults;

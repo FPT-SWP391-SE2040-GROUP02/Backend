@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LegacyVault.Infrastructure.Data.Configurations;
 
+/// <summary>Cấu hình bảng HandoverDocuments (biên bản).</summary>
 public sealed class HandoverDocumentConfiguration : IEntityTypeConfiguration<HandoverDocument>
 {
     public void Configure(EntityTypeBuilder<HandoverDocument> builder)

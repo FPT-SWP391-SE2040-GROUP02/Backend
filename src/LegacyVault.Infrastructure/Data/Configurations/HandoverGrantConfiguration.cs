@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LegacyVault.Infrastructure.Data.Configurations;
 
+/// <summary>Cấu hình bảng HandoverGrants (quyền tải của người nhận).</summary>
 public sealed class HandoverGrantConfiguration : IEntityTypeConfiguration<HandoverGrant>
 {
     public void Configure(EntityTypeBuilder<HandoverGrant> builder)

@@ -20,7 +20,7 @@ public static class HandoverApplicationConfig
         services.AddScoped<IHandoverJob, HandoverJob>();
         services.AddScoped<IHandoverInvitationRetryJob, HandoverInvitationRetryJob>();
         services.AddScoped<IHandoverKeyMailService, HandoverKeyMailService>();
-        services.AddScoped<IExecutorDeclinePaperService, ExecutorDeclinePaperService>();
+        services.AddScoped<IExecutorHandoverPaperService, ExecutorHandoverPaperService>();
         return services;
     }
 }

@@ -7,13 +7,8 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-public interface IExecutorDeclinePaperService
-{
-    /// <summary>Người thực thi xem ảnh văn bản từ chối (lượt bị từ chối) hoặc biên bản đồng ý (lượt đã đồng ý nhận).</summary>
-    Task<PreparedDownload> PrepareAsync(Guid caseId, Guid turnId, CancellationToken ct);
-}
-
-public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
+/// <summary>Người thực thi tải ảnh biên bản đồng ý hoặc văn bản từ chối đã duyệt của một lượt; giải mã thẳng ra response.</summary>
+public sealed class ExecutorHandoverPaperService : IExecutorHandoverPaperService
 {
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaults;
@@ -23,7 +18,7 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
     private readonly IHandoverSubmissionRepository submissions;
     private readonly IAssetContentStore contentStore;
 
-    public ExecutorDeclinePaperService(
+    public ExecutorHandoverPaperService(
         ICurrentUser currentUser,
         IVaultRepository vaults,
         IExecutorReader executorReader,

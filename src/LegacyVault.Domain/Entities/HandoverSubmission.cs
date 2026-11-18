@@ -1,31 +1,5 @@
 namespace LegacyVault.Domain.Entities;
 
-/// <summary>Người nhận chọn gì trong hồ sơ nộp cho Người xét duyệt.</summary>
-public enum HandoverSubmissionKind
-{
-    /// <summary>Chấp nhận nhận tài sản của gói.</summary>
-    Accept = 0,
-
-    /// <summary>Từ chối nhận; tài sản của gói coi như không giao cho ai.</summary>
-    Decline = 1,
-}
-
-/// <summary>Trạng thái một hồ sơ người nhận.</summary>
-public enum HandoverSubmissionStatus
-{
-    /// <summary>Đã nộp, chờ Người xét duyệt.</summary>
-    Submitted = 0,
-
-    /// <summary>Người xét duyệt yêu cầu bổ sung; người nhận nộp lại bản mới.</summary>
-    SupplementRequested = 1,
-
-    /// <summary>Người xét duyệt đã duyệt; lượt sang bước quyết định.</summary>
-    Approved = 2,
-
-    /// <summary>Bị bản nộp lại thay thế.</summary>
-    Superseded = 3,
-}
-
 /// <summary>
 /// Hồ sơ người nhận nộp cho Người xét duyệt (bảng HandoverSubmissions): lựa chọn Chấp nhận hoặc Từ chối, thông tin
 /// khai trên văn bản mẫu và ảnh căn cước hai mặt. Thay cho xác minh eKYC bằng camera ở bước danh tính của lượt bàn giao.

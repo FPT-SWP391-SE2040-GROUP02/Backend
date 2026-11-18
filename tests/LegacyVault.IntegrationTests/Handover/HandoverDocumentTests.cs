@@ -224,11 +224,11 @@ public sealed class HandoverDocumentTests
             currentUser, users, vaults, submissions, holds, store, audit, unitOfWork, time, writer, handover, documents, notifier);
     }
 
-    private sealed class FakePaperRenderer : IDeclinePaperRenderer
+    private sealed class FakePaperRenderer : IHandoverPaperRenderer
     {
-        public DeclinePaperData? Last { get; private set; }
+        public HandoverPaperData? Last { get; private set; }
 
-        public byte[] Render(DeclinePaperData paper)
+        public byte[] Render(HandoverPaperData paper)
         {
             Last = paper;
             return new byte[] { 0x25, 0x50, 0x44, 0x46 };
@@ -500,13 +500,13 @@ public sealed class HandoverDocumentTests
 
         await reviewService.CompleteAsync(submission.Id, AllChecks(), CancellationToken.None);
 
-        DeclinePaperData paper = Assert.IsType<DeclinePaperData>(renderer.Last);
+        HandoverPaperData paper = Assert.IsType<HandoverPaperData>(renderer.Last);
         Assert.Equal("Nguyễn Văn Chủ Kho", paper.OwnerFullName);
         Assert.Equal("0456/2026", paper.CertificateNumber);
         Assert.Equal(new DateOnly(2026, 11, 5), paper.DateOfDeath);
         Assert.Equal(new DateOnly(2026, 11, 7), paper.DeathCertificateIssuedOn);
         Assert.Equal("UBND phường Bến Thành, Thành phố Hồ Chí Minh", paper.DeathRegistrationPlace);
-        Assert.Equal("Trần Minh Anh", paper.DeclinerFullName);
+        Assert.Equal("Trần Minh Anh", paper.RecipientFullName);
         Assert.Equal(1990, paper.RecipientBirthYear);
         Assert.Equal("34 Trần Hưng Đạo, Phường Hoàn Kiếm, Hà Nội", paper.RecipientResidenceAddress);
         Assert.Equal("12 Lê Lợi, Phường Bến Thành, TP. Hồ Chí Minh", paper.OwnerResidenceAddress);

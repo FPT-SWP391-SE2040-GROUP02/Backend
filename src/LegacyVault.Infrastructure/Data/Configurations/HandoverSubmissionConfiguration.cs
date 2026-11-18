@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LegacyVault.Infrastructure.Data.Configurations;
 
+/// <summary>Cấu hình bảng HandoverSubmissions (hồ sơ người nhận).</summary>
 public sealed class HandoverSubmissionConfiguration : IEntityTypeConfiguration<HandoverSubmission>
 {
     public void Configure(EntityTypeBuilder<HandoverSubmission> builder)

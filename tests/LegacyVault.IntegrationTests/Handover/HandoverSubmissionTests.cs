@@ -370,18 +370,18 @@ public sealed class HandoverSubmissionTests
         Assert.Equal(AuditAction.HandoverSubmissionApproved, Assert.Single(audit.Logs).Action);
     }
 
-    private sealed class FakePaperRenderer : IDeclinePaperRenderer
+    private sealed class FakePaperRenderer : IHandoverPaperRenderer
     {
-        public DeclinePaperData? Last { get; private set; }
+        public HandoverPaperData? Last { get; private set; }
 
-        public byte[] Render(DeclinePaperData data)
+        public byte[] Render(HandoverPaperData data)
         {
             Last = data;
             return new byte[] { 0x25, 0x50, 0x44, 0x46 };
         }
     }
 
-    private HandoverPaperWriter WriterFor(IDeclinePaperRenderer renderer)
+    private HandoverPaperWriter WriterFor(IHandoverPaperRenderer renderer)
     {
         return new HandoverPaperWriter(
             users, vaults, beneficiaries, protector, renderer, deathCases, store, new AdministrativeUnitCatalog());
@@ -393,15 +393,15 @@ public sealed class HandoverSubmissionTests
             currentUser, users, vaults, submissions, holds, store, audit, unitOfWork, time, WriterFor(renderer));
     }
 
-    private HandoverSubmissionService SubmitWithPaper(IDeclinePaperRenderer renderer)
+    private HandoverSubmissionService SubmitWithPaper(IHandoverPaperRenderer renderer)
     {
         return new HandoverSubmissionService(
             currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time, WriterFor(renderer));
     }
 
-    private sealed class ThrowingPaperRenderer : IDeclinePaperRenderer
+    private sealed class ThrowingPaperRenderer : IHandoverPaperRenderer
     {
-        public byte[] Render(DeclinePaperData data)
+        public byte[] Render(HandoverPaperData data)
         {
             throw new InvalidOperationException("Không dựng được văn bản.");
         }
@@ -418,7 +418,7 @@ public sealed class HandoverSubmissionTests
 
         Assert.NotEmpty(submission.PaperStorageKey);
         Assert.True(store.Contents.ContainsKey(submission.PaperStorageKey));
-        Assert.Equal("Trần Minh Anh", renderer.Last!.DeclinerFullName);
+        Assert.Equal("Trần Minh Anh", renderer.Last!.RecipientFullName);
         Assert.Equal("1234", renderer.Last.CitizenIdLast4);
         Assert.Equal("Luật sư Dũng", renderer.Last.ReviewerFullName);
         Assert.Equal("Gói gia đình", renderer.Last.ContainerName);
@@ -457,7 +457,7 @@ public sealed class HandoverSubmissionTests
         Assert.True(store.Contents.ContainsKey(saved.PaperStorageKey));
         Assert.Equal(3, store.Contents.Count);
         Assert.False(renderer.Last!.IsAcceptance);
-        Assert.Equal("Trần Minh Anh", renderer.Last.DeclinerFullName);
+        Assert.Equal("Trần Minh Anh", renderer.Last.RecipientFullName);
         Assert.Equal("Gói gia đình", renderer.Last.ContainerName);
         Assert.Equal(new DateOnly(2026, 10, 5), renderer.Last.DateOfDeath);
         Assert.Equal(new DateOnly(2026, 10, 7), renderer.Last.DeathCertificateIssuedOn);

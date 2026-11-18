@@ -29,15 +29,3 @@ public class AdminHandoverTemplateResponse
     /// <summary>Mẫu gốc, để nút "Khôi phục mẫu gốc" nạp lại vào trang sửa.</summary>
     public HandoverTemplateContent Default { get; set; } = new HandoverTemplateContent();
 }
-
-/// <summary>Một dòng trong lịch sử các lần Admin lưu mẫu.</summary>
-public class HandoverTemplateVersionResponse
-{
-    public int Version { get; set; }
-
-    public DateTimeOffset CreatedAt { get; set; }
-
-    public string? CreatedByName { get; set; }
-
-    public string? Note { get; set; }
-}

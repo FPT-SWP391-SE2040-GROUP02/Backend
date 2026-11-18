@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegacyVault.Infrastructure.Repositories;
 
+/// <summary>Đọc các gói sẵn sàng của kho cho màn Tài sản của Người thực thi (EF Core).</summary>
 /// <remarks>Chỉ truy cập dữ liệu; luật ai được xem nằm ở ExecutorAssetService.</remarks>
 public sealed class ExecutorAssetReader : IExecutorAssetReader
 {

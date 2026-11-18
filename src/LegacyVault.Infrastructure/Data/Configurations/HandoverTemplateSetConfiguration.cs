@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LegacyVault.Infrastructure.Data.Configurations;
 
+/// <summary>Cấu hình bảng HandoverTemplateSets (các phiên bản mẫu biên bản).</summary>
 public sealed class HandoverTemplateSetConfiguration : IEntityTypeConfiguration<HandoverTemplateSet>
 {
     public void Configure(EntityTypeBuilder<HandoverTemplateSet> builder)

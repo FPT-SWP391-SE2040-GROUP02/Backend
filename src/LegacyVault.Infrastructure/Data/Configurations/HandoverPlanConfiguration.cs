@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LegacyVault.Infrastructure.Data.Configurations;
 
+/// <summary>Cấu hình bảng HandoverPlans (kế hoạch bàn giao của kho).</summary>
 public sealed class HandoverPlanConfiguration : IEntityTypeConfiguration<HandoverPlan>
 {
     public void Configure(EntityTypeBuilder<HandoverPlan> builder)
