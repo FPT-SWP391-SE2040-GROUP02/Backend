@@ -17,20 +17,9 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
     private readonly IHandoverRepository handover;
     private readonly IAssetContentStore contentStore;
     private readonly IHoldReader holdReader;
-    private readonly IExecutorKeyShardRepository? keyShards;
+    private readonly IExecutorKeyShardRepository keyShards;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
-
-    public HandoverDownloadService(
-        ICurrentUser currentUser,
-        IVaultRepository vaults,
-        IHandoverRepository handover,
-        IAssetContentStore contentStore,
-        IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
-        : this(currentUser, vaults, handover, contentStore, new NoHoldReader(), unitOfWork, timeProvider)
-    {
-    }
 
     public HandoverDownloadService(
         ICurrentUser currentUser,
@@ -40,7 +29,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        IExecutorKeyShardRepository? keyShards = null)
+        IExecutorKeyShardRepository keyShards)
     {
         this.currentUser = currentUser;
         this.vaults = vaults;
@@ -82,7 +71,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
             // Hold đang hiệu lực chặn tải (SRS §6.4), kể cả hold Admin đặt không đổi trạng thái grant.
             deniedReason = "HOLD_ACTIVE";
         }
-        if (deniedReason == null && turn.KeyVerifiedAt == null && keyShards != null
+        if (deniedReason == null && turn.KeyVerifiedAt == null
             && await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null)
         {
             // Người nhận phải nhập khóa mở gói do Người thực thi đưa trước khi tải.

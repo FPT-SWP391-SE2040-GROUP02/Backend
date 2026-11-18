@@ -24,15 +24,6 @@ public sealed class HandoverJob : IHandoverJob
     public HandoverJob(
         IVaultRepository vaults,
         IHandoverRepository handover,
-        IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
-        : this(vaults, handover, new NoHoldReader(), unitOfWork, timeProvider)
-    {
-    }
-
-    public HandoverJob(
-        IVaultRepository vaults,
-        IHandoverRepository handover,
         IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
