@@ -7,16 +7,6 @@ using LegacyVault.Domain.Entities;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Kiểm thư mời có thật không bằng mã hồ sơ và 4 số cuối căn cước ghi trong thư, để chống thư giả. Không ghi gì.</summary>
-public interface IInvitationMailCheckService
-{
-    /// <summary>
-    /// Công khai (không cần đăng nhập): người nhận nhập mã hồ sơ và 4 số cuối căn cước ghi trong thư để biết thư có thật không.
-    /// Đúng thì trả tên gói và tên Chủ kho; sai thì trả số lần thử còn lại. Hết lượt thì 423 HANDOVER_MAIL_CHECK_LOCKED.
-    /// </summary>
-    Task<InvitationMailCheckResponse> CheckAsync(string token, string caseCode, string citizenIdLast4, CancellationToken ct);
-}
-
 /// <summary>Kiểm thư mời có thật không; tối đa MaxAttempts lần sai mỗi lượt, đếm trong bộ nhớ.</summary>
 /// <remarks>
 /// Số lần thử đếm theo lượt mời, giữ trong bộ nhớ (khởi động lại thì đếm lại): chỉ nhằm chặn dò mã hồ sơ và số căn cước,

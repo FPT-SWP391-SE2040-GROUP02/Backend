@@ -31,11 +31,3 @@ public interface IHandoverSubmissionRepository
     /// <summary>true khi Người xét duyệt này đã duyệt hồ sơ chứng tử của kho (căn cứ để được duyệt hồ sơ người nhận).</summary>
     Task<bool> IsApprovingVerifierAsync(Guid verifierUserId, Guid vaultId, CancellationToken ct);
 }
-
-/// <summary>Họ tên và số thẻ luật sư của Người xét duyệt, để hiện trên màn người nhận.</summary>
-public class ApprovingVerifierRow
-{
-    public string FullName { get; set; } = string.Empty;
-
-    public string? LawyerCardNumber { get; set; }
-}

@@ -10,33 +10,6 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Người xét duyệt kiểm tra hồ sơ người nhận: xem danh sách và ảnh, gửi biên bản đã ký hoặc yêu cầu bổ sung.</summary>
-public interface IHandoverSubmissionReviewService
-{
-    /// <summary>Hồ sơ người nhận đang chờ tôi duyệt (chỉ kho mà tôi đã duyệt hồ sơ chứng tử).</summary>
-    Task<List<VerifierHandoverSubmissionSummaryResponse>> ListPendingAsync(CancellationToken ct);
-
-    Task<VerifierHandoverSubmissionResponse> GetAsync(Guid submissionId, CancellationToken ct);
-
-    /// <summary>Ảnh căn cước một mặt ("front" hoặc "back"), giải mã khi đọc, có kiểm toàn vẹn.</summary>
-    Task<PreparedDownload> PrepareImageAsync(Guid submissionId, string side, CancellationToken ct);
-
-    /// <summary>Duyệt: chỉ khi cả ba trường khớp. Lượt sang bước quyết định (READY_TO_ACCEPT).</summary>
-    Task<VerifierHandoverSubmissionResponse> ApproveAsync(Guid submissionId, CancellationToken ct);
-
-    /// <summary>
-    /// Luồng Biên Bản: Người xét duyệt kiểm tra thủ công (tick đủ hai mục và xác nhận trách nhiệm) rồi gửi.
-    /// Hoàn tất biên bản và kết thúc lượt: Chấp nhận thì mở quyền tải tài sản, Từ chối thì ghi nhận từ chối.
-    /// Lỗi: 400 chưa tick đủ; 404; 409 WRONG_STATE, NO_DOCUMENT, PLAN_NOT_IN_HANDOVER, HOLD_ACTIVE.
-    /// </summary>
-    Task<VerifierHandoverSubmissionResponse> CompleteAsync(
-        Guid submissionId, ApproveHandoverDocumentRequest request, CancellationToken ct);
-
-    /// <summary>Yêu cầu người nhận bổ sung kèm lý do; người nhận nộp lại bản mới.</summary>
-    Task<VerifierHandoverSubmissionResponse> RequestSupplementAsync(
-        Guid submissionId, RequestHandoverSupplementRequest request, CancellationToken ct);
-}
-
 // Người xét duyệt kiểm tra hồ sơ người nhận, các nút theo thứ tự trên màn /notary/recipients:
 //   1. Danh sách hồ sơ chờ kiểm tra ........ ListPendingAsync
 //   2. Mở một hồ sơ ........................ GetAsync

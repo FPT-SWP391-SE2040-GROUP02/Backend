@@ -12,7 +12,7 @@ public interface IHandoverJob
 
     Task<IReadOnlyList<Guid>> FindExpiredGrantIdsAsync(CancellationToken ct);
 
-    /// <summary>Invited quá hạn phản hồi → InitialResponseExpired (vẫn nhận được lượt, CLAIM-02).</summary>
+    /// <summary>Invited quá hạn phản hồi → InitialResponseExpired (người nhận vẫn nhận được lượt).</summary>
     Task ProcessResponseExpiryAsync(Guid turnId, CancellationToken ct);
 
     /// <summary>ReadyToAccept quá hạn quyết định → DecisionExpired; đóng kế hoạch nếu mọi lượt đã xong.</summary>

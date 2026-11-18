@@ -27,7 +27,7 @@ public static class RetentionRules
     public const int NoticeOneDay = 3;
 
     /// <summary>
-    /// Chỉ kế hoạch đang/đã bàn giao mới áp dụng lưu và xóa. Kế hoạch đã về ACTIVE (Owner còn sống, ALIVE-06) hay
+    /// Chỉ kế hoạch đang/đã bàn giao mới áp dụng lưu và xóa. Kế hoạch đã về ACTIVE (Owner còn sống) hay
     /// còn nháp thì dữ liệu là của Owner, không bao giờ bị dọn.
     /// </summary>
     public static bool AppliesToPlan(PlanStatus status)
