@@ -45,8 +45,10 @@ public sealed class HandoverStarter : IHandoverStarter
         this.timeProvider = timeProvider;
     }
 
+    // Mở bàn giao cho một kho. Được gọi ngay khi Người xét duyệt duyệt hồ sơ chứng tử, trong cùng một lần lưu.
     public async Task<HandoverStartResult> StartAsync(Guid vaultId, CancellationToken ct)
     {
+        // 1. Tìm kho
         Vault? vault = await vaults.FindByIdAsync(vaultId, ct);
         if (vault == null)
         {
@@ -56,6 +58,7 @@ public sealed class HandoverStarter : IHandoverStarter
         HandoverPlan plan = vault.Plan;
         DateTimeOffset now = timeProvider.GetUtcNow();
 
+        // 2. Đã mở bàn giao rồi thì trả kết quả cũ; kế hoạch phải đang ở trạng thái mở hồ sơ chứng tử
         // Gọi lặp (F2B retry) không tạo lượt mới và không gửi lại lời mời.
         // Lượt đã hủy (Owner còn sống, ALIVE-06) chỉ còn là lịch sử, không tính là đã bắt đầu: nếu tính thì hồ sơ chứng tử
         // mới của cùng kho không bao giờ mở được bàn giao. Chỉ mục UX_HandoverTurns_ActivePerDesignation không tính lượt
@@ -83,6 +86,7 @@ public sealed class HandoverStarter : IHandoverStarter
             throw NotAllowed("PLAN_NOT_READY", "Kế hoạch chưa ở trạng thái mở bàn giao.");
         }
 
+        // 3. Lấy các chỉ định gói cho người nhận, chỉ giữ phần có trong bản di chúc đã ký gần nhất
         List<Designation> designations = await handover.FindStartableDesignationsAsync(vaultId, ct);
 
         // Bàn giao chỉ theo bản di chúc ký gần nhất: phần thêm/đổi sau khi ký (chưa ký lại) bị bỏ qua, phần đã xóa vốn không
@@ -102,6 +106,7 @@ public sealed class HandoverStarter : IHandoverStarter
             throw NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
         }
 
+        // 4. Với mỗi chỉ định: tạo một lượt (token mời, hạn phản hồi, danh sách tài sản ghim lại) và soạn thư mời
         List<HandoverInvitation> invitations = new List<HandoverInvitation>();
         List<HandoverTurn> turns = new List<HandoverTurn>();
         HandoverContactInfo? contacts = null;
@@ -162,6 +167,7 @@ public sealed class HandoverStarter : IHandoverStarter
             throw NotAllowed("NOTHING_TO_HAND_OVER", "Không có gói nào sẵn sàng để bàn giao.");
         }
 
+        // 5. Đảm bảo kho có khóa mở gói cho Người thực thi, chuyển kế hoạch sang đang bàn giao, lưu một lần
         // Bắt đầu bàn giao thì Người thực thi đọc được mã: đảm bảo kho có mã đọc được (chưa có hoặc chỉ có hash thì tạo mới).
         // Lưu chung giao dịch với việc đổi trạng thái kế hoạch.
         if (keyIssuer != null)
@@ -178,6 +184,7 @@ public sealed class HandoverStarter : IHandoverStarter
         result.PlanId = plan.Id;
         result.TurnCount = turns.Count;
 
+        // 6. Gửi thư mời; thư lỗi được ghi số lần thử để job gửi lại, rồi lưu kết quả gửi
         // Gửi sau khi đã lưu: lỗi gửi không làm mất lượt (INVITE-01), chỉ để InvitationSentAt = null.
         foreach (HandoverInvitation invitation in invitations)
         {
