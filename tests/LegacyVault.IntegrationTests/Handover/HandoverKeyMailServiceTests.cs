@@ -87,7 +87,7 @@ public sealed class HandoverKeyMailServiceTests
     [Fact]
     public async Task RightKey_IsMailedToTheRecipient()
     {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited);
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
 
         SendHandoverKeyResponse result = await service.SendAsync(
             deathCase.Id, turn.Id, key.ToLowerInvariant(), CancellationToken.None);
@@ -102,7 +102,7 @@ public sealed class HandoverKeyMailServiceTests
     [Fact]
     public async Task WrongKey_IsForbiddenAndNothingIsSent()
     {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited);
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
 
         AppException error = await Assert.ThrowsAsync<AppException>(
             () => service.SendAsync(deathCase.Id, turn.Id, ExecutorKeyRules.GenerateShard(), CancellationToken.None));
@@ -115,7 +115,7 @@ public sealed class HandoverKeyMailServiceTests
     [Fact]
     public async Task VaultWithoutKey_IsRejected()
     {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited);
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
         shards.Shard = null;
 
         Assert.Equal("NO_KEY", await ReasonOfRejectionAsync(turn.Id));
@@ -129,7 +129,7 @@ public sealed class HandoverKeyMailServiceTests
         {
             CitizenId = "012345671234", FullName = "Người Nhận", DateOfBirth = new DateOnly(1990, 1, 1), Email = null
         };
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited);
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
 
         Assert.Equal("NO_EMAIL", await ReasonOfRejectionAsync(turn.Id));
         Assert.Empty(sender.Sent);
@@ -139,6 +139,20 @@ public sealed class HandoverKeyMailServiceTests
     public async Task FinishedTurn_IsRejected()
     {
         HandoverTurn turn = AddTurn(HandoverTurnStatus.Declined);
+
+        Assert.Equal("WRONG_STATE", await ReasonOfRejectionAsync(turn.Id));
+        Assert.Empty(sender.Sent);
+    }
+
+    [Theory]
+    [InlineData(HandoverTurnStatus.Invited)]
+    [InlineData(HandoverTurnStatus.InitialResponseExpired)]
+    [InlineData(HandoverTurnStatus.IdentityInProgress)]
+    [InlineData(HandoverTurnStatus.ReadyToAccept)]
+    public async Task TurnWhoseDocumentIsNotApprovedYet_IsRejected(HandoverTurnStatus status)
+    {
+        // Người nhận chưa xác minh xong và biên bản chưa được duyệt thì chưa được có mã.
+        HandoverTurn turn = AddTurn(status);
 
         Assert.Equal("WRONG_STATE", await ReasonOfRejectionAsync(turn.Id));
         Assert.Empty(sender.Sent);
@@ -179,7 +193,7 @@ public sealed class HandoverKeyMailServiceTests
     [Fact]
     public async Task SendFailure_ReturnsServiceUnavailable()
     {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited);
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
         sender.FailNext = true;
 
         AppException error = await Assert.ThrowsAsync<AppException>(
@@ -192,7 +206,7 @@ public sealed class HandoverKeyMailServiceTests
     [Fact]
     public async Task OwnerOrStranger_GetsNotFound()
     {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited);
+        HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
         currentUser.UserId = Guid.NewGuid();
 
         AppException error = await Assert.ThrowsAsync<AppException>(
