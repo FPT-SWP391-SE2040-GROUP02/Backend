@@ -48,24 +48,24 @@ public sealed class HandoverTemplateRulesTests
     [Fact]
     public void Renderer_BuildsFromTemplateParagraphs_AndFromLegacyWording()
     {
-        DeclinePaperData data = new DeclinePaperData
+        HandoverPaperData data = new HandoverPaperData
         {
             IsAcceptance = true,
             TurnCode = "AB12CD34",
             ContainerName = "Gói gia đình",
             OwnerFullName = "Nguyễn Văn A",
-            DeclinerFullName = "Trần Minh Anh",
+            RecipientFullName = "Trần Minh Anh",
             CitizenIdLast4 = "1234",
             SubmittedAt = new DateTimeOffset(2026, 11, 9, 3, 0, 0, TimeSpan.Zero),
         };
 
         // Chữ cố định cũ (không có mẫu)
-        byte[] legacy = new QuestPdfDeclinePaperRenderer().Render(data);
+        byte[] legacy = new QuestPdfHandoverPaperRenderer().Render(data);
         Assert.Equal("PNG", Encoding.ASCII.GetString(legacy, 1, 3));
 
         // Dựng theo mẫu gốc và theo một mẫu Admin sửa ngắn gọn
         data.Paragraphs = HandoverTemplateDefaults.Create().Accept;
-        byte[] fromDefault = new QuestPdfDeclinePaperRenderer().Render(data);
+        byte[] fromDefault = new QuestPdfHandoverPaperRenderer().Render(data);
         Assert.Equal("PNG", Encoding.ASCII.GetString(fromDefault, 1, 3));
 
         data.Paragraphs = new List<TemplateParagraph>
@@ -73,7 +73,7 @@ public sealed class HandoverTemplateRulesTests
             new TemplateParagraph("BIÊN BẢN THỬ", "center", true),
             new TemplateParagraph("Tôi là {HO_TEN_NGUOI_NHAN}. {CAU_BAO_TU_CHOI}", "justify", false),
         };
-        byte[] custom = new QuestPdfDeclinePaperRenderer().Render(data);
+        byte[] custom = new QuestPdfHandoverPaperRenderer().Render(data);
         Assert.Equal("PNG", Encoding.ASCII.GetString(custom, 1, 3));
         Assert.NotEqual(fromDefault.Length, custom.Length);
     }
@@ -81,7 +81,7 @@ public sealed class HandoverTemplateRulesTests
     [Fact]
     public void PaperData_DeclineNoticeDefaultsToTheOriginalSentence()
     {
-        DeclinePaperData data = new DeclinePaperData();
+        HandoverPaperData data = new HandoverPaperData();
 
         Assert.Equal(HandoverTemplateDefaults.DefaultDeclineNotice, data.DeclineNotice);
     }

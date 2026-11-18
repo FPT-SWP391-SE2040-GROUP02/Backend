@@ -1,7 +1,7 @@
 namespace LegacyVault.Application.Services;
 
 /// <summary>Dữ liệu in lên văn bản từ chối hoặc biên bản đồng ý nhận (IsAcceptance); chỉ gồm thông tin hệ thống đã giữ, không có số căn cước đầy đủ.</summary>
-public sealed class DeclinePaperData
+public sealed class HandoverPaperData
 {
     /// <summary>true: biên bản đồng ý nhận phần di sản; false: văn bản từ chối.</summary>
     public bool IsAcceptance { get; set; }
@@ -22,8 +22,8 @@ public sealed class DeclinePaperData
 
     public string OwnerFullName { get; set; } = string.Empty;
 
-    /// <summary>Họ tên người từ chối lấy từ hồ sơ người được chỉ định mà Chủ kho đã khai.</summary>
-    public string DeclinerFullName { get; set; } = string.Empty;
+    /// <summary>Họ tên người nhận ghi trên văn bản: lấy từ biên bản đã ký, hoặc từ hồ sơ người được chỉ định mà Chủ kho đã khai.</summary>
+    public string RecipientFullName { get; set; } = string.Empty;
 
     /// <summary>Số căn cước công dân 12 số (giải mã trong RAM từ hồ sơ người nhận để in biên bản); null khi không có.</summary>
     public string? CitizenId { get; set; }
@@ -76,8 +76,8 @@ public sealed class DeclinePaperData
     public string DeathRegistrationPlace { get; set; } = string.Empty;
 }
 
-/// <summary>Dựng ảnh PNG "Văn bản từ chối nhận di sản" (một trang); cài đặt cụ thể nằm ở Infrastructure.</summary>
-public interface IDeclinePaperRenderer
+/// <summary>Dựng ảnh PNG một trang của biên bản đồng ý nhận hoặc văn bản từ chối nhận di sản; cài đặt cụ thể nằm ở Infrastructure.</summary>
+public interface IHandoverPaperRenderer
 {
-    byte[] Render(DeclinePaperData data);
+    byte[] Render(HandoverPaperData data);
 }

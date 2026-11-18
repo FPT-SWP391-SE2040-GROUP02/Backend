@@ -12,7 +12,7 @@ namespace LegacyVault.Infrastructure.Handover;
 /// font Times New Roman 13pt, màu chữ #222222, khoảng cách đoạn 9pt trước và 6pt sau, căn đều. Máy chủ không có Times New Roman thì dùng
 /// Liberation Serif (cùng kích thước chữ), cuối cùng là Lato đi kèm gói.
 /// </summary>
-public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
+public sealed class QuestPdfHandoverPaperRenderer : IHandoverPaperRenderer
 {
     /// <summary>Kiểu in của một đoạn: căn trái, giữa hoặc đều; thêm Bold là chữ đậm.</summary>
     private enum ParaStyle
@@ -27,7 +27,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
 
     private const string Ink = "#222222";
 
-    static QuestPdfDeclinePaperRenderer()
+    static QuestPdfHandoverPaperRenderer()
     {
         QuestPDF.Settings.License = LicenseType.Community;
         // Times New Roman là font của Windows nên không nhúng vào gói: dùng font hệ thống nếu máy có (hoặc Liberation Serif trên Linux),
@@ -37,7 +37,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>Dựng văn bản thành ảnh PNG một trang. Có mẫu của Admin (data.Paragraphs) thì in theo mẫu, không thì in chữ cố định.</summary>
-    public byte[] Render(DeclinePaperData data)
+    public byte[] Render(HandoverPaperData data)
     {
         Document document = Document.Create(container =>
         {
@@ -86,7 +86,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     /// Dựng theo mẫu Admin đã lưu (hoặc mẫu gốc): mỗi đoạn điền các trường {…} từ dữ liệu hệ thống. Khối chữ ký hoặc dòng ký tên ở cuối
     /// là phần cố định, không nằm trong mẫu.
     /// </summary>
-    private static void WriteFromTemplate(ColumnDescriptor column, DeclinePaperData data)
+    private static void WriteFromTemplate(ColumnDescriptor column, HandoverPaperData data)
     {
         Dictionary<string, string> values = BuildValues(data);
         foreach (TemplateParagraph paragraph in data.Paragraphs!)
@@ -113,7 +113,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>Giá trị cho từng trường của mẫu; thiếu dữ liệu thì in dòng chấm như mẫu giấy.</summary>
-    private static Dictionary<string, string> BuildValues(DeclinePaperData data)
+    private static Dictionary<string, string> BuildValues(HandoverPaperData data)
     {
         DateTimeOffset local = data.SubmittedAt.ToOffset(TimeSpan.FromHours(7));
         string place = "UBND …………………";
@@ -125,7 +125,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         values[HandoverTemplateTokens.Day] = local.Day.ToString("00");
         values[HandoverTemplateTokens.Month] = local.Month.ToString("00");
         values[HandoverTemplateTokens.Year] = local.Year.ToString();
-        values[HandoverTemplateTokens.RecipientName] = data.DeclinerFullName;
+        values[HandoverTemplateTokens.RecipientName] = data.RecipientFullName;
         values[HandoverTemplateTokens.RecipientBirthYear] = BirthYearText(data);
         values[HandoverTemplateTokens.RecipientCitizenId] = CitizenIdText(data);
         values[HandoverTemplateTokens.OwnerName] = data.OwnerFullName;
@@ -139,7 +139,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>Văn bản từ chối: viết theo thể thức văn bản pháp lý, điền dữ liệu hệ thống đã giữ, đồng nhất xưng Tôi.</summary>
-    private static void WriteDecline(ColumnDescriptor column, DeclinePaperData data)
+    private static void WriteDecline(ColumnDescriptor column, HandoverPaperData data)
     {
         DateTimeOffset local = data.SubmittedAt.ToOffset(TimeSpan.FromHours(7));
         string nbsp3 = "   ";
@@ -149,7 +149,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "VĂN BẢN TỪ CHỐI NHẬN DI SẢN THỪA KẾ", ParaStyle.CenterBold);
         Para(column,
             $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault, tôi là:");
-        Para(column, $"Ông/bà: {data.DeclinerFullName} Sinh năm : {BirthYearText(data)}", ParaStyle.Justify);
+        Para(column, $"Ông/bà: {data.RecipientFullName} Sinh năm : {BirthYearText(data)}", ParaStyle.Justify);
         Para(column,
             $"Số Căn cước/CCCD: {CitizenIdText(data)} do Bộ Công an cấp.", ParaStyle.Justify);
         Para(column, "(Là người được chỉ định nhận của người để lại di sản thừa kế)", ParaStyle.Justify);
@@ -178,7 +178,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>Biên bản đồng ý nhận di sản thừa kế, cùng khổ giấy và kiểu chữ với văn bản từ chối.</summary>
-    private static void WriteAcceptance(ColumnDescriptor column, DeclinePaperData data)
+    private static void WriteAcceptance(ColumnDescriptor column, HandoverPaperData data)
     {
         DateTimeOffset local = data.SubmittedAt.ToOffset(TimeSpan.FromHours(7));
         Para(column, "CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM", ParaStyle.CenterBold);
@@ -186,7 +186,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         Para(column, "-----------------", ParaStyle.Center);
         Para(column, "BIÊN BẢN ĐỒNG Ý NHẬN DI SẢN THỪA KẾ", ParaStyle.CenterBold);
         Para(column, $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault.");
-        Para(column, $"Tôi là: {data.DeclinerFullName}; sinh năm: {BirthYearText(data)}; Số Căn cước/CCCD: {CitizenIdText(data)}.", ParaStyle.Justify);
+        Para(column, $"Tôi là: {data.RecipientFullName}; sinh năm: {BirthYearText(data)}; Số Căn cước/CCCD: {CitizenIdText(data)}.", ParaStyle.Justify);
         Para(column, "Bằng biên bản này, tôi xin khai đúng sự thật rằng:", ParaStyle.Justify);
         Para(column,
             $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, {DeathSentence(data)} "
@@ -223,7 +223,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     /// "chết ngày {ngày mất} theo giấy chứng tử do {nơi đăng ký} đăng ký khai tử ngày {ngày đăng ký}."
     /// Thiếu dữ liệu nào thì in dòng chấm ở chỗ đó. Không in số giấy chứng tử.
     /// </summary>
-    public static string DeathSentence(DeclinePaperData data)
+    public static string DeathSentence(HandoverPaperData data)
     {
         string place = "UBND …………………";
         if (!string.IsNullOrWhiteSpace(data.DeathRegistrationPlace))
@@ -235,7 +235,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>Có năm sinh người nhận khai thì in năm; không thì để dòng chấm như mẫu cũ.</summary>
-    private static string BirthYearText(DeclinePaperData data)
+    private static string BirthYearText(HandoverPaperData data)
     {
         if (data.RecipientBirthYear != null)
         {
@@ -245,7 +245,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>In số căn cước 12 số khi có trong hồ sơ người nhận, hoặc số đã lưu khi chỉ còn hậu tố.</summary>
-    private static string CitizenIdText(DeclinePaperData data)
+    private static string CitizenIdText(HandoverPaperData data)
     {
         if (!string.IsNullOrWhiteSpace(data.CitizenId))
         {
@@ -259,7 +259,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>Tên gói kèm số mục (nếu có) để in ở phần di sản.</summary>
-    private static string ContainerText(DeclinePaperData data)
+    private static string ContainerText(HandoverPaperData data)
     {
         if (data.ItemCount > 0)
         {
@@ -269,7 +269,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>Khối chữ ký của hai bên: người lập và Người xét duyệt đã kiểm tra thủ công. Thông tin về Chủ kho chép từ hồ sơ chứng tử đã duyệt nên không có chữ ký riêng.</summary>
-    private static void WriteSignatures(ColumnDescriptor column, DeclinePaperData data)
+    private static void WriteSignatures(ColumnDescriptor column, HandoverPaperData data)
     {
         column.Item().PaddingTop(12).Row(row =>
         {
@@ -279,7 +279,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     }
 
     /// <summary>Một ô chữ ký: tiêu đề, họ tên và dòng ký điện tử (hoặc "chưa ký"). forRecipient là true thì ô của người nhận, ngược lại là ô của Người xét duyệt.</summary>
-    private static void SignCell(IContainer cell, DeclinePaperData data, bool forRecipient)
+    private static void SignCell(IContainer cell, HandoverPaperData data, bool forRecipient)
     {
         string title = "Người xét duyệt đã kiểm tra thủ công";
         string name = data.ReviewerFullName;
@@ -287,7 +287,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         if (forRecipient)
         {
             title = "Người lập văn bản";
-            name = data.DeclinerFullName;
+            name = data.RecipientFullName;
             signedAt = data.RecipientSignedAt;
         }
         cell.PaddingHorizontal(4).Column(c =>
