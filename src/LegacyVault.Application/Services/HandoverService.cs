@@ -448,7 +448,7 @@ public sealed class HandoverService : IHandoverService
         List<HandoverItemResponse> items = new List<HandoverItemResponse>();
         foreach (HandoverSnapshotItem item in turn.Items.OrderBy(i => i.Position))
         {
-            items.Add(ToItemResponse(item));
+            items.Add(item.ToResponse());
         }
         return items;
     }
@@ -681,7 +681,7 @@ public sealed class HandoverService : IHandoverService
 
             foreach (HandoverSnapshotItem item in turn.Items.OrderBy(i => i.Position))
             {
-                response.Items.Add(ToItemResponse(item));
+                response.Items.Add(item.ToResponse());
             }
         }
 
@@ -776,18 +776,6 @@ public sealed class HandoverService : IHandoverService
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["attemptsRemaining"] = Math.Max(0, MaxKeyFailures - turn.KeyFailedCount);
         throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverKeyInvalid, "Khóa mở gói chưa đúng.", extensions);
-    }
-
-    private static HandoverItemResponse ToItemResponse(HandoverSnapshotItem item)
-    {
-        HandoverItemResponse response = new HandoverItemResponse();
-        response.Id = item.Id;
-        response.Name = item.Name;
-        response.Kind = item.Kind.ToApiString();
-        response.FileName = item.FileName;
-        response.ContentType = item.ContentType;
-        response.SizeBytes = item.SizeBytes;
-        return response;
     }
 
     private static AppException InvitationInvalid()
