@@ -41,114 +41,128 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         this.timeProvider = timeProvider;
     }
 
+    /// <summary>
+    /// Nút "Tải" một tài sản: kiểm quyền, kiểm toàn vẹn nội dung rồi trả thông tin tệp. Chưa có byte nội dung nào được gửi
+    /// trước khi kiểm xong.
+    /// </summary>
     public async Task<PreparedDownload> PrepareAsync(Guid grantId, Guid itemId, CancellationToken ct)
     {
         // 1. Người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
 
-        // 2. Tìm quyền tải và tài sản trong gói; không phải của mình thì báo không tìm thấy
-        // Grant lạ và grant của người khác cho cùng một lỗi, không ghi nhật ký (SEC-04).
+        // 2. Tìm quyền tải; quyền lạ và quyền của người khác cho cùng một lỗi, không ghi nhật ký
         HandoverGrant? grant = await handover.FindGrantByIdAsync(grantId, ct);
         if (grant == null || grant.UserId != userId)
         {
             throw HandoverAccess.NotFound();
         }
 
+        // 3. Tìm tài sản trong gói của lượt và kho của lượt
         HandoverTurn turn = grant.Turn;
-        HandoverSnapshotItem? item = turn.Items.FirstOrDefault(i => i.Id == itemId);
+        HandoverSnapshotItem? item = null;
+        foreach (HandoverSnapshotItem candidate in turn.Items)
+        {
+            if (candidate.Id == itemId)
+            {
+                item = candidate;
+                break;
+            }
+        }
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
         if (item == null || vault == null)
         {
             throw HandoverAccess.NotFound();
         }
 
-        // 3. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kho đang bị giữ, hoặc chưa nhập khóa mở gói.
-        //    Bị chặn thì ghi nhật ký và báo lý do
+        // 4. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kho đang bị giữ, hoặc chưa nhập khóa mở gói.
+        //    Bị chặn thì ghi nhật ký rồi báo lý do.
         DateTimeOffset now = timeProvider.GetUtcNow();
+        HandoverAccessLog log = new HandoverAccessLog
+        {
+            GrantId = grant.Id,
+            SnapshotItemId = item.Id,
+            UserId = userId,
+            At = now
+        };
         string? deniedReason = HandoverRules.GrantDeniedReason(grant, vault.Plan.Status, now);
-        if (deniedReason == null && await holdReader.HasActiveHoldAsync(vault.Id, ct))
+        if (deniedReason == null)
         {
-            // Hold đang hiệu lực chặn tải (SRS §6.4), kể cả hold Admin đặt không đổi trạng thái grant.
-            deniedReason = "HOLD_ACTIVE";
+            bool vaultIsHeld = await holdReader.HasActiveHoldAsync(vault.Id, ct);
+            if (vaultIsHeld)
+            {
+                // Kho đang bị giữ thì không cho tải, kể cả khi quyền tải vẫn còn hạn.
+                deniedReason = "HOLD_ACTIVE";
+            }
         }
-        if (deniedReason == null && turn.KeyVerifiedAt == null
-            && await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null)
+        if (deniedReason == null && turn.KeyVerifiedAt == null)
         {
-            // Người nhận phải nhập khóa mở gói do Người thực thi đưa trước khi tải.
-            deniedReason = "KEY_REQUIRED";
+            ExecutorKeyShard? shard = await keyShards.FindByVaultIdAsync(turn.VaultId, ct);
+            if (shard != null)
+            {
+                // Kho có khóa mở gói thì người nhận phải nhập khóa do Người thực thi đưa trước khi tải.
+                deniedReason = "KEY_REQUIRED";
+            }
         }
         if (deniedReason != null)
         {
-            await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.Denied, now, ct);
-
-            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-            extensions["reason"] = deniedReason;
-            throw new AppException(AppErrorType.Forbidden, ErrorCode.GrantNotActive,
-                "Quyền tải tài sản không còn hiệu lực.", extensions);
+            await SaveLogAsync(log, HandoverAccessOutcome.Denied, ct);
+            throw GrantNotActive(deniedReason, "Quyền tải tài sản không còn hiệu lực.");
         }
 
-        // 4. Nội dung phải còn: không thấy tài sản hoặc đã bị xóa theo hạn lưu thì báo lỗi
+        // 5. Nội dung phải còn: không thấy tài sản hoặc đã bị xóa theo hạn lưu thì báo lỗi
         Asset? asset = await handover.FindAssetAsync(item.AssetId, ct);
         if (asset == null)
         {
-            await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.IntegrityFailed, now, ct);
+            await SaveLogAsync(log, HandoverAccessOutcome.IntegrityFailed, ct);
             throw new ContentIntegrityException("Không tìm thấy nội dung của tài sản.", null);
         }
         if (asset.ContentDeletedAt != null)
         {
-            // RETENTION-06: nội dung đã dọn (khóa đã hủy) thì không giải mã nữa.
-            Dictionary<string, object?> deleted = new Dictionary<string, object?>();
-            deleted["reason"] = "CONTENT_DELETED";
-            throw new AppException(AppErrorType.Forbidden, ErrorCode.GrantNotActive,
-                "Nội dung đã được xóa theo chính sách lưu dữ liệu.", deleted);
+            // Nội dung đã dọn: khóa giải mã đã bị hủy nên không thể giải mã nữa.
+            throw GrantNotActive("CONTENT_DELETED", "Nội dung đã được xóa theo chính sách lưu dữ liệu.");
         }
 
-        // 5. Giải mã thử một lượt để chắc tệp không hỏng, ghi nhật ký thành công
-        StoredContent stored = new StoredContent();
-        stored.StorageKey = asset.StorageKey;
-        stored.SizeBytes = asset.SizeBytes;
-        stored.EncryptionKeyId = asset.EncryptionKeyId;
-        stored.WrappedDataKey = asset.WrappedDataKey;
-
-        // Lượt 1: giải mã vào Stream.Null. Việc kiểm kích thước + SHA-256 của kho chỉ xảy ra ở CUỐI luồng,
-        // nên phải chạy hết một lượt trước khi gửi byte đầu tiên, nếu không người nhận có thể nhận tệp hỏng.
+        // 6. Giải mã thử một lượt vào Stream.Null để chắc tệp không hỏng.
+        //    Việc kiểm kích thước và SHA-256 chỉ xảy ra ở cuối luồng, nên phải chạy hết một lượt
+        //    trước khi gửi byte đầu tiên, nếu không người nhận có thể nhận tệp hỏng.
+        StoredContent stored = new StoredContent
+        {
+            StorageKey = asset.StorageKey,
+            SizeBytes = asset.SizeBytes,
+            EncryptionKeyId = asset.EncryptionKeyId,
+            WrappedDataKey = asset.WrappedDataKey
+        };
         try
         {
             await contentStore.CopyToAsync(stored, Stream.Null, ct);
         }
         catch (Exception ex) when (ex is CryptographicException || ex is IOException)
         {
-            await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.IntegrityFailed, now, ct);
+            await SaveLogAsync(log, HandoverAccessOutcome.IntegrityFailed, ct);
             throw new ContentIntegrityException("Nội dung tài sản không vượt qua kiểm tra toàn vẹn.", ex);
         }
+        await SaveLogAsync(log, HandoverAccessOutcome.Succeeded, ct);
 
-        await WriteLogAsync(grant, item, userId, HandoverAccessOutcome.Succeeded, now, ct);
-
-        // 6. Trả thông tin tệp; nội dung được giải mã lần nữa khi ghi ra response
-        PreparedDownload download = new PreparedDownload();
-        download.FileName = ResolveFileName(item);
-        download.ContentType = item.ContentType;
-        download.Length = item.SizeBytes;
-        // Lượt 2: giải mã lần nữa, lần này ghi thẳng ra response.
-        download.WriteToAsync = (destination, token) => contentStore.CopyToAsync(stored, destination, token);
+        // 7. Trả thông tin tệp. Nội dung được giải mã lần hai khi ghi thẳng ra response.
+        PreparedDownload download = new PreparedDownload
+        {
+            FileName = ResolveFileName(item),
+            ContentType = item.ContentType,
+            Length = item.SizeBytes,
+            WriteToAsync = (destination, token) => contentStore.CopyToAsync(stored, destination, token)
+        };
         return download;
     }
 
-    /// <summary>Nhật ký chỉ ghi id và kết quả, không ghi tên tệp hay nội dung (OPS-04).</summary>
-    private async Task WriteLogAsync(
-        HandoverGrant grant, HandoverSnapshotItem item, Guid userId,
-        HandoverAccessOutcome outcome, DateTimeOffset now, CancellationToken ct)
+    /// <summary>Ghi một dòng nhật ký truy cập. Chỉ ghi id và kết quả, không ghi tên tệp hay nội dung.</summary>
+    private async Task SaveLogAsync(HandoverAccessLog log, HandoverAccessOutcome outcome, CancellationToken ct)
     {
-        HandoverAccessLog log = new HandoverAccessLog();
-        log.GrantId = grant.Id;
-        log.SnapshotItemId = item.Id;
-        log.UserId = userId;
         log.Outcome = outcome;
-        log.At = now;
         handover.AddAccessLog(log);
         await unitOfWork.SaveChangesAsync(ct);
     }
 
+    /// <summary>Tên tệp trả về: tên tệp gốc; tài sản dạng văn bản thì lấy tên tài sản kèm đuôi .txt.</summary>
     private static string ResolveFileName(HandoverSnapshotItem item)
     {
         if (!string.IsNullOrWhiteSpace(item.FileName))
@@ -162,5 +176,13 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         }
 
         return item.Name;
+    }
+
+    /// <summary>Lỗi 403: quyền tải không dùng được, kèm mã lý do để giao diện hiện câu phù hợp.</summary>
+    private static AppException GrantNotActive(string reason, string message)
+    {
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["reason"] = reason;
+        return new AppException(AppErrorType.Forbidden, ErrorCode.GrantNotActive, message, extensions);
     }
 }
