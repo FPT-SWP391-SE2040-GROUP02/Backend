@@ -548,6 +548,13 @@ public sealed class DeathCaseService : IDeathCaseService
         {
             if (!PlanRules.IsRunning(plan.Status))
             {
+                // Executor khác có thể vừa gửi đúng bản này, xen giữa lúc đọc hồ sơ và lúc đọc kế hoạch:
+                // khi đó trả trạng thái mới nhất như nhánh tranh chấp lúc lưu, thay vì báo kế hoạch không còn chạy.
+                DeathCaseResponse? alreadySubmitted = await FindSubmittedByOtherAsync(caseId, submittingVersionNo, ct);
+                if (alreadySubmitted != null)
+                {
+                    return alreadySubmitted;
+                }
                 throw PlanNotRunning(plan.Status);
             }
             deathCase.StatusBeforeCase = plan.Status;
@@ -622,19 +629,34 @@ public sealed class DeathCaseService : IDeathCaseService
         {
             // Executor khác vừa gửi cùng bản này (etag/RowVersion lệch, hoặc trùng cờ/phân công)
             // → trả trạng thái hiện tại thay vì báo lỗi.
-            deathCaseRepository.DiscardPendingChanges();
-            DeathCase? latest = await deathCaseRepository.FindByIdAsync(caseId, ct);
-            if (latest != null)
+            DeathCaseResponse? alreadySubmitted = await FindSubmittedByOtherAsync(caseId, submittingVersionNo, ct);
+            if (alreadySubmitted != null)
             {
-                DeathCaseVersion latestVersion = DeathCaseMappings.FindVersion(latest, submittingVersionNo);
-                if (latestVersion.SubmittedAt != null)
-                {
-                    return BuildResponse(latest);
-                }
+                return alreadySubmitted;
             }
             throw;
         }
         return BuildResponse(deathCase);
+    }
+
+    /// <summary>
+    /// Bỏ các thay đổi đang chờ rồi đọc lại hồ sơ: bản này đã được Executor khác gửi thì trả trạng thái mới nhất, chưa thì null.
+    /// Dùng khi hai Executor cùng bấm Gửi, để bên chậm hơn nhận kết quả như khi bấm lặp.
+    /// </summary>
+    private async Task<DeathCaseResponse?> FindSubmittedByOtherAsync(Guid caseId, int versionNo, CancellationToken ct)
+    {
+        deathCaseRepository.DiscardPendingChanges();
+        DeathCase? latest = await deathCaseRepository.FindByIdAsync(caseId, ct);
+        if (latest == null)
+        {
+            return null;
+        }
+        DeathCaseVersion latestVersion = DeathCaseMappings.FindVersion(latest, versionNo);
+        if (latestVersion.SubmittedAt == null)
+        {
+            return null;
+        }
+        return BuildResponse(latest);
     }
 
     public async Task<DeathCaseResponse> CreateVersionAsync(Guid caseId, CreateDeathCaseVersionRequest request, CancellationToken ct)
