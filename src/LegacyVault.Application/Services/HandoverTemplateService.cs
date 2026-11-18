@@ -73,6 +73,7 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         this.timeProvider = timeProvider;
     }
 
+    /// <summary>Admin xem mẫu đang áp dụng (bản mới nhất, hoặc bộ mẫu gốc khi chưa lưu bản nào).</summary>
     public async Task<AdminHandoverTemplateResponse> GetCurrentAsync(CancellationToken ct)
     {
         await RequireAdminAsync(ct);
@@ -80,6 +81,7 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         return await ToResponseAsync(latest, ct);
     }
 
+    /// <summary>Admin xem một phiên bản mẫu đã lưu; không có thì 404.</summary>
     public async Task<AdminHandoverTemplateResponse> GetVersionAsync(int version, CancellationToken ct)
     {
         await RequireAdminAsync(ct);
@@ -91,6 +93,7 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         return await ToResponseAsync(set, ct);
     }
 
+    /// <summary>Admin xem danh sách các phiên bản mẫu đã lưu, mới nhất trước, tối đa 50 bản.</summary>
     public async Task<List<HandoverTemplateVersionResponse>> ListVersionsAsync(CancellationToken ct)
     {
         await RequireAdminAsync(ct);
@@ -99,26 +102,31 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         Dictionary<Guid, string> names = new Dictionary<Guid, string>();
         foreach (HandoverTemplateSet set in sets)
         {
-            HandoverTemplateVersionResponse row = new HandoverTemplateVersionResponse();
-            row.Version = set.Id;
-            row.CreatedAt = set.CreatedAt;
-            row.Note = set.Note;
-            row.CreatedByName = await NameOfAsync(set.CreatedByUserId, names, ct);
+            HandoverTemplateVersionResponse row = new HandoverTemplateVersionResponse
+            {
+                Version = set.Id,
+                CreatedAt = set.CreatedAt,
+                Note = set.Note,
+                CreatedByName = await NameOfAsync(set.CreatedByUserId, names, ct)
+            };
             list.Add(row);
         }
         return list;
     }
 
+    /// <summary>Admin lưu một phiên bản mẫu mới. Phiên bản cũ giữ nguyên để biên bản đã tạo vẫn in đúng chữ lúc tạo.</summary>
     public async Task<AdminHandoverTemplateResponse> SaveAsync(SaveHandoverTemplateRequest request, CancellationToken ct)
     {
         Guid adminId = await RequireAdminAsync(ct);
         Validate(request);
 
         DateTimeOffset now = timeProvider.GetUtcNow();
-        HandoverTemplateSet set = new HandoverTemplateSet();
-        set.AcceptJson = JsonSerializer.Serialize(Clean(request.Accept));
-        set.DeclineJson = JsonSerializer.Serialize(Clean(request.Decline));
-        set.DeclineNotice = request.DeclineNotice.Trim();
+        HandoverTemplateSet set = new HandoverTemplateSet
+        {
+            AcceptJson = JsonSerializer.Serialize(Clean(request.Accept)),
+            DeclineJson = JsonSerializer.Serialize(Clean(request.Decline)),
+            DeclineNotice = request.DeclineNotice.Trim()
+        };
         if (!string.IsNullOrWhiteSpace(request.Note))
         {
             set.Note = request.Note.Trim();
@@ -133,6 +141,7 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         return await ToResponseAsync(set, ct);
     }
 
+    /// <summary>Khóa phiên bản đang áp dụng, ghi vào biên bản mới tạo; chưa có bản nào thì là khóa của bộ mẫu gốc.</summary>
     public async Task<string> ActiveVersionKeyAsync(CancellationToken ct)
     {
         HandoverTemplateSet? latest = await templates.FindLatestAsync(ct);
@@ -143,11 +152,14 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         return KeyPrefix + latest.Id;
     }
 
+    /// <summary>Đọc nội dung mẫu theo khóa phiên bản; khóa lạ hoặc bản không còn thì dùng bộ mẫu gốc.</summary>
     public async Task<ResolvedHandoverTemplate> ResolveAsync(string versionKey, CancellationToken ct)
     {
-        ResolvedHandoverTemplate resolved = new ResolvedHandoverTemplate();
-        resolved.VersionKey = HandoverDocumentRules.TemplateVersion;
-        resolved.Content = HandoverTemplateDefaults.Create();
+        ResolvedHandoverTemplate resolved = new ResolvedHandoverTemplate
+        {
+            VersionKey = HandoverDocumentRules.TemplateVersion,
+            Content = HandoverTemplateDefaults.Create()
+        };
         int version;
         if (versionKey.StartsWith(KeyPrefix, StringComparison.Ordinal)
             && int.TryParse(versionKey.Substring(KeyPrefix.Length), out version))
@@ -162,6 +174,7 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         return resolved;
     }
 
+    /// <summary>Đổi một bản mẫu đã lưu (hoặc bộ mẫu gốc khi set là null) sang dữ liệu trả cho màn Admin, kèm tên người lưu.</summary>
     private async Task<AdminHandoverTemplateResponse> ToResponseAsync(HandoverTemplateSet? set, CancellationToken ct)
     {
         AdminHandoverTemplateResponse response = new AdminHandoverTemplateResponse();
@@ -183,15 +196,27 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         return response;
     }
 
+    /// <summary>Đọc hai cột JSON của bản mẫu thành danh sách đoạn chữ.</summary>
     private static HandoverTemplateContent ToContent(HandoverTemplateSet set)
     {
         HandoverTemplateContent content = new HandoverTemplateContent();
-        content.Accept = JsonSerializer.Deserialize<List<TemplateParagraph>>(set.AcceptJson) ?? new List<TemplateParagraph>();
-        content.Decline = JsonSerializer.Deserialize<List<TemplateParagraph>>(set.DeclineJson) ?? new List<TemplateParagraph>();
+        List<TemplateParagraph>? accept = JsonSerializer.Deserialize<List<TemplateParagraph>>(set.AcceptJson);
+        if (accept == null)
+        {
+            accept = new List<TemplateParagraph>();
+        }
+        List<TemplateParagraph>? decline = JsonSerializer.Deserialize<List<TemplateParagraph>>(set.DeclineJson);
+        if (decline == null)
+        {
+            decline = new List<TemplateParagraph>();
+        }
+        content.Accept = accept;
+        content.Decline = decline;
         content.DeclineNotice = set.DeclineNotice;
         return content;
     }
 
+    /// <summary>Làm sạch chữ Admin nhập: đổi xuống dòng thành dấu cách, bỏ khoảng trắng cuối dòng.</summary>
     private static List<TemplateParagraph> Clean(List<TemplateParagraph> paragraphs)
     {
         List<TemplateParagraph> list = new List<TemplateParagraph>();
@@ -204,11 +229,16 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         return list;
     }
 
+    /// <summary>Kiểm tra bản mẫu Admin gửi lên: có đoạn chữ, có câu báo từ chối, chỉ dùng trường {...} có trong danh sách.</summary>
     private static void Validate(SaveHandoverTemplateRequest request)
     {
         ValidateList(request.Accept, "accept", "Biên bản đồng ý");
         ValidateList(request.Decline, "decline", "Văn bản từ chối");
-        string notice = (request.DeclineNotice ?? string.Empty).Trim();
+        string notice = string.Empty;
+        if (request.DeclineNotice != null)
+        {
+            notice = request.DeclineNotice.Trim();
+        }
         if (notice.Length == 0)
         {
             throw ValidationErrors.For("declineNotice", "Câu báo khi người nhận từ chối không được để trống.");
@@ -223,6 +253,7 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         }
     }
 
+    /// <summary>Kiểm tra một danh sách đoạn chữ: không rỗng, không quá số đoạn và độ dài cho phép, không có trường lạ.</summary>
     private static void ValidateList(List<TemplateParagraph>? paragraphs, string field, string label)
     {
         if (paragraphs == null || paragraphs.Count == 0)
@@ -237,7 +268,11 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         {
             TemplateParagraph paragraph = paragraphs[i];
             string where = label + ", đoạn " + (i + 1) + ": ";
-            string text = (paragraph.Text ?? string.Empty).Trim();
+            string text = string.Empty;
+            if (paragraph.Text != null)
+            {
+                text = paragraph.Text.Trim();
+            }
             if (text.Length == 0)
             {
                 throw ValidationErrors.For(field, where + "không được để trống (xóa đoạn nếu không cần).");
@@ -260,6 +295,7 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         }
     }
 
+    /// <summary>Họ tên người lưu bản mẫu; tra một lần rồi nhớ trong cache.</summary>
     private async Task<string?> NameOfAsync(Guid? userId, Dictionary<Guid, string> cache, CancellationToken ct)
     {
         if (userId == null)
@@ -280,13 +316,14 @@ public sealed class HandoverTemplateService : IHandoverTemplateService
         return user.FullName;
     }
 
+    /// <summary>Người đang đăng nhập phải là Admin còn hoạt động; không thì trả 404 như tài khoản không tồn tại.</summary>
     private async Task<Guid> RequireAdminAsync(CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
         User? user = await users.FindByIdAsync(userId, ct);
         if (user == null || user.Role != UserRole.Admin || user.Status != UserStatus.Active)
         {
-            // Không lộ sự tồn tại của khu vực Admin (SEC-04), cùng mã lỗi với AdminService.
+            // Không lộ sự tồn tại của khu vực Admin, cùng mã lỗi với AdminService.
             throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Không tìm thấy tài khoản.");
         }
         return userId;

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace LegacyVault.Application.Services;
@@ -68,33 +69,89 @@ public static class HandoverTemplateTokens
 
     private static readonly Regex TokenPattern = new Regex(@"\{([A-Za-z_]+)\}", RegexOptions.Compiled);
 
+    /// <summary>Danh sách mọi trường {...} được phép dùng trong mẫu, kèm tên hiển thị và ví dụ cho màn Admin.</summary>
     public static List<TemplateTokenInfo> All()
     {
         List<TemplateTokenInfo> tokens = new List<TemplateTokenInfo>();
-        Add(tokens, Day, "Ngày ký (ngày)", "11");
-        Add(tokens, Month, "Ngày ký (tháng)", "11");
-        Add(tokens, Year, "Ngày ký (năm)", "2026");
-        Add(tokens, RecipientName, "Họ tên người nhận", "Trần Minh Anh");
-        Add(tokens, RecipientBirthYear, "Năm sinh người nhận", "1990");
-        Add(tokens, RecipientCitizenId, "Số căn cước người nhận", "079090001234");
-        Add(tokens, OwnerName, "Họ tên Chủ kho (người để lại di sản)", "Nguyễn Văn A");
-        Add(tokens, DeathDate, "Ngày mất", "05/11/2026");
-        Add(tokens, RegistrationDate, "Ngày đăng ký khai tử", "07/11/2026");
-        Add(tokens, RegistrationPlace, "Nơi đăng ký khai tử", "UBND phường Bến Thành, Thành phố Hồ Chí Minh");
-        Add(tokens, Inheritance, "Phần di sản (tên gói và số mục)", "Gói gia đình (gồm 3 mục)");
-        Add(tokens, DeathSentence, "Cả câu về người mất: ngày mất, nơi và ngày đăng ký khai tử",
-            "chết ngày 05/11/2026 theo giấy chứng tử do UBND phường Bến Thành, Thành phố Hồ Chí Minh đăng ký khai tử ngày 07/11/2026.");
-        Add(tokens, DeclineNotice, "Câu báo khi có người nhận từ chối", "Nếu một người nhận từ chối nhận, …");
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = Day,
+            Label = "Ngày ký (ngày)",
+            Example = "11"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = Month,
+            Label = "Ngày ký (tháng)",
+            Example = "11"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = Year,
+            Label = "Ngày ký (năm)",
+            Example = "2026"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = RecipientName,
+            Label = "Họ tên người nhận",
+            Example = "Trần Minh Anh"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = RecipientBirthYear,
+            Label = "Năm sinh người nhận",
+            Example = "1990"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = RecipientCitizenId,
+            Label = "Số căn cước người nhận",
+            Example = "079090001234"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = OwnerName,
+            Label = "Họ tên Chủ kho (người để lại di sản)",
+            Example = "Nguyễn Văn A"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = DeathDate,
+            Label = "Ngày mất",
+            Example = "05/11/2026"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = RegistrationDate,
+            Label = "Ngày đăng ký khai tử",
+            Example = "07/11/2026"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = RegistrationPlace,
+            Label = "Nơi đăng ký khai tử",
+            Example = "UBND phường Bến Thành, Thành phố Hồ Chí Minh"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = Inheritance,
+            Label = "Phần di sản (tên gói và số mục)",
+            Example = "Gói gia đình (gồm 3 mục)"
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = DeathSentence,
+            Label = "Cả câu về người mất: ngày mất, nơi và ngày đăng ký khai tử",
+            Example = "chết ngày 05/11/2026 theo giấy chứng tử do UBND phường Bến Thành, Thành phố Hồ Chí Minh đăng ký khai tử ngày 07/11/2026."
+        });
+        tokens.Add(new TemplateTokenInfo
+        {
+            Token = DeclineNotice,
+            Label = "Câu báo khi có người nhận từ chối",
+            Example = "Nếu một người nhận từ chối nhận, …"
+        });
         return tokens;
-    }
-
-    private static void Add(List<TemplateTokenInfo> tokens, string token, string label, string example)
-    {
-        TemplateTokenInfo info = new TemplateTokenInfo();
-        info.Token = token;
-        info.Label = label;
-        info.Example = example;
-        tokens.Add(info);
     }
 
     /// <summary>Tên trường lạ (không nằm trong danh sách) đầu tiên tìm thấy trong chữ; không có thì null.</summary>
@@ -119,16 +176,25 @@ public static class HandoverTemplateTokens
     /// <summary>Thay từng {TRƯỜNG} bằng giá trị tương ứng; trường không có giá trị thì để nguyên.</summary>
     public static string Fill(string text, IReadOnlyDictionary<string, string> values)
     {
-        return TokenPattern.Replace(text, match =>
+        StringBuilder result = new StringBuilder();
+        int position = 0;
+        foreach (Match match in TokenPattern.Matches(text))
         {
+            result.Append(text, position, match.Index - position);
             string name = match.Groups[1].Value;
             string? value;
             if (values.TryGetValue(name, out value))
             {
-                return value;
+                result.Append(value);
             }
-            return match.Value;
-        });
+            else
+            {
+                result.Append(match.Value);
+            }
+            position = match.Index + match.Length;
+        }
+        result.Append(text, position, text.Length - position);
+        return result.ToString();
     }
 }
 
@@ -139,15 +205,19 @@ public static class HandoverTemplateDefaults
     public const string DefaultDeclineNotice =
         "Nếu một người nhận từ chối nhận, phần tài sản của gói bàn giao đó sẽ bị xóa hoàn toàn khỏi hệ thống và không thể khôi phục.";
 
+    /// <summary>Bộ mẫu gốc gồm biên bản đồng ý, văn bản từ chối và câu báo từ chối.</summary>
     public static HandoverTemplateContent Create()
     {
-        HandoverTemplateContent content = new HandoverTemplateContent();
-        content.DeclineNotice = DefaultDeclineNotice;
-        content.Accept = CreateAccept();
-        content.Decline = CreateDecline();
+        HandoverTemplateContent content = new HandoverTemplateContent
+        {
+            DeclineNotice = DefaultDeclineNotice,
+            Accept = CreateAccept(),
+            Decline = CreateDecline()
+        };
         return content;
     }
 
+    /// <summary>Bốn dòng đầu của mọi văn bản: quốc hiệu, tiêu ngữ, đường kẻ và tiêu đề.</summary>
     private static List<TemplateParagraph> Header(string title)
     {
         List<TemplateParagraph> list = new List<TemplateParagraph>();
@@ -158,6 +228,7 @@ public static class HandoverTemplateDefaults
         return list;
     }
 
+    /// <summary>Các đoạn chữ gốc của biên bản đồng ý nhận.</summary>
     private static List<TemplateParagraph> CreateAccept()
     {
         List<TemplateParagraph> list = Header("BIÊN BẢN ĐỒNG Ý NHẬN DI SẢN THỪA KẾ");
@@ -185,6 +256,7 @@ public static class HandoverTemplateDefaults
         return list;
     }
 
+    /// <summary>Các đoạn chữ gốc của văn bản từ chối nhận.</summary>
     private static List<TemplateParagraph> CreateDecline()
     {
         List<TemplateParagraph> list = Header("VĂN BẢN TỪ CHỐI NHẬN DI SẢN THỪA KẾ");
