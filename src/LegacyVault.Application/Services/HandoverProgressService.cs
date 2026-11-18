@@ -37,8 +37,10 @@ public sealed class HandoverProgressService : IHandoverProgressService
         this.timeProvider = timeProvider;
     }
 
+    // Màn tiến độ bàn giao của Người thực thi: tình trạng từng lượt của từng người nhận.
     public async Task<HandoverProgressResponse> GetProgressAsync(Guid caseId, CancellationToken ct)
     {
+        // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
         DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
         if (deathCase == null)
@@ -51,6 +53,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
             throw CaseNotFound();
         }
 
+        // 2. Chưa duyệt hồ sơ chứng tử thì chưa có lượt nào để theo dõi
         HandoverProgressResponse response = new HandoverProgressResponse();
         response.CaseId = deathCase.Id;
         response.ServerTime = timeProvider.GetUtcNow();
@@ -63,6 +66,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
         }
         response.HandoverStarted = true;
 
+        // 3. Lấy mọi lượt, rồi đọc gộp một lần: lần tải đầu, 4 số cuối căn cước, mốc ký biên bản
         List<HandoverTurn> turns = await progressReader.FindTurnsWithItemsAsync(deathCase.PlanId, ct);
         List<Guid> grantIds = new List<Guid>();
         List<Guid> beneficiaryIds = new List<Guid>();
@@ -83,6 +87,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
         Dictionary<Guid, string> citizenIdLast4 = await progressReader.FindCitizenIdLast4Async(beneficiaryIds, ct);
         Dictionary<Guid, HandoverDocumentTimes> documentTimes = await progressReader.FindDocumentTimesAsync(turnIds, ct);
 
+        // 4. Dựng từng dòng lượt; lượt còn hiệu lực hoặc đã bàn giao thì kèm liên hệ người nhận; cộng số đếm theo nhóm
         foreach (HandoverTurn turn in turns)
         {
             string last4 = string.Empty;

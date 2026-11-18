@@ -32,7 +32,8 @@ public sealed class HandoverReceivedAllTests
         container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
         designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
         service = new HandoverService(currentUser, new FakeUserRepository(), vaults, repository, new FakeTokenService(),
-            new FakePolicy(), new NoHoldReader(), unitOfWork, new FixedTimeProvider(Now), null, submissions);
+            new FakePolicy(), new NoHoldReader(), unitOfWork, new FixedTimeProvider(Now), new HandoverKeyTests.FakeKeyShards(), submissions,
+            new LegacyVault.IntegrationTests.Ekyc.FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector());
     }
 
     private HandoverTurn AddTurn(HandoverTurnStatus status)

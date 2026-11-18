@@ -34,6 +34,14 @@ public interface IHandoverDocumentService
     Task<List<HandoverDocumentResponse>> ListForVerifierAsync(CancellationToken ct);
 }
 
+// Biên bản đồng ý nhận hoặc văn bản từ chối của một lượt, các nút theo từng vai:
+//   Người nhận:
+//     1. Chọn Chấp nhận hoặc Từ chối để bắt đầu biên bản ... CreateAsync (Phần 1 chép từ hồ sơ chứng tử)
+//     2. Xem biên bản của lượt ............................. GetByTurnAsync
+//     3. Mục Biên Bản: mọi biên bản của mình ............... ListMineAsync
+//   Người thực thi (chỉ xem lại): ListForExecutorAsync, GetForExecutorAsync
+//   Người xét duyệt (mục Biên Bản): ListForVerifierAsync
+// Người nhận ký ở HandoverSubmissionService.SubmitAsync; Người xét duyệt gửi ở HandoverSubmissionReviewService.CompleteAsync.
 public sealed class HandoverDocumentService : IHandoverDocumentService
 {
     private readonly ICurrentUser currentUser;
@@ -89,8 +97,10 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         this.beneficiaryProtector = beneficiaryProtector;
     }
 
+    // Người nhận, bước 1: bấm "Tôi chấp nhận" hoặc "Tôi từ chối".
     public async Task<HandoverDocumentResponse> CreateAsync(Guid turnId, CreateHandoverDocumentRequest request, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập và đang ở bước lập biên bản
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
         if (turn.Status != HandoverTurnStatus.IdentityInProgress)
@@ -98,6 +108,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
             throw NotAllowed("WRONG_STATE", "Lượt này không ở bước lập biên bản.");
         }
 
+        // 2. Đã có biên bản: cùng lựa chọn thì trả lại; khác lựa chọn thì chỉ đổi được khi người nhận chưa nộp
         HandoverSubmissionKind kind = HandoverDocumentRules.ParseKind(request.Kind);
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverDocument? existing = await documents.FindByTurnIdAsync(turn.Id, ct);
@@ -116,6 +127,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
             return await ToResponseAsync(existing, false, ct);
         }
 
+        // 3. Chưa có biên bản: tạo mới, chép Phần 1 về Chủ kho từ hồ sơ chứng tử, điền sẵn tên tài khoản người nhận
         HandoverDocument document = new HandoverDocument();
         document.TurnId = turn.Id;
         document.Turn = turn;
@@ -132,6 +144,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         {
             document.RecipientFullName = account.FullName;
         }
+        // 4. Lưu một lần; hai lần bấm cùng lúc thì bên thua nhận lỗi sửa trùng
         documents.Add(document);
         try
         {
@@ -146,8 +159,10 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return await ToResponseAsync(document, false, ct);
     }
 
+    // Người nhận, bước 2: xem biên bản của lượt mình.
     public async Task<HandoverDocumentResponse?> GetByTurnAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập; chưa có biên bản thì trả null
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
         HandoverDocument? document = await documents.FindByTurnIdAsync(turn.Id, ct);
@@ -158,6 +173,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return await ToResponseAsync(document, false, ct);
     }
 
+    // Người nhận, bước 3: mục Biên Bản liệt kê mọi biên bản của mình.
     public async Task<List<HandoverDocumentResponse>> ListMineAsync(CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
@@ -165,8 +181,10 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return await ToResponsesAsync(found, false, ct);
     }
 
+    // Người thực thi: danh sách biên bản của các kho mình đang phụ trách.
     public async Task<List<HandoverDocumentResponse>> ListForExecutorAsync(CancellationToken ct)
     {
+        // 1. Các kho người này đang là Người thực thi; không có kho nào thì trả rỗng
         Guid userId = currentUser.RequireUserId();
         List<ExecutorVaultRow> rows = await deathCases.FindExecutorVaultsAsync(userId, ct);
         List<Guid> vaultIds = new List<Guid>();
@@ -178,10 +196,12 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         {
             return new List<HandoverDocumentResponse>();
         }
+        // 2. Biên bản của các kho đó
         List<HandoverDocument> found = await documents.ListByVaultIdsAsync(vaultIds, ct);
         return await ToResponsesAsync(found, false, ct);
     }
 
+    // Người thực thi: mở một biên bản; kho không do mình phụ trách thì báo không tìm thấy.
     public async Task<HandoverDocumentResponse> GetForExecutorAsync(Guid documentId, CancellationToken ct)
     {
         Guid userId = currentUser.RequireUserId();
@@ -189,8 +209,10 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return await ToResponseAsync(document, false, ct);
     }
 
+    // Người xét duyệt: mục Biên Bản liệt kê biên bản của các kho mình đã duyệt hồ sơ chứng tử.
     public async Task<List<HandoverDocumentResponse>> ListForVerifierAsync(CancellationToken ct)
     {
+        // 1. Phải là Người xét duyệt đang hoạt động
         Guid userId = currentUser.RequireUserId();
         User? user = await users.FindByIdAsync(userId, ct);
         if (user == null || user.Status != UserStatus.Active || user.Role != UserRole.Verifier)
@@ -198,6 +220,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
             throw new AppException(AppErrorType.Forbidden, ErrorCode.RoleNotAllowed,
                 "Chỉ Người xét duyệt mới xem được danh sách này.");
         }
+        // 2. Lấy biên bản rồi bổ sung số liệu để màn hình xếp theo thời điểm nộp và gom theo kho
         List<HandoverDocument> found = await documents.ListForVerifierAsync(userId, ct);
         List<HandoverDocumentResponse> responses = await ToResponsesAsync(found, true, ct);
 
