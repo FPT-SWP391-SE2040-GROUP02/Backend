@@ -1,6 +1,6 @@
 namespace LegacyVault.Application.Notifications;
 
-/// <summary>Thư gửi khóa mở gói cho người nhận. Khóa gốc chỉ đi qua đây, không lưu DB và không ghi log (SEC-07).</summary>
+/// <summary>Thư gửi khóa mở gói cho người nhận. Khóa gốc chỉ đi qua đây, không lưu DB và không ghi log.</summary>
 public sealed class HandoverKeyMail
 {
     public Guid TurnId { get; set; }

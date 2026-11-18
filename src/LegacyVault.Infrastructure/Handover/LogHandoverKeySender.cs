@@ -6,7 +6,7 @@ namespace LegacyVault.Infrastructure.Handover;
 
 /// <summary>
 /// Bản gửi khóa cho môi trường chưa cấu hình email: chỉ ghi log, không gửi thư thật.
-/// Ở Development, log in khóa để thử tay; môi trường khác không ghi khóa hay email và báo lỗi (SEC-07).
+/// Ở Development, log in khóa để thử tay; môi trường khác không ghi khóa hay email và báo lỗi.
 /// </summary>
 public sealed class LogHandoverKeySender : IHandoverKeySender
 {

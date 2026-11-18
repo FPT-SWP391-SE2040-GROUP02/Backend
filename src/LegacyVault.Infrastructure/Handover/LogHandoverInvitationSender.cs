@@ -6,7 +6,7 @@ namespace LegacyVault.Infrastructure.Handover;
 
 /// <summary>
 /// Bản gửi lời mời cho môi trường chưa cấu hình email: chỉ ghi log, không gửi thư thật.
-/// Ở Development, log in token để bạn tự dựng link thử; môi trường khác tuyệt đối không ghi token hay email (OPS-04).
+/// Ở Development, log in token để bạn tự dựng link thử; môi trường khác tuyệt đối không ghi token hay email.
 /// </summary>
 public sealed class LogHandoverInvitationSender : IHandoverInvitationSender
 {

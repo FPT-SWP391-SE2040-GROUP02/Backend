@@ -38,10 +38,10 @@ public class HandoverProgressTurnResponse
     /// <summary>Trạng thái lượt dạng UPPER_SNAKE_CASE, ví dụ INVITED, HANDOVER_COMMITTED.</summary>
     public string Status { get; set; } = string.Empty;
 
-    /// <summary>true: lượt do chính tài khoản đang xem nhận. Executor không tự xác nhận được lượt này (BR-122).</summary>
+    /// <summary>true: lượt do chính tài khoản đang xem nhận. Executor không tự xác nhận được lượt này.</summary>
     public bool ClaimedByYou { get; set; }
 
-    /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC (BR-122).</summary>
+    /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC.</summary>
     public bool IdentityConfirmedByExecutor { get; set; }
 
     /// <summary>Lúc người nhận xác nhận đã nhận đủ tài sản; null khi chưa.</summary>
@@ -49,7 +49,7 @@ public class HandoverProgressTurnResponse
 
     public DateTimeOffset InvitedAt { get; set; }
 
-    /// <summary>Lúc máy chủ email nhận thư mời; null nghĩa là lời mời chưa gửi được (INVITE-04).</summary>
+    /// <summary>Lúc máy chủ email nhận thư mời; null nghĩa là lời mời chưa gửi được.</summary>
     public DateTimeOffset? InvitationSentAt { get; set; }
 
     /// <summary>Lúc người nhận ký biên bản (đồng ý hoặc từ chối) của lượt; null khi chưa có biên bản hoặc chưa ký.</summary>
