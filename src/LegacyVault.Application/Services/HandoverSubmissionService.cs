@@ -23,6 +23,11 @@ public interface IHandoverSubmissionService
     Task<HandoverSubmissionResponse?> GetLatestAsync(Guid turnId, CancellationToken ct);
 }
 
+// Người nhận nộp hồ sơ ở bước xác minh danh tính, theo thứ tự:
+//   1. Nộp hồ sơ (Chấp nhận hoặc Từ chối, thông tin khai, ảnh căn cước hai mặt) ... SubmitAsync
+//   2. Xem lại hồ sơ mới nhất đã nộp ................................................. GetLatestAsync
+// Lượt có biên bản: hồ sơ này là phần ký của người nhận, ảnh văn bản dựng lúc Người xét duyệt gửi.
+// Lượt không có biên bản (luồng cũ): ảnh văn bản dựng ngay lúc nộp (StorePaperAsync).
 public sealed class HandoverSubmissionService : IHandoverSubmissionService
 {
     private readonly ICurrentUser currentUser;
@@ -66,17 +71,21 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         this.notifier = notifier;
     }
 
+    // Nút "Nộp hồ sơ" ở cổng người nhận.
     public async Task<HandoverSubmissionResponse> SubmitAsync(
         Guid turnId, SubmitHandoverSubmissionRequest request, byte[] frontImage, byte[] backImage, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
 
+        // 2. Lượt phải đang ở bước nộp hồ sơ người nhận
         if (turn.Status != HandoverTurnStatus.IdentityInProgress)
         {
-            throw NotAllowed("WRONG_STATE", "Lượt này không ở bước nộp hồ sơ người nhận.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không ở bước nộp hồ sơ người nhận.");
         }
 
+        // 3. Đọc lựa chọn; phải tick đã đọc điều khoản, và tick tự nguyện nếu từ chối
         HandoverSubmissionKind kind = request.Kind == "DECLINE" ? HandoverSubmissionKind.Decline : HandoverSubmissionKind.Accept;
         if (!request.Acknowledged)
         {
@@ -87,6 +96,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             throw ValidationErrors.For("voluntaryDecline", "Vui lòng xác nhận tự nguyện từ chối, không nhằm trốn tránh nghĩa vụ tài sản.");
         }
 
+        // 4. Hai ảnh căn cước phải là JPEG, PNG hoặc WEBP
         string? frontType = IdentityImageStorage.DetectContentType(frontImage);
         string? backType = IdentityImageStorage.DetectContentType(backImage);
         if (frontType == null || backType == null)
@@ -94,6 +104,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             throw ValidationErrors.For("images", "Cần ảnh căn cước hai mặt dạng JPEG, PNG hoặc WEBP.");
         }
 
+        // 5. Nếu lượt có biên bản: biên bản phải đang chờ người nhận và lựa chọn phải trùng biên bản.
         // Lượt đã có biên bản thì hồ sơ này là phần ký của người nhận: chỉ nộp được khi biên bản đang chờ người nhận (Phần 1 đã chép sẵn từ hồ sơ chứng tử).
         HandoverDocument? document = null;
         if (documents != null)
@@ -104,7 +115,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         {
             if (document.Status != HandoverDocumentStatus.WaitRecipient)
             {
-                throw NotAllowed("DOCUMENT_NOT_READY", "Biên bản chưa đến lượt bạn điền và ký.");
+                throw HandoverAccess.NotAllowed("DOCUMENT_NOT_READY", "Biên bản chưa đến lượt bạn điền và ký.");
             }
             if (document.Kind != kind)
             {
@@ -112,19 +123,21 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             }
         }
 
+        // 6. Đọc thông tin Chủ kho đã khai cho người nhận để đối chiếu; hồ sơ đã được duyệt thì không nộp lại
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
         if (beneficiary == null)
         {
-            throw HandoverNotFound();
+            throw HandoverAccess.NotFound();
         }
         BeneficiaryPersonalData expected = protector.Unprotect(beneficiary);
 
         HandoverSubmission? latest = await submissions.FindLatestByTurnAsync(turn.Id, ct);
         if (latest != null && latest.Status == HandoverSubmissionStatus.Approved)
         {
-            throw NotAllowed("ALREADY_APPROVED", "Hồ sơ của bạn đã được duyệt.");
+            throw HandoverAccess.NotAllowed("ALREADY_APPROVED", "Hồ sơ của bạn đã được duyệt.");
         }
 
+        // 7. Tạo hồ sơ mới: chỉ giữ 4 số cuối căn cước và ba kết quả đối chiếu tên, số căn cước, ngày sinh
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverSubmission submission = new HandoverSubmission();
         submission.TurnId = turn.Id;
@@ -139,6 +152,8 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         submission.VoluntaryDecline = request.VoluntaryDecline;
         submission.CreatedAt = now;
 
+        // 8. Lưu mã hóa hai ảnh, cập nhật biên bản nếu có, đánh dấu bản cũ bị thay, rồi lưu một lần.
+        //    Lỗi giữa chừng thì xóa các ảnh vừa lưu.
         string? frontKey = null;
         string? backKey = null;
         string? paperKey = null;
@@ -203,6 +218,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             throw;
         }
 
+        // 9. Sau khi lưu: xóa ảnh của bản cũ, báo Người xét duyệt nếu có biên bản, trả kết quả.
         // Bản cũ bị thay thế: xóa ảnh của nó, không giữ ảnh căn cước lâu hơn cần thiết.
         if (latest != null)
         {
@@ -236,10 +252,13 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         }
     }
 
+    // Màn hồ sơ của người nhận: xem hồ sơ mới nhất đã nộp.
     public async Task<HandoverSubmissionResponse?> GetLatestAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
+        // 2. Trả hồ sơ mới nhất, chưa nộp thì null
         HandoverSubmission? latest = await submissions.FindLatestByTurnAsync(turn.Id, ct);
         return latest == null ? null : ToResponse(latest);
     }
@@ -254,28 +273,5 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         response.SupplementReason = submission.SupplementReason;
         response.CreatedAt = submission.CreatedAt;
         return response;
-    }
-
-    /// <summary>Lượt của người đang đăng nhập; id lạ và lượt của người khác cho cùng một lỗi (SEC-04).</summary>
-    private async Task<HandoverTurn> FindMyTurnAsync(Guid turnId, Guid userId, CancellationToken ct)
-    {
-        HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
-        if (turn == null || turn.ClaimantUserId != userId)
-        {
-            throw HandoverNotFound();
-        }
-        return turn;
-    }
-
-    private static AppException HandoverNotFound()
-    {
-        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy nội dung bàn giao.");
-    }
-
-    private static AppException NotAllowed(string reason, string message)
-    {
-        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["reason"] = reason;
-        return new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed, message, extensions);
     }
 }

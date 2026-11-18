@@ -86,9 +86,11 @@ public sealed class RetentionJob : IRetentionJob
         return repository.FindPlanIdsForRetentionAsync(BatchSize, ct);
     }
 
+    // Job dọn dữ liệu cho một kế hoạch: hết thời hạn lưu thì xóa nội dung lượt, dọn xong hết thì đóng kho.
     public async Task<RetentionRunResult> ProcessPlanAsync(Guid planId, CancellationToken ct)
     {
         RetentionRunResult result = new RetentionRunResult();
+        // 1. Lấy các lượt và kho; kho đã đóng hoặc kế hoạch chưa tới giai đoạn lưu/xóa thì bỏ qua
         List<HandoverTurn> turns = await repository.FindTurnsAsync(planId, ct);
         if (turns.Count == 0)
         {
@@ -106,6 +108,8 @@ public sealed class RetentionJob : IRetentionJob
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
+        // 2. Với từng lượt: còn lý do giữ (đang nhận, còn quyền tải, kho bị giữ...) thì dừng đồng hồ, hết lý do thì chạy tiếp;
+        //    lượt hết thời hạn lưu được đưa vào danh sách cần dọn
         List<HandoverTurn> due = new List<HandoverTurn>();
         bool vaultHeld = await holdReader.HasActiveHoldAsync(vault.Id, ct);
         foreach (HandoverTurn turn in turns)
@@ -126,6 +130,7 @@ public sealed class RetentionJob : IRetentionJob
             }
         }
 
+        // 3. Dọn các lượt tới hạn (tài sản còn lượt khác dùng thì giữ), đóng kế hoạch nếu mọi lượt đã xong
         if (due.Count > 0)
         {
             await DeleteTurnsAsync(turns, due, now, result, ct);
@@ -133,6 +138,7 @@ public sealed class RetentionJob : IRetentionJob
             HandoverRules.CloseIfAllTerminal(plan, turns, now);
         }
 
+        // 4. Kế hoạch đã đóng và mọi lượt đã dọn: hủy nốt nội dung còn lại và đóng kho
         if (plan.Status == PlanStatus.Closed && AllTurnsDone(turns))
         {
             // SETUP-18: mọi lượt đã dọn và kế hoạch đã đóng → dọn nốt nội dung còn lại rồi đóng kho.
@@ -153,6 +159,7 @@ public sealed class RetentionJob : IRetentionJob
             result.VaultClosed = true;
         }
 
+        // 5. Lưu một lần; sau đó mới xóa tệp, xóa ảnh căn cước của lượt đã dọn và gửi thư nhắc
         await unitOfWork.SaveChangesAsync(ct);
 
         await DeleteStoredFilesAsync(vault.Id, now, ct);
