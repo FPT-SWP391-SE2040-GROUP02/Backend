@@ -339,22 +339,22 @@ public sealed class DesignationFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task MinorBeneficiaryMakesContainerReadyAndUsesSlot()
+    public async Task JustTurnedEighteenBeneficiaryMakesContainerReadyAndUsesSlot()
     {
-        // Chuẩn bị: người nhận 10 tuổi (không cần xác nhận); gói có tài sản.
+        // Chuẩn bị: người nhận vừa tròn 18 tuổi hôm nay (tuổi tối thiểu được phép); gói có tài sản.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        string tenYearsAgo = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime)
-            .AddYears(-10).ToString("yyyy-MM-dd");
-        HttpResponseMessage createMinor = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
-            new { citizenId = CitizenA, fullName = "Bé A", dateOfBirth = tenYearsAgo, email = ApiTestHelpers.BeneficiaryEmail });
-        Assert.Equal(HttpStatusCode.Created, createMinor.StatusCode);
-        Guid minorId = (await ApiTestHelpers.ReadJsonAsync(createMinor)).GetProperty("id").GetGuid();
+        string eighteenYearsAgo = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime)
+            .AddYears(-18).ToString("yyyy-MM-dd");
+        HttpResponseMessage createYoung = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = CitizenA, fullName = "Bé A", dateOfBirth = eighteenYearsAgo, email = ApiTestHelpers.BeneficiaryEmail });
+        Assert.Equal(HttpStatusCode.Created, createYoung.StatusCode);
+        Guid youngId = (await ApiTestHelpers.ReadJsonAsync(createYoung)).GetProperty("id").GetGuid();
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         Guid containerId = await CreateContainerIdAsync(client, vaultId, "Gói");
         Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(client, vaultId, containerId, assetId)).StatusCode);
 
         // Hành động
-        HttpResponseMessage add = await ApiTestHelpers.AddBeneficiaryToContainerAsync(client, vaultId, containerId, minorId);
+        HttpResponseMessage add = await ApiTestHelpers.AddBeneficiaryToContainerAsync(client, vaultId, containerId, youngId);
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, add.StatusCode);
