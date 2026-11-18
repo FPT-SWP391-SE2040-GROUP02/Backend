@@ -42,16 +42,8 @@ public sealed class HandoverProgressService : IHandoverProgressService
     {
         // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
-        if (deathCase == null)
-        {
-            throw CaseNotFound();
-        }
-        Vault? vault = await vaultRepository.FindByIdAsync(deathCase.VaultId, ct);
-        if (vault == null || !await IsActiveExecutorAsync(vault, userId, ct))
-        {
-            throw CaseNotFound();
-        }
+        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+            progressReader, vaultRepository, executorReader, caseId, userId, ct);
 
         // 2. Chưa duyệt hồ sơ chứng tử thì chưa có lượt nào để theo dõi
         HandoverProgressResponse response = new HandoverProgressResponse();
@@ -150,24 +142,6 @@ public sealed class HandoverProgressService : IHandoverProgressService
         }
     }
 
-    /// <summary>Executor đang hiệu lực của kho và không phải Owner, giống luật của phần nộp hồ sơ chứng tử.</summary>
-    private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
-    {
-        if (vault.OwnerId == userId)
-        {
-            return false;
-        }
-        List<Executor> executors = await executorReader.GetActiveAsync(vault.Id, ct);
-        foreach (Executor executor in executors)
-        {
-            if (executor.UserId == userId)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /// <summary>Gom trạng thái lượt vào năm nhóm hiển thị trên màn hình tổng hợp.</summary>
     private static void CountTurn(HandoverProgressSummaryResponse summary, HandoverTurnStatus status)
     {
@@ -192,10 +166,5 @@ public sealed class HandoverProgressService : IHandoverProgressService
         {
             summary.Ended++;
         }
-    }
-
-    private static AppException CaseNotFound()
-    {
-        return new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
     }
 }

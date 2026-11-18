@@ -36,7 +36,7 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         // 1. Người gọi phải là Người thực thi đang phụ trách kho; không thì báo không tìm thấy kho
         Guid userId = currentUser.RequireUserId();
         Vault? vault = await vaultRepository.FindByIdAsync(vaultId, ct);
-        if (vault == null || !await IsActiveExecutorAsync(vault, userId, ct))
+        if (vault == null || !await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct))
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
         }
@@ -107,22 +107,5 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         {
             return null;
         }
-    }
-
-    private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
-    {
-        if (vault.OwnerId == userId)
-        {
-            return false;
-        }
-        List<Executor> executors = await executorReader.GetActiveAsync(vault.Id, ct);
-        foreach (Executor executor in executors)
-        {
-            if (executor.UserId == userId)
-            {
-                return true;
-            }
-        }
-        return false;
     }
 }
