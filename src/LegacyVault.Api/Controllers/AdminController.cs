@@ -1,7 +1,10 @@
+using LegacyVault.Api.Exceptions;
+using LegacyVault.Api.Handover;
 using LegacyVault.Api.Models;
 using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -68,6 +71,35 @@ public sealed class AdminController : ControllerBase
         await using Stream content = file.OpenReadStream();
         await notaryCardService.UploadAsync(userId, content, file.Length, ct);
         return NoContent();
+    }
+
+    /// <summary>Xem ảnh thẻ của Người xét duyệt hoặc Người thực thi hệ thống (nội dung ảnh, không phải JSON). 404 khi chưa có ảnh.</summary>
+    [HttpGet("users/{userId:guid}/notary-card")]
+    [Produces("image/jpeg", "image/png", "image/webp", "application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetNotaryCard(Guid userId, CancellationToken ct)
+    {
+        PreparedDownload download;
+        try
+        {
+            download = await notaryCardService.PrepareForAdminAsync(userId, ct);
+        }
+        catch (ContentIntegrityException)
+        {
+            ProblemDetails problem = GlobalExceptionHandler.Problem(
+                StatusCodes.Status500InternalServerError, ErrorCode.ContentIntegrityFailed,
+                "Ảnh thẻ không vượt qua kiểm tra toàn vẹn nên không thể tải.");
+            problem.Extensions["traceId"] = HttpContext.TraceIdentifier;
+
+            ObjectResult result = new ObjectResult(problem);
+            result.StatusCode = StatusCodes.Status500InternalServerError;
+            result.ContentTypes.Add("application/problem+json");
+            return result;
+        }
+
+        return new AvatarFileResult(download);
     }
 
     [HttpGet("users")]
