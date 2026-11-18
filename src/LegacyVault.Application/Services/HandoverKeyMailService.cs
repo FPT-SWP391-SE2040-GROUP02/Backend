@@ -58,12 +58,12 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
         if (deathCase == null)
         {
-            throw CaseNotFound();
+            throw HandoverAccess.DeathCaseNotFound();
         }
         Vault? vault = await vaults.FindByIdAsync(deathCase.VaultId, ct);
-        if (vault == null || !await IsActiveExecutorAsync(vault, userId, ct))
+        if (vault == null || !await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct))
         {
-            throw CaseNotFound();
+            throw HandoverAccess.DeathCaseNotFound();
         }
 
         // 2. Lượt phải thuộc kho này; kế hoạch đang bàn giao hoặc đã đóng; lượt còn cần khóa
@@ -136,28 +136,6 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         response.TurnId = turn.Id;
         response.SentAt = timeProvider.GetUtcNow();
         return response;
-    }
-
-    private async Task<bool> IsActiveExecutorAsync(Vault vault, Guid userId, CancellationToken ct)
-    {
-        if (vault.OwnerId == userId)
-        {
-            return false;
-        }
-        List<Executor> executors = await executorReader.GetActiveAsync(vault.Id, ct);
-        foreach (Executor executor in executors)
-        {
-            if (executor.UserId == userId)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static AppException CaseNotFound()
-    {
-        return new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
     }
 
     private static AppException NotAllowed(AppErrorType type, string reason, string message)
