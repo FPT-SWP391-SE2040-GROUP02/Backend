@@ -8,6 +8,16 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+// Cổng người nhận, các nút theo thứ tự người nhận đi:
+//   1. Mở link trong thư mời ............ GetInvitationAsync
+//   2. Bấm "Nhận lời mời" ............... ClaimAsync (qua link), ClaimByTurnAsync (trong app)
+//   3. Xem lời mời và lượt của mình ..... GetMyInvitationsAsync, GetMyTurnsAsync, GetTurnAsync
+//   4. Nhập khóa mở gói ................. VerifyKeyAsync
+//   5. Xem danh sách tài sản ............ ListAssetsAsync
+//   6. Báo đã nhận đủ ................... ConfirmReceivedAllAsync
+// Luồng cũ, chỉ cho lượt không có biên bản: AcceptAsync (đồng ý nhận), DeclineAsync (từ chối nhận).
+// Luồng Biên Bản kết thúc lượt ở HandoverSubmissionReviewService.CompleteAsync, không đi qua hai hàm này.
+// Các hàm private ở cuối tệp là phần kiểm và dựng kết quả dùng chung.
 public sealed class HandoverService : IHandoverService
 {
     private readonly ICurrentUser currentUser;
@@ -70,17 +80,21 @@ public sealed class HandoverService : IHandoverService
         this.timeProvider = timeProvider;
     }
 
+    /// <summary>Bước 1: người nhận mở link trong thư mời (không cần đăng nhập).</summary>
     public async Task<InvitationStatusResponse> GetInvitationAsync(string token, CancellationToken ct)
     {
+        // 1. Tìm lượt theo token trong link; token sai thì báo link không hợp lệ
         HandoverTurn turn = await FindTurnByTokenAsync(token, ct);
         DateTimeOffset now = timeProvider.GetUtcNow();
 
+        // 2. Đã quá hạn phản hồi ban đầu chưa (quá hạn vẫn nhận được, chỉ để giao diện báo)
         bool responseExpired = turn.Status == HandoverTurnStatus.InitialResponseExpired;
         if (turn.Status == HandoverTurnStatus.Invited && HandoverRules.IsExpired(turn.ResponseDeadline, now))
         {
             responseExpired = true;
         }
 
+        // 3. Dựng kết quả: link hợp lệ, email được mời, đã có tài khoản chưa, tên Chủ kho
         InvitationStatusResponse response = new InvitationStatusResponse();
         response.Valid = true;
         response.ResponseExpired = responseExpired;
@@ -107,12 +121,17 @@ public sealed class HandoverService : IHandoverService
         return response;
     }
 
+    /// <summary>Bước 2: người nhận đã đăng nhập bấm "Nhận lời mời" trên trang mở từ link.</summary>
     public async Task<HandoverTurnResponse> ClaimAsync(string token, CancellationToken ct)
     {
+        // 1. Người đang đăng nhập; tài khoản phải đang hoạt động và đã xác minh email
         Guid userId = currentUser.RequireUserId();
         User user = await EnsureAccountUsableAsync(userId, ct);
 
+        // 2. Tìm lượt theo token trong link
         HandoverTurn turn = await FindTurnByTokenAsync(token, ct);
+
+        // 3. Kiểm điều kiện, gắn lượt cho người này rồi lưu (xem ClaimTurnAsync)
         return await ClaimTurnAsync(user, turn, ct);
     }
 
@@ -122,14 +141,18 @@ public sealed class HandoverService : IHandoverService
     /// </summary>
     public async Task<HandoverTurnResponse> ClaimByTurnAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Người đang đăng nhập; tài khoản phải đang hoạt động và đã xác minh email
         Guid userId = currentUser.RequireUserId();
         User user = await EnsureAccountUsableAsync(userId, ct);
 
+        // 2. Tìm lượt theo id
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
         if (turn == null)
         {
             throw HandoverNotFound();
         }
+
+        // 3. Kiểm điều kiện, gắn lượt cho người này rồi lưu (xem ClaimTurnAsync)
         return await ClaimTurnAsync(user, turn, ct);
     }
 
@@ -144,6 +167,7 @@ public sealed class HandoverService : IHandoverService
     /// </remarks>
     public async Task<List<PendingInvitationResponse>> GetMyInvitationsAsync(CancellationToken ct)
     {
+        // 1. Người đang đăng nhập; tài khoản chưa dùng được thì trả danh sách rỗng
         Guid userId = currentUser.RequireUserId();
         User? user = await users.FindByIdAsync(userId, ct);
         if (user == null)
@@ -158,6 +182,9 @@ public sealed class HandoverService : IHandoverService
             return result;
         }
 
+        // 2. Lấy mọi lượt chưa ai nhận, rồi bỏ qua lượt không hợp lệ:
+        //    không nhận được nữa, kho không có hoặc là kho của mình, kế hoạch không ở giai đoạn bàn giao,
+        //    kho đang bị giữ, hoặc email người nhận khác email tài khoản
         string accountEmail = NormalizeEmail(user.Email);
         List<HandoverTurn> candidates = await handover.FindUnclaimedTurnsInHandoverAsync(ct);
         foreach (HandoverTurn turn in candidates)
@@ -189,6 +216,7 @@ public sealed class HandoverService : IHandoverService
                 continue;
             }
 
+            // 3. Lượt hợp lệ: thêm vào danh sách kèm tên gói và tên Chủ kho
             User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
             string ownerName = string.Empty;
             if (owner != null)
@@ -214,12 +242,13 @@ public sealed class HandoverService : IHandoverService
         Guid userId = user.Id;
         DateTimeOffset now = timeProvider.GetUtcNow();
 
-        // Cùng người bấm lại (F5, mở link lần hai): trả trạng thái hiện tại, không ghi gì.
+        // 1. Cùng người bấm lại (F5, mở link lần hai): trả trạng thái hiện tại, không ghi gì.
         if (turn.ClaimantUserId == userId)
         {
             return await BuildTurnResponseAsync(turn, ct);
         }
 
+        // 2. Các điều kiện chặn, mỗi điều kiện một lỗi riêng
         if (turn.ClaimantUserId != null)
         {
             throw new AppException(AppErrorType.Conflict, ErrorCode.HandoverAlreadyClaimed,
@@ -261,12 +290,14 @@ public sealed class HandoverService : IHandoverService
         // D2: đúng email mới được nhận (tài khoản đã xác minh email ở EnsureAccountUsableAsync).
         await EnsureEmailMatchesAsync(user, turn, ct);
 
+        // 3. Gắn lượt cho người này
         turn.ClaimantUserId = userId;
         turn.ClaimedAt = now;
         turn.UpdatedAt = now;
         // Chạm kế hoạch để RowVersion của nó chặn nhận lượt chạy cùng lúc với báo còn sống (ALIVE-01).
         vault.Plan.UpdatedAt = now;
 
+        // 4. Chuyển lượt sang bước xác minh danh tính (người nhận nộp hồ sơ và biên bản)
         if (policy.RequireIdentityVerification)
         {
             turn.Status = HandoverTurnStatus.IdentityInProgress;
@@ -278,15 +309,19 @@ public sealed class HandoverService : IHandoverService
             HandoverRules.MarkReadyToAccept(turn, now);
         }
 
+        // 5. Lưu một lần rồi trả trạng thái mới của lượt
         await unitOfWork.SaveChangesAsync(ct);
         return await BuildTurnResponseAsync(turn, ct);
     }
 
+    /// <summary>Bước 3: danh sách lượt người đang đăng nhập đã nhận.</summary>
     public async Task<List<HandoverTurnResponse>> GetMyTurnsAsync(CancellationToken ct)
     {
+        // 1. Người đang đăng nhập và các lượt họ đã nhận
         Guid userId = currentUser.RequireUserId();
         List<HandoverTurn> turns = await handover.FindTurnsByClaimantAsync(userId, ct);
 
+        // 2. Dựng kết quả cho từng lượt
         List<HandoverTurnResponse> responses = new List<HandoverTurnResponse>();
         foreach (HandoverTurn turn in turns)
         {
@@ -295,34 +330,43 @@ public sealed class HandoverService : IHandoverService
         return responses;
     }
 
+    /// <summary>Bước 3: chi tiết một lượt của người đang đăng nhập.</summary>
     public async Task<HandoverTurnResponse> GetTurnAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập; không thì báo không tìm thấy
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+
+        // 2. Trả trạng thái hiện tại của lượt
         return await BuildTurnResponseAsync(turn, ct);
     }
 
+    /// <summary>Luồng cũ: người nhận bấm "Đồng ý nhận" khi lượt đang chờ quyết định (lượt không có biên bản).</summary>
     public async Task<HandoverTurnResponse> AcceptAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
 
-        // Bấm lặp: đã đồng ý rồi thì trả lại đúng grant cũ, không tạo thêm và không ghi gì.
+        // 2. Bấm lặp: đã đồng ý rồi thì trả lại đúng grant cũ, không tạo thêm và không ghi gì.
         if (turn.Status == HandoverTurnStatus.HandoverCommitted && turn.Grant != null)
         {
             return await BuildTurnResponseAsync(turn, ct);
         }
 
+        // 3. Kiểm lượt còn quyết định được (xem EnsureDecidableAsync)
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverPlan plan = await EnsureDecidableAsync(turn, now, ct);
         // Khóa mở gói chỉ cần khi tải (HandoverDownloadService), không chặn việc đồng ý nhận.
         plan.UpdatedAt = now;
 
+        // 4. Tạo quyền tải cho người nhận, kết thúc lượt; đóng kế hoạch nếu mọi lượt đã xong
         HandoverGrant grant = HandoverRules.CommitAccept(turn, userId, now);
         handover.AddGrant(grant);
 
         await CloseDecidedPlanAsync(plan, now, ct);
 
+        // 5. Lưu một lần.
         // RowVersion của lượt và chỉ mục unique của grant chặn hai lần đồng ý chạy song song:
         // bên thua nhận 409 và khi bấm lại sẽ thấy lượt đã hoàn tất (nhánh "bấm lặp" ở đầu hàm).
         try
@@ -337,33 +381,42 @@ public sealed class HandoverService : IHandoverService
         return await BuildTurnResponseAsync(turn, ct);
     }
 
+    /// <summary>Luồng cũ: người nhận bấm "Từ chối nhận" khi lượt đang chờ quyết định (lượt không có biên bản).</summary>
     public async Task<HandoverTurnResponse> DeclineAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
 
+        // 2. Bấm lặp: đã từ chối rồi thì trả trạng thái hiện tại
         if (turn.Status == HandoverTurnStatus.Declined)
         {
             return await BuildTurnResponseAsync(turn, ct);
         }
 
+        // 3. Kiểm lượt còn quyết định được (xem EnsureDecidableAsync)
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverPlan plan = await EnsureDecidableAsync(turn, now, ct);
         plan.UpdatedAt = now;
 
+        // 4. Kết thúc lượt bằng từ chối; đóng kế hoạch nếu mọi lượt đã xong.
         // Người nhận từ chối thì nội dung của lượt này bị xóa luôn thay vì chờ hết thời hạn lưu (xem MarkDeclined).
         HandoverRules.MarkDeclined(turn, now);
 
         await CloseDecidedPlanAsync(plan, now, ct);
 
+        // 5. Lưu một lần rồi trả trạng thái mới của lượt
         await unitOfWork.SaveChangesAsync(ct);
         return await BuildTurnResponseAsync(turn, ct);
     }
 
+    /// <summary>Bước 5: người nhận xem danh sách tài sản của gói được bàn giao.</summary>
     public async Task<List<HandoverItemResponse>> ListAssetsAsync(Guid grantId, CancellationToken ct)
     {
+        // 1. Người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
 
+        // 2. Tìm quyền xem; quyền của người khác thì coi như không có
         HandoverGrant? grant = await handover.FindGrantByIdAsync(grantId, ct);
         if (grant == null || grant.UserId != userId)
         {
@@ -377,6 +430,7 @@ public sealed class HandoverService : IHandoverService
             throw HandoverNotFound();
         }
 
+        // 3. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kế hoạch không còn chạy, hoặc kho đang bị giữ
         string? deniedReason = HandoverRules.GrantDeniedReason(grant, vault.Plan.Status, timeProvider.GetUtcNow());
         if (deniedReason == null && await holdReader.HasActiveHoldAsync(vault.Id, ct))
         {
@@ -390,6 +444,7 @@ public sealed class HandoverService : IHandoverService
                 "Quyền xem tài sản không còn hiệu lực.", extensions);
         }
 
+        // 4. Trả danh sách tài sản theo thứ tự trong gói
         List<HandoverItemResponse> items = new List<HandoverItemResponse>();
         foreach (HandoverSnapshotItem item in turn.Items.OrderBy(i => i.Position))
         {
@@ -652,14 +707,19 @@ public sealed class HandoverService : IHandoverService
         return await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null;
     }
 
+    /// <summary>Bước 6: người nhận bấm "Đã nhận đủ" sau khi tải xong.</summary>
     public async Task<HandoverTurnResponse> ConfirmReceivedAllAsync(Guid turnId, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+
+        // 2. Chỉ xác nhận được khi lượt đã bàn giao và có quyền tải
         if (turn.Status != HandoverTurnStatus.HandoverCommitted || turn.Grant == null)
         {
             throw NotAllowed("NOT_COMMITTED", "Chỉ xác nhận đã nhận đủ sau khi đồng ý nhận tài sản.");
         }
+        // 3. Ghi mốc nhận đủ một lần; bấm lặp thì giữ mốc cũ
         if (turn.ReceivedAllAt == null)
         {
             DateTimeOffset now = timeProvider.GetUtcNow();
@@ -670,10 +730,14 @@ public sealed class HandoverService : IHandoverService
         return await BuildTurnResponseAsync(turn, ct);
     }
 
+    /// <summary>Bước 4: người nhận nhập khóa mở gói lấy từ Người thực thi.</summary>
     public async Task<HandoverTurnResponse> VerifyKeyAsync(Guid turnId, string? key, CancellationToken ct)
     {
+        // 1. Lượt phải thuộc người đang đăng nhập
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = await FindMyTurnAsync(turnId, userId, ct);
+
+        // 2. Kho chưa cấp khóa, hoặc đã nhập đúng từ trước: không cần làm gì
         ExecutorKeyShard? shard = null;
         if (keyShards != null)
         {
@@ -683,6 +747,7 @@ public sealed class HandoverService : IHandoverService
         {
             return await BuildTurnResponseAsync(turn, ct);
         }
+        // 3. Lượt phải đã sẵn sàng hoặc đã bàn giao, và chưa bị khóa vì sai quá số lần
         if (turn.Status != HandoverTurnStatus.ReadyToAccept && turn.Status != HandoverTurnStatus.HandoverCommitted)
         {
             throw NotAllowed("WRONG_STATE", "Lượt này chưa sẵn sàng để nhập khóa.");
@@ -693,6 +758,7 @@ public sealed class HandoverService : IHandoverService
                 "Đã nhập sai khóa quá nhiều lần. Hãy liên hệ Người thực thi hoặc quản trị viên.");
         }
 
+        // 4. Khóa đúng: ghi mốc đã nhập khóa, lưu rồi trả trạng thái mới
         DateTimeOffset now = timeProvider.GetUtcNow();
         if (ExecutorKeyRules.Matches(turn.VaultId, shard.Version, key ?? string.Empty, shard.ShardHash))
         {
@@ -702,6 +768,7 @@ public sealed class HandoverService : IHandoverService
             return await BuildTurnResponseAsync(turn, ct);
         }
 
+        // 5. Khóa sai: tăng bộ đếm sai, lưu, rồi báo lỗi kèm số lần thử còn lại.
         // Lưu bộ đếm rồi mới báo lỗi, nên lần thử sai không bị mất khi request kết thúc bằng exception.
         turn.KeyFailedCount = turn.KeyFailedCount + 1;
         turn.UpdatedAt = now;
