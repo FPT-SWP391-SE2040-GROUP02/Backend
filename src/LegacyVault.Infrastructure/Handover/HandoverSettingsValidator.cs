@@ -13,6 +13,7 @@ public sealed class HandoverSettingsValidator : IValidateOptions<HandoverSetting
         this.environment = environment;
     }
 
+    /// <summary>Tắt xác minh danh tính (RequireIdentityVerification là false) chỉ được ở môi trường Development; môi trường khác thì ứng dụng không khởi động.</summary>
     public ValidateOptionsResult Validate(string? name, HandoverSettings options)
     {
         if (options.RequireIdentityVerification)

@@ -7,6 +7,6 @@ public enum HandoverAccessOutcome
     Succeeded = 0,
     /// <summary>Grant không còn hiệu lực hoặc kế hoạch không cho phép.</summary>
     Denied = 1,
-    /// <summary>Sai tag, sai checksum hoặc sai kích thước: không trả byte nội dung nào (DOWNLOAD-05).</summary>
+    /// <summary>Sai tag, sai checksum hoặc sai kích thước: không trả byte nội dung nào.</summary>
     IntegrityFailed = 2,
 }

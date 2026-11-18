@@ -44,7 +44,7 @@ public sealed class HandoverTurnConfiguration : IEntityTypeConfiguration<Handove
         builder.HasIndex(t => t.InvitationTokenHash)
             .IsUnique();
 
-        // DATA-04: mỗi chỉ định chỉ một lượt đang hiệu lực hoặc đã nhận.
+        // Mỗi chỉ định chỉ một lượt đang hiệu lực hoặc đã nhận.
         builder.HasIndex(t => t.DesignationId)
             .IsUnique()
             .HasFilter("[Status] IN ('Invited','InitialResponseExpired','IdentityInProgress','ReadyToAccept','HandoverCommitted')")

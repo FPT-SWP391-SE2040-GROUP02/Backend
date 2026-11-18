@@ -3,13 +3,16 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Luật thuần của việc lưu và xóa dữ liệu sau bàn giao (SRS §7.7, RETENTION-01..09). Không đụng DB.</summary>
+/// <summary>Luật thuần của việc lưu và xóa dữ liệu sau bàn giao. Không đụng DB.</summary>
 public static class RetentionRules
 {
-    /// <summary>RETENTION-01: 30 ngày lưu trước khi xóa.</summary>
-    public static TimeSpan RetentionWindow => RuntimeSettings.Days("Handover.RetentionWindowDays", 30);
+    /// <summary>30 ngày lưu trước khi xóa.</summary>
+    public static TimeSpan RetentionWindow
+    {
+        get { return RuntimeSettings.Days("Handover.RetentionWindowDays", 30); }
+    }
 
-    /// <summary>CLAIM-06, RETENTION-04: claim đang xử lý giữ dữ liệu tối đa 30 ngày kể từ lúc nhận lượt.</summary>
+    /// <summary>Claim đang xử lý giữ dữ liệu tối đa 30 ngày kể từ lúc nhận lượt.</summary>
     public static readonly TimeSpan ClaimHoldWindow = TimeSpan.FromDays(30);
 
     public const string HoldAwaitingResponse = "AWAITING_RESPONSE";
@@ -42,7 +45,7 @@ public static class RetentionRules
 
     /// <summary>
     /// Lý do đang giữ dữ liệu của lượt tại thời điểm now; null = không còn gì giữ, đồng hồ được chạy.
-    /// RETENTION-03: mở link hay đăng nhập không phải lý do giữ; chỉ claim đang xử lý, grant còn hạn hoặc hold đã xác nhận.
+    /// Mở link hay đăng nhập không phải lý do giữ; chỉ claim đang xử lý, grant còn hạn hoặc hold đã xác nhận.
     /// </summary>
     public static string? HoldReason(HandoverTurn turn, PlanStatus planStatus, DateTimeOffset now)
     {
@@ -52,13 +55,13 @@ public static class RetentionRules
         }
         if (turn.Status == HandoverTurnStatus.Invited && now < turn.ResponseDeadline)
         {
-            // §7.7 bước 1: đồng hồ chỉ chạy sau 5 ngày không phản hồi.
+            // Đồng hồ chỉ chạy sau 5 ngày không phản hồi.
             return HoldAwaitingResponse;
         }
         if ((turn.Status == HandoverTurnStatus.IdentityInProgress || turn.Status == HandoverTurnStatus.ReadyToAccept)
             && !IsClaimHoldExpired(turn, now))
         {
-            // RETENTION-04: claim đang xử lý, giữ tối đa 30 ngày (CLAIM-06). Hết 30 ngày mà chưa xong thì không giữ nữa,
+            // Claim đang xử lý, giữ tối đa 30 ngày. Hết 30 ngày mà chưa xong thì không giữ nữa,
             // đồng hồ lưu chạy tiếp phần còn lại; lượt không bị kẹt mãi ở bước xác minh danh tính.
             return HoldClaimInProgress;
         }
@@ -70,18 +73,22 @@ public static class RetentionRules
     }
 
     /// <summary>
-    /// CLAIM-06: mốc tính 30 ngày là lúc nhận lượt (ClaimedAt), vì hệ thống chưa lưu riêng thời điểm "tiếp nhận đầy đủ lần đầu".
+    /// Mốc tính 30 ngày là lúc nhận lượt (ClaimedAt), vì hệ thống chưa lưu riêng thời điểm "tiếp nhận đầy đủ lần đầu".
     /// Không có ClaimedAt (dữ liệu cũ) thì dùng InvitedAt để vẫn có giới hạn.
     /// </summary>
     private static bool IsClaimHoldExpired(HandoverTurn turn, DateTimeOffset now)
     {
-        DateTimeOffset start = turn.ClaimedAt ?? turn.InvitedAt;
+        DateTimeOffset start = turn.InvitedAt;
+        if (turn.ClaimedAt != null)
+        {
+            start = turn.ClaimedAt.Value;
+        }
         return now >= start + ClaimHoldWindow;
     }
 
     /// <summary>
     /// Cập nhật đồng hồ của một lượt theo lý do giữ. Trả true khi lượt đã tới hạn và đủ điều kiện dọn ngay.
-    /// Tạm dừng lưu phần còn lại; chạy lại cộng phần còn lại, không bao giờ đặt lại 30 ngày (RETENTION-04).
+    /// Tạm dừng lưu phần còn lại; chạy lại cộng phần còn lại, không bao giờ đặt lại 30 ngày.
     /// </summary>
     public static bool Advance(HandoverTurn turn, string? holdReason, DateTimeOffset now)
     {
@@ -119,7 +126,7 @@ public static class RetentionRules
             turn.RetentionDeadline = now + TimeSpan.FromSeconds(seconds);
             turn.RetentionRemainingSeconds = null;
         }
-        // TIME-02: đúng giây hạn là tới hạn.
+        // Đúng giây hạn là tới hạn.
         return turn.RetentionStatus == RetentionStatus.RetentionActive
             && turn.RetentionDeadline != null
             && now >= turn.RetentionDeadline.Value;

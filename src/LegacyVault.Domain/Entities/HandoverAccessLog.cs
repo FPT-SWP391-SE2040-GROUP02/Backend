@@ -5,7 +5,7 @@ namespace LegacyVault.Domain.Entities;
 /// <summary>
 /// Nhật ký một lần yêu cầu tải nội dung (bảng HandoverAccessLogs), phục vụ "lịch sử xem/tải" và điều tra lỗi toàn vẹn.
 /// </summary>
-/// <remarks>Không ghi nội dung, tên tệp hay khóa (SEC-07).</remarks>
+/// <remarks>Không ghi nội dung, tên tệp hay khóa.</remarks>
 public class HandoverAccessLog
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();

@@ -4,15 +4,16 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
+/// <summary>
+/// Job chạy nền xử lý các mốc hết hạn của bàn giao, mỗi loại hai bước: tìm id rồi xử lý từng id.
+/// </summary>
 /// <remarks>
-/// TIME-04, TIME-09: kế hoạch đang bị chặn (Blocked) hoặc kho có hold thì đồng hồ tạm dừng: job không chuyển lượt hay grant
-/// sang hết hạn. Khi hold được gỡ, HandoverClockRules.ExtendAfterPause dời các hạn đang chạy đúng bằng thời gian đã dừng.
+/// 1. Quá hạn phản hồi thư mời: FindExpiredResponseTurnIdsAsync, ProcessResponseExpiryAsync.
+/// 2. Quá hạn quyết định (luồng cũ): FindExpiredDecisionTurnIdsAsync, ProcessDecisionExpiryAsync.
+/// 3. Hết hạn quyền tải: FindExpiredGrantIdsAsync, ProcessGrantExpiryAsync.
+/// Kế hoạch đang bị chặn (Blocked) hoặc kho có hold thì đồng hồ tạm dừng: job bỏ qua, không chuyển lượt hay grant sang hết hạn.
+/// Khi hold được gỡ, HandoverClockRules.ExtendAfterPause dời các hạn đang chạy đúng bằng thời gian đã dừng.
 /// </remarks>
-// Job chạy nền xử lý các mốc hết hạn của bàn giao, mỗi loại hai bước: tìm id rồi xử lý từng id.
-//   1. Quá hạn phản hồi thư mời ..... FindExpiredResponseTurnIdsAsync, ProcessResponseExpiryAsync
-//   2. Quá hạn quyết định (luồng cũ) . FindExpiredDecisionTurnIdsAsync, ProcessDecisionExpiryAsync
-//   3. Hết hạn quyền tải ............ FindExpiredGrantIdsAsync, ProcessGrantExpiryAsync
-// Kho đang bị giữ thì đồng hồ dừng: job bỏ qua, không đổi gì.
 public sealed class HandoverJob : IHandoverJob
 {
     private readonly IVaultRepository vaults;
@@ -35,22 +36,25 @@ public sealed class HandoverJob : IHandoverJob
         this.timeProvider = timeProvider;
     }
 
+    /// <summary>Id các lượt đã mời nhưng quá hạn phản hồi.</summary>
     public Task<IReadOnlyList<Guid>> FindExpiredResponseTurnIdsAsync(CancellationToken ct)
     {
         return handover.FindExpiredResponseTurnIdsAsync(timeProvider.GetUtcNow(), ct);
     }
 
+    /// <summary>Id các lượt đang chờ quyết định (luồng cũ) nhưng quá hạn quyết định.</summary>
     public Task<IReadOnlyList<Guid>> FindExpiredDecisionTurnIdsAsync(CancellationToken ct)
     {
         return handover.FindExpiredDecisionTurnIdsAsync(timeProvider.GetUtcNow(), ct);
     }
 
+    /// <summary>Id các quyền tải còn hiệu lực nhưng đã quá hạn.</summary>
     public Task<IReadOnlyList<Guid>> FindExpiredGrantIdsAsync(CancellationToken ct)
     {
         return handover.FindExpiredGrantIdsAsync(timeProvider.GetUtcNow(), ct);
     }
 
-    // Lượt quá hạn phản hồi: đánh dấu đã quá hạn (người nhận vẫn nhận lượt được sau đó).
+    /// <summary>Lượt quá hạn phản hồi: đánh dấu đã quá hạn (người nhận vẫn nhận lượt được sau đó).</summary>
     public async Task ProcessResponseExpiryAsync(Guid turnId, CancellationToken ct)
     {
         // 1. Lượt phải còn ở trạng thái đã mời và thật sự quá hạn; kho bị giữ thì bỏ qua
@@ -73,7 +77,7 @@ public sealed class HandoverJob : IHandoverJob
         await unitOfWork.SaveChangesAsync(ct);
     }
 
-    // Luồng cũ: lượt quá hạn quyết định thì kết thúc; đóng kế hoạch nếu mọi lượt đã xong.
+    /// <summary>Luồng cũ: lượt quá hạn quyết định thì kết thúc; đóng kế hoạch nếu mọi lượt đã xong.</summary>
     public async Task ProcessDecisionExpiryAsync(Guid turnId, CancellationToken ct)
     {
         // 1. Lượt phải đang chờ quyết định và thật sự quá hạn; kho bị giữ thì bỏ qua
@@ -108,7 +112,7 @@ public sealed class HandoverJob : IHandoverJob
         await unitOfWork.SaveChangesAsync(ct);
     }
 
-    // Quyền tải hết hạn: đánh dấu hết hạn.
+    /// <summary>Quyền tải quá hạn: đánh dấu hết hạn.</summary>
     public async Task ProcessGrantExpiryAsync(Guid grantId, CancellationToken ct)
     {
         // 1. Quyền phải còn hiệu lực và thật sự quá hạn; kho bị giữ thì bỏ qua
@@ -130,14 +134,24 @@ public sealed class HandoverJob : IHandoverJob
         await unitOfWork.SaveChangesAsync(ct);
     }
 
+    /// <summary>Đồng hồ của kho có đang tạm dừng không. Không tìm thấy kho thì coi như không dừng.</summary>
     private async Task<bool> IsClockPausedAsync(Guid vaultId, CancellationToken ct)
     {
         Vault? vault = await vaults.FindByIdAsync(vaultId, ct);
-        return vault != null && await IsClockPausedAsync(vault, ct);
+        if (vault == null)
+        {
+            return false;
+        }
+        return await IsClockPausedAsync(vault, ct);
     }
 
+    /// <summary>Đồng hồ tạm dừng khi kế hoạch bị chặn hoặc kho đang có hold.</summary>
     private async Task<bool> IsClockPausedAsync(Vault vault, CancellationToken ct)
     {
-        return vault.Plan.Status == PlanStatus.Blocked || await holdReader.HasActiveHoldAsync(vault.Id, ct);
+        if (vault.Plan.Status == PlanStatus.Blocked)
+        {
+            return true;
+        }
+        return await holdReader.HasActiveHoldAsync(vault.Id, ct);
     }
 }

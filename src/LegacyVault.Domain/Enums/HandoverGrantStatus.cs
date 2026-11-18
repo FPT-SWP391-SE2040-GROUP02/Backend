@@ -1,6 +1,6 @@
 namespace LegacyVault.Domain.Enums;
 
-/// <summary>Trạng thái quyền xem/tải (grant) của người nhận (SRS §11.1).</summary>
+/// <summary>Trạng thái quyền xem/tải (grant) của người nhận.</summary>
 public enum HandoverGrantStatus
 {
     /// <summary>Còn hiệu lực; vẫn phải kiểm hạn ExpiresAt ở mỗi request.</summary>

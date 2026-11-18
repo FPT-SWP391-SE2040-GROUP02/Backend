@@ -3,11 +3,11 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Quyền xem và tải của người nhận sau khi đồng ý nhận (bảng HandoverGrants), SRS §7.5, §7.6.
+/// Quyền xem và tải của người nhận sau khi đồng ý nhận (bảng HandoverGrants).
 /// </summary>
 /// <remarks>
-/// - Unique theo TurnId: một lượt chỉ có một grant (DATA-04), nên bấm nhận nhiều lần hay song song vẫn một kết quả.
-/// - ExpiresAt = lúc nhận + 30 ngày, không gia hạn (DOWNLOAD-02). Hạn được kiểm lại ở MỖI request, không chờ job.
+/// - Unique theo TurnId: một lượt chỉ có một grant, nên bấm nhận nhiều lần hay song song vẫn một kết quả.
+/// - ExpiresAt = lúc nhận + 30 ngày, không gia hạn. Hạn được kiểm lại ở MỖI request, không chờ job.
 /// </remarks>
 public class HandoverGrant
 {

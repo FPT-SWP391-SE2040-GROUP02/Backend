@@ -2,7 +2,7 @@ using LegacyVault.Domain.Entities;
 
 namespace LegacyVault.Application.Repositories;
 
-/// <summary>Đọc/ghi cho job lưu và xóa dữ liệu sau bàn giao (SRS §7.7). Hàm Find trả entity có theo dõi thay đổi.</summary>
+/// <summary>Đọc/ghi cho job lưu và xóa dữ liệu sau bàn giao. Hàm Find trả entity có theo dõi thay đổi.</summary>
 public interface IRetentionRepository
 {
     /// <summary>Id các kế hoạch đang/đã bàn giao còn lượt chưa dọn, hoặc kho chưa đóng mà mọi lượt đã dọn.</summary>

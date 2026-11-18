@@ -81,9 +81,11 @@ public sealed class HandoverProgressReader : IHandoverProgressReader
 
         foreach (var row in rows)
         {
-            HandoverDocumentTimes times = new HandoverDocumentTimes();
-            times.RecipientSignedAt = row.RecipientSignedAt;
-            times.VerifierSignedAt = row.VerifierSignedAt;
+            HandoverDocumentTimes times = new HandoverDocumentTimes
+            {
+                RecipientSignedAt = row.RecipientSignedAt,
+                VerifierSignedAt = row.VerifierSignedAt
+            };
             result[row.TurnId] = times;
         }
         return result;
