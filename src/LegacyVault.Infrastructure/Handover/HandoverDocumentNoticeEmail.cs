@@ -9,16 +9,21 @@ namespace LegacyVault.Infrastructure.Handover;
 /// <remarks>Thư chỉ nêu loại biên bản, mã và việc cần làm; không có nội dung tài sản, số căn cước hay giấy chứng tử.</remarks>
 public static class HandoverDocumentNoticeEmail
 {
+    /// <summary>Dựng thư báo biên bản hoàn chỉnh: chữ gốc, thay bằng chữ Admin đã sửa (nếu có), rồi ghép bản chữ và bản HTML.</summary>
     public static EmailContent Build(HandoverDocumentNotice notice, string appUrl)
     {
         string key = KeyFor(notice.Kind);
-        EmailParts defaults = Parts(notice.Kind, notice.DocumentCode, Name(notice), notice.Reason, notice.DocumentKind);
+        EmailParts defaults = Parts(notice);
 
         Dictionary<string, string> tokens = new Dictionary<string, string>();
         tokens["TEN_NGUOI_NHAN"] = notice.FullName;
         tokens["MA_BIEN_BAN"] = notice.DocumentCode;
         tokens["TEN_BEN_NHAN"] = Name(notice);
-        tokens["LY_DO"] = notice.Reason ?? string.Empty;
+        tokens["LY_DO"] = string.Empty;
+        if (notice.Reason != null)
+        {
+            tokens["LY_DO"] = notice.Reason;
+        }
         EmailParts parts = EmailTemplateOverrides.Apply(key, defaults, tokens);
 
         string text = $"Xin chào {notice.FullName},\n\n{parts.Title}\n\n{parts.Body}\n\n{parts.ButtonText}: {appUrl}\n\n{parts.Note}\n";
@@ -32,6 +37,7 @@ public static class HandoverDocumentNoticeEmail
         return new EmailContent(parts.Subject, text, html, key);
     }
 
+    /// <summary>Khóa mẫu thư tương ứng với loại thư báo, dùng để tìm chữ Admin đã sửa.</summary>
     public static string KeyFor(HandoverDocumentNoticeKind kind)
     {
         if (kind == HandoverDocumentNoticeKind.VerifierTurn)
@@ -48,11 +54,24 @@ public static class HandoverDocumentNoticeEmail
     /// <summary>Chữ gốc của từng loại, biến {MA_BIEN_BAN}... giữ nguyên để Admin sao chép làm chỗ bắt đầu.</summary>
     public static EmailParts SampleParts(HandoverDocumentNoticeKind kind)
     {
-        return Parts(kind, "{MA_BIEN_BAN}", "{TEN_BEN_NHAN}", "{LY_DO}", "ACCEPT");
+        HandoverDocumentNotice sample = new HandoverDocumentNotice
+        {
+            Kind = kind,
+            DocumentCode = "{MA_BIEN_BAN}",
+            RecipientName = "{TEN_BEN_NHAN}",
+            Reason = "{LY_DO}",
+            DocumentKind = "ACCEPT"
+        };
+        return Parts(sample);
     }
 
-    private static EmailParts Parts(HandoverDocumentNoticeKind kind, string code, string name, string? reason, string documentKind)
+    /// <summary>Chữ mặc định (tiêu đề, thân thư, nút, ghi chú) của thư báo biên bản theo loại thư.</summary>
+    private static EmailParts Parts(HandoverDocumentNotice notice)
     {
+        HandoverDocumentNoticeKind kind = notice.Kind;
+        string code = notice.DocumentCode;
+        string name = Name(notice);
+        string? reason = notice.Reason;
         string subject;
         string title;
         string paragraph;
@@ -76,13 +95,19 @@ public static class HandoverDocumentNoticeEmail
         {
             subject = "Biên bản đã hoàn tất";
             title = "Biên bản đã hoàn tất";
-            paragraph = documentKind == "ACCEPT"
-                ? "Biên bản (mã " + code + ") đã hoàn tất, người nhận được mở tải tài sản."
-                : "Văn bản từ chối (mã " + code + ") đã hoàn tất.";
+            if (notice.DocumentKind == "ACCEPT")
+            {
+                paragraph = "Biên bản (mã " + code + ") đã hoàn tất, người nhận được mở tải tài sản.";
+            }
+            else
+            {
+                paragraph = "Văn bản từ chối (mã " + code + ") đã hoàn tất.";
+            }
         }
         return new EmailParts(subject, title, paragraph, buttonText, "Email không chứa nội dung tài sản. Nếu không liên quan, bạn hãy bỏ qua.");
     }
 
+    /// <summary>Họ tên người nhận ghi trên biên bản; chưa có tên thì trả chữ "(chưa ghi tên)".</summary>
     private static string Name(HandoverDocumentNotice notice)
     {
         if (notice.RecipientName.Length > 0)

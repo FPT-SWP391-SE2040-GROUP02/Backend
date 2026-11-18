@@ -46,8 +46,10 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
     {
         // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+        ExecutorCaseAccess access = await HandoverAccess.FindCaseForExecutorAsync(
             progressReader, vaults, executorReader, caseId, userId, ct);
+        DeathCase deathCase = access.DeathCase;
+        Vault vault = access.Vault;
 
         // 2. Lượt phải thuộc kho này và đã kết thúc bằng đồng ý hoặc từ chối
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
@@ -59,9 +61,13 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
 
         // 3. Hồ sơ mới nhất phải đã duyệt, đúng loại với kết quả lượt và đã có ảnh văn bản
         HandoverSubmission? submission = await submissions.FindLatestByTurnAsync(turn.Id, ct);
-        HandoverSubmissionKind expected = turn.Status == HandoverTurnStatus.Declined
-            ? HandoverSubmissionKind.Decline
-            : HandoverSubmissionKind.Accept;
+        HandoverSubmissionKind expected = HandoverSubmissionKind.Accept;
+        string fileName = "bien-ban-dong-y.png";
+        if (turn.Status == HandoverTurnStatus.Declined)
+        {
+            expected = HandoverSubmissionKind.Decline;
+            fileName = "van-ban-tu-choi.png";
+        }
         if (submission == null || submission.Kind != expected
             || submission.Status != HandoverSubmissionStatus.Approved || submission.PaperStorageKey.Length == 0)
         {
@@ -69,14 +75,17 @@ public sealed class ExecutorDeclinePaperService : IExecutorDeclinePaperService
         }
 
         // 4. Chuẩn bị giải mã ảnh văn bản để tải về
-        StoredContent stored = new StoredContent();
-        stored.StorageKey = submission.PaperStorageKey;
-        stored.SizeBytes = submission.PaperSizeBytes;
-        stored.EncryptionKeyId = submission.PaperEncryptionKeyId;
-        stored.WrappedDataKey = submission.PaperWrappedDataKey;
-        return await IdentityImageStorage.PrepareAsync(contentStore, stored, "image/png", expected == HandoverSubmissionKind.Decline ? "van-ban-tu-choi.png" : "bien-ban-dong-y.png", ct);
+        StoredContent stored = new StoredContent
+        {
+            StorageKey = submission.PaperStorageKey,
+            SizeBytes = submission.PaperSizeBytes,
+            EncryptionKeyId = submission.PaperEncryptionKeyId,
+            WrappedDataKey = submission.PaperWrappedDataKey
+        };
+        return await IdentityImageStorage.PrepareAsync(contentStore, stored, "image/png", fileName, ct);
     }
 
+    /// <summary>Lỗi 404 dùng chung cho lượt không thuộc kho, hồ sơ chưa duyệt hoặc chưa có ảnh văn bản.</summary>
     private static AppException PaperNotFound()
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không có văn bản hoặc biên bản cho lượt này.");

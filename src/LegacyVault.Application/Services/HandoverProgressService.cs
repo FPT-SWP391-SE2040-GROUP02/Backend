@@ -42,13 +42,17 @@ public sealed class HandoverProgressService : IHandoverProgressService
     {
         // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+        ExecutorCaseAccess access = await HandoverAccess.FindCaseForExecutorAsync(
             progressReader, vaultRepository, executorReader, caseId, userId, ct);
+        DeathCase deathCase = access.DeathCase;
+        Vault vault = access.Vault;
 
         // 2. Chưa duyệt hồ sơ chứng tử thì chưa có lượt nào để theo dõi
-        HandoverProgressResponse response = new HandoverProgressResponse();
-        response.CaseId = deathCase.Id;
-        response.ServerTime = timeProvider.GetUtcNow();
+        HandoverProgressResponse response = new HandoverProgressResponse
+        {
+            CaseId = deathCase.Id,
+            ServerTime = timeProvider.GetUtcNow()
+        };
 
         // Lượt bàn giao chỉ được tạo khi Verifier duyệt; trước đó chưa có gì để theo dõi.
         if (deathCase.Status != DeathCaseStatus.ApprovedForHandover)

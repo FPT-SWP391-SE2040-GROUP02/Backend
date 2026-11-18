@@ -10,7 +10,7 @@ namespace LegacyVault.Application.Services;
 
 /// <remarks>
 /// - Khóa mở gói không lưu ở đâu, DB chỉ có mã băm; Người thực hiện nhập lại khóa mình đang giữ, Backend băm để kiểm rồi mới gửi.
-/// - Email người nhận chỉ giải mã ở đây để gửi; Người thực hiện không thấy email (SEC-05).
+/// - Email người nhận chỉ giải mã ở đây để gửi; Người thực hiện không thấy email.
 /// - Khóa đi bằng thư riêng, tách khỏi thư lời mời, nên người chỉ có một trong hai thư thì chưa mở được gói.
 /// </remarks>
 public sealed class HandoverKeyMailService : IHandoverKeyMailService
@@ -55,8 +55,10 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
     {
         // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
-        (DeathCase deathCase, Vault vault) = await HandoverAccess.FindCaseForExecutorAsync(
+        ExecutorCaseAccess access = await HandoverAccess.FindCaseForExecutorAsync(
             progressReader, vaults, executorReader, caseId, userId, ct);
+        DeathCase deathCase = access.DeathCase;
+        Vault vault = access.Vault;
 
         // 2. Lượt phải thuộc kho này; kế hoạch đang bàn giao hoặc đã đóng; lượt còn cần khóa
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
@@ -77,12 +79,17 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         }
 
         // 3. Kho phải đã cấp khóa và khóa Người thực thi nhập phải đúng
+        string enteredKey = string.Empty;
+        if (key != null)
+        {
+            enteredKey = key;
+        }
         ExecutorKeyShard? shard = await keyShards.FindByVaultIdAsync(vault.Id, ct);
         if (shard == null)
         {
             throw NotAllowed(AppErrorType.Conflict, "NO_KEY", "Kho này chưa cấp khóa mở gói.");
         }
-        if (!ExecutorKeyRules.Matches(vault.Id, shard.Version, key ?? string.Empty, shard.ShardHash))
+        if (!ExecutorKeyRules.Matches(vault.Id, shard.Version, enteredKey, shard.ShardHash))
         {
             throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverKeyInvalid, "Khóa mở gói chưa đúng.");
         }
@@ -103,11 +110,13 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         }
 
         // 5. Gửi thư chứa khóa; lỗi gửi thì báo thử lại, không ghi chi tiết vì thư có khóa
-        HandoverKeyMail mail = new HandoverKeyMail();
-        mail.TurnId = turn.Id;
-        mail.ToEmail = email;
-        mail.FullName = fullName;
-        mail.Key = (key ?? string.Empty).Trim();
+        HandoverKeyMail mail = new HandoverKeyMail
+        {
+            TurnId = turn.Id,
+            ToEmail = email,
+            FullName = fullName,
+            Key = enteredKey.Trim()
+        };
         try
         {
             await sender.SendAsync(mail, ct);
@@ -124,12 +133,15 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         }
 
         // 6. Trả thời điểm đã gửi
-        SendHandoverKeyResponse response = new SendHandoverKeyResponse();
-        response.TurnId = turn.Id;
-        response.SentAt = timeProvider.GetUtcNow();
+        SendHandoverKeyResponse response = new SendHandoverKeyResponse
+        {
+            TurnId = turn.Id,
+            SentAt = timeProvider.GetUtcNow()
+        };
         return response;
     }
 
+    /// <summary>Lỗi không được phép; reason là mã lý do để giao diện hiện đúng câu.</summary>
     private static AppException NotAllowed(AppErrorType type, string reason, string message)
     {
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();

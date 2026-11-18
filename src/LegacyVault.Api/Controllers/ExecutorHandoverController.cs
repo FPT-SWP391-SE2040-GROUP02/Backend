@@ -47,7 +47,7 @@ public sealed class ExecutorHandoverController : ControllerBase
     }
 
     /// <summary>
-    /// Gửi lại lời mời nhận tài sản cho một lượt chưa ai nhận (INVITE-02, INVITE-04). Link cũ hết dùng, hạn phản hồi không đặt lại
+    /// Gửi lại lời mời nhận tài sản cho một lượt chưa ai nhận. Link cũ hết dùng, hạn phản hồi không đặt lại
     /// (trừ khi lời mời chưa từng được giao). Giãn cách tối thiểu 15 phút giữa hai lần gửi.
     /// </summary>
     /// <summary>Ảnh văn bản từ chối hoặc biên bản đồng ý nhận của một lượt đã có quyết định. Trả ảnh PNG, không phải JSON.</summary>

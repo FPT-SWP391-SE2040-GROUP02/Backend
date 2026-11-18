@@ -44,8 +44,9 @@ public static class HandoverAccess
     /// <summary>
     /// Hồ sơ chứng tử và kho cho các màn của Người thực thi. Không thấy hồ sơ, không thấy kho, hoặc người gọi không phải
     /// Người thực thi đang hiệu lực thì cùng một lỗi không tìm thấy hồ sơ, để không lộ hồ sơ nào có thật.
+    /// Hàm dùng chung cho ba service nên nhận sẵn ba bộ đọc dữ liệu mà các service này đều đã có, để không chép lại phần kiểm.
     /// </summary>
-    public static async Task<(DeathCase DeathCase, Vault Vault)> FindCaseForExecutorAsync(
+    public static async Task<ExecutorCaseAccess> FindCaseForExecutorAsync(
         IHandoverProgressReader progressReader, IVaultRepository vaults, IExecutorReader executorReader,
         Guid caseId, Guid userId, CancellationToken ct)
     {
@@ -59,7 +60,12 @@ public static class HandoverAccess
         {
             throw DeathCaseNotFound();
         }
-        return (deathCase, vault);
+        ExecutorCaseAccess access = new ExecutorCaseAccess
+        {
+            DeathCase = deathCase,
+            Vault = vault
+        };
+        return access;
     }
 
     /// <summary>Không tìm thấy lượt, quyền tải hay tài sản bàn giao (dùng chung cho cả trường hợp không có quyền xem).</summary>

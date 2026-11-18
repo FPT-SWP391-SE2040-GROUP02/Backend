@@ -14,6 +14,17 @@ namespace LegacyVault.Infrastructure.Handover;
 /// </summary>
 public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
 {
+    /// <summary>Kiểu in của một đoạn: căn trái, giữa hoặc đều; thêm Bold là chữ đậm.</summary>
+    private enum ParaStyle
+    {
+        Left,
+        LeftBold,
+        Center,
+        CenterBold,
+        Justify,
+        JustifyBold
+    }
+
     private const string Ink = "#222222";
 
     static QuestPdfDeclinePaperRenderer()
@@ -25,6 +36,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         QuestPDF.Settings.ThrowOnMissingFontFamilies = false;
     }
 
+    /// <summary>Dựng văn bản thành ảnh PNG một trang. Có mẫu của Admin (data.Paragraphs) thì in theo mẫu, không thì in chữ cố định.</summary>
     public byte[] Render(DeclinePaperData data)
     {
         Document document = Document.Create(container =>
@@ -55,11 +67,19 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
                 });
             });
         });
-        ImageGenerationSettings settings = new ImageGenerationSettings();
-        settings.ImageFormat = ImageFormat.Png;
-        settings.RasterDpi = 150;
+        ImageGenerationSettings settings = new ImageGenerationSettings
+        {
+            ImageFormat = ImageFormat.Png,
+            RasterDpi = 150
+        };
         // Văn bản chỉ một trang: lấy trang đầu làm ảnh PNG, xem như ảnh giấy chứng tử mà Người xét duyệt đọc.
-        return document.GenerateImages(settings).First();
+        byte[] firstPage = new byte[0];
+        foreach (byte[] page in document.GenerateImages(settings))
+        {
+            firstPage = page;
+            break;
+        }
+        return firstPage;
     }
 
     /// <summary>
@@ -72,10 +92,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         foreach (TemplateParagraph paragraph in data.Paragraphs!)
         {
             string text = HandoverTemplateTokens.Fill(paragraph.Text, values);
-            Para(column, text,
-                center: paragraph.Align == TemplateParagraph.AlignCenter,
-                bold: paragraph.Bold,
-                justify: paragraph.Align == TemplateParagraph.AlignJustify);
+            Para(column, text, StyleOf(paragraph));
         }
         if (data.HasSignatures)
         {
@@ -85,13 +102,13 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         {
             if (data.IsAcceptance)
             {
-                Para(column, "Người lập Biên bản đồng ý nhận di sản thừa kế", center: true, bold: true);
+                Para(column, "Người lập Biên bản đồng ý nhận di sản thừa kế", ParaStyle.CenterBold);
             }
             else
             {
-                Para(column, "Người lập Văn bản từ chối nhận di sản thừa kế", center: true, bold: true);
+                Para(column, "Người lập Văn bản từ chối nhận di sản thừa kế", ParaStyle.CenterBold);
             }
-            Para(column, "(Ký/điểm chỉ và ghi rõ họ tên)", center: true);
+            Para(column, "(Ký/điểm chỉ và ghi rõ họ tên)", ParaStyle.Center);
         }
     }
 
@@ -126,26 +143,23 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     {
         DateTimeOffset local = data.SubmittedAt.ToOffset(TimeSpan.FromHours(7));
         string nbsp3 = "   ";
-        Para(column, "CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM", center: true, bold: true);
-        Para(column, "Độc lập - Tự do - Hạnh phúc", center: true, bold: true);
-        Para(column, "-----------------", center: true);
-        Para(column, "VĂN BẢN TỪ CHỐI NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
+        Para(column, "CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM", ParaStyle.CenterBold);
+        Para(column, "Độc lập - Tự do - Hạnh phúc", ParaStyle.CenterBold);
+        Para(column, "-----------------", ParaStyle.Center);
+        Para(column, "VĂN BẢN TỪ CHỐI NHẬN DI SẢN THỪA KẾ", ParaStyle.CenterBold);
         Para(column,
             $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault, tôi là:");
-        Para(column, $"Ông/bà: {data.DeclinerFullName} Sinh năm : {BirthYearText(data)}", justify: true);
+        Para(column, $"Ông/bà: {data.DeclinerFullName} Sinh năm : {BirthYearText(data)}", ParaStyle.Justify);
         Para(column,
-            $"Số Căn cước/CCCD: {CitizenIdText(data)} do Bộ Công an cấp.",
-            justify: true);
-        Para(column, "(Là người được chỉ định nhận của người để lại di sản thừa kế)", justify: true);
-        Para(column, $"{nbsp3}Tôi là người thừa kế của ông/bà {data.OwnerFullName}", justify: true);
+            $"Số Căn cước/CCCD: {CitizenIdText(data)} do Bộ Công an cấp.", ParaStyle.Justify);
+        Para(column, "(Là người được chỉ định nhận của người để lại di sản thừa kế)", ParaStyle.Justify);
+        Para(column, $"{nbsp3}Tôi là người thừa kế của ông/bà {data.OwnerFullName}", ParaStyle.Justify);
         Para(column,
-            $"{nbsp3} Ông/bà {data.OwnerFullName} {DeathSentence(data)}",
-            justify: true);
-        Para(column, $"{nbsp3}Di sản mà ông/bà {data.OwnerFullName} để lại là: {ContainerText(data)}.", justify: true);
+            $"{nbsp3} Ông/bà {data.OwnerFullName} {DeathSentence(data)}", ParaStyle.Justify);
+        Para(column, $"{nbsp3}Di sản mà ông/bà {data.OwnerFullName} để lại là: {ContainerText(data)}.", ParaStyle.Justify);
         Para(column,
-            "Nay bằng Văn bản này tôi tự nguyện từ chối nhận kỷ phần thừa kế di sản nêu trên mà tôi được hưởng.",
-            justify: true);
-        Para(column, "          Tôi xin cam đoan:", bold: true);
+            "Nay bằng Văn bản này tôi tự nguyện từ chối nhận kỷ phần thừa kế di sản nêu trên mà tôi được hưởng.", ParaStyle.Justify);
+        Para(column, "          Tôi xin cam đoan:", ParaStyle.LeftBold);
         Para(column, "- Những thông tin về nhân thân, về tài sản đã ghi trong văn bản này là đúng sự thật.");
         Para(column,
             "- Việc từ chối nhận tài sản thừa kế này không nhằm trốn tránh việc thực hiện nghĩa vụ tài sản của mình đối với người khác theo Điều 620 Bộ luật Dân sự 2015.");
@@ -153,13 +167,13 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
             "- Tôi đã đọc nội dung Văn bản này, đã hiểu rõ trách nhiệm pháp lý của mình khi lập và ký/điểm chỉ vào Văn bản này.");
         if (data.HasSignatures)
         {
-            Para(column, "Văn bản này được gửi đến Người thực thi của kho, là người quản lý di sản, để biết.", justify: true);
+            Para(column, "Văn bản này được gửi đến Người thực thi của kho, là người quản lý di sản, để biết.", ParaStyle.Justify);
             WriteSignatures(column, data);
         }
         else
         {
-            Para(column, "Người lập Văn bản từ chối nhận di sản thừa kế", center: true, bold: true);
-            Para(column, "(Ký/điểm chỉ và ghi rõ họ tên)", center: true);
+            Para(column, "Người lập Văn bản từ chối nhận di sản thừa kế", ParaStyle.CenterBold);
+            Para(column, "(Ký/điểm chỉ và ghi rõ họ tên)", ParaStyle.Center);
         }
     }
 
@@ -167,45 +181,40 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     private static void WriteAcceptance(ColumnDescriptor column, DeclinePaperData data)
     {
         DateTimeOffset local = data.SubmittedAt.ToOffset(TimeSpan.FromHours(7));
-        Para(column, "CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM", center: true, bold: true);
-        Para(column, "Độc lập - Tự do - Hạnh phúc", center: true, bold: true);
-        Para(column, "-----------------", center: true);
-        Para(column, "BIÊN BẢN ĐỒNG Ý NHẬN DI SẢN THỪA KẾ", center: true, bold: true);
+        Para(column, "CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM", ParaStyle.CenterBold);
+        Para(column, "Độc lập - Tự do - Hạnh phúc", ParaStyle.CenterBold);
+        Para(column, "-----------------", ParaStyle.Center);
+        Para(column, "BIÊN BẢN ĐỒNG Ý NHẬN DI SẢN THỪA KẾ", ParaStyle.CenterBold);
         Para(column, $"Hôm nay, ngày {local.Day:00} tháng {local.Month:00} năm {local.Year}, tại hệ thống LegacyVault.");
-        Para(column, $"Tôi là: {data.DeclinerFullName}; sinh năm: {BirthYearText(data)}; Số Căn cước/CCCD: {CitizenIdText(data)}.", justify: true);
-        Para(column, "Bằng biên bản này, tôi xin khai đúng sự thật rằng:", justify: true);
+        Para(column, $"Tôi là: {data.DeclinerFullName}; sinh năm: {BirthYearText(data)}; Số Căn cước/CCCD: {CitizenIdText(data)}.", ParaStyle.Justify);
+        Para(column, "Bằng biên bản này, tôi xin khai đúng sự thật rằng:", ParaStyle.Justify);
         Para(column,
             $"1. Người để lại di sản: Chủ kho {data.OwnerFullName}, {DeathSentence(data)} "
-            + "Thông tin này đã được Người xét duyệt thẩm định trên hệ thống.",
-            justify: true);
-        Para(column, "2. Tôi là người được Chủ kho chỉ định nhận phần di sản nêu tại mục 4.", justify: true);
+            + "Thông tin này đã được Người xét duyệt thẩm định trên hệ thống.", ParaStyle.Justify);
+        Para(column, "2. Tôi là người được Chủ kho chỉ định nhận phần di sản nêu tại mục 4.", ParaStyle.Justify);
         Para(column,
             "3. Tôi không thuộc các trường hợp không được quyền hưởng di sản theo Điều 621 Bộ luật Dân sự 2015, và trước khi lập biên bản này tôi chưa lập văn bản "
-            + "từ chối nhận di sản đối với phần này.",
-            justify: true);
-        Para(column, $"4. Di sản khai nhận: {ContainerText(data)}.", justify: true);
+            + "từ chối nhận di sản đối với phần này.", ParaStyle.Justify);
+        Para(column, $"4. Di sản khai nhận: {ContainerText(data)}.", ParaStyle.Justify);
         Para(column,
             "5. Tôi xin cam đoan những điều khai trong biên bản này là đúng sự thật, không khai thiếu, không giấu thông tin. "
-            + "Nếu sai, tôi hoàn toàn chịu trách nhiệm trước pháp luật.",
-            justify: true);
+            + "Nếu sai, tôi hoàn toàn chịu trách nhiệm trước pháp luật.", ParaStyle.Justify);
         Para(column,
             "6. Nay, bằng biên bản này tôi đồng ý nhận phần di sản nêu tại mục 4. Tôi hiểu rằng người thừa kế chỉ phải thực hiện "
             + "nghĩa vụ tài sản của người chết trong phạm vi di sản được nhận theo Điều 615 Bộ luật Dân sự 2015, tự chịu trách nhiệm "
-            + "về việc quản lý, sử dụng tài sản đã nhận và bảo mật mã khóa giải mã dữ liệu được bàn giao.",
-            justify: true);
+            + "về việc quản lý, sử dụng tài sản đã nhận và bảo mật mã khóa giải mã dữ liệu được bàn giao.", ParaStyle.Justify);
         Para(column,
             "7. Tôi đã đọc lại toàn bộ nội dung, hiểu rõ, chấp nhận và nhận thức đầy đủ trách nhiệm pháp lý của mình khi lập và "
-            + "xác nhận biên bản này.",
-            justify: true);
-        Para(column, $"8. Tôi đã được thông báo: {data.DeclineNotice}", justify: true);
+            + "xác nhận biên bản này.", ParaStyle.Justify);
+        Para(column, $"8. Tôi đã được thông báo: {data.DeclineNotice}", ParaStyle.Justify);
         if (data.HasSignatures)
         {
             WriteSignatures(column, data);
         }
         else
         {
-            Para(column, "Người lập Biên bản đồng ý nhận di sản thừa kế", center: true, bold: true);
-            Para(column, "(Ký/điểm chỉ và ghi rõ họ tên)", center: true);
+            Para(column, "Người lập Biên bản đồng ý nhận di sản thừa kế", ParaStyle.CenterBold);
+            Para(column, "(Ký/điểm chỉ và ghi rõ họ tên)", ParaStyle.Center);
         }
     }
 
@@ -249,6 +258,7 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         return "............";
     }
 
+    /// <summary>Tên gói kèm số mục (nếu có) để in ở phần di sản.</summary>
     private static string ContainerText(DeclinePaperData data)
     {
         if (data.ItemCount > 0)
@@ -263,13 +273,23 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
     {
         column.Item().PaddingTop(12).Row(row =>
         {
-            SignCell(row.RelativeItem(), "Người lập văn bản", data.DeclinerFullName, data.RecipientSignedAt);
-            SignCell(row.RelativeItem(), "Người xét duyệt đã kiểm tra thủ công", data.ReviewerFullName, data.ReviewedAt);
+            SignCell(row.RelativeItem(), data, true);
+            SignCell(row.RelativeItem(), data, false);
         });
     }
 
-    private static void SignCell(IContainer cell, string title, string name, DateTimeOffset? signedAt)
+    /// <summary>Một ô chữ ký: tiêu đề, họ tên và dòng ký điện tử (hoặc "chưa ký"). forRecipient là true thì ô của người nhận, ngược lại là ô của Người xét duyệt.</summary>
+    private static void SignCell(IContainer cell, DeclinePaperData data, bool forRecipient)
     {
+        string title = "Người xét duyệt đã kiểm tra thủ công";
+        string name = data.ReviewerFullName;
+        DateTimeOffset? signedAt = data.ReviewedAt;
+        if (forRecipient)
+        {
+            title = "Người lập văn bản";
+            name = data.DeclinerFullName;
+            signedAt = data.RecipientSignedAt;
+        }
         cell.PaddingHorizontal(4).Column(c =>
         {
             c.Item().AlignCenter().Text(title).Bold().FontSize(10);
@@ -284,9 +304,38 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         });
     }
 
-    /// <summary>Một đoạn theo mẫu Word: cách đoạn trên 9pt, dưới 6pt; tiêu đề căn giữa và đậm, thân văn bản căn đều.</summary>
-    private static void Para(ColumnDescriptor column, string text, bool center = false, bool bold = false, bool justify = false)
+    /// <summary>Kiểu in của một đoạn mẫu: căn trái, giữa hoặc đều, có đậm hoặc không.</summary>
+    private static ParaStyle StyleOf(TemplateParagraph paragraph)
     {
+        if (paragraph.Align == TemplateParagraph.AlignCenter)
+        {
+            if (paragraph.Bold)
+            {
+                return ParaStyle.CenterBold;
+            }
+            return ParaStyle.Center;
+        }
+        if (paragraph.Align == TemplateParagraph.AlignJustify)
+        {
+            if (paragraph.Bold)
+            {
+                return ParaStyle.JustifyBold;
+            }
+            return ParaStyle.Justify;
+        }
+        if (paragraph.Bold)
+        {
+            return ParaStyle.LeftBold;
+        }
+        return ParaStyle.Left;
+    }
+
+    /// <summary>Một đoạn theo mẫu Word: cách đoạn trên 9pt, dưới 6pt; tiêu đề căn giữa và đậm, thân văn bản căn đều.</summary>
+    private static void Para(ColumnDescriptor column, string text, ParaStyle style = ParaStyle.Left)
+    {
+        bool center = style == ParaStyle.Center || style == ParaStyle.CenterBold;
+        bool justify = style == ParaStyle.Justify || style == ParaStyle.JustifyBold;
+        bool bold = style == ParaStyle.LeftBold || style == ParaStyle.CenterBold || style == ParaStyle.JustifyBold;
         IContainer item = column.Item().PaddingTop(9).PaddingBottom(6);
         item.Text(t =>
         {
@@ -306,8 +355,13 @@ public sealed class QuestPdfDeclinePaperRenderer : IDeclinePaperRenderer
         });
     }
 
+    /// <summary>Ngày dạng dd/MM/yyyy; chưa có ngày thì in chuỗi chấm blank như mẫu giấy.</summary>
     private static string Date(DateOnly? value, string blank)
     {
-        return value == null ? blank : value.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+        if (value == null)
+        {
+            return blank;
+        }
+        return value.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
     }
 }

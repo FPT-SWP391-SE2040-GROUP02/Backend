@@ -148,7 +148,8 @@ public sealed class HandoverRepository : IHandoverRepository
     public bool IsUniqueViolation(Exception exception)
     {
         // SQL Server: 2601 = trùng giá trị chỉ mục unique, 2627 = vi phạm ràng buộc unique.
-        if (exception is not DbUpdateException)
+        DbUpdateException? updateException = exception as DbUpdateException;
+        if (updateException == null)
         {
             return false;
         }
@@ -156,7 +157,8 @@ public sealed class HandoverRepository : IHandoverRepository
         Exception? inner = exception.InnerException;
         while (inner != null)
         {
-            if (inner is SqlException sqlException && (sqlException.Number == 2601 || sqlException.Number == 2627))
+            SqlException? sqlException = inner as SqlException;
+            if (sqlException != null && (sqlException.Number == 2601 || sqlException.Number == 2627))
             {
                 return true;
             }

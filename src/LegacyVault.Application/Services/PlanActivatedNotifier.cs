@@ -57,11 +57,14 @@ public sealed class PlanActivatedNotifier(
                     FullName = data.FullName,
                     OwnerName = owner.FullName,
                     OwnerEmail = owner.Email,
-                    OwnerPhone = owner.Phone,
-                    ExecutorName = executor?.FullName,
-                    ExecutorEmail = executor?.Email,
-                    ExecutorPhone = executor?.Phone,
+                    OwnerPhone = owner.Phone
                 };
+                if (executor != null)
+                {
+                    notice.ExecutorName = executor.FullName;
+                    notice.ExecutorEmail = executor.Email;
+                    notice.ExecutorPhone = executor.Phone;
+                }
                 await sender.SendAsync(notice, ct);
             }
             catch (Exception) when (!ct.IsCancellationRequested)
@@ -71,6 +74,7 @@ public sealed class PlanActivatedNotifier(
         }
     }
 
+    /// <summary>Tài khoản của Người thực thi đã chấp nhận lời mời của kho; chưa có thì null.</summary>
     private async Task<User?> FindAcceptedExecutorAsync(Vault vault, CancellationToken ct)
     {
         foreach (Executor item in vault.Executors)

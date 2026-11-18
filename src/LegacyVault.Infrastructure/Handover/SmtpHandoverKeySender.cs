@@ -3,7 +3,7 @@ using LegacyVault.Infrastructure.Notifications;
 
 namespace LegacyVault.Infrastructure.Handover;
 
-/// <summary>Gửi thư khóa mở gói thật qua SmtpMailSender. Thư không có tên gói hay tài sản (OPS-04).</summary>
+/// <summary>Gửi thư khóa mở gói thật qua SmtpMailSender. Thư không có tên gói hay tài sản.</summary>
 public sealed class SmtpHandoverKeySender : IHandoverKeySender
 {
     private readonly SmtpMailSender mailSender;

@@ -51,24 +51,27 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         return responses;
     }
 
+    /// <summary>Đổi một gói sang dữ liệu trả ra màn hình: các người nhận (theo ngày tạo) và các tài sản còn nội dung (theo ngày thêm). Không có nội dung tài sản.</summary>
     private ExecutorVaultPackageResponse ToResponse(Container package)
     {
-        ExecutorVaultPackageResponse response = new ExecutorVaultPackageResponse();
-        response.ContainerId = package.Id;
-        response.ContainerName = package.Name;
+        ExecutorVaultPackageResponse response = new ExecutorVaultPackageResponse
+        {
+            ContainerId = package.Id,
+            ContainerName = package.Name
+        };
 
-        List<Designation> designations = new List<Designation>(package.Designations);
-        designations.Sort((left, right) => left.CreatedAt.CompareTo(right.CreatedAt));
+        List<Designation> designations = package.Designations.OrderBy(designation => designation.CreatedAt).ToList();
         foreach (Designation designation in designations)
         {
-            ExecutorPackageRecipientResponse recipient = new ExecutorPackageRecipientResponse();
-            recipient.CitizenIdLast4 = designation.Beneficiary.CitizenIdLast4;
-            recipient.FullName = ReadFullName(designation.Beneficiary);
+            ExecutorPackageRecipientResponse recipient = new ExecutorPackageRecipientResponse
+            {
+                CitizenIdLast4 = designation.Beneficiary.CitizenIdLast4,
+                FullName = ReadFullName(designation.Beneficiary)
+            };
             response.Recipients.Add(recipient);
         }
 
-        List<ContainerAsset> links = new List<ContainerAsset>(package.Assets);
-        links.Sort((left, right) => left.AddedAt.CompareTo(right.AddedAt));
+        List<ContainerAsset> links = package.Assets.OrderBy(link => link.AddedAt).ToList();
         foreach (ContainerAsset link in links)
         {
             Asset asset = link.Asset;
@@ -76,16 +79,19 @@ public sealed class ExecutorAssetService : IExecutorAssetService
             {
                 continue;
             }
-            ExecutorPackageAssetResponse item = new ExecutorPackageAssetResponse();
-            item.Id = asset.Id;
-            item.Name = asset.Name;
-            item.Kind = ToKind(asset.Kind);
-            item.SizeBytes = asset.SizeBytes;
+            ExecutorPackageAssetResponse item = new ExecutorPackageAssetResponse
+            {
+                Id = asset.Id,
+                Name = asset.Name,
+                Kind = ToKind(asset.Kind),
+                SizeBytes = asset.SizeBytes
+            };
             response.Assets.Add(item);
         }
         return response;
     }
 
+    /// <summary>Loại tài sản dạng chữ trả ra API: TEXT cho ghi chú văn bản, FILE cho tệp.</summary>
     private static string ToKind(AssetKind kind)
     {
         if (kind == AssetKind.Text)

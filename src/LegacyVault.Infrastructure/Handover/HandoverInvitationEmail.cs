@@ -6,13 +6,13 @@ using LegacyVault.Infrastructure.Notifications;
 namespace LegacyVault.Infrastructure.Handover;
 
 /// <summary>
-/// Dựng email mời nhận tài sản (INVITE-01). Hàm thuần, không gửi gì.
+/// Dựng email mời nhận tài sản. Hàm thuần, không gửi gì.
 /// </summary>
 /// <remarks>
-/// - OPS-04: không có tên gói hay tên tài sản; chỉ có tên người nhận, tên Chủ kho, liên hệ Người thực thi, link và hạn phản hồi.
+/// - Không có tên gói hay tên tài sản; chỉ có tên người nhận, tên Chủ kho, liên hệ Người thực thi, link và hạn phản hồi.
 /// - Đây là thư thứ hai người nhận được: lần đầu họ đã được báo khi Chủ kho bật kế hoạch bàn giao, nên thư nhắc lại chuyện cũ.
 /// - Không đoán giới tính từ tên: dùng "bạn" cho người nhận và chỉ dùng họ tên cho Chủ kho, Người thực thi.
-/// - Giờ hiển thị theo giờ Việt Nam (UTC+7, TIME-01). Mọi chữ do người dùng nhập được mã hóa HTML trong bản HTML.
+/// - Giờ hiển thị theo giờ Việt Nam (UTC+7). Mọi chữ do người dùng nhập được mã hóa HTML trong bản HTML.
 /// </remarks>
 public static class HandoverInvitationEmail
 {
@@ -21,42 +21,60 @@ public static class HandoverInvitationEmail
     /// <summary>Bản rút gọn khi chưa có thông tin liên hệ của kho (dữ liệu cũ, test).</summary>
     public static EmailContent Build(string fullName, string link, DateTimeOffset responseDeadline)
     {
-        HandoverInvitation invitation = new HandoverInvitation();
-        invitation.FullName = fullName;
-        invitation.ResponseDeadline = responseDeadline;
+        HandoverInvitation invitation = new HandoverInvitation
+        {
+            FullName = fullName,
+            ResponseDeadline = responseDeadline
+        };
         return Build(invitation, link, null);
-    }
-
-    /// <param name="supportContact">Câu liên hệ hỗ trợ của nhóm, ví dụ "email ho-tro@... hoặc số 090...". Null thì chỉ bảo báo lại cho LegacyVault.</param>
-    public static EmailContent Build(HandoverInvitation invitation, string link, string? supportContact)
-    {
-        return Build(invitation, link, supportContact, true);
     }
 
     /// <summary>Chữ gốc của tiêu đề, nút và ghi chú với biến giữ nguyên, để Admin sao chép làm chỗ bắt đầu.</summary>
     public static EmailParts SampleParts()
     {
-        HandoverInvitation sample = new HandoverInvitation();
-        sample.FullName = "{TEN_NGUOI_NHAN}";
-        sample.OwnerFullName = "{TEN_CHU_KHO}";
-        sample.ResponseDeadline = DateTimeOffset.UtcNow;
-        EmailContent content = Build(sample, string.Empty, null, false);
-        return content.Defaults!;
+        HandoverInvitation sample = new HandoverInvitation
+        {
+            FullName = "{TEN_NGUOI_NHAN}",
+            OwnerFullName = "{TEN_CHU_KHO}",
+            ResponseDeadline = DateTimeOffset.UtcNow
+        };
+        return DefaultParts(sample, null);
     }
 
-    private static EmailContent Build(HandoverInvitation invitation, string link, string? supportContact, bool applyOverrides)
+    /// <summary>Hạn phản hồi theo giờ Việt Nam, dạng giờ và ngày đầy đủ.</summary>
+    private static string LongDeadline(HandoverInvitation invitation)
     {
-        string deadline = invitation.ResponseDeadline.ToOffset(VietnamOffset)
+        return invitation.ResponseDeadline.ToOffset(VietnamOffset)
             .ToString("HH:mm 'ngày' dd/MM/yyyy", CultureInfo.InvariantCulture);
-        string shortDeadline = invitation.ResponseDeadline.ToOffset(VietnamOffset)
-            .ToString("dd/MM", CultureInfo.InvariantCulture);
+    }
 
+    /// <summary>Hạn phản hồi theo giờ Việt Nam, dạng ngày/tháng ngắn.</summary>
+    private static string ShortDeadline(HandoverInvitation invitation)
+    {
+        return invitation.ResponseDeadline.ToOffset(VietnamOffset)
+            .ToString("dd/MM", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Cách gọi Chủ kho trong thư: họ tên, hoặc chữ "chủ kho" khi chưa có tên.</summary>
+    private static string OwnerLabel(HandoverInvitation invitation)
+    {
         string owner = invitation.OwnerFullName.Trim();
-        string ownerLabel = owner;
         if (owner.Length == 0)
         {
-            ownerLabel = "chủ kho";
+            return "chủ kho";
         }
+        return owner;
+    }
+
+    /// <summary>
+    /// Chữ gốc của thư mời: tiêu đề thư, tiêu đề lớn, thân thư theo từng hồ sơ, nút và ghi chú.
+    /// Admin chỉ sửa được tiêu đề, tiêu đề lớn, nút và ghi chú; phần thân giữ nguyên.
+    /// </summary>
+    private static EmailParts DefaultParts(HandoverInvitation invitation, string? supportContact)
+    {
+        string deadline = LongDeadline(invitation);
+        string shortDeadline = ShortDeadline(invitation);
+        string ownerLabel = OwnerLabel(invitation);
         string executor = invitation.ExecutorFullName.Trim();
         bool hasExecutor = executor.Length > 0;
         string executorLabel = executor;
@@ -84,9 +102,11 @@ public static class HandoverInvitationEmail
         lines.Add(ContactLine(invitation, executorLabel, hasExecutor));
         if (invitation.VerifierFullName.Trim().Length > 0)
         {
-            string card = string.IsNullOrWhiteSpace(invitation.VerifierLawyerCardNumber)
-                ? string.Empty
-                : $" (thẻ luật sư {invitation.VerifierLawyerCardNumber!.Trim()})";
+            string card = string.Empty;
+            if (!string.IsNullOrWhiteSpace(invitation.VerifierLawyerCardNumber))
+            {
+                card = $" (thẻ luật sư {invitation.VerifierLawyerCardNumber.Trim()})";
+            }
             lines.Add($"Hồ sơ đã được Người xét duyệt {invitation.VerifierFullName.Trim()}{card} kiểm tra.");
         }
         if (invitation.CaseCode.Trim().Length > 0)
@@ -94,7 +114,11 @@ public static class HandoverInvitationEmail
             lines.Add($"Mã hồ sơ: {invitation.CaseCode.Trim()}.");
         }
 
-        string message = (invitation.OwnerMessage ?? string.Empty).Trim();
+        string message = string.Empty;
+        if (invitation.OwnerMessage != null)
+        {
+            message = invitation.OwnerMessage.Trim();
+        }
         if (message.Length > 0)
         {
             lines.Add($"Lời nhắn {ownerLabel} để lại cho bạn:");
@@ -120,18 +144,20 @@ public static class HandoverInvitationEmail
             + "Trân trọng, Đội ngũ LegacyVault. " + ScamWarning();
 
         string leadText = string.Join("\n", lines);
+        return new EmailParts(subject, title, leadText, "Nhận tài sản", note);
+    }
 
-        // Admin chỉ sửa được tiêu đề, tiêu đề lớn, nút và ghi chú; phần thân theo từng hồ sơ nên giữ nguyên.
-        EmailParts defaults = new EmailParts(subject, title, leadText, "Nhận tài sản", note);
-        if (!applyOverrides)
-        {
-            return new EmailContent(subject, leadText, string.Empty, EmailTemplateCatalog.HandoverInvitation, defaults);
-        }
+    /// <summary>Dựng thư mời hoàn chỉnh: chữ gốc, thay bằng chữ Admin đã sửa (nếu có), rồi ghép bản chữ và bản HTML.</summary>
+    /// <param name="supportContact">Câu liên hệ hỗ trợ của nhóm, ví dụ "email ho-tro@... hoặc số 090...". Null thì chỉ bảo báo lại cho LegacyVault.</param>
+    public static EmailContent Build(HandoverInvitation invitation, string link, string? supportContact)
+    {
+        EmailParts defaults = DefaultParts(invitation, supportContact);
+        string leadText = defaults.Body;
         Dictionary<string, string> tokens = new Dictionary<string, string>();
         tokens["TEN_NGUOI_NHAN"] = invitation.FullName;
-        tokens["TEN_CHU_KHO"] = ownerLabel;
-        tokens["HAN_PHAN_HOI"] = deadline;
-        tokens["HAN_NGAN"] = shortDeadline;
+        tokens["TEN_CHU_KHO"] = OwnerLabel(invitation);
+        tokens["HAN_PHAN_HOI"] = LongDeadline(invitation);
+        tokens["HAN_NGAN"] = ShortDeadline(invitation);
         EmailParts parts = EmailTemplateOverrides.Apply(EmailTemplateCatalog.HandoverInvitation, defaults, tokens);
 
         string text = $"Xin chào {invitation.FullName},\n\n{leadText}\n\n{parts.ButtonText}: {link}\n\n{parts.Note}\n";
@@ -160,11 +186,16 @@ public static class HandoverInvitationEmail
                 company.Add(value);
             }
         }
-        string call = phone.Length > 0 ? $" Hãy gọi số {phone} của công ty để xác minh." : string.Empty;
+        string call = string.Empty;
+        if (phone.Length > 0)
+        {
+            call = $" Hãy gọi số {phone} của công ty để xác minh.";
+        }
         return "Cảnh báo lừa đảo: LegacyVault không bao giờ hỏi mật khẩu của bạn và không thu tiền qua thư." + call
             + " " + string.Join(" · ", company) + ".";
     }
 
+    /// <summary>Câu liên hệ trong thư: có Người thực thi thì kèm số điện thoại và/hoặc email của họ, không thì bảo hỏi Người thực thi do chủ kho chỉ định.</summary>
     private static string ContactLine(HandoverInvitation invitation, string executorLabel, bool hasExecutor)
     {
         if (!hasExecutor)
