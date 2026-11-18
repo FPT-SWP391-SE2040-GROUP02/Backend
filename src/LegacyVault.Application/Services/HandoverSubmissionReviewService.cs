@@ -100,9 +100,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         List<VerifierHandoverSubmissionSummaryResponse> list = new List<VerifierHandoverSubmissionSummaryResponse>();
         foreach (HandoverSubmission submission in pending)
         {
-            VerifierHandoverSubmissionSummaryResponse row = new VerifierHandoverSubmissionSummaryResponse();
-            FillSummary(row, submission);
-            list.Add(row);
+            list.Add(submission.ToVerifierSummary());
         }
         return list;
     }
@@ -119,10 +117,10 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             HandoverDocument? document = await documents.FindByTurnIdAsync(submission.TurnId, ct);
             if (document != null)
             {
-                return ToDetail(submission, document);
+                return submission.ToVerifierDetail(document);
             }
         }
-        return ToDetail(submission);
+        return submission.ToVerifierDetail();
     }
 
     // Bước 3: xem ảnh căn cước một mặt (front hoặc back).
@@ -166,7 +164,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         // Bấm lặp: đã duyệt rồi thì trả lại kết quả cũ.
         if (submission.Status == HandoverSubmissionStatus.Approved)
         {
-            return ToDetail(submission);
+            return submission.ToVerifierDetail();
         }
         if (submission.Status != HandoverSubmissionStatus.Submitted)
         {
@@ -215,7 +213,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             await IdentityImageStorage.TryDeleteAsync(contentStore, paperKey);
             throw;
         }
-        return ToDetail(submission);
+        return submission.ToVerifierDetail();
     }
 
     // Bước 4: Người xét duyệt tick đủ các mục kiểm tra, xác nhận trách nhiệm và bấm gửi biên bản.
@@ -242,7 +240,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         // Bấm lặp: đã hoàn tất rồi thì trả lại kết quả cũ.
         if (document.Status == HandoverDocumentStatus.Completed && submission.Status == HandoverSubmissionStatus.Approved)
         {
-            return ToDetail(submission, document);
+            return submission.ToVerifierDetail(document);
         }
         if (submission.Status != HandoverSubmissionStatus.Submitted
             || document.Status != HandoverDocumentStatus.WaitVerifier
@@ -334,7 +332,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         {
             await notifier.CompletedAsync(document, ct);
         }
-        return ToDetail(submission, document);
+        return submission.ToVerifierDetail(document);
     }
 
     /// <summary>
@@ -400,7 +398,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             submission.Turn.VaultId, userId, AuditActorRole.Verifier, AuditAction.HandoverSubmissionSupplementRequested,
             AuditTargetType.HandoverTurn, submission.Turn.Id, null, AuditOutcome.Succeeded, null, now));
         await unitOfWork.SaveChangesAsync(ct);
-        return ToDetail(submission);
+        return submission.ToVerifierDetail();
     }
 
     private async Task<Guid> RequireActiveVerifierAsync(CancellationToken ct)
@@ -453,49 +451,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             throw NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa duyệt được.");
         }
         return vault;
-    }
-
-    private static void FillSummary(VerifierHandoverSubmissionSummaryResponse response, HandoverSubmission submission)
-    {
-        response.Id = submission.Id;
-        response.TurnId = submission.TurnId;
-        response.ContainerName = submission.Turn.ContainerName;
-        response.Kind = submission.Kind.ToApiString();
-        response.AllMatch = submission.NameMatches && submission.CitizenIdMatches && submission.DateOfBirthMatches;
-        response.SubmittedAt = submission.CreatedAt;
-    }
-
-    /// <summary>Chi tiết hồ sơ thuộc một biên bản: duyệt được khi biên bản đang chờ Người xét duyệt, không còn chặn theo kết quả đối chiếu tự động.</summary>
-    private static VerifierHandoverSubmissionResponse ToDetail(HandoverSubmission submission, HandoverDocument document)
-    {
-        VerifierHandoverSubmissionResponse response = ToDetail(submission);
-        response.DocumentId = document.Id;
-        bool waiting = submission.Status == HandoverSubmissionStatus.Submitted
-            && document.Status == HandoverDocumentStatus.WaitVerifier
-            && submission.Turn.Status == HandoverTurnStatus.IdentityInProgress;
-        response.CanApprove = waiting;
-        response.CanRequestSupplement = waiting;
-        return response;
-    }
-
-    private static VerifierHandoverSubmissionResponse ToDetail(HandoverSubmission submission)
-    {
-        VerifierHandoverSubmissionResponse response = new VerifierHandoverSubmissionResponse();
-        FillSummary(response, submission);
-        response.Status = submission.Status.ToApiString();
-        response.NameMatches = submission.NameMatches;
-        response.CitizenIdMatches = submission.CitizenIdMatches;
-        response.DateOfBirthMatches = submission.DateOfBirthMatches;
-        response.CitizenIdLast4 = submission.CitizenIdLast4;
-        response.Acknowledged = submission.Acknowledged;
-        response.VoluntaryDecline = submission.VoluntaryDecline;
-        response.SupplementReason = submission.SupplementReason;
-        response.ItemCount = submission.Turn.Items.Count;
-        bool waiting = submission.Status == HandoverSubmissionStatus.Submitted
-            && submission.Turn.Status == HandoverTurnStatus.IdentityInProgress;
-        response.CanApprove = waiting && response.AllMatch;
-        response.CanRequestSupplement = waiting;
-        return response;
     }
 
     private static AppException SubmissionNotFound()
