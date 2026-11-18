@@ -16,7 +16,7 @@ public class InvitationMailCheckResponse
     public string? OwnerFullName { get; set; }
 }
 
-/// <summary>Kết quả kiểm link mời (công khai): chỉ hai cờ, không lộ thêm dữ liệu nào (SEC-04).</summary>
+/// <summary>Kết quả kiểm link mời (công khai): chỉ hai cờ, không lộ thêm dữ liệu nào.</summary>
 public class InvitationStatusResponse
 {
     public bool Valid { get; set; }
@@ -107,7 +107,7 @@ public class HandoverTurnResponse
     /// <summary>true: xác minh danh tính đã được bỏ qua bằng công tắc cấu hình (chỉ Development).</summary>
     public bool IdentityBypassed { get; set; }
 
-    /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC (BR-122).</summary>
+    /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC.</summary>
     public bool IdentityConfirmedByExecutor { get; set; }
 
     /// <summary>true: kho đã cấp khóa mở gói, người nhận phải nhập khóa do Người thực hiện đưa trước khi đồng ý.</summary>

@@ -3,8 +3,8 @@ using LegacyVault.Application.Dtos.Responses;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Phía người nhận: kiểm link, nhận lượt, xem, đồng ý/từ chối, liệt kê tài sản (SRS §6.3).
-/// Lượt/grant/tài sản không phải của người đang đăng nhập đều trả cùng một 404 HANDOVER_NOT_FOUND (SEC-04).
+/// Phía người nhận: kiểm link, nhận lượt, xem, đồng ý/từ chối, liệt kê tài sản.
+/// Lượt/grant/tài sản không phải của người đang đăng nhập đều trả cùng một 404 HANDOVER_NOT_FOUND, để không lộ lượt nào có thật.
 /// </summary>
 public interface IHandoverService
 {

@@ -109,6 +109,7 @@ public sealed class HandoverController : ControllerBase
         return handoverService.GetMyTurnsAsync(ct);
     }
 
+    /// <summary>Chi tiết một lượt của người đang đăng nhập.</summary>
     [HttpGet("turns/{turnId:guid}")]
     [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -148,6 +149,7 @@ public sealed class HandoverController : ControllerBase
         return handoverService.VerifyKeyAsync(turnId, request.Key, ct);
     }
 
+    /// <summary>Luồng cũ: người nhận bấm "Từ chối nhận" khi lượt đang chờ quyết định.</summary>
     [HttpPost("turns/{turnId:guid}/decline")]
     [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -185,7 +187,7 @@ public sealed class HandoverController : ControllerBase
         }
         catch (ContentIntegrityException)
         {
-            // Chỉ log id, không log nội dung hay tên tệp (OPS-04).
+            // Chỉ log id, không log nội dung hay tên tệp.
             logger.LogError("Nội dung tài sản không qua kiểm toàn vẹn: grant {GrantId}, mục {ItemId}", grantId, itemId);
 
             ProblemDetails problem = GlobalExceptionHandler.Problem(
