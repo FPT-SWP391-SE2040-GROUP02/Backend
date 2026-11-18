@@ -4,13 +4,13 @@ using LegacyVault.Application.Storage;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Lưu, đọc và xóa ảnh danh tính (mặt trước CCCD lúc eKYC, selfie lúc báo còn sống) qua cùng kho lưu trữ mã hóa
-/// envelope với tài sản (BR-48, BR-50 sửa 25/10/2026). Ảnh không có link công khai; chỉ Verifier được giao hồ sơ
-/// chứng tử của kho đọc được qua API.
+/// Lưu, đọc và xóa các ảnh nhạy cảm qua cùng kho lưu trữ mã hóa envelope với tài sản: ảnh căn cước lúc eKYC,
+/// ảnh căn cước hai mặt trong hồ sơ người nhận và ảnh văn bản (biên bản, văn bản từ chối) do hệ thống dựng.
+/// Ảnh không có link công khai; mỗi API tải ảnh tự kiểm tra quyền người xem.
 /// </summary>
 /// <remarks>
 /// - Loại ảnh nhận theo chữ ký đầu tệp (JPEG/PNG/WebP), không tin Content-Type của request.
-/// - Không log nội dung, tên tệp hay khóa lưu trữ (DATA-02, SEC-07).
+/// - Không log nội dung, tên tệp hay khóa lưu trữ.
 /// </remarks>
 public static class IdentityImageStorage
 {
@@ -34,7 +34,7 @@ public static class IdentityImageStorage
 
     /// <summary>
     /// Kiểm toàn vẹn (giải mã vào Stream.Null) rồi trả bản tải giải mã lần hai thẳng ra response, giống trang giấy
-    /// chứng tử (DATA-06). Hỏng → ContentIntegrityException.
+    /// chứng tử. Hỏng → ContentIntegrityException.
     /// </summary>
     public static async Task<PreparedDownload> PrepareAsync(
         IAssetContentStore contentStore, StoredContent stored, string contentType, string fileName, CancellationToken ct)
@@ -48,11 +48,13 @@ public static class IdentityImageStorage
             throw new ContentIntegrityException("Ảnh danh tính không vượt qua kiểm tra toàn vẹn.", ex);
         }
 
-        PreparedDownload download = new PreparedDownload();
-        download.FileName = fileName;
-        download.ContentType = contentType;
-        download.Length = stored.SizeBytes;
-        download.WriteToAsync = (destination, token) => contentStore.CopyToAsync(stored, destination, token);
+        PreparedDownload download = new PreparedDownload
+        {
+            FileName = fileName,
+            ContentType = contentType,
+            Length = stored.SizeBytes,
+            WriteToAsync = (destination, token) => contentStore.CopyToAsync(stored, destination, token)
+        };
         return download;
     }
 

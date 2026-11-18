@@ -29,7 +29,11 @@ public static class HandoverDocumentRules
             return string.Empty;
         }
         string joined = string.Join(' ', address.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        return joined.Length <= ResidenceAddressMaxLength ? joined : joined.Substring(0, ResidenceAddressMaxLength);
+        if (joined.Length <= ResidenceAddressMaxLength)
+        {
+            return joined;
+        }
+        return joined.Substring(0, ResidenceAddressMaxLength);
     }
 
     /// <summary>Mã ngắn của biên bản: 8 ký tự cuối id, in hoa.</summary>
@@ -44,11 +48,19 @@ public static class HandoverDocumentRules
         string text = string.Empty;
         foreach (bool check in checks)
         {
-            text += check ? "1" : "0";
+            if (check)
+            {
+                text += "1";
+            }
+            else
+            {
+                text += "0";
+            }
         }
         return text;
     }
 
+    /// <summary>Đọc lại chuỗi các mục kiểm tra đã lưu: ký tự 1 là đã tick, ký tự khác là chưa tick.</summary>
     public static List<bool> DecodeChecks(string text)
     {
         List<bool> checks = new List<bool>();
@@ -76,11 +88,17 @@ public static class HandoverDocumentRules
         return true;
     }
 
+    /// <summary>Đọc lựa chọn người nhận gửi lên: chữ DECLINE là từ chối, mọi chữ khác là chấp nhận.</summary>
     public static HandoverSubmissionKind ParseKind(string kind)
     {
-        return kind == "DECLINE" ? HandoverSubmissionKind.Decline : HandoverSubmissionKind.Accept;
+        if (kind == "DECLINE")
+        {
+            return HandoverSubmissionKind.Decline;
+        }
+        return HandoverSubmissionKind.Accept;
     }
 
+    /// <summary>Trạng thái biên bản dạng chữ trả ra API: WAIT_RECIPIENT, WAIT_VERIFIER hoặc COMPLETED.</summary>
     public static string StatusToApi(HandoverDocumentStatus status)
     {
         switch (status)

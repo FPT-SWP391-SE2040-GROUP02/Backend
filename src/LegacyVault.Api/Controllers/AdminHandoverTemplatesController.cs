@@ -8,7 +8,7 @@ namespace LegacyVault.Api.Controllers;
 
 /// <summary>
 /// Admin xem và sửa mẫu biên bản đồng ý nhận và văn bản từ chối nhận di sản. Mỗi lần lưu là một phiên bản mới; biên bản đã tạo giữ
-/// nguyên chữ của phiên bản lúc tạo. Không phải Admin đang hoạt động thì 404 (SEC-04).
+/// nguyên chữ của phiên bản lúc tạo. Không phải Admin đang hoạt động thì 404.
 /// </summary>
 [ApiController]
 [Authorize]

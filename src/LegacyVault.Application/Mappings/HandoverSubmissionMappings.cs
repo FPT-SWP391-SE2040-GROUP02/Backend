@@ -4,9 +4,23 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Mappings;
 
-/// <summary>Đổi hồ sơ người nhận sang dữ liệu cho màn Người xét duyệt. Không có ảnh căn cước hay số căn cước đầy đủ.</summary>
+/// <summary>Đổi hồ sơ người nhận sang dữ liệu trả ra màn hình (người nhận và Người xét duyệt). Không có ảnh căn cước hay số căn cước đầy đủ.</summary>
 public static class HandoverSubmissionMappings
 {
+    /// <summary>Kết quả trả cho người nhận sau khi nộp hồ sơ hoặc khi xem hồ sơ mới nhất của mình.</summary>
+    public static HandoverSubmissionResponse ToResponse(this HandoverSubmission submission)
+    {
+        return new HandoverSubmissionResponse
+        {
+            Id = submission.Id,
+            TurnId = submission.TurnId,
+            Kind = submission.Kind.ToApiString(),
+            Status = submission.Status.ToApiString(),
+            SupplementReason = submission.SupplementReason,
+            CreatedAt = submission.CreatedAt
+        };
+    }
+
     /// <summary>Một dòng trong danh sách hồ sơ chờ kiểm tra.</summary>
     public static VerifierHandoverSubmissionSummaryResponse ToVerifierSummary(this HandoverSubmission submission)
     {
@@ -49,6 +63,7 @@ public static class HandoverSubmissionMappings
         return response;
     }
 
+    /// <summary>Điền các cột chung của một dòng danh sách và của trang chi tiết hồ sơ.</summary>
     private static void FillSummary(VerifierHandoverSubmissionSummaryResponse response, HandoverSubmission submission)
     {
         response.Id = submission.Id;

@@ -1,6 +1,7 @@
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
+using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Repositories;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
@@ -128,15 +129,17 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         }
 
         // 3. Chưa có biên bản: tạo mới, chép Phần 1 về Chủ kho từ hồ sơ chứng tử, điền sẵn tên tài khoản người nhận
-        HandoverDocument document = new HandoverDocument();
-        document.TurnId = turn.Id;
-        document.Turn = turn;
-        document.VaultId = turn.VaultId;
-        document.Kind = kind;
-        document.Status = HandoverDocumentStatus.WaitRecipient;
-        document.ItemCount = turn.Items.Count;
-        document.TemplateVersion = await ActiveTemplateKeyAsync(ct);
-        document.CreatedAt = now;
+        HandoverDocument document = new HandoverDocument
+        {
+            TurnId = turn.Id,
+            Turn = turn,
+            VaultId = turn.VaultId,
+            Kind = kind,
+            Status = HandoverDocumentStatus.WaitRecipient,
+            ItemCount = turn.Items.Count,
+            TemplateVersion = await ActiveTemplateKeyAsync(ct),
+            CreatedAt = now
+        };
         await FillOwnerPartAsync(document, turn.VaultId, ct);
         // Điền sẵn tên tài khoản cho người nhận; Phần 2 sẽ ghi lại họ tên người nhận tự khai.
         User? account = await users.FindByIdAsync(userId, ct);
@@ -298,30 +301,40 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return await templates.ActiveVersionKeyAsync(ct);
     }
 
+    /// <summary>Lấy mẫu chữ theo phiên bản ghi trên biên bản; chưa có dịch vụ mẫu thì dùng bộ mẫu gốc.</summary>
     private async Task<ResolvedHandoverTemplate> ResolveTemplateAsync(string versionKey, CancellationToken ct)
     {
         if (templates == null)
         {
-            ResolvedHandoverTemplate fallback = new ResolvedHandoverTemplate();
-            fallback.VersionKey = HandoverDocumentRules.TemplateVersion;
-            fallback.Content = HandoverTemplateDefaults.Create();
+            ResolvedHandoverTemplate fallback = new ResolvedHandoverTemplate
+            {
+                VersionKey = HandoverDocumentRules.TemplateVersion,
+                Content = HandoverTemplateDefaults.Create()
+            };
             return fallback;
         }
         return await templates.ResolveAsync(versionKey, ct);
     }
 
+    /// <summary>Đổi biên bản sang dữ liệu trả ra màn hình, gồm họ tên hai bên ký và các dòng chữ của mẫu. forVerifier là true thì thêm họ tên, ngày sinh Chủ kho đã khai để Người xét duyệt đối chiếu. cache nhớ tên người đã tra để khỏi hỏi lặp khi trả danh sách.</summary>
     private async Task<HandoverDocumentResponse> ToResponseAsync(
         HandoverDocument document, bool forVerifier, CancellationToken ct, Dictionary<Guid, string>? cache = null)
     {
-        Dictionary<Guid, string> names = cache ?? new Dictionary<Guid, string>();
-        HandoverDocumentResponse response = new HandoverDocumentResponse();
-        response.Id = document.Id;
-        response.TurnId = document.TurnId;
-        response.VaultId = document.VaultId;
-        response.Code = HandoverDocumentRules.Code(document.Id);
-        response.Kind = document.Kind == HandoverSubmissionKind.Accept ? "ACCEPT" : "DECLINE";
-        response.Status = HandoverDocumentRules.StatusToApi(document.Status);
-        response.TemplateVersion = document.TemplateVersion;
+        Dictionary<Guid, string> names = new Dictionary<Guid, string>();
+        if (cache != null)
+        {
+            names = cache;
+        }
+        HandoverDocumentResponse response = new HandoverDocumentResponse
+        {
+            Id = document.Id,
+            TurnId = document.TurnId,
+            VaultId = document.VaultId,
+            Code = HandoverDocumentRules.Code(document.Id),
+            Kind = document.Kind.ToApiString(),
+            Status = HandoverDocumentRules.StatusToApi(document.Status),
+            TemplateVersion = document.TemplateVersion
+        };
         ResolvedHandoverTemplate template = await ResolveTemplateAsync(document.TemplateVersion, ct);
         response.DeclineNotice = template.Content.DeclineNotice;
         if (document.Kind == HandoverSubmissionKind.Accept)
@@ -368,14 +381,30 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
                 // Không giải mã được (thiếu KEK, dữ liệu hỏng): để trống, giao diện dùng 4 số cuối.
             }
         }
+        // Số căn cước hiện trên biên bản: ưu tiên số trong hồ sơ người nhận do Chủ kho khai; không có thì 4 số cuối đã lưu.
+        // Người nhận chưa ký và chưa có 4 số cuối thì để trống.
         BeneficiaryPersonalData? declared = await FindOwnerDeclaredAsync(document, ct);
-        response.Recipient.CitizenId = declared != null && !string.IsNullOrWhiteSpace(declared.CitizenId)
-            ? declared.CitizenId
-            : await FindRecipientCitizenIdAsync(document, ct);
+        bool recipientHasNotSigned = document.RecipientSignedAt == null
+            && string.IsNullOrWhiteSpace(document.RecipientCitizenIdLast4);
+        if (recipientHasNotSigned)
+        {
+            response.Recipient.CitizenId = string.Empty;
+        }
+        else if (declared != null && !string.IsNullOrWhiteSpace(declared.CitizenId))
+        {
+            response.Recipient.CitizenId = declared.CitizenId;
+        }
+        else
+        {
+            response.Recipient.CitizenId = document.RecipientCitizenIdLast4;
+        }
         if (forVerifier && declared != null)
         {
             response.Recipient.DeclaredFullName = declared.FullName;
-            response.Recipient.DeclaredDateOfBirth = declared.DateOfBirth == default ? null : declared.DateOfBirth;
+            if (declared.DateOfBirth != default)
+            {
+                response.Recipient.DeclaredDateOfBirth = declared.DateOfBirth;
+            }
         }
         response.Recipient.ResidenceAddress = document.RecipientResidenceAddress;
         response.Recipient.SignedAt = document.RecipientSignedAt;
@@ -414,7 +443,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         DeathCaseVersion version = DeathCaseReviewRules.FindReviewVersion(deathCase);
         document.DateOfDeath = version.DateOfDeath;
         document.CertificateIssuedOn = version.IssuedOn;
-        // D8: chụp nơi đăng ký khai tử dạng câu từ danh mục, để biên bản xem lại được kể cả khi hồ sơ bị dọn.
+        // Chụp nơi đăng ký khai tử dạng câu từ danh mục, để biên bản xem lại được kể cả khi hồ sơ bị dọn.
         document.DeathRegistrationPlace = Cut(
             administrativeUnits.BuildRegistrationPlace(version.DeathRegistrationProvinceCode, version.DeathRegistrationWardCode), 300);
         DeathCaseIdentityData? identity = deathCaseProtector.Unprotect(version);
@@ -481,32 +510,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         }
     }
 
-    private async Task<string> FindRecipientCitizenIdAsync(HandoverDocument document, CancellationToken ct)
-    {
-        if (document.RecipientSignedAt == null && string.IsNullOrWhiteSpace(document.RecipientCitizenIdLast4))
-        {
-            return string.Empty;
-        }
-        if (beneficiaries == null || beneficiaryProtector == null)
-        {
-            return document.RecipientCitizenIdLast4;
-        }
-        try
-        {
-            Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(document.VaultId, document.Turn.BeneficiaryId, ct);
-            if (beneficiary == null)
-            {
-                return document.RecipientCitizenIdLast4;
-            }
-            BeneficiaryPersonalData personal = beneficiaryProtector.Unprotect(beneficiary);
-            return !string.IsNullOrWhiteSpace(personal.CitizenId) ? personal.CitizenId : document.RecipientCitizenIdLast4;
-        }
-        catch (System.Security.Cryptography.CryptographicException)
-        {
-            return document.RecipientCitizenIdLast4;
-        }
-    }
-
+    /// <summary>Bỏ khoảng trắng hai đầu rồi cắt ngắn đúng độ dài tối đa của cột.</summary>
     private static string Cut(string text, int maxLength)
     {
         string trimmed = text.Trim();
@@ -517,6 +521,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return trimmed.Substring(0, maxLength);
     }
 
+    /// <summary>Họ tên của một người dùng; không có người dùng thì trả chuỗi rỗng. Tra một lần rồi nhớ trong names.</summary>
     private async Task<string> NameOfAsync(Guid? userId, Dictionary<Guid, string> names, CancellationToken ct)
     {
         if (userId == null)
@@ -528,12 +533,16 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
             return names[userId.Value];
         }
         User? user = await users.FindByIdAsync(userId.Value, ct);
-        string name = user == null ? string.Empty : user.FullName;
+        string name = string.Empty;
+        if (user != null)
+        {
+            name = user.FullName;
+        }
         names[userId.Value] = name;
         return name;
     }
 
-    /// <summary>Lượt của người đang đăng nhập; id lạ và lượt của người khác cho cùng một lỗi 404 (SEC-04).</summary>
+    /// <summary>Lượt của người đang đăng nhập; id lạ và lượt của người khác cho cùng một lỗi 404.</summary>
     private async Task<HandoverTurn> FindMyTurnAsync(Guid turnId, Guid userId, CancellationToken ct)
     {
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
@@ -544,6 +553,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return turn;
     }
 
+    /// <summary>Tìm biên bản cho Người thực thi; không có hoặc người gọi không phải Người thực thi đang hiệu lực của kho thì cùng một lỗi 404.</summary>
     private async Task<HandoverDocument> FindForExecutorAsync(Guid documentId, Guid userId, CancellationToken ct)
     {
         HandoverDocument? document = await documents.FindByIdAsync(documentId, ct);
@@ -554,6 +564,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return document;
     }
 
+    /// <summary>Người dùng có đang là Người thực thi hiệu lực của kho này không.</summary>
     private async Task<bool> IsActiveExecutorAsync(Guid vaultId, Guid userId, CancellationToken ct)
     {
         Vault? vault = await vaults.FindByIdAsync(vaultId, ct);
@@ -564,6 +575,7 @@ public sealed class HandoverDocumentService : IHandoverDocumentService
         return await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct);
     }
 
+    /// <summary>Lỗi 404 dùng chung cho biên bản không có hoặc người gọi không được xem.</summary>
     private static AppException NotFound()
     {
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy biên bản.");

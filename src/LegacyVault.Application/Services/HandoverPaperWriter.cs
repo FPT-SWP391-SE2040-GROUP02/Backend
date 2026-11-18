@@ -12,18 +12,13 @@ public interface IHandoverPaperWriter
 {
     /// <summary>
     /// Dựng ảnh, lưu mã hóa và gán các cột Paper* của hồ sơ. Trả khóa lưu để người gọi xóa bù khi lưu bản ghi thất bại;
-    /// trả null khi thiếu dữ liệu để dựng (không có hồ sơ người nhận, hoặc có reviewerId mà không tìm thấy Người xét duyệt).
+    /// trả null khi thiếu dữ liệu để dựng (không có hồ sơ người nhận, hoặc có người xét duyệt mà không tìm thấy họ).
     /// </summary>
     /// <remarks>
-    /// reviewerId và reviewedAt để trống khi dựng lúc người nhận nộp; có giá trị khi dựng bù lúc duyệt cho hồ sơ cũ chưa có ảnh.
-    /// </remarks>
-    /// <remarks>
-    /// Có document thì dựng từ biên bản đã ký (họ tên người nhận, số giấy chứng tử, ngày, chữ ký của người nhận và Người xét duyệt);
+    /// Có Document thì dựng từ biên bản đã ký (họ tên người nhận, số giấy chứng tử, ngày, chữ ký của người nhận và Người xét duyệt);
     /// không có thì dựng như luồng cũ từ hồ sơ người nhận và hồ sơ chứng tử.
     /// </remarks>
-    Task<string?> WriteAsync(
-        HandoverSubmission submission, HandoverTurn turn, Guid? reviewerId, DateTimeOffset? reviewedAt, CancellationToken ct,
-        HandoverDocument? document = null);
+    Task<string?> WriteAsync(HandoverPaperRequest request, CancellationToken ct);
 }
 
 public sealed class HandoverPaperWriter : IHandoverPaperWriter
@@ -36,6 +31,8 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
     private readonly IDeathCaseRepository deathCases;
     private readonly IAssetContentStore contentStore;
     private readonly IAdministrativeUnitCatalog administrativeUnits;
+
+    // Luôn có khi chạy thật; chỉ một số test bỏ trống (null) thì bộ dựng dùng chữ cố định.
     private readonly IHandoverTemplateService? templates;
 
     public HandoverPaperWriter(
@@ -49,7 +46,6 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         IAdministrativeUnitCatalog administrativeUnits,
         IHandoverTemplateService? templates = null)
     {
-        this.templates = templates;
         this.users = users;
         this.vaults = vaults;
         this.beneficiaries = beneficiaries;
@@ -58,65 +54,80 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         this.deathCases = deathCases;
         this.contentStore = contentStore;
         this.administrativeUnits = administrativeUnits;
+        this.templates = templates;
     }
 
-    public async Task<string?> WriteAsync(
-        HandoverSubmission submission, HandoverTurn turn, Guid? reviewerId, DateTimeOffset? reviewedAt, CancellationToken ct,
-        HandoverDocument? document = null)
+    /// <summary>Dựng ảnh văn bản PNG của hồ sơ, mã hóa, lưu và ghi tham chiếu vào các cột Paper* của hồ sơ.</summary>
+    public async Task<string?> WriteAsync(HandoverPaperRequest request, CancellationToken ct)
     {
+        HandoverSubmission submission = request.Submission;
+        HandoverTurn turn = request.Turn;
+        HandoverDocument? document = request.Document;
+
+        // 1. Người nhận do Chủ kho khai; không có và cũng không có biên bản thì không đủ dữ liệu để dựng
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
         if (beneficiary == null && document == null)
         {
             return null;
         }
+
+        // 2. Người xét duyệt (chỉ khi dựng lúc duyệt); không tìm thấy thì không dựng
         User? reviewer = null;
-        if (reviewerId != null)
+        if (request.ReviewerId != null)
         {
-            reviewer = await users.FindByIdAsync(reviewerId.Value, ct);
+            reviewer = await users.FindByIdAsync(request.ReviewerId.Value, ct);
             if (reviewer == null)
             {
                 return null;
             }
         }
+
+        // 3. Tên Chủ kho theo tài khoản
+        string ownerName = string.Empty;
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
-        User? owner = null;
         if (vault != null)
         {
-            owner = await users.FindByIdAsync(vault.OwnerId, ct);
+            User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+            if (owner != null)
+            {
+                ownerName = owner.FullName;
+            }
         }
 
-        DeclinePaperData data = new DeclinePaperData();
-        data.IsAcceptance = submission.Kind == HandoverSubmissionKind.Accept;
-        data.TurnCode = submission.TurnId.ToString("N").Substring(24).ToUpperInvariant();
-        data.ContainerName = turn.ContainerName;
-        data.OwnerFullName = owner?.FullName ?? string.Empty;
-        BeneficiaryPersonalData? personal = beneficiary != null ? protector.Unprotect(beneficiary) : null;
-        if (document != null)
+        // 4. Điền dữ liệu in chung cho cả hai loại văn bản
+        DeclinePaperData data = new DeclinePaperData
         {
-            data.OwnerFullName = document.OwnerFullName;
-            data.DeclinerFullName = document.RecipientFullName;
-        }
-        else if (personal != null)
+            IsAcceptance = submission.Kind == HandoverSubmissionKind.Accept,
+            TurnCode = submission.TurnId.ToString("N").Substring(24).ToUpperInvariant(),
+            ContainerName = turn.ContainerName,
+            OwnerFullName = ownerName,
+            CitizenIdLast4 = submission.CitizenIdLast4,
+            SubmittedAt = submission.CreatedAt,
+            NameMatches = submission.NameMatches,
+            CitizenIdMatches = submission.CitizenIdMatches,
+            DateOfBirthMatches = submission.DateOfBirthMatches
+        };
+        BeneficiaryPersonalData? personal = null;
+        if (beneficiary != null)
         {
-            data.DeclinerFullName = personal.FullName;
+            personal = protector.Unprotect(beneficiary);
+            data.CitizenId = personal.CitizenId;
         }
-        data.CitizenId = personal?.CitizenId;
-        data.CitizenIdLast4 = submission.CitizenIdLast4;
-        data.SubmittedAt = submission.CreatedAt;
-        data.NameMatches = submission.NameMatches;
-        data.CitizenIdMatches = submission.CitizenIdMatches;
-        data.DateOfBirthMatches = submission.DateOfBirthMatches;
         if (reviewer != null)
         {
             data.ReviewerFullName = reviewer.FullName;
             data.ReviewerLawyerCardNumber = reviewer.LawyerCardNumber;
         }
-        if (reviewedAt != null)
+        if (request.ReviewedAt != null)
         {
-            data.ReviewedAt = reviewedAt.Value;
+            data.ReviewedAt = request.ReviewedAt.Value;
         }
+
+        // 5. Dữ liệu riêng: có biên bản thì lấy từ biên bản đã ký, không thì lấy từ hồ sơ người nhận và hồ sơ chứng tử
         if (document != null)
         {
+            data.OwnerFullName = document.OwnerFullName;
+            data.DeclinerFullName = document.RecipientFullName;
             data.DateOfDeath = document.DateOfDeath;
             data.DeathCertificateIssuedOn = document.CertificateIssuedOn;
             data.DeathRegistrationPlace = document.DeathRegistrationPlace;
@@ -130,10 +141,15 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         }
         else
         {
+            if (personal != null)
+            {
+                data.DeclinerFullName = personal.FullName;
+            }
             await FillDeathDatesAsync(data, turn.VaultId, ct);
         }
 
-        await FillTemplateAsync(data, submission.Kind == HandoverSubmissionKind.Accept, document, ct);
+        // 6. Điền chữ của mẫu, dựng ảnh PNG, mã hóa và lưu, rồi ghi tham chiếu vào hồ sơ
+        await FillTemplateAsync(data, document, ct);
         byte[] image = renderer.Render(data);
         StoredContent stored = await IdentityImageStorage.SaveAsync(contentStore, image, ct);
         submission.PaperStorageKey = stored.StorageKey;
@@ -144,10 +160,10 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
     }
 
     /// <summary>
-    /// Điền các đoạn chữ của mẫu vào dữ liệu dựng: biên bản đã tạo dùng đúng mẫu ghi trên biên bản (templateVersion), luồng cũ không có
+    /// Điền các đoạn chữ của mẫu vào dữ liệu dựng: biên bản đã tạo dùng đúng mẫu ghi trên biên bản (TemplateVersion), luồng cũ không có
     /// biên bản thì dùng mẫu đang áp dụng. Không có dịch vụ mẫu thì để trống để bộ dựng dùng chữ cố định.
     /// </summary>
-    private async Task FillTemplateAsync(DeclinePaperData data, bool isAcceptance, HandoverDocument? document, CancellationToken ct)
+    private async Task FillTemplateAsync(DeclinePaperData data, HandoverDocument? document, CancellationToken ct)
     {
         if (templates == null)
         {
@@ -160,7 +176,7 @@ public sealed class HandoverPaperWriter : IHandoverPaperWriter
         }
         ResolvedHandoverTemplate template = await templates.ResolveAsync(key, ct);
         data.DeclineNotice = template.Content.DeclineNotice;
-        if (isAcceptance)
+        if (data.IsAcceptance)
         {
             data.Paragraphs = template.Content.Accept;
         }

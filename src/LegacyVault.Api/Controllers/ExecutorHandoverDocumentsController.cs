@@ -28,6 +28,7 @@ public sealed class ExecutorHandoverDocumentsController : ControllerBase
         return documentService.ListForExecutorAsync(ct);
     }
 
+    /// <summary>Người thực thi xem một biên bản của kho mình.</summary>
     [HttpGet("{documentId:guid}")]
     [ProducesResponseType<HandoverDocumentResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
