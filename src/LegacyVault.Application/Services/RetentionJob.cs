@@ -20,9 +20,10 @@ public sealed class RetentionRunResult
     public bool VaultClosed { get; set; }
 }
 
-/// <summary>Việc nền lưu và xóa dữ liệu sau bàn giao (SRS §7.7, RETENTION-01..09, SETUP-18).</summary>
+/// <summary>Việc nền lưu và xóa dữ liệu sau bàn giao.</summary>
 public interface IRetentionJob
 {
+    /// <summary>Id các kế hoạch cần xét lưu và xóa trong lần quét này (mỗi lần tối đa một lô).</summary>
     Task<List<Guid>> FindPlanIdsAsync(CancellationToken ct);
 
     /// <summary>Xử lý một kế hoạch; đọc lại và kiểm lại mọi điều kiện nên chạy lặp an toàn.</summary>
@@ -32,13 +33,13 @@ public interface IRetentionJob
 /// <remarks>
 /// - Đồng hồ theo từng lượt (một chỉ định). Lý do giữ: còn trong 5 ngày phản hồi, claim đang xử lý, grant còn hạn,
 ///   Owner báo còn sống (kế hoạch BLOCKED). Tạm dừng lưu phần còn lại, không đặt lại 30 ngày.
-/// - RETENTION-02: phiên bản tài sản chỉ bị xóa khi KHÔNG còn lượt nào khác chưa dọn cùng tham chiếu.
-/// - RETENTION-06: mọi kiểm tra và thay đổi DB của một kế hoạch lưu trong MỘT lần lưu và ghi plan.UpdatedAt, nên nhận lượt
+/// - Phiên bản tài sản chỉ bị xóa khi KHÔNG còn lượt nào khác chưa dọn cùng tham chiếu.
+/// - Mọi kiểm tra và thay đổi DB của một kế hoạch lưu trong MỘT lần lưu và ghi plan.UpdatedAt, nên nhận lượt
 ///   hay đồng ý chạy cùng lúc (cũng ghi plan.UpdatedAt) thua RowVersion: không có grant mới trên dữ liệu vừa dọn.
 /// - Xóa an toàn: hủy khóa trước (ghi đè WrappedDataKey bằng 0 + ContentDeletedAt) trong giao dịch, xóa tệp sau khi lưu;
 ///   xóa tệp lỗi thì nội dung vẫn không giải mã được và vòng sau thử xóa lại.
 /// - Lượt còn mở khi dọn thành LAPSED, link mời bị vô hiệu (đổi mã băm token).
-/// - SETUP-18: kế hoạch CLOSED và mọi lượt đã dọn thì xóa nốt nội dung còn lại của kho và đóng kho.
+/// - Kế hoạch CLOSED và mọi lượt đã dọn thì xóa nốt nội dung còn lại của kho và đóng kho.
 /// - Kế hoạch đã về ACTIVE (Owner còn sống) hay lượt CANCELLED không bao giờ bị dọn.
 /// - TODO(LV-07): thư mốc gửi lỗi phải giao người xử lý có hạn (RETENTION-05); hiện vòng sau gửi lại.
 /// </remarks>
@@ -81,6 +82,7 @@ public sealed class RetentionJob : IRetentionJob
         this.submissions = submissions;
     }
 
+    /// <summary>Lấy một lô kế hoạch cần xét; số lượng mỗi lô cố định là BatchSize.</summary>
     public Task<List<Guid>> FindPlanIdsAsync(CancellationToken ct)
     {
         return repository.FindPlanIdsForRetentionAsync(BatchSize, ct);
@@ -121,7 +123,7 @@ public sealed class RetentionJob : IRetentionJob
             string? reason = RetentionRules.HoldReason(turn, plan.Status, now);
             if (reason == null && vaultHeld)
             {
-                // SRS §6.4: hold đang hiệu lực giữ dữ liệu; tạm dừng đồng hồ lưu, không xóa.
+                // Hold đang hiệu lực giữ dữ liệu; tạm dừng đồng hồ lưu, không xóa.
                 reason = RetentionRules.HoldAdmin;
             }
             if (RetentionRules.Advance(turn, reason, now))
@@ -133,7 +135,10 @@ public sealed class RetentionJob : IRetentionJob
         // 3. Dọn các lượt tới hạn (tài sản còn lượt khác dùng thì giữ), đóng kế hoạch nếu mọi lượt đã xong
         if (due.Count > 0)
         {
-            await DeleteTurnsAsync(turns, due, now, result, ct);
+            HashSet<Guid> stillReferenced = FindAssetsStillReferenced(turns, due);
+            List<Guid> assetIdsToShred = MarkTurnsDeleted(due, stillReferenced, now);
+            result.TurnsDeleted += due.Count;
+            result.AssetsShredded += await ShredAssetsAsync(assetIdsToShred, now, ct);
             plan.UpdatedAt = now;
             HandoverRules.CloseIfAllTerminal(plan, turns, now);
         }
@@ -141,7 +146,7 @@ public sealed class RetentionJob : IRetentionJob
         // 4. Kế hoạch đã đóng và mọi lượt đã dọn: hủy nốt nội dung còn lại và đóng kho
         if (plan.Status == PlanStatus.Closed && AllTurnsDone(turns))
         {
-            // SETUP-18: mọi lượt đã dọn và kế hoạch đã đóng → dọn nốt nội dung còn lại rồi đóng kho.
+            // Mọi lượt đã dọn và kế hoạch đã đóng → dọn nốt nội dung còn lại rồi đóng kho.
             List<Asset> rest = await repository.FindLiveAssetsOfVaultAsync(vault.Id, ct);
             foreach (Asset asset in rest)
             {
@@ -168,9 +173,11 @@ public sealed class RetentionJob : IRetentionJob
         return result;
     }
 
-    /// <summary>Dọn các lượt tới hạn; tài sản còn lượt khác giữ thì để lại (RETENTION-02).</summary>
-    private async Task DeleteTurnsAsync(
-        List<HandoverTurn> turns, List<HandoverTurn> due, DateTimeOffset now, RetentionRunResult result, CancellationToken ct)
+    /// <summary>
+    /// Id các tài sản vẫn còn được một lượt khác (chưa dọn, không bị hủy) tham chiếu. Tài sản trong danh sách này
+    /// không được hủy khóa dù lượt đang dọn cũng dùng nó.
+    /// </summary>
+    private static HashSet<Guid> FindAssetsStillReferenced(List<HandoverTurn> turns, List<HandoverTurn> due)
     {
         HashSet<Guid> dueIds = new HashSet<Guid>();
         foreach (HandoverTurn turn in due)
@@ -190,7 +197,15 @@ public sealed class RetentionJob : IRetentionJob
                 stillReferenced.Add(item.AssetId);
             }
         }
+        return stillReferenced;
+    }
 
+    /// <summary>
+    /// Đánh dấu các lượt tới hạn là đã xóa: vô hiệu link mời, lượt còn mở thì chuyển sang hết hạn.
+    /// Trả về id các tài sản cần hủy khóa (tài sản còn lượt khác giữ thì không có trong danh sách).
+    /// </summary>
+    private static List<Guid> MarkTurnsDeleted(List<HandoverTurn> due, HashSet<Guid> stillReferenced, DateTimeOffset now)
+    {
         List<Guid> toShred = new List<Guid>();
         foreach (HandoverTurn turn in due)
         {
@@ -214,18 +229,23 @@ public sealed class RetentionJob : IRetentionJob
             // Vô hiệu link mời: token cũ không còn khớp mã băm nào.
             turn.InvitationTokenHash = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
             turn.UpdatedAt = now;
-            result.TurnsDeleted++;
         }
+        return toShred;
+    }
 
-        if (toShred.Count > 0)
+    /// <summary>Hủy khóa các tài sản theo id. Trả về số tài sản đã hủy.</summary>
+    private async Task<int> ShredAssetsAsync(List<Guid> assetIds, DateTimeOffset now, CancellationToken ct)
+    {
+        if (assetIds.Count == 0)
         {
-            List<Asset> assets = await repository.FindLiveAssetsAsync(toShred, ct);
-            foreach (Asset asset in assets)
-            {
-                Shred(asset, now);
-                result.AssetsShredded++;
-            }
+            return 0;
         }
+        List<Asset> assets = await repository.FindLiveAssetsAsync(assetIds, ct);
+        foreach (Asset asset in assets)
+        {
+            Shred(asset, now);
+        }
+        return assets.Count;
     }
 
     /// <summary>Hủy khóa nội dung: ghi đè DEK đã bọc bằng 0, ghi dấu đã xóa. Tệp xóa sau khi lưu.</summary>
@@ -235,6 +255,7 @@ public sealed class RetentionJob : IRetentionJob
         asset.ContentDeletedAt = now;
     }
 
+    /// <summary>Mọi lượt đều đã dọn xong hoặc đã bị hủy (Owner còn sống).</summary>
     private static bool AllTurnsDone(List<HandoverTurn> turns)
     {
         foreach (HandoverTurn turn in turns)
@@ -278,6 +299,7 @@ public sealed class RetentionJob : IRetentionJob
         }
     }
 
+    /// <summary>Xóa tệp trên kho lưu trữ của các tài sản đã hủy khóa. Xóa lỗi thì để vòng sau thử lại.</summary>
     private async Task DeleteStoredFilesAsync(Guid vaultId, DateTimeOffset now, CancellationToken ct)
     {
         List<Asset> pending = await repository.FindPendingStorageDeletesAsync(vaultId, ct);
@@ -300,6 +322,7 @@ public sealed class RetentionJob : IRetentionJob
         await unitOfWork.SaveChangesAsync(ct);
     }
 
+    /// <summary>Gửi thư nhắc mốc lưu dữ liệu cho người nhận của các lượt tới mốc. Trả về số thư đã gửi.</summary>
     private async Task<int> SendNoticesAsync(Vault vault, List<HandoverTurn> turns, DateTimeOffset now, CancellationToken ct)
     {
         int sent = 0;
@@ -323,12 +346,14 @@ public sealed class RetentionJob : IRetentionJob
                 continue;
             }
 
-            RetentionNotice notice = new RetentionNotice();
-            notice.TurnId = turn.Id;
-            notice.ToEmail = data.Email;
-            notice.FullName = data.FullName;
-            notice.Stage = stage;
-            notice.DeleteAt = turn.RetentionDeadline!.Value;
+            RetentionNotice notice = new RetentionNotice
+            {
+                TurnId = turn.Id,
+                ToEmail = data.Email,
+                FullName = data.FullName,
+                Stage = stage,
+                DeleteAt = turn.RetentionDeadline!.Value
+            };
             try
             {
                 await sender.SendAsync(notice, ct);

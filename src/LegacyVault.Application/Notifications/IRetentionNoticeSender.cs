@@ -16,8 +16,8 @@ public sealed class RetentionNotice
 }
 
 /// <summary>
-/// Gửi thư mốc lưu (RETENTION-05). Gửi lỗi thì ném exception; job không đánh dấu mốc đã gửi để vòng sau thử lại.
-/// OPS-04: thư không có tên gói hay tài sản.
+/// Gửi thư mốc lưu. Gửi lỗi thì ném exception; job không đánh dấu mốc đã gửi để vòng sau thử lại.
+/// Thư không có tên gói hay tài sản.
 /// </summary>
 public interface IRetentionNoticeSender
 {
