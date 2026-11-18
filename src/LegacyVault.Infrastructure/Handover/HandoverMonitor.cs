@@ -7,14 +7,22 @@ using Microsoft.Extensions.Options;
 namespace LegacyVault.Infrastructure.Handover;
 
 /// <summary>
-/// Vòng lặp nền gọi IHandoverJob theo chu kỳ để xử lý lượt và grant quá hạn (TIME-05).
+/// Vòng lặp nền gọi IHandoverJob theo chu kỳ để xử lý lượt và grant quá hạn.
 /// </summary>
 /// <remarks>
 /// Cùng mẫu với CheckInMonitor: chờ hết một chu kỳ rồi mới quét; mỗi mục một DI scope và try/catch riêng;
-/// chỉ log kiểu exception và id (OPS-04).
+/// chỉ log kiểu exception và id.
 /// </remarks>
 public sealed class HandoverMonitor : BackgroundService
 {
+    /// <summary>Ba loại mốc hết hạn mà vòng quét xử lý, theo đúng ba nhóm của IHandoverJob.</summary>
+    private enum ExpiryKind
+    {
+        Response,
+        Decision,
+        Grant
+    }
+
     private readonly IServiceScopeFactory scopeFactory;
     private readonly HandoverJobSettings settings;
     private readonly ILogger<HandoverMonitor> logger;
@@ -29,6 +37,7 @@ public sealed class HandoverMonitor : BackgroundService
         this.logger = logger;
     }
 
+    /// <summary>Vòng lặp chính: chờ hết một chu kỳ rồi quét một lần, lặp đến khi ứng dụng dừng. Lỗi một vòng chỉ ghi log rồi chạy tiếp.</summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!settings.Enabled)
@@ -60,18 +69,16 @@ public sealed class HandoverMonitor : BackgroundService
         }
     }
 
+    /// <summary>Một lần quét: xử lý ba loại mốc hết hạn, rồi gửi lại các lời mời chưa giao được.</summary>
     private async Task RunOnceAsync(CancellationToken ct)
     {
-        await RunKindAsync("phản hồi", (job, token) => job.FindExpiredResponseTurnIdsAsync(token),
-            (job, id, token) => job.ProcessResponseExpiryAsync(id, token), ct);
-        await RunKindAsync("quyết định", (job, token) => job.FindExpiredDecisionTurnIdsAsync(token),
-            (job, id, token) => job.ProcessDecisionExpiryAsync(id, token), ct);
-        await RunKindAsync("grant", (job, token) => job.FindExpiredGrantIdsAsync(token),
-            (job, id, token) => job.ProcessGrantExpiryAsync(id, token), ct);
+        await RunKindAsync(ExpiryKind.Response, "phản hồi", ct);
+        await RunKindAsync(ExpiryKind.Decision, "quyết định", ct);
+        await RunKindAsync(ExpiryKind.Grant, "grant", ct);
         await RunInvitationRetryAsync(ct);
     }
 
-    /// <summary>OPS-04: gửi lại lời mời F3 chưa giao được (lần gửi đầu lỗi hoặc tiến trình dừng trước khi gửi).</summary>
+    /// <summary>Gửi lại lời mời F3 chưa giao được (lần gửi đầu lỗi hoặc tiến trình dừng trước khi gửi).</summary>
     private async Task RunInvitationRetryAsync(CancellationToken ct)
     {
         IReadOnlyList<Guid> ids;
@@ -103,17 +110,17 @@ public sealed class HandoverMonitor : BackgroundService
         }
     }
 
-    private async Task RunKindAsync(
-        string kind,
-        Func<IHandoverJob, CancellationToken, Task<IReadOnlyList<Guid>>> find,
-        Func<IHandoverJob, Guid, CancellationToken, Task> process,
-        CancellationToken ct)
+    /// <summary>
+    /// Xử lý một loại mốc hết hạn: tìm các id quá hạn trong một phạm vi riêng, rồi xử lý từng id trong phạm vi riêng của nó.
+    /// Một id lỗi chỉ được ghi log, không làm dừng các id còn lại.
+    /// </summary>
+    private async Task RunKindAsync(ExpiryKind kind, string label, CancellationToken ct)
     {
         IReadOnlyList<Guid> ids;
         using (IServiceScope scope = scopeFactory.CreateScope())
         {
             IHandoverJob job = scope.ServiceProvider.GetRequiredService<IHandoverJob>();
-            ids = await find(job, ct);
+            ids = await FindExpiredIdsAsync(job, kind, ct);
         }
 
         foreach (Guid id in ids)
@@ -124,7 +131,7 @@ public sealed class HandoverMonitor : BackgroundService
                 using (IServiceScope scope = scopeFactory.CreateScope())
                 {
                     IHandoverJob job = scope.ServiceProvider.GetRequiredService<IHandoverJob>();
-                    await process(job, id, ct);
+                    await ProcessExpiredAsync(job, kind, id, ct);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -133,8 +140,39 @@ public sealed class HandoverMonitor : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogWarning("Xử lý hạn {Kind} của {Id} lỗi: {ExceptionType}", kind, id, ex.GetType().Name);
+                logger.LogWarning("Xử lý hạn {Kind} của {Id} lỗi: {ExceptionType}", label, id, ex.GetType().Name);
             }
+        }
+    }
+
+    /// <summary>Hỏi job danh sách id đã quá hạn của đúng loại.</summary>
+    private static async Task<IReadOnlyList<Guid>> FindExpiredIdsAsync(IHandoverJob job, ExpiryKind kind, CancellationToken ct)
+    {
+        if (kind == ExpiryKind.Response)
+        {
+            return await job.FindExpiredResponseTurnIdsAsync(ct);
+        }
+        if (kind == ExpiryKind.Decision)
+        {
+            return await job.FindExpiredDecisionTurnIdsAsync(ct);
+        }
+        return await job.FindExpiredGrantIdsAsync(ct);
+    }
+
+    /// <summary>Gọi job xử lý một id quá hạn của đúng loại.</summary>
+    private static async Task ProcessExpiredAsync(IHandoverJob job, ExpiryKind kind, Guid id, CancellationToken ct)
+    {
+        if (kind == ExpiryKind.Response)
+        {
+            await job.ProcessResponseExpiryAsync(id, ct);
+        }
+        else if (kind == ExpiryKind.Decision)
+        {
+            await job.ProcessDecisionExpiryAsync(id, ct);
+        }
+        else
+        {
+            await job.ProcessGrantExpiryAsync(id, ct);
         }
     }
 }

@@ -15,6 +15,7 @@ namespace LegacyVault.Infrastructure.Handover;
 /// </summary>
 public static class HandoverConfig
 {
+    /// <summary>Đăng ký repository, chính sách, các vòng quét nền và bộ gửi thư của luồng bàn giao.</summary>
     public static IServiceCollection AddHandover(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IHandoverRepository, HandoverRepository>();
@@ -32,22 +33,23 @@ public static class HandoverConfig
         services.Configure<HandoverJobSettings>(configuration.GetSection(HandoverJobSettings.SectionName));
         services.AddHostedService<HandoverMonitor>();
 
-        // Lưu và xóa dữ liệu sau bàn giao (§7.7).
+        // Lưu và xóa dữ liệu sau bàn giao.
         services.AddScoped<IRetentionRepository, RetentionRepository>();
         services.AddSingleton<IDeclinePaperRenderer, QuestPdfDeclinePaperRenderer>();
         services.Configure<RetentionJobSettings>(configuration.GetSection(RetentionJobSettings.SectionName));
         services.AddHostedService<RetentionMonitor>();
-        services.AddSingleton<IRetentionNoticeSender>(provider => ChooseRetentionSender(provider));
+        services.AddSingleton<IRetentionNoticeSender>(ChooseRetentionSender);
 
         // Chọn bộ gửi lúc cần dùng: có Email:Smtp đầy đủ thì gửi thật, không thì chỉ ghi log (như EmailConfig).
-        services.AddSingleton<IHandoverInvitationSender>(provider => ChooseSender(provider));
-        services.AddSingleton<IPlanActivatedNoticeSender>(provider => ChooseActivatedNoticeSender(provider));
-        services.AddSingleton<IHandoverKeySender>(provider => ChooseKeySender(provider));
-        services.AddSingleton<IHandoverDocumentNoticeSender>(provider => ChooseDocumentNoticeSender(provider));
+        services.AddSingleton<IHandoverInvitationSender>(ChooseSender);
+        services.AddSingleton<IPlanActivatedNoticeSender>(ChooseActivatedNoticeSender);
+        services.AddSingleton<IHandoverKeySender>(ChooseKeySender);
+        services.AddSingleton<IHandoverDocumentNoticeSender>(ChooseDocumentNoticeSender);
         services.AddScoped<IHandoverDocumentRepository, HandoverDocumentRepository>();
         return services;
     }
 
+    /// <summary>Thư báo biên bản: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
     private static IHandoverDocumentNoticeSender ChooseDocumentNoticeSender(IServiceProvider provider)
     {
         SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
@@ -58,6 +60,7 @@ public static class HandoverConfig
         return ActivatorUtilities.CreateInstance<LogHandoverDocumentNoticeSender>(provider);
     }
 
+    /// <summary>Thư gửi khóa mở gói: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
     private static IHandoverKeySender ChooseKeySender(IServiceProvider provider)
     {
         SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
@@ -68,6 +71,7 @@ public static class HandoverConfig
         return ActivatorUtilities.CreateInstance<LogHandoverKeySender>(provider);
     }
 
+    /// <summary>Thư báo kích hoạt kế hoạch: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
     private static IPlanActivatedNoticeSender ChooseActivatedNoticeSender(IServiceProvider provider)
     {
         SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
@@ -78,6 +82,7 @@ public static class HandoverConfig
         return ActivatorUtilities.CreateInstance<LogPlanActivatedNoticeSender>(provider);
     }
 
+    /// <summary>Thư nhắc mốc lưu dữ liệu: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
     private static IRetentionNoticeSender ChooseRetentionSender(IServiceProvider provider)
     {
         SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
@@ -88,6 +93,7 @@ public static class HandoverConfig
         return ActivatorUtilities.CreateInstance<LogRetentionNoticeSender>(provider);
     }
 
+    /// <summary>Thư mời nhận tài sản: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
     private static IHandoverInvitationSender ChooseSender(IServiceProvider provider)
     {
         SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;

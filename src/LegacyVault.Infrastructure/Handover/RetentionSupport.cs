@@ -27,6 +27,7 @@ public static class RetentionNoticeEmail
 {
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
+    /// <summary>Soạn thư nhắc mốc lưu dữ liệu gồm tiêu đề, bản chữ và bản HTML. Nội dung nói rõ hạn xóa theo giờ Việt Nam.</summary>
     public static EmailContent Build(RetentionNotice notice, string link)
     {
         string deadline = notice.DeleteAt.ToOffset(VietnamOffset).ToString("HH:mm 'ngày' dd/MM/yyyy", CultureInfo.InvariantCulture);
@@ -110,6 +111,7 @@ public sealed class RetentionMonitor : BackgroundService
         this.logger = logger;
     }
 
+    /// <summary>Vòng lặp chính: chờ hết một chu kỳ rồi quét một lần, lặp đến khi ứng dụng dừng. Lỗi một vòng chỉ ghi log rồi chạy tiếp.</summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!settings.Enabled)
@@ -140,6 +142,7 @@ public sealed class RetentionMonitor : BackgroundService
         }
     }
 
+    /// <summary>Một lần quét: lấy một lô kế hoạch, xử lý từng kế hoạch trong phạm vi riêng. Kế hoạch lỗi chỉ ghi log, vòng sau kiểm lại.</summary>
     private async Task RunOnceAsync(CancellationToken ct)
     {
         List<Guid> planIds;
