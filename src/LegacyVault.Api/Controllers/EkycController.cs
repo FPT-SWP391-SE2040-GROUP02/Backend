@@ -1,15 +1,19 @@
 using LegacyVault.Api.Models;
+using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>Xác minh danh tính điện tử của người dùng đang đăng nhập (docs/api-contract.md mục 6.9).</summary>
 [ApiController]
-[Authorize]
+// eKYC chỉ dành cho Chủ kho (vai trò USER); nhân sự (EXECUTOR, VERIFIER, ADMIN) không dùng và nhận 403.
+[Authorize(Roles = "USER")]
+[EnableRateLimiting(AuthRateLimitPolicies.Ekyc)]
 [Route("api/v1/ekyc")]
 // Cố ý KHÔNG đặt [Produces("application/json")]: giống CheckInsController, để lỗi validate 400 giữ problem+json.
 // Response chứa kết quả đọc giấy tờ và trạng thái xác minh nên cấm trình duyệt và proxy lưu đệm.
@@ -113,6 +117,7 @@ public sealed class EkycController : ControllerBase
 
     /// <summary>Gửi một khung hình camera của thử thách và nhận tiến độ.</summary>
     [HttpPost("liveness/frame")]
+    [EnableRateLimiting(AuthRateLimitPolicies.EkycFrame)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxRequestBytes)]
     [ProducesResponseType<EkycLivenessResponse>(StatusCodes.Status200OK)]
