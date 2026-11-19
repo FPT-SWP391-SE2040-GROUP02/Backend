@@ -29,4 +29,10 @@ public static class AuthRateLimitPolicies
 
     /// <summary>Số lượt quên/đặt lại mật khẩu trong mỗi cửa sổ.</summary>
     public const int PasswordResetPermitLimit = 5;
+
+    /// <summary>Policy giới hạn phát nonce đăng nhập Google (mỗi lần mở trang có nút Google lấy một nonce).</summary>
+    public const string GoogleNonce = "auth-google-nonce";
+
+    /// <summary>Số nonce được phát trong mỗi cửa sổ cho một IP.</summary>
+    public const int GoogleNoncePermitLimit = 30;
 }

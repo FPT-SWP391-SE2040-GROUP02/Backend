@@ -81,7 +81,7 @@ public sealed class GoogleAuthServiceTests
     }
 
     [Fact]
-    public async Task UnverifiedGoogleEmail_IsNotMarkedVerified()
+    public async Task UnverifiedGoogleEmail_DoesNotCreateAnAccount()
     {
         _verifier.Accept("unverified-token", new GoogleIdentity
         {
@@ -90,9 +90,12 @@ public sealed class GoogleAuthServiceTests
             EmailVerified = false,
         });
 
-        await _service.LoginWithGoogleAsync(new GoogleLoginRequest { IdToken = "unverified-token" }, default);
+        var error = await Assert.ThrowsAsync<GoogleEmailNotVerifiedException>(() =>
+            _service.LoginWithGoogleAsync(new GoogleLoginRequest { IdToken = "unverified-token" }, default));
 
-        Assert.Null(Assert.Single(_users.Users).EmailVerifiedAt);
+        Assert.Equal("GOOGLE_EMAIL_NOT_VERIFIED", error.ErrorCode);
+        Assert.Empty(_users.Users);
+        Assert.Empty(_refreshTokens.Tokens);
     }
 
     [Fact]

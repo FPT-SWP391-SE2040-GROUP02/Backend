@@ -199,11 +199,16 @@ public sealed class GoogleAuthService : IGoogleAuthService
         }
 
         // Trường hợp 3: người mới → tạo tài khoản không mật khẩu (AUTH-03) và liên kết Google luôn.
+        // Email Google chưa xác minh thì không tạo tài khoản: người khác có thể mang email của nạn nhân.
+        if (!identity.EmailVerified)
+        {
+            throw new GoogleEmailNotVerifiedException();
+        }
         var newUser = new User
         {
             Email = email,
-            // Chỉ coi email đã xác minh khi chính Google xác nhận (AUTH-04).
-            EmailVerifiedAt = identity.EmailVerified ? now : null,
+            // Email đã được chính Google xác minh (AUTH-04).
+            EmailVerifiedAt = now,
             PasswordHash = null,
             // Tên Google chỉ để điền sẵn, không phải xác minh danh tính (AUTH-05).
             FullName = identity.FullName ?? string.Empty,
