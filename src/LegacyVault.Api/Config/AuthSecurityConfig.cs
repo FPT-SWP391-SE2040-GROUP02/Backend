@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Threading.RateLimiting;
 using LegacyVault.Api.Security;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace LegacyVault.Api.Config;
@@ -77,7 +78,31 @@ public static class AuthSecurityConfig
                         AutoReplenishment = true,
                     }));
             }
+            // eKYC chạy OCR và nhận diện khuôn mặt trên CPU nên giới hạn theo người dùng (IP chỉ là phương án dự phòng
+            // khi không có claim), tránh một tài khoản làm nghẽn dịch vụ dùng chung.
+            AddPerUserPolicy(options, AuthRateLimitPolicies.Ekyc, AuthRateLimitPolicies.EkycPermitLimit);
+            AddPerUserPolicy(options, AuthRateLimitPolicies.EkycFrame, AuthRateLimitPolicies.EkycFramePermitLimit);
         });
         return services;
+    }
+
+    private static void AddPerUserPolicy(RateLimiterOptions options, string name, int limit)
+    {
+        options.AddPolicy(name, context =>
+        {
+            string? userId = context.User.FindFirst("sub")?.Value;
+            string key = "ip:" + context.Connection.RemoteIpAddress;
+            if (!string.IsNullOrEmpty(userId))
+            {
+                key = "user:" + userId;
+            }
+            return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limit,
+                Window = AuthRateLimitPolicies.Window,
+                QueueLimit = AuthRateLimitPolicies.QueueLimit,
+                AutoReplenishment = true,
+            });
+        });
     }
 }

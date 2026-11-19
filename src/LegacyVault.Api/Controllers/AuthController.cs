@@ -64,6 +64,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicies.Register)]
     public async Task<IActionResult> Register(RegisterRequest request, CancellationToken ct)
     {
         await _registrationService.RegisterAsync(request, ct);
