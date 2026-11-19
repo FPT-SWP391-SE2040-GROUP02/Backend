@@ -51,11 +51,8 @@ builder.Services.AddCorsConfig(builder.Configuration);
 var app = builder.Build();
 
 // Render/Vercel đặt API sau reverse proxy: tin X-Forwarded-* để scheme/IP client đúng
-// (HSTS, redirect HTTPS và rate limit theo IP người dùng).
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-});
+// (HSTS, redirect HTTPS và rate limit theo IP người dùng). Tin proxy nào: xem ForwardedHeadersConfig.
+app.UseForwardedHeaders(ForwardedHeadersConfig.Create(builder.Configuration));
 
 // Migrate tùy chọn khi deploy: bật bằng Database__MigrateOnStartup=true.
 // Tắt mặc định để local/CI không đổi schema ngoài dự kiến.
