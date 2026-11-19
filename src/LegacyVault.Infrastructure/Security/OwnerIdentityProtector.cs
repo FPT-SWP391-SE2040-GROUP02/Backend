@@ -20,10 +20,12 @@ public sealed class OwnerIdentityProtector : IOwnerIdentityProtector
     private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 
     private readonly DataKeyProtector dataKeyProtector;
+    private readonly ICitizenIdBlindIndex blindIndex;
 
-    public OwnerIdentityProtector(DataKeyProtector dataKeyProtector)
+    public OwnerIdentityProtector(DataKeyProtector dataKeyProtector, ICitizenIdBlindIndex blindIndex)
     {
         this.dataKeyProtector = dataKeyProtector;
+        this.blindIndex = blindIndex;
     }
 
     public void Protect(OwnerIdentity identity, OwnerIdentityData data)
@@ -35,6 +37,7 @@ public sealed class OwnerIdentityProtector : IOwnerIdentityProtector
 
         WrappedDataKey wrapped;
         byte[] encrypted = EncryptPayload(data, out wrapped);
+        identity.CitizenIdHash = blindIndex.Compute(data.CitizenId);
         identity.EncryptionKeyId = wrapped.KeyId;
         identity.WrappedDataKey = wrapped.Value;
         identity.IdentityEncrypted = encrypted;

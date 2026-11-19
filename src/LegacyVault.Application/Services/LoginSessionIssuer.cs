@@ -22,14 +22,17 @@ public sealed class LoginSessionIssuer
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _timeProvider;
     private readonly MaintenanceModeGuard? _maintenanceGuard;
+    private readonly IAuditLogRepository? _auditLogRepository;
 
     public LoginSessionIssuer(
         IRefreshTokenRepository refreshTokenRepository,
         ITokenService tokenService,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
-        MaintenanceModeGuard? maintenanceGuard = null)
+        MaintenanceModeGuard? maintenanceGuard = null,
+        IAuditLogRepository? auditLogRepository = null)
     {
+        _auditLogRepository = auditLogRepository;
         _refreshTokenRepository = refreshTokenRepository;
         _tokenService = tokenService;
         _unitOfWork = unitOfWork;
@@ -77,6 +80,7 @@ public sealed class LoginSessionIssuer
         });
 
         var accessToken = _tokenService.CreateAccessToken(user, familyId);
+        AuthAudit.Record(_auditLogRepository, user, Domain.Enums.AuditAction.LoginSucceeded, Domain.Enums.AuditOutcome.Succeeded, null, now);
         await _unitOfWork.SaveChangesAsync(ct);
 
         return new AuthResult

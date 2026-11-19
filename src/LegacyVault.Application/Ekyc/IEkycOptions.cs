@@ -18,6 +18,9 @@ public interface IEkycOptions
     /// <summary>Ngưỡng đang áp dụng (đã tính tới override runtime nếu có).</summary>
     double CurrentThreshold { get; }
 
+    /// <summary>Độ giống tên tối thiểu giữa tên Owner khai và tên OCR đọc (Ekyc:NameSimilarityThreshold).</summary>
+    double NameSimilarityThreshold => Services.EkycRules.NameSimilarityThreshold;
+
     /// <summary>Ghi đè ngưỡng đang chạy (chỉ DevTools; giới hạn an toàn do phía gọi kiểm).</summary>
     void SetThreshold(double threshold);
 

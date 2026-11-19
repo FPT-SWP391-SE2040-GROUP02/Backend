@@ -24,6 +24,12 @@ public class OwnerIdentity
     /// <summary>4 số cuối CCCD, dạng rõ (không đủ để định danh).</summary>
     public string CitizenIdLast4 { get; set; } = string.Empty;
 
+    /// <summary>
+    /// HMAC-SHA256 (hex, khóa riêng) của số CCCD đầy đủ để DB chặn hai tài khoản cùng một CCCD (unique index có lọc).
+    /// Null với dòng cũ chưa backfill hoặc khi chưa cấu hình Ekyc:CitizenIdIndexKey. Không khôi phục được số CCCD.
+    /// </summary>
+    public string? CitizenIdHash { get; set; }
+
     /// <summary>Lượt eKYC OWNER_ENROLLMENT đạt đã sinh ra danh tính này. Không đặt khóa ngoại để dọn lượt cũ không làm mất danh tính.</summary>
     public Guid SourceVerificationId { get; set; }
 

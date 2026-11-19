@@ -90,6 +90,16 @@ public sealed class FakeOwnerIdentityRepository : IOwnerIdentityRepository
             .ToList());
     }
 
+    public Task<bool> ExistsByCitizenIdHashExceptUserAsync(string citizenIdHash, Guid excludeUserId, CancellationToken ct)
+    {
+        return Task.FromResult(Identities.Any(i => i.CitizenIdHash == citizenIdHash && i.UserId != excludeUserId));
+    }
+
+    public bool IsCitizenIdHashViolation(Exception exception)
+    {
+        return false;
+    }
+
     public void Add(OwnerIdentity identity)
     {
         Identities.Add(identity);
@@ -99,12 +109,16 @@ public sealed class FakeOwnerIdentityRepository : IOwnerIdentityRepository
 /// <summary>Bộ mã hóa danh tính Owner thật (khóa ngẫu nhiên) để test kiểm cả vòng mã hóa lẫn giải mã.</summary>
 public static class OwnerIdentityTestSupport
 {
+    /// <summary>Chỉ mục mù CCCD với khóa cố định của test.</summary>
+    public static readonly CitizenIdBlindIndex BlindIndex =
+        new CitizenIdBlindIndex(Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i + 1)).ToArray()));
+
     public static OwnerIdentityProtector CreateIdentityProtector()
     {
         AssetEncryptionSettings settings = new AssetEncryptionSettings();
         settings.ActiveKeyId = "test-key";
         settings.Keys["test-key"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        return new OwnerIdentityProtector(new DataKeyProtector(Options.Create(settings)));
+        return new OwnerIdentityProtector(new DataKeyProtector(Options.Create(settings)), BlindIndex);
     }
 }
 

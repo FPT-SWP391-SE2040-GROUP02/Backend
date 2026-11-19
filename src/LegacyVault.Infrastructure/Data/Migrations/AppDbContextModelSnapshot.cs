@@ -2052,6 +2052,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CitizenIdHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
                     b.Property<string>("CitizenIdLast4")
                         .IsRequired()
                         .HasMaxLength(4)
@@ -2111,6 +2117,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsFixedLength();
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CitizenIdHash")
+                        .IsUnique()
+                        .HasFilter("[CitizenIdHash] IS NOT NULL");
 
                     b.HasIndex("UserId")
                         .IsUnique();

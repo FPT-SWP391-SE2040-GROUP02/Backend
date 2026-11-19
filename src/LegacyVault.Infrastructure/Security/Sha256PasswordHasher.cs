@@ -4,7 +4,7 @@ using LegacyVault.Application.Security;
 
 namespace LegacyVault.Infrastructure.Security;
 
-/// <summary>Băm mật khẩu bằng SHA-256 kèm salt ngẫu nhiên.</summary>
+/// <summary>Băm SHA-256 một vòng kèm salt (định dạng cũ). Mật khẩu mới dùng Pbkdf2PasswordHasher; lớp này còn để xác thực hash cũ và băm PIN kho.</summary>
 /// <remarks>
 /// Chuỗi lưu trong DB có dạng <c>salt$hash</c>, với hash = SHA-256(salt + mật khẩu).
 /// Mỗi mật khẩu có salt riêng nên hai người cùng mật khẩu vẫn ra hash khác nhau.
@@ -34,7 +34,8 @@ public sealed class Sha256PasswordHasher : IPasswordHasher
 
         string salt = parts[0];
         string savedHash = parts[1];
-        return ComputeHash(password, salt) == savedHash;
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(ComputeHash(password, salt)), Encoding.UTF8.GetBytes(savedHash));
     }
 
     /// <summary>SHA-256(salt + mật khẩu), trả về dạng base64.</summary>

@@ -47,6 +47,20 @@ public sealed class CurrentUser : ICurrentUser
         }
     }
 
+    public Guid? SessionFamilyId
+    {
+        get
+        {
+            string? value = GetPrincipal()?.FindFirstValue(JwtTokenService.FamilyIdClaim);
+            return Guid.TryParse(value, out Guid id) ? id : null;
+        }
+    }
+
+    public string ClientIpRange
+    {
+        get { return IpRange.From(_httpContextAccessor.HttpContext?.Connection.RemoteIpAddress); }
+    }
+
     private ClaimsPrincipal? GetPrincipal()
     {
         return _httpContextAccessor.HttpContext?.User;

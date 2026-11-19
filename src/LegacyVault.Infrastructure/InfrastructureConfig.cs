@@ -223,7 +223,11 @@ public static class InfrastructureConfig
         services.AddMemoryCache();
         services.AddScoped<ISystemSettingService, SystemSettingService>();
         services.AddHostedService<RuntimeSettingsRefresher>();
-        services.AddSingleton<IPasswordHasher, Sha256PasswordHasher>();
+        // Số vòng PBKDF2 cấu hình được (Auth:PasswordHashIterations); sàn 100.000 để cấu hình sai không làm yếu hash.
+        int passwordHashIterations = Math.Max(
+            100_000, configuration.GetValue("Auth:PasswordHashIterations", Pbkdf2PasswordHasher.DefaultIterations));
+        services.AddSingleton<IPasswordHasher>(new Pbkdf2PasswordHasher(passwordHashIterations));
+        // PIN kho chỉ 6 chữ số (10^6 khả năng) nên SHA-256 một vòng bị dò ra tức thì khi lộ DB: dùng chung PBKDF2.
         services.AddSingleton<IVaultPinHasher, VaultPinHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddScoped<ISessionRevocationValidator, SessionRevocationValidator>();
@@ -411,6 +415,8 @@ public static class InfrastructureConfig
             provider => provider.GetRequiredService<IOptions<EkycOptions>>().Value);
         // Danh tính đã gắn của Owner (EKYC-27, DATA-02): CCCD đủ 12 số, họ tên, ngày sinh mã hóa envelope.
         services.AddScoped<IOwnerIdentityRepository, OwnerIdentityRepository>();
+        // Khóa chỉ mục mù CCCD tách khỏi KEK; để trống thì tắt (chỉ còn kiểm trùng ở tầng ứng dụng).
+        services.AddSingleton<ICitizenIdBlindIndex>(new CitizenIdBlindIndex(configuration["Ekyc:CitizenIdIndexKey"]));
         services.AddSingleton<IOwnerIdentityProtector, OwnerIdentityProtector>();
         services.AddHttpClient<IEkycClient, EkycHttpClient>(client =>
         {

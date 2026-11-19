@@ -9,4 +9,10 @@ public interface ICurrentUser
     Guid? UserId { get; }
 
     bool IsAuthenticated { get; }
+
+    /// <summary>Phiên (family) của access token hiện tại; null nếu token không mang claim này.</summary>
+    Guid? SessionFamilyId => null;
+
+    /// <summary>Dải IP người gọi (IPv4 /24, IPv6 /64) để đếm sai mật khẩu; "unknown" nếu không rõ.</summary>
+    string ClientIpRange => "unknown";
 }

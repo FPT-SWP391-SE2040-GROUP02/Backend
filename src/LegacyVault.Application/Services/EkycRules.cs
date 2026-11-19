@@ -191,6 +191,58 @@ public static class EkycRules
         return EkycIdentityMatch.Matched;
     }
 
+    /// <summary>Độ giống tên tối thiểu (0..1) giữa tên Owner khai và tên OCR đọc; chỉnh được qua Ekyc:NameSimilarityThreshold.</summary>
+    public const double NameSimilarityThreshold = 0.85;
+
+    /// <summary>
+    /// Độ giống 0..1 của hai họ tên sau chuẩn hóa (hoa, bỏ dấu, gộp khoảng trắng): 1 - Levenshtein / độ dài lớn hơn.
+    /// Dung sai cho lỗi OCR dấu tiếng Việt nhưng vẫn bắt được đổi sang tên khác.
+    /// </summary>
+    public static double NameSimilarity(string first, string second)
+    {
+        string a = NormalizeNameForCompare(first);
+        string b = NormalizeNameForCompare(second);
+        int longest = Math.Max(a.Length, b.Length);
+        if (longest == 0)
+        {
+            return 1.0;
+        }
+        int[] previous = new int[b.Length + 1];
+        int[] current = new int[b.Length + 1];
+        for (int j = 0; j <= b.Length; j++)
+        {
+            previous[j] = j;
+        }
+        for (int i = 1; i <= a.Length; i++)
+        {
+            current[0] = i;
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
+            }
+            (previous, current) = (current, previous);
+        }
+        return 1.0 - (double)previous[b.Length] / longest;
+    }
+
+    /// <summary>
+    /// So thông tin Owner khai với thông tin OCR đọc. Trả mã lệch ("NAME_MISMATCH", "DOB_MISMATCH") hoặc null nếu khớp.
+    /// Ngày sinh so chính xác; họ tên so theo độ giống. Số CCCD không so vì không cho sửa.
+    /// </summary>
+    public static string? FindDeclaredMismatch(OwnerIdentityData read, string declaredName, DateOnly declaredBirth, double nameThreshold)
+    {
+        if (declaredBirth != read.DateOfBirth)
+        {
+            return "DOB_MISMATCH";
+        }
+        if (NameSimilarity(read.FullName, declaredName) < nameThreshold)
+        {
+            return "NAME_MISMATCH";
+        }
+        return null;
+    }
+
     /// <summary>Chuẩn hóa Unicode NFC, bỏ khoảng trắng thừa, không phân biệt hoa thường; KHÔNG bỏ dấu (MATCH-02).</summary>
     public static string NormalizeName(string name)
     {

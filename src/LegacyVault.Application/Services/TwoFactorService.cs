@@ -27,6 +27,11 @@ public sealed class TwoFactorService : ITwoFactorService
     private const int MaxChallengeFailures = 5;
     private const string RecoveryAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+    // Dùng chung bảng LoginThrottles: khóa theo user, không theo IP ("-" là phạm vi duy nhất).
+    private const string ThrottleScope = "-";
+
+    private static string ThrottleKey(Guid userId) => "2fa:" + userId.ToString("D");
+
     private static readonly TimeSpan ChallengeLifetime = TimeSpan.FromMinutes(5);
 
     private readonly ICurrentUser _currentUser;
@@ -36,6 +41,8 @@ public sealed class TwoFactorService : ITwoFactorService
     private readonly ITokenService _tokenService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly LoginSessionIssuer _sessionIssuer;
+    private readonly LoginThrottleGuard _throttleGuard;
+    private readonly IAuditLogRepository? _auditLogRepository;
     private readonly TimeProvider _timeProvider;
 
     public TwoFactorService(
@@ -46,8 +53,11 @@ public sealed class TwoFactorService : ITwoFactorService
         ITokenService tokenService,
         IUnitOfWork unitOfWork,
         LoginSessionIssuer sessionIssuer,
-        TimeProvider timeProvider)
+        LoginThrottleGuard throttleGuard,
+        TimeProvider timeProvider,
+        IAuditLogRepository? auditLogRepository = null)
     {
+        _auditLogRepository = auditLogRepository;
         _currentUser = currentUser;
         _userRepository = userRepository;
         _twoFactorRepository = twoFactorRepository;
@@ -55,6 +65,7 @@ public sealed class TwoFactorService : ITwoFactorService
         _tokenService = tokenService;
         _unitOfWork = unitOfWork;
         _sessionIssuer = sessionIssuer;
+        _throttleGuard = throttleGuard;
         _timeProvider = timeProvider;
     }
 
@@ -133,6 +144,7 @@ public sealed class TwoFactorService : ITwoFactorService
             totp.LastUsedStep = step.Value;
             user.UpdatedAt = now;
 
+            AuthAudit.Record(_auditLogRepository, user, AuditAction.TwoFactorEnabled, AuditOutcome.Succeeded, null, now);
             TwoFactorEnableResponse response = new TwoFactorEnableResponse();
             await ReplaceRecoveryCodesAsync(user.Id, response.RecoveryCodes, now, ct);
             await _unitOfWork.SaveChangesAsync(ct);
@@ -163,7 +175,9 @@ public sealed class TwoFactorService : ITwoFactorService
                 _twoFactorRepository.RemoveRecoveryCode(code);
             }
             _twoFactorRepository.RemoveTotp(totp);
-            user.UpdatedAt = _timeProvider.GetUtcNow();
+            DateTimeOffset disabledAt = _timeProvider.GetUtcNow();
+            user.UpdatedAt = disabledAt;
+            AuthAudit.Record(_auditLogRepository, user, AuditAction.TwoFactorDisabled, AuditOutcome.Succeeded, null, disabledAt);
             await _unitOfWork.SaveChangesAsync(ct);
             return true;
         }, ct);
@@ -215,6 +229,10 @@ public sealed class TwoFactorService : ITwoFactorService
             {
                 return (Result: (AuthResult?)null, Failure: (ApiException?)failure);
             }
+            catch (AccountLockedException failure)
+            {
+                return (Result: (AuthResult?)null, Failure: (ApiException?)failure);
+            }
         }, ct);
 
         if (outcome.Failure != null)
@@ -240,6 +258,10 @@ public sealed class TwoFactorService : ITwoFactorService
             throw TwoFactorException.InvalidChallenge();
         }
 
+        // Đếm sai theo TÀI KHOẢN (không theo thử thách): đăng nhập lại để lấy thử thách mới không reset bộ đếm.
+        string throttleKey = ThrottleKey(user.Id);
+        await _throttleGuard.ThrowIfLockedAsync(throttleKey, ThrottleScope, ct);
+
         bool accepted = await AcceptCodeAsync(user.Id, totp, code, ct);
         if (!accepted)
         {
@@ -248,10 +270,15 @@ public sealed class TwoFactorService : ITwoFactorService
             {
                 challenge.UsedAt = now;
             }
-            await _unitOfWork.SaveChangesAsync(ct);
+            ApiException failure = await _throttleGuard.RecordFailureAsync(throttleKey, ThrottleScope, ct);
+            if (failure is AccountLockedException)
+            {
+                throw failure;
+            }
             throw TwoFactorException.InvalidCode();
         }
 
+        await _throttleGuard.ClearAsync(throttleKey, ThrottleScope, ct);
         challenge.UsedAt = now;
         user.LastLoginAt = now;
         return await _sessionIssuer.OpenSessionAsync(user, challenge.RememberMe, ct);

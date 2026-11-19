@@ -25,6 +25,7 @@ public sealed class TwoFactorServiceTests
     private readonly FakeUnitOfWork _unitOfWork = new();
     private readonly FixedTimeProvider _clock = new(new DateTimeOffset(2026, 10, 19, 8, 0, 0, TimeSpan.Zero));
     private readonly TestCurrentUser _currentUser = new();
+    private readonly FakeLoginThrottleRepository _throttles = new();
     private readonly TwoFactorService _service;
 
     public TwoFactorServiceTests()
@@ -32,7 +33,8 @@ public sealed class TwoFactorServiceTests
         _twoFactor = new FakeTwoFactorRepository(_users);
         LoginSessionIssuer issuer = new LoginSessionIssuer(_refreshTokens, _tokenService, _unitOfWork, _clock);
         _service = new TwoFactorService(
-            _currentUser, _users, _twoFactor, _protector, _tokenService, _unitOfWork, issuer, _clock);
+            _currentUser, _users, _twoFactor, _protector, _tokenService, _unitOfWork, issuer,
+            new LoginThrottleGuard(_throttles, _unitOfWork, _clock), _clock);
     }
 
     [Fact]
@@ -186,16 +188,44 @@ public sealed class TwoFactorServiceTests
         TwoFactorChallengeResponse challenge = (await _service.ChallengeIfRequiredAsync(admin, false, default))!;
         TwoFactorVerifyRequest wrong = new TwoFactorVerifyRequest { ChallengeToken = challenge.ChallengeToken, Code = "000000" };
 
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 4; i++)
         {
             TwoFactorException failure = await Assert.ThrowsAsync<TwoFactorException>(() => _service.VerifyLoginAsync(wrong, default));
             Assert.Equal("INVALID_TWO_FACTOR_CODE", failure.ErrorCode);
         }
+        // Lần sai thứ 5 vừa burn thử thách vừa khóa tạm tài khoản.
+        await Assert.ThrowsAsync<AccountLockedException>(() => _service.VerifyLoginAsync(wrong, default));
+        _clock.Now = _clock.Now.AddMinutes(16);
 
         // Sau 5 lần sai, ngay cả mã đúng cũng không dùng được thử thách này nữa.
         TwoFactorVerifyRequest correct = new TwoFactorVerifyRequest { ChallengeToken = challenge.ChallengeToken, Code = CurrentCode() };
         TwoFactorException burned = await Assert.ThrowsAsync<TwoFactorException>(() => _service.VerifyLoginAsync(correct, default));
         Assert.Equal("TWO_FACTOR_CHALLENGE_INVALID", burned.ErrorCode);
+        Assert.Empty(_refreshTokens.Tokens);
+    }
+
+    [Fact]
+    public async Task Verify_WrongCodesAcrossChallenges_LockAccount()
+    {
+        User admin = AddUser(UserRole.Admin);
+        await SetupAndEnableAsync();
+        _clock.Now = _clock.Now.AddMinutes(1);
+
+        // Mỗi lần "đăng nhập lại" lấy thử thách mới (reset FailedAttempts của thử thách), nhưng bộ đếm theo tài khoản vẫn tăng.
+        for (int i = 0; i < AuthPolicy.MaxFailedAttempts - 1; i++)
+        {
+            TwoFactorChallengeResponse c = (await _service.ChallengeIfRequiredAsync(admin, false, default))!;
+            await Assert.ThrowsAsync<TwoFactorException>(() => _service.VerifyLoginAsync(
+                new TwoFactorVerifyRequest { ChallengeToken = c.ChallengeToken, Code = "000000" }, default));
+        }
+        TwoFactorChallengeResponse last = (await _service.ChallengeIfRequiredAsync(admin, false, default))!;
+        await Assert.ThrowsAsync<AccountLockedException>(() => _service.VerifyLoginAsync(
+            new TwoFactorVerifyRequest { ChallengeToken = last.ChallengeToken, Code = "000000" }, default));
+
+        // Đang khóa: mã đúng trên thử thách mới cũng bị từ chối.
+        TwoFactorChallengeResponse fresh = (await _service.ChallengeIfRequiredAsync(admin, false, default))!;
+        await Assert.ThrowsAsync<AccountLockedException>(() => _service.VerifyLoginAsync(
+            new TwoFactorVerifyRequest { ChallengeToken = fresh.ChallengeToken, Code = CurrentCode() }, default));
         Assert.Empty(_refreshTokens.Tokens);
     }
 

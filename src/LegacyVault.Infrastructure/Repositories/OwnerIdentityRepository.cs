@@ -33,6 +33,19 @@ public sealed class OwnerIdentityRepository : IOwnerIdentityRepository
             .ToListAsync(ct);
     }
 
+    public Task<bool> ExistsByCitizenIdHashExceptUserAsync(string citizenIdHash, Guid excludeUserId, CancellationToken ct)
+    {
+        return context.OwnerIdentities.AnyAsync(i => i.CitizenIdHash == citizenIdHash && i.UserId != excludeUserId, ct);
+    }
+
+    public bool IsCitizenIdHashViolation(Exception exception)
+    {
+        // Phân biệt theo tên index: unique UserId (đã có danh tính) là lỗi khác, không được báo thành CCCD trùng.
+        return exception is DbUpdateException update
+            && DbExceptions.IsUniqueViolation(update)
+            && update.InnerException!.Message.Contains("IX_OwnerIdentities_CitizenIdHash", StringComparison.Ordinal);
+    }
+
     public void Add(OwnerIdentity identity)
     {
         context.OwnerIdentities.Add(identity);

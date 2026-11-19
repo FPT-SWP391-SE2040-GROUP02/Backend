@@ -27,6 +27,7 @@ public sealed class AuthService : IAuthService
     private readonly ISessionRevocationValidator? _sessionValidator;
     private readonly ILogger<AuthService>? _logger;
     private readonly MaintenanceModeGuard? _maintenanceGuard;
+    private readonly IAuditLogRepository? _auditLogRepository;
 
     public AuthService(
         IUserRepository userRepository,
@@ -40,8 +41,10 @@ public sealed class AuthService : IAuthService
         ITwoFactorService? twoFactorService = null,
         ISessionRevocationValidator? sessionValidator = null,
         ILogger<AuthService>? logger = null,
-        MaintenanceModeGuard? maintenanceGuard = null)
+        MaintenanceModeGuard? maintenanceGuard = null,
+        IAuditLogRepository? auditLogRepository = null)
     {
+        _auditLogRepository = auditLogRepository;
         _maintenanceGuard = maintenanceGuard;
         _twoFactorService = twoFactorService;
         _sessionValidator = sessionValidator;
@@ -112,6 +115,12 @@ public sealed class AuthService : IAuthService
         // 4. Kiểm tra mật khẩu
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
+            if (_passwordHasher.NeedsRehash(user.PasswordHash))
+            {
+                // Hash cũ xác thực nhanh hơn hash mới: bù một lần băm giả để thời gian không phân biệt được với email không tồn tại.
+                _dummyHash ??= _passwordHasher.Hash(Guid.NewGuid().ToString());
+                _passwordHasher.Verify(request.Password, _dummyHash);
+            }
             throw await RecordFailedLoginAsync(throttle, user, email, ipRange, now, ct);
         }
 
@@ -124,6 +133,13 @@ public sealed class AuthService : IAuthService
         // 5b. Đang bảo trì: chỉ Admin được đăng nhập. Kiểm sau khi mật khẩu đúng để người lạ không dò được vai trò.
         // Lỗi ném ra làm giao dịch rollback nên không cấp phiên và không đổi bộ đếm.
         MaintenanceModeGuard.EnsureAllowed(maintenanceOn, user);
+
+        // 5c. Hash cũ (SHA-256 một vòng) hoặc ít vòng hơn cấu hình: băm lại bằng mật khẩu vừa nhập đúng, lưu cùng giao dịch.
+        if (_passwordHasher.NeedsRehash(user.PasswordHash))
+        {
+            user.PasswordHash = _passwordHasher.Hash(request.Password);
+            user.UpdatedAt = now;
+        }
 
         // 6. Đăng nhập đúng: xóa bộ đếm sai nếu có
         if (throttle != null)
@@ -166,6 +182,7 @@ public sealed class AuthService : IAuthService
         };
 
         _refreshTokenRepository.Add(refreshTokenEntity);
+        AuthAudit.Record(_auditLogRepository, user, AuditAction.LoginSucceeded, AuditOutcome.Succeeded, "PASSWORD", now);
 
         var accessToken = _tokenService.CreateAccessToken(user, familyId);
         await _unitOfWork.SaveChangesAsync(ct);
@@ -428,6 +445,15 @@ public sealed class AuthService : IAuthService
             {
                 throttle.FailedCount++;
             }
+        }
+
+        // Chỉ ghi khi email có thật: người lạ thử email bất kỳ không làm đầy nhật ký.
+        if (user != null)
+        {
+            bool locking = throttle.FailedCount >= AuthPolicy.MaxFailedAttempts;
+            AuthAudit.Record(
+                _auditLogRepository, user, locking ? AuditAction.LoginLocked : AuditAction.LoginFailed,
+                locking ? AuditOutcome.Denied : AuditOutcome.Failed, "PASSWORD", now);
         }
 
         if (throttle.FailedCount >= AuthPolicy.MaxFailedAttempts)

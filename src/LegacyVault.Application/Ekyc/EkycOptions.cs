@@ -21,6 +21,9 @@ public sealed class EkycOptions : IEkycOptions
     /// <summary>Ngưỡng cấu hình (binder đọc từ <c>Ekyc:MatchThreshold</c>), default giá trị chuẩn của <see cref="EkycRules.MatchThreshold"/>.</summary>
     public double MatchThreshold { get; set; } = EkycRules.MatchThreshold;
 
+    /// <summary>Ekyc:NameSimilarityThreshold, mặc định <see cref="EkycRules.NameSimilarityThreshold"/>.</summary>
+    public double NameSimilarityThreshold { get; set; } = EkycRules.NameSimilarityThreshold;
+
     /// <inheritdoc/> Ngưỡng cấu hình được coi là mốc mặc định để reset.
     double IEkycOptions.DefaultThreshold => MatchThreshold;
 

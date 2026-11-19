@@ -30,6 +30,8 @@ public sealed class EkycService : IEkycService
     private readonly TimeProvider timeProvider;
     private readonly IAssetContentStore contentStore;
     private readonly IEkycOptions ekycOptions;
+    private readonly IAuditLogRepository? auditLogRepository;
+    private readonly ICitizenIdBlindIndex? citizenIdIndex;
 
     public EkycService(
         ICurrentUser currentUser,
@@ -43,8 +45,12 @@ public sealed class EkycService : IEkycService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IAssetContentStore contentStore,
-        IEkycOptions ekycOptions)
+        IEkycOptions ekycOptions,
+        IAuditLogRepository? auditLogRepository = null,
+        ICitizenIdBlindIndex? citizenIdIndex = null)
     {
+        this.citizenIdIndex = citizenIdIndex;
+        this.auditLogRepository = auditLogRepository;
         this.currentUser = currentUser;
         this.verificationRepository = verificationRepository;
         this.consentRepository = consentRepository;
@@ -209,6 +215,20 @@ public sealed class EkycService : IEkycService
             OwnerIdentityData? pending = identityProtector.UnprotectPending(verification);
             if (pending != null)
             {
+                // Họ tên/ngày sinh khai lệch xa so với OCR: từ chối, không lưu giá trị khai. Nhật ký chỉ ghi mã lệch,
+                // không ghi tên hay ngày sinh (SEC-07). Chưa có người duyệt tay nên Owner tự sửa lại hoặc chụp lại.
+                string? mismatch = EkycRules.FindDeclaredMismatch(
+                    pending, request.FullName, request.DateOfBirth!.Value, ekycOptions.NameSimilarityThreshold);
+                if (mismatch != null)
+                {
+                    auditLogRepository?.Add(AuditRules.Create(
+                        null, userId, AuditActorRole.Owner, AuditAction.EkycFailed, AuditTargetType.User, userId, null,
+                        AuditOutcome.Failed, mismatch, timeProvider.GetUtcNow()));
+                    await unitOfWork.SaveChangesAsync(ct);
+                    throw ValidationErrors.For(
+                        mismatch == "DOB_MISMATCH" ? "dateOfBirth" : "fullName",
+                        "Thông tin khai không khớp giấy tờ đã đọc. Hãy kiểm tra lại hoặc chụp lại mặt trước rõ hơn.");
+                }
                 pending.FullName = EkycRules.NormalizeName(request.FullName);
                 pending.DateOfBirth = request.DateOfBirth!.Value;
                 pending.ResidenceAddress = request.ResidenceAddress.Trim();
@@ -514,6 +534,13 @@ public sealed class EkycService : IEkycService
     private async Task EnsureCitizenIdNotUsedByAnotherUserAsync(
         Guid userId, string citizenId, string? documentToken, CancellationToken ct)
     {
+        // Dòng đã có hash: tra bằng index. Dòng cũ chưa backfill vẫn dò bằng giải mã bên dưới.
+        string? hash = citizenIdIndex?.Compute(citizenId);
+        if (hash != null && await identityRepository.ExistsByCitizenIdHashExceptUserAsync(hash, userId, ct))
+        {
+            throw await CitizenIdAlreadyUsedAsync(documentToken, ct);
+        }
+
         string last4 = citizenId.Substring(citizenId.Length - 4);
         List<OwnerIdentity> candidates = await identityRepository.ListByCitizenIdLast4ExceptUserAsync(last4, userId, ct);
         foreach (OwnerIdentity candidate in candidates)
@@ -521,15 +548,20 @@ public sealed class EkycService : IEkycService
             OwnerIdentityData data = identityProtector.Unprotect(candidate);
             if (string.Equals(data.CitizenId, citizenId, StringComparison.Ordinal))
             {
-                if (documentToken != null)
-                {
-                    await TryDeleteDocumentAsync(documentToken, ct);
-                }
-                throw new AppException(AppErrorType.Conflict, ErrorCode.EkycIdentityMismatch,
-                    "Số CCCD này đã được sử dụng để xác minh cho một tài khoản khác trong hệ thống.",
-                    new Dictionary<string, object?> { ["reason"] = "CITIZEN_ID_ALREADY_USED" });
+                throw await CitizenIdAlreadyUsedAsync(documentToken, ct);
             }
         }
+    }
+
+    private async Task<AppException> CitizenIdAlreadyUsedAsync(string? documentToken, CancellationToken ct)
+    {
+        if (documentToken != null)
+        {
+            await TryDeleteDocumentAsync(documentToken, ct);
+        }
+        return new AppException(AppErrorType.Conflict, ErrorCode.EkycIdentityMismatch,
+            "Số CCCD này đã được sử dụng để xác minh cho một tài khoản khác trong hệ thống.",
+            new Dictionary<string, object?> { ["reason"] = "CITIZEN_ID_ALREADY_USED" });
     }
 
     /// <summary>
@@ -666,7 +698,23 @@ public sealed class EkycService : IEkycService
         verification.CompletedAt = now;
         verification.DocumentToken = null;
         verification.DocumentTokenExpiresAt = null;
-        await unitOfWork.SaveChangesAsync(ct);
+        // Chỉ ghi kết quả, không ghi điểm số, họ tên hay số giấy tờ (SEC-07).
+        auditLogRepository?.Add(AuditRules.Create(
+            null, verification.UserId, AuditActorRole.Owner,
+            status == EkycStatus.Passed ? AuditAction.EkycPassed : AuditAction.EkycFailed,
+            AuditTargetType.User, verification.UserId, null,
+            status == EkycStatus.Passed ? AuditOutcome.Succeeded : AuditOutcome.Failed,
+            verification.Purpose.ToApiString(), now));
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (Exception exception) when (identityRepository.IsCitizenIdHashViolation(exception))
+        {
+            // Hai yêu cầu cùng lúc gắn cùng một CCCD: DB chặn yêu cầu đến sau, trả lỗi nghiệp vụ thay vì 500.
+            await IdentityImageStorage.TryDeleteAsync(contentStore, discardedImageKey);
+            throw await CitizenIdAlreadyUsedAsync(documentToken, ct);
+        }
         await IdentityImageStorage.TryDeleteAsync(contentStore, discardedImageKey);
 
         if (documentToken != null)

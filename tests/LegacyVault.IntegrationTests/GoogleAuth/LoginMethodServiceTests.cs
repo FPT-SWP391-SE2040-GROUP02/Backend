@@ -23,12 +23,16 @@ public sealed class LoginMethodServiceTests
     private readonly FakeUnitOfWork _unitOfWork = new();
     private readonly FixedTimeProvider _clock = new(new DateTimeOffset(2026, 10, 19, 8, 0, 0, TimeSpan.Zero));
     private readonly TestCurrentUser _currentUser = new();
+    private readonly FakeRefreshTokenRepository _refreshTokens = new();
+    private readonly FakeLoginThrottleRepository _throttles = new();
     private readonly LoginMethodService _service;
 
     public LoginMethodServiceTests()
     {
         _logins = new FakeExternalLoginRepository(_users);
-        _service = new LoginMethodService(_currentUser, _users, _logins, _verifier, _hasher, _unitOfWork, _clock);
+        _service = new LoginMethodService(
+            _currentUser, _users, _logins, _verifier, _hasher, _refreshTokens,
+            new LoginThrottleGuard(_throttles, _unitOfWork, _clock), _unitOfWork, _clock);
 
         _verifier.Accept(GoogleToken, new GoogleIdentity
         {
@@ -305,6 +309,80 @@ public sealed class LoginMethodServiceTests
         return user;
     }
 
+    [Fact]
+    public async Task ChangePassword_RevokesOtherSessions_KeepsCurrent()
+    {
+        User user = AddUser(true);
+        Guid current = Guid.NewGuid();
+        Guid other = Guid.NewGuid();
+        _currentUser.SessionFamilyId = current;
+        RefreshToken keep = AddSession(user, current);
+        RefreshToken drop = AddSession(user, other);
+
+        await _service.ChangePasswordAsync(
+            new ChangePasswordRequest { CurrentPassword = Password, NewPassword = "MatKhauMoi123!" }, default);
+
+        Assert.Null(keep.RevokedAt);
+        Assert.NotNull(drop.RevokedAt);
+        // Chặn cả refresh: token phiên khác không còn nằm trong danh sách còn hiệu lực.
+        Assert.DoesNotContain(drop, await _refreshTokens.FindActiveByUserAsync(user.Id, default));
+    }
+
+    [Fact]
+    public async Task RemovePassword_RevokesOtherSessions()
+    {
+        User user = AddUser(true);
+        AddGoogleLink(user, "sub-1");
+        _currentUser.SessionFamilyId = Guid.NewGuid();
+        RefreshToken drop = AddSession(user, Guid.NewGuid());
+
+        await _service.RemovePasswordAsync(NewRemovePassword(Password, GoogleToken), default);
+
+        Assert.NotNull(drop.RevokedAt);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WrongPassword_LocksAfterMaxAttempts()
+    {
+        AddUser(true);
+        ChangePasswordRequest wrong = new ChangePasswordRequest { CurrentPassword = "sai", NewPassword = "MatKhauMoi123!" };
+
+        for (int i = 0; i < AuthPolicy.MaxFailedAttempts - 1; i++)
+        {
+            await Assert.ThrowsAsync<ReauthenticationFailedException>(() => _service.ChangePasswordAsync(wrong, default));
+        }
+        await Assert.ThrowsAsync<AccountLockedException>(() => _service.ChangePasswordAsync(wrong, default));
+
+        // Đã khóa: mật khẩu đúng cũng bị từ chối.
+        ChangePasswordRequest right = new ChangePasswordRequest { CurrentPassword = Password, NewPassword = "MatKhauMoi123!" };
+        await Assert.ThrowsAsync<AccountLockedException>(() => _service.ChangePasswordAsync(right, default));
+    }
+
+    [Fact]
+    public async Task VerifyPassword_Correct_ClearsFailureCounter()
+    {
+        AddUser(true);
+        await Assert.ThrowsAsync<ReauthenticationFailedException>(
+            () => _service.VerifyPasswordAsync(new VerifyPasswordRequest { CurrentPassword = "sai" }, default));
+        Assert.Single(_throttles.Throttles);
+
+        await _service.VerifyPasswordAsync(new VerifyPasswordRequest { CurrentPassword = Password }, default);
+
+        Assert.Empty(_throttles.Throttles);
+    }
+
+    private RefreshToken AddSession(User user, Guid familyId)
+    {
+        RefreshToken token = new RefreshToken
+        {
+            UserId = user.Id,
+            FamilyId = familyId,
+            TokenHash = Guid.NewGuid().ToString("N"),
+        };
+        _refreshTokens.Tokens.Add(token);
+        return token;
+    }
+
     private void AddGoogleLink(User user, string subject)
     {
         _logins.Logins.Add(new ExternalLogin
@@ -336,6 +414,10 @@ public sealed class LoginMethodServiceTests
     private sealed class TestCurrentUser : ICurrentUser
     {
         public Guid? UserId { get; set; }
+
+        public Guid? SessionFamilyId { get; set; }
+
+        public string ClientIpRange { get; set; } = "10.0.0.0/24";
 
         public bool IsAuthenticated
         {
