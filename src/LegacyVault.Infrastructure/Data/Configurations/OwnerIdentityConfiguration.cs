@@ -17,6 +17,16 @@ public sealed class OwnerIdentityConfiguration : IEntityTypeConfiguration<OwnerI
             .IsUnicode(false)
             .IsFixedLength();
 
+        builder.Property(i => i.CitizenIdHash)
+            .HasMaxLength(64)
+            .IsUnicode(false)
+            .IsFixedLength();
+
+        // Chặn trùng CCCD ở DB (hai request cùng lúc không lọt). Lọc NULL để dòng cũ chưa backfill không đụng nhau.
+        builder.HasIndex(i => i.CitizenIdHash)
+            .IsUnique()
+            .HasFilter("[CitizenIdHash] IS NOT NULL");
+
         builder.Property(i => i.EncryptionKeyId)
             .IsRequired()
             .HasMaxLength(64)

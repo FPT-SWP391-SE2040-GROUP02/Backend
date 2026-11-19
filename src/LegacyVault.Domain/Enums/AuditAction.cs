@@ -140,4 +140,22 @@ public enum AuditAction
     WillResigned = 64,
     /// <summary>Chủ kho xem danh tính đầy đủ (Chủ kho và người nhận) để lập di chúc. Nhật ký không ghi giá trị đã giải mã.</summary>
     WillIdentityViewed = 65,
+    /// <summary>Đăng nhập thành công (mật khẩu, Google hoặc mã hai bước). Lý do chỉ ghi phương thức, không ghi dữ liệu nhạy cảm.</summary>
+    LoginSucceeded = 66,
+    /// <summary>Sai mật khẩu của tài khoản có thật (kết quả Failed). Email chưa đăng ký không ghi để nhật ký không bị tràn.</summary>
+    LoginFailed = 67,
+    /// <summary>Tài khoản bị khóa tạm vì đăng nhập sai nhiều lần (kết quả Denied).</summary>
+    LoginLocked = 68,
+    /// <summary>Admin bật xác thực hai bước.</summary>
+    TwoFactorEnabled = 69,
+    /// <summary>Admin tắt xác thực hai bước.</summary>
+    TwoFactorDisabled = 70,
+    /// <summary>Người dùng đặt lại mật khẩu bằng liên kết gửi qua email.</summary>
+    PasswordResetCompleted = 71,
+    /// <summary>Người dùng đổi mật khẩu khi đang đăng nhập.</summary>
+    PasswordChanged = 72,
+    /// <summary>Lượt xác minh eKYC đạt. Nhật ký không ghi điểm số hay dữ liệu giấy tờ.</summary>
+    EkycPassed = 73,
+    /// <summary>Lượt xác minh eKYC không đạt (kết quả Failed).</summary>
+    EkycFailed = 74,
 }

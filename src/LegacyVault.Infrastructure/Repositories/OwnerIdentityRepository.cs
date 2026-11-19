@@ -33,6 +33,16 @@ public sealed class OwnerIdentityRepository : IOwnerIdentityRepository
             .ToListAsync(ct);
     }
 
+    public Task<bool> ExistsByCitizenIdHashExceptUserAsync(string citizenIdHash, Guid excludeUserId, CancellationToken ct)
+    {
+        return context.OwnerIdentities.AnyAsync(i => i.CitizenIdHash == citizenIdHash && i.UserId != excludeUserId, ct);
+    }
+
+    public bool IsUniqueViolation(Exception exception)
+    {
+        return exception is DbUpdateException update && DbExceptions.IsUniqueViolation(update);
+    }
+
     public void Add(OwnerIdentity identity)
     {
         context.OwnerIdentities.Add(identity);

@@ -17,7 +17,8 @@ public sealed class PasswordResetService(
     ITokenService tokenService,
     IEmailSender emailSender,
     IAppUrlProvider appUrlProvider,
-    TimeProvider timeProvider) : IPasswordResetService
+    TimeProvider timeProvider,
+    IAuditLogRepository? auditLogRepository = null) : IPasswordResetService
 {
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
@@ -128,6 +129,7 @@ public sealed class PasswordResetService(
             session.RevokedAt = now;
         }
 
+        AuthAudit.Record(auditLogRepository, user, AuditAction.PasswordResetCompleted, AuditOutcome.Succeeded, null, now);
         await unitOfWork.SaveChangesAsync(ct);
         return true;
     }

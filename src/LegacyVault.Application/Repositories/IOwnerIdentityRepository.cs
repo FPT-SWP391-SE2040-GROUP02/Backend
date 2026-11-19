@@ -12,5 +12,11 @@ public interface IOwnerIdentityRepository
     Task<List<OwnerIdentity>> ListByCitizenIdLast4ExceptUserAsync(string last4, Guid excludeUserId, CancellationToken ct);
 
     /// <summary>Đánh dấu "sẽ INSERT" một danh tính.</summary>
+    /// <summary>Có danh tính của tài khoản KHÁC đã mang hash CCCD này không.</summary>
+    Task<bool> ExistsByCitizenIdHashExceptUserAsync(string citizenIdHash, Guid excludeUserId, CancellationToken ct);
+
+    /// <summary>true khi lỗi lưu là vi phạm unique index (request khác vừa ghi trước).</summary>
+    bool IsUniqueViolation(Exception exception);
+
     void Add(OwnerIdentity identity);
 }

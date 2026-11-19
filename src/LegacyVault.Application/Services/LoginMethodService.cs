@@ -22,8 +22,11 @@ public sealed class LoginMethodService : ILoginMethodService
     private readonly IExternalLoginRepository _externalLoginRepository;
     private readonly IGoogleTokenVerifier _googleTokenVerifier;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IRefreshTokenRepository _refreshTokenRepository;
+    private readonly LoginThrottleGuard _throttleGuard;
     private readonly IUnitOfWork _unitOfWork;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditLogRepository? _auditLogRepository;
 
     public LoginMethodService(
         ICurrentUser currentUser,
@@ -31,14 +34,20 @@ public sealed class LoginMethodService : ILoginMethodService
         IExternalLoginRepository externalLoginRepository,
         IGoogleTokenVerifier googleTokenVerifier,
         IPasswordHasher passwordHasher,
+        IRefreshTokenRepository refreshTokenRepository,
+        LoginThrottleGuard throttleGuard,
         IUnitOfWork unitOfWork,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAuditLogRepository? auditLogRepository = null)
     {
+        _auditLogRepository = auditLogRepository;
         _currentUser = currentUser;
         _userRepository = userRepository;
         _externalLoginRepository = externalLoginRepository;
         _googleTokenVerifier = googleTokenVerifier;
         _passwordHasher = passwordHasher;
+        _refreshTokenRepository = refreshTokenRepository;
+        _throttleGuard = throttleGuard;
         _unitOfWork = unitOfWork;
         _timeProvider = timeProvider;
     }
@@ -55,7 +64,7 @@ public sealed class LoginMethodService : ILoginMethodService
         // Xác thực Google ngoài transaction để không giữ khóa DB trong lúc gọi mạng.
         GoogleIdentity identity = await VerifyGoogleAsync(request.IdToken, request.Nonce, ct);
 
-        return await _unitOfWork.ExecuteSerializableAsync(async () =>
+        return await WithReauthThrottleAsync(() => _unitOfWork.ExecuteSerializableAsync(async () =>
         {
             User user = await LoadCurrentUserAsync(ct);
             EnsurePasswordMatches(user, request.CurrentPassword);
@@ -84,18 +93,22 @@ public sealed class LoginMethodService : ILoginMethodService
 
             // Không đổi User.Email theo email Google (AUTH-02).
             return ToGoogleResponse(link, true);
-        }, ct);
+        }, ct), ct);
     }
 
     public async Task VerifyPasswordAsync(VerifyPasswordRequest request, CancellationToken ct)
     {
-        User user = await LoadCurrentUserAsync(ct);
-        EnsurePasswordMatches(user, request.CurrentPassword);
+        await WithReauthThrottleAsync(async () =>
+        {
+            User user = await LoadCurrentUserAsync(ct);
+            EnsurePasswordMatches(user, request.CurrentPassword);
+            return true;
+        }, ct);
     }
 
     public Task UnlinkGoogleAsync(UnlinkGoogleRequest request, CancellationToken ct)
     {
-        return _unitOfWork.ExecuteSerializableAsync(async () =>
+        return WithReauthThrottleAsync(() => _unitOfWork.ExecuteSerializableAsync(async () =>
         {
             User user = await LoadCurrentUserAsync(ct);
             ExternalLogin? link = await _externalLoginRepository.FindByUserAsync(user.Id, LoginProvider.Google, ct);
@@ -112,10 +125,12 @@ public sealed class LoginMethodService : ILoginMethodService
             EnsurePasswordMatches(user, request.CurrentPassword);
 
             _externalLoginRepository.Remove(link);
-            user.UpdatedAt = _timeProvider.GetUtcNow();
+            DateTimeOffset now = _timeProvider.GetUtcNow();
+            user.UpdatedAt = now;
+            await RevokeOtherSessionsAsync(user.Id, now, ct);
             await _unitOfWork.SaveChangesAsync(ct);
             return true;
-        }, ct);
+        }, ct), ct);
     }
 
     public async Task SetPasswordAsync(SetPasswordRequest request, CancellationToken ct)
@@ -141,7 +156,7 @@ public sealed class LoginMethodService : ILoginMethodService
 
     public Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct)
     {
-        return _unitOfWork.ExecuteSerializableAsync(async () =>
+        return WithReauthThrottleAsync(() => _unitOfWork.ExecuteSerializableAsync(async () =>
         {
             User user = await LoadCurrentUserAsync(ct);
             EnsurePasswordMatches(user, request.CurrentPassword);
@@ -150,18 +165,21 @@ public sealed class LoginMethodService : ILoginMethodService
                 throw ValidationErrors.For("newPassword", "Mật khẩu mới phải khác mật khẩu hiện tại.");
             }
 
+            DateTimeOffset now = _timeProvider.GetUtcNow();
             user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
-            user.UpdatedAt = _timeProvider.GetUtcNow();
+            user.UpdatedAt = now;
+            AuthAudit.Record(_auditLogRepository, user, AuditAction.PasswordChanged, AuditOutcome.Succeeded, null, now);
+            await RevokeOtherSessionsAsync(user.Id, now, ct);
             await _unitOfWork.SaveChangesAsync(ct);
             return true;
-        }, ct);
+        }, ct), ct);
     }
 
     public async Task RemovePasswordAsync(RemovePasswordRequest request, CancellationToken ct)
     {
         GoogleIdentity identity = await VerifyGoogleAsync(request.GoogleIdToken, request.Nonce, ct);
 
-        await _unitOfWork.ExecuteSerializableAsync(async () =>
+        await WithReauthThrottleAsync(() => _unitOfWork.ExecuteSerializableAsync(async () =>
         {
             User user = await LoadCurrentUserAsync(ct);
             if (string.IsNullOrEmpty(user.PasswordHash))
@@ -179,11 +197,57 @@ public sealed class LoginMethodService : ILoginMethodService
             EnsurePasswordMatches(user, request.CurrentPassword);
             EnsureSameGoogleAccount(link, identity);
 
+            DateTimeOffset now = _timeProvider.GetUtcNow();
             user.PasswordHash = null;
-            user.UpdatedAt = _timeProvider.GetUtcNow();
+            user.UpdatedAt = now;
+            await RevokeOtherSessionsAsync(user.Id, now, ct);
             await _unitOfWork.SaveChangesAsync(ct);
             return true;
-        }, ct);
+        }, ct), ct);
+    }
+
+    /// <summary>
+    /// Đếm sai mật khẩu xác thực lại theo email + dải IP, dùng chung bộ đếm với đăng nhập (SEC-10).
+    /// Chạy NGOÀI transaction của thao tác: lần sai phải được lưu dù thao tác bị hoàn tác.
+    /// </summary>
+    private async Task<T> WithReauthThrottleAsync<T>(Func<Task<T>> operation, CancellationToken ct)
+    {
+        User user = await LoadCurrentUserAsync(ct);
+        string email = user.Email;
+        string ipRange = _currentUser.ClientIpRange;
+        await _throttleGuard.ThrowIfLockedAsync(email, ipRange, ct);
+
+        T result;
+        try
+        {
+            result = await operation();
+        }
+        catch (ReauthenticationFailedException)
+        {
+            ApiException failure = await _throttleGuard.RecordFailureAsync(email, ipRange, ct);
+            if (failure is AccountLockedException)
+            {
+                throw failure;
+            }
+            throw;
+        }
+
+        await _throttleGuard.ClearAsync(email, ipRange, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+        return result;
+    }
+
+    /// <summary>Thu hồi refresh token của mọi phiên khác; giữ phiên hiện tại (không rõ phiên thì thu hồi hết).</summary>
+    private async Task RevokeOtherSessionsAsync(Guid userId, DateTimeOffset now, CancellationToken ct)
+    {
+        Guid? keep = _currentUser.SessionFamilyId;
+        foreach (RefreshToken token in await _refreshTokenRepository.FindActiveByUserAsync(userId, ct))
+        {
+            if (keep == null || token.FamilyId != keep)
+            {
+                token.RevokedAt = now;
+            }
+        }
     }
 
     private async Task<User> LoadCurrentUserAsync(CancellationToken ct)

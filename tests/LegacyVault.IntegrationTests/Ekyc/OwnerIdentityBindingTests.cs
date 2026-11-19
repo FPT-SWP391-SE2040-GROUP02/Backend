@@ -116,6 +116,38 @@ public sealed class OwnerIdentityBindingTests
     }
 
     [Fact]
+    public async Task FirstEnrollment_IsRejectedByBlindIndex_EvenWhenLast4ScanWouldMissIt()
+    {
+        Guid otherUserId = Guid.NewGuid();
+        AddBoundIdentity(otherUserId, "079200012345");
+        OwnerIdentity other = identities.Identities.Single();
+        Assert.NotNull(other.CitizenIdHash);
+        // Giả lập dòng mà dò last4 không thấy: chỉ còn hash chặn được.
+        other.CitizenIdLast4 = "0000";
+        EkycService withIndex = new EkycService(currentUser, repository, consentRepository,
+            beneficiaries, beneficiaryProtector, identities, identityProtector, client,
+            new FakeUnitOfWork(), clock, contentStore, new EkycOptions(),
+            citizenIdIndex: OwnerIdentityTestSupport.BlindIndex);
+
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => withIndex.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", default));
+
+        Assert.Equal("CITIZEN_ID_ALREADY_USED", error.Extensions["reason"]);
+    }
+
+    [Fact]
+    public void BlindIndex_IsDeterministicKeyedAndDisabledWithoutKey()
+    {
+        CitizenIdBlindIndex index = OwnerIdentityTestSupport.BlindIndex;
+        Assert.Equal(64, index.Compute("079200012345")!.Length);
+        Assert.Equal(index.Compute("079200012345"), index.Compute("079200012345"));
+        Assert.NotEqual(index.Compute("079200012345"), index.Compute("079200012346"));
+        Assert.NotEqual(index.Compute("079200012345"), new CitizenIdBlindIndex(Convert.ToBase64String(new byte[32])).Compute("079200012345"));
+        Assert.Null(new CitizenIdBlindIndex(null).Compute("079200012345"));
+        Assert.Throws<InvalidOperationException>(() => new CitizenIdBlindIndex(Convert.ToBase64String(new byte[8])));
+    }
+
+    [Fact]
     public async Task FirstEnrollment_IsRejected_WhenCitizenIdAlreadyBoundToAnotherUser()
     {
         Guid otherUserId = Guid.NewGuid();

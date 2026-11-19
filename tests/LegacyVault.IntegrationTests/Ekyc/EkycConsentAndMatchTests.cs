@@ -319,9 +319,9 @@ public sealed class EkycConsentAndMatchTests
     [Fact]
     public async Task Confirm_OwnerEnrollment_StoresCorrectedNameAndBirthDate_KeepsCitizenIdFromOcr()
     {
-        // OCR đọc sai tên và ngày sinh; Owner sửa lại trên form thì bản sửa được lưu làm danh tính tạm.
+        // OCR đọc sai dấu/một ký tự trong tên; Owner sửa lại trên form (ngày sinh phải khớp OCR) thì bản sửa được lưu.
         Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
-        client.Reading = Reading("079200012345", "NGUYEN VAN AM", "2000-02-11");
+        client.Reading = Reading("079200012345", "NGUYEN VAN AM", "2000-02-01");
         EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", default);
         EkycVerification stored = Assert.Single(repository.Verifications);
 
@@ -334,6 +334,21 @@ public sealed class EkycConsentAndMatchTests
         Assert.Equal(EkycRules.NormalizeName("Nguyễn Văn An"), pending.FullName);
         Assert.Equal(new DateOnly(2000, 2, 1), pending.DateOfBirth);
         Assert.Equal("079200012345", pending.CitizenId);
+    }
+
+    [Fact]
+    public async Task Confirm_OwnerEnrollment_DeclaredBirthDateDiffersFromOcr_IsRejectedAndNothingStored()
+    {
+        Consent(EkycPurpose.OwnerEnrollment, Now, EkycRules.NoticeVersion);
+        client.Reading = Reading("079200012345", "NGUYEN VAN AM", "2000-02-11");
+        EkycDocumentResponse front = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", default);
+        EkycVerification stored = Assert.Single(repository.Verifications);
+
+        // Form khai ngày sinh 2000-02-01, OCR đọc 2000-02-11: lệch.
+        await Assert.ThrowsAsync<AppException>(
+            () => service.ConfirmDocumentAsync(Confirmation(front.VerificationId!.Value), default));
+
+        Assert.Equal(new DateOnly(2000, 2, 11), identityProtector.UnprotectPending(stored)!.DateOfBirth);
     }
 
     [Theory]

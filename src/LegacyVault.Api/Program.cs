@@ -65,6 +65,13 @@ if (builder.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
         Console.WriteLine("--> [Database Migration] Cập nhật schema cơ sở dữ liệu thành công!");
+        int hashed = await LegacyVault.Infrastructure.Security.CitizenIdHashBackfill.RunAsync(
+            db, scope.ServiceProvider.GetRequiredService<LegacyVault.Application.Security.IOwnerIdentityProtector>(),
+            scope.ServiceProvider.GetRequiredService<LegacyVault.Application.Security.ICitizenIdBlindIndex>(), app.Logger, CancellationToken.None);
+        if (hashed > 0)
+        {
+            Console.WriteLine($"--> [Backfill CCCD] Đã điền hash cho {hashed} danh tính.");
+        }
     }
     catch (Exception ex)
     {
