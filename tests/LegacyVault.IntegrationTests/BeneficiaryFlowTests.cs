@@ -2,11 +2,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
+using LegacyVault.Infrastructure.Data;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests;
@@ -269,6 +272,36 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         // Kiểm tra: bị từ chối ở trường dateOfBirth.
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(put, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         Assert.True(problem.GetProperty("errors").TryGetProperty("dateOfBirth", out _));
+    }
+
+    [SqlFact]
+    public async Task Beneficiary_ResubmittingLegacyUnderEighteenProfileReturnsExistingNotError()
+    {
+        // Chuẩn bị: hồ sơ cũ chưa đủ 18 tuổi (tạo từ trước khi có quy tắc tuổi). Tạo người lớn rồi sửa thẳng ngày sinh trong DB.
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
+        Guid createdId = created.GetProperty("id").GetGuid();
+        string tenYearsAgo = TodayInVietnam().AddYears(-10).ToString("yyyy-MM-dd");
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            IBeneficiaryDataProtector protector = scope.ServiceProvider.GetRequiredService<IBeneficiaryDataProtector>();
+            Beneficiary row = await db.Beneficiaries.SingleAsync(b => b.Id == createdId);
+            BeneficiaryPersonalData data = protector.Unprotect(row);
+            data.DateOfBirth = DateOnly.Parse(tenYearsAgo);
+            protector.Protect(row, data);
+            await db.SaveChangesAsync();
+        }
+
+        // Hành động: gửi lại đúng hồ sơ đó (cùng CCCD, họ tên, ngày sinh).
+        HttpResponseMessage response = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = tenYearsAgo, email = Email });
+
+        // Kiểm tra: 200 trả hồ sơ cũ, không tạo thêm. Chỉ hồ sơ mới mới bị kiểm tuổi.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        JsonElement existing = await ApiTestHelpers.ReadJsonAsync(response);
+        Assert.Equal(createdId, existing.GetProperty("id").GetGuid());
+        Assert.Equal(1, await CountBeneficiariesAsync(vaultId));
     }
 
     [SqlFact]
