@@ -13,6 +13,9 @@ services:
         value: Production
       - key: AllowedHosts
         value: "*"
+      # API chỉ nhận request qua proxy của Render: tin X-Forwarded-* để rate limit và khóa đăng nhập theo IP thật.
+      - key: ForwardedHeaders__TrustAnyProxy
+        value: "true"
 
       # --- Database ---
       # Render PostgreSQL/MySQL không dùng được: API cần SQL Server.
