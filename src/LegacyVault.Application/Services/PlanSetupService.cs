@@ -88,6 +88,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return found.Select(u => new ExecutorCandidateResponse(u.Id, u.FullName, u.Email)).ToList();
     }
 
+    // GET plan-setup: FE gọi để hiện checklist điều kiện kích hoạt. Chỉ đọc, không ghi gì. Chi tiết ở BuildAsync.
     public async Task<PlanSetupResponse> GetAsync(Guid vaultId, CancellationToken ct) =>
         await BuildAsync(await OwnedAsync(vaultId, ct), ct);
 
@@ -139,9 +140,12 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             // Người thực thi là nhân sự LegacyVault, không phải người nhận.
             Executor item = new Executor
             {
-                VaultId = vault.Id, Status = ExecutorStatus.Invited,
-                InviteeEmail = email, InvitationTokenHash = token.Hash,
-                InvitedAt = now, ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7),
+                VaultId = vault.Id,
+                Status = ExecutorStatus.Invited,
+                InviteeEmail = email,
+                InvitationTokenHash = token.Hash,
+                InvitedAt = now,
+                ExpiresAt = now + RuntimeSettings.Days("Executor.InvitationExpiresDays", 7),
                 ReplacesExecutorId = replaces,
             };
             invitations.Add(item);
@@ -214,9 +218,12 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             }
             Executor item = new Executor
             {
-                VaultId = vault.Id, Status = ExecutorStatus.Invited,
-                InviteeEmail = target.Email.Trim().ToLowerInvariant(), InvitationTokenHash = token.Hash,
-                InvitedAt = now, ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7)),
+                VaultId = vault.Id,
+                Status = ExecutorStatus.Invited,
+                InviteeEmail = target.Email.Trim().ToLowerInvariant(),
+                InvitationTokenHash = token.Hash,
+                InvitedAt = now,
+                ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7)),
                 ReplacesExecutorId = replaces,
             };
             invitations.Add(item);
@@ -448,6 +455,10 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             return Map(item);
         }, ct);
 
+    /// <summary>
+    /// POST activate: Chủ kho ký di chúc lần đầu và kích hoạt kế hoạch (PIN kiểm ở filter RequireVaultPin).
+    /// Phần ghi dữ liệu nằm ở ActivateCoreAsync; thư báo người nhận gửi sau, ngoài giao dịch.
+    /// </summary>
     public async Task<PlanSetupResponse> ActivateAsync(Guid vaultId, ActivatePlanRequest request, CancellationToken ct)
     {
         bool activated = false;
@@ -460,20 +471,28 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return response;
     }
 
+    /// <summary>
+    /// Kích hoạt trong một giao dịch Serializable. Thứ tự: (1) kiểm quyền sở hữu và tài khoản, (2) kiểm chính sách đã xác nhận,
+    /// (3) kiểm ConfigVersion, (4) gọi lặp thì trả nguyên trạng, (5) kiểm đủ điều kiện bằng BuildAsync, (6) ghi dữ liệu.
+    /// Bảng ghi: HandoverPlans (Active), bảng kỳ điểm danh, ExecutorKeyShards (mã mở gói), WillVersions (bản ký số 1), AuditLogs.
+    /// </summary>
     private Task<PlanSetupResponse> ActivateCoreAsync(Guid vaultId, ActivatePlanRequest request, Action markActivated, CancellationToken ct) =>
         unitOfWork.ExecuteSerializableAsync(async () =>
         {
+            // (1) Kho phải của người đang đăng nhập; chủ kho còn Active và đã xác minh email.
             Vault vault = await OwnedAsync(vaultId, ct);
             await UsableUserAsync(vault.OwnerId, ct);
+            // (2) Phải tick đã đọc chính sách và đúng phiên bản chính sách hiện hành.
             if (!request.AcknowledgePolicy || request.PolicyVersion != PolicyVersion)
             {
                 throw new AppException(AppErrorType.Validation, ErrorCode.PolicyAcknowledgementRequired, "Cần đọc và xác nhận chính sách hiện hành.");
             }
+            // (3) FE gửi ConfigVersion lúc nó tải; lệch nghĩa là cấu hình đã đổi sau đó, phải tải lại rồi xem lại trước khi ký.
             if (request.ConfigVersion != vault.Plan.ConfigVersion)
             {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict, "Cấu hình kế hoạch đã thay đổi. Tải lại trước khi kích hoạt.");
             }
-            // A duplicate request returns the existing state without resetting deadlines or opening a period.
+            // (4) A duplicate request returns the existing state without resetting deadlines or opening a period.
             if (vault.Plan.Status == PlanStatus.Active)
             {
                 return await BuildAsync(vault, ct);
@@ -482,12 +501,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.PlanActivationNotAllowed, "Trạng thái kế hoạch không cho phép kích hoạt lại.");
             }
+            // (5) Kiểm lại đủ điều kiện ở server, không tin checklist FE. Thiếu thì trả danh sách mã thiếu cho FE hiện.
             PlanSetupResponse setup = await BuildAsync(vault, ct);
             if (!setup.CanActivate)
             {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.PlanActivationRequirementsNotMet,
                     "Kế hoạch chưa đủ điều kiện kích hoạt.", new Dictionary<string, object?> { ["missingRequirements"] = setup.MissingRequirements });
             }
+            // (6) Ghi dữ liệu. Tất cả nằm trong một giao dịch: lỗi ở đâu thì hoàn tác hết.
             DateTimeOffset now = time.GetUtcNow();
             vault.Plan.Status = PlanStatus.Active;
             vault.Plan.ActivatedAt = now;
@@ -547,7 +568,10 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         }, ct);
     }
 
-    /// <summary>Tạo phiên bản di chúc kế tiếp từ cấu hình hiện tại (chưa lưu; người gọi SaveChanges cùng thao tác chính).</summary>
+    /// <summary>
+    /// Tạo phiên bản di chúc kế tiếp từ cấu hình hiện tại (chưa lưu; người gọi SaveChanges cùng thao tác chính).
+    /// Kích hoạt gọi hàm này để tạo bản ký số 1; ký lại gọi để tạo bản số 2, 3... Bản chụp chỉ chứa id, ghi vào bảng WillVersions.
+    /// </summary>
     private async Task<WillVersion> AddWillVersionAsync(
         Vault vault, List<Container> openContainers, DateTimeOffset now, CancellationToken ct)
     {
@@ -598,9 +622,18 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         && vault.Entitlement.Status == EntitlementStatus.PaidActive
         && vault.Entitlement.ServiceExpiresAt > time.GetUtcNow();
 
+    /// <summary>
+    /// Dựng câu trả lời cho màn Kích hoạt. Chỉ đọc, không ghi. Ba phần:
+    /// A) kiểm 9 điều kiện kích hoạt, thiếu điều kiện nào thì thêm mã vào "missing" (kích hoạt được khi "missing" rỗng);
+    /// B) dựng dữ liệu hiển thị: Executor, người nhận, gói, tài sản ngoài gói;
+    /// C) so bản ký gần nhất với cấu hình hiện tại để tính cờ hasUnsignedChanges (cờ báo cần ký lại).
+    /// Gọi từ GetAsync, ActivateCoreAsync và SignWillAsync.
+    /// </summary>
     private async Task<PlanSetupResponse> BuildAsync(Vault vault, CancellationToken ct)
     {
+        // ===== A. Kiểm điều kiện kích hoạt: mỗi điều kiện thiếu thì thêm một mã, không dừng ở lỗi đầu tiên =====
         List<string> missing = new List<string>();
+        // Điều kiện 1-2: chủ kho Active và đã xác minh email (bảng Users).
         User? user = await users.FindByIdAsync(vault.OwnerId, ct);
         if (user?.Status != UserStatus.Active)
         {
@@ -610,15 +643,18 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         {
             missing.Add("EMAIL_VERIFICATION_REQUIRED");
         }
+        // Điều kiện 3: kho đang mở (bảng Vaults).
         if (vault.Status != VaultStatus.Open)
         {
             missing.Add("VAULT_NOT_OPEN");
         }
+        // Điều kiện 4: không có lệnh giữ đang hiệu lực.
         bool hasActiveHold = await holdReader.HasActiveHoldAsync(vault.Id, ct);
         if (hasActiveHold)
         {
             missing.Add("HOLD_ACTIVE");
         }
+        // Điều kiện 5: có gói trả phí còn hạn (bảng VaultEntitlements, xem hàm Paid).
         if (!Paid(vault))
         {
             missing.Add("PAID_SERVICE_REQUIRED");
@@ -629,11 +665,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         {
             missing.Add("OWNER_EKYC_REQUIRED");
         }
+        // Điều kiện 7: có ít nhất một gói Ready (bảng Containers).
         int readyContainersCount = await containers.CountReadyByVaultIdAsync(vault.Id, ct);
         if (readyContainersCount == 0)
         {
             missing.Add("READY_CONTAINER_REQUIRED");
         }
+        // Điều kiện 8: lọc các Executor "đã chấp nhận hợp lệ": Accepted, đúng phiên bản phạm vi nhiệm vụ,
+        // tài khoản còn Active, đã xác minh email, không phải chủ kho.
         List<Executor> accepted = new List<Executor>();
         foreach (Executor item in vault.Executors)
         {
@@ -666,10 +705,12 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         {
             missing.Add("PRIMARY_EXECUTOR_REQUIRED");
         }
+        // Điều kiện 9: chỉ kích hoạt khi kế hoạch còn Nháp.
         if (vault.Plan.Status != PlanStatus.Draft)
         {
             missing.Add("PLAN_NOT_DRAFT");
         }
+        // ===== B. Dựng dữ liệu hiển thị cho FE =====
         List<Container> openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
         List<Asset> outsideAssets = await assets.FindOutsideContainerByVaultIdAsync(vault.Id, ct);
         List<PlanSetupRecipientResponse> recipients = await BuildRecipientsAsync(vault, openContainers, ct);
@@ -702,6 +743,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             ownerFullName = user.FullName;
             ownerEmail = user.Email;
         }
+        // ===== C. Bản ký gần nhất và cờ "có thay đổi chưa ký lại" (bảng WillVersions) =====
         int? willVersionNo = null;
         DateTimeOffset? willSignedAt = null;
         bool hasUnsignedChanges = false;
