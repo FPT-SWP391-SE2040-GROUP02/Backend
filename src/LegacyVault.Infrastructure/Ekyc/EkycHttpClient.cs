@@ -216,7 +216,7 @@ public sealed class EkycHttpClient : IEkycClient
     public async Task<byte[]> GetLivenessSelfieAsync(string sessionId, CancellationToken ct)
     {
         using (HttpResponseMessage response = await SendAsync(
-            HttpMethod.Get, "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie?allow_captured=true", null, ct))
+            HttpMethod.Get, "api/liveness/" + Uri.EscapeDataString(sessionId) + "/selfie", null, ct))
         {
             if (response.IsSuccessStatusCode)
             {

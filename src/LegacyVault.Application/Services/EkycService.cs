@@ -262,6 +262,8 @@ public sealed class EkycService : IEkycService
         string? previousSession = verification.LivenessSessionId;
         EkycLivenessState state = await ActiveClient().StartLivenessAsync(ct);
         verification.LivenessSessionId = state.SessionId;
+        // Phiên mới phải tự đạt lại: không thừa hưởng kết quả đạt của phiên cũ.
+        verification.LivenessPassed = false;
         await unitOfWork.SaveChangesAsync(ct);
 
         if (previousSession != null)
@@ -299,12 +301,19 @@ public sealed class EkycService : IEkycService
         string sessionId = RequireLivenessSession(verification);
         string documentToken = verification.DocumentToken!;
 
-        // selfie lấy từ chính phiên đã đạt. Phiên chưa đạt thì dịch vụ từ chối (EKYC_LIVENESS_NOT_PASSED).
+        // Backend tự đòi phiên đã được dịch vụ báo đạt (cả động tác lẫn chống giả mạo) ở bước gửi khung hình,
+        // không tin việc dịch vụ trả được ảnh.
+        if (!verification.LivenessPassed)
+        {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EkycLivenessNotPassed,
+                "Bạn chưa hoàn thành thử thách camera.");
+        }
+
+        // selfie lấy từ chính phiên đã đạt. Dịch vụ kiểm lại lúc trả ảnh (phiên đổi mặt hoặc hỏng sau khi đạt thì
+        // từ chối, EKYC_LIVENESS_NOT_PASSED).
         byte[] selfie = await ActiveClient().GetLivenessSelfieAsync(sessionId, ct);
 
-        // Dịch vụ chỉ trả selfie khi cả động tác và chống giả mạo trong phiên đều đạt.
         verification.SpoofCheckPassed = true;
-        verification.LivenessPassed = true;
         double threshold = ekycOptions.CurrentThreshold;
 
         EkycFaceComparison comparison = await ActiveClient().CompareFaceAsync(

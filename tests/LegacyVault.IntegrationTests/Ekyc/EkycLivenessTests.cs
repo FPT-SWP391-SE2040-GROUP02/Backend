@@ -60,6 +60,15 @@ public sealed class EkycLivenessTests
         return Assert.Single(repository.Verifications);
     }
 
+    /// <summary>Đã bắt đầu và gửi khung hình mà dịch vụ báo đạt cả động tác lẫn chống giả mạo.</summary>
+    private async Task<EkycVerification> PassedAsync()
+    {
+        EkycVerification verification = await StartedAsync();
+        client.LivenessFrame = new EkycLivenessState { Passed = true, ChallengeCompleted = true, PadPassed = true };
+        await service.SubmitLivenessFrameAsync(Image(), "f.jpg", "image/jpeg", CancellationToken.None);
+        return verification;
+    }
+
     [Fact]
     public async Task Start_StoresSessionAndHidesItFromResponse()
     {
@@ -169,7 +178,7 @@ public sealed class EkycLivenessTests
     [Fact]
     public async Task Complete_UsesSessionSelfie_PassesAndClosesEverything()
     {
-        EkycVerification verification = await StartedAsync();
+        EkycVerification verification = await PassedAsync();
 
         EkycStatusResponse response = await service.CompleteLivenessAsync(CancellationToken.None);
 
@@ -187,7 +196,7 @@ public sealed class EkycLivenessTests
     [Fact]
     public async Task Complete_ScoreBelowThreshold_Fails()
     {
-        await StartedAsync();
+        await PassedAsync();
         client.Comparison = new EkycFaceComparison { Score = 0.1, Matched = true };
 
         EkycStatusResponse response = await service.CompleteLivenessAsync(CancellationToken.None);
@@ -197,11 +206,9 @@ public sealed class EkycLivenessTests
     }
 
     [Fact]
-    public async Task Complete_ChallengeNotPassed_RejectedAndStillPending()
+    public async Task Complete_WithoutPassedFrame_RejectedWithoutFetchingSelfie()
     {
         EkycVerification verification = await StartedAsync();
-        client.LivenessSelfieError = new AppException(
-            AppErrorType.Conflict, ErrorCode.EkycLivenessNotPassed, "Bạn chưa hoàn thành thử thách camera.");
 
         AppException error = await Assert.ThrowsAsync<AppException>(
             () => service.CompleteLivenessAsync(CancellationToken.None));
@@ -210,7 +217,37 @@ public sealed class EkycLivenessTests
         Assert.Equal(EkycStatus.Pending, verification.Status);
         Assert.False(verification.LivenessPassed);
         Assert.Equal("live-1", verification.LivenessSessionId);
+        Assert.Null(client.LastSelfieSession);
         Assert.Null(client.LastThreshold);
+    }
+
+    [Fact]
+    public async Task Complete_ServiceRefusesSelfieAfterPass_RejectedAndStillPending()
+    {
+        EkycVerification verification = await PassedAsync();
+        client.LivenessSelfieError = new AppException(
+            AppErrorType.Conflict, ErrorCode.EkycLivenessNotPassed, "Bạn chưa hoàn thành thử thách camera.");
+
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => service.CompleteLivenessAsync(CancellationToken.None));
+
+        Assert.Equal(ErrorCode.EkycLivenessNotPassed, error.Code);
+        Assert.Equal(EkycStatus.Pending, verification.Status);
+        Assert.Equal("live-1", verification.LivenessSessionId);
+        Assert.Null(client.LastThreshold);
+    }
+
+    [Fact]
+    public async Task Start_AgainAfterPass_NewSessionMustPassAgain()
+    {
+        EkycVerification verification = await PassedAsync();
+
+        await service.StartLivenessAsync(CancellationToken.None);
+
+        Assert.False(verification.LivenessPassed);
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => service.CompleteLivenessAsync(CancellationToken.None));
+        Assert.Equal(ErrorCode.EkycLivenessNotPassed, error.Code);
     }
 
     [Fact]
@@ -227,7 +264,7 @@ public sealed class EkycLivenessTests
     [Fact]
     public async Task Complete_Twice_SecondIsConflict()
     {
-        await StartedAsync();
+        await PassedAsync();
         await service.CompleteLivenessAsync(CancellationToken.None);
 
         AppException error = await Assert.ThrowsAsync<AppException>(
@@ -263,7 +300,7 @@ public sealed class EkycLivenessTests
     [Fact]
     public async Task Complete_DirectPath_NeedsNoExtraSelfie()
     {
-        await StartedAsync();
+        await PassedAsync();
 
         EkycStatusResponse response = await service.CompleteLivenessAsync(CancellationToken.None);
 
