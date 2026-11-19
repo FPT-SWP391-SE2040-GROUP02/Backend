@@ -117,7 +117,6 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vault.Id;
         EnsureDateOfBirthNotInFuture(data.DateOfBirth, today);
-        EnsureAdult(data.DateOfBirth, today);
 
         // hồ sơ chung trong kho, một số CCCD chỉ có một hồ sơ.
         MatchedBeneficiary? existing = await FindSameCitizenIdAsync(vault.Id, data.CitizenId, ct);
@@ -125,6 +124,9 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         {
             return await ResultForExistingAsync(existing, data, ct);
         }
+
+        // Sau bước tìm trùng: gửi lại đúng hồ sơ cũ (chưa đủ tuổi từ trước) vẫn trả 200, chỉ hồ sơ mới mới bị kiểm tuổi.
+        EnsureAdult(data.DateOfBirth, today);
 
         // Giới hạn số hồ sơ người nhận theo tổng suất của kho (suất kèm hạng + suất mua thêm), tính cả hồ sơ chưa ở gói nào.
         // Kiểm sau bước tìm trùng CCCD: gửi lại đúng người đã có vẫn trả hồ sơ cũ dù kho đã đủ suất.
