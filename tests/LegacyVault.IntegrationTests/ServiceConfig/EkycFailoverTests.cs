@@ -85,15 +85,45 @@ public sealed class EkycFailoverTests
     }
 
     [Fact]
-    public async Task NoApiKey_SendsNoKeyHeader()
+    public async Task NoApiKey_OnLoopback_SendsNoKeyHeader()
+    {
+        Setup setup = new Setup();
+        setup.Resolver.Slots[SystemConfigSlot.Primary] = Config("127.0.0.1", null);
+        setup.Handler.ByHost["127.0.0.1"] = () => Status(HttpStatusCode.OK);
+
+        await setup.Client().DeleteDocumentAsync("tok", CancellationToken.None);
+
+        Assert.Null(setup.Handler.Calls.Single().Key);
+    }
+
+    [Fact]
+    public async Task NoApiKey_OnRemoteHost_IsNeverCalledAndIsUnavailable()
     {
         Setup setup = new Setup();
         setup.Resolver.Slots[SystemConfigSlot.Primary] = Config(PrimaryHost, null);
         setup.Handler.ByHost[PrimaryHost] = () => Status(HttpStatusCode.OK);
 
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => setup.Client().DeleteDocumentAsync("tok", CancellationToken.None));
+
+        Assert.Equal(ErrorCode.EkycServiceUnavailable, error.Code);
+        Assert.Empty(setup.Handler.Calls);
+    }
+
+    [Fact]
+    public async Task PrimaryWithoutApiKey_IsSkippedAndFallbackWithKeyIsUsed()
+    {
+        Setup setup = new Setup();
+        setup.Resolver.Slots[SystemConfigSlot.Primary] = Config(PrimaryHost, null);
+        setup.Resolver.Slots[SystemConfigSlot.Fallback] = Config(FallbackHost, "fallback-key-2222");
+        setup.Handler.ByHost[PrimaryHost] = () => Status(HttpStatusCode.OK);
+        setup.Handler.ByHost[FallbackHost] = () => Status(HttpStatusCode.OK);
+
         await setup.Client().DeleteDocumentAsync("tok", CancellationToken.None);
 
-        Assert.Null(setup.Handler.Calls.Single().Key);
+        RecordedCall call = setup.Handler.Calls.Single();
+        Assert.Equal(FallbackHost, call.Uri.Host);
+        Assert.Equal("fallback-key-2222", call.Key);
     }
 
     [Theory]
