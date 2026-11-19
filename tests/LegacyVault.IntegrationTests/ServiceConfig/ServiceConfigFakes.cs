@@ -76,7 +76,10 @@ internal static class EkycTestClients
         Dictionary<string, string> settings = new Dictionary<string, string>();
         settings["baseUrl"] = "http://ekyc.test";
         settings["timeoutSeconds"] = "60";
-        resolver.Slots[SystemConfigSlot.Primary] = FakeConfigResolver.Config(settings, new Dictionary<string, string>());
+        // Dịch vụ ngoài máy này bắt buộc có khóa API (EkycHttpClient bỏ qua ô thiếu khóa).
+        Dictionary<string, string> secrets = new Dictionary<string, string>();
+        secrets["apiKey"] = "test-key";
+        resolver.Slots[SystemConfigSlot.Primary] = FakeConfigResolver.Config(settings, secrets);
         return new LegacyVault.Infrastructure.Ekyc.EkycHttpClient(
             new HttpClient(handler),
             resolver,

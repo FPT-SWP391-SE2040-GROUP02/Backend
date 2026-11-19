@@ -372,6 +372,15 @@ public sealed class EkycHttpClient : IEkycClient
             {
                 continue;
             }
+            // Dịch vụ ngoài máy này mà chưa có khóa API: không gọi (dịch vụ eKYC cũng không khởi động nếu thiếu khóa).
+            string? apiKey = null;
+            bool hasApiKey = config.Secrets.TryGetValue("apiKey", out apiKey) && !string.IsNullOrWhiteSpace(apiKey);
+            if (!hasApiKey && !baseUri.IsLoopback)
+            {
+                logger?.LogError("eKYC: Ô {Slot} chưa có khóa API nên không gọi dịch vụ ở địa chỉ ngoài máy này.", slot);
+                Record(slot, false, "NO_API_KEY");
+                continue;
+            }
             if (lastFailure != null)
             {
                 lastFailure.Dispose();
@@ -380,8 +389,7 @@ public sealed class EkycHttpClient : IEkycClient
 
             HttpRequestMessage request = new HttpRequestMessage(method, new Uri(baseUri, path));
             request.Content = content;
-            string? apiKey = null;
-            if (config.Secrets.TryGetValue("apiKey", out apiKey) && !string.IsNullOrWhiteSpace(apiKey))
+            if (hasApiKey)
             {
                 request.Headers.Add("X-Ekyc-Key", apiKey);
             }
