@@ -227,8 +227,8 @@ public static class InfrastructureConfig
         int passwordHashIterations = Math.Max(
             100_000, configuration.GetValue("Auth:PasswordHashIterations", Pbkdf2PasswordHasher.DefaultIterations));
         services.AddSingleton<IPasswordHasher>(new Pbkdf2PasswordHasher(passwordHashIterations));
-        // PIN kho chỉ 6 chữ số nên PBKDF2 nặng không tăng độ an toàn: giữ nguyên cách băm cũ.
-        services.AddSingleton<IVaultPinHasher>(new VaultPinHasher(new Sha256PasswordHasher()));
+        // PIN kho chỉ 6 chữ số (10^6 khả năng) nên SHA-256 một vòng bị dò ra tức thì khi lộ DB: dùng chung PBKDF2.
+        services.AddSingleton<IVaultPinHasher, VaultPinHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddScoped<ISessionRevocationValidator, SessionRevocationValidator>();
         services.AddHttpContextAccessor();

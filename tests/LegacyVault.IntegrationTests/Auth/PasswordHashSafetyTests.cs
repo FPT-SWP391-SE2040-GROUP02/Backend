@@ -76,3 +76,23 @@ public sealed class Pbkdf2PasswordHasherTests
         Assert.False(_hasher.Verify("fixture", hash));
     }
 }
+
+/// <summary>PIN kho dùng PBKDF2; PIN cũ SHA-256 vẫn mở được và được báo cần băm lại.</summary>
+public sealed class VaultPinHasherUpgradeTests
+{
+    [Fact]
+    public void LegacyPin_Verifies_NeedsRehash_AndNewPinIsPbkdf2()
+    {
+        VaultPinHasher hasher = new VaultPinHasher(new Pbkdf2PasswordHasher(1000));
+        Guid vault = Guid.NewGuid();
+        string legacy = new Sha256PasswordHasher().Hash("123456");
+
+        Assert.True(hasher.Verify(vault, "123456", legacy));
+        Assert.True(hasher.NeedsRehash(legacy));
+
+        string fresh = hasher.Hash(vault, "123456");
+        Assert.StartsWith("pbkdf2$", fresh);
+        Assert.False(hasher.NeedsRehash(fresh));
+        Assert.False(hasher.Verify(vault, "654321", fresh));
+    }
+}

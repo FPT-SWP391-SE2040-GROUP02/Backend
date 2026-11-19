@@ -192,6 +192,10 @@ public sealed class VaultPinService : IVaultPinService
 
         if (VaultPinRules.IsWellFormed(pin) && pinHasher.Verify(vault.Id, pin, record.PinHash))
         {
+            if (pinHasher.NeedsRehash(record.PinHash))
+            {
+                record.PinHash = pinHasher.Hash(vault.Id, pin);
+            }
             record.FailedCount = 0;
             record.LockLevel = 0;
             record.LockedUntil = null;

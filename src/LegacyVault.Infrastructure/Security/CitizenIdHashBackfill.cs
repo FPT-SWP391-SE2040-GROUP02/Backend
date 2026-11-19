@@ -8,8 +8,9 @@ namespace LegacyVault.Infrastructure.Security;
 
 /// <summary>
 /// Điền CitizenIdHash cho các danh tính gắn trước khi có cột này: giải mã từng dòng, tính hash, lưu từng dòng.
-/// Chạy được nhiều lần (chỉ đụng dòng chưa có hash). Dòng trùng hash với dòng khác (dữ liệu cũ đã trùng CCCD)
-/// bị bỏ qua và ghi cảnh báo kèm UserId, không ghi số CCCD.
+/// Chạy được nhiều lần và an toàn khi nhiều instance khởi động cùng lúc (chỉ đụng dòng chưa có hash; instance
+/// thua cuộc gặp vi phạm unique thì bỏ qua dòng đó). Lỗi một dòng (không giải mã được, trùng số) chỉ ghi cảnh báo
+/// kèm UserId rồi đi tiếp, không bao giờ làm API không khởi động. Không ghi số CCCD vào log.
 /// </summary>
 public static class CitizenIdHashBackfill
 {
@@ -21,25 +22,31 @@ public static class CitizenIdHashBackfill
             return 0;
         }
 
-        List<Guid> pendingIds = await context.OwnerIdentities
-            .Where(i => i.CitizenIdHash == null)
-            .Select(i => i.Id)
-            .ToListAsync(ct);
-
+        // Một truy vấn lấy cả các dòng cần điền (bảng nhỏ: mỗi Owner tối đa một dòng).
+        List<OwnerIdentity> pending = await context.OwnerIdentities.Where(i => i.CitizenIdHash == null).ToListAsync(ct);
+        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
         int filled = 0;
-        foreach (Guid id in pendingIds)
+        foreach (OwnerIdentity identity in pending)
         {
-            OwnerIdentity identity = await context.OwnerIdentities.FirstAsync(i => i.Id == id, ct);
-            string hash = index.Compute(protector.Unprotect(identity).CitizenId)!;
-            bool taken = await context.OwnerIdentities.AnyAsync(i => i.CitizenIdHash == hash && i.Id != id, ct);
-            if (taken)
+            try
             {
-                logger.LogWarning("Backfill CCCD: danh tính của user {UserId} trùng số với danh tính khác, bỏ qua.", identity.UserId);
-                continue;
+                string hash = index.Compute(protector.Unprotect(identity).CitizenId)!;
+                bool takenInDb = await context.OwnerIdentities.AnyAsync(i => i.CitizenIdHash == hash && i.Id != identity.Id, ct);
+                if (takenInDb || !seen.Add(hash))
+                {
+                    logger.LogWarning("Backfill CCCD: danh tính của user {UserId} trùng số với danh tính khác, bỏ qua.", identity.UserId);
+                    continue;
+                }
+                identity.CitizenIdHash = hash;
+                await context.SaveChangesAsync(ct);
+                filled++;
             }
-            identity.CitizenIdHash = hash;
-            await context.SaveChangesAsync(ct);
-            filled++;
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Backfill CCCD: bỏ qua danh tính của user {UserId}.", identity.UserId);
+                identity.CitizenIdHash = null;
+                context.Entry(identity).State = EntityState.Detached;
+            }
         }
         return filled;
     }

@@ -3,7 +3,7 @@ using LegacyVault.Application.Security;
 namespace LegacyVault.Infrastructure.Security;
 
 /// <summary>
-/// Băm PIN kho bằng đúng bộ băm mật khẩu hiện có (<see cref="IPasswordHasher"/>: SHA-256 kèm salt riêng mỗi PIN).
+/// Băm PIN kho bằng đúng bộ băm mật khẩu hiện có (<see cref="IPasswordHasher"/>: PBKDF2 kèm salt riêng mỗi PIN; PIN cũ SHA-256 vẫn xác thực và được băm lại khi mở khóa đúng).
 /// </summary>
 /// <remarks>
 /// PIN 6 chữ số chỉ có 1.000.000 tổ hợp nên ai có DB đều dò ra được; PIN chặn người dùng tài khoản,
@@ -27,5 +27,10 @@ public sealed class VaultPinHasher : IVaultPinHasher
     public bool Verify(Guid vaultId, string pin, string pinHash)
     {
         return passwordHasher.Verify(pin, pinHash);
+    }
+
+    public bool NeedsRehash(string pinHash)
+    {
+        return passwordHasher.NeedsRehash(pinHash);
     }
 }

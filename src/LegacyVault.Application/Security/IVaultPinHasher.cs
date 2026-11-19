@@ -12,4 +12,7 @@ public interface IVaultPinHasher
     string Hash(Guid vaultId, string pin);
 
     bool Verify(Guid vaultId, string pin, string pinHash);
+
+    /// <summary>true khi PIN đang lưu bằng định dạng cũ hoặc ít vòng hơn cấu hình: mở khóa đúng thì băm lại.</summary>
+    bool NeedsRehash(string pinHash) => false;
 }

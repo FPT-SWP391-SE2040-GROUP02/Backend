@@ -709,7 +709,7 @@ public sealed class EkycService : IEkycService
         {
             await unitOfWork.SaveChangesAsync(ct);
         }
-        catch (Exception exception) when (identityRepository.IsUniqueViolation(exception))
+        catch (Exception exception) when (identityRepository.IsCitizenIdHashViolation(exception))
         {
             // Hai yêu cầu cùng lúc gắn cùng một CCCD: DB chặn yêu cầu đến sau, trả lỗi nghiệp vụ thay vì 500.
             await IdentityImageStorage.TryDeleteAsync(contentStore, discardedImageKey);

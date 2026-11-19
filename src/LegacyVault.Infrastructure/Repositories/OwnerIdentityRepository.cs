@@ -38,9 +38,12 @@ public sealed class OwnerIdentityRepository : IOwnerIdentityRepository
         return context.OwnerIdentities.AnyAsync(i => i.CitizenIdHash == citizenIdHash && i.UserId != excludeUserId, ct);
     }
 
-    public bool IsUniqueViolation(Exception exception)
+    public bool IsCitizenIdHashViolation(Exception exception)
     {
-        return exception is DbUpdateException update && DbExceptions.IsUniqueViolation(update);
+        // Phân biệt theo tên index: unique UserId (đã có danh tính) là lỗi khác, không được báo thành CCCD trùng.
+        return exception is DbUpdateException update
+            && DbExceptions.IsUniqueViolation(update)
+            && update.InnerException!.Message.Contains("IX_OwnerIdentities_CitizenIdHash", StringComparison.Ordinal);
     }
 
     public void Add(OwnerIdentity identity)

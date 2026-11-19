@@ -95,7 +95,7 @@ public sealed class FakeOwnerIdentityRepository : IOwnerIdentityRepository
         return Task.FromResult(Identities.Any(i => i.CitizenIdHash == citizenIdHash && i.UserId != excludeUserId));
     }
 
-    public bool IsUniqueViolation(Exception exception)
+    public bool IsCitizenIdHashViolation(Exception exception)
     {
         return false;
     }
