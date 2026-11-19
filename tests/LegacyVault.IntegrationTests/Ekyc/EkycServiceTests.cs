@@ -207,6 +207,7 @@ public sealed class EkycServiceTests
             CitizenIdLast4 = "2345",
             BackSubmittedAt = Now,
             LivenessSessionId = "live-custom",
+            LivenessPassed = true,
         };
         repository.Verifications.Add(pending);
 

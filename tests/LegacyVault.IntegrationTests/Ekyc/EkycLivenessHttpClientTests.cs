@@ -33,12 +33,15 @@ public sealed class EkycLivenessHttpClientTests
 
         public string? Path { get; private set; }
 
+        public string Query { get; private set; } = string.Empty;
+
         public string? RequestBody { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Method = request.Method.Method;
             Path = request.RequestUri!.AbsolutePath;
+            Query = request.RequestUri!.Query;
             RequestBody = request.Content == null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             HttpResponseMessage response = new HttpResponseMessage(status);
             response.Content = new ByteArrayContent(body);
@@ -147,6 +150,8 @@ public sealed class EkycLivenessHttpClientTests
 
         Assert.Equal("GET", handler.Method);
         Assert.Equal("/api/liveness/sess-1/selfie", handler.Path);
+        // Không xin bỏ qua kiểm tra đạt thử thách (allow_captured): dịch vụ phải tự kiểm lúc trả ảnh.
+        Assert.Equal(string.Empty, handler.Query);
         Assert.Equal(jpeg, selfie);
     }
 

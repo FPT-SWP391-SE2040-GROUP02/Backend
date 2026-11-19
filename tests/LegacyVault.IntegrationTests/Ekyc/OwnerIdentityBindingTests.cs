@@ -74,12 +74,20 @@ public sealed class OwnerIdentityBindingTests
         return service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
     }
 
+    /// <summary>Bắt đầu thử thách camera rồi gửi khung hình mà dịch vụ báo đã đạt (Backend chỉ chốt khi phiên đã đạt).</summary>
+    private async Task StartPassedLivenessAsync()
+    {
+        await service.StartLivenessAsync(CancellationToken.None);
+        client.LivenessFrame = new EkycLivenessState { Passed = true, ChallengeCompleted = true, PadPassed = true };
+        await service.SubmitLivenessFrameAsync(Image(), "f.jpg", "image/jpeg", CancellationToken.None);
+    }
+
     /// <summary>Đăng ký trọn vẹn một lượt (đọc giấy tờ → thử thách camera → chốt) với danh tính mặc định của FakeEkycClient.</summary>
     private async Task<EkycStatusResponse> EnrollAsync()
     {
         await SubmitDocumentAsync();
         await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
-        await service.StartLivenessAsync(CancellationToken.None);
+        await StartPassedLivenessAsync();
         return await service.CompleteLivenessAsync(CancellationToken.None);
     }
 
@@ -198,7 +206,7 @@ public sealed class OwnerIdentityBindingTests
     {
         await SubmitDocumentAsync();
         await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
-        await service.StartLivenessAsync(CancellationToken.None);
+        await StartPassedLivenessAsync();
         client.Comparison = new EkycFaceComparison { Score = 0.1, Matched = false };
 
         EkycStatusResponse response = await service.CompleteLivenessAsync(CancellationToken.None);
@@ -318,7 +326,7 @@ public sealed class OwnerIdentityBindingTests
         Assert.Equal(JpegBytes(), contentStore.Contents[pendingKey!]);
 
         await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
-        await service.StartLivenessAsync(CancellationToken.None);
+        await StartPassedLivenessAsync();
         EkycStatusResponse response = await service.CompleteLivenessAsync(CancellationToken.None);
 
         Assert.Equal("PASSED", response.Status);
@@ -336,7 +344,7 @@ public sealed class OwnerIdentityBindingTests
         await SubmitJpegDocumentAsync();
         string pendingKey = Assert.Single(repository.Verifications).PendingDocumentImageStorageKey!;
         await service.SubmitBackAsync(Image(), "back.jpg", "image/jpeg", CancellationToken.None);
-        await service.StartLivenessAsync(CancellationToken.None);
+        await StartPassedLivenessAsync();
         client.Comparison = new EkycFaceComparison { Score = 0.1, Matched = false };
 
         await service.CompleteLivenessAsync(CancellationToken.None);
