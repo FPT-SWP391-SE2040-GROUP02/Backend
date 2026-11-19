@@ -261,6 +261,14 @@ public sealed class AdminService : IAdminService
         Guid adminId = await RequireAdminAsync(ct);
         UserRole newRole = ParseRole(request.Role, "role");
         string reason = RequireReason(request.Reason);
+        // Đếm Admin còn hoạt động và ghi phải cùng một giao dịch Serializable: hai Admin hạ nhau cùng lúc không thể vượt LAST_ADMIN.
+        return await unitOfWork.ExecuteSerializableAsync(
+            () => ChangeRoleCoreAsync(adminId, userId, newRole, reason, ct), ct);
+    }
+
+    private async Task<AdminUserResponse> ChangeRoleCoreAsync(
+        Guid adminId, Guid userId, UserRole newRole, string reason, CancellationToken ct)
+    {
         User user = await LoadUserAsync(userId, ct);
         if (user.Id == adminId)
         {
@@ -296,6 +304,14 @@ public sealed class AdminService : IAdminService
         Guid adminId = await RequireAdminAsync(ct);
         UserStatus newStatus = ParseStatus(request.Status, "status");
         string reason = RequireReason(request.Reason);
+        // Cùng lý do với ChangeRoleAsync: kiểm LAST_ADMIN và ghi trong một giao dịch Serializable.
+        return await unitOfWork.ExecuteSerializableAsync(
+            () => ChangeStatusCoreAsync(adminId, userId, newStatus, reason, ct), ct);
+    }
+
+    private async Task<AdminUserResponse> ChangeStatusCoreAsync(
+        Guid adminId, Guid userId, UserStatus newStatus, string reason, CancellationToken ct)
+    {
         User user = await LoadUserAsync(userId, ct);
         if (user.Id == adminId)
         {
