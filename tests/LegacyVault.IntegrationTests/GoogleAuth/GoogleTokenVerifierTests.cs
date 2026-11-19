@@ -27,6 +27,8 @@ public sealed class GoogleTokenVerifierTests
 
     private static GoogleTokenVerifier CreateVerifier(string clientId)
     {
-        return new GoogleTokenVerifier(Options.Create(new GoogleAuthSettings { ClientId = clientId }));
+        return new GoogleTokenVerifier(
+            Options.Create(new GoogleAuthSettings { ClientId = clientId }),
+            new GoogleNonceStore(TimeProvider.System));
     }
 }

@@ -361,6 +361,7 @@ public static class InfrastructureConfig
     {
         // Đăng nhập Google: Client ID đọc từ cấu hình GoogleAuth:ClientId, không viết cứng trong code.
         services.AddOptions<GoogleAuthSettings>().Bind(configuration.GetSection(GoogleAuthSettings.SectionName));
+        services.AddSingleton<IGoogleNonceStore, GoogleNonceStore>();
         services.AddSingleton<IGoogleTokenVerifier, GoogleTokenVerifier>();
         services.AddScoped<IExternalLoginRepository, ExternalLoginRepository>();
         services.AddScoped<IExternalLoginLinkTicketRepository, ExternalLoginLinkTicketRepository>();

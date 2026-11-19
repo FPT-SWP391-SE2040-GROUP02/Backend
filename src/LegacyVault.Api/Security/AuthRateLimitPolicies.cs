@@ -30,21 +30,9 @@ public static class AuthRateLimitPolicies
     /// <summary>Số lượt quên/đặt lại mật khẩu trong mỗi cửa sổ.</summary>
     public const int PasswordResetPermitLimit = 5;
 
-    /// <summary>Policy giới hạn đăng ký tài khoản (chống dò email/số điện thoại đã dùng qua lỗi 409 và chống dội email xác minh).</summary>
-    public const string Register = "auth-register";
+    /// <summary>Policy giới hạn phát nonce đăng nhập Google (mỗi lần mở trang có nút Google lấy một nonce).</summary>
+    public const string GoogleNonce = "auth-google-nonce";
 
-    /// <summary>Số lượt đăng ký trong mỗi cửa sổ cho một IP.</summary>
-    public const int RegisterPermitLimit = 10;
-
-    /// <summary>Policy giới hạn thao tác eKYC tốn tài nguyên (đọc giấy tờ, bắt đầu và chốt thử thách) theo từng người dùng.</summary>
-    public const string Ekyc = "ekyc";
-
-    /// <summary>Số lượt thao tác eKYC tốn tài nguyên trong mỗi cửa sổ cho một người dùng.</summary>
-    public const int EkycPermitLimit = 30;
-
-    /// <summary>Policy giới hạn gửi khung hình thử thách camera theo từng người dùng.</summary>
-    public const string EkycFrame = "ekyc-frame";
-
-    /// <summary>Khung hình gửi liên tục trong thử thách nên giới hạn cao hơn (dịch vụ eKYC tự chặn quá 400 khung/phiên).</summary>
-    public const int EkycFramePermitLimit = 600;
+    /// <summary>Số nonce được phát trong mỗi cửa sổ cho một IP.</summary>
+    public const int GoogleNoncePermitLimit = 30;
 }

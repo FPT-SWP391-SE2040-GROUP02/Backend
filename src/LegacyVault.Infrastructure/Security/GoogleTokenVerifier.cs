@@ -15,10 +15,12 @@ namespace LegacyVault.Infrastructure.Security;
 public sealed class GoogleTokenVerifier : IGoogleTokenVerifier
 {
     private readonly GoogleAuthSettings _settings;
+    private readonly IGoogleNonceStore _nonceStore;
 
-    public GoogleTokenVerifier(IOptions<GoogleAuthSettings> options)
+    public GoogleTokenVerifier(IOptions<GoogleAuthSettings> options, IGoogleNonceStore nonceStore)
     {
         _settings = options.Value;
+        _nonceStore = nonceStore;
     }
 
     public async Task<GoogleIdentity?> VerifyAsync(string idToken, string? expectedNonce, CancellationToken ct)
@@ -45,8 +47,9 @@ public sealed class GoogleTokenVerifier : IGoogleTokenVerifier
             return null;
         }
 
-        // FE có gửi nonce thì token phải chứa đúng nonce đó (chống dùng lại token cũ).
-        if (!string.IsNullOrEmpty(expectedNonce) && payload.Nonce != expectedNonce)
+        // Nonce bắt buộc, do chính Backend phát và chỉ dùng một lần: token phải chứa đúng nonce đó. Token bị lấy cắp,
+        // hoặc FE tự sinh nonce, đều không qua được. Chỉ tiêu thụ nonce sau khi token đã hợp lệ.
+        if (string.IsNullOrEmpty(expectedNonce) || payload.Nonce != expectedNonce || !_nonceStore.TryConsume(expectedNonce))
         {
             return null;
         }

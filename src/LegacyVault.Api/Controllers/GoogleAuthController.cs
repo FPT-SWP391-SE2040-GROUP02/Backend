@@ -1,6 +1,7 @@
 using LegacyVault.Api.Security;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Security;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
@@ -22,11 +23,28 @@ public sealed class GoogleAuthController : ControllerBase
 {
     private readonly IGoogleAuthService _googleAuthService;
     private readonly AuthCookieWriter _cookieWriter;
+    private readonly IGoogleNonceStore _nonceStore;
 
-    public GoogleAuthController(IGoogleAuthService googleAuthService, AuthCookieWriter cookieWriter)
+    public GoogleAuthController(
+        IGoogleAuthService googleAuthService, AuthCookieWriter cookieWriter, IGoogleNonceStore nonceStore)
     {
         _googleAuthService = googleAuthService;
         _cookieWriter = cookieWriter;
+        _nonceStore = nonceStore;
+    }
+
+    /// <summary>
+    /// GET /v1/auth/google/nonce — phát nonce dùng một lần (hết hạn sau 10 phút) cho nút Đăng nhập Google.
+    /// FE truyền nonce này cho Google rồi gửi lại ở POST /auth/google; nonce FE tự sinh bị từ chối.
+    /// </summary>
+    [HttpGet("nonce")]
+    [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicies.GoogleNonce)]
+    [EndpointSummary("Phát nonce dùng một lần cho đăng nhập Google")]
+    [ProducesResponseType<GoogleNonceResponse>(StatusCodes.Status200OK)]
+    public GoogleNonceResponse GetNonce()
+    {
+        return new GoogleNonceResponse { Nonce = _nonceStore.Issue() };
     }
 
     /// <summary>
