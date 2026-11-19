@@ -51,7 +51,7 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         this.timeProvider = timeProvider;
     }
 
-    // Nút "Gửi khóa qua email" của Người thực thi cho một lượt.
+    // Nút "Gửi mã qua email" của Người thực thi cho một lượt đã duyệt biên bản.
     public async Task<SendHandoverKeyResponse> SendAsync(Guid caseId, Guid turnId, string? key, CancellationToken ct)
     {
         // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
@@ -72,11 +72,13 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         {
             throw NotAllowed(AppErrorType.Conflict, "PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
-        // Lượt đã nhận (HandoverCommitted) vẫn cần mã cho tới khi người nhận nhập (khớp VerifyKeyAsync); các lượt kết thúc khác thì không.
+        // Chỉ gửi mã khi người nhận đã đồng ý và biên bản đã được duyệt (HandoverCommitted) mà chưa nhập mã.
+        // Trước đó người nhận chưa xác minh xong nên chưa được có mã; nhập rồi thì không cần gửi nữa.
         bool committedWithoutKey = turn.Status == HandoverTurnStatus.HandoverCommitted && turn.KeyVerifiedAt == null;
-        if ((HandoverRules.IsTerminal(turn.Status) && !committedWithoutKey) || turn.KeyVerifiedAt != null)
+        if (!committedWithoutKey)
         {
-            throw NotAllowed(AppErrorType.Conflict, "WRONG_STATE", "Lượt này đã kết thúc hoặc người nhận đã nhập khóa.");
+            throw NotAllowed(AppErrorType.Conflict, "WRONG_STATE",
+                "Chỉ gửi được mã khi biên bản đồng ý của người nhận đã được duyệt và người nhận chưa nhập mã.");
         }
 
         // 3. Kho phải đã cấp khóa và khóa Người thực thi nhập phải đúng
