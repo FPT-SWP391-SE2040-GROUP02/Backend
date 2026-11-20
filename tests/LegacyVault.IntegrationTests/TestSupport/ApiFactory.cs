@@ -132,8 +132,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             settings["Jwt:Audience"] = "LegacyVault.Tests";
             settings["Jwt:SigningKey"] = "LegacyVault_TestOnly_SigningKey_AtLeast32Bytes!";
             settings["Jwt:AccessTokenMinutes"] = "15";
-            // Tắt job nền điểm danh: test tự gọi ICheckInJob khi cần, tránh job chạy xen vào dữ liệu test.
-            settings["CheckIn:Enabled"] = "false";
             settings["EntitlementExpiry:Enabled"] = "false";
             settings["Handover:Job:Enabled"] = "false";
             settings["Handover:RequireIdentityVerification"] = "false";

@@ -2,7 +2,7 @@ using LegacyVault.Application.Security;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
@@ -25,7 +25,6 @@ public sealed class HandoverInvitationRetryJobTests
     private readonly FakeEkycBeneficiaryRepository beneficiaries = new FakeEkycBeneficiaryRepository();
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly FakeInvitationSender sender = new FakeInvitationSender();
-    private readonly FakeHoldReader holds = new FakeHoldReader();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(CreatedAt.AddMinutes(10));
     private readonly HandoverInvitationRetryJob job;
@@ -43,8 +42,7 @@ public sealed class HandoverInvitationRetryJobTests
         protector.Data[designation.BeneficiaryId] = data.People[designation.BeneficiaryId];
 
         job = new HandoverInvitationRetryJob(
-            vaults, repository, beneficiaries, protector, new FakeTokenService(), sender, holds,
-            NullLogger<HandoverInvitationRetryJob>.Instance, unitOfWork, time);
+            vaults, repository, beneficiaries, protector, new FakeTokenService(), sender, NullLogger<HandoverInvitationRetryJob>.Instance, unitOfWork, time);
     }
 
     private HandoverTurn AddUndeliveredTurn()
@@ -158,18 +156,6 @@ public sealed class HandoverInvitationRetryJobTests
 
         Assert.Empty(sender.Sent);
         Assert.Equal(HandoverInvitationRetryJob.MaxAttempts, turn.InvitationAttempts);
-    }
-
-    [Fact]
-    public async Task Process_ActiveHold_PausesWithoutCountingFailure()
-    {
-        HandoverTurn turn = AddUndeliveredTurn();
-        holds.Active = true;
-
-        await job.ProcessTurnAsync(turn.Id, CancellationToken.None);
-
-        Assert.Empty(sender.Sent);
-        Assert.Equal(0, turn.InvitationAttempts);
     }
 
     [Fact]

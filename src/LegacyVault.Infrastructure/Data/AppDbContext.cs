@@ -40,11 +40,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();
     public DbSet<Designation> Designations => Set<Designation>();
 
-    // Điểm danh (deadman switch)
-    public DbSet<CheckInSchedule> CheckInSchedules => Set<CheckInSchedule>();
-    public DbSet<CheckInPeriod> CheckInPeriods => Set<CheckInPeriod>();
-    public DbSet<CheckInReminder> CheckInReminders => Set<CheckInReminder>();
-
     /// <summary>Transaction Auth giữ khóa từ lúc đọc refresh token tới commit; dispose rollback khi operation lỗi.</summary>
     public async Task<T> ExecuteSerializableAsync<T>(Func<Task<T>> operation, CancellationToken ct)
     {
@@ -77,9 +72,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
 
-    public DbSet<ExtraMailRule> ExtraMailRules => Set<ExtraMailRule>();
-
-    public DbSet<ExtraMailSend> ExtraMailSends => Set<ExtraMailSend>();
 
     // Cấu hình tham số động (CR5)
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();

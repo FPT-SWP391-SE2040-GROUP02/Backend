@@ -118,8 +118,6 @@ services:
 
       # --- Jobs nền ---
       # Bật job đổi trạng thái/xóa dữ liệu và gửi thư; bật khi đã có SMTP thật.
-      - key: CheckIn__Enabled
-        value: "true"
       - key: Handover__Job__Enabled
         value: "true"
       - key: ExecutorInvitations__DeliveryEnabled

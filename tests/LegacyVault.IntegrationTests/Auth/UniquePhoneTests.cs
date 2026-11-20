@@ -4,7 +4,7 @@ using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 

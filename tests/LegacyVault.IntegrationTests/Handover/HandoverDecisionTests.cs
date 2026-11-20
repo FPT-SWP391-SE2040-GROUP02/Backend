@@ -3,7 +3,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -32,7 +32,7 @@ public sealed class HandoverDecisionTests
         currentUser.UserId = claimantId;
         container = data.AddContainer("Gói A", ContainerStatus.Ready, 2);
         designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
-        service = new HandoverService(currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(), new NoHoldReader(), unitOfWork, time,
+        service = new HandoverService(currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(), unitOfWork, time,
             new HandoverKeyTests.FakeKeyShards(), new FakeHandoverSubmissionRepository(), new LegacyVault.IntegrationTests.Ekyc.FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector());
     }
 
@@ -301,7 +301,7 @@ public sealed class HandoverDecisionTests
     {
         HandoverTurn turn = AddReadyTurn("t1");
         LegacyVault.Application.Repositories.IUnitOfWork failing = ThrowingUnitOfWork.Create(new Microsoft.EntityFrameworkCore.DbUpdateException("trùng grant"));
-        HandoverService racing = new HandoverService(currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(), new NoHoldReader(), failing, time,
+        HandoverService racing = new HandoverService(currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(), failing, time,
             new HandoverKeyTests.FakeKeyShards(), new FakeHandoverSubmissionRepository(), new LegacyVault.IntegrationTests.Ekyc.FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector());
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => racing.AcceptAsync(turn.Id, CancellationToken.None));

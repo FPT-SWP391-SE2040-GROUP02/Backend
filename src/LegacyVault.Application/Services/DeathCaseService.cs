@@ -28,7 +28,6 @@ public sealed class DeathCaseService : IDeathCaseService
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IAuditLogRepository auditLogRepository;
-    private readonly ICheckInRepository checkInRepository;
     private readonly IAdministrativeUnitCatalog administrativeUnits;
 
     public DeathCaseService(
@@ -43,7 +42,6 @@ public sealed class DeathCaseService : IDeathCaseService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IAuditLogRepository auditLogRepository,
-        ICheckInRepository checkInRepository,
         IAdministrativeUnitCatalog administrativeUnits)
     {
         this.currentUser = currentUser;
@@ -57,7 +55,6 @@ public sealed class DeathCaseService : IDeathCaseService
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
         this.auditLogRepository = auditLogRepository;
-        this.checkInRepository = checkInRepository;
         this.administrativeUnits = administrativeUnits;
     }
 
@@ -66,15 +63,9 @@ public sealed class DeathCaseService : IDeathCaseService
         Guid userId = currentUser.RequireUserId();
         List<ExecutorVaultRow> rows = await deathCaseRepository.FindExecutorVaultsAsync(userId, ct);
         List<ExecutorVaultResponse> responses = new List<ExecutorVaultResponse>();
-        int limit = ProxyCheckInRules.Limit();
         foreach (ExecutorVaultRow row in rows)
         {
-            ExecutorVaultResponse response = row.ToResponse();
-            int used = await checkInRepository.CountConsecutiveExecutorPeriodsAsync(row.PlanId, ct);
-            response.ProxyCheckInLimit = limit;
-            response.ProxyCheckInsUsed = used;
-            response.ProxyCheckInsLeft = ProxyCheckInRules.Left(used);
-            responses.Add(response);
+            responses.Add(row.ToResponse());
         }
         return responses;
     }

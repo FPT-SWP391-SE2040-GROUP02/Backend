@@ -6,16 +6,10 @@ namespace LegacyVault.Application.Services;
 /// <summary>Luật nghiệp vụ của kế hoạch bàn giao (HandoverPlan) dùng chung cho các service.</summary>
 public static class PlanRules
 {
-    /// <summary>Kế hoạch đang chạy: đã kích hoạt và lịch điểm danh đang chạy (SETUP-16, §11.2).</summary>
+    /// <summary>Kế hoạch đang chạy: đã kích hoạt, chưa sang bàn giao (SETUP-16, §11.2).</summary>
     public static bool IsRunning(PlanStatus status)
     {
-        if (status == PlanStatus.Active
-            || status == PlanStatus.CheckinOverdue
-            || status == PlanStatus.AwaitingCheck)
-        {
-            return true;
-        }
-        return false;
+        return status == PlanStatus.Active;
     }
 
     /// <summary>SETUP-04: mọi thay đổi cấu hình kế hoạch (gói, tài sản trong gói, người nhận...) tăng ConfigVersion.</summary>
@@ -37,6 +31,5 @@ public static class PlanRules
             executor.EndedAt = now;
             executor.UpdatedAt = now;
         }
-        // Lịch điểm danh được dừng bởi người gọi qua ICheckInScheduler.StopAsync (ContainerService).
     }
 }

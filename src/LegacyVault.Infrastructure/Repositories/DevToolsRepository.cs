@@ -37,22 +37,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .ToListAsync(ct);
     }
 
-    public Task<CheckInPeriod?> FindOpenPeriodAsync(Guid planId, CancellationToken ct)
-    {
-        return context.Set<CheckInPeriod>()
-            .Where(p => p.PlanId == planId && p.ClosedAt == null)
-            .OrderByDescending(p => p.Sequence)
-            .ThenBy(p => p.Id)
-            .FirstOrDefaultAsync(ct);
-    }
-
-    public Task<CheckInSchedule?> FindCheckInScheduleAsync(Guid planId, CancellationToken ct)
-    {
-        return context.Set<CheckInSchedule>()
-            .Where(s => s.PlanId == planId)
-            .FirstOrDefaultAsync(ct);
-    }
-
     public async Task<AuditAction?> FindLatestClockActionAsync(Guid vaultId, CancellationToken ct)
     {
         AuditLog? log = await context.Set<AuditLog>()
@@ -161,13 +145,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.PreviousCaseId, (Guid?)null), ct);
         await context.Set<DeathCase>().Where(c => c.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
-        // Điểm danh.
-        var planIds = context.Set<HandoverPlan>().Where(p => p.VaultId == vaultId).Select(p => p.Id);
-        var periodIds = context.Set<CheckInPeriod>().Where(p => planIds.Contains(p.PlanId)).Select(p => p.Id);
-        await context.Set<CheckInReminder>().Where(r => periodIds.Contains(r.PeriodId)).ExecuteDeleteAsync(ct);
-        await context.Set<CheckInPeriod>().Where(p => planIds.Contains(p.PlanId)).ExecuteDeleteAsync(ct);
-        await context.Set<CheckInSchedule>().Where(s => planIds.Contains(s.PlanId)).ExecuteDeleteAsync(ct);
-
         // Nội dung kho: chỉ định, tài sản trong gói, Executor (trỏ vào người nhận) → gói, tài sản, người nhận.
         var containerIds = context.Set<Container>().Where(c => c.VaultId == vaultId).Select(c => c.Id);
         await context.Set<Designation>().Where(d => containerIds.Contains(d.ContainerId)).ExecuteDeleteAsync(ct);
@@ -180,7 +157,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         await context.Set<Beneficiary>().Where(b => b.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
         // Vận hành và thanh toán.
-        await context.Set<Hold>().Where(h => h.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<StorageReservation>().Where(r => r.VaultId == vaultId).ExecuteDeleteAsync(ct);
         var orderIds = context.Set<PaymentOrder>().Where(o => o.VaultId == vaultId).Select(o => o.Id);
         await context.Set<PaymentTransaction>()

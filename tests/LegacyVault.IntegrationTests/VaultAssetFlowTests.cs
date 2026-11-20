@@ -344,7 +344,7 @@ public sealed class VaultApiWithoutDatabaseTests
     [Theory]
     [InlineData(EntitlementStatus.PaidActive, "PAID_ACTIVE")]
     [InlineData(ServiceTier.XsMax, "XS_MAX")]
-    [InlineData(PlanStatus.CheckinOverdue, "CHECKIN_OVERDUE")]
+    [InlineData(PlanStatus.HandoverInProgress, "HANDOVER_IN_PROGRESS")]
     [InlineData(AssetKind.File, "FILE")]
     public void EnumNamesMapToUpperSnakeCase(object value, string expected)
     {

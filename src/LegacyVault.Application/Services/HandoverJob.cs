@@ -11,25 +11,21 @@ namespace LegacyVault.Application.Services;
 /// 1. Quá hạn phản hồi thư mời: FindExpiredResponseTurnIdsAsync, ProcessResponseExpiryAsync.
 /// 2. Quá hạn quyết định (luồng cũ): FindExpiredDecisionTurnIdsAsync, ProcessDecisionExpiryAsync.
 /// 3. Hết hạn quyền tải: FindExpiredGrantIdsAsync, ProcessGrantExpiryAsync.
-/// Kế hoạch đang bị chặn (Blocked) hoặc kho có hold thì đồng hồ tạm dừng: job bỏ qua, không chuyển lượt hay grant sang hết hạn.
-/// Khi hold được gỡ, HandoverClockRules.ExtendAfterPause dời các hạn đang chạy đúng bằng thời gian đã dừng.
+/// Kế hoạch đang bị chặn (Blocked) thì đồng hồ tạm dừng: job bỏ qua, không chuyển lượt hay grant sang hết hạn.
 /// </remarks>
 public sealed class HandoverJob : IHandoverJob
 {
     private readonly IVaultRepository vaults;
     private readonly IHandoverRepository handover;
-    private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
 
     public HandoverJob(
         IVaultRepository vaults,
         IHandoverRepository handover,
-        IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
     {
-        this.holdReader = holdReader;
         this.vaults = vaults;
         this.handover = handover;
         this.unitOfWork = unitOfWork;
@@ -93,7 +89,7 @@ public sealed class HandoverJob : IHandoverJob
         }
 
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
-        if (vault != null && await IsClockPausedAsync(vault, ct))
+        if (vault != null && IsClockPaused(vault))
         {
             return;
         }
@@ -142,16 +138,12 @@ public sealed class HandoverJob : IHandoverJob
         {
             return false;
         }
-        return await IsClockPausedAsync(vault, ct);
+        return IsClockPaused(vault);
     }
 
-    /// <summary>Đồng hồ tạm dừng khi kế hoạch bị chặn hoặc kho đang có hold.</summary>
-    private async Task<bool> IsClockPausedAsync(Vault vault, CancellationToken ct)
+    /// <summary>Đồng hồ tạm dừng khi kế hoạch bị chặn.</summary>
+    private static bool IsClockPaused(Vault vault)
     {
-        if (vault.Plan.Status == PlanStatus.Blocked)
-        {
-            return true;
-        }
-        return await holdReader.HasActiveHoldAsync(vault.Id, ct);
+        return vault.Plan.Status == PlanStatus.Blocked;
     }
 }

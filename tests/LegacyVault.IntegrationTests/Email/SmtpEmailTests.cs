@@ -15,9 +15,6 @@ namespace LegacyVault.IntegrationTests.Email;
 public sealed class SmtpEmailTests
 {
     // 08:00 UTC = 15:00 giờ Việt Nam (UTC+7).
-    private static readonly DateTimeOffset Due = new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset GraceEnds = new DateTimeOffset(2026, 11, 9, 8, 0, 0, TimeSpan.Zero);
-    private const string CheckInUrl = "http://localhost:5173/dms";
 
     private static SmtpSettings SettingsFor(FakeSmtpServer server)
     {
@@ -41,65 +38,6 @@ public sealed class SmtpEmailTests
 
     // ---------- Nội dung thư nhắc ----------
 
-    [Fact]
-    public void Build_EachReminderKindHasItsOwnSubject()
-    {
-        List<string> subjects = new List<string>();
-        foreach (CheckInReminderKind kind in CheckInTimeline.ActiveKinds(CheckInRules.MaxLateRemindersLimit))
-        {
-            EmailContent content = CheckInReminderEmail.Build(kind, "Nguyễn Văn An", Due, GraceEnds, CheckInUrl);
-            Assert.False(string.IsNullOrWhiteSpace(content.Subject));
-            subjects.Add(content.Subject);
-        }
-
-        // Hai mốc trước hạn và năm thư nhắc trễ, mỗi thư một tiêu đề riêng.
-        Assert.Equal(7, subjects.Distinct().Count());
-    }
-
-    [Fact]
-    public void Build_LegacyKindsStillRenderForStoredData()
-    {
-        foreach (CheckInReminderKind kind in Enum.GetValues<CheckInReminderKind>())
-        {
-            EmailContent content = CheckInReminderEmail.Build(kind, "Nguyễn Văn An", Due, GraceEnds, CheckInUrl);
-            Assert.False(string.IsNullOrWhiteSpace(content.Subject));
-        }
-    }
-
-    [Fact]
-    public void Build_TextMentionsNameVietnamTimeAndLink()
-    {
-        EmailContent content = CheckInReminderEmail.Build(
-            CheckInReminderKind.DueInSevenDays, "Nguyễn Văn An", Due, GraceEnds, CheckInUrl);
-
-        Assert.Contains("Nguyễn Văn An", content.TextBody);
-        Assert.Contains("15:00", content.TextBody);
-        Assert.Contains("31/10/2026", content.TextBody);
-        Assert.Contains(CheckInUrl, content.TextBody);
-        Assert.Contains(CheckInUrl, content.HtmlBody);
-    }
-
-    [Fact]
-    public void Build_LateReminderMentionsOrdinalAndExecutorNoticeTime()
-    {
-        EmailContent content = CheckInReminderEmail.Build(
-            CheckInReminderKind.LateReminder2, "An", Due, GraceEnds, CheckInUrl);
-
-        Assert.Contains("lần 2", content.TextBody);
-        Assert.Contains("09/11/2026", content.TextBody);
-        Assert.Contains("Người thực thi", content.TextBody);
-    }
-
-    [Fact]
-    public void Build_HtmlEncodesUserSuppliedName()
-    {
-        EmailContent content = CheckInReminderEmail.Build(
-            CheckInReminderKind.DueInOneDay, "<b>Hack</b> & Co", Due, GraceEnds, CheckInUrl);
-
-        Assert.Contains("&lt;b&gt;Hack&lt;/b&gt;", content.HtmlBody);
-        Assert.DoesNotContain("<b>Hack</b>", content.HtmlBody);
-    }
-
     // ---------- Gửi qua SMTP (máy chủ giả) ----------
 
     [Fact]
@@ -119,25 +57,6 @@ public sealed class SmtpEmailTests
         Assert.Equal("Nguyễn Văn An", to.Name);
         Assert.Contains("Nội dung chữ thuần", message.TextBody);
         Assert.Contains("Nội dung HTML", message.HtmlBody);
-    }
-
-    [Fact]
-    public async Task CheckInReminderSender_SendsReminderPointingToClientCheckInPage()
-    {
-        using FakeSmtpServer server = new FakeSmtpServer();
-        SmtpMailSender mailSender = SmtpTestSenders.Create(SettingsFor(server));
-        IConfiguration configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["App:ClientUrl"] = "http://localhost:5173/" })
-            .Build();
-        SmtpCheckInReminderSender sender = new SmtpCheckInReminderSender(mailSender, configuration);
-
-        await sender.SendReminderAsync("an@test.local", "Nguyễn Văn An",
-            CheckInReminderKind.GraceStarted, Due, GraceEnds, CancellationToken.None);
-
-        MimeMessage message = ParseOnlyMessage(server);
-        Assert.Equal("an@test.local", message.To.Mailboxes.Single().Address);
-        Assert.Contains("http://localhost:5173/dms", message.TextBody);
-        Assert.DoesNotContain("//dms", message.TextBody);
     }
 
     [Fact]
@@ -290,25 +209,4 @@ public sealed class SmtpEmailTests
         return services.BuildServiceProvider();
     }
 
-    [Fact]
-    public void AddEmailServices_WithoutCredentials_UsesLogOnlySenders()
-    {
-        using ServiceProvider provider = BuildProvider(new Dictionary<string, string?>());
-
-        Assert.IsType<LogCheckInReminderSender>(provider.GetRequiredService<ICheckInReminderSender>());
-        Assert.IsType<DevEmailSender>(provider.GetRequiredService<IEmailSender>());
-    }
-
-    [Fact]
-    public void AddEmailServices_WithCredentials_UsesSmtpSenders()
-    {
-        using ServiceProvider provider = BuildProvider(new Dictionary<string, string?>
-        {
-            ["Email:Smtp:UserName"] = "user@gmail.com",
-            ["Email:Smtp:Password"] = "app-password",
-        });
-
-        Assert.IsType<SmtpCheckInReminderSender>(provider.GetRequiredService<ICheckInReminderSender>());
-        Assert.IsType<SmtpEmailSender>(provider.GetRequiredService<IEmailSender>());
-    }
 }

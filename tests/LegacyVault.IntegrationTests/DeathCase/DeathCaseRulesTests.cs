@@ -15,7 +15,7 @@ public sealed class DeathCaseRulesTests
     public void Death05_OnlyRunningPlanCanOpenCase()
     {
         // Chuẩn bị
-        PlanStatus[] running = { PlanStatus.Active, PlanStatus.CheckinOverdue, PlanStatus.AwaitingCheck };
+        PlanStatus[] running = { PlanStatus.Active };
 
         foreach (PlanStatus status in Enum.GetValues<PlanStatus>())
         {

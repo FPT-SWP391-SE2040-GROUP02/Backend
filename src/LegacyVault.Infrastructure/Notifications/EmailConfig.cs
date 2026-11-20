@@ -11,7 +11,7 @@ namespace LegacyVault.Infrastructure.Notifications;
 /// <summary>
 /// Đăng ký dịch vụ email. Có đủ Email:Smtp:UserName và Password thì gửi email thật qua Gmail;
 /// chưa cấu hình thì dùng bản chỉ ghi log để dev/test vẫn chạy được. Chọn lúc cần dùng, nên đăng ký này ghi đè
-/// các đăng ký IEmailSender/ICheckInReminderSender khác đặt trước nó.
+/// các đăng ký IEmailSender khác đặt trước nó.
 /// </summary>
 public static class EmailConfig
 {
@@ -103,38 +103,8 @@ public static class EmailConfig
         services.AddSingleton<DevEmailSender>();
         services.AddSingleton<SmtpMailSender>();
         services.AddHostedService<EmailStartupLogger>();
-        services.AddSingleton<ICheckInReminderSender>(provider => ChooseReminderSender(provider));
-        services.AddSingleton<ICheckInOverdueNoticeSender>(provider => ChooseOverdueNoticeSender(provider));
-        services.AddSingleton<IExtraMailSender>(provider => ChooseExtraMailSender(provider));
         services.AddSingleton<IEmailSender>(provider => ChooseVerificationSender(provider));
         return services;
-    }
-
-    private static ICheckInReminderSender ChooseReminderSender(IServiceProvider provider)
-    {
-        if (IsConfigured(provider))
-        {
-            return ActivatorUtilities.CreateInstance<SmtpCheckInReminderSender>(provider);
-        }
-        return ActivatorUtilities.CreateInstance<LogCheckInReminderSender>(provider);
-    }
-
-    private static ICheckInOverdueNoticeSender ChooseOverdueNoticeSender(IServiceProvider provider)
-    {
-        if (IsConfigured(provider))
-        {
-            return ActivatorUtilities.CreateInstance<SmtpCheckInOverdueNoticeSender>(provider);
-        }
-        return ActivatorUtilities.CreateInstance<LogCheckInOverdueNoticeSender>(provider);
-    }
-
-    private static IExtraMailSender ChooseExtraMailSender(IServiceProvider provider)
-    {
-        if (IsConfigured(provider))
-        {
-            return ActivatorUtilities.CreateInstance<SmtpExtraMailSender>(provider);
-        }
-        return ActivatorUtilities.CreateInstance<LogExtraMailSender>(provider);
     }
 
     private static IEmailSender ChooseVerificationSender(IServiceProvider provider)

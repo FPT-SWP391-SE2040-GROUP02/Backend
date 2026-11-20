@@ -2,7 +2,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -59,7 +59,7 @@ public sealed class HandoverDownloadTests
         turn.Grant = grant;
         repository.Grants.Add(grant);
 
-        service = new HandoverDownloadService(currentUser, vaults, repository, store, new HandoverKeyTests.NoHoldReaderForTests(), unitOfWork, time, keyShards);
+        service = new HandoverDownloadService(currentUser, vaults, repository, store, unitOfWork, time, keyShards);
     }
 
     [Fact]

@@ -20,12 +20,7 @@ public static class ApplicationConfig
         services.AddScoped<ISystemExecutorDirectoryService, SystemExecutorDirectoryService>();
         services.AddHandoverApplication();
 
-        // Điểm danh (deadman switch)
-        services.AddScoped<ICheckInService, CheckInService>();
-        services.AddScoped<IExecutorCheckInService, ExecutorCheckInService>();
         services.AddScoped<IExecutorAssetService, ExecutorAssetService>();
-        services.AddScoped<ICheckInScheduler, CheckInScheduler>();
-        services.AddScoped<ICheckInJob, CheckInJob>();
         services.AddScoped<IEntitlementExpiryJob, EntitlementExpiryJob>();
 
         // Hồ sơ chứng tử (F2B)
@@ -36,8 +31,6 @@ public static class ApplicationConfig
         services.AddScoped<IRetentionJob, RetentionJob>();
         services.AddScoped<IExecutorManagementService, ExecutorManagementService>();
         services.AddScoped<IExecutorInvitationJob, ExecutorInvitationJob>();
-        services.AddScoped<IHoldService, HoldService>();
-        services.AddScoped<IHoldReader, HoldReader>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<ISystemConfigService, SystemConfigService>();
         services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
@@ -75,8 +68,6 @@ public static class ApplicationConfig
         services.AddScoped<IAdminPaymentService, AdminPaymentService>();
         services.AddScoped<IHandoverTemplateService, HandoverTemplateService>();
         services.AddScoped<IEmailTemplateService, EmailTemplateService>();
-        services.AddScoped<IExtraMailService, ExtraMailService>();
-        services.AddScoped<IExtraMailJob, ExtraMailJob>();
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsService, DevToolsService>();
         // Chế độ bảo trì: chặn tài khoản không phải Admin ở đăng nhập, làm mới phiên và middleware API

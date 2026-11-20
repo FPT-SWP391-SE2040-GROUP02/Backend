@@ -3,7 +3,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -32,7 +32,7 @@ public sealed class HandoverReceivedAllTests
         container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
         designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
         service = new HandoverService(currentUser, new FakeUserRepository(), vaults, repository, new FakeTokenService(),
-            new FakePolicy(), new NoHoldReader(), unitOfWork, new FixedTimeProvider(Now), new HandoverKeyTests.FakeKeyShards(), submissions,
+            new FakePolicy(), unitOfWork, new FixedTimeProvider(Now), new HandoverKeyTests.FakeKeyShards(), submissions,
             new LegacyVault.IntegrationTests.Ekyc.FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector());
     }
 

@@ -15,7 +15,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.DeathCases;
 
 /// <summary>
-/// Hold, Admin (SRS §6.4, ASSIGN-04, AC-40) trên SQL Server thật: quyền, hold chặn phát hành,
+/// Admin (SRS §6.4, ASSIGN-04, AC-40) trên SQL Server thật: quyền, hold chặn phát hành,
 /// phân công lại Verifier, nhật ký.
 /// </summary>
 public sealed class AdminOperationsTests : IAsyncLifetime
@@ -59,62 +59,11 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         return (admin, ClientFor(admin));
     }
 
-    /// <summary>
-    /// Tạo một hold đang hiệu lực trực tiếp trong DB. Không còn API Admin đặt hold bằng tay và chưa có mã nào tự đặt hold.
-    /// Dùng để kiểm các bước chặn khi có hold.
-    /// </summary>
-    private async Task<Guid> SeedActiveHoldAsync(Guid vaultId)
-    {
-        Hold hold = new Hold();
-        hold.VaultId = vaultId;
-        hold.Scope = HoldScope.Vault;
-        hold.Type = HoldType.Dispute;
-        hold.Status = HoldStatus.Active;
-        hold.Reason = "Nghi vấn giấy tờ";
-        hold.ReviewAt = DateTimeOffset.UtcNow.AddDays(7);
-        hold.CreatedAt = DateTimeOffset.UtcNow;
-        hold.UpdatedAt = DateTimeOffset.UtcNow;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            db.Set<Hold>().Add(hold);
-            await db.SaveChangesAsync();
-        });
-        return hold.Id;
-    }
-
-    private async Task ReleaseHoldInDbAsync(Guid holdId)
-    {
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            Hold stored = await db.Set<Hold>().SingleAsync(h => h.Id == holdId);
-            stored.Status = HoldStatus.Released;
-            stored.ReleasedAt = DateTimeOffset.UtcNow;
-            stored.ReleaseReason = "Đã kiểm tra";
-            await db.SaveChangesAsync();
-        });
-    }
-
     private async Task<JsonElement> ListAsync(HttpClient client, string path)
     {
         HttpResponseMessage response = await client.GetAsync("/api/v1/admin/" + path);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await ApiTestHelpers.ReadJsonAsync(response);
-    }
-
-    [SqlFact]
-    public async Task AdminArea_NonAdminGets404()
-    {
-        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        User verifier = await DeathCaseTestData.AddVerifierAsync(factory);
-
-        foreach (User user in new[] { plain, verifier })
-        {
-            HttpClient client = ClientFor(user);
-            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/admin/dashboard")).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/admin/holds")).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/admin/users")).StatusCode);
-        }
-        Assert.Equal(HttpStatusCode.Unauthorized, (await app.CreateClient().GetAsync("/api/v1/admin/dashboard")).StatusCode);
     }
 
     [SqlFact]
@@ -395,55 +344,6 @@ public sealed class AdminOperationsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Hold_Active_BlocksApprove_UntilReleased()
-    {
-        // Chuẩn bị: hồ sơ đủ điều kiện duyệt, kho đang có hold
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateReadyToApproveCaseAsync(factory);
-        Guid holdId = await SeedActiveHoldAsync(submitted.Vault.VaultId);
-
-        // Hành động + Kiểm tra: duyệt bị chặn dù đủ điều kiện (DEATH-09)
-        HttpResponseMessage approve = await DeathCaseReviewTestData.ApproveNowAsync(submitted, "Đã đối chiếu.");
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(approve, HttpStatusCode.Conflict, "DEATH_CASE_NOT_ALLOWED");
-        Assert.Equal("HOLD_ACTIVE", problem.GetProperty("reason").GetString());
-
-        // Hold được gỡ thì duyệt được
-        await ReleaseHoldInDbAsync(holdId);
-        Assert.Equal(HttpStatusCode.OK, (await DeathCaseReviewTestData.ApproveNowAsync(submitted, "Đã đối chiếu.")).StatusCode);
-    }
-
-    [SqlFact]
-    public async Task Hold_AdminCanOnlyView_ManualPlaceReviewReleaseApisAreRemoved()
-    {
-        // Chuẩn bị
-        (User admin, HttpClient adminClient) = await AddAdminAsync();
-        DeathCaseTestData.OwnerVault owner = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        Guid holdId = await SeedActiveHoldAsync(owner.VaultId);
-
-        // Hành động
-        HttpResponseMessage place = await adminClient.PostAsJsonAsync("/api/v1/admin/holds",
-            new { vaultId = owner.VaultId, reason = "x" });
-        HttpResponseMessage review = await adminClient.PostAsJsonAsync($"/api/v1/admin/holds/{holdId}/review",
-            new { nextReviewAt = DateTimeOffset.UtcNow.AddDays(1), etag = "\"1\"" });
-        HttpResponseMessage release = await adminClient.PostAsJsonAsync($"/api/v1/admin/holds/{holdId}/release",
-            new { reason = "x", etag = "\"1\"" });
-
-        // Kiểm tra: không còn API thao tác tay; xem danh sách và chi tiết vẫn được
-        Assert.False(place.IsSuccessStatusCode);
-        Assert.False(review.IsSuccessStatusCode);
-        Assert.False(release.IsSuccessStatusCode);
-        JsonElement list = await ListAsync(adminClient, "holds?status=ACTIVE");
-        Assert.Single(list.GetProperty("items").EnumerateArray());
-        Assert.Equal(HttpStatusCode.OK, (await adminClient.GetAsync($"/api/v1/admin/holds/{holdId}")).StatusCode);
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            Hold stored = await db.Set<Hold>().SingleAsync(h => h.Id == holdId);
-            Assert.Equal(HoldStatus.Active, stored.Status);
-            Assert.Equal(1, await db.Set<Hold>().CountAsync());
-        });
-        Assert.NotEqual(Guid.Empty, admin.Id);
-    }
-
-    [SqlFact]
     public async Task Assign04_NoVerifier_AdminAssignsVerifierAndAuditIsWritten()
     {
         (User admin, HttpClient adminClient) = await AddAdminAsync();
@@ -495,21 +395,6 @@ public sealed class AdminOperationsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound,
             (await submitted.Verifier.Client.GetAsync($"/api/v1/verifier/death-cases/{submitted.CaseId}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ClientFor(replacement).GetAsync($"/api/v1/verifier/death-cases/{submitted.CaseId}")).StatusCode);
-        Assert.NotEqual(Guid.Empty, admin.Id);
-    }
-
-    [SqlFact]
-    public async Task Dashboard_CountsStuckWorkAndHolds()
-    {
-        (User admin, HttpClient adminClient) = await AddAdminAsync();
-        DeathCaseReviewTestData.SubmittedCase submitted = await CreateNoVerifierCaseAsync();
-        await SeedActiveHoldAsync(submitted.Vault.VaultId);
-
-        JsonElement dashboard = await ApiTestHelpers.ReadJsonAsync(await adminClient.GetAsync("/api/v1/admin/dashboard"));
-
-        Assert.Equal(1, dashboard.GetProperty("activeHolds").GetInt32());
-        Assert.Equal(1, dashboard.GetProperty("casesWithoutVerifier").GetInt32());
-        Assert.Equal(1, dashboard.GetProperty("activeAdmins").GetInt32());
         Assert.NotEqual(Guid.Empty, admin.Id);
     }
 

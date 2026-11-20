@@ -46,13 +46,13 @@ public interface IAssetService
 
     /// <summary>
     /// Đổi tên/mô tả (không đổi nội dung). Lỗi: 409 EDIT_CONFLICT (etag lệch),
-    /// 409 VAULT_NOT_EDITABLE (kể cả reason HOLD_ACTIVE).
+    /// 409 VAULT_NOT_EDITABLE.
     /// </summary>
     Task<AssetResponse> UpdateAssetAsync(Guid vaultId, Guid assetId, UpdateAssetRequest request, CancellationToken ct);
 
     /// <summary>
     /// Xóa tài sản cùng nội dung. Lỗi: 409 ASSET_IN_USE (reason IN_CONTAINER | PINNED_IN_HANDOVER),
-    /// 409 VAULT_NOT_EDITABLE (kể cả reason HOLD_ACTIVE).
+    /// 409 VAULT_NOT_EDITABLE.
     /// </summary>
     Task DeleteAssetAsync(Guid vaultId, Guid assetId, CancellationToken ct);
 }

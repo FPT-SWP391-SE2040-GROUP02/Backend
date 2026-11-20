@@ -81,33 +81,6 @@ public sealed class DeathCaseCancelDraftFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task CancelDraft_ThenExecutorCanCheckInForOverdueOwner()
-    {
-        // Chuẩn bị: chủ kho quá hạn, Executor lỡ mở hồ sơ nên bị chặn điểm danh thay
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, vault.PlanId, 1, DateTimeOffset.UtcNow.AddDays(-40), null);
-        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.AwaitingCheck);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
-        JsonElement opened = await DeathCaseApi.OpenAsync(executor.Client, vault.VaultId);
-        string checkInUrl = "/api/v1/executor/vaults/" + vault.VaultId + "/check-in";
-        HttpResponseMessage blocked = await executor.Client.PostAsync(checkInUrl, ApiTestHelpers.ProxyCheckInBody());
-        await ApiTestHelpers.AssertProblemAsync(blocked, HttpStatusCode.Conflict, "CHECKIN_NOT_ALLOWED");
-
-        // Hành động
-        HttpResponseMessage cancel = await executor.Client.DeleteAsync(DraftUrl(opened.GetProperty("id").GetGuid()));
-        HttpResponseMessage checkIn = await executor.Client.PostAsync(checkInUrl, ApiTestHelpers.ProxyCheckInBody());
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.NoContent, cancel.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, checkIn.StatusCode);
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            HandoverPlan plan = await db.HandoverPlans.SingleAsync(p => p.Id == vault.PlanId);
-            Assert.Equal(PlanStatus.Active, plan.Status);
-        });
-    }
-
-    [SqlFact]
     public async Task CancelSubmittedCase_Returns409VersionLocked()
     {
         // Chuẩn bị: hồ sơ đã gửi, kế hoạch đã khóa

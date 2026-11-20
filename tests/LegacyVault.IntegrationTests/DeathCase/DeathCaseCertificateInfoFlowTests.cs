@@ -305,61 +305,6 @@ public sealed class DeathCaseCertificateInfoFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Death10_VerifierSeesThePlaceAndAWarningWhenTheOwnerCheckedInAfterTheDeathDate()
-    {
-        // Chuẩn bị: ngày mất = hôm nay - 3 (CreateSubmittedCaseAsync); Chủ kho điểm danh lần cuối hôm qua
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        DateTimeOffset lastCheckInAt = DateTimeOffset.UtcNow.AddDays(-1);
-        await SetLastCheckInAsync(submitted.Vault.PlanId, lastCheckInAt);
-
-        // Hành động
-        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
-
-        // Kiểm tra
-        JsonElement review = detail.GetProperty("reviewVersion");
-        Assert.Equal("79", review.GetProperty("deathRegistrationProvinceCode").GetString());
-        Assert.Equal("26743", review.GetProperty("deathRegistrationWardCode").GetString());
-        Assert.Equal(DeathCaseApi.RegistrationPlace, review.GetProperty("deathRegistrationPlace").GetString());
-        JsonElement warnings = detail.GetProperty("warnings");
-        Assert.Equal(1, warnings.GetArrayLength());
-        Assert.Equal("DEATH_BEFORE_LAST_CHECKIN", warnings[0].GetProperty("code").GetString());
-        string expectedDay = VietnamDayText(lastCheckInAt);
-        Assert.Contains(expectedDay, warnings[0].GetProperty("message").GetString());
-        Assert.Equal(expectedDay, DateOnly.Parse(detail.GetProperty("lastCheckInOn").GetString()!).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
-        // Cảnh báo không chặn duyệt: các lý do chưa duyệt được không có mã của cảnh báo.
-        foreach (string blocker in DeathCaseApi.ReadStrings(detail.GetProperty("approveBlockers")))
-        {
-            Assert.NotEqual("DEATH_BEFORE_LAST_CHECKIN", blocker);
-        }
-    }
-
-    [SqlFact]
-    public async Task Death10_VerifierGetsNoWarningWhenTheLastCheckInIsBeforeTheDeathDate()
-    {
-        // Chuẩn bị: ngày mất = hôm nay - 3; điểm danh cuối cách đây 10 ngày
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        await SetLastCheckInAsync(submitted.Vault.PlanId, DateTimeOffset.UtcNow.AddDays(-10));
-
-        // Hành động
-        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
-
-        // Kiểm tra
-        Assert.Equal(0, detail.GetProperty("warnings").GetArrayLength());
-    }
-
-    [SqlFact]
-    public async Task Death10_VerifierGetsNoLastCheckInWhenTheOwnerNeverCheckedIn()
-    {
-        // Chuẩn bị + Hành động
-        DeathCaseReviewTestData.SubmittedCase submitted = await DeathCaseReviewTestData.CreateSubmittedCaseAsync(factory);
-        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(submitted.Verifier.Client, submitted.CaseId);
-
-        // Kiểm tra
-        Assert.Equal(JsonValueKind.Null, detail.GetProperty("lastCheckInOn").ValueKind);
-        Assert.Equal(0, detail.GetProperty("warnings").GetArrayLength());
-    }
-
-    [SqlFact]
     public async Task Death10_VerifierGetsALateRegistrationWarningButCanStillApprove()
     {
         // Chuẩn bị: đăng ký khai tử cách ngày mất 20 ngày. Ngày mất = hôm nay - 25, đăng ký = hôm nay - 5.
@@ -503,24 +448,6 @@ public sealed class DeathCaseCertificateInfoFlowTests : IAsyncLifetime
 
         // Kiểm tra
         await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.NotFound, "ADMINISTRATIVE_UNIT_NOT_FOUND");
-    }
-
-    /// <summary>Đặt lần điểm danh cuối của Chủ kho; tạo dòng lịch điểm danh nếu kế hoạch chưa có.</summary>
-    private async Task SetLastCheckInAsync(Guid planId, DateTimeOffset lastCheckInAt)
-    {
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            CheckInSchedule? schedule = await db.CheckInSchedules.SingleOrDefaultAsync(s => s.PlanId == planId);
-            if (schedule == null)
-            {
-                schedule = new CheckInSchedule();
-                schedule.PlanId = planId;
-                schedule.CreatedAt = DateTimeOffset.UtcNow;
-                db.CheckInSchedules.Add(schedule);
-            }
-            schedule.LastCheckInAt = lastCheckInAt;
-            await db.SaveChangesAsync();
-        });
     }
 
     /// <summary>Ngày giờ Việt Nam dạng dd/MM/yyyy, giống chữ trong cảnh báo.</summary>

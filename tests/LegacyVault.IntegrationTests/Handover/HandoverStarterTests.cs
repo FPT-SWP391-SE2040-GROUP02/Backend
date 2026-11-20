@@ -4,7 +4,7 @@ using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.Audit;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -92,8 +92,6 @@ public sealed class HandoverStarterTests
     [Theory]
     [InlineData(PlanStatus.Draft)]
     [InlineData(PlanStatus.Active)]
-    [InlineData(PlanStatus.CheckinOverdue)]
-    [InlineData(PlanStatus.AwaitingCheck)]
     [InlineData(PlanStatus.Closed)]
     [InlineData(PlanStatus.Blocked)]
     public async Task Start_RequiresDeathCaseOpen(PlanStatus status)

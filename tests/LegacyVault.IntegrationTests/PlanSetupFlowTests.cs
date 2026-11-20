@@ -16,12 +16,11 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests;
 
-/// <summary>Real HTTP/SQL Executor → activation → check-in; identity/payment and mail are explicit test fixtures.</summary>
+/// <summary>Real HTTP/SQL Executor → activation; identity/payment and mail are explicit test fixtures.</summary>
 public sealed class PlanSetupFlowTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;
     private readonly CapturedMail mail = new();
-    private bool failAfterOpening;
     public async Task InitializeAsync()
     {
         var created = ApiFactory.CreateForTempDatabase();
@@ -31,9 +30,6 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         {
             services.RemoveAll<IExecutorInvitationSender>();
             services.AddSingleton<IExecutorInvitationSender>(mail);
-            services.AddScoped<ICheckInScheduler>(provider => new FaultInjectingScheduler(
-                new CheckInScheduler(provider.GetRequiredService<ICheckInRepository>(), provider.GetRequiredService<TimeProvider>()),
-                provider.GetRequiredService<AppDbContext>(), () => failAfterOpening));
         };
         await factory.MigrateAsync();
     }
@@ -105,7 +101,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task FullHttpFlowAcceptActivateCheckInAndDuplicatesPreserveSingleOpenPeriod()
+    public async Task FullHttpFlowAcceptActivateAndDuplicateActivationIsIdempotent()
     {
         var (owner, recipient, vaultId) = await PrepareAsync();
         await InviteAsync(owner, vaultId);
@@ -116,20 +112,13 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
         Assert.Equal("ACTIVE", (await activation.Content.ReadFromJsonAsync<PlanSetupResponse>())!.PlanStatus);
         Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request)).StatusCode);
-        var first = await owner.GetFromJsonAsync<JsonElement>("/api/v1/check-ins/me");
-        Assert.Equal(1, first.GetProperty("history").GetProperty("totalCount").GetInt32());
-        var checkedIn = await owner.PostAsync("/api/v1/check-ins", null);
-        Assert.Equal(HttpStatusCode.OK, checkedIn.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsync("/api/v1/check-ins", null)).StatusCode);
-        var reloaded = await owner.GetFromJsonAsync<JsonElement>("/api/v1/check-ins/me");
-        Assert.Equal(2, reloaded.GetProperty("history").GetProperty("totalCount").GetInt32());
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             var plan = await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId);
             Assert.Equal(PlanSetupService.PolicyVersion, plan.ActivationPolicyVersion);
             Assert.NotNull(plan.ActivationPolicyAcknowledgedAt);
             Assert.NotNull(plan.ActivatedAt);
-            Assert.Equal(1, await db.CheckInPeriods.CountAsync(p => p.PlanId == plan.Id && p.ClosedAt == null));
+            Assert.Equal(PlanStatus.Active, plan.Status);
             Assert.Equal(ExecutorStatus.Accepted, (await db.Set<Executor>().SingleAsync(e => e.VaultId == vaultId)).Status);
         });
     }
@@ -147,7 +136,6 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.Contains("OWNER_EKYC_REQUIRED", body.GetProperty("missingRequirements").EnumerateArray().Select(e => e.GetString()));
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            Assert.Equal(0, await db.CheckInPeriods.CountAsync());
             Assert.Equal(PlanStatus.Draft, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId)).Status);
         });
     }
@@ -242,12 +230,11 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         {
             Assert.Equal(ExecutorStatus.Suspended, (await db.Set<Executor>().SingleAsync(e => e.VaultId == vaultId)).Status);
             Assert.Equal(PlanStatus.Draft, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId)).Status);
-            Assert.Equal(0, await db.CheckInPeriods.CountAsync(p => p.ClosedAt == null));
         });
     }
 
     [SqlFact]
-    public async Task ParallelActivationNeverCreatesTwoFirstPeriods()
+    public async Task ParallelActivationEndsActiveOnce()
     {
         var (owner, recipient, vaultId) = await PrepareAsync();
         await InviteAsync(owner, vaultId);
@@ -256,27 +243,8 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         var responses = await Task.WhenAll(owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request), owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request));
         Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
         Assert.All(responses, r => Assert.Contains(r.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Conflict }));
-        await ApiTestHelpers.WithDbAsync(factory, async db => Assert.Equal(1, await db.CheckInPeriods.CountAsync()));
-    }
-
-    [SqlFact]
-    public async Task SchedulerFailureRollsBackEvenAfterFlushingPlanAndPeriodInsideTransaction()
-    {
-        var (owner, recipient, vaultId) = await PrepareAsync();
-        await InviteAsync(owner, vaultId);
-        Assert.Equal(HttpStatusCode.OK, (await RespondAsync(recipient, mail.Token)).StatusCode);
-        failAfterOpening = true;
-        var failed = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", await ActivationAsync(owner, vaultId));
-        await ApiTestHelpers.AssertProblemAsync(failed, HttpStatusCode.InternalServerError, "INTERNAL_ERROR");
         await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            var plan = await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId);
-            Assert.Equal(PlanStatus.Draft, plan.Status);
-            Assert.Null(plan.ActivatedAt);
-            Assert.Null(plan.ActivationPolicyAcknowledgedAt);
-            Assert.Equal(0, await db.CheckInPeriods.CountAsync());
-            Assert.Equal(0, await db.CheckInSchedules.CountAsync());
-        });
+            Assert.Equal(PlanStatus.Active, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId)).Status));
     }
 
     [SqlFact]
@@ -376,19 +344,6 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.Equal(0, mine.GetProperty("ended").GetArrayLength());
     }
 
-    private sealed class FaultInjectingScheduler(ICheckInScheduler inner, AppDbContext db, Func<bool> shouldFail) : ICheckInScheduler
-    {
-        public async Task StartFirstPeriodAsync(HandoverPlan plan, CancellationToken ct)
-        {
-            await inner.StartFirstPeriodAsync(plan, ct);
-            if (shouldFail())
-            {
-                await db.SaveChangesAsync(ct);
-                throw new InvalidOperationException("Synthetic scheduler failure after flush");
-            }
-        }
-        public Task StopAsync(HandoverPlan plan, CancellationToken ct) => inner.StopAsync(plan, ct);
-    }
 
     private sealed class CapturedMail : IExecutorInvitationSender
     {

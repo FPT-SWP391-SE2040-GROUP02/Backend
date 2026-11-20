@@ -213,158 +213,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("Beneficiaries", (string)null);
                 });
 
-            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInPeriod", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset?>("AwaitingCheckAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<DateTimeOffset?>("CheckedInAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<DateTimeOffset?>("ClosedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<DateTimeOffset>("DueAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<DateTimeOffset>("GraceEndsAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("LateReminderGapDays")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(3);
-
-                    b.Property<int>("MaxLateReminders")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(3);
-
-                    b.Property<DateTimeOffset?>("OverdueAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("PlanId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ProxyContactMethod")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTimeOffset?>("ProxyContactedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("ProxyContactedWho")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<int>("Sequence")
-                        .HasColumnType("int");
-
-                    b.Property<DateTimeOffset>("StartedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<bool>("StartedByExecutor")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DueAt");
-
-                    b.HasIndex("PlanId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_CheckInPeriods_OpenPerPlan")
-                        .HasFilter("[ClosedAt] IS NULL");
-
-                    b.HasIndex("PlanId", "Sequence")
-                        .IsUnique();
-
-                    b.ToTable("CheckInPeriods", (string)null);
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInReminder", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<Guid>("PeriodId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset?>("SentAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PeriodId", "Kind")
-                        .IsUnique();
-
-                    b.ToTable("CheckInReminders", (string)null);
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInSchedule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("CycleDays")
-                        .HasColumnType("int");
-
-                    b.Property<int>("GraceDays")
-                        .HasColumnType("int");
-
-                    b.Property<DateTimeOffset?>("LastCheckInAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<int?>("PendingCycleDays")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("PendingGraceDays")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PlanId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .HasColumnType("datetimeoffset");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PlanId")
-                        .IsUnique();
-
-                    b.ToTable("CheckInSchedules", (string)null);
-                });
-
             modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1237,88 +1085,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("ExternalLoginLinkTickets", (string)null);
                 });
 
-            modelBuilder.Entity("LegacyVault.Domain.Entities.ExtraMailRule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
-
-                    b.Property<string>("ButtonText")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("DaysFromDue")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Note")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Subject")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("ExtraMailRules", (string)null);
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.ExtraMailSend", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("PeriodId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("RuleId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("Sent")
-                        .HasColumnType("bit");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RuleId", "PeriodId")
-                        .IsUnique();
-
-                    b.ToTable("ExtraMailSends", (string)null);
-                });
-
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverAccessLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1942,73 +1708,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasIndex("Status", "ResponseDeadline");
 
                     b.ToTable("HandoverTurns", (string)null);
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.Hold", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("ReleaseReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTimeOffset?>("ReleasedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("ReleasedByUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("ResponsibleUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("ReviewAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Scope")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<Guid?>("TargetId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("VaultId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Status", "ReviewAt");
-
-                    b.HasIndex("VaultId", "Status");
-
-                    b.ToTable("Holds", (string)null);
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.LoginThrottle", b =>
@@ -3011,39 +2710,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Vault");
                 });
 
-            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInPeriod", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.HandoverPlan", "Plan")
-                        .WithMany()
-                        .HasForeignKey("PlanId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Plan");
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInReminder", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.CheckInPeriod", "Period")
-                        .WithMany("Reminders")
-                        .HasForeignKey("PeriodId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Period");
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInSchedule", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.HandoverPlan", "Plan")
-                        .WithMany()
-                        .HasForeignKey("PlanId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Plan");
-                });
-
             modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.Vault", "Vault")
@@ -3325,15 +2991,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Turn");
                 });
 
-            modelBuilder.Entity("LegacyVault.Domain.Entities.Hold", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.Vault", null)
-                        .WithMany()
-                        .HasForeignKey("VaultId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("LegacyVault.Domain.Entities.OwnerIdentity", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.User", "User")
@@ -3464,11 +3121,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasForeignKey("VaultId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.CheckInPeriod", b =>
-                {
-                    b.Navigation("Reminders");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>

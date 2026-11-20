@@ -122,7 +122,6 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             Assert.False(await db.Set<Executor>().AnyAsync(e => e.VaultId == vaultId));
             Assert.False(await db.Set<HandoverTurn>().AnyAsync(t => t.VaultId == vaultId));
             Assert.Equal(0, await db.Set<HandoverSnapshotItem>().CountAsync());
-            Assert.Equal(0, await db.Set<CheckInPeriod>().CountAsync());
             Assert.False(await db.Set<AuditLog>().AnyAsync(l => l.VaultId == vaultId));
             Assert.Equal(0, await db.Set<OwnerIdentity>().CountAsync(i => i.UserId == ownerUser.Id));
             // Tài khoản giữ lại để đăng nhập và tạo kho mới; kho của người khác không bị đụng tới.
@@ -207,7 +206,6 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
         {
             planId = await db.Set<HandoverPlan>().Where(p => p.VaultId == vaultId).Select(p => p.Id).SingleAsync();
         });
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, planId, 1, DateTimeOffset.UtcNow.AddDays(-40), null);
 
         await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.DeathCaseOpen);
         using (IServiceScope scope = factory.Services.CreateScope())

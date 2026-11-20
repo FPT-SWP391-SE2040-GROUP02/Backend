@@ -17,7 +17,6 @@ public sealed class DevToolsService(
     IDevToolsRepository repository,
     IAuditLogRepository auditLogs,
     IUnitOfWork unitOfWork,
-    ICheckInJob checkInJob,
     IEntitlementExpiryJob entitlementExpiryJob,
     TimeProvider timeProvider,
     IEkycOptions ekycOptions,
@@ -66,62 +65,10 @@ public sealed class DevToolsService(
         DateTimeOffset past = now - DevToolsRules.PastMargin;
         AuditTargetType targetType;
         Guid targetId;
-        Guid? periodToProcess = null;
         bool runEntitlementExpiry = false;
         List<Guid> turnsToExpire = new List<Guid>();
 
-        CheckInReminderKind? reminderKind = DevToolsRules.ReminderKindOf(key);
-        if (reminderKind != null || key == DevToolsRules.GraceEnded)
-        {
-            CheckInPeriod? period = await repository.FindOpenPeriodAsync(vault.Plan.Id, ct);
-            IReadOnlyList<int> dueDays = CheckInRules.DueReminderDays;
-            DevMilestoneResponse state;
-            if (reminderKind != null)
-            {
-                state = DevToolsRules.EvaluateReminder(key, vault.Plan.Status, period, now, dueDays);
-            }
-            else
-            {
-                state = DevToolsRules.EvaluateGraceEnded(vault.Plan.Status, period, now);
-            }
-            EnsureAvailable(state);
-
-            if (reminderKind != null)
-            {
-                // Mốc thư nhắc: dời cả kỳ về quá khứ đúng một khoảng để mốc này vừa tới. Lịch nhắc và thời gian chờ
-                // của kỳ giữ nguyên; job điểm danh gửi thư của mốc này (và sang quá hạn nếu đã tới hạn).
-                DateTimeOffset at = CheckInTimeline.MilestoneAt(
-                    reminderKind.Value, period!.DueAt, period.LateReminderGapDays, dueDays);
-                TimeSpan shift = DevToolsRules.ShiftToReach(at, now);
-                period.StartedAt = period.StartedAt - shift;
-                period.DueAt = period.DueAt - shift;
-                period.GraceEndsAt = period.GraceEndsAt - shift;
-            }
-            else
-            {
-                period!.GraceEndsAt = past;
-                if (period.DueAt > period.GraceEndsAt)
-                {
-                    period.DueAt = period.GraceEndsAt - DevToolsRules.PastMargin;
-                }
-            }
-            // Lùi lần điểm danh gần nhất theo hạn mới để luật "một lần mỗi ngày" không chặn Owner khi test quá hạn.
-            CheckInSchedule? schedule = await repository.FindCheckInScheduleAsync(vault.Plan.Id, ct);
-            if (schedule != null)
-            {
-                DateTimeOffset? shiftedLastCheckIn = DevToolsRules.LastCheckInAfterShiftedDue(
-                    schedule.LastCheckInAt, period.DueAt, schedule.CycleDays);
-                if (shiftedLastCheckIn != schedule.LastCheckInAt)
-                {
-                    schedule.LastCheckInAt = shiftedLastCheckIn;
-                    schedule.UpdatedAt = now;
-                }
-            }
-            targetType = AuditTargetType.CheckIn;
-            targetId = period.Id;
-            periodToProcess = period.Id;
-        }
-        else if (key == DevToolsRules.ServiceExpired)
+        if (key == DevToolsRules.ServiceExpired)
         {
             // OPLAN-01: dời hạn dịch vụ về quá khứ; job hết hạn quyết định chuyển sang ân hạn như khi chạy nền.
             VaultEntitlement entitlement = vault.Entitlement;
@@ -161,11 +108,6 @@ public sealed class DevToolsService(
             targetType, targetId, null, AuditOutcome.Succeeded, key, now));
         await unitOfWork.SaveChangesAsync(ct);
 
-        if (periodToProcess != null)
-        {
-            // Chạy ngay vòng xử lý của job điểm danh cho kỳ này, giống job nền, để màn hình thấy trạng thái mới liền.
-            await checkInJob.ProcessPeriodAsync(periodToProcess.Value, ct);
-        }
         if (runEntitlementExpiry)
         {
             // Chạy ngay job hết hạn cho kho này, giống job nền, để màn hình thấy kho đã sang ân hạn.
@@ -455,31 +397,12 @@ public sealed class DevToolsService(
     private async Task<DevClockResponse> BuildClockAsync(Vault vault, CancellationToken ct)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
-        PlanStatus status = vault.Plan.Status;
-        CheckInPeriod? period = await repository.FindOpenPeriodAsync(vault.Plan.Id, ct);
         AuditAction? latestClockAction = await repository.FindLatestClockActionAsync(vault.Id, ct);
 
         DevClockResponse response = new DevClockResponse();
         response.VaultId = vault.Id;
-        response.PlanStatus = status.ToApiString();
-        response.CheckInState = DevToolsRules.GetCheckInState(status, period, now);
+        response.PlanStatus = vault.Plan.Status.ToApiString();
         response.ClockState = DevToolsRules.GetClockState(latestClockAction);
-        IReadOnlyList<int> dueDays = CheckInRules.DueReminderDays;
-        int maxLate = CheckInRules.MaxLateReminders;
-        if (period != null)
-        {
-            maxLate = period.MaxLateReminders;
-            response.MaxLateReminders = period.MaxLateReminders;
-            response.LateReminderGapDays = period.LateReminderGapDays;
-        }
-        foreach (string key in DevToolsRules.AllMilestones(dueDays.Count, maxLate))
-        {
-            if (DevToolsRules.ReminderKindOf(key) != null)
-            {
-                response.Milestones.Add(DevToolsRules.EvaluateReminder(key, status, period, now, dueDays));
-            }
-        }
-        response.Milestones.Add(DevToolsRules.EvaluateGraceEnded(status, period, now));
         response.Milestones.Add(DevToolsRules.EvaluateServiceExpired(vault.Entitlement));
         List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
         response.Milestones.Add(DevToolsRules.EvaluateRecipientDecision(turns, now));

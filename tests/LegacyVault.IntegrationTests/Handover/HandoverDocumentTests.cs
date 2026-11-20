@@ -7,7 +7,7 @@ using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.Audit;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
@@ -144,7 +144,6 @@ public sealed class HandoverDocumentTests
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly InMemoryContentStore store = new InMemoryContentStore();
     private readonly FakeAuditLogRepository audit = new FakeAuditLogRepository();
-    private readonly FakeHoldReader holds = new FakeHoldReader();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
     private readonly FakeDeathCaseRepository deathCases = new FakeDeathCaseRepository();
@@ -221,7 +220,7 @@ public sealed class HandoverDocumentTests
         submitService = new HandoverSubmissionService(
             currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time, writer, documents, notifier);
         reviewService = new HandoverSubmissionReviewService(
-            currentUser, users, vaults, submissions, holds, store, audit, unitOfWork, time, writer, handover, documents, notifier);
+            currentUser, users, vaults, submissions, store, audit, unitOfWork, time, writer, handover, documents, notifier);
     }
 
     private sealed class FakePaperRenderer : IHandoverPaperRenderer
@@ -588,17 +587,6 @@ public sealed class HandoverDocumentTests
         await reviewService.CompleteAsync(submission.Id, AllChecks(), CancellationToken.None);
 
         Assert.Single(handover.Grants);
-    }
-
-    [Fact]
-    public async Task Complete_WhileTheVaultIsOnHold_IsRejected()
-    {
-        HandoverSubmission submission = await ReadyForVerifier("ACCEPT");
-        holds.Active = true;
-
-        await Assert.ThrowsAsync<AppException>(() => reviewService.CompleteAsync(submission.Id, AllChecks(), CancellationToken.None));
-
-        Assert.Empty(handover.Grants);
     }
 
     [Fact]

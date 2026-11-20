@@ -1,7 +1,7 @@
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -15,7 +15,6 @@ public sealed class HandoverJobTests
     private readonly HandoverTestData data = new HandoverTestData(Now);
     private readonly FakeVaultRepository vaults = new FakeVaultRepository();
     private readonly FakeHandoverRepository repository = new FakeHandoverRepository();
-    private readonly FakeHoldReader holds = new FakeHoldReader();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
     private readonly HandoverJob job;
@@ -27,7 +26,7 @@ public sealed class HandoverJobTests
         vaults.Vaults.Add(data.Vault);
         container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
         designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
-        job = new HandoverJob(vaults, repository, holds, unitOfWork, time);
+        job = new HandoverJob(vaults, repository, unitOfWork, time);
     }
 
     private HandoverTurn AddTurn(HandoverTurnStatus status, string token)
@@ -181,34 +180,6 @@ public sealed class HandoverJobTests
     // H1, TIME-04, TIME-09: hold hoặc kế hoạch Blocked thì đồng hồ tạm dừng, job không cho hết hạn.
 
     [Fact]
-    public async Task ResponseExpiry_ActiveHold_DoesNothing()
-    {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited, "t1");
-        holds.Active = true;
-        time.Now = turn.ResponseDeadline.AddDays(1);
-
-        await job.ProcessResponseExpiryAsync(turn.Id, CancellationToken.None);
-
-        Assert.Equal(HandoverTurnStatus.Invited, turn.Status);
-        Assert.Equal(0, unitOfWork.SaveCount);
-    }
-
-    [Fact]
-    public async Task DecisionExpiry_ActiveHold_DoesNothing()
-    {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.ReadyToAccept, "t1");
-        turn.DecisionDeadline = Now.AddDays(7);
-        holds.Active = true;
-        time.Now = Now.AddDays(9);
-
-        await job.ProcessDecisionExpiryAsync(turn.Id, CancellationToken.None);
-
-        Assert.Equal(HandoverTurnStatus.ReadyToAccept, turn.Status);
-        Assert.Null(turn.EndedAt);
-        Assert.Equal(PlanStatus.HandoverInProgress, data.Plan.Status);
-    }
-
-    [Fact]
     public async Task DecisionExpiry_BlockedPlanWithoutHoldRecord_DoesNothing()
     {
         HandoverTurn turn = AddTurn(HandoverTurnStatus.ReadyToAccept, "t1");
@@ -222,22 +193,4 @@ public sealed class HandoverJobTests
         Assert.Equal(PlanStatus.Blocked, data.Plan.Status);
     }
 
-    [Fact]
-    public async Task GrantExpiry_ActiveHold_DoesNothing()
-    {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted, "t1");
-        HandoverGrant grant = new HandoverGrant
-        {
-            TurnId = turn.Id, Turn = turn, UserId = Guid.NewGuid(),
-            Status = HandoverGrantStatus.Active, GrantedAt = Now, ExpiresAt = Now.AddDays(30)
-        };
-        repository.Grants.Add(grant);
-        holds.Active = true;
-        time.Now = grant.ExpiresAt.AddDays(1);
-
-        await job.ProcessGrantExpiryAsync(grant.Id, CancellationToken.None);
-
-        Assert.Equal(HandoverGrantStatus.Active, grant.Status);
-        Assert.Null(grant.EndedAt);
-    }
 }

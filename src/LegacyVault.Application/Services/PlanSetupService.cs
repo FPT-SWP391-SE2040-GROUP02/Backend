@@ -53,7 +53,7 @@ public interface IPlanSetupService
 public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository vaults,
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
-    IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
+    IExecutorInvitationSender sender, IUnitOfWork unitOfWork,
     TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
     ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector,
     ISigningPasswordChecker signingPasswordChecker, IEmailBounceStore bounces,
@@ -494,7 +494,6 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             vault.Plan.ActivationPolicyVersion = PolicyVersion;
             vault.Plan.ActivationPolicyAcknowledgedAt = now;
             vault.Plan.UpdatedAt = now;
-            await scheduler.StartFirstPeriodAsync(vault.Plan, ct);
             // Mã mở gói do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
             await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
             // Ký bằng PIN cũng là lúc chụp lại cấu hình: bàn giao chỉ theo bản ký này cho tới khi Chủ kho ký lại.
@@ -613,11 +612,6 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         if (vault.Status != VaultStatus.Open)
         {
             missing.Add("VAULT_NOT_OPEN");
-        }
-        bool hasActiveHold = await holdReader.HasActiveHoldAsync(vault.Id, ct);
-        if (hasActiveHold)
-        {
-            missing.Add("HOLD_ACTIVE");
         }
         if (!Paid(vault))
         {

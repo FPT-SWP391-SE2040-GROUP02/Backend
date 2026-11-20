@@ -4,11 +4,11 @@ namespace LegacyVault.Application.Services;
 
 /// <summary>
 /// Luật kiểm tra giá trị các tham số Admin đặt ở trang Cấu hình (SystemSettings): số nguyên trong khoảng hợp lý,
-/// true/false, độ dài chữ, và vài cặp tham số phải đi cùng nhau (thư nhắc thứ nhất xa hạn hơn thư thứ hai...).
+/// true/false, độ dài chữ, và vài cặp tham số phải đi cùng nhau (giờ nhắc lời mời Người thực thi sớm hơn hạn lời mời...).
 /// Hàm thuần, không đọc DB. Các khóa Plans.* đã có bộ kiểm riêng (bảng giá) nên không nằm ở đây.
 /// </summary>
 /// <remarks>
-/// Khoảng giá trị khớp với cách hệ thống đọc tham số (clamp trong CheckInRules, ProxyCheckInRules...) để số Admin
+/// Khoảng giá trị khớp với cách hệ thống đọc tham số (clamp trong các lớp Rules) để số Admin
 /// thấy trên màn hình đúng bằng số hệ thống chạy, không bị điều chỉnh âm thầm khi đọc.
 /// </remarks>
 public static class SystemSettingRules
@@ -28,9 +28,6 @@ public static class SystemSettingRules
         public bool IsPhone;
     }
 
-    public const string FirstReminderKey = "CheckIn.FirstReminderDaysBeforeDue";
-    public const string SecondReminderKey = "CheckIn.SecondReminderDaysBeforeDue";
-    public const string DueReminderCountKey = "CheckIn.DueReminderCount";
     public const string ExecutorExpiresKey = "Executor.InvitationExpiresDays";
     public const string ExecutorReminderKey = "Executor.ReminderAfterHours";
 
@@ -45,12 +42,6 @@ public static class SystemSettingRules
     /// <summary>Giá trị mặc định của các khóa nằm trong cặp phải đi cùng nhau, dùng khi chưa có dòng hoặc dòng bị tắt.</summary>
     private static readonly Dictionary<string, long> RelationDefaults = new Dictionary<string, long>
     {
-        { FirstReminderKey, 7 },
-        { SecondReminderKey, 1 },
-        { DueReminderCountKey, 2 },
-        { "CheckIn.ThirdReminderDaysBeforeDue", 1 },
-        { "CheckIn.FourthReminderDaysBeforeDue", 1 },
-        { "CheckIn.FifthReminderDaysBeforeDue", 1 },
         { ExecutorExpiresKey, 7 },
         { ExecutorReminderKey, 48 },
     };
@@ -64,17 +55,6 @@ public static class SystemSettingRules
     private static Dictionary<string, IntegerRule> BuildIntegerRules()
     {
         Dictionary<string, IntegerRule> rules = new Dictionary<string, IntegerRule>();
-        Add(rules, "CheckIn.DefaultCycleDays", "Chu kỳ điểm danh mặc định (ngày)", 7, 365);
-        Add(rules, FirstReminderKey, "Thư nhắc trước hạn thứ nhất (ngày trước hạn)", 2, 60);
-        Add(rules, SecondReminderKey, "Thư nhắc trước hạn thứ hai (ngày trước hạn)", 1, 30);
-        Add(rules, "CheckIn.ThirdReminderDaysBeforeDue", "Thư nhắc trước hạn thứ ba (ngày trước hạn)", 1, 30);
-        Add(rules, "CheckIn.FourthReminderDaysBeforeDue", "Thư nhắc trước hạn thứ tư (ngày trước hạn)", 1, 30);
-        Add(rules, "CheckIn.FifthReminderDaysBeforeDue", "Thư nhắc trước hạn thứ năm (ngày trước hạn)", 1, 30);
-        Add(rules, DueReminderCountKey, "Số thư nhắc trước hạn", 1, 5);
-        Add(rules, "CheckIn.LateReminderGapDays", "Khoảng cách giữa hai thư nhắc trễ (ngày)", 1, 30);
-        Add(rules, "CheckIn.MaxLateReminders", "Số thư nhắc trễ", 1, 5);
-        Add(rules, "CheckIn.ExecutorProxyLimit", "Số lần Người thực thi điểm danh thay liên tiếp", 1, 20);
-
         Add(rules, "Handover.ResponseWindowDays", "Hạn người nhận phản hồi lời mời (ngày)", 1, 60);
         Add(rules, "Handover.DecisionWindowDays", "Hạn người nhận quyết định (ngày)", 1, 60);
         Add(rules, "Handover.GrantWindowDays", "Thời hạn được xem và tải tài sản (ngày)", 1, 365);
@@ -215,20 +195,6 @@ public static class SystemSettingRules
     /// </summary>
     public static string? FindRelationError(IReadOnlyDictionary<string, long> effective)
     {
-        string[] ordinals = { "nhất", "hai", "ba", "tư", "năm" };
-        long count = Pick(effective, DueReminderCountKey);
-        for (int i = 1; i < count && i < ordinals.Length; i++)
-        {
-            long farther = Pick(effective, CheckInRules.DueReminderKey(i));
-            long nearer = Pick(effective, CheckInRules.DueReminderKey(i + 1));
-            if (farther <= nearer)
-            {
-                return "Thư nhắc trước hạn thứ " + ordinals[i - 1] + " phải xa hạn hơn thư thứ " + ordinals[i]
-                    + " (số ngày lớn hơn). Hiện là "
-                    + farther.ToString(CultureInfo.InvariantCulture) + " ngày và " + nearer.ToString(CultureInfo.InvariantCulture) + " ngày.";
-            }
-        }
-
         long expiresDays = Pick(effective, ExecutorExpiresKey);
         long remindHours = Pick(effective, ExecutorReminderKey);
         if (remindHours >= expiresDays * 24)

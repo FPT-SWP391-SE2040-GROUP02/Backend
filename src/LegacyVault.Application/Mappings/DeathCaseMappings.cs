@@ -86,11 +86,8 @@ public static class DeathCaseMappings
         response.PlanStatus = row.PlanStatus.ToApiString();
         response.ExecutorNote = row.ExecutorNote;
         response.ExecutorNoteUpdatedAt = row.ExecutorNoteUpdatedAt;
-        // DMS-05: quá hạn điểm danh = đang trong thời gian chờ hoặc đã hết thời gian chờ.
-        response.CheckInOverdue = row.PlanStatus == PlanStatus.CheckinOverdue || row.PlanStatus == PlanStatus.AwaitingCheck;
         response.OpenDeathCaseId = row.OpenDeathCaseId;
         response.LastRejectedDeathCaseId = row.LastRejectedDeathCaseId;
-        response.LastOwnerCheckInAt = row.LastOwnerCheckInAt;
         response.AcceptedAt = row.ExecutorAcceptedAt;
         return response;
     }

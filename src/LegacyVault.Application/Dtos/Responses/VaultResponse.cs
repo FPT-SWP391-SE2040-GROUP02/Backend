@@ -18,7 +18,7 @@ public class VaultResponse
     public string Status { get; set; } = string.Empty;
     public DateTimeOffset? ClosedAt { get; set; }
 
-    /// <summary>"DRAFT", "ACTIVE", "CHECKIN_OVERDUE", ...</summary>
+    /// <summary>"DRAFT", "ACTIVE", "HANDOVER_IN_PROGRESS", ...</summary>
     public string PlanStatus { get; set; } = string.Empty;
     public int PlanConfigVersion { get; set; }
     public DateTimeOffset? PlanActivatedAt { get; set; }

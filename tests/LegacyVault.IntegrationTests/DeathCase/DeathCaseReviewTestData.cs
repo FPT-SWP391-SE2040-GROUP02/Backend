@@ -386,18 +386,6 @@ public static class DeathCaseReviewTestData
         });
     }
 
-    /// <summary>Thêm một kỳ điểm danh đang mở bắt đầu daysAgo ngày trước; trả Id kỳ.</summary>
-    public static async Task<Guid> AddOpenPeriodAsync(ApiFactory factory, Guid planId, int daysAgo)
-    {
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, planId, 1, DateTimeOffset.UtcNow.AddDays(-daysAgo), null);
-        Guid periodId = Guid.Empty;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            periodId = await db.CheckInPeriods.Where(p => p.PlanId == planId).Select(p => p.Id).SingleAsync();
-        });
-        return periodId;
-    }
-
     public static async Task<HandoverPlan> LoadPlanAsync(ApiFactory factory, Guid vaultId)
     {
         HandoverPlan? plan = null;

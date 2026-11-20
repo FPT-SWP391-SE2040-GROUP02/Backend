@@ -70,29 +70,6 @@ public static class DeathCaseTestData
         return result;
     }
 
-    /// <summary>
-    /// Thêm một kỳ điểm danh. checkedInAt có giá trị = Owner đã điểm danh lúc đó (kỳ đóng luôn);
-    /// null = kỳ đang mở.
-    /// </summary>
-    public static async Task AddCheckInPeriodAsync(
-        ApiFactory factory, Guid planId, int sequence, DateTimeOffset startedAt, DateTimeOffset? checkedInAt)
-    {
-        CheckInPeriod period = new CheckInPeriod();
-        period.PlanId = planId;
-        period.Sequence = sequence;
-        period.StartedAt = startedAt;
-        period.DueAt = startedAt.AddDays(30);
-        period.GraceEndsAt = startedAt.AddDays(37);
-        period.CheckedInAt = checkedInAt;
-        period.ClosedAt = checkedInAt;
-
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            db.CheckInPeriods.Add(period);
-            await db.SaveChangesAsync();
-        });
-    }
-
     /// <summary>Hồ sơ Draft mới kèm phiên bản 1 rỗng (chưa lưu).</summary>
     public static DeathCase NewDraftCase(OwnerVault vault, Guid openedByUserId)
     {

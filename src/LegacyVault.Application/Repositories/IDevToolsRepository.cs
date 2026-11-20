@@ -9,12 +9,6 @@ public interface IDevToolsRepository
     /// <summary>Các kho kèm Owner và kế hoạch, chỉ đọc, sắp theo ngày tạo. Không nạp nội dung tài sản.</summary>
     Task<List<Vault>> ListVaultsAsync(int maxCount, CancellationToken ct);
 
-    /// <summary>Kỳ điểm danh đang mở của kế hoạch, có theo dõi thay đổi.</summary>
-    Task<CheckInPeriod?> FindOpenPeriodAsync(Guid planId, CancellationToken ct);
-
-    /// <summary>Lịch điểm danh của kế hoạch, có theo dõi thay đổi; null khi chưa có.</summary>
-    Task<CheckInSchedule?> FindCheckInScheduleAsync(Guid planId, CancellationToken ct);
-
     /// <summary>Thao tác đồng hồ gần nhất của kho trong nhật ký: tua hoặc về thời gian hiện tại; null khi chưa từng có.</summary>
     Task<AuditAction?> FindLatestClockActionAsync(Guid vaultId, CancellationToken ct);
 

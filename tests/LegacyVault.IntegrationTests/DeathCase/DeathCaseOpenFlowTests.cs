@@ -305,37 +305,6 @@ public sealed class DeathCaseOpenFlowTests : IAsyncLifetime
         Assert.True(idProblem.GetProperty("errors").TryGetProperty("ownerCitizenId", out _));
     }
 
-    [SqlFact]
-    public async Task Dms05_ExecutorVaultListShowsOverdueFlag()
-    {
-        // Chuẩn bị: user là Executor của hai kho; kho 2 đã quá hạn điểm danh
-        DeathCaseTestData.OwnerVault vault1 = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DeathCaseTestData.OwnerVault vault2 = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        await ApiTestHelpers.SetPlanStatusAsync(factory, vault2.VaultId, PlanStatus.CheckinOverdue);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault1.VaultId);
-        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vault2.VaultId, executor.User.Id);
-        Guid caseId = await OpenCaseAsync(executor.Client, vault1.VaultId);
-
-        // Hành động
-        HttpResponseMessage response = await executor.Client.GetAsync("/api/v1/executor/vaults");
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        JsonElement list = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.Equal(2, list.GetArrayLength());
-        JsonElement? row1 = FindVault(list, vault1.VaultId);
-        JsonElement? row2 = FindVault(list, vault2.VaultId);
-        Assert.NotNull(row1);
-        Assert.NotNull(row2);
-        Assert.False(row1.Value.GetProperty("checkInOverdue").GetBoolean());
-        Assert.False(row1.Value.TryGetProperty("role", out _));
-        Assert.Equal("ACTIVE", row1.Value.GetProperty("planStatus").GetString());
-        Assert.Equal(caseId, row1.Value.GetProperty("openDeathCaseId").GetGuid());
-        Assert.True(row2.Value.GetProperty("checkInOverdue").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, row2.Value.GetProperty("openDeathCaseId").ValueKind);
-        Assert.Equal("Người thử", row2.Value.GetProperty("ownerFullName").GetString());
-    }
-
     private static string OpenUrl(Guid vaultId)
     {
         return $"/api/v1/executor/vaults/{vaultId}/death-case";

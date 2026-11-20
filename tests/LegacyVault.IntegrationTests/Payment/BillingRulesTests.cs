@@ -661,8 +661,6 @@ public sealed class BillingRulesTests
     [Theory]
     [InlineData(PlanStatus.Draft)]
     [InlineData(PlanStatus.Active)]
-    [InlineData(PlanStatus.CheckinOverdue)]
-    [InlineData(PlanStatus.AwaitingCheck)]
     public void Sec83_PlanNotLocked_AllowsPayment(PlanStatus status)
     {
         // Chuẩn bị

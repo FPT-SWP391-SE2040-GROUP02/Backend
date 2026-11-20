@@ -75,22 +75,4 @@ public sealed class AdminCountsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, badStatus.StatusCode);
     }
 
-    [SqlFact]
-    public async Task HoldCounts_AreZeroWhenEmpty_AndNonAdminGets404()
-    {
-        // Chuẩn bị
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        User member = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        HttpClient adminClient = await AdminAsync(admin);
-        HttpClient memberClient = await AdminAsync(member);
-
-        // Hành động
-        JsonElement counts = await CountsOf(await adminClient.GetAsync("/api/v1/admin/holds/counts"));
-        HttpResponseMessage denied = await memberClient.GetAsync("/api/v1/admin/holds/counts");
-
-        // Kiểm tra
-        Assert.Equal(0, counts.GetProperty("ACTIVE").GetInt32());
-        Assert.Equal(0, counts.GetProperty("RELEASED").GetInt32());
-        Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
-    }
 }

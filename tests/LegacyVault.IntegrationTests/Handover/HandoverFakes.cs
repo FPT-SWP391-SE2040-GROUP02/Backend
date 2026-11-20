@@ -5,7 +5,7 @@ using LegacyVault.Application.Services;
 using LegacyVault.Application.Storage;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 
 namespace LegacyVault.IntegrationTests.Handover;
@@ -218,16 +218,6 @@ public sealed class FakeBeneficiaryDataProtector : IBeneficiaryDataProtector
     }
 }
 
-/// <summary>Đọc hold giả: bật Active để mô phỏng kho đang bị giữ.</summary>
-public sealed class FakeHoldReader : IHoldReader
-{
-    public bool Active { get; set; }
-
-    public Task<bool> HasActiveHoldAsync(Guid vaultId, CancellationToken ct)
-    {
-        return Task.FromResult(Active);
-    }
-}
 
 public sealed class FakePolicy : IHandoverPolicy
 {

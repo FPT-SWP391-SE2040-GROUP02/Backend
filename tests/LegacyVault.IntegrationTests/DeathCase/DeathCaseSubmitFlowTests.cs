@@ -47,7 +47,7 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
     {
         // Chuẩn bị: Owner quá hạn điểm danh (đang trong thời gian chờ), Executor đã soạn đủ hồ sơ
         DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.CheckinOverdue);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.Active);
         DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
             executor.Client, vault.VaultId, DeathCaseApi.Today().AddDays(-3));
@@ -63,7 +63,7 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
         Assert.NotEqual(prepared.GetProperty("etag").GetString(), submitted.GetProperty("etag").GetString());
         Guid caseId = submitted.GetProperty("id").GetGuid();
         DeathCase deathCase = await LoadCaseAsync(caseId);
-        Assert.Equal(PlanStatus.CheckinOverdue, deathCase.StatusBeforeCase);
+        Assert.Equal(PlanStatus.Active, deathCase.StatusBeforeCase);
         Assert.NotNull(deathCase.FirstSubmittedAt);
         Assert.Equal(1, deathCase.ReviewVersionNo);
         Assert.Equal(PlanStatus.DeathCaseOpen, await LoadPlanStatusAsync(vault.VaultId));
@@ -90,66 +90,6 @@ public sealed class DeathCaseSubmitFlowTests : IAsyncLifetime
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "VAULT_NOT_EDITABLE");
         Assert.Equal("PLAN_LOCKED", problem.GetProperty("reason").GetString());
-    }
-
-    [SqlFact]
-    public async Task Dms04_OwnerCheckInIsRejectedAfterSubmit()
-    {
-        // Chuẩn bị
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
-        JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
-            executor.Client, vault.VaultId, DeathCaseApi.Today().AddDays(-3));
-        await DeathCaseApi.SubmitOkAsync(executor.Client, prepared);
-
-        // Hành động
-        HttpResponseMessage response = await vault.Client.PostAsync("/api/v1/check-ins", null);
-
-        // Kiểm tra: điểm danh không đưa kế hoạch về ACTIVE
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "CHECKIN_NOT_ALLOWED");
-        Assert.Equal("DEATH_CASE_OPEN", problem.GetProperty("planStatus").GetString());
-        Assert.Equal(PlanStatus.DeathCaseOpen, await LoadPlanStatusAsync(vault.VaultId));
-    }
-
-    [SqlFact]
-    public async Task Death05_SubmitAndCheckInJobDoNotOverwritePlanStatus()
-    {
-        // Chuẩn bị: kế hoạch đang chạy, có kỳ điểm danh đã quá hạn
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        await DeathCaseTestData.AddCheckInPeriodAsync(factory, vault.PlanId, 1, now.AddDays(-31), null);
-        Guid periodId = Guid.Empty;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            periodId = await db.CheckInPeriods.Where(p => p.PlanId == vault.PlanId).Select(p => p.Id).SingleAsync();
-        });
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
-        JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
-            executor.Client, vault.VaultId, DeathCaseApi.Today().AddDays(-3));
-
-        using (IServiceScope jobScope = factory.Services.CreateScope())
-        {
-            // Job điểm danh đọc kỳ và kế hoạch (còn ACTIVE) trước khi hồ sơ được gửi...
-            ICheckInRepository checkInRepository = jobScope.ServiceProvider.GetRequiredService<ICheckInRepository>();
-            IUnitOfWork jobUnitOfWork = jobScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            CheckInPeriod? period = await checkInRepository.FindPeriodForJobAsync(periodId, CancellationToken.None);
-            Assert.NotNull(period);
-            Assert.Equal(PlanStatus.Active, period.Plan.Status);
-
-            // ...Executor gửi hồ sơ, kế hoạch sang DEATH_CASE_OPEN...
-            await DeathCaseApi.SubmitOkAsync(executor.Client, prepared);
-
-            // Hành động: ...rồi job lưu theo kiểu MoveToNextStatus (ACTIVE → CHECKIN_OVERDUE)
-            period.OverdueAt = now;
-            period.Plan.Status = PlanStatus.CheckinOverdue;
-            period.Plan.UpdatedAt = now;
-            AppException conflict = await Assert.ThrowsAsync<AppException>(
-                () => jobUnitOfWork.SaveChangesAsync(CancellationToken.None));
-
-            // Kiểm tra: RowVersion của kế hoạch chặn ghi đè
-            Assert.Equal(ErrorCode.EditConflict, conflict.Code);
-        }
-        Assert.Equal(PlanStatus.DeathCaseOpen, await LoadPlanStatusAsync(vault.VaultId));
     }
 
     [SqlFact]

@@ -3,17 +3,16 @@ namespace LegacyVault.Domain.Enums;
 /// <summary>
 /// Trạng thái kế hoạch bàn giao (SRS §11.1, chuyển trạng thái ở §11.2).
 /// </summary>
-/// <remarks>Tạo kho chỉ dùng Draft; các giá trị khác khai báo sẵn cho kích hoạt, điểm danh, chứng tử, bàn giao.</remarks>
+/// <remarks>
+/// Tạo kho chỉ dùng Draft. Số 2 và 3 (quá hạn điểm danh, chờ kiểm tra) đã bỏ cùng điểm danh; dòng cũ được migration
+/// RemoveCheckInAndExtraMail chuyển về Active. Không dùng lại hai số này.
+/// </remarks>
 public enum PlanStatus
 {
-    /// <summary>Đang thiết lập; chưa điểm danh, chưa bàn giao.</summary>
+    /// <summary>Đang thiết lập; chưa bàn giao.</summary>
     Draft = 0,
-    /// <summary>Đã kích hoạt theo SETUP-01; lịch điểm danh đang chạy.</summary>
+    /// <summary>Đã kích hoạt theo SETUP-01.</summary>
     Active = 1,
-    /// <summary>Đến hạn mà Owner chưa điểm danh, đang trong thời gian chờ.</summary>
-    CheckinOverdue = 2,
-    /// <summary>Hết thời gian chờ; đã tạo việc cho Executor kiểm tra.</summary>
-    AwaitingCheck = 3,
     /// <summary>Đã có hồ sơ chứng tử; snapshot đã ghim, chặn sửa cấu hình (SETUP-05).</summary>
     DeathCaseOpen = 4,
     /// <summary>Chứng tử đã duyệt; đang bàn giao (F3).</summary>

@@ -52,10 +52,6 @@ public sealed class DeathCaseRepository : IDeathCaseRepository
                 VaultId = e.VaultId,
                 ExecutorAcceptedAt = e.AcceptedAt,
                 PlanId = e.Vault.Plan.Id,
-                LastOwnerCheckInAt = context.Set<CheckInSchedule>()
-                    .Where(s => s.PlanId == e.Vault.Plan.Id)
-                    .Select(s => s.LastCheckInAt)
-                    .FirstOrDefault(),
                 OwnerFullName = e.Vault.Owner.FullName,
                 PlanStatus = e.Vault.Plan.Status,
                 ExecutorNote = e.Vault.ExecutorNote,
