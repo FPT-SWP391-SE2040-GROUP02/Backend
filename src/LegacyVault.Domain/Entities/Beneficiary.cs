@@ -45,6 +45,12 @@ public class Beneficiary
     /// <summary>Đã mã hóa: JSON {email, phone}. Thông tin liên hệ là dữ liệu cá nhân (§11.6).</summary>
     public byte[] ContactEncrypted { get; set; } = Array.Empty<byte>();
 
+    /// <summary>
+    /// Băm SHA-256 của link riêng để người nhận gửi yêu cầu nhận tài sản; cấp mới mỗi lần Chủ kho kích hoạt kế hoạch
+    /// (gửi trong thư báo kích hoạt). Null khi chưa cấp.
+    /// </summary>
+    public string? RequestTokenHash { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>Đổi sau mỗi lần sửa; dùng làm ETag chống ghi đè. Null khi mới tạo → etag "0".</summary>

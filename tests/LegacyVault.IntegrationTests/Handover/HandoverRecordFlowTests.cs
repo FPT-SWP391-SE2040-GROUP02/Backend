@@ -10,7 +10,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
-/// Biên bản bàn giao qua HTTP trên SQL Server thật: Người thực thi mở bàn giao, luật sư lập, chốt, mở lại,
+/// Biên bản bàn giao qua HTTP trên SQL Server thật: người nhận gửi yêu cầu kèm giấy tờ, luật sư xét, lập, chốt, mở lại,
 /// kiểm thứ tự ba bước (biên bản → danh tính → chữ ký ba bên) và quyền của từng vai.
 /// Môi trường test bỏ qua xác minh danh tính nên nhận lượt xong là coi như luật sư đã xác nhận.
 /// </summary>
@@ -99,44 +99,78 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
+    private const string RequestsUrl = "/api/v1/handover/requests";
+
+    /// <summary>Người nhận đầu tiên gửi yêu cầu bằng link riêng; trả client của người đó, token và phản hồi.</summary>
+    private async Task<(HttpClient Client, string Token, HttpResponseMessage Response)> SubmitRequestAsync(Guid vaultId)
+    {
+        (string token, string email, Guid _) = await HandoverRecordTestData.IssueRequestTokenAsync(factory, vaultId);
+        HttpClient recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, email);
+        HttpResponseMessage response = await recipient.PostAsync(RequestsUrl, HandoverRecordTestData.RequestForm(token, "Bố tôi mất"));
+        return (recipient, token, response);
+    }
+
     [SqlFact]
-    public async Task Open_CreatesOneRecordLocksVaultAndAssignsAVerifier()
+    public async Task Request_CreatesOneRecordLocksVaultAndAssignsAVerifier()
     {
         Vault2 vault = await BuildVaultAsync();
         VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         await HandoverRecordTestData.CreateVerifierClientAsync(factory);
 
-        // Chưa mở bàn giao: chưa có biên bản.
+        // Chưa ai gửi yêu cầu: chưa có biên bản; Người thực thi không còn tự mở bàn giao được.
         HttpResponseMessage none = await executor.Client.GetAsync(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId));
         Assert.Equal(HttpStatusCode.NoContent, none.StatusCode);
+        HttpResponseMessage open = await executor.Client.PostAsync(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId), null);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, open.StatusCode);
 
-        JsonElement opened = await HandoverRecordTestData.OpenAsync(executor.Client, vault.VaultId);
-        JsonElement again = await HandoverRecordTestData.OpenAsync(executor.Client, vault.VaultId);
+        // Link riêng cho xem tên Chủ kho và email đã che mà không cần đăng nhập.
+        (HttpClient recipient, string token, HttpResponseMessage sent) = await SubmitRequestAsync(vault.VaultId);
+        HttpClient anonymous = factory.CreateClient();
+        JsonElement preview = await ApiTestHelpers.ReadJsonAsync(
+            await anonymous.GetAsync(RequestsUrl + "/preview?token=" + Uri.EscapeDataString(token)));
+        Assert.Equal(ApiTestHelpers.BeneficiaryName(0), preview.GetProperty("recipientName").GetString());
+        Assert.Contains("•", preview.GetProperty("invitedEmailMasked").GetString());
 
-        Assert.Equal("DRAFTING", opened.GetProperty("status").GetString());
-        Assert.Equal(opened.GetProperty("id").GetGuid(), again.GetProperty("id").GetGuid());
+        Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
+        JsonElement claim = await ApiTestHelpers.ReadJsonAsync(sent);
+        Assert.Equal("SUBMITTED", claim.GetProperty("status").GetString());
+        Assert.Single(claim.GetProperty("files").EnumerateArray());
+
+        // Gửi lại lần nữa: đã có yêu cầu.
+        HttpResponseMessage again = await recipient.PostAsync(RequestsUrl, HandoverRecordTestData.RequestForm(token, "lần 2"));
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(again, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("ALREADY_REQUESTED", problem.GetProperty("reason").GetString());
+
+        Guid recordId = claim.GetProperty("recordId").GetGuid();
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             HandoverRecord record = await db.Set<HandoverRecord>().SingleAsync(r => r.VaultId == vault.VaultId);
+            Assert.Equal(recordId, record.Id);
             Assert.Equal(UserRole.Verifier, (await db.Users.SingleAsync(u => u.Id == record.VerifierUserId)).Role);
-            Assert.Equal(executor.User.Id, record.RequestedByUserId);
             Assert.Equal(PlanStatus.HandoverRequested, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
         });
 
-        // Kho đã khóa: Chủ kho không thêm tài sản được nữa.
+        // Người thực thi thấy biên bản đang lập; kho đã khóa nên Chủ kho không thêm tài sản được nữa.
+        JsonElement executorView = await ApiTestHelpers.ReadJsonAsync(
+            await executor.Client.GetAsync(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId)));
+        Assert.Equal("DRAFTING", executorView.GetProperty("status").GetString());
+        Assert.Equal(0, executorView.GetProperty("claims").GetArrayLength());
         HttpResponseMessage locked = await vault.Owner.PostAsJsonAsync(
             $"/api/v1/vaults/{vault.VaultId}/assets/text", new { name = "Mới", content = "x" });
         Assert.Equal(HttpStatusCode.Conflict, locked.StatusCode);
     }
 
     [SqlFact]
-    public async Task Open_ByOwnerOrStranger_IsNotFound_AndWithoutVerifier_IsConflict()
+    public async Task Request_BadLink_WrongEmail_AndWithoutVerifier_AreRejected()
     {
         Vault2 vault = await BuildVaultAsync();
-        VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        (string token, string _, Guid _) = await HandoverRecordTestData.IssueRequestTokenAsync(factory, vault.VaultId);
 
-        HttpResponseMessage byOwner = await vault.Owner.PostAsync(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId), null);
-        Assert.Equal(HttpStatusCode.NotFound, byOwner.StatusCode);
+        HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
+        HttpResponseMessage badLink = await stranger.PostAsync(RequestsUrl, HandoverRecordTestData.RequestForm("sai-link", "x"));
+        await ApiTestHelpers.AssertProblemAsync(badLink, HttpStatusCode.NotFound, "HANDOVER_INVITATION_INVALID");
+        HttpResponseMessage wrongEmail = await stranger.PostAsync(RequestsUrl, HandoverRecordTestData.RequestForm(token, "x"));
+        await ApiTestHelpers.AssertProblemAsync(wrongEmail, HttpStatusCode.Forbidden, "HANDOVER_EMAIL_MISMATCH");
 
         // Không còn luật sư nào đang hoạt động (database tạm dùng chung trong lớp nên tắt hết luật sư của test khác).
         await ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -144,9 +178,151 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
             await db.Users.Where(u => u.Role == UserRole.Verifier)
                 .ExecuteUpdateAsync(x => x.SetProperty(u => u.Status, UserStatus.Disabled));
         });
-        HttpResponseMessage noVerifier = await executor.Client.PostAsync(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId), null);
+        (HttpClient _, string _, HttpResponseMessage noVerifier) = await SubmitRequestAsync(vault.VaultId);
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(noVerifier, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("NO_VERIFIER", problem.GetProperty("reason").GetString());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.False(await db.Set<HandoverRecord>().AnyAsync(r => r.VaultId == vault.VaultId));
+            Assert.False(await db.Set<HandoverRecordFile>().AnyAsync());
+        });
+    }
+
+    [SqlFact]
+    public async Task Owner_CanCancelUntilSigned_ThenVaultUnlocksAndRecipientCanRequestAgain()
+    {
+        Vault2 vault = await BuildVaultAsync();
+        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        (HttpClient recipient, string token, HttpResponseMessage sent) = await SubmitRequestAsync(vault.VaultId);
+        Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
+        string ownerUrl = $"/api/v1/vaults/{vault.VaultId}/handover-request";
+
+        JsonElement request = await ApiTestHelpers.ReadJsonAsync(await vault.Owner.GetAsync(ownerUrl));
+        Assert.True(request.GetProperty("canCancel").GetBoolean());
+        Assert.Equal(ApiTestHelpers.BeneficiaryName(0), request.GetProperty("requesterNames")[0].GetString());
+
+        // Người khác không xem, không hủy được.
+        HttpResponseMessage byRecipient = await recipient.PostAsync(ownerUrl + "/cancel", null);
+        Assert.Equal(HttpStatusCode.NotFound, byRecipient.StatusCode);
+
+        HttpResponseMessage cancelled = await vault.Owner.PostAsync(ownerUrl + "/cancel", null);
+        Assert.Equal(HttpStatusCode.NoContent, cancelled.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await vault.Owner.GetAsync(ownerUrl)).StatusCode);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(PlanStatus.Active, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
+            Assert.Equal(HandoverRecordStatus.Cancelled, (await db.Set<HandoverRecord>().SingleAsync(r => r.VaultId == vault.VaultId)).Status);
+        });
+
+        // Kho mở khóa; người nhận gửi lại được và tạo biên bản mới.
+        HttpResponseMessage unlocked = await vault.Owner.PostAsJsonAsync(
+            $"/api/v1/vaults/{vault.VaultId}/assets/text", new { name = "Mới", content = "x" });
+        Assert.Equal(HttpStatusCode.Created, unlocked.StatusCode);
+        HttpResponseMessage again = await recipient.PostAsync(RequestsUrl, HandoverRecordTestData.RequestForm(token, "lần 2"));
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal(2, (await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync(RequestsUrl + "/mine"))).GetArrayLength());
+    }
+
+    [SqlFact]
+    public async Task Verifier_ReviewsDocuments_SupplementRejectAndFinalizeNeedsAllReviewed()
+    {
+        Vault2 vault = await BuildVaultAsync();
+        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        (HttpClient recipient, string _, HttpResponseMessage sent) = await SubmitRequestAsync(vault.VaultId);
+        JsonElement mine = await ApiTestHelpers.ReadJsonAsync(sent);
+        Guid recordId = mine.GetProperty("recordId").GetGuid();
+        Guid claimId = mine.GetProperty("id").GetGuid();
+        Guid fileId = mine.GetProperty("files")[0].GetProperty("id").GetGuid();
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        string url = HandoverRecordTestData.VerifierRecordUrl(recordId);
+
+        // Luật sư thấy yêu cầu kèm tệp và tải được tệp; người nhận tải lại được tệp của mình.
+        JsonElement record = await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(url));
+        Assert.Equal("SUBMITTED", record.GetProperty("claims")[0].GetProperty("status").GetString());
+        HttpResponseMessage file = await verifier.Client.GetAsync(url + "/files/" + fileId);
+        Assert.Equal(HttpStatusCode.OK, file.StatusCode);
+        Assert.Equal(HandoverRecordTestData.SamplePdf(), await file.Content.ReadAsByteArrayAsync());
+        Assert.Equal(HttpStatusCode.OK, (await recipient.GetAsync(RequestsUrl + "/" + claimId + "/files/" + fileId)).StatusCode);
+
+        // Chưa xét thì chưa chốt được.
+        Assert.Equal(HttpStatusCode.OK, (await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA))).StatusCode);
+        JsonElement pending = await ApiTestHelpers.AssertProblemAsync(
+            await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("CLAIMS_PENDING", pending.GetProperty("reason").GetString());
+
+        // Bổ sung phải có lý do; người nhận nộp thêm thì quay về chờ xét.
+        string review = url + "/claims/" + claimId + "/review";
+        await ApiTestHelpers.AssertProblemAsync(
+            await verifier.Client.PostAsJsonAsync(review, new { decision = "REQUEST_SUPPLEMENT" }), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(HttpStatusCode.OK,
+            (await verifier.Client.PostAsJsonAsync(review, new { decision = "REQUEST_SUPPLEMENT", reason = "Thiếu giấy chứng tử" })).StatusCode);
+        JsonElement asked = (await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync(RequestsUrl + "/mine")))[0];
+        Assert.Equal("SUPPLEMENT_REQUESTED", asked.GetProperty("status").GetString());
+        Assert.Equal("Thiếu giấy chứng tử", asked.GetProperty("reviewReason").GetString());
+        MultipartFormDataContent more = HandoverRecordTestData.RequestForm("bo-qua", "Đã bổ sung");
+        HttpResponseMessage supplemented = await recipient.PostAsync(RequestsUrl + "/" + claimId + "/supplement", more);
+        Assert.Equal(HttpStatusCode.OK, supplemented.StatusCode);
+        JsonElement after = await ApiTestHelpers.ReadJsonAsync(supplemented);
+        Assert.Equal("SUBMITTED", after.GetProperty("status").GetString());
+        Assert.Equal(2, after.GetProperty("files").GetArrayLength());
+
+        // Từ chối: người này ra khỏi biên bản và không ghi tài sản cho họ được nữa.
+        Assert.Equal(HttpStatusCode.OK,
+            (await verifier.Client.PostAsJsonAsync(review, new { decision = "REJECT", reason = "Giấy tờ không hợp lệ" })).StatusCode);
+        JsonElement rejected = await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(url));
+        Assert.Equal(0, rejected.GetProperty("recipients").GetArrayLength());
+        await ApiTestHelpers.AssertProblemAsync(
+            await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA)), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        JsonElement noAccepted = await ApiTestHelpers.AssertProblemAsync(
+            await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("RECORD_INVALID", noAccepted.GetProperty("reason").GetString());
+    }
+
+    [SqlFact]
+    public async Task Verifier_AddsNewRecipientAndEvidenceFiles()
+    {
+        Vault2 vault = await BuildVaultAsync();
+        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        Guid recordId = await HandoverRecordTestData.RequestAsync(factory, vault.VaultId);
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        string url = HandoverRecordTestData.VerifierRecordUrl(recordId);
+
+        // Người nhận mới (có tên trong di chúc nhưng Chủ kho chưa khai): thêm vào kho rồi ghi tài sản được.
+        HttpResponseMessage added = await verifier.Client.PostAsJsonAsync(url + "/recipients", new
+        {
+            fullName = "Lê Văn Mới",
+            citizenId = "001090000099",
+            dateOfBirth = "1990-01-01",
+            email = "nguoi-moi@example.com"
+        });
+        Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+        JsonElement body = await ApiTestHelpers.ReadJsonAsync(added);
+        JsonElement person = body.GetProperty("availableRecipients").EnumerateArray()
+            .Single(p => p.GetProperty("fullName").GetString() == "Lê Văn Mới");
+        Guid newRecipient = person.GetProperty("beneficiaryId").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await SetLinesAsync(verifier.Client, recordId, (newRecipient, vault.AssetA))).StatusCode);
+        // Trùng CCCD người đã có thì báo lỗi.
+        await ApiTestHelpers.AssertProblemAsync(await verifier.Client.PostAsJsonAsync(url + "/recipients", new
+        {
+            fullName = "Trùng",
+            citizenId = "001090000099",
+            dateOfBirth = "1990-01-01",
+            email = "trung@example.com"
+        }), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+
+        // Tệp căn cứ: đính kèm, tải, gỡ; tệp không phải PDF hay ảnh thì bị từ chối.
+        MultipartFormDataContent evidence = new MultipartFormDataContent();
+        ByteArrayContent pdf = new ByteArrayContent(HandoverRecordTestData.SamplePdf());
+        evidence.Add(pdf, "files", "di-chuc.pdf");
+        JsonElement withEvidence = await ApiTestHelpers.ReadJsonAsync(await verifier.Client.PostAsync(url + "/evidence", evidence));
+        Guid evidenceId = withEvidence.GetProperty("evidenceFiles")[0].GetProperty("id").GetGuid();
+        Assert.Equal("di-chuc.pdf", withEvidence.GetProperty("evidenceFiles")[0].GetProperty("fileName").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await verifier.Client.GetAsync(url + "/files/" + evidenceId)).StatusCode);
+        MultipartFormDataContent bad = new MultipartFormDataContent();
+        bad.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("không phải pdf")), "files", "x.txt");
+        await ApiTestHelpers.AssertProblemAsync(await verifier.Client.PostAsync(url + "/evidence", bad), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        JsonElement removed = await ApiTestHelpers.ReadJsonAsync(await verifier.Client.DeleteAsync(url + "/evidence/" + evidenceId));
+        Assert.Equal(0, removed.GetProperty("evidenceFiles").GetArrayLength());
     }
 
     [SqlFact]
@@ -159,11 +335,10 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
 
         HttpResponseMessage beforeOpen = await executor.Client.GetAsync(assetsUrl);
         Assert.Equal(HttpStatusCode.Conflict, beforeOpen.StatusCode);
-        JsonElement opened = await HandoverRecordTestData.OpenAsync(executor.Client, vault.VaultId);
+        Guid openedId = await HandoverRecordTestData.RequestAsync(factory, vault.VaultId);
         HttpResponseMessage drafting = await executor.Client.GetAsync(assetsUrl);
         Assert.Equal(HttpStatusCode.Conflict, drafting.StatusCode);
 
-        Guid openedId = opened.GetProperty("id").GetGuid();
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, openedId);
         await HandoverRecordTestData.UseOwnerSplitAndFinalizeAsync(verifier.Client, openedId);
 
@@ -177,7 +352,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Vault2 vault = await BuildVaultAsync();
         VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         await HandoverRecordTestData.CreateVerifierClientAsync(factory);
-        Guid recordId = (await HandoverRecordTestData.OpenAsync(executor.Client, vault.VaultId)).GetProperty("id").GetGuid();
+        Guid recordId = await HandoverRecordTestData.RequestAsync(factory, vault.VaultId);
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
         string url = HandoverRecordTestData.VerifierRecordUrl(recordId);
 
@@ -198,6 +373,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         HttpResponseMessage set = await SetLinesAsync(verifier.Client, recordId,
             (vault.FirstRecipient, vault.AssetA), (vault.FirstRecipient, vault.AssetB), (vault.SecondRecipient, vault.AssetB));
         Assert.Equal(HttpStatusCode.OK, set.StatusCode);
+        await HandoverRecordTestData.AcceptAllClaimsAsync(verifier.Client, recordId);
         JsonElement finalized = await PostOkAsync(verifier.Client, url + "/finalize");
 
         Assert.Equal("IDENTITY_CHECK", finalized.GetProperty("status").GetString());
@@ -221,7 +397,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Vault2 vault = await BuildVaultAsync();
         VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         await HandoverRecordTestData.CreateVerifierClientAsync(factory);
-        Guid recordId = (await HandoverRecordTestData.OpenAsync(executor.Client, vault.VaultId)).GetProperty("id").GetGuid();
+        Guid recordId = await HandoverRecordTestData.RequestAsync(factory, vault.VaultId);
         VaultTestData.ExecutorClient other = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
 
         HttpResponseMessage response = await other.Client.GetAsync(HandoverRecordTestData.VerifierRecordUrl(recordId));

@@ -283,7 +283,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Assert.Equal(6, body.EnumerateObject().Count());
         Assert.Equal(ReceiverEmail(0), body.GetProperty("invitedEmail").GetString());
         Assert.False(string.IsNullOrEmpty(body.GetProperty("ownerFullName").GetString()));
-        Assert.False(body.GetProperty("accountExists").GetBoolean());
+        // Người nhận đã có tài khoản từ lúc gửi yêu cầu nhận tài sản.
+        Assert.True(body.GetProperty("accountExists").GetBoolean());
         string masked = body.GetProperty("invitedEmailMasked").GetString()!;
         Assert.EndsWith("@example.com", masked);
 

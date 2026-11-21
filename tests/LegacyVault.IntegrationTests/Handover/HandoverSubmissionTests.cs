@@ -505,7 +505,6 @@ public sealed class CountingRecordService : IHandoverRecordService
     public Task<Guid?> FindVerifierUserIdAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
     public Task<List<ExecutorVaultResponse>> ListMyVaultsAsync(CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse?> GetForExecutorAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
-    public Task<HandoverRecordResponse> OpenAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> SignAsExecutorAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
     public Task<List<HandoverRecordSummaryResponse>> ListForVerifierAsync(CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> GetForVerifierAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
@@ -516,4 +515,16 @@ public sealed class CountingRecordService : IHandoverRecordService
     public Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> GetForRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> ReviewClaimAsync(Guid recordId, Guid claimId, ReviewHandoverClaimRequest request, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> AddRecipientAsync(Guid recordId, AddHandoverRecipientRequest request, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> AddEvidenceAsync(Guid recordId, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> RemoveEvidenceAsync(Guid recordId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<PreparedDownload> PrepareVerifierFileAsync(Guid recordId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRequestPreviewResponse> PreviewRequestAsync(string token, CancellationToken ct) => throw new NotSupportedException();
+    public Task<MyHandoverClaimResponse> SubmitClaimAsync(string token, string? note, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
+    public Task<List<MyHandoverClaimResponse>> ListMyClaimsAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<MyHandoverClaimResponse> SupplementClaimAsync(Guid claimId, string? note, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
+    public Task<PreparedDownload> PrepareMyClaimFileAsync(Guid claimId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
+    public Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
 }

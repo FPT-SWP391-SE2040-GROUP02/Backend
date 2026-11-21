@@ -14,13 +14,16 @@ namespace LegacyVault.Application.Services;
 /// - Thư có email và số điện thoại của Chủ kho và Người thực thi; hai người này được báo trước ở màn kích hoạt
 ///   và màn nhận lời mời rằng thông tin liên hệ của họ sẽ được chia sẻ cho người nhận.
 /// - Thư không có tên gói hay tài sản. Gửi sau khi đã lưu kích hoạt, nên gửi lỗi không làm hỏng việc kích hoạt.
+/// - Mỗi người nhận có link riêng để gửi yêu cầu nhận tài sản khi Chủ kho qua đời; kích hoạt lại thì cấp link mới.
 /// </remarks>
 public sealed class PlanActivatedNotifier(
     IVaultRepository vaults,
     IUserRepository users,
     IHandoverRepository handover,
     IBeneficiaryDataProtector protector,
-    IPlanActivatedNoticeSender sender) : IPlanActivatedNotifier
+    IPlanActivatedNoticeSender sender,
+    IHandoverRecordRepository records,
+    IUnitOfWork unitOfWork) : IPlanActivatedNotifier
 {
     public async Task NotifyAsync(Guid vaultId, CancellationToken ct)
     {
@@ -37,6 +40,29 @@ public sealed class PlanActivatedNotifier(
         User? executor = await FindAcceptedExecutorAsync(vault, ct);
 
         List<Designation> designations = await handover.FindStartableDesignationsAsync(vault.Id, ct);
+
+        // Cấp link riêng mới cho từng người nhận (link cũ hết hiệu lực), lưu băm trước khi gửi thư.
+        Dictionary<Guid, string> tokens = new Dictionary<Guid, string>();
+        foreach (Designation designation in designations)
+        {
+            if (tokens.ContainsKey(designation.BeneficiaryId))
+            {
+                continue;
+            }
+            Beneficiary? tracked = await records.FindBeneficiaryForUpdateAsync(designation.BeneficiaryId, ct);
+            if (tracked == null)
+            {
+                continue;
+            }
+            (string value, string hash) = HandoverRecordRules.CreateRequestToken();
+            tracked.RequestTokenHash = hash;
+            tokens[designation.BeneficiaryId] = value;
+        }
+        if (tokens.Count > 0)
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+
         HashSet<Guid> notified = new HashSet<Guid>();
         foreach (Designation designation in designations)
         {
@@ -59,6 +85,10 @@ public sealed class PlanActivatedNotifier(
                     OwnerEmail = owner.Email,
                     OwnerPhone = owner.Phone
                 };
+                if (tokens.ContainsKey(designation.BeneficiaryId))
+                {
+                    notice.RequestToken = tokens[designation.BeneficiaryId];
+                }
                 if (executor != null)
                 {
                     notice.ExecutorName = executor.FullName;

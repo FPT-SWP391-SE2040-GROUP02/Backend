@@ -19,9 +19,10 @@ public sealed class HandoverRecordConfiguration : IEntityTypeConfiguration<Hando
         builder.Property(r => r.UpdatedAt)
             .IsConcurrencyToken();
 
-        // Mỗi kho chỉ có một biên bản bàn giao.
+        // Mỗi kho chỉ có một biên bản đang mở; biên bản Chủ kho đã hủy không tính (người nhận gửi yêu cầu lại được).
         builder.HasIndex(r => r.VaultId)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("[Status] <> 'Cancelled'");
         builder.HasIndex(r => new { r.VerifierUserId, r.Status });
 
         builder.HasOne<Vault>()
@@ -37,6 +38,16 @@ public sealed class HandoverRecordConfiguration : IEntityTypeConfiguration<Hando
         builder.HasMany(r => r.Signatures)
             .WithOne(s => s.Record)
             .HasForeignKey(s => s.RecordId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(r => r.Claims)
+            .WithOne(c => c.Record)
+            .HasForeignKey(c => c.RecordId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(r => r.Files)
+            .WithOne(f => f.Record)
+            .HasForeignKey(f => f.RecordId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

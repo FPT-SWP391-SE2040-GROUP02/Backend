@@ -141,4 +141,61 @@ public sealed class FakeHandoverRecordRepository : IHandoverRecordRepository
     public void AddSignature(HandoverRecordSignature signature)
     {
     }
+
+    public Task<Beneficiary?> FindBeneficiaryByRequestTokenHashAsync(string tokenHash, CancellationToken ct)
+    {
+        foreach (Beneficiary beneficiary in Beneficiaries)
+        {
+            if (beneficiary.RequestTokenHash == tokenHash)
+            {
+                return Task.FromResult<Beneficiary?>(beneficiary);
+            }
+        }
+        return Task.FromResult<Beneficiary?>(null);
+    }
+
+    public Task<List<HandoverClaim>> ListClaimsByUserAsync(Guid userId, CancellationToken ct)
+    {
+        List<HandoverClaim> result = new List<HandoverClaim>();
+        foreach (HandoverRecord record in Records)
+        {
+            foreach (HandoverClaim claim in record.Claims)
+            {
+                if (claim.UserId == userId)
+                {
+                    result.Add(claim);
+                }
+            }
+        }
+        return Task.FromResult(result);
+    }
+
+    public void AddClaim(HandoverClaim claim)
+    {
+    }
+
+    public void AddFile(HandoverRecordFile file)
+    {
+    }
+
+    public void RemoveFile(HandoverRecordFile file)
+    {
+    }
+
+    public void AddBeneficiary(Beneficiary beneficiary)
+    {
+        Beneficiaries.Add(beneficiary);
+    }
+
+    public Task<Beneficiary?> FindBeneficiaryForUpdateAsync(Guid beneficiaryId, CancellationToken ct)
+    {
+        foreach (Beneficiary beneficiary in Beneficiaries)
+        {
+            if (beneficiary.Id == beneficiaryId)
+            {
+                return Task.FromResult<Beneficiary?>(beneficiary);
+            }
+        }
+        return Task.FromResult<Beneficiary?>(null);
+    }
 }

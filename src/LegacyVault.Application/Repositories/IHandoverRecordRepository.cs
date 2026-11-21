@@ -5,10 +5,12 @@ namespace LegacyVault.Application.Repositories;
 /// <summary>Đọc và ghi biên bản bàn giao. Không chứa luật nghiệp vụ.</summary>
 public interface IHandoverRecordRepository
 {
-    /// <summary>Biên bản kèm dòng và chữ ký, có theo dõi thay đổi; null khi không có.</summary>
+    /// <summary>Biên bản kèm dòng, chữ ký, yêu cầu nhận và tệp, có theo dõi thay đổi; null khi không có.</summary>
     Task<HandoverRecord?> FindByIdAsync(Guid recordId, CancellationToken ct);
 
-    /// <summary>Biên bản của kho kèm dòng và chữ ký, có theo dõi thay đổi; null khi kho chưa mở bàn giao.</summary>
+    /// <summary>
+    /// Biên bản đang mở của kho (bỏ biên bản Chủ kho đã hủy), có theo dõi thay đổi; null khi chưa ai gửi yêu cầu nhận.
+    /// </summary>
     Task<HandoverRecord?> FindByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>Các biên bản được giao cho một luật sư, mới nhất trước, kèm dòng và chữ ký.</summary>
@@ -38,4 +40,22 @@ public interface IHandoverRecordRepository
     void RemoveLine(HandoverRecordLine line);
     void AddLine(HandoverRecordLine line);
     void AddSignature(HandoverRecordSignature signature);
+
+    /// <summary>Người nhận có link riêng này, kèm kho và kế hoạch, có theo dõi thay đổi; null khi link sai.</summary>
+    Task<Beneficiary?> FindBeneficiaryByRequestTokenHashAsync(string tokenHash, CancellationToken ct);
+
+    /// <summary>Các yêu cầu nhận tài sản tài khoản này đã gửi, mới nhất trước, kèm biên bản. Chỉ đọc.</summary>
+    Task<List<HandoverClaim>> ListClaimsByUserAsync(Guid userId, CancellationToken ct);
+
+    void AddClaim(HandoverClaim claim);
+
+    void AddFile(HandoverRecordFile file);
+
+    void RemoveFile(HandoverRecordFile file);
+
+    /// <summary>Luật sư thêm người nhận mới vào kho khi lập biên bản.</summary>
+    void AddBeneficiary(Beneficiary beneficiary);
+
+    /// <summary>Người nhận của kho, có theo dõi thay đổi (để cấp link riêng); null khi không có.</summary>
+    Task<Beneficiary?> FindBeneficiaryForUpdateAsync(Guid beneficiaryId, CancellationToken ct);
 }

@@ -4,13 +4,14 @@ using System.Text.Json;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.TestSupport;
 
 /// <summary>
-/// Đưa một kho đi qua luồng biên bản bàn giao bằng API thật: Người thực thi mở bàn giao, luật sư lấy file phân chia
-/// của Chủ kho làm biên bản rồi chốt. Dùng chung cho các test cần kho đã ở giai đoạn bàn giao.
+/// Đưa một kho đi qua luồng biên bản bàn giao bằng API thật: người nhận gửi yêu cầu kèm giấy tờ, luật sư chấp nhận
+/// giấy tờ, lấy file phân chia của Chủ kho làm biên bản rồi chốt. Dùng chung cho các test cần kho đã ở giai đoạn bàn giao.
 /// </summary>
 public static class HandoverRecordTestData
 {
@@ -56,17 +57,91 @@ public static class HandoverRecordTestData
         return result;
     }
 
-    /// <summary>Người thực thi mở bàn giao; trả biên bản vừa tạo.</summary>
-    public static async Task<JsonElement> OpenAsync(HttpClient executor, Guid vaultId)
+    /// <summary>Một tệp PDF nhỏ hợp lệ theo chữ ký đầu tệp, dùng làm giấy tờ người nhận nộp.</summary>
+    public static byte[] SamplePdf()
     {
-        HttpResponseMessage response = await executor.PostAsync(ExecutorRecordUrl(vaultId), null);
+        return System.Text.Encoding.ASCII.GetBytes("%PDF-1.4\n% giay to thu\n%%EOF\n");
+    }
+
+    /// <summary>Multipart gửi yêu cầu nhận: token, lời nhắn và một tệp PDF.</summary>
+    public static MultipartFormDataContent RequestForm(string token, string note)
+    {
+        MultipartFormDataContent form = new MultipartFormDataContent();
+        form.Add(new StringContent(token), "token");
+        form.Add(new StringContent(note), "note");
+        ByteArrayContent file = new ByteArrayContent(SamplePdf());
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(file, "files", "giay-to.pdf");
+        return form;
+    }
+
+    /// <summary>
+    /// Cấp link riêng cho người nhận đầu tiên có email của kho (như lúc kích hoạt kế hoạch). Trả token và email người nhận.
+    /// </summary>
+    public static async Task<(string Token, string Email, Guid BeneficiaryId)> IssueRequestTokenAsync(ApiFactory factory, Guid vaultId)
+    {
+        (string value, string hash) = LegacyVault.Application.Services.HandoverRecordRules.CreateRequestToken();
+        string email = string.Empty;
+        Guid beneficiaryId = Guid.Empty;
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            LegacyVault.Infrastructure.Data.AppDbContext db =
+                scope.ServiceProvider.GetRequiredService<LegacyVault.Infrastructure.Data.AppDbContext>();
+            LegacyVault.Application.Security.IBeneficiaryDataProtector protector =
+                scope.ServiceProvider.GetRequiredService<LegacyVault.Application.Security.IBeneficiaryDataProtector>();
+            List<Beneficiary> beneficiaries = await db.Set<Beneficiary>()
+                .Where(b => b.VaultId == vaultId).OrderBy(b => b.CreatedAt).ToListAsync();
+            foreach (Beneficiary beneficiary in beneficiaries)
+            {
+                string? candidate = protector.Unprotect(beneficiary).Email;
+                if (!string.IsNullOrWhiteSpace(candidate))
+                {
+                    beneficiary.RequestTokenHash = hash;
+                    email = candidate.Trim().ToLowerInvariant();
+                    beneficiaryId = beneficiary.Id;
+                    break;
+                }
+            }
+            Assert.NotEqual(Guid.Empty, beneficiaryId);
+            await db.SaveChangesAsync();
+        }
+        return (value, email, beneficiaryId);
+    }
+
+    /// <summary>
+    /// Người nhận đầu tiên của kho gửi yêu cầu nhận tài sản kèm một tệp PDF; trả id biên bản vừa tạo hoặc đang mở.
+    /// </summary>
+    public static async Task<Guid> RequestAsync(ApiFactory factory, Guid vaultId)
+    {
+        (string token, string email, Guid _) = await IssueRequestTokenAsync(factory, vaultId);
+        HttpClient recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, email);
+        HttpResponseMessage response = await recipient.PostAsync("/api/v1/handover/requests", RequestForm(token, "Xin nhận tài sản"));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return await ApiTestHelpers.ReadJsonAsync(response);
+        JsonElement claim = await ApiTestHelpers.ReadJsonAsync(response);
+        return claim.GetProperty("recordId").GetGuid();
+    }
+
+    /// <summary>Luật sư chấp nhận giấy tờ của mọi yêu cầu đang chờ xét.</summary>
+    public static async Task AcceptAllClaimsAsync(HttpClient verifier, Guid recordId)
+    {
+        JsonElement record = await ApiTestHelpers.ReadJsonAsync(await verifier.GetAsync(VerifierRecordUrl(recordId)));
+        foreach (JsonElement claim in record.GetProperty("claims").EnumerateArray())
+        {
+            if (claim.GetProperty("status").GetString() != "SUBMITTED")
+            {
+                continue;
+            }
+            Guid claimId = claim.GetProperty("id").GetGuid();
+            HttpResponseMessage reviewed = await verifier.PostAsJsonAsync(
+                VerifierRecordUrl(recordId) + "/claims/" + claimId + "/review", new { decision = "ACCEPT" });
+            Assert.Equal(HttpStatusCode.OK, reviewed.StatusCode);
+        }
     }
 
     /// <summary>Luật sư lấy file phân chia của Chủ kho làm biên bản rồi chốt; trả biên bản sau khi chốt.</summary>
     public static async Task<JsonElement> UseOwnerSplitAndFinalizeAsync(HttpClient verifier, Guid recordId)
     {
+        await AcceptAllClaimsAsync(verifier, recordId);
         HttpResponseMessage split = await verifier.PostAsync(VerifierRecordUrl(recordId) + "/use-owner-split", null);
         Assert.Equal(HttpStatusCode.OK, split.StatusCode);
         HttpResponseMessage finalized = await verifier.PostAsync(VerifierRecordUrl(recordId) + "/finalize", null);
@@ -75,7 +150,7 @@ public static class HandoverRecordTestData
     }
 
     /// <summary>
-    /// Kho đã có gói sẵn sàng và người nhận: đặt kế hoạch Đã kích hoạt, Người thực thi mở bàn giao, luật sư chốt biên bản.
+    /// Kho đã có gói sẵn sàng và người nhận: đặt kế hoạch Đã kích hoạt, người nhận gửi yêu cầu, luật sư chốt biên bản.
     /// Trả client của Người thực thi, của luật sư và id biên bản.
     /// </summary>
     public static async Task<FinalizedRecord> FinalizeFromOwnerSplitAsync(ApiFactory factory, Guid vaultId)
@@ -83,8 +158,7 @@ public static class HandoverRecordTestData
         await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.Active);
         VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vaultId);
         await CreateVerifierClientAsync(factory);
-        JsonElement opened = await OpenAsync(executor.Client, vaultId);
-        Guid recordId = opened.GetProperty("id").GetGuid();
+        Guid recordId = await RequestAsync(factory, vaultId);
         VaultTestData.ExecutorClient verifier = await AssignedVerifierClientAsync(factory, recordId);
         JsonElement finalized = await UseOwnerSplitAndFinalizeAsync(verifier.Client, recordId);
 

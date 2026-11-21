@@ -23,7 +23,8 @@ public sealed class HandoverRecordRepository : IHandoverRecordRepository
 
     public Task<HandoverRecord?> FindByVaultIdAsync(Guid vaultId, CancellationToken ct)
     {
-        return QueryWithDetails().FirstOrDefaultAsync(r => r.VaultId == vaultId, ct);
+        return QueryWithDetails()
+            .FirstOrDefaultAsync(r => r.VaultId == vaultId && r.Status != HandoverRecordStatus.Cancelled, ct);
     }
 
     public Task<List<HandoverRecord>> ListByVerifierAsync(Guid verifierUserId, CancellationToken ct)
@@ -129,11 +130,55 @@ public sealed class HandoverRecordRepository : IHandoverRecordRepository
         context.Set<HandoverRecordSignature>().Add(signature);
     }
 
+    public Task<Beneficiary?> FindBeneficiaryByRequestTokenHashAsync(string tokenHash, CancellationToken ct)
+    {
+        return context.Set<Beneficiary>()
+            .Include(b => b.Vault).ThenInclude(v => v.Plan)
+            .FirstOrDefaultAsync(b => b.RequestTokenHash == tokenHash, ct);
+    }
+
+    public Task<List<HandoverClaim>> ListClaimsByUserAsync(Guid userId, CancellationToken ct)
+    {
+        return context.Set<HandoverClaim>()
+            .AsNoTracking()
+            .Include(c => c.Record)
+            .Where(c => c.UserId == userId)
+            .OrderByDescending(c => c.CreatedAt)
+            .ToListAsync(ct);
+    }
+
+    public void AddClaim(HandoverClaim claim)
+    {
+        context.Set<HandoverClaim>().Add(claim);
+    }
+
+    public void AddFile(HandoverRecordFile file)
+    {
+        context.Set<HandoverRecordFile>().Add(file);
+    }
+
+    public void RemoveFile(HandoverRecordFile file)
+    {
+        context.Set<HandoverRecordFile>().Remove(file);
+    }
+
+    public void AddBeneficiary(Beneficiary beneficiary)
+    {
+        context.Set<Beneficiary>().Add(beneficiary);
+    }
+
+    public Task<Beneficiary?> FindBeneficiaryForUpdateAsync(Guid beneficiaryId, CancellationToken ct)
+    {
+        return context.Set<Beneficiary>().FirstOrDefaultAsync(b => b.Id == beneficiaryId, ct);
+    }
+
     private IQueryable<HandoverRecord> QueryWithDetails()
     {
         return context.Set<HandoverRecord>()
             .Include(r => r.Lines)
             .Include(r => r.Signatures)
+            .Include(r => r.Claims)
+            .Include(r => r.Files)
             .AsSplitQuery();
     }
 }

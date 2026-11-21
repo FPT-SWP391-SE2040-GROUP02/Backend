@@ -24,6 +24,20 @@ public static class ApiTestHelpers
     /// <summary>Thêm một user Active vào DB và trả HttpClient đã gắn Bearer token của user đó.</summary>
     public static async Task<HttpClient> CreateClientForNewUserAsync(ApiFactory factory, bool emailVerified, string? email = null)
     {
+        if (email != null)
+        {
+            User? existing = null;
+            await WithDbAsync(factory, async db =>
+            {
+                existing = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == email);
+            });
+            if (existing != null)
+            {
+                HttpClient reused = factory.CreateClient();
+                AuthorizeAs(reused, factory.Services, existing);
+                return reused;
+            }
+        }
         User user = new User();
         user.Email = email ?? $"{Guid.NewGuid():N}@test.local";
         user.FullName = "Người thử";
