@@ -2,6 +2,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Mappings;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace LegacyVault.Api.Exceptions;
@@ -12,6 +13,7 @@ namespace LegacyVault.Api.Exceptions;
 /// - AppException (kho, tài sản, gói): status theo AppErrorType, code UPPER_SNAKE_CASE, kèm Extensions.
 /// - Request vượt giới hạn kích thước → 413 FILE_TOO_LARGE.
 /// - DbUpdateConcurrencyException (UpdatedAt là concurrency token) → 409 EDIT_CONFLICT.
+/// - SQL Server chọn request làm nạn nhân deadlock (lỗi 1205, kể cả lúc đọc) → 409 EDIT_CONFLICT.
 /// - Còn lại → 500 INTERNAL_ERROR.
 /// </summary>
 public sealed class GlobalExceptionHandler(
@@ -48,6 +50,12 @@ public sealed class GlobalExceptionHandler(
             problem = Problem(StatusCodes.Status409Conflict, ErrorCode.EditConflict,
                 "Dữ liệu vừa được sửa ở nơi khác. Vui lòng tải lại rồi sửa tiếp.");
         }
+        else if (IsDeadlockVictim(exception))
+        {
+            // Hai request cùng ghi một bản ghi (ví dụ bấm ký hai lần cùng lúc): một bên thua, giao dịch đã rollback.
+            problem = Problem(StatusCodes.Status409Conflict, ErrorCode.EditConflict,
+                "Dữ liệu đang được cập nhật đồng thời. Vui lòng tải lại rồi thử lại.");
+        }
         else
         {
             // Không ghi nội dung request, connection string hoặc exception message có thể chứa secrets.
@@ -69,6 +77,20 @@ public sealed class GlobalExceptionHandler(
                 contentType: "application/problem+json", cancellationToken: cancellationToken);
         }
         return true;
+    }
+
+    private static bool IsDeadlockVictim(Exception exception)
+    {
+        Exception? current = exception;
+        while (current != null)
+        {
+            if (current is SqlException sql && sql.Number == 1205)
+            {
+                return true;
+            }
+            current = current.InnerException;
+        }
+        return false;
     }
 
     private static ProblemDetails FromApiException(ApiException exception)

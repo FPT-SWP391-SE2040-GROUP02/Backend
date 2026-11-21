@@ -5,13 +5,13 @@ namespace LegacyVault.Infrastructure.Data;
 
 public static class DbExceptions
 {
-    /// <summary>SQL Server 2601/2627: vi phạm unique index/constraint (request khác vừa ghi trước).</summary>
     /// <summary>SQL Server chọn giao dịch này làm nạn nhân của deadlock (lỗi 1205).</summary>
     public static bool IsDeadlock(DbUpdateException exception)
     {
         return exception.InnerException is SqlException { Number: 1205 };
     }
 
+    /// <summary>SQL Server 2601/2627: vi phạm unique index/constraint (request khác vừa ghi trước).</summary>
     public static bool IsUniqueViolation(DbUpdateException exception)
     {
         return exception.InnerException is SqlException { Number: 2601 or 2627 };

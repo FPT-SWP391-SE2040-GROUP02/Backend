@@ -17,5 +17,10 @@ public sealed class HandoverRecordSignatureConfiguration : IEntityTypeConfigurat
             .HasMaxLength(16);
 
         builder.HasIndex(s => new { s.RecordId, s.RevisionNo });
+        // Mỗi bản biên bản chỉ có một chữ ký cho mỗi bên (người nhận tính theo từng người): bấm ký hai lần cùng lúc
+        // thì lần sau vi phạm unique và trả 409 thay vì ghi trùng chữ ký.
+        builder.HasIndex(s => new { s.RecordId, s.RevisionNo, s.Role, s.BeneficiaryId })
+            .IsUnique()
+            .HasFilter(null);
     }
 }

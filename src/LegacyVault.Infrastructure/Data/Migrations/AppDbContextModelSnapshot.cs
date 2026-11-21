@@ -967,6 +967,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.HasIndex("RecordId", "RevisionNo");
 
+                    b.HasIndex("RecordId", "RevisionNo", "Role", "BeneficiaryId")
+                        .IsUnique();
+
                     b.ToTable("HandoverRecordSignatures", (string)null);
                 });
 
