@@ -518,6 +518,13 @@ public sealed class HandoverRecordService : IHandoverRecordService
         Dictionary<Guid, HandoverTurn> turns = await turnSync.FindActiveTurnsAsync(record, ct);
         foreach (HandoverTurn turn in turns.Values)
         {
+            if (turn.Grant != null)
+            {
+                // Một lần ký khác vừa hoàn tất biên bản và mở quyền tải cho lượt này (ví dụ người nhận bấm ký hai lần
+                // cùng lúc). Lượt đã đọc trước đó đã cũ, nên dừng thay vì tạo thêm quyền tải.
+                throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
+                    "Biên bản vừa được hoàn tất ở nơi khác. Vui lòng tải lại.");
+            }
             if (turn.Status != HandoverTurnStatus.ReadyToAccept || turn.ClaimantUserId == null)
             {
                 continue;
