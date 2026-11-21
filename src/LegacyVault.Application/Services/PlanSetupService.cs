@@ -53,17 +53,17 @@ public interface IPlanSetupService
 public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository vaults,
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
-    IExecutorInvitationSender sender, ICheckInScheduler scheduler, IHoldReader holdReader, IUnitOfWork unitOfWork,
+    IExecutorInvitationSender sender, IHoldReader holdReader, IUnitOfWork unitOfWork,
     TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
     ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector,
     ISigningPasswordChecker signingPasswordChecker, IEmailBounceStore bounces,
     IWillVersionRepository willVersions) : IPlanSetupService
 {
-    public const string PolicyVersion = "setup-2026-10-30";
-    public const string ScopeVersion = "executor-2026-10-15";
-    public const string ScopeText = "Executor theo dõi khi Owner quá hạn điểm danh và thực hiện nhiệm vụ kiểm tra/chứng tử theo phân công. Chấp nhận nhiệm vụ không cấp quyền đọc tài sản, duyệt thay danh tính hoặc tự nhận di sản.";
+    public const string PolicyVersion = "setup-2026-11-20";
+    public const string ScopeVersion = "executor-2026-11-20";
+    public const string ScopeText = "Người thực thi chỉ giữ hộ tài sản và giao theo biên bản bàn giao do luật sư lập: mở bàn giao khi cần, ký biên bản, gửi mã nhận cho người nhận. Không được tự chia, bán hay cho tài sản, không đọc nội dung tài sản và không làm thủ tục pháp lý.";
     // The immutable version identifies this text. Change the version whenever changing these warnings.
-    public static string PolicyText => $"Kích hoạt bắt đầu lịch điểm danh đã chọn. Quá hạn chỉ tạo bước kiểm tra, không tự bàn giao. Lời mời người nhận có hạn phản hồi {HandoverRules.ResponseWindow.TotalDays:0} ngày; khi đủ điều kiện, hạn quyết định {HandoverRules.DecisionWindow.TotalDays:0} ngày và quyền xem/tải {HandoverRules.GrantWindow.TotalDays:0} ngày từ lúc đồng ý. Không thao tác đúng hạn có thể mất quyền tiếp nhận/tải. Dữ liệu chỉ được xóa sau khi kiểm tra các điều kiện lưu giữ, tham chiếu và chặn liên quan; không mặc nhiên xóa ngay khi hết một lời mời. Nếu Executor không thực hiện được nhiệm vụ, Chủ kho cần mời người thay để kế hoạch không bị chậm.";
+    public static string PolicyText => $"Hệ thống chỉ giữ và giao tài sản, không làm thủ tục pháp lý. Người thực thi bạn chọn chỉ là đề cử: họ chỉ giữ hộ tài sản và giao theo biên bản bàn giao do luật sư lập, không được tự chia, bán hay cho tài sản. Khi cần bàn giao, Người thực thi mở bàn giao, luật sư lập biên bản, kiểm danh tính người nhận, rồi ba bên ký. Lời mời người nhận có hạn phản hồi {HandoverRules.ResponseWindow.TotalDays:0} ngày; quyền xem/tải {HandoverRules.GrantWindow.TotalDays:0} ngày từ lúc biên bản đủ chữ ký. Dữ liệu chỉ được xóa sau khi kiểm tra các điều kiện lưu giữ, tham chiếu và chặn liên quan.";
 
     public async Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct)
     {
@@ -494,7 +494,6 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             vault.Plan.ActivationPolicyVersion = PolicyVersion;
             vault.Plan.ActivationPolicyAcknowledgedAt = now;
             vault.Plan.UpdatedAt = now;
-            await scheduler.StartFirstPeriodAsync(vault.Plan, ct);
             // Mã mở gói do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
             await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
             // Ký bằng PIN cũng là lúc chụp lại cấu hình: bàn giao chỉ theo bản ký này cho tới khi Chủ kho ký lại.
@@ -516,7 +515,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (!PlanRules.IsRunning(vault.Plan.Status))
             {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.WillSignNotAllowed,
-                    "Chỉ ký lại di chúc được khi kế hoạch đang chạy.");
+                    "Chỉ ký lại file phân chia được khi kế hoạch đang chạy.");
             }
             if (request.ConfigVersion != vault.Plan.ConfigVersion)
             {

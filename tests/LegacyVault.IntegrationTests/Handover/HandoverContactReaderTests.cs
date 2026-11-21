@@ -3,7 +3,7 @@ using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace LegacyVault.IntegrationTests.DeathCases;
+namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>Đọc họ tên Chủ kho và liên hệ Người thực thi trên SQL Server thật (cho thư mời nhận tài sản).</summary>
 public sealed class HandoverContactReaderTests : IAsyncLifetime
@@ -34,8 +34,8 @@ public sealed class HandoverContactReaderTests : IAsyncLifetime
     [SqlFact]
     public async Task ReturnsOwnerNameAndAcceptedExecutorContact()
     {
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
+        await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
 
         using IServiceScope scope = factory.Services.CreateScope();
         IHandoverContactReader reader = scope.ServiceProvider.GetRequiredService<IHandoverContactReader>();

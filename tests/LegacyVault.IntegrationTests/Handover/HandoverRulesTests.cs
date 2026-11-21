@@ -11,10 +11,9 @@ public sealed class HandoverRulesTests
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 14, 8, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Windows_AreFiveSevenThirtyDays()
+    public void Windows_AreFiveAndThirtyDays()
     {
         Assert.Equal(TimeSpan.FromDays(5), HandoverRules.ResponseWindow);
-        Assert.Equal(TimeSpan.FromDays(7), HandoverRules.DecisionWindow);
         Assert.Equal(TimeSpan.FromDays(30), HandoverRules.GrantWindow);
     }
 
@@ -85,7 +84,7 @@ public sealed class HandoverRulesTests
 
         Assert.Equal(HandoverTurnStatus.ReadyToAccept, turn.Status);
         Assert.Equal(Now, turn.ReadyAt);
-        Assert.Equal(Now.AddDays(7), turn.DecisionDeadline);
+        Assert.Null(turn.DecisionDeadline);
         Assert.Equal(Now, turn.UpdatedAt);
     }
 
@@ -96,7 +95,7 @@ public sealed class HandoverRulesTests
 
         Assert.Null(HandoverRules.GrantDeniedReason(active, PlanStatus.HandoverInProgress, Now));
         Assert.Null(HandoverRules.GrantDeniedReason(active, PlanStatus.Closed, Now));
-        Assert.Equal("PLAN_NOT_ACTIVE", HandoverRules.GrantDeniedReason(active, PlanStatus.DeathCaseOpen, Now));
+        Assert.Equal("PLAN_NOT_ACTIVE", HandoverRules.GrantDeniedReason(active, PlanStatus.HandoverRequested, Now));
         Assert.Equal("EXPIRED", HandoverRules.GrantDeniedReason(active, PlanStatus.Closed, Now.AddDays(1)));
         Assert.Equal("BLOCKED", HandoverRules.GrantDeniedReason(
             new HandoverGrant { Status = HandoverGrantStatus.Blocked, ExpiresAt = Now.AddDays(1) }, PlanStatus.Closed, Now));

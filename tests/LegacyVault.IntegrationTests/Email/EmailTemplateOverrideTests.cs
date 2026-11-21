@@ -32,52 +32,17 @@ public sealed class EmailTemplateOverrideTests : IDisposable
     }
 
     [Fact]
-    public void Build_WithoutOverride_KeepsOriginalText()
-    {
-        EmailContent email = ExecutorOverdueNoticeEmail.Build("Trần Thực Thi", "https://x/executor");
-
-        Assert.Equal(ExecutorOverdueNoticeEmail.DefaultParts(false).Subject, email.Subject);
-        Assert.Equal(EmailTemplateCatalog.ExecutorOverdue, email.TemplateKey);
-    }
-
-    [Fact]
-    public void Build_WithOverride_UsesAdminTextAndFillsTokens()
-    {
-        Set(EmailTemplateCatalog.ExecutorOverdue,
-            new EmailTemplateOverride(true, "Chào {TEN_NGUOI_NHAN}, cần bạn xem", null, "Nội dung riêng cho {TEN_NGUOI_NHAN}.", "Mở ngay", null));
-
-        EmailContent email = ExecutorOverdueNoticeEmail.Build("Trần Thực Thi", "https://x/executor");
-
-        Assert.Equal("Chào Trần Thực Thi, cần bạn xem", email.Subject);
-        Assert.Contains("Nội dung riêng cho Trần Thực Thi.", email.TextBody);
-        Assert.Contains("Mở ngay: https://x/executor", email.TextBody);
-        // Trường để trống giữ chữ gốc.
-        Assert.Contains(ExecutorOverdueNoticeEmail.DefaultParts(false).Note, email.TextBody);
-    }
-
-    [Fact]
-    public void Build_OverrideOfOneKind_DoesNotChangeTheOther()
-    {
-        Set(EmailTemplateCatalog.ExecutorOverdueReminder,
-            new EmailTemplateOverride(true, "Chỉ thư nhắc lại", null, null, null, null));
-
-        Assert.Equal(ExecutorOverdueNoticeEmail.DefaultParts(false).Subject, ExecutorOverdueNoticeEmail.Build("A", "u").Subject);
-        Assert.Equal("Chỉ thư nhắc lại", ExecutorOverdueNoticeEmail.Build("A", "u", true).Subject);
-    }
-
-    [Fact]
     public void IsEnabled_OnlyHonoursTheSwitchForTypesThatMayBeDisabled()
     {
         EmailTemplateOverrides.Replace(new Dictionary<string, EmailTemplateOverride>
         {
-            [EmailTemplateCatalog.CheckInDueFirst] = new EmailTemplateOverride(false, null, null, null, null, null),
+            [EmailTemplateCatalog.PlanActivated] = new EmailTemplateOverride(false, null, null, null, null, null),
             [EmailTemplateCatalog.HandoverInvitation] = new EmailTemplateOverride(false, null, null, null, null, null),
         });
 
-        Assert.False(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.CheckInDueFirst));
+        Assert.False(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.PlanActivated));
         // Thư mời nhận tài sản không được tắt dù dòng ghi Enabled = false.
         Assert.True(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.HandoverInvitation));
-        Assert.True(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.PlanActivated));
     }
 
     [Fact]
@@ -98,14 +63,6 @@ public sealed class EmailTemplateOverrideTests : IDisposable
     }
 
     [Fact]
-    public void CheckIn_UsesOneKeyPerMilestone()
-    {
-        Assert.Equal(EmailTemplateCatalog.CheckInDueFirst, CheckInReminderEmail.KeyFor(CheckInReminderKind.DueInSevenDays));
-        Assert.Equal(EmailTemplateCatalog.CheckInDueSecond, CheckInReminderEmail.KeyFor(CheckInReminderKind.DueInOneDay));
-        Assert.Equal(EmailTemplateCatalog.CheckInLate, CheckInReminderEmail.KeyFor(CheckInReminderKind.LateReminder3));
-    }
-
-    [Fact]
     public void Defaults_EveryCatalogTypeHasOriginalTextWithPlaceholdersKept()
     {
         EmailTemplateDefaults defaults = new EmailTemplateDefaults();
@@ -115,7 +72,6 @@ public sealed class EmailTemplateOverrideTests : IDisposable
             Assert.NotNull(parts);
             Assert.False(string.IsNullOrWhiteSpace(parts!.Subject), definition.Key);
         }
-        Assert.Contains("{MA_BIEN_BAN}", defaults.Find(EmailTemplateCatalog.DocCompleted)!.Body);
         Assert.Contains("{TEN_CHU_KHO}", defaults.Find(EmailTemplateCatalog.PlanActivated)!.Body);
     }
 }

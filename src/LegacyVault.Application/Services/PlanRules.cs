@@ -9,9 +9,7 @@ public static class PlanRules
     /// <summary>Kế hoạch đang chạy: đã kích hoạt và lịch điểm danh đang chạy (SETUP-16, §11.2).</summary>
     public static bool IsRunning(PlanStatus status)
     {
-        if (status == PlanStatus.Active
-            || status == PlanStatus.CheckinOverdue
-            || status == PlanStatus.AwaitingCheck)
+        if (status == PlanStatus.Active)
         {
             return true;
         }
@@ -37,6 +35,5 @@ public static class PlanRules
             executor.EndedAt = now;
             executor.UpdatedAt = now;
         }
-        // Lịch điểm danh được dừng bởi người gọi qua ICheckInScheduler.StopAsync (ContainerService).
     }
 }

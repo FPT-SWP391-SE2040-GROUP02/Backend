@@ -60,19 +60,4 @@ public sealed class EkycOwnerIdentityRulesTests
             EkycRules.CompareIdentity(Reading("079200012345", "NGUYEN VAN AN", "2001-02-01"), Expected()));
     }
 
-    [Fact]
-    public void Death13_FullNumber_SameLast4ButDifferentId_IsMismatch()
-    {
-        // Hai số khác nhau nhưng trùng 4 số cuối: cách so 4 số cuối bỏ sót, so đủ 12 số thì bắt được.
-        Assert.False(DeathCaseRules.IsIdentityMismatch("2345", "079211112345"));
-        Assert.True(DeathCaseRules.IsIdentityMismatchFull("079200012345", "079211112345"));
-    }
-
-    [Fact]
-    public void Death13_FullNumber_SameId_NoMismatch_AndMissingCaseIdNeverConcludes()
-    {
-        Assert.False(DeathCaseRules.IsIdentityMismatchFull("079200012345", "079200012345"));
-        Assert.False(DeathCaseRules.IsIdentityMismatchFull("079200012345", null));
-        Assert.False(DeathCaseRules.IsIdentityMismatchFull("079200012345", string.Empty));
-    }
 }

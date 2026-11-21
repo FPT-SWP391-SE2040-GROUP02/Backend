@@ -24,7 +24,6 @@ public sealed class ContainerService : IContainerService
     private readonly IContainerRepository containerRepository;
     private readonly IAssetRepository assetRepository;
     private readonly IBeneficiaryRepository beneficiaryRepository;
-    private readonly ICheckInScheduler checkInScheduler;
     private readonly IAuditLogRepository auditLogRepository;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -35,7 +34,6 @@ public sealed class ContainerService : IContainerService
         IContainerRepository containerRepository,
         IAssetRepository assetRepository,
         IBeneficiaryRepository beneficiaryRepository,
-        ICheckInScheduler checkInScheduler,
         IAuditLogRepository auditLogRepository,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
@@ -45,7 +43,6 @@ public sealed class ContainerService : IContainerService
         this.containerRepository = containerRepository;
         this.assetRepository = assetRepository;
         this.beneficiaryRepository = beneficiaryRepository;
-        this.checkInScheduler = checkInScheduler;
         this.auditLogRepository = auditLogRepository;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
@@ -502,8 +499,6 @@ public sealed class ContainerService : IContainerService
                 "Thao tác này làm kế hoạch không còn gói sẵn sàng và kế hoạch sẽ trở về bản nháp. Vui lòng xác nhận.");
         }
         PlanRules.Deactivate(vault, now);
-        // kế hoạch về DRAFT thì lịch điểm danh dừng; người gọi lưu cùng giao dịch.
-        await checkInScheduler.StopAsync(vault.Plan, ct);
         // Owner đã xác nhận cảnh báo; lưu cùng thao tác gây ra việc này.
         auditLogRepository.Add(AuditRules.OwnerAction(
             vault.Id, vault.OwnerId, AuditAction.PlanDeactivated, AuditTargetType.Plan, vault.Plan.Id,

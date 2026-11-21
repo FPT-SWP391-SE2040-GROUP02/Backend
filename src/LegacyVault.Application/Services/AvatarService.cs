@@ -164,7 +164,7 @@ public sealed class AvatarService : IAvatarService
     /// <summary>Đọc vài byte đầu để nhận loại ảnh thật rồi đưa stream về đầu. Không phải JPEG/PNG/WebP → 400.</summary>
     private static async Task<string> ReadImageContentTypeAsync(Stream content, CancellationToken ct)
     {
-        byte[] header = new byte[DeathCaseFileRules.HeaderLength];
+        byte[] header = new byte[FileSignatureRules.HeaderLength];
         int read = 0;
         while (read < header.Length)
         {

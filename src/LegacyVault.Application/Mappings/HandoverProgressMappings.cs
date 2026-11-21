@@ -21,6 +21,7 @@ public static class HandoverProgressMappings
             InvitedAt = turn.InvitedAt,
             InvitationSentAt = turn.InvitationSentAt,
             KeyVerifiedAt = turn.KeyVerifiedAt,
+            IdentityConfirmedAt = turn.IdentityConfirmedAt,
             ResponseDeadline = turn.ResponseDeadline,
             ClaimedAt = turn.ClaimedAt,
             IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null,

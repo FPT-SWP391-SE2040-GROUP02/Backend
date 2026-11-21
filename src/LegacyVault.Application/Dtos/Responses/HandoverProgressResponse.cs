@@ -2,7 +2,7 @@ namespace LegacyVault.Application.Dtos.Responses;
 
 /// <summary>
 /// Tiến độ bàn giao của một hồ sơ chứng tử cho Executor
-/// (GET /api/v1/executor/death-cases/{caseId}/handover-progress).
+/// (GET /api/v1/executor/handover-records/{recordId}/handover-progress).
 /// </summary>
 /// <remarks>
 /// Chỉ có trạng thái, hạn và việc đã tải hay chưa. Không có nội dung tài sản hay số CCCD đầy đủ.

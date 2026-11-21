@@ -54,16 +54,16 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
     // Nút "Gửi mã qua email" của Người thực thi cho một lượt đã duyệt biên bản.
     public async Task<SendHandoverKeyResponse> SendAsync(Guid caseId, Guid turnId, string? key, CancellationToken ct)
     {
-        // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
+        // 1. Tìm biên bản bàn giao và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
         ExecutorCaseAccess access = await HandoverAccess.FindCaseForExecutorAsync(
             progressReader, vaults, executorReader, caseId, userId, ct);
-        DeathCase deathCase = access.DeathCase;
+        HandoverRecord record = access.Record;
         Vault vault = access.Vault;
 
         // 2. Lượt phải thuộc kho này; kế hoạch đang bàn giao hoặc đã đóng; lượt còn cần khóa
         HandoverTurn? turn = await handover.FindTurnByIdAsync(turnId, ct);
-        if (turn == null || turn.PlanId != deathCase.PlanId || turn.VaultId != vault.Id)
+        if (turn == null || turn.RecordId != record.Id || turn.VaultId != vault.Id)
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound,
                 "Không tìm thấy nội dung bàn giao.");
@@ -72,13 +72,13 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         {
             throw NotAllowed(AppErrorType.Conflict, "PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
-        // Chỉ gửi mã khi người nhận đã đồng ý và biên bản đã được duyệt (HandoverCommitted) mà chưa nhập mã.
-        // Trước đó người nhận chưa xác minh xong nên chưa được có mã; nhập rồi thì không cần gửi nữa.
+        // Chỉ gửi mã khi biên bản đã đủ chữ ký ba bên (lượt HandoverCommitted) mà người nhận chưa nhập mã.
+        // Trước đó biên bản chưa hoàn tất nên người nhận chưa được có mã; nhập rồi thì không cần gửi nữa.
         bool committedWithoutKey = turn.Status == HandoverTurnStatus.HandoverCommitted && turn.KeyVerifiedAt == null;
         if (!committedWithoutKey)
         {
             throw NotAllowed(AppErrorType.Conflict, "WRONG_STATE",
-                "Chỉ gửi được mã khi biên bản đồng ý của người nhận đã được duyệt và người nhận chưa nhập mã.");
+                "Chỉ gửi được mã khi biên bản bàn giao đã đủ chữ ký ba bên và người nhận chưa nhập mã.");
         }
 
         // 3. Kho phải đã cấp khóa và khóa Người thực thi nhập phải đúng

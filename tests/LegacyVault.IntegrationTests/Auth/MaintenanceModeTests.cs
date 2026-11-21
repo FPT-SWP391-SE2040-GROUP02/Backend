@@ -6,7 +6,6 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -90,8 +89,8 @@ public sealed class MaintenanceModeTests : IAsyncLifetime
     [SqlFact]
     public async Task MaintenanceOn_OnlyAdminCanLogIn()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User owner = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient adminApi = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(adminApi, factory.Services, admin);
         await SetMaintenanceAsync(adminApi, true);
@@ -113,7 +112,7 @@ public sealed class MaintenanceModeTests : IAsyncLifetime
     public async Task MaintenanceOn_RefreshIsRefused_ButSessionSurvivesUntilMaintenanceEnds()
     {
         HttpClient admin = await AdminClientAsync();
-        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User owner = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient browser = SecureClient();
 
         HttpResponseMessage login = await LoginAsync(browser, owner.Email);
@@ -159,8 +158,8 @@ public sealed class MaintenanceModeTests : IAsyncLifetime
     public async Task MaintenanceOn_SessionIssuer_UsedByGoogleAndTwoFactor_OpensOnlyAdminSessions()
     {
         HttpClient adminApi = await AdminClientAsync();
-        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User owner = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         await SetMaintenanceAsync(adminApi, true);
 
         using (IServiceScope scope = factory.Services.CreateScope())
@@ -193,7 +192,7 @@ public sealed class MaintenanceModeTests : IAsyncLifetime
 
     private async Task<HttpClient> AdminClientAsync()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, admin);
         return client;
@@ -233,7 +232,7 @@ public sealed class MaintenanceModeTests : IAsyncLifetime
         string proof = await CsrfAsync(client);
         HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login");
         request.Headers.Add("X-CSRF-Token", proof);
-        request.Content = JsonContent.Create(new { email, password = DeathCaseTestData.TestPassword });
+        request.Content = JsonContent.Create(new { email, password = VaultTestData.TestPassword });
         return await client.SendAsync(request);
     }
 

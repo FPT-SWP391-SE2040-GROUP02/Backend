@@ -4,7 +4,6 @@ using System.Text.Json;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -51,7 +50,7 @@ public sealed class AdminPaymentTransactionsTests : IAsyncLifetime
 
     private async Task<HttpClient> AdminClientAsync()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         return ClientFor(admin);
     }
 
@@ -263,9 +262,9 @@ public sealed class AdminPaymentTransactionsTests : IAsyncLifetime
     {
         // Chuẩn bị
         await AddTransactionAsync(1, PaymentTransactionStatus.Received, null, DateTimeOffset.UtcNow);
-        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        User verifier = await DeathCaseTestData.AddVerifierAsync(factory);
-        User lockedAdmin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Locked);
+        User plain = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User verifier = await VaultTestData.AddVerifierAsync(factory);
+        User lockedAdmin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Locked);
 
         // Hành động + Kiểm tra: Owner thường, Verifier, Admin bị khóa đều như khu vực không tồn tại
         foreach (User user in new User[] { plain, verifier, lockedAdmin })

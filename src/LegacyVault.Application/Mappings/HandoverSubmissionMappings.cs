@@ -29,20 +29,7 @@ public static class HandoverSubmissionMappings
         return response;
     }
 
-    /// <summary>Chi tiết hồ sơ thuộc một biên bản: duyệt được khi biên bản đang chờ Người xét duyệt, không còn chặn theo kết quả đối chiếu tự động.</summary>
-    public static VerifierHandoverSubmissionResponse ToVerifierDetail(this HandoverSubmission submission, HandoverDocument document)
-    {
-        VerifierHandoverSubmissionResponse response = submission.ToVerifierDetail();
-        response.DocumentId = document.Id;
-        bool waiting = submission.Status == HandoverSubmissionStatus.Submitted
-            && document.Status == HandoverDocumentStatus.WaitVerifier
-            && submission.Turn.Status == HandoverTurnStatus.IdentityInProgress;
-        response.CanApprove = waiting;
-        response.CanRequestSupplement = waiting;
-        return response;
-    }
-
-    /// <summary>Chi tiết hồ sơ không có biên bản (luồng cũ): chỉ duyệt được khi cả ba trường đều khớp.</summary>
+    /// <summary>Chi tiết hồ sơ danh tính: luật sư chỉ xác nhận được khi cả ba trường đều khớp.</summary>
     public static VerifierHandoverSubmissionResponse ToVerifierDetail(this HandoverSubmission submission)
     {
         VerifierHandoverSubmissionResponse response = new VerifierHandoverSubmissionResponse();

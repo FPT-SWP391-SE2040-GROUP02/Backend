@@ -21,9 +21,7 @@ public sealed class ExecutorAssignRulesTests
     [Theory]
     [InlineData(PlanStatus.Draft, true)]
     [InlineData(PlanStatus.Active, true)]
-    [InlineData(PlanStatus.CheckinOverdue, true)]
-    [InlineData(PlanStatus.AwaitingCheck, true)]
-    [InlineData(PlanStatus.DeathCaseOpen, false)]
+    [InlineData(PlanStatus.HandoverRequested, false)]
     [InlineData(PlanStatus.HandoverInProgress, false)]
     [InlineData(PlanStatus.Closed, false)]
     [InlineData(PlanStatus.Blocked, false)]
@@ -46,7 +44,7 @@ public sealed class ExecutorAssignRulesTests
         Executor stale = Item(ExecutorStatus.Invited, Now.AddDays(-1));
 
         Guid? replaces = ExecutorAssignRules.PrepareForAssign(
-            new[] { accepted, pending, stale }, PlanStatus.AwaitingCheck, Now);
+            new[] { accepted, pending, stale }, PlanStatus.Active, Now);
 
         Assert.Equal(accepted.Id, replaces);
         Assert.Equal(ExecutorStatus.Accepted, accepted.Status);

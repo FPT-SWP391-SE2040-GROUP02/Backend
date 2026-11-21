@@ -164,27 +164,15 @@ public sealed class AdminUserRepository : IAdminUserRepository
         return context.Set<User>().CountAsync(u => u.Role == UserRole.Admin && u.Status == UserStatus.Active, ct);
     }
 
-    public async Task<List<(Guid CaseId, DeathCaseStatus Status, DateTimeOffset DueAt)>> ListOpenAssignmentsAsync(
+    public async Task<List<(Guid CaseId, HandoverRecordStatus Status, DateTimeOffset DueAt)>> ListOpenAssignmentsAsync(
         Guid verifierUserId, CancellationToken ct)
     {
-        var rows = await context.Set<DeathCaseAssignment>().AsNoTracking()
-            .Join(context.Set<DeathCase>().AsNoTracking(), a => a.CaseId, c => c.Id, (a, c) => new { Assignment = a, Case = c })
-            .Where(x => x.Assignment.VerifierUserId == verifierUserId && x.Assignment.EndedAt == null
-                && (x.Case.Status == DeathCaseStatus.UnderReview || x.Case.Status == DeathCaseStatus.SupplementRequired))
-            .OrderBy(x => x.Assignment.DueAt)
-            .Select(x => new { x.Case.Id, x.Case.Status, x.Assignment.DueAt })
+        var rows = await context.Set<HandoverRecord>().AsNoTracking()
+            .Where(r => r.VerifierUserId == verifierUserId && r.Status != HandoverRecordStatus.Completed)
+            .OrderBy(r => r.RequestedAt)
+            .Select(r => new { r.Id, r.Status, r.RequestedAt })
             .ToListAsync(ct);
-        return rows.Select(r => (r.Id, r.Status, r.DueAt)).ToList();
-    }
-
-    public Task<List<DeathCaseDecision>> ListRecentDecisionsAsync(Guid verifierUserId, int take, CancellationToken ct)
-    {
-        return context.Set<DeathCaseDecision>().AsNoTracking()
-            .Where(d => d.VerifierUserId == verifierUserId)
-            .OrderByDescending(d => d.DecidedAt)
-            .ThenByDescending(d => d.Id)
-            .Take(take)
-            .ToListAsync(ct);
+        return rows.Select(r => (r.Id, r.Status, r.RequestedAt)).ToList();
     }
 
     public Task<List<AuditLog>> ListRecentAuditByActorAsync(Guid userId, int take, CancellationToken ct)
@@ -209,15 +197,13 @@ public sealed class AdminUserRepository : IAdminUserRepository
     public async Task<List<(Guid VerifierUserId, int Open, int Overdue)>> CountVerifierLoadAsync(
         DateTimeOffset now, CancellationToken ct)
     {
-        var rows = await context.Set<DeathCaseAssignment>().AsNoTracking()
-            .Join(context.Set<DeathCase>().AsNoTracking(), a => a.CaseId, c => c.Id, (a, c) => new { Assignment = a, Case = c })
-            .Where(x => x.Assignment.EndedAt == null
-                && (x.Case.Status == DeathCaseStatus.UnderReview || x.Case.Status == DeathCaseStatus.SupplementRequired))
-            .Select(x => x.Assignment)
-            .GroupBy(a => a.VerifierUserId)
-            .Select(g => new { VerifierUserId = g.Key, Open = g.Count(), Overdue = g.Count(a => a.DueAt < now) })
+        // Biên bản không có hạn chót nên không có biên bản trễ hạn.
+        var rows = await context.Set<HandoverRecord>().AsNoTracking()
+            .Where(r => r.Status != HandoverRecordStatus.Completed)
+            .GroupBy(r => r.VerifierUserId)
+            .Select(g => new { VerifierUserId = g.Key, Open = g.Count() })
             .ToListAsync(ct);
-        return rows.Select(r => (r.VerifierUserId, r.Open, r.Overdue)).ToList();
+        return rows.Select(r => (r.VerifierUserId, r.Open, 0)).ToList();
     }
 
     public async Task<List<(AuditLog Log, string? ActorFullName)>> ListRecentAuditAsync(int take, CancellationToken ct)
@@ -235,8 +221,8 @@ public sealed class AdminUserRepository : IAdminUserRepository
 
     public Task<int> CountCasesWithoutVerifierAsync(CancellationToken ct)
     {
-        return context.Set<DeathCase>().CountAsync(
-            c => (c.Status == DeathCaseStatus.UnderReview || c.Status == DeathCaseStatus.SupplementRequired)
-                && !c.Assignments.Any(a => a.EndedAt == null), ct);
+        return context.Set<HandoverRecord>().CountAsync(
+            r => r.Status != HandoverRecordStatus.Completed
+                && !context.Set<User>().Any(u => u.Id == r.VerifierUserId && u.Status == UserStatus.Active), ct);
     }
 }

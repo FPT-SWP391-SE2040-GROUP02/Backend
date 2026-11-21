@@ -128,7 +128,6 @@ public static class InfrastructureConfig
         services.AddScoped<IVaultPinRepository, VaultPinRepository>();
         services.AddScoped<IExecutorKeyShardRepository, ExecutorKeyShardRepository>();
         services.AddScoped<IWillVersionRepository, WillVersionRepository>();
-        services.AddScoped<ICheckInRepository, CheckInRepository>();
         services.AddScoped<IEntitlementExpiryRepository, EntitlementExpiryRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IHoldRepository, HoldRepository>();
@@ -150,9 +149,7 @@ public static class InfrastructureConfig
         services.AddSingleton<IBillingDevSettings, BillingDevSettings>();
         // Webhook SePay (SRS §8.5): giao dịch tiền vào và cấu hình nhận webhook.
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
-        services.AddScoped<IHandoverTemplateRepository, HandoverTemplateRepository>();
         services.AddScoped<IEmailTemplateRepository, EmailTemplateRepository>();
-        services.AddScoped<IExtraMailRepository, ExtraMailRepository>();
         services.AddSingleton<IEmailTemplateDefaults, EmailTemplateDefaults>();
         services.AddHostedService<EmailTemplateRefresher>();
         services.AddSingleton<IBillingSePaySettings, BillingSePaySettings>();
@@ -236,16 +233,12 @@ public static class InfrastructureConfig
         services.AddSingleton<IEmailSender, DevEmailSender>();
         services.AddSingleton<IAppUrlProvider, AppUrlProvider>();
 
-        // Job nền điểm danh: quét DB theo chu kỳ, gửi nhắc qua ICheckInReminderSender (bản dev chỉ ghi log).
-        services.Configure<CheckInJobSettings>(configuration.GetSection(CheckInJobSettings.SectionName));
         // Dịch vụ email: Gmail qua MailKit khi có cấu hình Email:Smtp, không thì chỉ ghi log (xem EmailConfig).
         services.AddEmailServices(configuration);
         services.AddSingleton<IEmailDomainChecker, DnsEmailDomainChecker>();
         services.AddScoped<IEmailBounceStore, EmailBounceStore>();
         services.AddHostedService<BounceMailboxMonitor>();
         LegacyVault.Infrastructure.Handover.HandoverConfig.AddHandover(services, configuration);
-        LegacyVault.Infrastructure.DeathCases.DeathCaseConfig.AddDeathCases(services, configuration);
-        services.AddHostedService<CheckInMonitor>();
         // Job nền hết hạn dịch vụ (OPLAN-01): kho trả phí hết kỳ thì sang ân hạn chỉ đọc.
         services.Configure<EntitlementExpiryJobSettings>(configuration.GetSection(EntitlementExpiryJobSettings.SectionName));
         services.AddHostedService<EntitlementExpiryMonitor>();

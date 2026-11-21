@@ -12,12 +12,6 @@ public static class HandoverRules
         get { return RuntimeSettings.Days("Handover.ResponseWindowDays", 5); }
     }
 
-    /// <summary>Hạn quyết định của luồng cũ, tính từ lúc sẵn sàng nhận. Khóa Handover.DecisionWindowDays (mặc định 7 ngày).</summary>
-    public static TimeSpan DecisionWindow
-    {
-        get { return RuntimeSettings.Days("Handover.DecisionWindowDays", 7); }
-    }
-
     /// <summary>Thời hạn quyền xem và tải, tính từ lúc đồng ý. Khóa Handover.GrantWindowDays (mặc định 30 ngày).</summary>
     public static TimeSpan GrantWindow
     {
@@ -63,12 +57,12 @@ public static class HandoverRules
         return grant.Status;
     }
 
-    /// <summary>Chuyển lượt sang "sẵn sàng nhận" và đặt hạn quyết định.</summary>
+    /// <summary>Luật sư đã xác nhận danh tính: lượt chờ ký biên bản. Không có hạn quyết định, chỉ chờ đủ chữ ký.</summary>
     public static void MarkReadyToAccept(HandoverTurn turn, DateTimeOffset now)
     {
         turn.Status = HandoverTurnStatus.ReadyToAccept;
         turn.ReadyAt = now;
-        turn.DecisionDeadline = now + DecisionWindow;
+        turn.DecisionDeadline = null;
         turn.UpdatedAt = now;
     }
 

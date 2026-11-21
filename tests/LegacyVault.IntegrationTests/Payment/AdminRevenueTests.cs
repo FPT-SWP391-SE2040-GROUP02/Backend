@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
@@ -43,7 +42,7 @@ public sealed class AdminRevenueTests : IAsyncLifetime
 
     private async Task<HttpClient> ClientForRoleAsync(UserRole role)
     {
-        User user = await DeathCaseTestData.AddUserAsync(factory, role, UserStatus.Active);
+        User user = await VaultTestData.AddUserAsync(factory, role, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
         return client;

@@ -19,6 +19,9 @@ public static class HandoverConfig
     public static IServiceCollection AddHandover(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IHandoverRepository, HandoverRepository>();
+        services.AddScoped<IHandoverRecordRepository, HandoverRecordRepository>();
+        // Khóa ký sai nhiều lần của luật sư và Người thực thi.
+        services.AddScoped<IVerifierSigningGuardRepository, VerifierSigningGuardRepository>();
         services.AddScoped<IHandoverSubmissionRepository, HandoverSubmissionRepository>();
         services.AddScoped<IHandoverContactReader, HandoverContactReader>();
 
@@ -35,7 +38,6 @@ public static class HandoverConfig
 
         // Lưu và xóa dữ liệu sau bàn giao.
         services.AddScoped<IRetentionRepository, RetentionRepository>();
-        services.AddSingleton<IHandoverPaperRenderer, QuestPdfHandoverPaperRenderer>();
         services.Configure<RetentionJobSettings>(configuration.GetSection(RetentionJobSettings.SectionName));
         services.AddHostedService<RetentionMonitor>();
         services.AddSingleton<IRetentionNoticeSender>(ChooseRetentionSender);
@@ -44,20 +46,7 @@ public static class HandoverConfig
         services.AddSingleton<IHandoverInvitationSender>(ChooseSender);
         services.AddSingleton<IPlanActivatedNoticeSender>(ChooseActivatedNoticeSender);
         services.AddSingleton<IHandoverKeySender>(ChooseKeySender);
-        services.AddSingleton<IHandoverDocumentNoticeSender>(ChooseDocumentNoticeSender);
-        services.AddScoped<IHandoverDocumentRepository, HandoverDocumentRepository>();
         return services;
-    }
-
-    /// <summary>Thư báo biên bản: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
-    private static IHandoverDocumentNoticeSender ChooseDocumentNoticeSender(IServiceProvider provider)
-    {
-        SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
-        if (smtp.IsConfigured)
-        {
-            return ActivatorUtilities.CreateInstance<SmtpHandoverDocumentNoticeSender>(provider);
-        }
-        return ActivatorUtilities.CreateInstance<LogHandoverDocumentNoticeSender>(provider);
     }
 
     /// <summary>Thư gửi khóa mở gói: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>

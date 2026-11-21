@@ -42,7 +42,7 @@ public static class HandoverAccess
     }
 
     /// <summary>
-    /// Hồ sơ chứng tử và kho cho các màn của Người thực thi. Không thấy hồ sơ, không thấy kho, hoặc người gọi không phải
+    /// Biên bản bàn giao và kho cho các màn của Người thực thi. Không thấy biên bản, không thấy kho, hoặc người gọi không phải
     /// Người thực thi đang hiệu lực thì cùng một lỗi không tìm thấy hồ sơ, để không lộ hồ sơ nào có thật.
     /// Hàm dùng chung cho ba service nên nhận sẵn ba bộ đọc dữ liệu mà các service này đều đã có, để không chép lại phần kiểm.
     /// </summary>
@@ -50,19 +50,19 @@ public static class HandoverAccess
         IHandoverProgressReader progressReader, IVaultRepository vaults, IExecutorReader executorReader,
         Guid caseId, Guid userId, CancellationToken ct)
     {
-        DeathCase? deathCase = await progressReader.FindCaseAsync(caseId, ct);
-        if (deathCase == null)
+        HandoverRecord? record = await progressReader.FindRecordAsync(caseId, ct);
+        if (record == null)
         {
             throw DeathCaseNotFound();
         }
-        Vault? vault = await vaults.FindByIdAsync(deathCase.VaultId, ct);
+        Vault? vault = await vaults.FindByIdAsync(record.VaultId, ct);
         if (vault == null || !await IsActiveExecutorAsync(executorReader, vault, userId, ct))
         {
             throw DeathCaseNotFound();
         }
         ExecutorCaseAccess access = new ExecutorCaseAccess
         {
-            DeathCase = deathCase,
+            Record = record,
             Vault = vault
         };
         return access;
@@ -74,10 +74,10 @@ public static class HandoverAccess
         return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy nội dung bàn giao.");
     }
 
-    /// <summary>Không tìm thấy hồ sơ chứng tử, hoặc người gọi không phải Người thực thi của kho.</summary>
+    /// <summary>Không tìm thấy biên bản bàn giao, hoặc người gọi không phải Người thực thi của kho.</summary>
     public static AppException DeathCaseNotFound()
     {
-        return new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
+        return new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy biên bản bàn giao.");
     }
 
     /// <summary>Thao tác không được phép ở trạng thái hiện tại; reason là mã lý do để giao diện hiện câu phù hợp.</summary>

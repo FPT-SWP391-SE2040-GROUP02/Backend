@@ -1,7 +1,6 @@
 using System.Net;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
@@ -42,9 +41,9 @@ public sealed class TestEmailEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
 
         // Người dùng thường, Verifier, Admin bị khóa: như endpoint không tồn tại
-        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        User verifier = await DeathCaseTestData.AddVerifierAsync(factory);
-        User lockedAdmin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Locked);
+        User plain = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User verifier = await VaultTestData.AddVerifierAsync(factory);
+        User lockedAdmin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Locked);
         foreach (User user in new User[] { plain, verifier, lockedAdmin })
         {
             HttpClient client = factory.CreateClient();

@@ -39,9 +39,6 @@ public sealed class RuntimeSettingsTests
         {
             Assert.Equal(TimeSpan.FromSeconds(3), TimeUnits.Days(3));
             Assert.Equal(TimeSpan.FromSeconds(48), RuntimeSettings.Hours("Test.Only.Good", 72));
-            Assert.Equal(TimeSpan.FromSeconds(30), CheckInTimeline.ComputeDueAt(DateTimeOffset.UnixEpoch, 30) - DateTimeOffset.UnixEpoch);
-            Assert.True(CheckInRules.HasCheckedInToday(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
-            Assert.False(CheckInRules.HasCheckedInToday(DateTimeOffset.UtcNow.AddSeconds(-5), DateTimeOffset.UtcNow));
         }
         finally
         {

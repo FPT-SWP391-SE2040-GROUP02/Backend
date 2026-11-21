@@ -20,11 +20,14 @@ public sealed class HandoverProgressReader : IHandoverProgressReader
         this.context = context;
     }
 
-    public Task<DeathCase?> FindCaseAsync(Guid caseId, CancellationToken ct)
+    public Task<HandoverRecord?> FindRecordAsync(Guid recordId, CancellationToken ct)
     {
-        return context.Set<DeathCase>()
+        return context.Set<HandoverRecord>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == caseId, ct);
+            .Include(r => r.Lines)
+            .Include(r => r.Signatures)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(r => r.Id == recordId, ct);
     }
 
     public Task<List<HandoverTurn>> FindTurnsWithItemsAsync(Guid planId, CancellationToken ct)
@@ -60,34 +63,6 @@ public sealed class HandoverProgressReader : IHandoverProgressReader
         foreach (var row in rows)
         {
             result[row.ItemId] = row.FirstAt;
-        }
-        return result;
-    }
-
-    public async Task<Dictionary<Guid, HandoverDocumentTimes>> FindDocumentTimesAsync(
-        List<Guid> turnIds, CancellationToken ct)
-    {
-        Dictionary<Guid, HandoverDocumentTimes> result = new Dictionary<Guid, HandoverDocumentTimes>();
-        if (turnIds.Count == 0)
-        {
-            return result;
-        }
-
-        // Chỉ đọc id lượt và hai giờ ký, không đọc nội dung biên bản.
-        var rows = await context.Set<HandoverDocument>()
-            .AsNoTracking()
-            .Where(d => turnIds.Contains(d.TurnId))
-            .Select(d => new { d.TurnId, d.RecipientSignedAt, d.VerifierSignedAt })
-            .ToListAsync(ct);
-
-        foreach (var row in rows)
-        {
-            HandoverDocumentTimes times = new HandoverDocumentTimes
-            {
-                RecipientSignedAt = row.RecipientSignedAt,
-                VerifierSignedAt = row.VerifierSignedAt
-            };
-            result[row.TurnId] = times;
         }
         return result;
     }

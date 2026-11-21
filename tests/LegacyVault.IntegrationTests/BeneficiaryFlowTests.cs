@@ -6,7 +6,6 @@ using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -494,7 +493,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         UserRole[] staffRoles = new UserRole[] { UserRole.Executor, UserRole.Verifier, UserRole.Admin };
         foreach (UserRole role in staffRoles)
         {
-            User staff = await DeathCaseTestData.AddUserAsync(factory, role, UserStatus.Active);
+            User staff = await VaultTestData.AddUserAsync(factory, role, UserStatus.Active);
 
             // Hành động: tạo người nhận bằng email nhân sự
             HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
@@ -509,7 +508,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
 
         // Sửa người nhận hợp lệ sang email nhân sự cũng bị chặn, dữ liệu giữ nguyên
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         HttpResponseMessage update = await client.PutAsJsonAsync($"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}",
             new { etag = created.GetProperty("etag").GetString(), email = admin.Email });
         await ApiTestHelpers.AssertProblemAsync(update, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
@@ -522,7 +521,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     public async Task OrdinaryAccountEmailIsStillAllowedAsRecipient()
     {
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        User ordinary = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User ordinary = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
 
         HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
             new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = "1990-05-20", email = ordinary.Email });

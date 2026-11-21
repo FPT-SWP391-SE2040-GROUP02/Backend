@@ -283,7 +283,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         (HttpClient lockedClient, Guid lockedVaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
-        await ApiTestHelpers.SetPlanStatusAsync(factory, lockedVaultId, PlanStatus.DeathCaseOpen);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, lockedVaultId, PlanStatus.HandoverRequested);
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
 
         // Hành động

@@ -4,7 +4,6 @@ using System.Text.Json;
 using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -50,7 +49,7 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
 
     private async Task<HttpClient> AdminClientAsync(WebApplicationFactory<Program>? host = null)
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         WebApplicationFactory<Program> target = host ?? factory;
         HttpClient client = target.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, target.Services, admin);
@@ -362,8 +361,8 @@ public sealed class AdminSystemConfigTests : IAsyncLifetime
     [SqlFact]
     public async Task NonAdminAndInactiveAdmin_Get404()
     {
-        User verifier = await DeathCaseTestData.AddUserAsync(factory, UserRole.Verifier, UserStatus.Active);
-        User lockedAdmin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Locked);
+        User verifier = await VaultTestData.AddUserAsync(factory, UserRole.Verifier, UserStatus.Active);
+        User lockedAdmin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Locked);
         foreach (User user in new[] { verifier, lockedAdmin })
         {
             HttpClient client = factory.CreateClient();

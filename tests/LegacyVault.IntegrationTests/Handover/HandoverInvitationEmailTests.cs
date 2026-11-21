@@ -31,7 +31,8 @@ public sealed class HandoverInvitationEmailTests
         EmailContent content = HandoverInvitationEmail.Build(Full(), Link, null);
 
         Assert.Contains("Trước đây Nguyễn Văn A đã báo cho bạn biết", content.TextBody);
-        Assert.Contains("Lê Văn C, người thực thi di chúc của Nguyễn Văn A", content.TextBody);
+        Assert.Contains("Lê Văn C, Người thực thi của Nguyễn Văn A, đã mở bàn giao", content.TextBody);
+        Assert.DoesNotContain("chứng tử", content.TextBody);
         Assert.Contains("0901 234 567", content.TextBody);
         Assert.Contains("c.le@example.com", content.TextBody);
         Assert.Contains("Nhắn Lê Văn C xin khóa mở gói", content.TextBody.Replace("3. ", string.Empty));
