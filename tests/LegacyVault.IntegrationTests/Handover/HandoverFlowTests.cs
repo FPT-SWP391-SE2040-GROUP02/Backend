@@ -17,12 +17,13 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
-/// Giai đoạn nhận tài sản qua HTTP trên SQL Server thật: nhận lượt, đồng ý, tải tệp đúng từng byte,
-/// chống người khác đoán id, chạy song song và job hết hạn.
+/// Giai đoạn nhận tài sản qua HTTP trên SQL Server thật: luật sư chốt biên bản, người nhận nhận lượt, ba bên ký,
+/// tải tệp đúng từng byte, chống người khác đoán id, ký song song và job hết hạn.
 /// Chỉ chạy khi có LEGACYVAULT_TEST_CONNECTION; mỗi lớp test dùng một database tạm.
 /// </summary>
 /// <remarks>
-/// Chưa có endpoint mở bàn giao, nên test dựng kho qua API rồi gọi IHandoverStarter trực tiếp.
+/// Kho đi qua luồng biên bản thật: Người thực thi mở bàn giao, luật sư lấy file phân chia làm biên bản rồi chốt.
+/// Môi trường test bỏ qua xác minh danh tính nên nhận lượt xong là sang bước ký.
 /// Token mời thật chỉ có hash trong DB, nên test thay hash bằng hash của token đã biết.
 /// </remarks>
 public sealed class HandoverFlowTests : IAsyncLifetime
@@ -31,6 +32,9 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     private const string TextContent = "Mật khẩu két sắt: 123456";
 
     private ApiFactory factory = null!;
+
+    // Kịch bản đang chạy của test hiện tại: để các hàm ký biên bản biết luật sư, Người thực thi và kho.
+    private Scenario current = null!;
 
     public async Task InitializeAsync()
     {
@@ -61,6 +65,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         public Guid FileAssetId { get; set; }
         public byte[] FileBytes { get; set; } = Array.Empty<byte>();
         public int TurnCount { get; set; }
+        public HandoverRecordTestData.FinalizedRecord Record { get; set; } = null!;
     }
 
     private static string TokenFor(int index)
@@ -106,14 +111,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
             beneficiaryIds.Add(beneficiary.GetProperty("id").GetGuid());
         }
 
-        await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.DeathCaseOpen);
-
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IHandoverStarter starter = scope.ServiceProvider.GetRequiredService<IHandoverStarter>();
-            HandoverStartResult result = await starter.StartAsync(vaultId, CancellationToken.None);
-            Assert.Equal(beneficiaryCount, result.TurnCount);
-        }
+        HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vaultId);
+        Assert.Equal(beneficiaryCount, record.Body.GetProperty("recipients").GetArrayLength());
 
         // Thay hash token ngẫu nhiên bằng hash của token đã biết để gọi API.
         ITokenService tokens = factory.Services.GetRequiredService<ITokenService>();
@@ -136,6 +135,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         scenario.FileAssetId = fileAssetId;
         scenario.FileBytes = bytes;
         scenario.TurnCount = beneficiaryCount;
+        scenario.Record = record;
+        current = scenario;
         return scenario;
     }
 
@@ -164,21 +165,28 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
-    private static async Task<JsonElement> AcceptAsync(HttpClient client, Guid turnId)
+    private static async Task<JsonElement> GetTurnAsync(HttpClient client, Guid turnId)
     {
-        HttpResponseMessage response = await client.PostAsync($"/api/v1/handover/turns/{turnId}/accept", null);
+        HttpResponseMessage response = await client.GetAsync($"/api/v1/handover/turns/{turnId}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
-    /// <summary>Nhận lượt tokenIndex và đồng ý; trả (turnId, grantId, danh sách tài sản).</summary>
-    private static async Task<(Guid TurnId, Guid GrantId, JsonElement Items)> ClaimAndAcceptAsync(HttpClient client, int tokenIndex)
+    /// <summary>
+    /// Kịch bản một người nhận: nhận lượt tokenIndex, luật sư và Người thực thi ký, người nhận ký.
+    /// Đủ chữ ký thì lượt đã bàn giao; trả (turnId, grantId, danh sách tài sản).
+    /// </summary>
+    private async Task<(Guid TurnId, Guid GrantId, JsonElement Items)> ClaimAndAcceptAsync(HttpClient client, int tokenIndex)
     {
         JsonElement claimed = await ClaimAsync(client, tokenIndex);
         Assert.Equal("READY_TO_ACCEPT", claimed.GetProperty("status").GetString());
         Guid turnId = claimed.GetProperty("id").GetGuid();
 
-        JsonElement accepted = await AcceptAsync(client, turnId);
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
+        JsonElement signed = await HandoverRecordTestData.SignAsRecipientAsync(client, turnId);
+        Assert.Equal("COMPLETED", signed.GetProperty("status").GetString());
+
+        JsonElement accepted = await GetTurnAsync(client, turnId);
         Assert.Equal("HANDOVER_COMMITTED", accepted.GetProperty("status").GetString());
         Guid grantId = accepted.GetProperty("grant").GetProperty("id").GetGuid();
         return (turnId, grantId, accepted.GetProperty("items"));
@@ -306,7 +314,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, mine.StatusCode);
         JsonElement list = await ApiTestHelpers.ReadJsonAsync(mine);
         Assert.Equal(1, list.GetArrayLength());
-        Assert.Equal("Gói thừa kế", list[0].GetProperty("containerName").GetString());
+        Assert.Equal("Biên bản bàn giao", list[0].GetProperty("containerName").GetString());
         Guid turnId = list[0].GetProperty("turnId").GetGuid();
 
         JsonElement strangerList = await ApiTestHelpers.ReadJsonAsync(await stranger.GetAsync("/api/v1/handover/invitations/mine"));
@@ -377,8 +385,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
             Assert.Equal(unknown.GetProperty("title").GetString(), other.GetProperty("title").GetString());
         }
 
-        HttpResponseMessage accept = await stranger.PostAsync($"/api/v1/handover/turns/{turnId}/accept", null);
-        await ApiTestHelpers.AssertProblemAsync(accept, HttpStatusCode.NotFound, "HANDOVER_NOT_FOUND");
+        HttpResponseMessage sign = await stranger.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
+        await ApiTestHelpers.AssertProblemAsync(sign, HttpStatusCode.NotFound, "HANDOVER_NOT_FOUND");
     }
 
     [SqlFact]
@@ -405,15 +413,16 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task AcceptTwiceInParallel_CreatesOneGrant()
+    public async Task RecipientSignsTwiceInParallel_CreatesOneGrant()
     {
         await BuildScenarioAsync(1);
         HttpClient receiver = await NewReceiverAsync();
         JsonElement claimed = await ClaimAsync(receiver, 0);
         Guid turnId = claimed.GetProperty("id").GetGuid();
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
 
-        Task<HttpResponseMessage> first = receiver.PostAsync($"/api/v1/handover/turns/{turnId}/accept", null);
-        Task<HttpResponseMessage> second = receiver.PostAsync($"/api/v1/handover/turns/{turnId}/accept", null);
+        Task<HttpResponseMessage> first = receiver.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
+        Task<HttpResponseMessage> second = receiver.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
         HttpResponseMessage[] responses = await Task.WhenAll(first, second);
 
         foreach (HttpResponseMessage response in responses)
@@ -423,44 +432,47 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         }
         Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
 
-        Guid savedGrantId = Guid.Empty;
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            List<HandoverGrant> grants = await db.Set<HandoverGrant>().Where(g => g.TurnId == turnId).ToListAsync();
-            Assert.Single(grants);
-            savedGrantId = grants[0].Id;
+            Assert.Single(await db.Set<HandoverGrant>().Where(g => g.TurnId == turnId).ToListAsync());
+            Assert.Equal(1, await db.Set<HandoverRecordSignature>().CountAsync(x => x.Role == HandoverSignerRole.Recipient));
         });
-
-        JsonElement again = await AcceptAsync(receiver, turnId);
-        Assert.Equal(savedGrantId, again.GetProperty("grant").GetProperty("id").GetGuid());
     }
 
     [SqlFact]
-    public async Task TwoBeneficiariesOnSameContainer_AreIndependent()
+    public async Task TwoRecipients_GetGrantsOnlyAfterEveryoneSigned_AndCannotReadEachOther()
     {
         await BuildScenarioAsync(2);
         HttpClient receiverA = await NewReceiverAsync();
         HttpClient receiverB = await NewReceiverAsync(1);
 
-        (Guid turnA, Guid grantA, JsonElement itemsA) = await ClaimAndAcceptAsync(receiverA, 0);
-        await VerifyKeyAsync(receiverA, turnA);
-        JsonElement claimedB = await ClaimAsync(receiverB, 1);
-        Guid turnB = claimedB.GetProperty("id").GetGuid();
-        HttpResponseMessage declined = await receiverB.PostAsync($"/api/v1/handover/turns/{turnB}/decline", null);
-        Assert.Equal(HttpStatusCode.OK, declined.StatusCode);
-        Assert.Equal("DECLINED", (await ApiTestHelpers.ReadJsonAsync(declined)).GetProperty("status").GetString());
+        Guid turnA = (await ClaimAsync(receiverA, 0)).GetProperty("id").GetGuid();
+        // Mới một người nhận được xác nhận danh tính: chưa tới bước ký.
+        HttpResponseMessage tooEarly = await receiverA.PostAsync($"/api/v1/handover/turns/{turnA}/record/sign", null);
+        await ApiTestHelpers.AssertProblemAsync(tooEarly, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
 
-        Guid itemId = FindItemId(itemsA, "FILE");
+        Guid turnB = (await ClaimAsync(receiverB, 1)).GetProperty("id").GetGuid();
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
+        JsonElement afterA = await HandoverRecordTestData.SignAsRecipientAsync(receiverA, turnA);
+        Assert.Equal("SIGNING", afterA.GetProperty("status").GetString());
+        Assert.Equal("READY_TO_ACCEPT", (await GetTurnAsync(receiverA, turnA)).GetProperty("status").GetString());
+
+        JsonElement afterB = await HandoverRecordTestData.SignAsRecipientAsync(receiverB, turnB);
+        Assert.Equal("COMPLETED", afterB.GetProperty("status").GetString());
+
+        JsonElement committedA = await GetTurnAsync(receiverA, turnA);
+        Guid grantA = committedA.GetProperty("grant").GetProperty("id").GetGuid();
+        await VerifyKeyAsync(receiverA, turnA);
+        Guid itemId = FindItemId(committedA.GetProperty("items"), "FILE");
         HttpResponseMessage bTries = await receiverB.GetAsync($"/api/v1/handover/grants/{grantA}/assets/{itemId}/content");
         await ApiTestHelpers.AssertProblemAsync(bTries, HttpStatusCode.NotFound, "HANDOVER_NOT_FOUND");
-
         HttpResponseMessage aDownloads = await receiverA.GetAsync($"/api/v1/handover/grants/{grantA}/assets/{itemId}/content");
         Assert.Equal(HttpStatusCode.OK, aDownloads.StatusCode);
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            Assert.Equal(1, await db.Set<HandoverGrant>().CountAsync());
-            PlanStatus plan = await db.HandoverPlans.Select(p => p.Status).SingleAsync();
+            Assert.Equal(2, await db.Set<HandoverGrant>().CountAsync());
+            PlanStatus plan = await db.HandoverPlans.Where(p => p.VaultId == current.VaultId).Select(p => p.Status).SingleAsync();
             Assert.Equal(PlanStatus.Closed, plan);
         });
     }
@@ -549,20 +561,15 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Jobs_ExpireDecisionAndGrantAndCloseThePlan()
+    public async Task Jobs_ExpireGrant()
     {
-        Scenario scenario = await BuildScenarioAsync(2);
+        await BuildScenarioAsync(1);
         HttpClient receiverA = await NewReceiverAsync();
-        HttpClient receiverB = await NewReceiverAsync(1);
         (Guid _, Guid grantA, JsonElement _) = await ClaimAndAcceptAsync(receiverA, 0);
-        JsonElement claimedB = await ClaimAsync(receiverB, 1);
-        Guid turnB = claimedB.GetProperty("id").GetGuid();
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             DateTimeOffset past = DateTimeOffset.UtcNow.AddMinutes(-5);
-            await db.Set<HandoverTurn>().Where(t => t.Id == turnB)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.DecisionDeadline, past));
             await db.Set<HandoverGrant>().Where(g => g.Id == grantA)
                 .ExecuteUpdateAsync(s => s.SetProperty(g => g.ExpiresAt, past));
         });
@@ -570,26 +577,16 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         using (IServiceScope scope = factory.Services.CreateScope())
         {
             IHandoverJob job = scope.ServiceProvider.GetRequiredService<IHandoverJob>();
-            IReadOnlyList<Guid> decisionIds = await job.FindExpiredDecisionTurnIdsAsync(CancellationToken.None);
-            IReadOnlyList<Guid> grantIds = await job.FindExpiredGrantIdsAsync(CancellationToken.None);
-            Assert.Equal(turnB, Assert.Single(decisionIds));
-            Assert.Equal(grantA, Assert.Single(grantIds));
-            await job.ProcessDecisionExpiryAsync(turnB, CancellationToken.None);
-        }
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IHandoverJob job = scope.ServiceProvider.GetRequiredService<IHandoverJob>();
+            // Lượt theo biên bản không có hạn quyết định nên job không bao giờ cho lượt hết hạn quyết định.
+            Assert.Empty(await job.FindExpiredDecisionTurnIdsAsync(CancellationToken.None));
+            Assert.Equal(grantA, Assert.Single(await job.FindExpiredGrantIdsAsync(CancellationToken.None)));
             await job.ProcessGrantExpiryAsync(grantA, CancellationToken.None);
         }
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            HandoverTurnStatus statusB = await db.Set<HandoverTurn>().Where(t => t.Id == turnB).Select(t => t.Status).SingleAsync();
             HandoverGrantStatus grantStatus = await db.Set<HandoverGrant>().Where(g => g.Id == grantA).Select(g => g.Status).SingleAsync();
-            PlanStatus plan = await db.HandoverPlans.Where(p => p.VaultId == scenario.VaultId).Select(p => p.Status).SingleAsync();
-            Assert.Equal(HandoverTurnStatus.DecisionExpired, statusB);
             Assert.Equal(HandoverGrantStatus.Expired, grantStatus);
-            Assert.Equal(PlanStatus.Closed, plan);
         });
     }
 }

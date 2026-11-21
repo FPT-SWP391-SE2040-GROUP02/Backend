@@ -5,7 +5,6 @@ using LegacyVault.Application.Security;
 using LegacyVault.Application.ServiceConfig;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -68,7 +67,7 @@ public sealed class R2ConfigApiTests : IAsyncLifetime
 
     private async Task<HttpClient> AdminClientAsync(WebApplicationFactory<Program>? host = null)
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         WebApplicationFactory<Program> target = host ?? factory;
         HttpClient client = target.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, target.Services, admin);

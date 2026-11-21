@@ -640,7 +640,7 @@ public sealed class BillingRulesTests
     }
 
     [Theory]
-    [InlineData(PlanStatus.DeathCaseOpen)]
+    [InlineData(PlanStatus.HandoverRequested)]
     [InlineData(PlanStatus.HandoverInProgress)]
     [InlineData(PlanStatus.Blocked)]
     public void Sec83_PlanLocked_RejectsPayment(PlanStatus status)
@@ -661,8 +661,6 @@ public sealed class BillingRulesTests
     [Theory]
     [InlineData(PlanStatus.Draft)]
     [InlineData(PlanStatus.Active)]
-    [InlineData(PlanStatus.CheckinOverdue)]
-    [InlineData(PlanStatus.AwaitingCheck)]
     public void Sec83_PlanNotLocked_AllowsPayment(PlanStatus status)
     {
         // Chuẩn bị

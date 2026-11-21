@@ -57,13 +57,12 @@ public interface IAdminService
 /// </remarks>
 public sealed class AdminService : IAdminService
 {
-    private const string EndReasonAdmin = "ADMIN_REASSIGN";
 
     private readonly ICurrentUser currentUser;
     private readonly IUserRepository users;
     private readonly IAdminUserRepository adminUsers;
     private readonly IVaultRepository vaults;
-    private readonly IDeathCaseRepository deathCases;
+    private readonly IHandoverRecordRepository records;
     private readonly IExecutorReader executorReader;
     private readonly IHoldRepository holds;
     private readonly IRefreshTokenRepository refreshTokens;
@@ -81,7 +80,7 @@ public sealed class AdminService : IAdminService
         IUserRepository users,
         IAdminUserRepository adminUsers,
         IVaultRepository vaults,
-        IDeathCaseRepository deathCases,
+        IHandoverRecordRepository records,
         IExecutorReader executorReader,
         IHoldRepository holds,
         IRefreshTokenRepository refreshTokens,
@@ -103,7 +102,7 @@ public sealed class AdminService : IAdminService
         this.users = users;
         this.adminUsers = adminUsers;
         this.vaults = vaults;
-        this.deathCases = deathCases;
+        this.records = records;
         this.executorReader = executorReader;
         this.holds = holds;
         this.audit = audit;
@@ -184,22 +183,14 @@ public sealed class AdminService : IAdminService
 
         if (user.Role == UserRole.Verifier)
         {
-            foreach ((Guid caseId, DeathCaseStatus status, DateTimeOffset dueAt) in await adminUsers.ListOpenAssignmentsAsync(userId, ct))
+            foreach ((Guid caseId, HandoverRecordStatus status, DateTimeOffset dueAt) in await adminUsers.ListOpenAssignmentsAsync(userId, ct))
             {
                 AdminUserCaseResponse item = new AdminUserCaseResponse();
                 item.CaseId = caseId;
                 item.Status = status.ToApiString();
                 item.DueAt = dueAt;
-                item.Overdue = dueAt < now;
+                item.Overdue = false;
                 response.AssignedCases.Add(item);
-            }
-            foreach (DeathCaseDecision decision in await adminUsers.ListRecentDecisionsAsync(userId, 10, ct))
-            {
-                AdminUserDecisionResponse item = new AdminUserDecisionResponse();
-                item.CaseId = decision.CaseId;
-                item.Kind = decision.Kind.ToApiString();
-                item.DecidedAt = decision.DecidedAt;
-                response.RecentDecisions.Add(item);
             }
         }
         foreach (AuditLog log in await adminUsers.ListRecentAuditByActorAsync(userId, 10, ct))
@@ -348,32 +339,32 @@ public sealed class AdminService : IAdminService
 
     public async Task ReassignVerifierAsync(Guid caseId, ReassignVerifierRequest request, CancellationToken ct)
     {
+        // caseId là id của biên bản bàn giao.
         Guid adminId = await RequireAdminAsync(ct);
         string reason = RequireReason(request.Reason);
-        DeathCase? deathCase = await deathCases.FindByIdAsync(caseId, ct);
-        if (deathCase == null)
+        HandoverRecord? record = await records.FindByIdAsync(caseId, ct);
+        if (record == null)
         {
-            throw new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
+            throw new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy biên bản bàn giao.");
         }
-        // Chỉ giao lại được khi hồ sơ đang chờ quyết định.
-        if (!DeathCaseReviewRules.CanDecide(deathCase.Status))
+        // Biên bản đã đủ chữ ký thì không giao lại nữa.
+        if (record.Status == HandoverRecordStatus.Completed)
         {
             throw NotAllowed("CASE_NOT_PENDING");
         }
-        Vault? vault = await vaults.FindByIdAsync(deathCase.VaultId, ct);
+        Vault? vault = await vaults.FindByIdAsync(record.VaultId, ct);
         if (vault == null)
         {
-            throw new AppException(AppErrorType.NotFound, ErrorCode.DeathCaseNotFound, "Không tìm thấy hồ sơ chứng tử.");
+            throw new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy biên bản bàn giao.");
         }
 
         Guid verifierId = request.VerifierUserId!.Value;
         User? verifier = await users.FindByIdAsync(verifierId, ct);
-        if (!DeathCaseAssignmentRules.IsVerifierAvailable(verifier))
+        if (verifier == null || verifier.Role != UserRole.Verifier || verifier.Status != UserStatus.Active)
         {
-            throw ValidationErrors.For("verifierUserId", "Chỉ giao cho Verifier đang hoạt động.");
+            throw ValidationErrors.For("verifierUserId", "Chỉ giao cho luật sư đang hoạt động.");
         }
-        DeathCaseVersion reviewVersion = DeathCaseReviewRules.FindReviewVersion(deathCase);
-        bool conflict = verifierId == vault.OwnerId || verifierId == reviewVersion.SubmittedByUserId;
+        bool conflict = verifierId == vault.OwnerId || verifierId == record.RequestedByUserId;
         List<Executor> executors = await executorReader.GetActiveAsync(vault.Id, ct);
         foreach (Executor executor in executors)
         {
@@ -384,44 +375,25 @@ public sealed class AdminService : IAdminService
         }
         if (conflict)
         {
-            throw ValidationErrors.For("verifierUserId", "Verifier không được là chủ kho, Executor hoặc người gửi hồ sơ.");
+            throw ValidationErrors.For("verifierUserId", "Luật sư không được là Chủ kho hoặc Người thực thi của kho.");
+        }
+        if (record.VerifierUserId == verifierId)
+        {
+            // Đã đúng người đó: gọi lặp, không làm gì.
+            return;
         }
 
+        // Đổi luật sư: chữ ký của luật sư cũ không còn giá trị nên tăng số bản nếu biên bản đang ở bước ký.
         DateTimeOffset now = timeProvider.GetUtcNow();
-        foreach (DeathCaseAssignment assignment in deathCase.Assignments)
+        record.VerifierUserId = verifierId;
+        if (record.Status == HandoverRecordStatus.Signing)
         {
-            if (assignment.EndedAt == null)
-            {
-                if (assignment.VerifierUserId == verifierId)
-                {
-                    // Đã đúng người đó: gọi lặp, không làm gì.
-                    return;
-                }
-                assignment.EndedAt = now;
-                assignment.EndReason = EndReasonAdmin;
-            }
+            record.RevisionNo = record.RevisionNo + 1;
         }
-        DeathCaseAssignment created = new DeathCaseAssignment();
-        created.CaseId = deathCase.Id;
-        created.VerifierUserId = verifierId;
-        created.AssignedAt = now;
-        created.DueAt = DeathCaseAssignmentRules.ComputeDueAt(now);
-        deathCase.Assignments.Add(created);
-        deathCases.AddAssignment(created);
-        // Đổi etag để Verifier cũ đang thao tác nhận 409 EDIT_CONFLICT, tải lại thì 404.
-        deathCase.UpdatedAt = now;
+        record.UpdatedAt = now;
         audit.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.VerifierReassigned,
-            AuditTargetType.DeathCase, deathCase.Id, null, AuditOutcome.Succeeded, reason, now));
-        try
-        {
-            await unitOfWork.SaveChangesAsync(ct);
-        }
-        catch (Exception ex) when (deathCases.IsUniqueViolation(ex))
-        {
-            // Job phân công vừa giao cùng lúc (chỉ mục "mỗi hồ sơ một phân công còn hiệu lực"): báo xung đột để Admin tải lại.
-            throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
-                "Hồ sơ vừa được giao ở nơi khác. Vui lòng tải lại rồi thử lại.");
-        }
+            AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, reason, now));
+        await unitOfWork.SaveChangesAsync(ct);
     }
 
     public async Task<AdminDashboardResponse> GetDashboardAsync(CancellationToken ct)

@@ -3,7 +3,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
@@ -168,7 +168,7 @@ public sealed class HandoverClaimTests
 
         Assert.Equal("READY_TO_ACCEPT", response.Status);
         Assert.True(response.IdentityBypassed);
-        Assert.Equal(Now.AddDays(7), response.DecisionDeadline);
+        Assert.Null(response.DecisionDeadline);
         Assert.Equal(Now, repository.Turns[0].ReadyAt);
         Assert.NotNull(response.Container);
         Assert.Equal("Gói A", response.Container!.Name);

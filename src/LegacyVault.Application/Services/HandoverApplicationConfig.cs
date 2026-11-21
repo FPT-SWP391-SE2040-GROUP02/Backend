@@ -8,19 +8,16 @@ public static class HandoverApplicationConfig
     /// <summary>Đăng ký các service, việc nền và bộ dựng văn bản của luồng bàn giao.</summary>
     public static IServiceCollection AddHandoverApplication(this IServiceCollection services)
     {
-        services.AddScoped<IHandoverStarter, HandoverStarter>();
+        services.AddScoped<HandoverRecordTurnSync>();
+        services.AddScoped<IHandoverRecordService, HandoverRecordService>();
         services.AddScoped<IHandoverService, HandoverService>();
         services.AddScoped<IInvitationMailCheckService, InvitationMailCheckService>();
-        services.AddScoped<IHandoverPaperWriter, HandoverPaperWriter>();
-        services.AddScoped<IHandoverDocumentNotifier, HandoverDocumentNotifier>();
-        services.AddScoped<IHandoverDocumentService, HandoverDocumentService>();
         services.AddScoped<IHandoverSubmissionService, HandoverSubmissionService>();
         services.AddScoped<IHandoverSubmissionReviewService, HandoverSubmissionReviewService>();
         services.AddScoped<IHandoverDownloadService, HandoverDownloadService>();
         services.AddScoped<IHandoverJob, HandoverJob>();
         services.AddScoped<IHandoverInvitationRetryJob, HandoverInvitationRetryJob>();
         services.AddScoped<IHandoverKeyMailService, HandoverKeyMailService>();
-        services.AddScoped<IExecutorHandoverPaperService, ExecutorHandoverPaperService>();
         return services;
     }
 }

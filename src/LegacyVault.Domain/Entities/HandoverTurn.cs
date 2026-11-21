@@ -20,6 +20,9 @@ public class HandoverTurn
 
     public Guid PlanId { get; set; }
 
+    /// <summary>Biên bản bàn giao đã tạo lượt này; mỗi người nhận trong biên bản có một lượt.</summary>
+    public Guid? RecordId { get; set; }
+
     public Guid ContainerId { get; set; }
 
     /// <summary>Tên gói lúc ghim snapshot.</summary>

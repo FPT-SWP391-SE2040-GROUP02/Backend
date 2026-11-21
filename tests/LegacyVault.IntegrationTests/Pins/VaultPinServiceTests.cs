@@ -8,7 +8,7 @@ using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Security;
 using LegacyVault.IntegrationTests.Auth;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 

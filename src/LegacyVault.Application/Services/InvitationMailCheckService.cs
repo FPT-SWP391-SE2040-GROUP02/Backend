@@ -21,7 +21,7 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
 
     private readonly IHandoverRepository handover;
     private readonly ITokenService tokens;
-    private readonly IDeathCaseRepository deathCases;
+    private readonly IHandoverRecordRepository records;
     private readonly IBeneficiaryRepository beneficiaries;
     private readonly IBeneficiaryDataProtector protector;
     private readonly IVaultRepository vaults;
@@ -30,7 +30,7 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
     public InvitationMailCheckService(
         IHandoverRepository handover,
         ITokenService tokens,
-        IDeathCaseRepository deathCases,
+        IHandoverRecordRepository records,
         IBeneficiaryRepository beneficiaries,
         IBeneficiaryDataProtector protector,
         IVaultRepository vaults,
@@ -38,7 +38,7 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
     {
         this.handover = handover;
         this.tokens = tokens;
-        this.deathCases = deathCases;
+        this.records = records;
         this.beneficiaries = beneficiaries;
         this.protector = protector;
         this.vaults = vaults;
@@ -67,10 +67,10 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
 
         // 3. Mã hồ sơ đúng lấy từ hồ sơ chứng tử, 4 số cuối căn cước đúng lấy từ thông tin Chủ kho đã khai
         string wantedCode = string.Empty;
-        DeathCase? deathCase = await deathCases.FindOpenByVaultIdAsync(turn.VaultId, ct);
-        if (deathCase != null)
+        HandoverRecord? record = await records.FindByVaultIdAsync(turn.VaultId, ct);
+        if (record != null)
         {
-            wantedCode = DeathCaseRules.CaseCode(deathCase.Id);
+            wantedCode = HandoverRecordRules.CaseCode(record.Id);
         }
         string wantedLast4 = string.Empty;
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);

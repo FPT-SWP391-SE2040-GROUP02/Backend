@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
@@ -72,8 +71,8 @@ public sealed class HandoverSubmissionApiTests : IAsyncLifetime
     [SqlFact]
     public async Task Verifier_ListsNothingWhenHeApprovedNoCase_AndAnOrdinaryUserIsForbidden()
     {
-        User verifier = await DeathCaseTestData.AddUserAsync(factory, UserRole.Verifier, UserStatus.Active);
-        User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User verifier = await VaultTestData.AddUserAsync(factory, UserRole.Verifier, UserStatus.Active);
+        User user = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient verifierClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(verifierClient, factory.Services, verifier);
         HttpClient userClient = factory.CreateClient();
@@ -90,7 +89,7 @@ public sealed class HandoverSubmissionApiTests : IAsyncLifetime
     [SqlFact]
     public async Task Submit_ForUnknownTurn_IsNotFoundAndNothingIsLeaked()
     {
-        User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User user = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
 
@@ -105,7 +104,7 @@ public sealed class HandoverSubmissionApiTests : IAsyncLifetime
     [SqlFact]
     public async Task Submit_WithMissingImages_IsValidationErrorBeforeAnyLookup()
     {
-        User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User user = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
         using MultipartFormDataContent form = new MultipartFormDataContent();
@@ -120,7 +119,7 @@ public sealed class HandoverSubmissionApiTests : IAsyncLifetime
     [SqlFact]
     public async Task GetLatest_ForUnknownTurn_IsNotFound()
     {
-        User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User user = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
 

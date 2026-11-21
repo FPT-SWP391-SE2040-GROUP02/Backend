@@ -3,7 +3,6 @@ using System.Text.Json;
 using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -153,10 +152,10 @@ public sealed class WillIdentityTests : IAsyncLifetime
         Assert.NotNull(owner);
 
         HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         HttpClient adminClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(adminClient, factory.Services, admin);
-        User executorUser = await DeathCaseTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
+        User executorUser = await VaultTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
         HttpClient executorClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(executorClient, factory.Services, executorUser);
 

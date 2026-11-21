@@ -6,7 +6,6 @@ using LegacyVault.Application.Ekyc;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,8 +45,8 @@ public sealed class EkycPauseFlowTests : IAsyncLifetime
     public async Task OwnerPassesWholeEkycFlowWhilePausedAndAdminToggleIsAudited()
     {
         // Chuẩn bị: Admin bật tạm ngừng eKYC
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User owner = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient adminClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(adminClient, factory.Services, admin);
         HttpResponseMessage toggled = await adminClient.PutAsJsonAsync(PauseUrl, new { paused = true });
@@ -95,7 +94,7 @@ public sealed class EkycPauseFlowTests : IAsyncLifetime
     public async Task NonAdminCannotToggleOrReadPause()
     {
         // Chuẩn bị
-        User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User user = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
 
@@ -113,7 +112,7 @@ public sealed class EkycPauseFlowTests : IAsyncLifetime
     public async Task PauseIsOffByDefaultAndAdminCanTurnItBackOff()
     {
         // Chuẩn bị
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, admin);
 

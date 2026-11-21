@@ -4,7 +4,6 @@ using System.Text.Json;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,7 +70,7 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
 
     private async Task<HttpClient> ClientForAsync(UserRole role)
     {
-        User user = await DeathCaseTestData.AddUserAsync(factory, role, UserStatus.Active);
+        User user = await VaultTestData.AddUserAsync(factory, role, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
         return client;
@@ -81,8 +80,8 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
     public async Task Admin_AssignsExecutor_InvitesWithAdminWording_AndWritesAudit()
     {
         // Chuẩn bị: kho đang chạy chưa có Người thực thi, và một Người thực thi hệ thống được chọn
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        User target = await DeathCaseTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
+        VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
+        User target = await VaultTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
         HttpClient admin = await ClientForAsync(UserRole.Admin);
 
         // Hành động
@@ -108,8 +107,8 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
     public async Task Assign_RejectsOwnerAndMissingReason_AndNonAdminGets404()
     {
         // Chuẩn bị
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        User target = await DeathCaseTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
+        VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
+        User target = await VaultTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
         HttpClient admin = await ClientForAsync(UserRole.Admin);
         HttpClient member = await ClientForAsync(UserRole.User);
         string url = "/api/v1/admin/vaults/" + vault.VaultId + "/executor";
@@ -130,8 +129,8 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
     public async Task Assign_OrdinaryUser_IsRejected_OnlySystemExecutorsAllowed()
     {
         // Chuẩn bị: tài khoản thường (không phải Người thực thi hệ thống)
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        User ordinary = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
+        User ordinary = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient admin = await ClientForAsync(UserRole.Admin);
 
         // Hành động

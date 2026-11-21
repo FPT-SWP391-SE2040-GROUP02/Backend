@@ -52,10 +52,13 @@ public class HandoverProgressTurnResponse
     /// <summary>Lúc máy chủ email nhận thư mời; null nghĩa là lời mời chưa gửi được.</summary>
     public DateTimeOffset? InvitationSentAt { get; set; }
 
-    /// <summary>Lúc người nhận ký biên bản (đồng ý hoặc từ chối) của lượt; null khi chưa có biên bản hoặc chưa ký.</summary>
+    /// <summary>Lúc luật sư xác nhận danh tính người nhận của lượt; null khi chưa xác nhận.</summary>
+    public DateTimeOffset? IdentityConfirmedAt { get; set; }
+
+    /// <summary>Lúc người nhận ký biên bản bàn giao (bản hiện tại); null khi chưa ký.</summary>
     public DateTimeOffset? RecipientSignedAt { get; set; }
 
-    /// <summary>Lúc Người xét duyệt ký biên bản (đồng ý hoặc từ chối) của lượt; null khi chưa có biên bản hoặc chưa ký.</summary>
+    /// <summary>Lúc biên bản bàn giao đủ chữ ký ba bên; null khi chưa đủ.</summary>
     public DateTimeOffset? DocumentApprovedAt { get; set; }
 
     /// <summary>Lúc người nhận nhập đúng mã mở gói; null khi chưa nhập hoặc kho không dùng mã.</summary>

@@ -11,8 +11,8 @@ public static class AvatarRules
     /// </summary>
     public static string? DetectImageContentType(byte[] header)
     {
-        string? detected = DeathCaseFileRules.DetectContentType(header);
-        if (detected == DeathCaseFileRules.Jpeg || detected == DeathCaseFileRules.Png || detected == DeathCaseFileRules.Webp)
+        string? detected = FileSignatureRules.DetectContentType(header);
+        if (detected == FileSignatureRules.Jpeg || detected == FileSignatureRules.Png || detected == FileSignatureRules.Webp)
         {
             return detected;
         }

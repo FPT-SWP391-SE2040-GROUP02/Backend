@@ -183,7 +183,7 @@ public sealed class NotaryCardService : INotaryCardService
 
     private static async Task<string> ReadImageContentTypeAsync(Stream content, CancellationToken ct)
     {
-        byte[] header = new byte[DeathCaseFileRules.HeaderLength];
+        byte[] header = new byte[FileSignatureRules.HeaderLength];
         int read = 0;
         while (read < header.Length)
         {

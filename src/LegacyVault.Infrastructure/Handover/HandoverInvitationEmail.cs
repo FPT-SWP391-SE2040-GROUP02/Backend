@@ -91,13 +91,13 @@ public static class HandoverInvitationEmail
             + "họ trên LegacyVault. Nay đã đến lúc bạn nhận phần đó: người này đã qua đời nên không thể tự gửi lời nhắn này.");
         if (hasExecutor)
         {
-            lines.Add($"Người được tin tưởng nhất là {executor}, người thực thi di chúc của {ownerLabel}, đã thay gửi giấy chứng tử. "
-                + "Bên mình cũng đã kiểm tra và xác nhận đầy đủ thông tin.");
+            lines.Add($"{executor}, Người thực thi của {ownerLabel}, đã mở bàn giao. "
+                + "Luật sư đã lập biên bản bàn giao, trong đó có tên bạn.");
         }
         else
         {
-            lines.Add("Người thực thi do chủ kho chỉ định đã thay gửi giấy chứng tử. "
-                + "Bên mình cũng đã kiểm tra và xác nhận đầy đủ thông tin.");
+            lines.Add("Người thực thi do chủ kho chỉ định đã mở bàn giao. "
+                + "Luật sư đã lập biên bản bàn giao, trong đó có tên bạn.");
         }
         lines.Add(ContactLine(invitation, executorLabel, hasExecutor));
         if (invitation.VerifierFullName.Trim().Length > 0)
@@ -107,7 +107,7 @@ public static class HandoverInvitationEmail
             {
                 card = $" (thẻ luật sư {invitation.VerifierLawyerCardNumber.Trim()})";
             }
-            lines.Add($"Hồ sơ đã được Người xét duyệt {invitation.VerifierFullName.Trim()}{card} kiểm tra.");
+            lines.Add($"Biên bản do luật sư {invitation.VerifierFullName.Trim()}{card} lập và kiểm.");
         }
         if (invitation.CaseCode.Trim().Length > 0)
         {

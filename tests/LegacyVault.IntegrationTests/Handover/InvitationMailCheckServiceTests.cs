@@ -3,8 +3,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
-using LegacyVault.IntegrationTests.DeathCases;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
@@ -20,7 +19,7 @@ public sealed class InvitationMailCheckServiceTests
     private readonly FakeUserRepository users = new FakeUserRepository();
     private readonly FakeVaultRepository vaults = new FakeVaultRepository();
     private readonly FakeHandoverRepository repository = new FakeHandoverRepository();
-    private readonly FakeDeathCaseRepository deathCases = new FakeDeathCaseRepository();
+    private readonly FakeHandoverRecordRepository records = new FakeHandoverRecordRepository();
     private readonly FakeEkycBeneficiaryRepository beneficiaries = new FakeEkycBeneficiaryRepository();
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly InvitationMailCheckService service;
@@ -41,12 +40,14 @@ public sealed class InvitationMailCheckServiceTests
         token = "token-" + Guid.NewGuid().ToString("N");
         repository.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, token, null));
 
-        DeathCase deathCase = new DeathCase { VaultId = data.Vault.Id, Status = DeathCaseStatus.ApprovedForHandover };
-        deathCases.Cases.Add(deathCase);
-        caseCode = DeathCaseRules.CaseCode(deathCase.Id);
+        HandoverRecord record = new HandoverRecord();
+        record.VaultId = data.Vault.Id;
+        record.Status = HandoverRecordStatus.IdentityCheck;
+        records.Records.Add(record);
+        caseCode = HandoverRecordRules.CaseCode(record.Id);
 
         service = new InvitationMailCheckService(
-            repository, new FakeTokenService(), deathCases, beneficiaries, protector, vaults, users);
+            repository, new FakeTokenService(), records, beneficiaries, protector, vaults, users);
     }
 
     [Fact]

@@ -67,8 +67,8 @@ public sealed class ExecutorInvitationSender(
         if (assignedByAdmin)
         {
             who = "Quản trị viên LegacyVault";
-            subject = "Quản trị viên LegacyVault mời bạn làm Người thi hành di chúc";
-            title = "Quản trị viên LegacyVault mời bạn làm Người thi hành di chúc";
+            subject = "Quản trị viên LegacyVault mời bạn làm Người thực thi";
+            title = "Quản trị viên LegacyVault mời bạn làm Người thực thi";
             lead = "Quản trị viên LegacyVault chọn anh/chị là người đứng ra lo việc bàn giao tài sản số của một kho đang cần người phụ trách, "
                 + "cho người thân của Chủ kho khi Chủ kho qua đời. Mỗi kho chỉ có một người được giao nhiệm vụ như vậy.";
         }
@@ -76,30 +76,30 @@ public sealed class ExecutorInvitationSender(
         {
             string name = ownerName!.Trim();
             who = "Ông/Bà " + name;
-            subject = "Ông/Bà " + name + " mời bạn làm Người thi hành di chúc";
-            title = name + " mời bạn làm Người thi hành di chúc";
+            subject = "Ông/Bà " + name + " mời bạn làm Người thực thi";
+            title = name + " mời bạn làm Người thực thi";
             lead = "Ông/Bà " + name + " đang lưu giữ tài sản số của mình trên LegacyVault và đã chọn anh/chị là người đứng ra lo việc "
                 + "bàn giao số tài sản này cho người thân khi ông/bà qua đời. Mỗi kho chỉ có một người được giao nhiệm vụ như vậy.";
         }
         else
         {
             who = "Một Chủ kho";
-            subject = "Lời mời làm Người thi hành di chúc — LegacyVault";
-            title = "Bạn được mời làm Người thi hành di chúc";
+            subject = "Lời mời làm Người thực thi — LegacyVault";
+            title = "Bạn được mời làm Người thực thi";
             lead = "Một Chủ kho trên LegacyVault đã chọn anh/chị là người đứng ra lo việc bàn giao tài sản số của họ cho người thân "
                 + "khi họ qua đời. Mỗi kho chỉ có một người được giao nhiệm vụ như vậy.";
         }
 
-        string text = who + " mời anh/chị làm Người thi hành di chúc trên LegacyVault. Xem và trả lời tại " + link
+        string text = who + " mời anh/chị làm Người thực thi trên LegacyVault. Xem và trả lời tại " + link
             + " . Lời mời hết hạn " + expiresAt.ToString("O") + ". Không chuyển tiếp liên kết này.";
 
         List<LegacyVaultEmailTheme.MailListSection> sections = new List<LegacyVaultEmailTheme.MailListSection>();
         sections.Add(new LegacyVaultEmailTheme.MailListSection("Nếu nhận lời, anh/chị sẽ:", new string[]
         {
-            "Điểm danh thay khi Chủ kho trễ hạn điểm danh.",
-            "Báo tin và nộp giấy chứng tử khi Chủ kho qua đời.",
-            "Giữ mảnh khóa Chủ kho giao, và gửi khóa mở gói cho người nhận khi đến lúc.",
-            "Theo dõi việc bàn giao cho đến khi xong.",
+            "Mở bàn giao trên hệ thống khi Chủ kho qua đời (không cần nộp giấy tờ).",
+            "Giữ hộ tài sản, không tự chia, bán hay cho; việc chia do luật sư lập trong biên bản bàn giao.",
+            "Ký biên bản bàn giao cùng luật sư và người nhận.",
+            "Gửi mã nhận cho người nhận khi biên bản đã đủ chữ ký.",
         }));
 
         List<LegacyVaultEmailTheme.MailParagraph> closing = new List<LegacyVaultEmailTheme.MailParagraph>();

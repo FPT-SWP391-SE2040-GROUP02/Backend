@@ -1,4 +1,4 @@
-using LegacyVault.Api.DeathCases;
+using LegacyVault.Api.Handover;
 using LegacyVault.Api.Exceptions;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace LegacyVault.Api.Controllers;
 
-/// <summary>Người xét duyệt duyệt hồ sơ người nhận của các kho mà mình đã duyệt hồ sơ chứng tử.</summary>
+/// <summary>Luật sư kiểm danh tính người nhận (bước 2 của biên bản bàn giao) ở các kho được giao cho mình.</summary>
 /// <remarks>Vai trò Verifier được service kiểm từ DB; hồ sơ không thuộc kho của mình luôn là 404.</remarks>
 [ApiController]
 [Authorize]
@@ -76,7 +76,7 @@ public sealed class VerifierHandoverSubmissionsController : ControllerBase
         return new IdentityImageResult(download);
     }
 
-    /// <summary>Duyệt hồ sơ: chỉ khi cả ba trường khớp. Lượt sang bước quyết định.</summary>
+    /// <summary>Xác nhận danh tính người nhận: chỉ khi cả ba trường khớp. Đủ người thì biên bản sang bước ký.</summary>
     [HttpPost("{submissionId:guid}/approve")]
     [ProducesResponseType<VerifierHandoverSubmissionResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -84,22 +84,6 @@ public sealed class VerifierHandoverSubmissionsController : ControllerBase
     public Task<VerifierHandoverSubmissionResponse> Approve(Guid submissionId, CancellationToken ct)
     {
         return reviewService.ApproveAsync(submissionId, ct);
-    }
-
-    /// <summary>
-    /// Luồng Biên Bản: kiểm tra thủ công (tick đủ hai mục và xác nhận trách nhiệm) rồi gửi.
-    /// Hoàn tất biên bản: Chấp nhận thì mở quyền tải tài sản, Từ chối thì ghi nhận từ chối.
-    /// </summary>
-    [HttpPost("{submissionId:guid}/complete")]
-    [Consumes("application/json")]
-    [ProducesResponseType<VerifierHandoverSubmissionResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<VerifierHandoverSubmissionResponse> Complete(
-        Guid submissionId, ApproveHandoverDocumentRequest request, CancellationToken ct)
-    {
-        return reviewService.CompleteAsync(submissionId, request, ct);
     }
 
     /// <summary>Yêu cầu người nhận bổ sung, kèm lý do.</summary>

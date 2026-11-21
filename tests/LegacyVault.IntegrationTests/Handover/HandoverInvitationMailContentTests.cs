@@ -58,7 +58,7 @@ public sealed class HandoverInvitationMailContentTests
     {
         EmailContent content = HandoverInvitationEmail.Build(Invitation(), Link, null);
 
-        Assert.Contains("Người xét duyệt Luật sư Dũng (thẻ luật sư LS-12345)", content.TextBody);
+        Assert.Contains("luật sư Luật sư Dũng (thẻ luật sư LS-12345) lập và kiểm", content.TextBody);
     }
 
     [Fact]

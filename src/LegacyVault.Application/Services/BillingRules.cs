@@ -147,12 +147,12 @@ public static class BillingRules
             throw NotAllowed(PaymentNotAllowedReason.VaultClosed, "Kho đã đóng nên không thể thanh toán.");
         }
         PlanStatus planStatus = vault.Plan.Status;
-        if (planStatus == PlanStatus.DeathCaseOpen
+        if (planStatus == PlanStatus.HandoverRequested
             || planStatus == PlanStatus.HandoverInProgress
             || planStatus == PlanStatus.Blocked)
         {
             throw NotAllowed(PaymentNotAllowedReason.PlanLocked,
-                "Kế hoạch đang trong quy trình chứng tử hoặc bàn giao nên chưa thể tạo đơn mới.");
+                "Kho đang trong quy trình bàn giao nên chưa thể tạo đơn mới.");
         }
     }
 

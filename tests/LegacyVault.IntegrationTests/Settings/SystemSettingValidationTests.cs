@@ -4,8 +4,6 @@ using System.Text.Json;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Xunit;
 
@@ -15,11 +13,11 @@ namespace LegacyVault.IntegrationTests.Settings;
 public sealed class SystemSettingRulesTests
 {
     [Theory]
-    [InlineData("CheckIn.MaxLateReminders", "3")]
-    [InlineData("CheckIn.MaxLateReminders", "1")]
-    [InlineData("CheckIn.MaxLateReminders", "5")]
-    [InlineData("CheckIn.FirstReminderDaysBeforeDue", "60")]
-    [InlineData("CheckIn.SecondReminderDaysBeforeDue", "1")]
+    [InlineData("Executor.InvitationExpiresDays", "7")]
+    [InlineData("Executor.InvitationExpiresDays", "1")]
+    [InlineData("Executor.InvitationExpiresDays", "60")]
+    [InlineData("Executor.ReminderAfterHours", "1440")]
+    [InlineData("Handover.ResponseWindowDays", "1")]
     [InlineData("Handover.GrantWindowDays", " 30 ")]
     [InlineData("Features.MaintenanceMode", "true")]
     [InlineData("Time.DemoSeconds", "false")]
@@ -38,17 +36,15 @@ public sealed class SystemSettingRulesTests
     }
 
     [Theory]
-    [InlineData("CheckIn.MaxLateReminders", "0")]
-    [InlineData("CheckIn.MaxLateReminders", "6")]
-    [InlineData("CheckIn.MaxLateReminders", "-1")]
-    [InlineData("CheckIn.MaxLateReminders", "abc")]
-    [InlineData("CheckIn.MaxLateReminders", "2.5")]
-    [InlineData("CheckIn.MaxLateReminders", "")]
-    [InlineData("CheckIn.FirstReminderDaysBeforeDue", "61")]
-    [InlineData("CheckIn.FirstReminderDaysBeforeDue", "1")]
-    [InlineData("CheckIn.SecondReminderDaysBeforeDue", "0")]
-    [InlineData("CheckIn.SecondReminderDaysBeforeDue", "31")]
-    [InlineData("CheckIn.ExecutorProxyLimit", "21")]
+    [InlineData("Executor.InvitationExpiresDays", "0")]
+    [InlineData("Executor.InvitationExpiresDays", "61")]
+    [InlineData("Executor.InvitationExpiresDays", "-1")]
+    [InlineData("Executor.InvitationExpiresDays", "abc")]
+    [InlineData("Executor.InvitationExpiresDays", "2.5")]
+    [InlineData("Executor.InvitationExpiresDays", "")]
+    [InlineData("Executor.ReminderAfterHours", "0")]
+    [InlineData("Executor.ReminderAfterHours", "1441")]
+    [InlineData("Handover.GrantWindowDays", "366")]
     [InlineData("Handover.ResponseWindowDays", "0")]
     [InlineData("Security.MaxPinAttempts", "0")]
     [InlineData("Security.PinLockoutMinutes", "99999")]
@@ -82,27 +78,6 @@ public sealed class SystemSettingRulesTests
     {
         // Hành động và kiểm tra: không có giá trị nào thì dùng mặc định, và mặc định phải hợp lệ.
         Assert.Null(SystemSettingRules.FindRelationError(new Dictionary<string, long>()));
-    }
-
-    [Theory]
-    [InlineData(7, 1, true)]
-    [InlineData(3, 2, true)]
-    [InlineData(2, 1, true)]
-    [InlineData(1, 1, false)]
-    [InlineData(3, 3, false)]
-    [InlineData(2, 5, false)]
-    public void FindRelationError_FirstReminderMustBeFartherThanSecond(long first, long second, bool valid)
-    {
-        // Chuẩn bị
-        Dictionary<string, long> effective = new Dictionary<string, long>();
-        effective[SystemSettingRules.FirstReminderKey] = first;
-        effective[SystemSettingRules.SecondReminderKey] = second;
-
-        // Hành động
-        string? error = SystemSettingRules.FindRelationError(effective);
-
-        // Kiểm tra
-        Assert.Equal(valid, error == null);
     }
 
     [Theory]
@@ -158,7 +133,7 @@ public sealed class SystemSettingValidationFlowTests : IAsyncLifetime
 
     private async Task<HttpClient> AdminClientAsync()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, admin);
         // Lần đọc đầu tạo các tham số mặc định.
@@ -197,13 +172,13 @@ public sealed class SystemSettingValidationFlowTests : IAsyncLifetime
         HttpClient admin = await AdminClientAsync();
 
         // Hành động
-        HttpResponseMessage response = await PutAsync(admin, "CheckIn.MaxLateReminders", "9");
+        HttpResponseMessage response = await PutAsync(admin, "Executor.InvitationExpiresDays", "99");
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         // Màn Cấu hình hiện câu này (trường title), nên câu phải nói rõ khoảng hợp lệ.
-        Assert.Contains("từ 1 đến 5", problem.GetProperty("title").GetString());
-        Assert.Equal("3", await ReadValueAsync(admin, "CheckIn.MaxLateReminders"));
+        Assert.Contains("từ 1 đến 60", problem.GetProperty("title").GetString());
+        Assert.Equal("7", await ReadValueAsync(admin, "Executor.InvitationExpiresDays"));
     }
 
     [SqlFact]
@@ -227,31 +202,31 @@ public sealed class SystemSettingValidationFlowTests : IAsyncLifetime
         HttpClient admin = await AdminClientAsync();
 
         // Hành động
-        HttpResponseMessage response = await PutAsync(admin, "CheckIn.MaxLateReminders", "4");
+        HttpResponseMessage response = await PutAsync(admin, "Executor.InvitationExpiresDays", "10");
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("4", await ReadValueAsync(admin, "CheckIn.MaxLateReminders"));
+        Assert.Equal("10", await ReadValueAsync(admin, "Executor.InvitationExpiresDays"));
     }
 
     [SqlFact]
-    public async Task Put_FirstReminderNotFartherThanSecond_Returns400()
+    public async Task Put_ReminderNotBeforeInvitationExpiry_Returns400()
     {
-        // Chuẩn bị: thư thứ hai đang là 1 (mặc định); đặt thư thứ nhất bằng 1 là trùng nhau.
+        // Chuẩn bị: nhắc sau 48 giờ (mặc định); hạn lời mời 3 ngày (72 giờ) vẫn hợp lệ.
         HttpClient admin = await AdminClientAsync();
 
         // Hành động
-        HttpResponseMessage equal = await PutAsync(admin, "CheckIn.FirstReminderDaysBeforeDue", "2");
-        HttpResponseMessage valid = await PutAsync(admin, "CheckIn.SecondReminderDaysBeforeDue", "2");
+        HttpResponseMessage shorter = await PutAsync(admin, "Executor.InvitationExpiresDays", "3");
+        HttpResponseMessage late = await PutAsync(admin, "Executor.ReminderAfterHours", "100");
 
-        // Kiểm tra: 2 so với 1 hợp lệ, rồi thư thứ hai lên 2 thì trùng thư thứ nhất (2) nên bị từ chối.
-        Assert.Equal(HttpStatusCode.OK, equal.StatusCode);
-        await ApiTestHelpers.AssertProblemAsync(valid, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        Assert.Equal("1", await ReadValueAsync(admin, "CheckIn.SecondReminderDaysBeforeDue"));
+        // Kiểm tra: nhắc sau 100 giờ thì lời mời đã hết hạn (72 giờ) nên bị từ chối.
+        Assert.Equal(HttpStatusCode.OK, shorter.StatusCode);
+        await ApiTestHelpers.AssertProblemAsync(late, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal("48", await ReadValueAsync(admin, "Executor.ReminderAfterHours"));
     }
 
     [SqlFact]
-    public async Task Batch_SecondFartherThanFirst_Returns400AndSavesNothing()
+    public async Task Batch_ReminderAfterExpiry_Returns400AndSavesNothing()
     {
         // Chuẩn bị
         HttpClient admin = await AdminClientAsync();
@@ -259,15 +234,15 @@ public sealed class SystemSettingValidationFlowTests : IAsyncLifetime
         // Hành động
         HttpResponseMessage response = await BatchAsync(
             admin,
-            ("CheckIn.FirstReminderDaysBeforeDue", "3"),
-            ("CheckIn.SecondReminderDaysBeforeDue", "5"),
-            ("CheckIn.MaxLateReminders", "4"));
+            ("Executor.InvitationExpiresDays", "1"),
+            ("Executor.ReminderAfterHours", "30"),
+            ("Handover.GrantWindowDays", "40"));
 
-        // Kiểm tra: cả lô bị từ chối nên ngay cả giá trị đúng (MaxLateReminders) cũng chưa được lưu.
+        // Kiểm tra: cả lô bị từ chối nên ngay cả giá trị đúng (GrantWindowDays) cũng chưa được lưu.
         await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        Assert.Equal("7", await ReadValueAsync(admin, "CheckIn.FirstReminderDaysBeforeDue"));
-        Assert.Equal("1", await ReadValueAsync(admin, "CheckIn.SecondReminderDaysBeforeDue"));
-        Assert.Equal("3", await ReadValueAsync(admin, "CheckIn.MaxLateReminders"));
+        Assert.Equal("7", await ReadValueAsync(admin, "Executor.InvitationExpiresDays"));
+        Assert.Equal("48", await ReadValueAsync(admin, "Executor.ReminderAfterHours"));
+        Assert.Equal("30", await ReadValueAsync(admin, "Handover.GrantWindowDays"));
     }
 
     [SqlFact]
@@ -279,13 +254,13 @@ public sealed class SystemSettingValidationFlowTests : IAsyncLifetime
         // Hành động: đổi cả hai trong một lần, thứ tự trong lô không quan trọng.
         HttpResponseMessage response = await BatchAsync(
             admin,
-            ("CheckIn.SecondReminderDaysBeforeDue", "2"),
-            ("CheckIn.FirstReminderDaysBeforeDue", "3"));
+            ("Executor.ReminderAfterHours", "60"),
+            ("Executor.InvitationExpiresDays", "3"));
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("3", await ReadValueAsync(admin, "CheckIn.FirstReminderDaysBeforeDue"));
-        Assert.Equal("2", await ReadValueAsync(admin, "CheckIn.SecondReminderDaysBeforeDue"));
+        Assert.Equal("3", await ReadValueAsync(admin, "Executor.InvitationExpiresDays"));
+        Assert.Equal("60", await ReadValueAsync(admin, "Executor.ReminderAfterHours"));
     }
 
     [SqlFact]
@@ -308,7 +283,7 @@ public sealed class SystemSettingValidationFlowTests : IAsyncLifetime
         HttpClient admin = await AdminClientAsync();
 
         // Hành động: tắt tham số thì hệ thống dùng mức gốc, giá trị gõ vào không có tác dụng.
-        HttpResponseMessage response = await PutAsync(admin, "CheckIn.MaxLateReminders", "3", isEnabled: false);
+        HttpResponseMessage response = await PutAsync(admin, "Executor.InvitationExpiresDays", "7", isEnabled: false);
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

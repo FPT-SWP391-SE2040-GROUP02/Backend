@@ -37,38 +37,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .ToListAsync(ct);
     }
 
-    public Task<CheckInPeriod?> FindOpenPeriodAsync(Guid planId, CancellationToken ct)
-    {
-        return context.Set<CheckInPeriod>()
-            .Where(p => p.PlanId == planId && p.ClosedAt == null)
-            .OrderByDescending(p => p.Sequence)
-            .ThenBy(p => p.Id)
-            .FirstOrDefaultAsync(ct);
-    }
-
-    public Task<CheckInSchedule?> FindCheckInScheduleAsync(Guid planId, CancellationToken ct)
-    {
-        return context.Set<CheckInSchedule>()
-            .Where(s => s.PlanId == planId)
-            .FirstOrDefaultAsync(ct);
-    }
-
-    public async Task<AuditAction?> FindLatestClockActionAsync(Guid vaultId, CancellationToken ct)
-    {
-        AuditLog? log = await context.Set<AuditLog>()
-            .AsNoTracking()
-            .Where(l => l.VaultId == vaultId
-                && (l.Action == AuditAction.DevTimeTravel || l.Action == AuditAction.DevClockReset))
-            .OrderByDescending(l => l.At)
-            .ThenByDescending(l => l.Id)
-            .FirstOrDefaultAsync(ct);
-        if (log == null)
-        {
-            return null;
-        }
-        return log.Action;
-    }
-
     public Task<List<EkycVerification>> ListEkycVerificationsAsync(Guid userId, CancellationToken ct)
     {
         return context.Set<EkycVerification>()
@@ -125,15 +93,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
             .ToListAsync(ct);
         AddKeys(keys, assetKeys);
 
-        var caseIds = context.Set<DeathCase>().Where(c => c.VaultId == vaultId).Select(c => c.Id);
-        var versionIds = context.Set<DeathCaseVersion>().Where(v => caseIds.Contains(v.CaseId)).Select(v => v.Id);
-        List<string?> fileKeys = await context.Set<DeathCaseFile>()
-            .AsNoTracking()
-            .Where(f => versionIds.Contains(f.VersionId))
-            .Select(f => (string?)f.StorageKey)
-            .ToListAsync(ct);
-        AddKeys(keys, fileKeys);
-
         return keys;
     }
 
@@ -147,26 +106,8 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         await context.Set<HandoverSnapshotItem>().Where(i => turnIds.Contains(i.TurnId)).ExecuteDeleteAsync(ct);
         await context.Set<HandoverTurn>().Where(t => t.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
-        // Hồ sơ chứng tử: quyết định → phân công → cờ → trang giấy → bản khai → thông báo → lời báo còn sống → hồ sơ.
-        var caseIds = context.Set<DeathCase>().Where(c => c.VaultId == vaultId).Select(c => c.Id);
-        var versionIds = context.Set<DeathCaseVersion>().Where(v => caseIds.Contains(v.CaseId)).Select(v => v.Id);
-        await context.Set<DeathCaseDecision>().Where(d => caseIds.Contains(d.CaseId)).ExecuteDeleteAsync(ct);
-        await context.Set<DeathCaseAssignment>().Where(a => caseIds.Contains(a.CaseId)).ExecuteDeleteAsync(ct);
-        await context.Set<DeathCaseFlag>().Where(f => caseIds.Contains(f.CaseId)).ExecuteDeleteAsync(ct);
-        await context.Set<DeathCaseFile>().Where(f => versionIds.Contains(f.VersionId)).ExecuteDeleteAsync(ct);
-        await context.Set<DeathCaseVersion>().Where(v => caseIds.Contains(v.CaseId)).ExecuteDeleteAsync(ct);
-        // Hồ sơ trỏ vào hồ sơ trước của cùng kho: gỡ liên kết rồi mới xóa được.
-        await context.Set<DeathCase>()
-            .Where(c => c.VaultId == vaultId && c.PreviousCaseId != null)
-            .ExecuteUpdateAsync(s => s.SetProperty(c => c.PreviousCaseId, (Guid?)null), ct);
-        await context.Set<DeathCase>().Where(c => c.VaultId == vaultId).ExecuteDeleteAsync(ct);
-
-        // Điểm danh.
-        var planIds = context.Set<HandoverPlan>().Where(p => p.VaultId == vaultId).Select(p => p.Id);
-        var periodIds = context.Set<CheckInPeriod>().Where(p => planIds.Contains(p.PlanId)).Select(p => p.Id);
-        await context.Set<CheckInReminder>().Where(r => periodIds.Contains(r.PeriodId)).ExecuteDeleteAsync(ct);
-        await context.Set<CheckInPeriod>().Where(p => planIds.Contains(p.PlanId)).ExecuteDeleteAsync(ct);
-        await context.Set<CheckInSchedule>().Where(s => planIds.Contains(s.PlanId)).ExecuteDeleteAsync(ct);
+        // Biên bản bàn giao: chữ ký và dòng xóa theo biên bản (cascade).
+        await context.Set<HandoverRecord>().Where(r => r.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
         // Nội dung kho: chỉ định, tài sản trong gói, Executor (trỏ vào người nhận) → gói, tài sản, người nhận.
         var containerIds = context.Set<Container>().Where(c => c.VaultId == vaultId).Select(c => c.Id);

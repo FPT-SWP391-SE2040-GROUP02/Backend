@@ -2,7 +2,7 @@ using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.CheckIn;
+using LegacyVault.IntegrationTests.TestSupport;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
 
@@ -170,7 +170,7 @@ public sealed class HandoverDownloadTests
     [Fact]
     public async Task Prepare_PlanDeathCaseOpen_Throws()
     {
-        data.Plan.Status = PlanStatus.DeathCaseOpen;
+        data.Plan.Status = PlanStatus.HandoverRequested;
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.PrepareAsync(grant.Id, item.Id, CancellationToken.None));
 
