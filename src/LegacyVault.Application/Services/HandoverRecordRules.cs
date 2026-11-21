@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 
@@ -150,5 +152,44 @@ public static class HandoverRecordRules
             seenPairs.Add((beneficiaryId, assetId));
         }
         return null;
+    }
+
+    /// <summary>
+    /// Trước khi chốt: mọi yêu cầu nhận phải đã xét (không còn chờ xét hay chờ bổ sung) và có ít nhất một yêu cầu được
+    /// chấp nhận. Trả câu lỗi, hoặc null khi hợp lệ.
+    /// </summary>
+    public static string? ValidateClaimsForFinalize(List<HandoverClaim> claims)
+    {
+        bool anyAccepted = false;
+        foreach (HandoverClaim claim in claims)
+        {
+            if (claim.Status == HandoverClaimStatus.Submitted || claim.Status == HandoverClaimStatus.SupplementRequested)
+            {
+                return "Còn yêu cầu nhận tài sản chưa xét xong. Xét giấy tờ của mọi người nhận trước khi chốt.";
+            }
+            if (claim.Status == HandoverClaimStatus.Accepted)
+            {
+                anyAccepted = true;
+            }
+        }
+        if (!anyAccepted)
+        {
+            return "Chưa có yêu cầu nhận tài sản nào được chấp nhận.";
+        }
+        return null;
+    }
+
+    /// <summary>Link riêng gửi yêu cầu nhận tài sản: chuỗi ngẫu nhiên 32 byte (base64url) và băm SHA-256 để lưu DB.</summary>
+    public static (string Value, string Hash) CreateRequestToken()
+    {
+        byte[] bytes = RandomNumberGenerator.GetBytes(32);
+        string value = Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        return (value, HashRequestToken(value));
+    }
+
+    public static string HashRequestToken(string value)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(hash);
     }
 }

@@ -45,6 +45,7 @@ public static class HandoverConfig
         // Chọn bộ gửi lúc cần dùng: có Email:Smtp đầy đủ thì gửi thật, không thì chỉ ghi log (như EmailConfig).
         services.AddSingleton<IHandoverInvitationSender>(ChooseSender);
         services.AddSingleton<IPlanActivatedNoticeSender>(ChooseActivatedNoticeSender);
+        services.AddSingleton<IHandoverRequestNoticeSender>(ChooseRequestNoticeSender);
         services.AddSingleton<IHandoverKeySender>(ChooseKeySender);
         return services;
     }
@@ -58,6 +59,17 @@ public static class HandoverConfig
             return ActivatorUtilities.CreateInstance<SmtpHandoverKeySender>(provider);
         }
         return ActivatorUtilities.CreateInstance<LogHandoverKeySender>(provider);
+    }
+
+    /// <summary>Thư báo có yêu cầu nhận tài sản: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
+    private static IHandoverRequestNoticeSender ChooseRequestNoticeSender(IServiceProvider provider)
+    {
+        SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;
+        if (smtp.IsConfigured)
+        {
+            return ActivatorUtilities.CreateInstance<SmtpHandoverRequestNoticeSender>(provider);
+        }
+        return ActivatorUtilities.CreateInstance<LogHandoverRequestNoticeSender>(provider);
     }
 
     /// <summary>Thư báo kích hoạt kế hoạch: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>

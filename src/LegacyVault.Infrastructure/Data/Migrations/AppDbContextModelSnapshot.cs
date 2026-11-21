@@ -187,6 +187,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("varbinary(max)");
 
+                    b.Property<string>("RequestTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .IsConcurrencyToken()
                         .HasColumnType("datetimeoffset");
@@ -201,6 +205,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsFixedLength();
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RequestTokenHash")
+                        .IsUnique()
+                        .HasFilter("[RequestTokenHash] IS NOT NULL");
 
                     b.HasIndex("VaultId", "CitizenIdHash")
                         .IsUnique()
@@ -769,6 +777,58 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("HandoverAccessLogs", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverClaim", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BeneficiaryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReviewReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("RecordId", "BeneficiaryId")
+                        .IsUnique();
+
+                    b.ToTable("HandoverClaims", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverGrant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -866,6 +926,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -902,11 +965,69 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("VaultId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[Status] <> 'Cancelled'");
 
                     b.HasIndex("VerifierUserId", "Status");
 
                     b.ToTable("HandoverRecords", (string)null);
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverRecordFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ClaimId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("EncryptionKeyId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("WrappedDataKey")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordId", "ClaimId");
+
+                    b.ToTable("HandoverRecordFiles", (string)null);
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverRecordLine", b =>
@@ -2476,6 +2597,17 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverClaim", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.HandoverRecord", "Record")
+                        .WithMany("Claims")
+                        .HasForeignKey("RecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Record");
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverGrant", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.HandoverTurn", "Turn")
@@ -2505,6 +2637,17 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasForeignKey("VaultId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverRecordFile", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.HandoverRecord", "Record")
+                        .WithMany("Files")
+                        .HasForeignKey("RecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Record");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverRecordLine", b =>
@@ -2701,6 +2844,10 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverRecord", b =>
                 {
+                    b.Navigation("Claims");
+
+                    b.Navigation("Files");
+
                     b.Navigation("Lines");
 
                     b.Navigation("Signatures");

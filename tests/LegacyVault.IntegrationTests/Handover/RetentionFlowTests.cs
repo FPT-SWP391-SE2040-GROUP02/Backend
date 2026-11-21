@@ -93,6 +93,16 @@ public sealed class RetentionFlowTests : IAsyncLifetime
     /// <summary>Tài khoản đã xác minh có đúng email người nhận (BeneficiaryEmail) để nhận lượt (D2).</summary>
     private async Task<User> AddRecipientAsync()
     {
+        // Người nhận đã có tài khoản từ lúc gửi yêu cầu nhận tài sản thì dùng lại tài khoản đó.
+        User? existing = null;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            existing = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == ApiTestHelpers.BeneficiaryEmail);
+        });
+        if (existing != null)
+        {
+            return existing;
+        }
         User user = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
@@ -134,8 +144,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
 
         User verifier = await VaultTestData.AddVerifierAsync(factory);
         VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vaultId);
-        JsonElement opened = await HandoverRecordTestData.OpenAsync(ClientFor(executor.User), vaultId);
-        Guid recordId = opened.GetProperty("id").GetGuid();
+        Guid recordId = await HandoverRecordTestData.RequestAsync(factory, vaultId);
         // Client phải tạo từ app (có bộ gửi thư giả giữ token mời), không phải từ factory gốc.
         VaultTestData.ExecutorClient assigned = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
         assigned.Client = ClientFor(assigned.User);

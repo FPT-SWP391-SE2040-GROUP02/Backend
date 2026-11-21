@@ -37,6 +37,12 @@ public class HandoverRecordResponse
 
     /// <summary>Chỉ cho luật sư: file phân chia của Chủ kho (các gói sẵn sàng). Rỗng khi Chủ kho chưa lập.</summary>
     public List<OwnerSplitPackageResponse> OwnerSplit { get; set; } = new List<OwnerSplitPackageResponse>();
+
+    /// <summary>Yêu cầu nhận tài sản kèm giấy tờ; chỉ luật sư của biên bản thấy, các vai khác nhận danh sách rỗng.</summary>
+    public List<HandoverClaimResponse> Claims { get; set; } = new List<HandoverClaimResponse>();
+
+    /// <summary>Tệp căn cứ luật sư đính kèm biên bản; chỉ luật sư thấy.</summary>
+    public List<HandoverRecordFileResponse> EvidenceFiles { get; set; } = new List<HandoverRecordFileResponse>();
 }
 
 /// <summary>Một người nhận trong biên bản, kèm tài sản được nhận và tình trạng danh tính, chữ ký.</summary>

@@ -57,20 +57,6 @@ public sealed class ExecutorHandoverController : ControllerBase
         return Ok(record);
     }
 
-    /// <summary>
-    /// Mở bàn giao cho kho: tạo biên bản và phân công một luật sư. Không cần nộp giấy tờ nào.
-    /// Gọi lặp thì trả biên bản đã có.
-    /// </summary>
-    [HttpPost("vaults/{vaultId:guid}/handover-record")]
-    [EnableRateLimiting("plan-setup")]
-    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<HandoverRecordResponse> OpenRecord(Guid vaultId, CancellationToken ct)
-    {
-        return recordService.OpenAsync(vaultId, ct);
-    }
-
     /// <summary>Người thực thi ký biên bản (bước 3). Ký là bấm xác nhận, lưu người ký và thời điểm.</summary>
     [HttpPost("vaults/{vaultId:guid}/handover-record/sign")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
