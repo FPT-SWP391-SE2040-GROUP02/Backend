@@ -41,6 +41,12 @@ public sealed class BeneficiaryConfiguration : IEntityTypeConfiguration<Benefici
 
         // KHÔNG unique: hai CCCD khác nhau có thể trùng 4 số cuối. Dùng để dò trùng CCCD (QUOTA-04) và tìm kiếm.
         builder.HasIndex(b => new { b.VaultId, b.CitizenIdLast4 });
+
+        // Link riêng gửi yêu cầu nhận tài sản: tra theo băm, mỗi link chỉ thuộc một người nhận.
+        builder.Property(b => b.RequestTokenHash).HasMaxLength(128);
+        builder.HasIndex(b => b.RequestTokenHash)
+            .IsUnique()
+            .HasFilter("[RequestTokenHash] IS NOT NULL");
         builder.HasIndex(b => new { b.VaultId, b.CreatedAt });
 
         builder.Property(b => b.CitizenIdHash)

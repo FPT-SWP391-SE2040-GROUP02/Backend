@@ -8,8 +8,10 @@ public enum AuditTargetType
     Asset = 2,
     Container = 3,
     Beneficiary = 4,
+    /// <summary>Không còn dùng (đã bỏ điểm danh); giữ giá trị để đọc nhật ký cũ.</summary>
     CheckIn = 5,
     DeathCase = 6,
+    /// <summary>Không còn dùng (đã bỏ tạm giữ); giữ giá trị để đọc nhật ký cũ.</summary>
     Hold = 7,
     Incident = 8,
     User = 9,

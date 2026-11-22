@@ -15,7 +15,6 @@ namespace LegacyVault.IntegrationTests.Email;
 public sealed class SmtpEmailTests
 {
     // 08:00 UTC = 15:00 giờ Việt Nam (UTC+7).
-
     private static SmtpSettings SettingsFor(FakeSmtpServer server)
     {
         SmtpSettings settings = new SmtpSettings();
@@ -209,4 +208,23 @@ public sealed class SmtpEmailTests
         return services.BuildServiceProvider();
     }
 
+    [Fact]
+    public void AddEmailServices_WithoutCredentials_UsesLogOnlySenders()
+    {
+        using ServiceProvider provider = BuildProvider(new Dictionary<string, string?>());
+
+        Assert.IsType<DevEmailSender>(provider.GetRequiredService<IEmailSender>());
+    }
+
+    [Fact]
+    public void AddEmailServices_WithCredentials_UsesSmtpSenders()
+    {
+        using ServiceProvider provider = BuildProvider(new Dictionary<string, string?>
+        {
+            ["Email:Smtp:UserName"] = "user@gmail.com",
+            ["Email:Smtp:Password"] = "app-password",
+        });
+
+        Assert.IsType<SmtpEmailSender>(provider.GetRequiredService<IEmailSender>());
+    }
 }

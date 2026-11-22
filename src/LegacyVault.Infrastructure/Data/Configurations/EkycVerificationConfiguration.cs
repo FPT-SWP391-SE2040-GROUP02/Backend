@@ -22,10 +22,10 @@ public sealed class EkycVerificationConfiguration : IEntityTypeConfiguration<Eky
             .HasConversion<string>()
             .HasMaxLength(32);
 
-        // Rỗng khi OCR không đọc được số; còn lại đúng 4 chữ số.
-        builder.Property(v => v.CitizenIdLast4)
+        // Rỗng khi OCR không đọc được số; còn lại là số CCCD đầy đủ.
+        builder.Property(v => v.CitizenId)
             .IsRequired()
-            .HasMaxLength(4)
+            .HasMaxLength(12)
             .IsUnicode(false);
 
         // secrets.token_urlsafe(24) của dịch vụ eKYC dài 32 ký tự.

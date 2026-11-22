@@ -17,12 +17,9 @@ public sealed class DevToolsService(
     IDevToolsRepository repository,
     IAuditLogRepository auditLogs,
     IUnitOfWork unitOfWork,
-    IEntitlementExpiryJob entitlementExpiryJob,
     TimeProvider timeProvider,
     IEkycOptions ekycOptions,
-    IAssetContentStore contentStore,
-    IHandoverRepository handover,
-    IHandoverJob handoverJob) : IDevToolsService
+    IAssetContentStore contentStore) : IDevToolsService
 {
     /// <summary>Đủ cho dữ liệu thử trên máy dev; ô chọn không cần phân trang.</summary>
     private const int MaxVaults = 200;
@@ -42,100 +39,6 @@ public sealed class DevToolsService(
             items.Add(item);
         }
         return items;
-    }
-
-    public async Task<DevClockResponse> GetClockAsync(Guid vaultId, CancellationToken ct)
-    {
-        await RequireAdminAsync(ct);
-        Vault vault = await LoadVaultAsync(vaultId, ct);
-        return await BuildClockAsync(vault, ct);
-    }
-
-    public async Task<DevClockResponse> TimeTravelAsync(Guid vaultId, DevTimeTravelRequest request, CancellationToken ct)
-    {
-        Guid adminId = await RequireAdminAsync(ct);
-        string key = request.Milestone.Trim().ToUpperInvariant();
-        if (!DevToolsRules.IsKnownMilestone(key))
-        {
-            throw ValidationErrors.For("milestone", "Mốc cần tua không hợp lệ.");
-        }
-
-        Vault vault = await LoadVaultAsync(vaultId, ct);
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        DateTimeOffset past = now - DevToolsRules.PastMargin;
-        AuditTargetType targetType;
-        Guid targetId;
-        bool runEntitlementExpiry = false;
-        List<Guid> turnsToExpire = new List<Guid>();
-
-        if (key == DevToolsRules.ServiceExpired)
-        {
-            // OPLAN-01: dời hạn dịch vụ về quá khứ; job hết hạn quyết định chuyển sang ân hạn như khi chạy nền.
-            VaultEntitlement entitlement = vault.Entitlement;
-            EnsureAvailable(DevToolsRules.EvaluateServiceExpired(entitlement));
-            if (entitlement.ServiceExpiresAt!.Value > past)
-            {
-                entitlement.ServiceExpiresAt = past;
-            }
-            entitlement.UpdatedAt = now;
-            targetType = AuditTargetType.Vault;
-            targetId = vault.Id;
-            runEntitlementExpiry = true;
-        }
-        else
-        {
-            // Mốc cuối: key đã được kiểm là mốc hợp lệ nên chỉ còn RecipientDecisionEnded.
-            // Dời hạn quyết định (7 ngày sau khi xác nhận danh tính) của mọi lượt đang chờ về quá khứ;
-            // job hết hạn quyết định của hệ thống chuyển lượt sang DECISION_EXPIRED và đóng kế hoạch nếu mọi lượt đã xong.
-            List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
-            EnsureAvailable(DevToolsRules.EvaluateRecipientDecision(turns, now));
-            foreach (HandoverTurn turn in turns)
-            {
-                if (turn.Status == HandoverTurnStatus.ReadyToAccept && turn.DecisionDeadline != null)
-                {
-                    if (turn.DecisionDeadline.Value > past)
-                    {
-                        turn.DecisionDeadline = past;
-                        turn.UpdatedAt = now;
-                    }
-                    turnsToExpire.Add(turn.Id);
-                }
-            }
-            targetType = AuditTargetType.Vault;
-            targetId = vault.Id;
-        }
-        auditLogs.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.DevTimeTravel,
-            targetType, targetId, null, AuditOutcome.Succeeded, key, now));
-        await unitOfWork.SaveChangesAsync(ct);
-
-        if (runEntitlementExpiry)
-        {
-            // Chạy ngay job hết hạn cho kho này, giống job nền, để màn hình thấy kho đã sang ân hạn.
-            await entitlementExpiryJob.ProcessVaultAsync(vault.Id, ct);
-        }
-        foreach (Guid turnId in turnsToExpire)
-        {
-            // Chạy ngay job hết hạn quyết định cho từng lượt, giống job nền, để màn hình thấy kết quả liền.
-            await handoverJob.ProcessDecisionExpiryAsync(turnId, ct);
-        }
-
-        Vault refreshed = await LoadVaultAsync(vault.Id, ct);
-        return await BuildClockAsync(refreshed, ct);
-    }
-
-    public async Task<DevClockResponse> ResetClockAsync(Guid vaultId, CancellationToken ct)
-    {
-        Guid adminId = await RequireAdminAsync(ct);
-        Vault vault = await LoadVaultAsync(vaultId, ct);
-        AuditAction? latest = await repository.FindLatestClockActionAsync(vault.Id, ct);
-        if (latest == AuditAction.DevTimeTravel)
-        {
-            DateTimeOffset now = timeProvider.GetUtcNow();
-            auditLogs.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.DevClockReset,
-                AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
-            await unitOfWork.SaveChangesAsync(ct);
-        }
-        return await BuildClockAsync(vault, ct);
     }
 
     public async Task<DevEkycResetResponse> ResetEkycAsync(DevEkycResetRequest request, CancellationToken ct)
@@ -392,38 +295,6 @@ public sealed class DevToolsService(
             return true;
         }
         return false;
-    }
-
-    private async Task<DevClockResponse> BuildClockAsync(Vault vault, CancellationToken ct)
-    {
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        AuditAction? latestClockAction = await repository.FindLatestClockActionAsync(vault.Id, ct);
-
-        DevClockResponse response = new DevClockResponse();
-        response.VaultId = vault.Id;
-        response.PlanStatus = vault.Plan.Status.ToApiString();
-        response.ClockState = DevToolsRules.GetClockState(latestClockAction);
-        response.Milestones.Add(DevToolsRules.EvaluateServiceExpired(vault.Entitlement));
-        List<HandoverTurn> turns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
-        response.Milestones.Add(DevToolsRules.EvaluateRecipientDecision(turns, now));
-        return response;
-    }
-
-    private static void EnsureAvailable(DevMilestoneResponse state)
-    {
-        if (state.State == DevToolsRules.Available)
-        {
-            return;
-        }
-        string message = state.Note;
-        if (state.State == DevToolsRules.Passed)
-        {
-            message = "Kho đã qua mốc này.";
-        }
-        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["milestone"] = state.Key;
-        extensions["state"] = state.State;
-        throw new AppException(AppErrorType.Conflict, ErrorCode.DevToolNotAllowed, message, extensions);
     }
 
     private async Task<Vault> LoadVaultAsync(Guid vaultId, CancellationToken ct)

@@ -4,7 +4,6 @@ using System.Text.Json;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -157,39 +156,6 @@ public sealed class EntitlementExpiryTests : IAsyncLifetime
             Assert.Equal(EntitlementStatus.Free,
                 (await db.VaultEntitlements.SingleAsync(e => e.VaultId == freeVaultId)).Status);
         });
-    }
-
-    [SqlFact]
-    public async Task Oplan01_DevTools_ServiceExpiredMilestone_MovesVaultToGrace()
-    {
-        // Chuẩn bị: kho XS còn hạn 1 năm, Admin mở công cụ tua thời gian
-        (HttpClient _, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await SetServiceExpiresAtAsync(vaultId, DateTimeOffset.UtcNow.AddDays(365));
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        HttpClient adminClient = factory.CreateClient();
-        ApiTestHelpers.AuthorizeAs(adminClient, factory.Services, admin);
-        string clockUrl = $"/api/v1/admin/dev-tools/vaults/{vaultId}/clock";
-
-        JsonElement before = await ApiTestHelpers.ReadJsonAsync(await adminClient.GetAsync(clockUrl));
-        Assert.Equal("AVAILABLE", FindMilestone(before, "SERVICE_EXPIRED").GetProperty("state").GetString());
-
-        // Hành động
-        HttpResponseMessage travel = await adminClient.PostAsJsonAsync(
-            $"/api/v1/admin/dev-tools/vaults/{vaultId}/time-travel", new { milestone = "SERVICE_EXPIRED" });
-
-        // Kiểm tra: kho sang ân hạn ngay, mốc hiện là đã qua, tua lại bị từ chối
-        Assert.Equal(HttpStatusCode.OK, travel.StatusCode);
-        JsonElement after = await ApiTestHelpers.ReadJsonAsync(travel);
-        Assert.Equal("PASSED", FindMilestone(after, "SERVICE_EXPIRED").GetProperty("state").GetString());
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            VaultEntitlement entitlement = await db.VaultEntitlements.SingleAsync(e => e.VaultId == vaultId);
-            Assert.Equal(EntitlementStatus.GraceReadOnly, entitlement.Status);
-            Assert.True(entitlement.ServiceExpiresAt <= DateTimeOffset.UtcNow);
-        });
-        HttpResponseMessage again = await adminClient.PostAsJsonAsync(
-            $"/api/v1/admin/dev-tools/vaults/{vaultId}/time-travel", new { milestone = "SERVICE_EXPIRED" });
-        await ApiTestHelpers.AssertProblemAsync(again, HttpStatusCode.Conflict, "DEV_TOOL_NOT_ALLOWED");
     }
 
     private static JsonElement FindMilestone(JsonElement clock, string key)

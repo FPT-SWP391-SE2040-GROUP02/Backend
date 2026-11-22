@@ -170,7 +170,7 @@ public sealed class HandoverDownloadTests
     [Fact]
     public async Task Prepare_PlanDeathCaseOpen_Throws()
     {
-        data.Plan.Status = PlanStatus.DeathCaseOpen;
+        data.Plan.Status = PlanStatus.HandoverRequested;
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.PrepareAsync(grant.Id, item.Id, CancellationToken.None));
 

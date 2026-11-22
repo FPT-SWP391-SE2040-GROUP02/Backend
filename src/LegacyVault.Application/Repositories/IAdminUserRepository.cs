@@ -15,15 +15,12 @@ public interface IAdminUserRepository
     /// <summary>Số Admin đang hoạt động (luôn phải còn ít nhất một).</summary>
     Task<int> CountActiveAdminsAsync(CancellationToken ct);
 
-    /// <summary>Hồ sơ chứng tử đang chờ Verifier (đang xét hoặc cần bổ sung) mà chưa có phân công còn hiệu lực.</summary>
+    /// <summary>Biên bản bàn giao chưa hoàn tất mà luật sư được giao không còn hoạt động (cần Admin giao lại).</summary>
     Task<int> CountCasesWithoutVerifierAsync(CancellationToken ct);
 
-    /// <summary>Hồ sơ đang xét hoặc cần bổ sung của Verifier (phân công còn hiệu lực), hạn gần nhất trước.</summary>
-    Task<List<(Guid CaseId, DeathCaseStatus Status, DateTimeOffset DueAt)>> ListOpenAssignmentsAsync(
+    /// <summary>Biên bản bàn giao chưa hoàn tất của một luật sư, mở sớm nhất trước.</summary>
+    Task<List<(Guid CaseId, HandoverRecordStatus Status, DateTimeOffset DueAt)>> ListOpenAssignmentsAsync(
         Guid verifierUserId, CancellationToken ct);
-
-    /// <summary>Các quyết định gần nhất của Verifier, mới nhất trước.</summary>
-    Task<List<DeathCaseDecision>> ListRecentDecisionsAsync(Guid verifierUserId, int take, CancellationToken ct);
 
     /// <summary>Các dòng nhật ký gần nhất do tài khoản thực hiện, mới nhất trước.</summary>
     Task<List<AuditLog>> ListRecentAuditByActorAsync(Guid userId, int take, CancellationToken ct);

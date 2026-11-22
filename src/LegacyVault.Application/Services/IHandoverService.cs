@@ -27,13 +27,8 @@ public interface IHandoverService
 
     Task<HandoverTurnResponse> GetTurnAsync(Guid turnId, CancellationToken ct);
 
-    /// <summary>Đồng ý nhận: tạo grant 30 ngày. Gọi lặp trả lại cùng grant.</summary>
-    Task<HandoverTurnResponse> AcceptAsync(Guid turnId, CancellationToken ct);
-
     /// <summary>Người nhận xác nhận đã nhận đủ tài sản sau khi tải.</summary>
     Task<HandoverTurnResponse> ConfirmReceivedAllAsync(Guid turnId, CancellationToken ct);
-
-    Task<HandoverTurnResponse> DeclineAsync(Guid turnId, CancellationToken ct);
 
     /// <summary>
     /// Nhập khóa mở gói do Người thực thi đưa. Đúng thì ghi nhận (gọi lặp an toàn); sai thì 403 HANDOVER_KEY_INVALID kèm

@@ -26,7 +26,7 @@ public sealed class HandoverProgressServiceTests
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly HandoverProgressService service;
     private readonly Guid executorUserId = Guid.NewGuid();
-    private readonly DeathCase deathCase;
+    private readonly HandoverRecord record;
 
     public HandoverProgressServiceTests()
     {
@@ -39,11 +39,12 @@ public sealed class HandoverProgressServiceTests
         executor.Status = ExecutorStatus.Accepted;
         executors.Executors.Add(executor);
 
-        deathCase = new DeathCase();
-        deathCase.VaultId = data.Vault.Id;
-        deathCase.PlanId = data.Plan.Id;
-        deathCase.Status = DeathCaseStatus.ApprovedForHandover;
-        reader.Cases.Add(deathCase);
+        record = new HandoverRecord();
+        record.VaultId = data.Vault.Id;
+        record.PlanId = data.Plan.Id;
+        record.Status = HandoverRecordStatus.IdentityCheck;
+        record.FinalizedAt = Now;
+        reader.Records.Add(record);
 
         service = new HandoverProgressService(
             currentUser, vaults, executors, reader, beneficiaries, protector, new FixedTimeProvider(Now));
@@ -67,10 +68,10 @@ public sealed class HandoverProgressServiceTests
         reader.Turns.Add(accepted);
         reader.Turns.Add(waiting);
         reader.FirstDownloads[accepted.Items[0].Id] = Now.AddHours(1);
-        reader.CitizenIdLast4[first.BeneficiaryId] = "1111";
+        reader.CitizenIds[first.BeneficiaryId] = "001099001111";
 
         // Hành động
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         // Kiểm tra
         Assert.True(result.HandoverStarted);
@@ -81,7 +82,7 @@ public sealed class HandoverProgressServiceTests
 
         HandoverProgressTurnResponse acceptedTurn = result.Turns[0];
         Assert.Equal("HANDOVER_COMMITTED", acceptedTurn.Status);
-        Assert.Equal("1111", acceptedTurn.BeneficiaryCitizenIdLast4);
+        Assert.Equal("001099001111", acceptedTurn.BeneficiaryCitizenId);
         Assert.Equal(first.BeneficiaryId, acceptedTurn.BeneficiaryId);
         Assert.Equal(second.BeneficiaryId, result.Turns[1].BeneficiaryId);
         Assert.Equal("ACTIVE", acceptedTurn.GrantStatus);
@@ -123,7 +124,7 @@ public sealed class HandoverProgressServiceTests
         RegisterBeneficiary(designation, "0901234567");
         reader.Turns.Add(data.BuildTurn(container, designation, status, "d1", null));
 
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         Assert.Equal("Nguyễn Văn Một", result.Turns[0].BeneficiaryFullName);
         Assert.Equal("0901234567", result.Turns[0].BeneficiaryPhone);
@@ -142,7 +143,7 @@ public sealed class HandoverProgressServiceTests
         RegisterBeneficiary(designation, "0911111111");
         reader.Turns.Add(data.BuildTurn(container, designation, status, "e1", null));
 
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         Assert.Null(result.Turns[0].BeneficiaryFullName);
         Assert.Null(result.Turns[0].BeneficiaryPhone);
@@ -159,7 +160,7 @@ public sealed class HandoverProgressServiceTests
         protector.Failing = true;
         reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "f1", null));
 
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         Assert.Null(result.Turns[0].BeneficiaryFullName);
         Assert.Null(result.Turns[0].BeneficiaryPhone);
@@ -179,12 +180,17 @@ public sealed class HandoverProgressServiceTests
         turn.KeyVerifiedAt = Now.AddDays(-2);
         turn.ReceivedAllAt = Now.AddDays(-1);
         reader.Turns.Add(turn);
-        HandoverDocumentTimes times = new HandoverDocumentTimes();
-        times.RecipientSignedAt = Now.AddDays(-3).AddHours(-1);
-        times.VerifierSignedAt = Now.AddDays(-3);
-        reader.DocumentTimes[turn.Id] = times;
+        // Người nhận ký biên bản, rồi biên bản đủ chữ ký ba bên.
+        HandoverRecordSignature signature = new HandoverRecordSignature();
+        signature.RecordId = record.Id;
+        signature.RevisionNo = record.RevisionNo;
+        signature.Role = HandoverSignerRole.Recipient;
+        signature.BeneficiaryId = designation.BeneficiaryId;
+        signature.SignedAt = Now.AddDays(-3).AddHours(-1);
+        record.Signatures.Add(signature);
+        record.CompletedAt = Now.AddDays(-3);
 
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         HandoverProgressTurnResponse turnResponse = result.Turns[0];
         Assert.Equal(Now.AddDays(-5), turnResponse.InvitationSentAt);
@@ -202,7 +208,7 @@ public sealed class HandoverProgressServiceTests
         Designation designation = data.Designate(container, "Người Sáu", null);
         reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "h1", null));
 
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         Assert.Null(result.Turns[0].InvitationSentAt);
         Assert.Null(result.Turns[0].RecipientSignedAt);
@@ -233,7 +239,7 @@ public sealed class HandoverProgressServiceTests
             index++;
         }
 
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         Assert.Equal(7, result.Summary.TotalTurns);
         Assert.Equal(1, result.Summary.WaitingResponse);
@@ -253,25 +259,22 @@ public sealed class HandoverProgressServiceTests
         reader.Turns.Add(turn);
         reader.FirstDownloads[turn.Items[0].Id] = Now;
 
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         Assert.False(result.Turns[0].Items[0].Downloaded);
         Assert.Equal(0, result.Turns[0].DownloadedItems);
     }
 
-    [Theory]
-    [InlineData(DeathCaseStatus.Draft)]
-    [InlineData(DeathCaseStatus.UnderReview)]
-    [InlineData(DeathCaseStatus.SupplementRequired)]
-    [InlineData(DeathCaseStatus.Rejected)]
-    public async Task Progress_CaseNotApproved_ReturnsNotStartedWithoutTurns(DeathCaseStatus status)
+    [Fact]
+    public async Task Progress_RecordNeverFinalized_ReturnsNotStartedWithoutTurns()
     {
-        deathCase.Status = status;
+        record.Status = HandoverRecordStatus.Drafting;
+        record.FinalizedAt = null;
         Container container = data.AddContainer("Gói D", ContainerStatus.Ready, 1);
         Designation designation = data.Designate(container, "Người Bốn", null);
         reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "t4", null));
 
-        HandoverProgressResponse result = await service.GetProgressAsync(deathCase.Id, CancellationToken.None);
+        HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         Assert.False(result.HandoverStarted);
         Assert.Empty(result.Turns);
@@ -285,9 +288,9 @@ public sealed class HandoverProgressServiceTests
         currentUser.UserId = data.Owner.Id;
         executors.Executors[0].UserId = data.Owner.Id;
 
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.GetProgressAsync(deathCase.Id, CancellationToken.None));
+        AppException error = await Assert.ThrowsAsync<AppException>(() => service.GetProgressAsync(record.Id, CancellationToken.None));
 
-        Assert.Equal(ErrorCode.DeathCaseNotFound, error.Code);
+        Assert.Equal(ErrorCode.HandoverNotFound, error.Code);
         Assert.Equal(AppErrorType.NotFound, error.Type);
     }
 
@@ -296,9 +299,9 @@ public sealed class HandoverProgressServiceTests
     {
         currentUser.UserId = Guid.NewGuid();
 
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.GetProgressAsync(deathCase.Id, CancellationToken.None));
+        AppException error = await Assert.ThrowsAsync<AppException>(() => service.GetProgressAsync(record.Id, CancellationToken.None));
 
-        Assert.Equal(ErrorCode.DeathCaseNotFound, error.Code);
+        Assert.Equal(ErrorCode.HandoverNotFound, error.Code);
     }
 
     [Fact]
@@ -306,7 +309,7 @@ public sealed class HandoverProgressServiceTests
     {
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.GetProgressAsync(Guid.NewGuid(), CancellationToken.None));
 
-        Assert.Equal(ErrorCode.DeathCaseNotFound, error.Code);
+        Assert.Equal(ErrorCode.HandoverNotFound, error.Code);
     }
 
     [Fact]
@@ -358,31 +361,29 @@ public sealed class FakeProgressExecutorReader : IExecutorReader
     }
 }
 
-/// <summary>Nguồn dữ liệu tiến độ giả: hồ sơ, lượt, lần tải đầu và 4 số cuối CCCD nằm trong bộ nhớ.</summary>
+/// <summary>Nguồn dữ liệu tiến độ giả: biên bản, lượt, lần tải đầu và 4 số cuối CCCD nằm trong bộ nhớ.</summary>
 public sealed class FakeHandoverProgressReader : IHandoverProgressReader
 {
-    public List<DeathCase> Cases { get; } = new List<DeathCase>();
+    public List<HandoverRecord> Records { get; } = new List<HandoverRecord>();
 
     public List<HandoverTurn> Turns { get; } = new List<HandoverTurn>();
 
     public Dictionary<Guid, DateTimeOffset> FirstDownloads { get; } = new Dictionary<Guid, DateTimeOffset>();
 
-    public Dictionary<Guid, string> CitizenIdLast4 { get; } = new Dictionary<Guid, string>();
-
-    public Dictionary<Guid, HandoverDocumentTimes> DocumentTimes { get; } = new Dictionary<Guid, HandoverDocumentTimes>();
+    public Dictionary<Guid, string> CitizenIds { get; } = new Dictionary<Guid, string>();
 
     public int TurnQueryCount { get; private set; }
 
-    public Task<DeathCase?> FindCaseAsync(Guid caseId, CancellationToken ct)
+    public Task<HandoverRecord?> FindRecordAsync(Guid recordId, CancellationToken ct)
     {
-        foreach (DeathCase deathCase in Cases)
+        foreach (HandoverRecord record in Records)
         {
-            if (deathCase.Id == caseId)
+            if (record.Id == recordId)
             {
-                return Task.FromResult<DeathCase?>(deathCase);
+                return Task.FromResult<HandoverRecord?>(record);
             }
         }
-        return Task.FromResult<DeathCase?>(null);
+        return Task.FromResult<HandoverRecord?>(null);
     }
 
     public Task<List<HandoverTurn>> FindTurnsWithItemsAsync(Guid planId, CancellationToken ct)
@@ -393,6 +394,11 @@ public sealed class FakeHandoverProgressReader : IHandoverProgressReader
         {
             if (turn.PlanId == planId)
             {
+                // Lượt dựng bằng HandoverTestData chưa gắn biên bản: coi như thuộc biên bản đầu tiên của kho.
+                if (turn.RecordId == null && Records.Count > 0)
+                {
+                    turn.RecordId = Records[0].Id;
+                }
                 result.Add(turn);
             }
         }
@@ -404,13 +410,8 @@ public sealed class FakeHandoverProgressReader : IHandoverProgressReader
         return Task.FromResult(FirstDownloads);
     }
 
-    public Task<Dictionary<Guid, HandoverDocumentTimes>> FindDocumentTimesAsync(List<Guid> turnIds, CancellationToken ct)
+    public Task<Dictionary<Guid, string>> FindCitizenIdsAsync(List<Guid> beneficiaryIds, CancellationToken ct)
     {
-        return Task.FromResult(DocumentTimes);
-    }
-
-    public Task<Dictionary<Guid, string>> FindCitizenIdLast4Async(List<Guid> beneficiaryIds, CancellationToken ct)
-    {
-        return Task.FromResult(CitizenIdLast4);
+        return Task.FromResult(CitizenIds);
     }
 }

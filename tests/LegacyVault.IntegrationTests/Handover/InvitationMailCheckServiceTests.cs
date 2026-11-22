@@ -4,7 +4,6 @@ using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.TestSupport;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using Xunit;
@@ -20,7 +19,7 @@ public sealed class InvitationMailCheckServiceTests
     private readonly FakeUserRepository users = new FakeUserRepository();
     private readonly FakeVaultRepository vaults = new FakeVaultRepository();
     private readonly FakeHandoverRepository repository = new FakeHandoverRepository();
-    private readonly FakeDeathCaseRepository deathCases = new FakeDeathCaseRepository();
+    private readonly FakeHandoverRecordRepository records = new FakeHandoverRecordRepository();
     private readonly FakeEkycBeneficiaryRepository beneficiaries = new FakeEkycBeneficiaryRepository();
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly InvitationMailCheckService service;
@@ -41,18 +40,20 @@ public sealed class InvitationMailCheckServiceTests
         token = "token-" + Guid.NewGuid().ToString("N");
         repository.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, token, null));
 
-        DeathCase deathCase = new DeathCase { VaultId = data.Vault.Id, Status = DeathCaseStatus.ApprovedForHandover };
-        deathCases.Cases.Add(deathCase);
-        caseCode = DeathCaseRules.CaseCode(deathCase.Id);
+        HandoverRecord record = new HandoverRecord();
+        record.VaultId = data.Vault.Id;
+        record.Status = HandoverRecordStatus.IdentityCheck;
+        records.Records.Add(record);
+        caseCode = HandoverRecordRules.CaseCode(record.Id);
 
         service = new InvitationMailCheckService(
-            repository, new FakeTokenService(), deathCases, beneficiaries, protector, vaults, users);
+            repository, new FakeTokenService(), records, beneficiaries, protector, vaults, users);
     }
 
     [Fact]
-    public async Task Check_RightCodeAndLast4_VerifiesAndReturnsPackageAndOwnerName()
+    public async Task Check_RightCodeAndCitizenId_VerifiesAndReturnsPackageAndOwnerName()
     {
-        InvitationMailCheckResponse response = await service.CheckAsync(token, caseCode, "1234", CancellationToken.None);
+        InvitationMailCheckResponse response = await service.CheckAsync(token, caseCode, "012345671234", CancellationToken.None);
 
         Assert.True(response.Verified);
         Assert.Equal("Gói gia đình", response.ContainerName);
@@ -63,15 +64,15 @@ public sealed class InvitationMailCheckServiceTests
     public async Task Check_CaseCodeIsNotCaseSensitive()
     {
         InvitationMailCheckResponse response = await service.CheckAsync(
-            token, "  " + caseCode.ToLowerInvariant() + " ", "1234", CancellationToken.None);
+            token, "  " + caseCode.ToLowerInvariant() + " ", "012345671234", CancellationToken.None);
 
         Assert.True(response.Verified);
     }
 
     [Fact]
-    public async Task Check_WrongLast4_FailsAndLeaksNothingButAttemptsLeft()
+    public async Task Check_WrongCitizenId_FailsAndLeaksNothingButAttemptsLeft()
     {
-        InvitationMailCheckResponse response = await service.CheckAsync(token, caseCode, "9999", CancellationToken.None);
+        InvitationMailCheckResponse response = await service.CheckAsync(token, caseCode, "012345679999", CancellationToken.None);
 
         Assert.False(response.Verified);
         Assert.Equal(InvitationMailCheckService.MaxAttempts - 1, response.AttemptsLeft);
@@ -82,7 +83,7 @@ public sealed class InvitationMailCheckServiceTests
     [Fact]
     public async Task Check_WrongCaseCode_Fails()
     {
-        InvitationMailCheckResponse response = await service.CheckAsync(token, "ABCD1234", "1234", CancellationToken.None);
+        InvitationMailCheckResponse response = await service.CheckAsync(token, "ABCD1234", "012345671234", CancellationToken.None);
 
         Assert.False(response.Verified);
     }
@@ -91,7 +92,7 @@ public sealed class InvitationMailCheckServiceTests
     public async Task Check_UnknownToken_ThrowsInvitationInvalid()
     {
         AppException error = await Assert.ThrowsAsync<AppException>(
-            () => service.CheckAsync("khong-co", caseCode, "1234", CancellationToken.None));
+            () => service.CheckAsync("khong-co", caseCode, "012345671234", CancellationToken.None));
 
         Assert.Equal(ErrorCode.HandoverInvitationInvalid, error.Code);
         Assert.Equal(AppErrorType.NotFound, error.Type);
@@ -106,7 +107,7 @@ public sealed class InvitationMailCheckServiceTests
         }
 
         AppException error = await Assert.ThrowsAsync<AppException>(
-            () => service.CheckAsync(token, caseCode, "1234", CancellationToken.None));
+            () => service.CheckAsync(token, caseCode, "012345671234", CancellationToken.None));
 
         Assert.Equal(ErrorCode.HandoverMailCheckLocked, error.Code);
         Assert.Equal(AppErrorType.Locked, error.Type);
@@ -116,7 +117,7 @@ public sealed class InvitationMailCheckServiceTests
     public async Task Check_RightAnswerResetsTheFailureCount()
     {
         await service.CheckAsync(token, caseCode, "0000", CancellationToken.None);
-        await service.CheckAsync(token, caseCode, "1234", CancellationToken.None);
+        await service.CheckAsync(token, caseCode, "012345671234", CancellationToken.None);
 
         InvitationMailCheckResponse response = await service.CheckAsync(token, caseCode, "0000", CancellationToken.None);
 

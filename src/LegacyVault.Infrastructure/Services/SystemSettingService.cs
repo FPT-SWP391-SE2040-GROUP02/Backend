@@ -489,11 +489,8 @@ public sealed class SystemSettingService : ISystemSettingService
     {
         var defaults = new List<SystemSetting>
         {
-            // Điểm danh (Check-in)
-
             // Bàn giao & Lưu trữ (Handover & Retention)
             new() { Key = "Handover.ResponseWindowDays", Value = "5", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn người nhận phản hồi lời mời bàn giao di sản (ngày)" },
-            new() { Key = "Handover.DecisionWindowDays", Value = "7", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn người nhận quyết định nhận hoặc từ chối (ngày)" },
             new() { Key = "Handover.GrantWindowDays", Value = "30", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn được cấp quyền xem/tải tài sản sau khi nhận (ngày)" },
             new() { Key = "Handover.RetentionWindowDays", Value = "30", DataType = "NUMBER", Category = "Handover", Description = "Thời hạn lưu trữ dữ liệu trước khi xóa hoàn toàn (ngày)" },
             new() { Key = "Handover.ResendCooldownMinutes", Value = "15", DataType = "NUMBER", Category = "Handover", Description = "Khoảng cách tối thiểu giữa hai lần gửi lại lời mời (phút)" },
@@ -501,12 +498,6 @@ public sealed class SystemSettingService : ISystemSettingService
             // Người thực thi (Executor)
             new() { Key = "Executor.InvitationExpiresDays", Value = "7", DataType = "NUMBER", Category = "Executor", Description = "Thời hạn hiệu lực của lời mời Người thực thi (ngày)" },
             new() { Key = "Executor.ReminderAfterHours", Value = "48", DataType = "NUMBER", Category = "Executor", Description = "Thời gian gửi email nhắc nhở sau khi mời Người thực thi (giờ)" },
-
-            // Hồ sơ chứng tử (DeathCase)
-            new() { Key = "DeathCase.SupplementDueDays", Value = "7", DataType = "NUMBER", Category = "DeathCase", Description = "Thời hạn Người thực thi bổ sung hồ sơ chứng tử (ngày)" },
-            new() { Key = "DeathCase.MaxFilesPerVersion", Value = "10", DataType = "NUMBER", Category = "DeathCase", Description = "Số lượng tệp tối đa tải lên trong một bản hồ sơ chứng tử" },
-            new() { Key = "DeathCase.MaxFileSizeMb", Value = "20", DataType = "NUMBER", Category = "DeathCase", Description = "Dung lượng tối đa của một tệp hồ sơ chứng tử (MiB)" },
-            new() { Key = "DeathCase.ReviewDueHours", Value = "48", DataType = "NUMBER", Category = "DeathCase", Description = "Thời hạn Người xét duyệt phải hoàn tất thẩm định (giờ)" },
 
             // Giới hạn chống lạm dụng & Quota (Limits)
             new() { Key = "Limits.MaxUploadsPerHour", Value = "60", DataType = "NUMBER", Category = "Limits", Description = "Số lần tải lên tối đa mỗi giờ cho một tài khoản" },

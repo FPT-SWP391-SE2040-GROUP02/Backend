@@ -14,7 +14,7 @@ public static class EkycMappings
             Purpose = verification.Purpose.ToApiString(),
             BackSideChecked = verification.BackSideChecked,
             VerificationId = verification.Id,
-            CitizenIdLast4 = verification.CitizenIdLast4,
+            CitizenId = verification.CitizenId,
             FaceMatchScore = verification.FaceMatchScore,
             MatchThreshold = matchThreshold,
             SpoofCheckPassed = verification.SpoofCheckPassed,
@@ -34,7 +34,7 @@ public static class EkycMappings
         response.Purpose = verification.Purpose.ToApiString();
         response.BackSideChecked = verification.BackSideChecked;
         response.VerificationId = verification.Id;
-        response.CitizenIdLast4 = verification.CitizenIdLast4;
+        response.CitizenId = verification.CitizenId;
         response.FaceMatchScore = verification.FaceMatchScore;
         response.MatchThreshold = matchThreshold;
         response.SpoofCheckPassed = verification.SpoofCheckPassed;

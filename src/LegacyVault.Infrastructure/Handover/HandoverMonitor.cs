@@ -10,7 +10,7 @@ namespace LegacyVault.Infrastructure.Handover;
 /// Vòng lặp nền gọi IHandoverJob theo chu kỳ để xử lý lượt và grant quá hạn.
 /// </summary>
 /// <remarks>
-/// Cùng mẫu với CheckInMonitor: chờ hết một chu kỳ rồi mới quét; mỗi mục một DI scope và try/catch riêng;
+/// Chờ hết một chu kỳ rồi mới quét; mỗi mục một DI scope và try/catch riêng;
 /// chỉ log kiểu exception và id.
 /// </remarks>
 public sealed class HandoverMonitor : BackgroundService

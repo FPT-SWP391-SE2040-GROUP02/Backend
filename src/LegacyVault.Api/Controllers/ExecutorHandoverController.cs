@@ -1,6 +1,5 @@
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
-using LegacyVault.Api.DeathCases;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,10 +7,12 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace LegacyVault.Api.Controllers;
 
-/// <summary>Executor theo dõi tiến độ bàn giao của hồ sơ chứng tử (docs/api-contract.md, mục tiến độ bàn giao).</summary>
+/// <summary>
+/// Người thực thi: mở bàn giao, xem và ký biên bản bàn giao, theo dõi tiến độ, gửi mã nhận cho người nhận.
+/// </summary>
 /// <remarks>
-/// Controller riêng cùng tiền tố với ExecutorDeathCasesController để không sửa controller đó.
-/// Người gọi phải là Executor đang hiệu lực của kho và không phải Owner; không đủ điều kiện thì 404.
+/// Người gọi phải là Người thực thi đang hiệu lực của kho và không phải Chủ kho; không đủ điều kiện thì 404.
+/// Người thực thi chỉ giữ và giao tài sản theo biên bản, không sửa được biên bản.
 /// </remarks>
 [ApiController]
 [Authorize]
@@ -19,54 +20,71 @@ namespace LegacyVault.Api.Controllers;
 [Produces("application/json")]
 public sealed class ExecutorHandoverController : ControllerBase
 {
+    private readonly IHandoverRecordService recordService;
     private readonly IHandoverProgressService handoverProgressService;
     private readonly IHandoverKeyMailService handoverKeyMailService;
-    private readonly IExecutorHandoverPaperService declinePaperService;
 
     public ExecutorHandoverController(
+        IHandoverRecordService recordService,
         IHandoverProgressService handoverProgressService,
-        IHandoverKeyMailService handoverKeyMailService,
-        IExecutorHandoverPaperService declinePaperService)
+        IHandoverKeyMailService handoverKeyMailService)
     {
-        this.declinePaperService = declinePaperService;
+        this.recordService = recordService;
         this.handoverKeyMailService = handoverKeyMailService;
         this.handoverProgressService = handoverProgressService;
     }
 
+    /// <summary>Các kho tôi đang là Người thực thi, kèm tình trạng biên bản bàn giao.</summary>
+    [HttpGet("vaults")]
+    [ProducesResponseType<List<ExecutorVaultResponse>>(StatusCodes.Status200OK)]
+    public Task<List<ExecutorVaultResponse>> GetMyVaults(CancellationToken ct)
+    {
+        return recordService.ListMyVaultsAsync(ct);
+    }
+
+    /// <summary>Biên bản bàn giao của kho. Chưa mở bàn giao thì 204 (không có nội dung).</summary>
+    [HttpGet("vaults/{vaultId:guid}/handover-record")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRecord(Guid vaultId, CancellationToken ct)
+    {
+        HandoverRecordResponse? record = await recordService.GetForExecutorAsync(vaultId, ct);
+        if (record == null)
+        {
+            return NoContent();
+        }
+        return Ok(record);
+    }
+
+    /// <summary>Người thực thi ký biên bản (bước 3). Ký là bấm xác nhận, lưu người ký và thời điểm.</summary>
+    [HttpPost("vaults/{vaultId:guid}/handover-record/sign")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverRecordResponse> SignRecord(Guid vaultId, CancellationToken ct)
+    {
+        return recordService.SignAsExecutorAsync(vaultId, ct);
+    }
+
     /// <summary>
-    /// Trạng thái từng lượt bàn giao và từng tài sản đã tải hay chưa. Không có nội dung tài sản
-    /// và thông tin liên hệ người nhận. Hồ sơ chưa duyệt trả handoverStarted = false.
+    /// Trạng thái từng lượt bàn giao và từng tài sản đã tải hay chưa. Không có nội dung tài sản.
+    /// Biên bản chưa chốt lần nào thì handoverStarted = false.
     /// </summary>
-    [HttpGet("death-cases/{caseId:guid}/handover-progress")]
+    [HttpGet("handover-records/{recordId:guid}/handover-progress")]
     [ProducesResponseType<HandoverProgressResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public Task<HandoverProgressResponse> GetHandoverProgress(Guid caseId, CancellationToken ct)
+    public Task<HandoverProgressResponse> GetHandoverProgress(Guid recordId, CancellationToken ct)
     {
-        return handoverProgressService.GetProgressAsync(caseId, ct);
+        return handoverProgressService.GetProgressAsync(recordId, ct);
     }
 
     /// <summary>
-    /// Gửi lại lời mời nhận tài sản cho một lượt chưa ai nhận. Link cũ hết dùng, hạn phản hồi không đặt lại
-    /// (trừ khi lời mời chưa từng được giao). Giãn cách tối thiểu 15 phút giữa hai lần gửi.
+    /// Người thực thi gửi mã nhận (khóa mở gói) cho người nhận của lượt qua email đã lưu. Chỉ khi biên bản đã đủ chữ ký.
+    /// Body là khóa mình đang giữ để Backend kiểm; khóa sai trả 403 HANDOVER_KEY_INVALID. Khóa không được lưu.
     /// </summary>
-    /// <summary>Ảnh văn bản từ chối hoặc biên bản đồng ý nhận của một lượt đã có quyết định. Trả ảnh PNG, không phải JSON.</summary>
-    [HttpGet("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/decline-paper")]
-    [HttpGet("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/paper")]
-    [Produces("image/png", "application/json")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetHandoverPaper(Guid caseId, Guid turnId, CancellationToken ct)
-    {
-        PreparedDownload download = await declinePaperService.PrepareAsync(caseId, turnId, ct);
-        return new IdentityImageResult(download);
-    }
-
-    /// <summary>
-    /// Người thực thi gửi khóa mở gói cho người nhận của lượt qua email đã lưu. Body là khóa mình đang giữ để Backend kiểm;
-    /// khóa sai trả 403 HANDOVER_KEY_INVALID. Khóa không được lưu và không có trong phản hồi.
-    /// </summary>
-    [HttpPost("death-cases/{caseId:guid}/handover-turns/{turnId:guid}/send-key")]
+    [HttpPost("handover-records/{recordId:guid}/handover-turns/{turnId:guid}/send-key")]
     [EnableRateLimiting("plan-setup")]
     [ProducesResponseType<SendHandoverKeyResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
@@ -74,8 +92,8 @@ public sealed class ExecutorHandoverController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
-    public Task<SendHandoverKeyResponse> SendKey(Guid caseId, Guid turnId, [FromBody] SendHandoverKeyRequest request, CancellationToken ct)
+    public Task<SendHandoverKeyResponse> SendKey(Guid recordId, Guid turnId, [FromBody] SendHandoverKeyRequest request, CancellationToken ct)
     {
-        return handoverKeyMailService.SendAsync(caseId, turnId, request.Key, ct);
+        return handoverKeyMailService.SendAsync(recordId, turnId, request.Key, ct);
     }
 }

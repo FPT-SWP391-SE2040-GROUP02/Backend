@@ -5,8 +5,8 @@ namespace LegacyVault.Domain.Entities;
 /// khai trên văn bản mẫu và ảnh căn cước hai mặt. Thay cho xác minh eKYC bằng camera ở bước danh tính của lượt bàn giao.
 /// </summary>
 /// <remarks>
-/// - Không lưu họ tên, ngày sinh hay số căn cước đầy đủ: Backend đối chiếu bản khai với thông tin Chủ kho đã khai
-///   cho người nhận lúc nộp và chỉ giữ kết quả khớp hay không, cộng 4 số cuối.
+/// - Không lưu họ tên, ngày sinh: Backend đối chiếu bản khai với thông tin Chủ kho đã khai cho người nhận lúc nộp
+///   và giữ kết quả khớp hay không, cộng số căn cước người nhận khai.
 /// - Ảnh căn cước lưu mã hóa (cùng cơ chế ảnh danh tính Chủ kho); chỉ Người xét duyệt được giao xem, mỗi lần xem có log.
 /// - Mỗi lượt có thể có nhiều hồ sơ (nộp lại sau khi được yêu cầu bổ sung); chỉ bản mới nhất còn hiệu lực.
 /// </remarks>
@@ -31,8 +31,8 @@ public class HandoverSubmission
     /// <summary>Ngày sinh khai khớp.</summary>
     public bool DateOfBirthMatches { get; set; }
 
-    /// <summary>4 số cuối căn cước khai, để Người xét duyệt đối chiếu với ảnh.</summary>
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    /// <summary>Số căn cước đầy đủ người nhận khai, để Người xét duyệt đối chiếu với ảnh.</summary>
+    public string CitizenId { get; set; } = string.Empty;
 
     /// <summary>Người nhận đã tick đọc điều khoản của lựa chọn.</summary>
     public bool Acknowledged { get; set; }
@@ -59,15 +59,6 @@ public class HandoverSubmission
     public string BackImageEncryptionKeyId { get; set; } = string.Empty;
 
     public byte[] BackImageWrappedDataKey { get; set; } = Array.Empty<byte>();
-
-    /// <summary>Ảnh PNG văn bản từ chối, dựng khi Người xét duyệt duyệt hồ sơ Từ chối; rỗng khi không có.</summary>
-    public string PaperStorageKey { get; set; } = string.Empty;
-
-    public long PaperSizeBytes { get; set; }
-
-    public string PaperEncryptionKeyId { get; set; } = string.Empty;
-
-    public byte[] PaperWrappedDataKey { get; set; } = Array.Empty<byte>();
 
     /// <summary>Lý do yêu cầu bổ sung (khi Status = SupplementRequested).</summary>
     public string? SupplementReason { get; set; }

@@ -36,14 +36,13 @@ public sealed class EmailTemplateOverrideTests : IDisposable
     {
         EmailTemplateOverrides.Replace(new Dictionary<string, EmailTemplateOverride>
         {
-            [EmailTemplateCatalog.DocCompleted] = new EmailTemplateOverride(false, null, null, null, null, null),
+            [EmailTemplateCatalog.PlanActivated] = new EmailTemplateOverride(false, null, null, null, null, null),
             [EmailTemplateCatalog.HandoverInvitation] = new EmailTemplateOverride(false, null, null, null, null, null),
         });
 
-        Assert.False(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.DocCompleted));
+        Assert.False(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.PlanActivated));
         // Thư mời nhận tài sản không được tắt dù dòng ghi Enabled = false.
         Assert.True(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.HandoverInvitation));
-        Assert.True(EmailTemplateOverrides.IsEnabled(EmailTemplateCatalog.PlanActivated));
     }
 
     [Fact]
@@ -73,7 +72,6 @@ public sealed class EmailTemplateOverrideTests : IDisposable
             Assert.NotNull(parts);
             Assert.False(string.IsNullOrWhiteSpace(parts!.Subject), definition.Key);
         }
-        Assert.Contains("{MA_BIEN_BAN}", defaults.Find(EmailTemplateCatalog.DocCompleted)!.Body);
         Assert.Contains("{TEN_CHU_KHO}", defaults.Find(EmailTemplateCatalog.PlanActivated)!.Body);
     }
 }

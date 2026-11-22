@@ -20,7 +20,12 @@ public sealed class SmtpPlanActivatedNoticeSender : IPlanActivatedNoticeSender
 
     public Task SendAsync(PlanActivatedNotice notice, CancellationToken ct)
     {
-        EmailContent content = PlanActivatedNoticeEmail.Build(notice, landingUrl);
+        string actionUrl = landingUrl;
+        if (notice.RequestToken.Length > 0)
+        {
+            actionUrl = landingUrl + "request?token=" + Uri.EscapeDataString(notice.RequestToken);
+        }
+        EmailContent content = PlanActivatedNoticeEmail.Build(notice, actionUrl);
         return mailSender.SendAsync(notice.ToEmail, notice.FullName, content, ct);
     }
 }

@@ -24,8 +24,6 @@ public static class ApplicationConfig
         services.AddScoped<IEntitlementExpiryJob, EntitlementExpiryJob>();
 
         // Hồ sơ chứng tử (F2B)
-        services.AddScoped<IDeathCaseService, DeathCaseService>();
-        services.AddScoped<IDeathCaseReviewService, DeathCaseReviewService>();
         services.AddScoped<IAdministrativeUnitService, AdministrativeUnitService>();
         services.AddScoped<ISigningPasswordChecker, SigningPasswordChecker>();
         services.AddScoped<IRetentionJob, RetentionJob>();
@@ -33,9 +31,6 @@ public static class ApplicationConfig
         services.AddScoped<IExecutorInvitationJob, ExecutorInvitationJob>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<ISystemConfigService, SystemConfigService>();
-        services.AddScoped<IDeathCaseSupplementJob, DeathCaseSupplementJob>();
-        services.AddScoped<IDeathCaseVerifierPicker, DeathCaseVerifierPicker>();
-        services.AddScoped<IDeathCaseAssignmentJob, DeathCaseAssignmentJob>();
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
@@ -66,7 +61,6 @@ public static class ApplicationConfig
         services.AddScoped<PaymentGranter>();
         services.AddScoped<ISePayWebhookService, SePayWebhookService>();
         services.AddScoped<IAdminPaymentService, AdminPaymentService>();
-        services.AddScoped<IHandoverTemplateService, HandoverTemplateService>();
         services.AddScoped<IEmailTemplateService, EmailTemplateService>();
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsService, DevToolsService>();

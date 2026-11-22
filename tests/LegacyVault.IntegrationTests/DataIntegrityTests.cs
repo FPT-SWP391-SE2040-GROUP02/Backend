@@ -4,7 +4,6 @@ using System.Text.Json;
 using LegacyVault.Application.Notifications;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.Infrastructure.DeathCases;
 using LegacyVault.Infrastructure.Handover;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;

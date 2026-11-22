@@ -15,12 +15,6 @@ public sealed class EmailTemplateDefaults : IEmailTemplateDefaults
                 return PlanActivatedNoticeEmail.SampleParts();
             case EmailTemplateCatalog.HandoverInvitation:
                 return HandoverInvitationEmail.SampleParts();
-            case EmailTemplateCatalog.DocVerifierTurn:
-                return HandoverDocumentNoticeEmail.SampleParts(HandoverDocumentNoticeKind.VerifierTurn);
-            case EmailTemplateCatalog.DocRecipientReturned:
-                return HandoverDocumentNoticeEmail.SampleParts(HandoverDocumentNoticeKind.RecipientReturned);
-            case EmailTemplateCatalog.DocCompleted:
-                return HandoverDocumentNoticeEmail.SampleParts(HandoverDocumentNoticeKind.Completed);
             default:
                 return null;
         }

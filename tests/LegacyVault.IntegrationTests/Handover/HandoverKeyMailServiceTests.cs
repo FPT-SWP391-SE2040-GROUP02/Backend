@@ -31,7 +31,7 @@ public sealed class HandoverKeyMailServiceTests
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
     private readonly HandoverKeyMailService service;
     private readonly Guid executorUserId = Guid.NewGuid();
-    private readonly DeathCase deathCase;
+    private readonly HandoverRecord record;
     private readonly Container container;
     private readonly Designation designation;
     private readonly string key = ExecutorKeyRules.GenerateShard();
@@ -52,11 +52,11 @@ public sealed class HandoverKeyMailServiceTests
         beneficiaries.Beneficiaries.Add(designation.Beneficiary);
         protector.Data[designation.BeneficiaryId] = data.People[designation.BeneficiaryId];
 
-        deathCase = new DeathCase();
-        deathCase.VaultId = data.Vault.Id;
-        deathCase.PlanId = data.Plan.Id;
-        deathCase.Status = DeathCaseStatus.ApprovedForHandover;
-        reader.Cases.Add(deathCase);
+        record = new HandoverRecord();
+        record.VaultId = data.Vault.Id;
+        record.PlanId = data.Plan.Id;
+        record.Status = HandoverRecordStatus.Completed;
+        reader.Records.Add(record);
 
         ExecutorKeyShard shard = new ExecutorKeyShard();
         shard.VaultId = data.Vault.Id;
@@ -72,6 +72,7 @@ public sealed class HandoverKeyMailServiceTests
     private HandoverTurn AddTurn(HandoverTurnStatus status)
     {
         HandoverTurn turn = data.BuildTurn(container, designation, status, "old-token", null);
+        turn.RecordId = record.Id;
         repository.Turns.Add(turn);
         return turn;
     }
@@ -79,7 +80,7 @@ public sealed class HandoverKeyMailServiceTests
     private async Task<string?> ReasonOfRejectionAsync(Guid turnId)
     {
         AppException error = await Assert.ThrowsAsync<AppException>(
-            () => service.SendAsync(deathCase.Id, turnId, key, CancellationToken.None));
+            () => service.SendAsync(record.Id, turnId, key, CancellationToken.None));
         Assert.Equal(ErrorCode.HandoverNotAllowed, error.Code);
         return error.Extensions["reason"] as string;
     }
@@ -90,7 +91,7 @@ public sealed class HandoverKeyMailServiceTests
         HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
 
         SendHandoverKeyResponse result = await service.SendAsync(
-            deathCase.Id, turn.Id, key.ToLowerInvariant(), CancellationToken.None);
+            record.Id, turn.Id, key.ToLowerInvariant(), CancellationToken.None);
 
         Assert.Single(sender.Sent);
         Assert.Equal("nguoi-nhan@example.com", sender.Sent[0].ToEmail);
@@ -105,7 +106,7 @@ public sealed class HandoverKeyMailServiceTests
         HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
 
         AppException error = await Assert.ThrowsAsync<AppException>(
-            () => service.SendAsync(deathCase.Id, turn.Id, ExecutorKeyRules.GenerateShard(), CancellationToken.None));
+            () => service.SendAsync(record.Id, turn.Id, ExecutorKeyRules.GenerateShard(), CancellationToken.None));
 
         Assert.Equal(ErrorCode.HandoverKeyInvalid, error.Code);
         Assert.Equal(AppErrorType.Forbidden, error.Type);
@@ -165,7 +166,7 @@ public sealed class HandoverKeyMailServiceTests
         HandoverTurn turn = AddTurn(HandoverTurnStatus.HandoverCommitted);
         data.Plan.Status = PlanStatus.Closed;
 
-        await service.SendAsync(deathCase.Id, turn.Id, key, CancellationToken.None);
+        await service.SendAsync(record.Id, turn.Id, key, CancellationToken.None);
 
         Assert.Single(sender.Sent);
     }
@@ -197,7 +198,7 @@ public sealed class HandoverKeyMailServiceTests
         sender.FailNext = true;
 
         AppException error = await Assert.ThrowsAsync<AppException>(
-            () => service.SendAsync(deathCase.Id, turn.Id, key, CancellationToken.None));
+            () => service.SendAsync(record.Id, turn.Id, key, CancellationToken.None));
 
         Assert.Equal(AppErrorType.ServiceUnavailable, error.Type);
         Assert.Equal("KEY_SEND_FAILED", error.Extensions["reason"]);
@@ -210,9 +211,9 @@ public sealed class HandoverKeyMailServiceTests
         currentUser.UserId = Guid.NewGuid();
 
         AppException error = await Assert.ThrowsAsync<AppException>(
-            () => service.SendAsync(deathCase.Id, turn.Id, key, CancellationToken.None));
+            () => service.SendAsync(record.Id, turn.Id, key, CancellationToken.None));
 
-        Assert.Equal(ErrorCode.DeathCaseNotFound, error.Code);
+        Assert.Equal(ErrorCode.HandoverNotFound, error.Code);
         Assert.Empty(sender.Sent);
     }
 

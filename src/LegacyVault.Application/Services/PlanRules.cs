@@ -9,7 +9,11 @@ public static class PlanRules
     /// <summary>Kế hoạch đang chạy: đã kích hoạt, chưa sang bàn giao (SETUP-16, §11.2).</summary>
     public static bool IsRunning(PlanStatus status)
     {
-        return status == PlanStatus.Active;
+        if (status == PlanStatus.Active)
+        {
+            return true;
+        }
+        return false;
     }
 
     /// <summary>SETUP-04: mọi thay đổi cấu hình kế hoạch (gói, tài sản trong gói, người nhận...) tăng ConfigVersion.</summary>

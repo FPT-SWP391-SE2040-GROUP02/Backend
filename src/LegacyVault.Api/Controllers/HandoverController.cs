@@ -21,14 +21,17 @@ public sealed class HandoverController : ControllerBase
     private readonly IHandoverService handoverService;
     private readonly IHandoverDownloadService downloadService;
     private readonly IInvitationMailCheckService mailCheckService;
+    private readonly IHandoverRecordService recordService;
     private readonly ILogger<HandoverController> logger;
 
     public HandoverController(
         IHandoverService handoverService,
         IHandoverDownloadService downloadService,
         IInvitationMailCheckService mailCheckService,
+        IHandoverRecordService recordService,
         ILogger<HandoverController> logger)
     {
+        this.recordService = recordService;
         this.handoverService = handoverService;
         this.downloadService = downloadService;
         this.mailCheckService = mailCheckService;
@@ -62,7 +65,7 @@ public sealed class HandoverController : ControllerBase
     public Task<InvitationMailCheckResponse> CheckMail(
         string token, InvitationMailCheckRequest request, CancellationToken ct)
     {
-        return mailCheckService.CheckAsync(token, request.CaseCode, request.CitizenIdLast4, ct);
+        return mailCheckService.CheckAsync(token, request.CaseCode, request.CitizenId, ct);
     }
 
     /// <summary>Gắn tài khoản đang đăng nhập vào lượt. Gọi lặp bởi cùng người là an toàn.</summary>
@@ -88,7 +91,7 @@ public sealed class HandoverController : ControllerBase
         return handoverService.GetMyInvitationsAsync(ct);
     }
 
-    /// <summary>Nhận lượt trong app (bấm Đồng ý/Từ chối nhận ở thẻ thư mời). Gọi lặp bởi cùng người là an toàn.</summary>
+    /// <summary>Nhận lượt trong app (bấm Bắt đầu ở thẻ thư mời). Gọi lặp bởi cùng người là an toàn.</summary>
     [HttpPost("turns/{turnId:guid}/claim")]
     [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
@@ -128,14 +131,25 @@ public sealed class HandoverController : ControllerBase
         return handoverService.ConfirmReceivedAllAsync(turnId, ct);
     }
 
-    /// <summary>Đồng ý nhận: mở quyền xem và tải 30 ngày.</summary>
-    [HttpPost("turns/{turnId:guid}/accept")]
-    [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
+    /// <summary>Biên bản bàn giao nhìn từ lượt của tôi: chỉ phần tài sản của tôi và tình trạng chữ ký.</summary>
+    [HttpGet("turns/{turnId:guid}/record")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<HandoverRecordResponse> GetRecord(Guid turnId, CancellationToken ct)
+    {
+        return recordService.GetForRecipientAsync(turnId, ct);
+    }
+
+    /// <summary>
+    /// Người nhận ký biên bản (bước 3). Đủ chữ ký ba bên thì mở quyền xem và tải; Người thực thi gửi mã nhận.
+    /// </summary>
+    [HttpPost("turns/{turnId:guid}/record/sign")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<HandoverTurnResponse> Accept(Guid turnId, CancellationToken ct)
+    public Task<HandoverRecordResponse> SignRecord(Guid turnId, CancellationToken ct)
     {
-        return handoverService.AcceptAsync(turnId, ct);
+        return recordService.SignAsRecipientAsync(turnId, ct);
     }
 
     /// <summary>Nhập khóa mở gói do Người thực thi đưa. Sai thì 403 HANDOVER_KEY_INVALID, quá giới hạn thì 423.</summary>
@@ -147,16 +161,6 @@ public sealed class HandoverController : ControllerBase
     public Task<HandoverTurnResponse> VerifyKey(Guid turnId, VerifyHandoverKeyRequest request, CancellationToken ct)
     {
         return handoverService.VerifyKeyAsync(turnId, request.Key, ct);
-    }
-
-    /// <summary>Luồng cũ: người nhận bấm "Từ chối nhận" khi lượt đang chờ quyết định.</summary>
-    [HttpPost("turns/{turnId:guid}/decline")]
-    [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<HandoverTurnResponse> Decline(Guid turnId, CancellationToken ct)
-    {
-        return handoverService.DeclineAsync(turnId, ct);
     }
 
     /// <summary>Danh sách tài sản trong quyền xem của tôi.</summary>

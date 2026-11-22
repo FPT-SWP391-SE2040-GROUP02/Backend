@@ -15,7 +15,7 @@ public sealed class HandoverSubmissionConfiguration : IEntityTypeConfiguration<H
 
         builder.Property(s => s.Kind).IsRequired().HasConversion<string>().HasMaxLength(16);
         builder.Property(s => s.Status).IsRequired().HasConversion<string>().HasMaxLength(32);
-        builder.Property(s => s.CitizenIdLast4).IsRequired().HasMaxLength(4);
+        builder.Property(s => s.CitizenId).IsRequired().HasMaxLength(12).IsUnicode(false);
         builder.Property(s => s.SupplementReason).HasMaxLength(1000);
 
         builder.Property(s => s.FrontImageStorageKey).IsRequired().HasMaxLength(256);
@@ -26,10 +26,6 @@ public sealed class HandoverSubmissionConfiguration : IEntityTypeConfiguration<H
         builder.Property(s => s.BackImageContentType).IsRequired().HasMaxLength(64);
         builder.Property(s => s.BackImageEncryptionKeyId).IsRequired().HasMaxLength(64);
         builder.Property(s => s.BackImageWrappedDataKey).IsRequired();
-
-        builder.Property(s => s.PaperStorageKey).IsRequired().HasMaxLength(256).HasDefaultValue(string.Empty);
-        builder.Property(s => s.PaperEncryptionKeyId).IsRequired().HasMaxLength(64).HasDefaultValue(string.Empty);
-        builder.Property(s => s.PaperWrappedDataKey).IsRequired().HasDefaultValue(Array.Empty<byte>());
 
         builder.Property(s => s.RowVersion).IsRowVersion();
 

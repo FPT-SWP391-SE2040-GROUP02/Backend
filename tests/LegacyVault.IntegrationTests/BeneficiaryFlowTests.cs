@@ -6,7 +6,6 @@ using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -128,7 +127,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.NotNull(first.Headers.Location);
         JsonElement created = await ApiTestHelpers.ReadJsonAsync(first);
-        Assert.Equal("8901", created.GetProperty("citizenIdLast4").GetString());
+        Assert.Equal(LeadingZeroCitizenId, created.GetProperty("citizenId").GetString());
         Assert.Equal(FullName, created.GetProperty("fullName").GetString());
         Assert.Equal("1990-05-20", created.GetProperty("dateOfBirth").GetString());
         Assert.Equal(Email, created.GetProperty("email").GetString());
@@ -305,7 +304,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Data02_FullCitizenIdIsNeverReturnedAndIsStoredEncrypted()
+    public async Task Data02_FullCitizenIdIsReturnedAndIsStoredEncrypted()
     {
         // Chuẩn bị
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -317,11 +316,11 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         string getBody = await (await client.GetAsync($"{BeneficiariesUrl(vaultId)}/{beneficiaryId}")).Content.ReadAsStringAsync();
         string listBody = await (await client.GetAsync(BeneficiariesUrl(vaultId))).Content.ReadAsStringAsync();
 
-        // Kiểm tra: response không có CCCD đầy đủ.
+        // Kiểm tra: response trả CCCD đầy đủ.
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
-        Assert.DoesNotContain(LeadingZeroCitizenId, createBody);
-        Assert.DoesNotContain(LeadingZeroCitizenId, getBody);
-        Assert.DoesNotContain(LeadingZeroCitizenId, listBody);
+        Assert.Contains(LeadingZeroCitizenId, createBody);
+        Assert.Contains(LeadingZeroCitizenId, getBody);
+        Assert.Contains(LeadingZeroCitizenId, listBody);
 
         // Kiểm tra: DB không chứa CCCD, họ tên, email dạng UTF-8 rõ; DEK đã bọc 60 byte.
         Beneficiary? row = null;
@@ -445,7 +444,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         Assert.Equal("Nguyễn Văn Bình", updated.GetProperty("fullName").GetString());
         JsonElement readBack = await ApiTestHelpers.ReadJsonAsync(get);
         Assert.Equal("Nguyễn Văn Bình", readBack.GetProperty("fullName").GetString());
-        Assert.Equal("8901", readBack.GetProperty("citizenIdLast4").GetString());
+        Assert.Equal(LeadingZeroCitizenId, readBack.GetProperty("citizenId").GetString());
         Assert.Equal(Email, readBack.GetProperty("email").GetString());
         Assert.Equal(updated.GetProperty("etag").GetString(), readBack.GetProperty("etag").GetString());
     }
@@ -494,7 +493,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         UserRole[] staffRoles = new UserRole[] { UserRole.Executor, UserRole.Verifier, UserRole.Admin };
         foreach (UserRole role in staffRoles)
         {
-            User staff = await DeathCaseTestData.AddUserAsync(factory, role, UserStatus.Active);
+            User staff = await VaultTestData.AddUserAsync(factory, role, UserStatus.Active);
 
             // Hành động: tạo người nhận bằng email nhân sự
             HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
@@ -509,7 +508,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
 
         // Sửa người nhận hợp lệ sang email nhân sự cũng bị chặn, dữ liệu giữ nguyên
         JsonElement created = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         HttpResponseMessage update = await client.PutAsJsonAsync($"{BeneficiariesUrl(vaultId)}/{created.GetProperty("id").GetGuid()}",
             new { etag = created.GetProperty("etag").GetString(), email = admin.Email });
         await ApiTestHelpers.AssertProblemAsync(update, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
@@ -519,10 +518,36 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task RecipientEmailCannotRepeatAnotherRecipientInTheSameVault_OnCreateOrUpdate()
+    {
+        // Chuẩn bị: một người nhận đã có email chung
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
+        string message = "Email này đã dùng cho một người nhận khác trong kho.";
+
+        // Hành động: người thứ hai khác CCCD nhưng dùng lại email đó
+        HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = SameLast4CitizenId, fullName = "Trần Thị Bình", dateOfBirth = "1990-05-20", email = " " + Email.ToUpperInvariant() + " " });
+
+        // Kiểm tra: 400 ở trường email, chưa tạo thêm hồ sơ
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(create, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(message, problem.GetProperty("errors").GetProperty("email")[0].GetString());
+        Assert.Equal(1, await CountBeneficiariesAsync(vaultId));
+
+        // Sửa người thứ hai sang email của người thứ nhất cũng bị chặn; gửi lại đúng người thứ nhất (cùng email) thì không
+        JsonElement second = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, SameLast4CitizenId, "Trần Thị Bình");
+        HttpResponseMessage update = await client.PutAsJsonAsync($"{BeneficiariesUrl(vaultId)}/{second.GetProperty("id").GetGuid()}",
+            new { etag = second.GetProperty("etag").GetString(), email = Email });
+        await ApiTestHelpers.AssertProblemAsync(update, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        HttpResponseMessage resend = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(LeadingZeroCitizenId, FullName));
+        Assert.True(resend.IsSuccessStatusCode);
+    }
+
+    [SqlFact]
     public async Task OrdinaryAccountEmailIsStillAllowedAsRecipient()
     {
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        User ordinary = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User ordinary = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
 
         HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
             new { citizenId = LeadingZeroCitizenId, fullName = FullName, dateOfBirth = "1990-05-20", email = ordinary.Email });
@@ -657,7 +682,9 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
 
     private static object AdultBody(string citizenId, string fullName)
     {
-        return new { citizenId, fullName, dateOfBirth = "1990-05-20", email = Email };
+        // Mỗi người một email riêng (email không được trùng người nhận khác trong kho); người chính giữ email chung.
+        string email = citizenId == LeadingZeroCitizenId ? Email : $"nn{citizenId.Replace(" ", "")}@example.com";
+        return new { citizenId, fullName, dateOfBirth = "1990-05-20", email };
     }
 
     /// <summary>Số dòng Beneficiaries của kho (đọc thẳng DB).</summary>

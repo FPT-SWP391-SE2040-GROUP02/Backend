@@ -102,10 +102,10 @@ public sealed class AuditVaultAssetFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task State02_RejectedAsset_WritesNoLog()
     {
-        // Chuẩn bị: kế hoạch đang khóa vì có hồ sơ chứng tử, Owner không được thêm tài sản (SETUP-05)
+        // Chuẩn bị: kế hoạch đang khóa vì đã mở bàn giao, Owner không được thêm tài sản (SETUP-05)
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
-        await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.DeathCaseOpen);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.HandoverRequested);
 
         // Hành động
         HttpResponseMessage response = await client.PostAsJsonAsync(

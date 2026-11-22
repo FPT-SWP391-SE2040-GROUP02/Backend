@@ -21,7 +21,7 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
 
     private readonly IHandoverRepository handover;
     private readonly ITokenService tokens;
-    private readonly IDeathCaseRepository deathCases;
+    private readonly IHandoverRecordRepository records;
     private readonly IBeneficiaryRepository beneficiaries;
     private readonly IBeneficiaryDataProtector protector;
     private readonly IVaultRepository vaults;
@@ -30,7 +30,7 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
     public InvitationMailCheckService(
         IHandoverRepository handover,
         ITokenService tokens,
-        IDeathCaseRepository deathCases,
+        IHandoverRecordRepository records,
         IBeneficiaryRepository beneficiaries,
         IBeneficiaryDataProtector protector,
         IVaultRepository vaults,
@@ -38,16 +38,16 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
     {
         this.handover = handover;
         this.tokens = tokens;
-        this.deathCases = deathCases;
+        this.records = records;
         this.beneficiaries = beneficiaries;
         this.protector = protector;
         this.vaults = vaults;
         this.users = users;
     }
 
-    /// <summary>Nút "Kiểm tra" ở trang lời mời: đối chiếu mã hồ sơ và 4 số cuối căn cước, tối đa 5 lần sai mỗi lượt.</summary>
+    /// <summary>Nút "Kiểm tra" ở trang lời mời: đối chiếu mã hồ sơ và số căn cước, tối đa 5 lần sai mỗi lượt.</summary>
     public async Task<InvitationMailCheckResponse> CheckAsync(
-        string token, string caseCode, string citizenIdLast4, CancellationToken ct)
+        string token, string caseCode, string citizenId, CancellationToken ct)
     {
         // 1. Tìm lượt theo token trong link; token sai thì báo link không hợp lệ
         HandoverTurn? turn = await handover.FindTurnByTokenHashAsync(tokens.HashOpaqueToken(token), ct);
@@ -65,28 +65,24 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
                 "Bạn đã thử quá số lần cho phép. Hãy gọi số điện thoại công ty ghi trong thư để xác minh.");
         }
 
-        // 3. Mã hồ sơ đúng lấy từ hồ sơ chứng tử, 4 số cuối căn cước đúng lấy từ thông tin Chủ kho đã khai
+        // 3. Mã hồ sơ đúng lấy từ hồ sơ chứng tử, số căn cước đúng lấy từ thông tin Chủ kho đã khai
         string wantedCode = string.Empty;
-        DeathCase? deathCase = await deathCases.FindOpenByVaultIdAsync(turn.VaultId, ct);
-        if (deathCase != null)
+        HandoverRecord? record = await records.FindByVaultIdAsync(turn.VaultId, ct);
+        if (record != null)
         {
-            wantedCode = DeathCaseRules.CaseCode(deathCase.Id);
+            wantedCode = HandoverRecordRules.CaseCode(record.Id);
         }
-        string wantedLast4 = string.Empty;
+        string wantedCitizenId = string.Empty;
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
         if (beneficiary != null)
         {
-            string citizenId = protector.Unprotect(beneficiary).CitizenId;
-            if (citizenId.Length >= 4)
-            {
-                wantedLast4 = citizenId.Substring(citizenId.Length - 4);
-            }
+            wantedCitizenId = protector.Unprotect(beneficiary).CitizenId;
         }
 
-        // 4. So khớp: mã hồ sơ không phân biệt hoa thường, 4 số cuối so chính xác
-        bool matched = wantedCode.Length > 0 && wantedLast4.Length > 0
+        // 4. So khớp: mã hồ sơ không phân biệt hoa thường, số căn cước so chính xác
+        bool matched = wantedCode.Length > 0 && wantedCitizenId.Length > 0
             && string.Equals(caseCode.Trim(), wantedCode, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(citizenIdLast4.Trim(), wantedLast4, StringComparison.Ordinal);
+            && string.Equals(citizenId.Trim(), wantedCitizenId, StringComparison.Ordinal);
 
         InvitationMailCheckResponse response = new InvitationMailCheckResponse();
         // 5. Sai: cộng một lần sai và trả số lần còn lại

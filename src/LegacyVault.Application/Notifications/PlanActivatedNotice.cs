@@ -10,6 +10,9 @@ public sealed class PlanActivatedNotice
 
     public string FullName { get; set; } = string.Empty;
 
+    /// <summary>Link riêng (chưa băm) để người nhận gửi yêu cầu nhận tài sản; rỗng thì nút dẫn về trang giới thiệu.</summary>
+    public string RequestToken { get; set; } = string.Empty;
+
     public string OwnerName { get; set; } = string.Empty;
 
     public string OwnerEmail { get; set; } = string.Empty;

@@ -11,8 +11,8 @@ namespace LegacyVault.Application.Repositories;
 /// </remarks>
 public interface IHandoverProgressReader
 {
-    /// <summary>Hồ sơ chứng tử theo id, không kèm phiên bản hay tệp; null khi không có.</summary>
-    Task<DeathCase?> FindCaseAsync(Guid caseId, CancellationToken ct);
+    /// <summary>Biên bản bàn giao theo id, kèm dòng và chữ ký; null khi không có.</summary>
+    Task<HandoverRecord?> FindRecordAsync(Guid recordId, CancellationToken ct);
 
     /// <summary>Các lượt bàn giao của kế hoạch, kèm danh sách tài sản đã ghim và quyền tải.</summary>
     Task<List<HandoverTurn>> FindTurnsWithItemsAsync(Guid planId, CancellationToken ct);
@@ -23,12 +23,6 @@ public interface IHandoverProgressReader
     /// </summary>
     Task<Dictionary<Guid, DateTimeOffset>> FindFirstDownloadTimesAsync(List<Guid> grantIds, CancellationToken ct);
 
-    /// <summary>
-    /// Mốc ký biên bản của từng lượt cho trước, theo id lượt (người nhận ký, Người xét duyệt ký).
-    /// Lượt chưa có biên bản thì không có trong kết quả.
-    /// </summary>
-    Task<Dictionary<Guid, HandoverDocumentTimes>> FindDocumentTimesAsync(List<Guid> turnIds, CancellationToken ct);
-
-    /// <summary>4 số cuối CCCD của các người nhận cho trước, theo id người nhận.</summary>
-    Task<Dictionary<Guid, string>> FindCitizenIdLast4Async(List<Guid> beneficiaryIds, CancellationToken ct);
+    /// <summary>Số CCCD đầy đủ (đã giải mã) của các người nhận cho trước, theo id người nhận.</summary>
+    Task<Dictionary<Guid, string>> FindCitizenIdsAsync(List<Guid> beneficiaryIds, CancellationToken ct);
 }

@@ -7,7 +7,6 @@ using LegacyVault.Application.Notifications;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -88,12 +87,23 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         public Guid PlanId { get; set; }
         public Guid ExtraAssetId { get; set; }
         public List<string> Tokens { get; set; } = new List<string>();
+        public HandoverRecordTestData.FinalizedRecord Record { get; set; } = new HandoverRecordTestData.FinalizedRecord();
     }
 
     /// <summary>Tài khoản đã xác minh có đúng email người nhận (BeneficiaryEmail) để nhận lượt (D2).</summary>
     private async Task<User> AddRecipientAsync()
     {
-        User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        // Người nhận đã có tài khoản từ lúc gửi yêu cầu nhận tài sản thì dùng lại tài khoản đó.
+        User? existing = null;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            existing = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == ApiTestHelpers.BeneficiaryEmail);
+        });
+        if (existing != null)
+        {
+            return existing;
+        }
+        User user = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             await db.Users.Where(u => u.Id == user.Id)
@@ -112,11 +122,11 @@ public sealed class RetentionFlowTests : IAsyncLifetime
 
     /// <summary>
     /// Kho có một gói READY với một tài sản, chỉ định cho beneficiaryCount người nhận; thêm một tài sản ngoài gói.
-    /// Hồ sơ chứng tử được duyệt nên F3 đã mở, mỗi người nhận một lượt.
+    /// Người thực thi mở bàn giao, luật sư lấy biên bản phân chia làm biên bản rồi chốt: mỗi người nhận một lượt.
     /// </summary>
     private async Task<Scenario> BuildHandoverAsync(int beneficiaryCount)
     {
-        DeathCaseTestData.OwnerVault owner = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
+        VaultTestData.OwnerVault owner = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
         HttpClient ownerClient = ClientFor(owner.Owner);
         Guid vaultId = owner.VaultId;
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
@@ -132,22 +142,22 @@ public sealed class RetentionFlowTests : IAsyncLifetime
                 ownerClient, vaultId, containerId, b.GetProperty("id").GetGuid())).StatusCode);
         }
 
-        User verifier = await DeathCaseTestData.AddVerifierAsync(factory);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vaultId);
-        JsonElement prepared = await DeathCaseApi.PrepareCompleteDraftAsync(
-            ClientFor(executor.User), vaultId, DeathCaseApi.Today().AddDays(-3));
-        JsonElement submitted = await DeathCaseApi.SubmitOkAsync(ClientFor(executor.User), prepared);
-        Guid caseId = submitted.GetProperty("id").GetGuid();
-        HttpClient verifierClient = ClientFor(verifier);
-        JsonElement detail = await DeathCaseReviewTestData.GetDetailAsync(verifierClient, caseId);
-        HttpResponseMessage approve = await DeathCaseReviewTestData.ApproveAsync(
-            verifierClient, caseId, detail.GetProperty("etag").GetString(), "Đã đối chiếu hồ sơ.");
-        Assert.Equal(HttpStatusCode.OK, approve.StatusCode);
+        User verifier = await VaultTestData.AddVerifierAsync(factory);
+        VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vaultId);
+        Guid recordId = await HandoverRecordTestData.RequestAsync(factory, vaultId);
+        // Client phải tạo từ app (có bộ gửi thư giả giữ token mời), không phải từ factory gốc.
+        VaultTestData.ExecutorClient assigned = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        assigned.Client = ClientFor(assigned.User);
+        HttpClient verifierClient = assigned.Client;
+        await HandoverRecordTestData.UseOwnerSplitAndFinalizeAsync(verifierClient, recordId);
 
         Scenario scenario = new Scenario();
         scenario.VaultId = vaultId;
         scenario.PlanId = owner.PlanId;
         scenario.ExtraAssetId = extraAssetId;
+        scenario.Record.Executor = new VaultTestData.ExecutorClient { User = executor.User, Client = ClientFor(executor.User) };
+        scenario.Record.Verifier = assigned;
+        scenario.Record.RecordId = recordId;
         foreach (HandoverInvitation invitation in invitations.Invitations)
         {
             scenario.Tokens.Add(invitation.Token);
@@ -217,7 +227,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Retention04_ClaimPausesClock_DeclineDeletesImmediately()
+    public async Task Retention04_ClaimPausesClock()
     {
         Scenario s = await BuildHandoverAsync(1);
         await PassResponseDeadlineAsync(s.PlanId);
@@ -239,11 +249,6 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         Assert.Equal(RetentionStatus.DeletionHeld, held.RetentionStatus);
         Assert.InRange(held.RetentionRemainingSeconds!.Value, (long)TimeSpan.FromDays(10).TotalSeconds - 120, (long)TimeSpan.FromDays(10).TotalSeconds);
 
-        // Từ chối: nội dung của lượt bị xóa ngay ở vòng quét kế tiếp để giải phóng bộ nhớ, không chờ hết thời hạn lưu
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/api/v1/handover/turns/{turnId}/decline", null)).StatusCode);
-        await RunAsync(s.PlanId);
-        HandoverTurn deleted = Assert.Single(await TurnsAsync(s.PlanId));
-        Assert.Equal(RetentionStatus.Deleted, deleted.RetentionStatus);
     }
 
     [SqlFact]
@@ -319,7 +324,9 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         JsonElement claimed = await ApiTestHelpers.ReadJsonAsync(
             await client.PostAsync($"/api/v1/handover/invitations/{s.Tokens[0]}/claim", null));
         Guid turnId = claimed.GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync($"/api/v1/handover/turns/{turnId}/accept", null)).StatusCode);
+        // Ba bên ký biên bản: đủ chữ ký thì lượt đã bàn giao, có quyền tải.
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(s.Record, s.VaultId);
+        await HandoverRecordTestData.SignAsRecipientAsync(client, turnId);
 
         await RunAsync(s.PlanId);
         Assert.Equal(RetentionStatus.NotStarted, Assert.Single(await TurnsAsync(s.PlanId)).RetentionStatus);

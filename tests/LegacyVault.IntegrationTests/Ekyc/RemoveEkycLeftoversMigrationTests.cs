@@ -1,7 +1,6 @@
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -46,7 +45,7 @@ public sealed class RemoveEkycLeftoversMigrationTests : IAsyncLifetime
     public async Task Up_RemovesLegacyPurposesOwnerAliveHoldsAndFaceTemplates_KeepsOwnerEnrollment()
     {
         // Chuẩn bị: kho và tài khoản thật, rồi đưa schema về trước migration để chèn dữ liệu kiểu cũ.
-        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User owner = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, owner);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);

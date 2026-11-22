@@ -8,7 +8,6 @@ using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.Audit;
 using LegacyVault.IntegrationTests.TestSupport;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.Ekyc;
 using LegacyVault.IntegrationTests.GoogleAuth;
 using LegacyVault.Infrastructure.Reference;
@@ -132,7 +131,8 @@ public sealed class HandoverSubmissionTests
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly InMemoryContentStore store = new InMemoryContentStore();
     private readonly FakeAuditLogRepository audit = new FakeAuditLogRepository();
-    private readonly FakeDeathCaseRepository deathCases = new FakeDeathCaseRepository();
+    private readonly FakeHandoverRecordRepository records = new FakeHandoverRecordRepository();
+    private readonly CountingRecordService recordService = new CountingRecordService();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
     private readonly User recipient;
@@ -156,6 +156,14 @@ public sealed class HandoverSubmissionTests
         protector.Data[designation.BeneficiaryId] = data.People[designation.BeneficiaryId];
 
         turn = data.BuildTurn(container, designation, HandoverTurnStatus.IdentityInProgress, "token-" + Guid.NewGuid().ToString("N"), recipient.Id);
+        // Biên bản đã chốt, đang ở bước kiểm danh tính: luật sư mới xác nhận được.
+        HandoverRecord record = new HandoverRecord();
+        record.VaultId = data.Vault.Id;
+        record.PlanId = data.Plan.Id;
+        record.VerifierUserId = verifier.Id;
+        record.Status = HandoverRecordStatus.IdentityCheck;
+        records.Records.Add(record);
+        turn.RecordId = record.Id;
         handover.Turns.Add(turn);
         submissions.Approvers.Add((verifier.Id, data.Vault.Id));
         currentUser.UserId = recipient.Id;
@@ -163,7 +171,7 @@ public sealed class HandoverSubmissionTests
         submitService = new HandoverSubmissionService(
             currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time);
         reviewService = new HandoverSubmissionReviewService(
-            currentUser, users, vaults, submissions, store, audit, unitOfWork, time);
+            currentUser, users, vaults, submissions, store, audit, unitOfWork, time, records, recordService);
     }
 
     private static SubmitHandoverSubmissionRequest Request(
@@ -204,7 +212,7 @@ public sealed class HandoverSubmissionTests
     // ---- Người nhận nộp hồ sơ ----
 
     [Fact]
-    public async Task Submit_Accept_KeepsOnlyMatchFlagsAndLast4AndEncryptedImages()
+    public async Task Submit_Accept_KeepsMatchFlagsCitizenIdAndEncryptedImages()
     {
         HandoverSubmissionResponse response = await Submit(Request());
 
@@ -212,7 +220,7 @@ public sealed class HandoverSubmissionTests
         Assert.Equal("ACCEPT", response.Kind);
         Assert.Equal("SUBMITTED", response.Status);
         Assert.True(saved.NameMatches && saved.CitizenIdMatches && saved.DateOfBirthMatches);
-        Assert.Equal("1234", saved.CitizenIdLast4);
+        Assert.Equal("012345671234", saved.CitizenId);
         Assert.Equal(2, store.Contents.Count);
         Assert.Equal("image/png", saved.FrontImageContentType);
         Assert.Equal("image/jpeg", saved.BackImageContentType);
@@ -245,23 +253,6 @@ public sealed class HandoverSubmissionTests
         Assert.Equal(AppErrorType.Validation, error.Type);
         Assert.Empty(submissions.Items);
         Assert.Empty(store.Contents);
-    }
-
-    [Fact]
-    public async Task Submit_DeclineWithoutVoluntaryTick_IsRejected()
-    {
-        AppException error = await Assert.ThrowsAsync<AppException>(() => Submit(Request(kind: "DECLINE", voluntary: false)));
-
-        Assert.Equal(AppErrorType.Validation, error.Type);
-    }
-
-    [Fact]
-    public async Task Submit_Decline_WithVoluntaryTick_IsAccepted()
-    {
-        HandoverSubmissionResponse response = await Submit(Request(kind: "DECLINE", voluntary: true));
-
-        Assert.Equal("DECLINE", response.Kind);
-        Assert.True(Stored().VoluntaryDecline);
     }
 
     [Fact]
@@ -365,149 +356,24 @@ public sealed class HandoverSubmissionTests
         Assert.Equal("APPROVED", response.Status);
         Assert.Equal(HandoverTurnStatus.ReadyToAccept, turn.Status);
         Assert.Equal(verifier.Id, turn.IdentityConfirmedByUserId);
-        Assert.NotNull(turn.DecisionDeadline);
+        Assert.Null(turn.DecisionDeadline);
+        Assert.Equal(1, recordService.AdvanceCalls);
         Assert.Equal(AuditAction.HandoverSubmissionApproved, Assert.Single(audit.Logs).Action);
     }
 
-    private sealed class FakePaperRenderer : IHandoverPaperRenderer
-    {
-        public HandoverPaperData? Last { get; private set; }
-
-        public byte[] Render(HandoverPaperData data)
-        {
-            Last = data;
-            return new byte[] { 0x25, 0x50, 0x44, 0x46 };
-        }
-    }
-
-    private HandoverPaperWriter WriterFor(IHandoverPaperRenderer renderer)
-    {
-        return new HandoverPaperWriter(
-            users, vaults, beneficiaries, protector, renderer, deathCases, store, new AdministrativeUnitCatalog());
-    }
-
-    private HandoverSubmissionReviewService ReviewWithPaper(FakePaperRenderer renderer)
-    {
-        return new HandoverSubmissionReviewService(
-            currentUser, users, vaults, submissions, store, audit, unitOfWork, time, WriterFor(renderer));
-    }
-
-    private HandoverSubmissionService SubmitWithPaper(IHandoverPaperRenderer renderer)
-    {
-        return new HandoverSubmissionService(
-            currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time, WriterFor(renderer));
-    }
-
-    private sealed class ThrowingPaperRenderer : IHandoverPaperRenderer
-    {
-        public byte[] Render(HandoverPaperData data)
-        {
-            throw new InvalidOperationException("Không dựng được văn bản.");
-        }
-    }
-
     [Fact]
-    public async Task Approve_Decline_StoresEncryptedPaperWithDataFromSystemRecords()
-    {
-        HandoverSubmission submission = await SubmitAndAttach(Request("DECLINE", voluntary: true));
-        FakePaperRenderer renderer = new FakePaperRenderer();
-        currentUser.UserId = verifier.Id;
-
-        await ReviewWithPaper(renderer).ApproveAsync(submission.Id, CancellationToken.None);
-
-        Assert.NotEmpty(submission.PaperStorageKey);
-        Assert.True(store.Contents.ContainsKey(submission.PaperStorageKey));
-        Assert.Equal("Trần Minh Anh", renderer.Last!.RecipientFullName);
-        Assert.Equal("1234", renderer.Last.CitizenIdLast4);
-        Assert.Equal("Luật sư Dũng", renderer.Last.ReviewerFullName);
-        Assert.Equal("Gói gia đình", renderer.Last.ContainerName);
-        Assert.False(renderer.Last.IsAcceptance);
-    }
-
-    [Fact]
-    public async Task Approve_Accept_StoresAcceptancePaper()
+    public async Task Approve_WhenRecordIsReopenedForEditing_IsConflict()
     {
         HandoverSubmission submission = await SubmitAndAttach(Request());
-        FakePaperRenderer renderer = new FakePaperRenderer();
         currentUser.UserId = verifier.Id;
+        records.Records[0].Status = HandoverRecordStatus.Drafting;
 
-        await ReviewWithPaper(renderer).ApproveAsync(submission.Id, CancellationToken.None);
+        AppException error = await Assert.ThrowsAsync<AppException>(
+            () => reviewService.ApproveAsync(submission.Id, CancellationToken.None));
 
-        Assert.NotEmpty(submission.PaperStorageKey);
-        Assert.True(renderer.Last!.IsAcceptance);
-    }
-
-    [Fact]
-    public async Task Submit_StoresEncryptedPaperRightAwayWithDeathDatesAndNoReviewer()
-    {
-        deathCases.Cases.Add(new DeathCase
-        {
-            VaultId = data.Vault.Id,
-            Status = DeathCaseStatus.ApprovedForHandover,
-            ReviewVersionNo = 1,
-            Versions = { new DeathCaseVersion { VersionNo = 1, DateOfDeath = new DateOnly(2026, 10, 5), IssuedOn = new DateOnly(2026, 10, 7) } },
-        });
-        FakePaperRenderer renderer = new FakePaperRenderer();
-
-        await SubmitWithPaper(renderer).SubmitAsync(turn.Id, Request("DECLINE", voluntary: true), Png, Jpeg, CancellationToken.None);
-
-        HandoverSubmission saved = Stored();
-        Assert.NotEmpty(saved.PaperStorageKey);
-        Assert.True(store.Contents.ContainsKey(saved.PaperStorageKey));
-        Assert.Equal(3, store.Contents.Count);
-        Assert.False(renderer.Last!.IsAcceptance);
-        Assert.Equal("Trần Minh Anh", renderer.Last.RecipientFullName);
-        Assert.Equal("Gói gia đình", renderer.Last.ContainerName);
-        Assert.Equal(new DateOnly(2026, 10, 5), renderer.Last.DateOfDeath);
-        Assert.Equal(new DateOnly(2026, 10, 7), renderer.Last.DeathCertificateIssuedOn);
-        Assert.Equal(Now, renderer.Last.SubmittedAt);
-        Assert.Equal(string.Empty, renderer.Last.ReviewerFullName);
-    }
-
-    [Fact]
-    public async Task Submit_WhenPaperRenderFails_StillStoresSubmissionWithoutPaper()
-    {
-        await SubmitWithPaper(new ThrowingPaperRenderer()).SubmitAsync(turn.Id, Request(), Png, Jpeg, CancellationToken.None);
-
-        HandoverSubmission saved = Stored();
-        Assert.Equal(HandoverSubmissionStatus.Submitted, saved.Status);
-        Assert.Empty(saved.PaperStorageKey);
-        Assert.Equal(2, store.Contents.Count);
-    }
-
-    [Fact]
-    public async Task Approve_KeepsPaperStoredAtSubmitWithoutRenderingAgain()
-    {
-        FakePaperRenderer atSubmit = new FakePaperRenderer();
-        await SubmitWithPaper(atSubmit).SubmitAsync(turn.Id, Request(), Png, Jpeg, CancellationToken.None);
-        HandoverSubmission submission = Stored();
-        submission.Turn = turn;
-        string keyAtSubmit = submission.PaperStorageKey;
-        FakePaperRenderer atApprove = new FakePaperRenderer();
-        currentUser.UserId = verifier.Id;
-
-        await ReviewWithPaper(atApprove).ApproveAsync(submission.Id, CancellationToken.None);
-
-        Assert.Equal(keyAtSubmit, submission.PaperStorageKey);
-        Assert.Null(atApprove.Last);
-        Assert.Equal(3, store.Contents.Count);
-    }
-
-    [Fact]
-    public async Task Resubmit_KeepsThePaperOfTheReplacedSubmissionAndStoresANewOne()
-    {
-        HandoverSubmissionService service = SubmitWithPaper(new FakePaperRenderer());
-        await service.SubmitAsync(turn.Id, Request(name: "Người Khác"), Png, Jpeg, CancellationToken.None);
-        HandoverSubmission first = Stored();
-
-        await service.SubmitAsync(turn.Id, Request(), Png, Jpeg, CancellationToken.None);
-
-        HandoverSubmission second = Stored();
-        Assert.Equal(HandoverSubmissionStatus.Superseded, first.Status);
-        Assert.NotEmpty(first.PaperStorageKey);
-        Assert.True(store.Contents.ContainsKey(first.PaperStorageKey));
-        Assert.NotEmpty(second.PaperStorageKey);
-        Assert.NotEqual(first.PaperStorageKey, second.PaperStorageKey);
+        Assert.Equal(AppErrorType.Conflict, error.Type);
+        Assert.Equal("NOT_IDENTITY_STEP", error.Extensions["reason"]);
+        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
     }
 
     [Fact]
@@ -524,19 +390,19 @@ public sealed class HandoverSubmissionTests
     }
 
     [Fact]
-    public async Task Approve_WhenAnyFieldMismatches_IsRefusedAndOnlySupplementIsOffered()
+    public async Task Approve_WhenAnyFieldMismatches_VerifierStillDecides()
     {
         HandoverSubmission submission = await SubmitAndAttach(Request(citizenId: "999999999999"));
         currentUser.UserId = verifier.Id;
 
         VerifierHandoverSubmissionResponse detail = await reviewService.GetAsync(submission.Id, CancellationToken.None);
-        AppException error = await Assert.ThrowsAsync<AppException>(
-            () => reviewService.ApproveAsync(submission.Id, CancellationToken.None));
+        VerifierHandoverSubmissionResponse approved = await reviewService.ApproveAsync(submission.Id, CancellationToken.None);
 
-        Assert.False(detail.CanApprove);
+        Assert.False(detail.AllMatch);
+        Assert.True(detail.CanApprove);
         Assert.True(detail.CanRequestSupplement);
-        Assert.Equal(AppErrorType.Conflict, error.Type);
-        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
+        Assert.Equal("APPROVED", approved.Status);
+        Assert.NotEqual(HandoverTurnStatus.IdentityInProgress, turn.Status);
     }
 
     [Fact]
@@ -607,4 +473,43 @@ public sealed class HandoverSubmissionTests
             () => reviewService.PrepareImageAsync(submission.Id, "side", CancellationToken.None));
         Assert.Equal(AppErrorType.NotFound, bad.Type);
     }
+}
+
+/// <summary>Biên bản giả: chỉ đếm số lần được báo đã xác nhận danh tính.</summary>
+public sealed class CountingRecordService : IHandoverRecordService
+{
+    public int AdvanceCalls { get; private set; }
+
+    public Task AdvanceAfterIdentityAsync(HandoverTurn turn, DateTimeOffset now, CancellationToken ct)
+    {
+        AdvanceCalls++;
+        turn.DecisionDeadline = null;
+        return Task.CompletedTask;
+    }
+
+    public Task<Guid?> FindVerifierUserIdAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<List<ExecutorVaultResponse>> ListMyVaultsAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse?> GetForExecutorAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> SignAsExecutorAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<List<HandoverRecordSummaryResponse>> ListForVerifierAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> GetForVerifierAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> UseOwnerSplitAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> SetLinesAsync(Guid recordId, SetHandoverRecordLinesRequest request, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> FinalizeAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> ReopenAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> GetForRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> ReviewClaimAsync(Guid recordId, Guid claimId, ReviewHandoverClaimRequest request, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> AddRecipientAsync(Guid recordId, AddHandoverRecipientRequest request, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> AddEvidenceAsync(Guid recordId, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> RemoveEvidenceAsync(Guid recordId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<PreparedDownload> PrepareVerifierFileAsync(Guid recordId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRequestPreviewResponse> PreviewRequestAsync(string token, CancellationToken ct) => throw new NotSupportedException();
+    public Task<MyHandoverClaimResponse> SubmitClaimAsync(string token, string? note, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
+    public Task<List<MyHandoverClaimResponse>> ListMyClaimsAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<MyHandoverClaimResponse> SupplementClaimAsync(Guid claimId, string? note, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
+    public Task<PreparedDownload> PrepareMyClaimFileAsync(Guid claimId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
+    public Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
 }

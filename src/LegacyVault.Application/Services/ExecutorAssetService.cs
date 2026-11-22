@@ -42,6 +42,14 @@ public sealed class ExecutorAssetService : IExecutorAssetService
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
         }
 
+        // Trước khi luật sư chốt biên bản bàn giao, Người thực thi chưa có quyền gì: không xem được tài sản,
+        // tránh lạm quyền khi Chủ kho còn sống.
+        if (vault.Plan.Status != PlanStatus.HandoverInProgress && vault.Plan.Status != PlanStatus.Closed)
+        {
+            throw HandoverAccess.NotAllowed("HANDOVER_NOT_STARTED",
+                "Chỉ xem được tài sản sau khi luật sư chốt biên bản bàn giao.");
+        }
+
         // 2. Lấy các gói sẵn sàng rồi dựng kết quả từng gói (bỏ tài sản đã bị xóa nội dung)
         List<Container> packages = await assetReader.FindReadyPackagesAsync(vault.Id, ct);
         List<ExecutorVaultPackageResponse> responses = new List<ExecutorVaultPackageResponse>();
@@ -66,7 +74,7 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         {
             ExecutorPackageRecipientResponse recipient = new ExecutorPackageRecipientResponse
             {
-                CitizenIdLast4 = designation.Beneficiary.CitizenIdLast4,
+                CitizenId = ReadCitizenId(designation.Beneficiary),
                 FullName = ReadFullName(designation.Beneficiary)
             };
             response.Recipients.Add(recipient);
@@ -102,7 +110,20 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         return "FILE";
     }
 
-    /// <summary>Họ tên người nhận; không giải mã được thì null để màn hình hiện 4 số cuối CCCD thay vì lỗi cả danh sách.</summary>
+    /// <summary>Họ tên người nhận; không giải mã được thì null để màn hình hiện số CCCD thay vì lỗi cả danh sách.</summary>
+    /// <summary>Số CCCD đầy đủ của người nhận; không giải mã được thì chuỗi rỗng.</summary>
+    private string ReadCitizenId(Beneficiary beneficiary)
+    {
+        try
+        {
+            return beneficiaryProtector.Unprotect(beneficiary).CitizenId;
+        }
+        catch (CryptographicException)
+        {
+            return string.Empty;
+        }
+    }
+
     private string? ReadFullName(Beneficiary beneficiary)
     {
         try

@@ -14,8 +14,8 @@ public class EkycStatusResponse
 
     public Guid? VerificationId { get; set; }
 
-    /// <summary>4 số cuối CCCD; chuỗi rỗng khi chưa đọc được.</summary>
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    /// <summary>Số CCCD đầy đủ; chuỗi rỗng khi chưa đọc được.</summary>
+    public string CitizenId { get; set; } = string.Empty;
 
     /// <summary>Điểm cosine của lần so khớp; không phải phần trăm.</summary>
     public double? FaceMatchScore { get; set; }

@@ -68,9 +68,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     // Thanh toán (SRS §8)
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
-    public DbSet<HandoverTemplateSet> HandoverTemplateSets => Set<HandoverTemplateSet>();
 
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
+
 
 
     // Cấu hình tham số động (CR5)
@@ -98,6 +98,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         }
         catch (DbUpdateConcurrencyException)
         {
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
+                "Dữ liệu vừa được sửa ở nơi khác. Vui lòng tải lại rồi sửa tiếp.");
+        }
+        catch (DbUpdateException exception) when (DbExceptions.IsDeadlock(exception))
+        {
+            // Hai request cùng ghi một bản ghi (ví dụ hai lần bấm ký cùng lúc): SQL Server chọn một bên thua.
             throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
                 "Dữ liệu vừa được sửa ở nơi khác. Vui lòng tải lại rồi sửa tiếp.");
         }

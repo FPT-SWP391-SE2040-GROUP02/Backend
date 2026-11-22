@@ -9,9 +9,6 @@ public interface IDevToolsRepository
     /// <summary>Các kho kèm Owner và kế hoạch, chỉ đọc, sắp theo ngày tạo. Không nạp nội dung tài sản.</summary>
     Task<List<Vault>> ListVaultsAsync(int maxCount, CancellationToken ct);
 
-    /// <summary>Thao tác đồng hồ gần nhất của kho trong nhật ký: tua hoặc về thời gian hiện tại; null khi chưa từng có.</summary>
-    Task<AuditAction?> FindLatestClockActionAsync(Guid vaultId, CancellationToken ct);
-
     /// <summary>Mọi lượt eKYC của tài khoản, có theo dõi thay đổi để xóa.</summary>
     Task<List<EkycVerification>> ListEkycVerificationsAsync(Guid userId, CancellationToken ct);
 

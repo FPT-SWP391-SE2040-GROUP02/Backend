@@ -232,7 +232,7 @@ public sealed class HandoverTestData
         Now = now;
         Owner = new User { Email = "owner@example.com", FullName = "Chủ Kho", Status = UserStatus.Active, EmailVerifiedAt = now.AddDays(-100), Role = UserRole.User };
         Vault = new Vault { OwnerId = Owner.Id, Owner = Owner, Name = "Kho", Status = VaultStatus.Open, CreatedAt = now.AddDays(-100) };
-        Vault.Plan = new HandoverPlan { VaultId = Vault.Id, Vault = Vault, Status = PlanStatus.DeathCaseOpen, CreatedAt = now.AddDays(-100) };
+        Vault.Plan = new HandoverPlan { VaultId = Vault.Id, Vault = Vault, Status = PlanStatus.HandoverRequested, CreatedAt = now.AddDays(-100) };
     }
 
     public DateTimeOffset Now { get; }

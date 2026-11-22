@@ -15,4 +15,7 @@ public class HandoverItemResponse
     public string ContentType { get; set; } = string.Empty;
 
     public long SizeBytes { get; set; }
+
+    /// <summary>true khi người nhận đã tải thành công mục này ít nhất một lần.</summary>
+    public bool Downloaded { get; set; }
 }

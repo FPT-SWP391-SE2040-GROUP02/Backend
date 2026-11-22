@@ -1,6 +1,7 @@
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
 using LegacyVault.Application.Repositories;
+using LegacyVault.Application.Mappings;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
@@ -54,11 +55,21 @@ public sealed class HandoverKeyTests
         keyShards.Shard = shard;
     }
 
+    /// <summary>Biên bản đủ chữ ký: lượt đã bàn giao và có quyền tải (như HandoverRecordService làm khi hoàn tất).</summary>
+    private HandoverTurnResponse CommitTurn()
+    {
+        HandoverGrant grant = HandoverRules.CommitAccept(turn, turn.ClaimantUserId!.Value, Now);
+        repository.AddGrant(grant);
+        HandoverTurnResponse response = new HandoverTurnResponse();
+        response.Status = turn.Status.ToApiString();
+        return response;
+    }
+
     [Fact]
     public async Task VaultWithoutAKey_DoesNotRequireOneAndAcceptWorks()
     {
         HandoverTurnResponse view = await service.GetTurnAsync(turn.Id, CancellationToken.None);
-        HandoverTurnResponse accepted = await service.AcceptAsync(turn.Id, CancellationToken.None);
+        HandoverTurnResponse accepted = await Task.FromResult(CommitTurn());
 
         Assert.False(view.KeyRequired);
         Assert.True(view.KeyVerified);
@@ -71,7 +82,7 @@ public sealed class HandoverKeyTests
         IssueKey();
 
         HandoverTurnResponse view = await service.GetTurnAsync(turn.Id, CancellationToken.None);
-        await service.AcceptAsync(turn.Id, CancellationToken.None);
+        await Task.FromResult(CommitTurn());
 
         Assert.True(view.KeyRequired);
         Assert.False(view.KeyVerified);
@@ -82,7 +93,7 @@ public sealed class HandoverKeyTests
     public async Task VerifyKey_AfterAccepting_IsAllowed()
     {
         IssueKey();
-        await service.AcceptAsync(turn.Id, CancellationToken.None);
+        await Task.FromResult(CommitTurn());
 
         HandoverTurnResponse verified = await service.VerifyKeyAsync(turn.Id, shardText, CancellationToken.None);
 
@@ -96,7 +107,7 @@ public sealed class HandoverKeyTests
         string typed = shardText.ToLowerInvariant().Replace("-", " ");
 
         HandoverTurnResponse verified = await service.VerifyKeyAsync(turn.Id, typed, CancellationToken.None);
-        HandoverTurnResponse accepted = await service.AcceptAsync(turn.Id, CancellationToken.None);
+        HandoverTurnResponse accepted = await Task.FromResult(CommitTurn());
 
         Assert.True(verified.KeyVerified);
         Assert.NotNull(turn.KeyVerifiedAt);

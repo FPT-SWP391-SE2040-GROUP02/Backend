@@ -10,7 +10,7 @@ namespace LegacyVault.Infrastructure.Jobs;
 /// Vòng lặp nền gọi IEntitlementExpiryJob theo chu kỳ: kho trả phí hết hạn thì sang ân hạn chỉ đọc (OPLAN-01).
 /// </summary>
 /// <remarks>
-/// - Cùng mẫu với CheckInMonitor: chờ hết một chu kỳ rồi mới quét lần đầu.
+/// - Chờ hết một chu kỳ rồi mới quét lần đầu.
 /// - Mỗi kho xử lý trong một DI scope (một DbContext) riêng và bọc try/catch: một kho lỗi không ảnh hưởng kho khác.
 /// - Chỉ log kiểu exception và vaultId; không log thông tin cá nhân (OPS-04).
 /// </remarks>

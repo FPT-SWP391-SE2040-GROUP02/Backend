@@ -46,14 +46,14 @@ public sealed class OwnerIdentityReader : IOwnerIdentityReader
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<string?> FindVerifiedCitizenIdLast4Async(Guid userId, CancellationToken ct)
+    public async Task<string?> FindVerifiedCitizenIdAsync(Guid userId, CancellationToken ct)
     {
-        string? last4 = await context.Set<EkycVerification>()
-            .Where(e => e.UserId == userId && e.Status == EkycStatus.Passed && e.CitizenIdLast4 != "")
+        string? citizenId = await context.Set<EkycVerification>()
+            .Where(e => e.UserId == userId && e.Status == EkycStatus.Passed && e.CitizenId != "")
             .OrderByDescending(e => e.CompletedAt)
             .ThenByDescending(e => e.Id)
-            .Select(e => e.CitizenIdLast4)
+            .Select(e => e.CitizenId)
             .FirstOrDefaultAsync(ct);
-        return last4;
+        return citizenId;
     }
 }

@@ -39,12 +39,13 @@ public sealed class HandoverSubmissionRepository : IHandoverSubmissionRepository
 
     public Task<List<HandoverSubmission>> ListPendingForVerifierAsync(Guid verifierUserId, CancellationToken ct)
     {
+        // Chỉ hồ sơ của lượt thuộc biên bản đang ở bước kiểm danh tính, được giao cho luật sư này.
         return context.Set<HandoverSubmission>()
             .Include(s => s.Turn)
             .Where(s => s.Status == HandoverSubmissionStatus.Submitted
-                && context.Set<DeathCaseDecision>().Any(d => d.Kind == DeathCaseDecisionKind.Approved
-                    && d.VerifierUserId == verifierUserId
-                    && context.Set<DeathCase>().Any(c => c.Id == d.CaseId && c.VaultId == s.Turn.VaultId)))
+                && context.Set<HandoverRecord>().Any(r => r.Id == s.Turn.RecordId
+                    && r.VerifierUserId == verifierUserId
+                    && r.Status == HandoverRecordStatus.IdentityCheck))
             .OrderBy(s => s.CreatedAt)
             .ToListAsync(ct);
     }
@@ -56,34 +57,28 @@ public sealed class HandoverSubmissionRepository : IHandoverSubmissionRepository
 
     public async Task<ApprovingVerifierRow?> FindApprovingVerifierAsync(Guid vaultId, CancellationToken ct)
     {
-        ApprovingVerifierRow? row = await context.Set<DeathCaseDecision>()
+        ApprovingVerifierRow? row = await context.Set<HandoverRecord>()
             .AsNoTracking()
-            .Where(d => d.Kind == DeathCaseDecisionKind.Approved
-                && context.Set<DeathCase>().Any(c => c.Id == d.CaseId && c.VaultId == vaultId))
-            .OrderByDescending(d => d.DecidedAt)
-            .Join(context.Set<User>(), d => d.VerifierUserId, u => u.Id,
-                (d, u) => new ApprovingVerifierRow { FullName = u.FullName, LawyerCardNumber = u.LawyerCardNumber })
+            .Where(r => r.VaultId == vaultId)
+            .Join(context.Set<User>(), r => r.VerifierUserId, u => u.Id,
+                (r, u) => new ApprovingVerifierRow { FullName = u.FullName, LawyerCardNumber = u.LawyerCardNumber })
             .FirstOrDefaultAsync(ct);
         return row;
     }
 
     public async Task<Guid?> FindApprovingVerifierUserIdAsync(Guid vaultId, CancellationToken ct)
     {
-        Guid? verifierId = await context.Set<DeathCaseDecision>()
+        Guid? verifierId = await context.Set<HandoverRecord>()
             .AsNoTracking()
-            .Where(d => d.Kind == DeathCaseDecisionKind.Approved
-                && context.Set<DeathCase>().Any(c => c.Id == d.CaseId && c.VaultId == vaultId))
-            .OrderByDescending(d => d.DecidedAt)
-            .Select(d => (Guid?)d.VerifierUserId)
+            .Where(r => r.VaultId == vaultId)
+            .Select(r => (Guid?)r.VerifierUserId)
             .FirstOrDefaultAsync(ct);
         return verifierId;
     }
 
     public Task<bool> IsApprovingVerifierAsync(Guid verifierUserId, Guid vaultId, CancellationToken ct)
     {
-        return context.Set<DeathCaseDecision>()
-            .AnyAsync(d => d.Kind == DeathCaseDecisionKind.Approved
-                && d.VerifierUserId == verifierUserId
-                && context.Set<DeathCase>().Any(c => c.Id == d.CaseId && c.VaultId == vaultId), ct);
+        return context.Set<HandoverRecord>()
+            .AnyAsync(r => r.VaultId == vaultId && r.VerifierUserId == verifierUserId, ct);
     }
 }

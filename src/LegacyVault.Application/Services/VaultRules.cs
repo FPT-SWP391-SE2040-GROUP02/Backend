@@ -52,7 +52,7 @@ public static class VaultRules
         {
             reason = VaultNotEditableReason.VaultClosed;
         }
-        else if (vault.Plan.Status == PlanStatus.DeathCaseOpen
+        else if (vault.Plan.Status == PlanStatus.HandoverRequested
             || vault.Plan.Status == PlanStatus.HandoverInProgress
             || vault.Plan.Status == PlanStatus.Blocked
             || vault.Plan.Status == PlanStatus.Closed)
@@ -75,7 +75,7 @@ public static class VaultRules
         {
             return VaultNotEditableReason.VaultClosed;
         }
-        if (vault.Plan.Status is PlanStatus.DeathCaseOpen or PlanStatus.HandoverInProgress or PlanStatus.Blocked or PlanStatus.Closed)
+        if (vault.Plan.Status is PlanStatus.HandoverRequested or PlanStatus.HandoverInProgress or PlanStatus.Blocked or PlanStatus.Closed)
         {
             return VaultNotEditableReason.PlanLocked;
         }

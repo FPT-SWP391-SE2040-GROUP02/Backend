@@ -1,21 +1,25 @@
 using System.Net;
 using System.Net.Http.Json;
 using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
 /// API tiến độ bàn giao trên SQL Server thật: quyền Executor, truy vấn gom nhóm lần tải và 4 số cuối CCCD.
-/// Lượt, tài sản đã ghim, quyền tải và nhật ký tải được chèn thẳng DB (không chạy cả luồng duyệt).
+/// Biên bản, lượt, tài sản đã ghim, quyền tải và nhật ký tải được chèn thẳng DB (không chạy cả luồng ký).
 /// </summary>
 public sealed class HandoverProgressApiTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;
+
+    // Biên bản chèn gần nhất: lượt chèn sau đó thuộc biên bản này.
+    private Guid lastRecordId;
 
     public async Task InitializeAsync()
     {
@@ -41,11 +45,11 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
     [SqlFact]
     public async Task Executor_SeesTurnsAndOnlySuccessfulDownloads()
     {
-        // Chuẩn bị: hồ sơ đã duyệt, một lượt đã đồng ý có hai tài sản
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        // Chuẩn bị: biên bản đã đủ chữ ký, một lượt đã bàn giao có hai tài sản
+        VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
+        VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         Guid caseId = await AddApprovedCaseAsync(vault, executor.User.Id);
-        Guid beneficiaryId = await AddBeneficiaryAsync(vault.VaultId, "4321");
+        Guid beneficiaryId = await AddBeneficiaryAsync(vault.VaultId, "001099004321");
         SeededTurn seeded = await AddCommittedTurnAsync(vault, beneficiaryId);
         DateTimeOffset firstAt = DateTimeOffset.UtcNow.AddMinutes(-30);
         await AddAccessLogAsync(seeded, seeded.FirstItemId, HandoverAccessOutcome.Denied, firstAt.AddMinutes(-5));
@@ -54,7 +58,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         await AddAccessLogAsync(seeded, seeded.SecondItemId, HandoverAccessOutcome.IntegrityFailed, firstAt);
 
         // Hành động
-        HttpResponseMessage response = await executor.Client.GetAsync($"/api/v1/executor/death-cases/{caseId}/handover-progress");
+        HttpResponseMessage response = await executor.Client.GetAsync($"/api/v1/executor/handover-records/{caseId}/handover-progress");
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -64,7 +68,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         Assert.Equal(1, body.Summary.Accepted);
         HandoverProgressTurnResponse turn = Assert.Single(body.Turns);
         Assert.Equal("Gói thử", turn.ContainerName);
-        Assert.Equal("4321", turn.BeneficiaryCitizenIdLast4);
+        Assert.Equal("001099004321", turn.BeneficiaryCitizenId);
         Assert.Equal("HANDOVER_COMMITTED", turn.Status);
         Assert.Equal("ACTIVE", turn.GrantStatus);
         Assert.Equal(2, turn.TotalItems);
@@ -88,13 +92,13 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
     [SqlFact]
     public async Task OwnerAndStranger_GetNotFound()
     {
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
+        VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         Guid caseId = await AddApprovedCaseAsync(vault, executor.User.Id);
-        User stranger = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User stranger = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient strangerClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(strangerClient, factory.Services, stranger);
-        string url = $"/api/v1/executor/death-cases/{caseId}/handover-progress";
+        string url = $"/api/v1/executor/handover-records/{caseId}/handover-progress";
 
         HttpResponseMessage ownerResponse = await vault.Client.GetAsync(url);
         HttpResponseMessage strangerResponse = await strangerClient.GetAsync(url);
@@ -102,38 +106,32 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, ownerResponse.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, strangerResponse.StatusCode);
         string body = await strangerResponse.Content.ReadAsStringAsync();
-        Assert.Contains("DEATH_CASE_NOT_FOUND", body, StringComparison.Ordinal);
+        Assert.Contains("HANDOVER_NOT_FOUND", body, StringComparison.Ordinal);
     }
 
     [SqlFact]
     public async Task SuspendedExecutor_GetsNotFound()
     {
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        User user = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        await DeathCaseTestData.AddExecutorAsync(factory, vault.VaultId, user.Id, ExecutorStatus.Suspended);
+        VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
+        User user = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        await VaultTestData.AddExecutorAsync(factory, vault.VaultId, user.Id, ExecutorStatus.Suspended);
         Guid caseId = await AddApprovedCaseAsync(vault, user.Id);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, user);
 
-        HttpResponseMessage response = await client.GetAsync($"/api/v1/executor/death-cases/{caseId}/handover-progress");
+        HttpResponseMessage response = await client.GetAsync($"/api/v1/executor/handover-records/{caseId}/handover-progress");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [SqlFact]
-    public async Task CaseUnderReview_ReturnsNotStarted()
+    public async Task RecordStillDrafting_ReturnsNotStarted()
     {
-        DeathCaseTestData.OwnerVault vault = await DeathCaseTestData.CreateOwnerWithRunningPlanAsync(factory);
-        DeathCaseTestData.ExecutorClient executor = await DeathCaseTestData.CreateExecutorClientAsync(factory, vault.VaultId);
-        DeathCase deathCase = DeathCaseTestData.NewDraftCase(vault, executor.User.Id);
-        deathCase.Status = DeathCaseStatus.UnderReview;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            db.Set<DeathCase>().Add(deathCase);
-            await db.SaveChangesAsync();
-        });
+        VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
+        VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        Guid recordId = await AddRecordAsync(vault, executor.User.Id, HandoverRecordStatus.Drafting);
 
-        HttpResponseMessage response = await executor.Client.GetAsync($"/api/v1/executor/death-cases/{deathCase.Id}/handover-progress");
+        HttpResponseMessage response = await executor.Client.GetAsync($"/api/v1/executor/handover-records/{recordId}/handover-progress");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         HandoverProgressResponse? body = await response.Content.ReadFromJsonAsync<HandoverProgressResponse>();
@@ -142,25 +140,54 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         Assert.Empty(body.Turns);
     }
 
-    private async Task<Guid> AddApprovedCaseAsync(DeathCaseTestData.OwnerVault vault, Guid executorUserId)
+    private Task<Guid> AddApprovedCaseAsync(VaultTestData.OwnerVault vault, Guid executorUserId)
     {
-        DeathCase deathCase = DeathCaseTestData.NewDraftCase(vault, executorUserId);
-        deathCase.Status = DeathCaseStatus.ApprovedForHandover;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            db.Set<DeathCase>().Add(deathCase);
-            await db.SaveChangesAsync();
-        });
-        return deathCase.Id;
+        return AddRecordAsync(vault, executorUserId, HandoverRecordStatus.Completed);
     }
 
-    private async Task<Guid> AddBeneficiaryAsync(Guid vaultId, string last4)
+    /// <summary>Chèn biên bản bàn giao của kho; khác Drafting thì coi như đã chốt (và Completed thì đã đủ chữ ký).</summary>
+    private async Task<Guid> AddRecordAsync(VaultTestData.OwnerVault vault, Guid executorUserId, HandoverRecordStatus status)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        HandoverRecord record = new HandoverRecord();
+        record.VaultId = vault.VaultId;
+        record.PlanId = vault.PlanId;
+        record.Status = status;
+        record.RequestedByUserId = executorUserId;
+        record.VerifierUserId = Guid.NewGuid();
+        record.RequestedAt = now.AddDays(-3);
+        if (status != HandoverRecordStatus.Drafting)
+        {
+            record.FinalizedAt = now.AddDays(-2);
+        }
+        if (status == HandoverRecordStatus.Completed)
+        {
+            record.CompletedAt = now.AddHours(-2);
+        }
+        record.UpdatedAt = now;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            db.Set<HandoverRecord>().Add(record);
+            await db.SaveChangesAsync();
+        });
+        lastRecordId = record.Id;
+        return record.Id;
+    }
+
+    private async Task<Guid> AddBeneficiaryAsync(Guid vaultId, string citizenId)
     {
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vaultId;
-        beneficiary.CitizenIdLast4 = last4;
-        beneficiary.EncryptionKeyId = "k1";
         beneficiary.CreatedAt = DateTimeOffset.UtcNow;
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IBeneficiaryDataProtector protector = scope.ServiceProvider.GetRequiredService<IBeneficiaryDataProtector>();
+            BeneficiaryPersonalData data = new BeneficiaryPersonalData();
+            data.CitizenId = citizenId;
+            data.FullName = "Người nhận thử";
+            data.DateOfBirth = new DateOnly(1990, 1, 1);
+            protector.Protect(beneficiary, data);
+        }
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             db.Set<Beneficiary>().Add(beneficiary);
@@ -170,12 +197,13 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
     }
 
     /// <summary>Lượt đã đồng ý kèm hai tài sản đã ghim và quyền tải đang hiệu lực.</summary>
-    private async Task<SeededTurn> AddCommittedTurnAsync(DeathCaseTestData.OwnerVault vault, Guid beneficiaryId)
+    private async Task<SeededTurn> AddCommittedTurnAsync(VaultTestData.OwnerVault vault, Guid beneficiaryId)
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         HandoverTurn turn = new HandoverTurn();
         turn.VaultId = vault.VaultId;
         turn.PlanId = vault.PlanId;
+        turn.RecordId = lastRecordId;
         turn.ContainerId = Guid.NewGuid();
         turn.ContainerName = "Gói thử";
         turn.DesignationId = Guid.NewGuid();
@@ -204,21 +232,19 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         grant.ExpiresAt = now.AddDays(30);
         turn.Grant = grant;
 
-        // Biên bản đã được cả hai bên ký, để kiểm tra hai mốc ký trả về cho Người thực thi.
-        HandoverDocument document = new HandoverDocument();
-        document.TurnId = turn.Id;
-        document.VaultId = vault.VaultId;
-        document.Kind = HandoverSubmissionKind.Accept;
-        document.Status = HandoverDocumentStatus.Completed;
-        document.RecipientSignedAt = now.AddHours(-3);
-        document.VerifierSignedAt = now.AddHours(-2);
-        document.CreatedAt = now.AddHours(-4);
+        // Người nhận đã ký biên bản trước lúc biên bản đủ chữ ký, để kiểm tra hai mốc trả về cho Người thực thi.
+        HandoverRecordSignature signature = new HandoverRecordSignature();
+        signature.RecordId = lastRecordId;
+        signature.RevisionNo = 1;
+        signature.Role = HandoverSignerRole.Recipient;
+        signature.SignerUserId = turn.ClaimantUserId.Value;
+        signature.BeneficiaryId = beneficiaryId;
+        signature.SignedAt = now.AddHours(-3);
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             db.Set<HandoverTurn>().Add(turn);
-            await db.SaveChangesAsync();
-            db.Set<HandoverDocument>().Add(document);
+            db.Set<HandoverRecordSignature>().Add(signature);
             await db.SaveChangesAsync();
         });
 

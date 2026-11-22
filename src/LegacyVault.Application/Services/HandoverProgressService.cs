@@ -41,30 +41,37 @@ public sealed class HandoverProgressService : IHandoverProgressService
     // Màn tiến độ bàn giao của Người thực thi: tình trạng từng lượt của từng người nhận.
     public async Task<HandoverProgressResponse> GetProgressAsync(Guid caseId, CancellationToken ct)
     {
-        // 1. Tìm hồ sơ chứng tử và kho; người gọi phải là Người thực thi đang phụ trách kho
+        // 1. Tìm biên bản bàn giao và kho; người gọi phải là Người thực thi đang phụ trách kho
         Guid userId = currentUser.RequireUserId();
         ExecutorCaseAccess access = await HandoverAccess.FindCaseForExecutorAsync(
             progressReader, vaultRepository, executorReader, caseId, userId, ct);
-        DeathCase deathCase = access.DeathCase;
+        HandoverRecord record = access.Record;
         Vault vault = access.Vault;
 
-        // 2. Chưa duyệt hồ sơ chứng tử thì chưa có lượt nào để theo dõi
+        // 2. Biên bản chưa chốt lần nào thì chưa có lượt nào để theo dõi
         HandoverProgressResponse response = new HandoverProgressResponse
         {
-            CaseId = deathCase.Id,
+            CaseId = record.Id,
             ServerTime = timeProvider.GetUtcNow()
         };
 
-        // Lượt bàn giao chỉ được tạo khi Verifier duyệt; trước đó chưa có gì để theo dõi.
-        if (deathCase.Status != DeathCaseStatus.ApprovedForHandover)
+        // Lượt bàn giao chỉ được tạo khi luật sư chốt biên bản; trước đó chưa có gì để theo dõi.
+        if (record.Status == HandoverRecordStatus.Drafting && record.FinalizedAt == null && record.RevisionNo == 1)
         {
             response.HandoverStarted = false;
             return response;
         }
         response.HandoverStarted = true;
 
-        // 3. Lấy mọi lượt, rồi đọc gộp một lần: lần tải đầu, 4 số cuối căn cước, mốc ký biên bản
-        List<HandoverTurn> turns = await progressReader.FindTurnsWithItemsAsync(deathCase.PlanId, ct);
+        // 3. Lấy mọi lượt của biên bản, rồi đọc gộp một lần: lần tải đầu, 4 số cuối căn cước
+        List<HandoverTurn> turns = new List<HandoverTurn>();
+        foreach (HandoverTurn candidate in await progressReader.FindTurnsWithItemsAsync(record.PlanId, ct))
+        {
+            if (candidate.RecordId == record.Id)
+            {
+                turns.Add(candidate);
+            }
+        }
         List<Guid> grantIds = new List<Guid>();
         List<Guid> beneficiaryIds = new List<Guid>();
         List<Guid> turnIds = new List<Guid>();
@@ -81,24 +88,25 @@ public sealed class HandoverProgressService : IHandoverProgressService
             }
         }
         Dictionary<Guid, DateTimeOffset> firstDownloads = await progressReader.FindFirstDownloadTimesAsync(grantIds, ct);
-        Dictionary<Guid, string> citizenIdLast4 = await progressReader.FindCitizenIdLast4Async(beneficiaryIds, ct);
-        Dictionary<Guid, HandoverDocumentTimes> documentTimes = await progressReader.FindDocumentTimesAsync(turnIds, ct);
+        Dictionary<Guid, string> citizenIds = await progressReader.FindCitizenIdsAsync(beneficiaryIds, ct);
 
         // 4. Dựng từng dòng lượt; lượt còn hiệu lực hoặc đã bàn giao thì kèm liên hệ người nhận; cộng số đếm theo nhóm
         foreach (HandoverTurn turn in turns)
         {
-            string last4 = string.Empty;
-            if (citizenIdLast4.ContainsKey(turn.BeneficiaryId))
+            string citizenId = string.Empty;
+            if (citizenIds.ContainsKey(turn.BeneficiaryId))
             {
-                last4 = citizenIdLast4[turn.BeneficiaryId];
+                citizenId = citizenIds[turn.BeneficiaryId];
             }
-            HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(last4, firstDownloads);
+            HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(citizenId, firstDownloads);
             turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
-            if (documentTimes.ContainsKey(turn.Id))
+            HandoverRecordSignature? signature = HandoverRecordRules.FindSignature(
+                record, HandoverSignerRole.Recipient, turn.BeneficiaryId);
+            if (signature != null)
             {
-                turnResponse.RecipientSignedAt = documentTimes[turn.Id].RecipientSignedAt;
-                turnResponse.DocumentApprovedAt = documentTimes[turn.Id].VerifierSignedAt;
+                turnResponse.RecipientSignedAt = signature.SignedAt;
             }
+            turnResponse.DocumentApprovedAt = record.CompletedAt;
             if (ShowsBeneficiaryContact(turn.Status))
             {
                 await FillBeneficiaryContactAsync(turnResponse, vault.Id, turn.BeneficiaryId, ct);

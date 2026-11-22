@@ -1,6 +1,6 @@
 using LegacyVault.Application.Services;
 using LegacyVault.Infrastructure.Data;
-using LegacyVault.IntegrationTests.DeathCases;
+using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;

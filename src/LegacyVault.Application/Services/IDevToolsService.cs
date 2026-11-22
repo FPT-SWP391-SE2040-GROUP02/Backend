@@ -13,22 +13,6 @@ public interface IDevToolsService
     /// <summary>Danh sách kho để chọn. Lỗi: 404 USER_NOT_FOUND khi không phải Admin.</summary>
     Task<List<DevVaultOptionResponse>> ListVaultsAsync(CancellationToken ct);
 
-    /// <summary>Trạng thái kế hoạch, điểm danh, đồng hồ và các mốc tua được. Lỗi: 404 USER_NOT_FOUND, 404 VAULT_NOT_FOUND.</summary>
-    Task<DevClockResponse> GetClockAsync(Guid vaultId, CancellationToken ct);
-
-    /// <summary>
-    /// Tua tới một mốc: dời hạn tương ứng về quá khứ, rồi cho job điểm danh xử lý ngay với hai mốc điểm danh.
-    /// Lỗi: 400 VALIDATION_ERROR (mốc không hợp lệ), 404 USER_NOT_FOUND, 404 VAULT_NOT_FOUND,
-    /// 409 DEV_TOOL_NOT_ALLOWED (trạng thái hiện tại không có mốc này hoặc đã qua mốc).
-    /// </summary>
-    Task<DevClockResponse> TimeTravelAsync(Guid vaultId, DevTimeTravelRequest request, CancellationToken ct);
-
-    /// <summary>
-    /// Đưa đồng hồ của kho về thời gian thực: chỉ ghi nhận trong nhật ký, giữ nguyên mọi trạng thái đã phát sinh khi tua.
-    /// Lỗi: 404 USER_NOT_FOUND, 404 VAULT_NOT_FOUND.
-    /// </summary>
-    Task<DevClockResponse> ResetClockAsync(Guid vaultId, CancellationToken ct);
-
     /// <summary>
     /// Đưa tài khoản về lúc vừa đăng ký và đăng nhập được: xóa toàn bộ dữ liệu eKYC (lượt xác minh, đồng ý chụp ảnh,
     /// danh tính đã gắn) và xóa hẳn kho của tài khoản cùng mọi dữ liệu trong kho (tài sản, gói, người nhận,

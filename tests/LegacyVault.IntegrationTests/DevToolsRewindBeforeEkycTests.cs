@@ -4,7 +4,6 @@ using System.Text.Json;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -40,9 +39,9 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
     [SqlFact]
     public async Task RewindRemovesEkycResetsEntitlementCancelsPendingOrderAndKeepsPaidOrder()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        DeathCaseTestData.OwnerVault target = await CreatePaidOwnerVaultAsync();
-        DeathCaseTestData.OwnerVault other = await CreatePaidOwnerVaultAsync();
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        VaultTestData.OwnerVault target = await CreatePaidOwnerVaultAsync();
+        VaultTestData.OwnerVault other = await CreatePaidOwnerVaultAsync();
         Guid paidOrderId = await AddOrderAsync(target.VaultId, target.Owner.Id, PaymentOrderStatus.Paid);
         Guid pendingOrderId = await AddOrderAsync(target.VaultId, target.Owner.Id, PaymentOrderStatus.Pending);
         await AddEkycDataAsync(target.Owner.Id);
@@ -95,8 +94,8 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
     [SqlFact]
     public async Task VaultAlreadyBeforeEkycReturnsZerosAndWritesNoAudit()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User owner = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient ownerClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(ownerClient, factory.Services, owner);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(ownerClient);
@@ -119,8 +118,8 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
     [SqlFact]
     public async Task RunningPlanIs409AndChangesNothing()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        DeathCaseTestData.OwnerVault target = await CreatePaidOwnerVaultAsync();
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        VaultTestData.OwnerVault target = await CreatePaidOwnerVaultAsync();
         await ApiTestHelpers.SetPlanStatusAsync(factory, target.VaultId, PlanStatus.Active);
         await AddEkycDataAsync(target.Owner.Id);
 
@@ -143,8 +142,8 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
     [SqlFact]
     public async Task UnknownVaultIs404_NonAdminIs404()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        DeathCaseTestData.OwnerVault target = await CreatePaidOwnerVaultAsync();
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        VaultTestData.OwnerVault target = await CreatePaidOwnerVaultAsync();
 
         HttpClient adminClient = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(adminClient, factory.Services, admin);
@@ -166,9 +165,9 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
     }
 
     /// <summary>Owner có kho (kế hoạch Nháp) với quyền dịch vụ Xs đã trả.</summary>
-    private async Task<DeathCaseTestData.OwnerVault> CreatePaidOwnerVaultAsync()
+    private async Task<VaultTestData.OwnerVault> CreatePaidOwnerVaultAsync()
     {
-        User owner = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User owner = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, owner);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
@@ -183,7 +182,7 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
             await db.SaveChangesAsync();
         });
 
-        DeathCaseTestData.OwnerVault result = new DeathCaseTestData.OwnerVault();
+        VaultTestData.OwnerVault result = new VaultTestData.OwnerVault();
         result.Owner = owner;
         result.Client = client;
         result.VaultId = vaultId;
@@ -229,7 +228,7 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
             verification.UserId = userId;
             verification.Purpose = EkycPurpose.OwnerEnrollment;
             verification.Status = EkycStatus.Passed;
-            verification.CitizenIdLast4 = "1234";
+            verification.CitizenId = "001099001234";
             verification.CreatedAt = now;
             verification.CompletedAt = now;
             db.Add(verification);

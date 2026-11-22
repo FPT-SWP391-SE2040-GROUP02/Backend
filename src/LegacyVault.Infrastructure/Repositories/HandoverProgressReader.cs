@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using LegacyVault.Application.Repositories;
+using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
@@ -14,17 +16,22 @@ namespace LegacyVault.Infrastructure.Repositories;
 public sealed class HandoverProgressReader : IHandoverProgressReader
 {
     private readonly AppDbContext context;
+    private readonly IBeneficiaryDataProtector protector;
 
-    public HandoverProgressReader(AppDbContext context)
+    public HandoverProgressReader(AppDbContext context, IBeneficiaryDataProtector protector)
     {
         this.context = context;
+        this.protector = protector;
     }
 
-    public Task<DeathCase?> FindCaseAsync(Guid caseId, CancellationToken ct)
+    public Task<HandoverRecord?> FindRecordAsync(Guid recordId, CancellationToken ct)
     {
-        return context.Set<DeathCase>()
+        return context.Set<HandoverRecord>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == caseId, ct);
+            .Include(r => r.Lines)
+            .Include(r => r.Signatures)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(r => r.Id == recordId, ct);
     }
 
     public Task<List<HandoverTurn>> FindTurnsWithItemsAsync(Guid planId, CancellationToken ct)
@@ -64,35 +71,7 @@ public sealed class HandoverProgressReader : IHandoverProgressReader
         return result;
     }
 
-    public async Task<Dictionary<Guid, HandoverDocumentTimes>> FindDocumentTimesAsync(
-        List<Guid> turnIds, CancellationToken ct)
-    {
-        Dictionary<Guid, HandoverDocumentTimes> result = new Dictionary<Guid, HandoverDocumentTimes>();
-        if (turnIds.Count == 0)
-        {
-            return result;
-        }
-
-        // Chỉ đọc id lượt và hai giờ ký, không đọc nội dung biên bản.
-        var rows = await context.Set<HandoverDocument>()
-            .AsNoTracking()
-            .Where(d => turnIds.Contains(d.TurnId))
-            .Select(d => new { d.TurnId, d.RecipientSignedAt, d.VerifierSignedAt })
-            .ToListAsync(ct);
-
-        foreach (var row in rows)
-        {
-            HandoverDocumentTimes times = new HandoverDocumentTimes
-            {
-                RecipientSignedAt = row.RecipientSignedAt,
-                VerifierSignedAt = row.VerifierSignedAt
-            };
-            result[row.TurnId] = times;
-        }
-        return result;
-    }
-
-    public async Task<Dictionary<Guid, string>> FindCitizenIdLast4Async(
+    public async Task<Dictionary<Guid, string>> FindCitizenIdsAsync(
         List<Guid> beneficiaryIds, CancellationToken ct)
     {
         Dictionary<Guid, string> result = new Dictionary<Guid, string>();
@@ -101,16 +80,24 @@ public sealed class HandoverProgressReader : IHandoverProgressReader
             return result;
         }
 
-        // Chỉ đọc cột 4 số cuối (không mã hóa); không đọc và không giải mã phần danh tính, liên hệ.
-        var rows = await context.Set<Beneficiary>()
+        // Giải mã phần danh tính để lấy số CCCD đầy đủ; hồ sơ không giải mã được thì để chuỗi rỗng.
+        List<Beneficiary> rows = await context.Set<Beneficiary>()
             .AsNoTracking()
             .Where(b => beneficiaryIds.Contains(b.Id))
-            .Select(b => new { b.Id, b.CitizenIdLast4 })
             .ToListAsync(ct);
 
-        foreach (var row in rows)
+        foreach (Beneficiary row in rows)
         {
-            result[row.Id] = row.CitizenIdLast4;
+            string citizenId = string.Empty;
+            try
+            {
+                citizenId = protector.Unprotect(row).CitizenId;
+            }
+            catch (CryptographicException)
+            {
+                citizenId = string.Empty;
+            }
+            result[row.Id] = citizenId;
         }
         return result;
     }

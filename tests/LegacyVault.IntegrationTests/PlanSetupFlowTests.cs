@@ -118,7 +118,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
             Assert.Equal(PlanSetupService.PolicyVersion, plan.ActivationPolicyVersion);
             Assert.NotNull(plan.ActivationPolicyAcknowledgedAt);
             Assert.NotNull(plan.ActivatedAt);
-            Assert.Equal(PlanStatus.Active, plan.Status);
+            Assert.Equal(1, await db.WillVersions.CountAsync(w => w.VaultId == vaultId));
             Assert.Equal(ExecutorStatus.Accepted, (await db.Set<Executor>().SingleAsync(e => e.VaultId == vaultId)).Status);
         });
     }
@@ -136,6 +136,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.Contains("OWNER_EKYC_REQUIRED", body.GetProperty("missingRequirements").EnumerateArray().Select(e => e.GetString()));
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
+            Assert.Equal(0, await db.WillVersions.CountAsync());
             Assert.Equal(PlanStatus.Draft, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId)).Status);
         });
     }
@@ -234,7 +235,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task ParallelActivationEndsActiveOnce()
+    public async Task ParallelActivationNeverCreatesTwoWillVersions()
     {
         var (owner, recipient, vaultId) = await PrepareAsync();
         await InviteAsync(owner, vaultId);
@@ -243,8 +244,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         var responses = await Task.WhenAll(owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request), owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request));
         Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
         Assert.All(responses, r => Assert.Contains(r.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Conflict }));
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-            Assert.Equal(PlanStatus.Active, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId)).Status));
+        await ApiTestHelpers.WithDbAsync(factory, async db => Assert.Equal(1, await db.WillVersions.CountAsync(w => w.VaultId == vaultId)));
     }
 
     [SqlFact]
@@ -343,7 +343,6 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.Equal(0, mine.GetProperty("pending").GetArrayLength());
         Assert.Equal(0, mine.GetProperty("ended").GetArrayLength());
     }
-
 
     private sealed class CapturedMail : IExecutorInvitationSender
     {

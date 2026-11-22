@@ -4,7 +4,6 @@ using System.Text.Json;
 using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
-using LegacyVault.IntegrationTests.DeathCases;
 using LegacyVault.IntegrationTests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,9 +41,9 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
     [SqlFact]
     public async Task AdminRemovesAllEkycDataOfTargetAndKeepsAccount()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        User target = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        User other = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User target = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User other = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         await AddEkycDataAsync(target.Id);
         await AddEkycDataAsync(other.Id);
 
@@ -80,7 +79,7 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
     [SqlFact]
     public async Task AdminRemovesOwnerVaultWithAllDataAndFiles_OtherVaultKept()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         (HttpClient owner, Guid vaultId) = await BuildHandedOverVaultAsync();
         (HttpClient otherOwner, Guid otherVaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         HttpResponseMessage otherText = await otherOwner.PostAsJsonAsync($"/api/v1/vaults/{otherVaultId}/assets/text",
@@ -122,6 +121,7 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             Assert.False(await db.Set<Executor>().AnyAsync(e => e.VaultId == vaultId));
             Assert.False(await db.Set<HandoverTurn>().AnyAsync(t => t.VaultId == vaultId));
             Assert.Equal(0, await db.Set<HandoverSnapshotItem>().CountAsync());
+            Assert.False(await db.Set<HandoverRecord>().AnyAsync(r => r.VaultId == vaultId));
             Assert.False(await db.Set<AuditLog>().AnyAsync(l => l.VaultId == vaultId));
             Assert.Equal(0, await db.Set<OwnerIdentity>().CountAsync(i => i.UserId == ownerUser.Id));
             // Tài khoản giữ lại để đăng nhập và tạo kho mới; kho của người khác không bị đụng tới.
@@ -141,8 +141,8 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
     [SqlFact]
     public async Task AccountWithoutEkycReturnsZerosAndWritesNoAudit()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        User target = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User target = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
 
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, admin);
@@ -161,8 +161,8 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
     [SqlFact]
     public async Task UnknownEmailIs404_NonAdminIs404()
     {
-        User admin = await DeathCaseTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
-        User plain = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
+        User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User plain = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         await AddEkycDataAsync(plain.Id);
 
         HttpClient adminClient = factory.CreateClient();
@@ -181,8 +181,8 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Kho đã trả phí có tài sản chữ trong một gói, một người nhận, Executor đã nhận, kỳ điểm danh,
-    /// và đã mở bàn giao (lượt và tài sản đã ghim). Trả client của Owner và id kho.
+    /// Kho đã trả phí có tài sản chữ trong một gói, một người nhận, Executor đã nhận,
+    /// và đã chốt biên bản bàn giao (lượt và tài sản đã ghim). Trả client của Owner và id kho.
     /// </summary>
     private async Task<(HttpClient Owner, Guid VaultId)> BuildHandedOverVaultAsync()
     {
@@ -199,21 +199,9 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.OK, designate.StatusCode);
 
-        User executor = await DeathCaseTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
-        await DeathCaseTestData.AddAcceptedExecutorAsync(factory, vaultId, executor.Id);
-        Guid planId = Guid.Empty;
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            planId = await db.Set<HandoverPlan>().Where(p => p.VaultId == vaultId).Select(p => p.Id).SingleAsync();
-        });
-
-        await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.DeathCaseOpen);
-        using (IServiceScope scope = factory.Services.CreateScope())
-        {
-            IHandoverStarter starter = scope.ServiceProvider.GetRequiredService<IHandoverStarter>();
-            HandoverStartResult result = await starter.StartAsync(vaultId, CancellationToken.None);
-            Assert.Equal(1, result.TurnCount);
-        }
+        // Người thực thi mở bàn giao, luật sư lấy biên bản phân chia làm biên bản rồi chốt: kho có một lượt đã ghim tài sản.
+        HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vaultId);
+        Assert.Equal(1, record.Body.GetProperty("recipients").GetArrayLength());
         return (owner, vaultId);
     }
 
@@ -232,7 +220,7 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             verification.UserId = userId;
             verification.Purpose = EkycPurpose.OwnerEnrollment;
             verification.Status = EkycStatus.Passed;
-            verification.CitizenIdLast4 = "1234";
+            verification.CitizenId = "001099001234";
             verification.CreatedAt = now;
             verification.CompletedAt = now;
             db.Add(verification);

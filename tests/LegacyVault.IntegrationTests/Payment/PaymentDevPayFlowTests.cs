@@ -352,7 +352,7 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         // Chuẩn bị: đơn tạo trước, sau đó kế hoạch vào chứng tử (§8.3: đơn tạo trước vẫn được cấp)
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
         Guid orderId = await CreateXsOrderAsync(client);
-        await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.DeathCaseOpen);
+        await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.HandoverRequested);
 
         // Hành động
         HttpResponseMessage response = await DevPayAsync(client, orderId);
@@ -363,7 +363,7 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             HandoverPlan plan = await db.HandoverPlans.AsNoTracking().SingleAsync(p => p.VaultId == vaultId);
-            Assert.Equal(PlanStatus.DeathCaseOpen, plan.Status);
+            Assert.Equal(PlanStatus.HandoverRequested, plan.Status);
         });
     }
 

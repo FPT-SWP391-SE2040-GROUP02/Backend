@@ -21,7 +21,7 @@ public sealed class ExecutorAssignRulesTests
     [Theory]
     [InlineData(PlanStatus.Draft, true)]
     [InlineData(PlanStatus.Active, true)]
-    [InlineData(PlanStatus.DeathCaseOpen, false)]
+    [InlineData(PlanStatus.HandoverRequested, false)]
     [InlineData(PlanStatus.HandoverInProgress, false)]
     [InlineData(PlanStatus.Closed, false)]
     [InlineData(PlanStatus.Blocked, false)]

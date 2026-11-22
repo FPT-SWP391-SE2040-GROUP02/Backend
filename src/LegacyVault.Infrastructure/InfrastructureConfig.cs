@@ -148,7 +148,6 @@ public static class InfrastructureConfig
         services.AddSingleton<IBillingDevSettings, BillingDevSettings>();
         // Webhook SePay (SRS §8.5): giao dịch tiền vào và cấu hình nhận webhook.
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
-        services.AddScoped<IHandoverTemplateRepository, HandoverTemplateRepository>();
         services.AddScoped<IEmailTemplateRepository, EmailTemplateRepository>();
         services.AddSingleton<IEmailTemplateDefaults, EmailTemplateDefaults>();
         services.AddHostedService<EmailTemplateRefresher>();
@@ -239,7 +238,6 @@ public static class InfrastructureConfig
         services.AddScoped<IEmailBounceStore, EmailBounceStore>();
         services.AddHostedService<BounceMailboxMonitor>();
         LegacyVault.Infrastructure.Handover.HandoverConfig.AddHandover(services, configuration);
-        LegacyVault.Infrastructure.DeathCases.DeathCaseConfig.AddDeathCases(services, configuration);
         // Job nền hết hạn dịch vụ (OPLAN-01): kho trả phí hết kỳ thì sang ân hạn chỉ đọc.
         services.Configure<EntitlementExpiryJobSettings>(configuration.GetSection(EntitlementExpiryJobSettings.SectionName));
         services.AddHostedService<EntitlementExpiryMonitor>();

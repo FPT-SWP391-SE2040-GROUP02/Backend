@@ -8,7 +8,7 @@ namespace LegacyVault.Domain.Entities;
 /// <remarks>
 /// - Chỉ lưu KẾT QUẢ. Không lưu ảnh giấy tờ, ảnh khuôn mặt, vector đặc trưng; ảnh chỉ đi qua dịch vụ eKYC
 ///   rồi bị bỏ. Họ tên, ngày sinh, địa chỉ đọc từ giấy tờ chỉ trả cho FE một lần, không ghi DB.
-/// - Chỉ 4 số cuối CCCD để dạng rõ (giống Beneficiary.CitizenIdLast4), đủ để đối chiếu mà không định danh được.
+/// - Số CCCD đầy đủ đọc từ mặt trước, dạng rõ.
 /// - DocumentToken là mã tham chiếu của dịch vụ eKYC (giữ khuôn mặt trên giấy tờ trong RAM của dịch vụ đó,
 ///   tối đa 30 phút). Chỉ server biết, không trả cho FE, và bị xóa ngay khi đã so khớp (SEC-04).
 /// - Mỗi lần người dùng đọc lại mặt trước là một dòng mới; dòng mới nhất là kết quả hiện hành.
@@ -38,8 +38,8 @@ public class EkycVerification
     /// </summary>
     public DateTimeOffset? BackSubmittedAt { get; set; }
 
-    /// <summary>4 số cuối CCCD đọc được từ mặt trước, dạng rõ. Rỗng khi OCR không đọc được số.</summary>
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    /// <summary>Số CCCD đầy đủ đọc được từ mặt trước, dạng rõ. Rỗng khi OCR không đọc được số.</summary>
+    public string CitizenId { get; set; } = string.Empty;
 
     /// <summary>Mã tham chiếu khuôn mặt của dịch vụ eKYC; null sau khi đã so khớp hoặc khi hết hạn.</summary>
     public string? DocumentToken { get; set; }

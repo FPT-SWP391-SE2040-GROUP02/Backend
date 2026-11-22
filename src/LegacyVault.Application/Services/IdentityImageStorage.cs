@@ -17,8 +17,8 @@ public static class IdentityImageStorage
     /// <summary>Loại ảnh theo nội dung thật; null khi không phải JPEG/PNG/WebP (khi đó không lưu ảnh).</summary>
     public static string? DetectContentType(byte[] image)
     {
-        int length = Math.Min(image.Length, DeathCaseFileRules.HeaderLength);
-        byte[] header = new byte[DeathCaseFileRules.HeaderLength];
+        int length = Math.Min(image.Length, FileSignatureRules.HeaderLength);
+        byte[] header = new byte[FileSignatureRules.HeaderLength];
         Array.Copy(image, header, length);
         return AvatarRules.DetectImageContentType(header);
     }

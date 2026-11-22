@@ -21,8 +21,8 @@ public class ExecutorPackageRecipientResponse
     /// <summary>Họ tên người nhận; null khi không giải mã được (thiếu KEK, dữ liệu hỏng).</summary>
     public string? FullName { get; set; }
 
-    /// <summary>4 số cuối CCCD để phân biệt người nhận trùng tên.</summary>
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    /// <summary>Số CCCD đầy đủ để phân biệt người nhận trùng tên.</summary>
+    public string CitizenId { get; set; } = string.Empty;
 }
 
 public class ExecutorPackageAssetResponse

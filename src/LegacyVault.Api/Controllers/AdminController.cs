@@ -161,7 +161,7 @@ public sealed class AdminController : ControllerBase
 
     // ---- Phân công Verifier ----
 
-    [HttpPost("death-cases/{caseId:guid}/reassign-verifier")]
+    [HttpPost("handover-records/{caseId:guid}/reassign-verifier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ReassignVerifier(Guid caseId, ReassignVerifierRequest request, CancellationToken ct)

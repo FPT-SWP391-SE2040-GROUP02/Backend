@@ -4,11 +4,11 @@ namespace LegacyVault.Application.Services;
 
 /// <summary>
 /// Luật kiểm tra giá trị các tham số Admin đặt ở trang Cấu hình (SystemSettings): số nguyên trong khoảng hợp lý,
-/// true/false, độ dài chữ, và vài cặp tham số phải đi cùng nhau (giờ nhắc lời mời Người thực thi sớm hơn hạn lời mời...).
+/// true/false, độ dài chữ, và vài cặp tham số phải đi cùng nhau (giờ nhắc lời mời sớm hơn hạn lời mời...).
 /// Hàm thuần, không đọc DB. Các khóa Plans.* đã có bộ kiểm riêng (bảng giá) nên không nằm ở đây.
 /// </summary>
 /// <remarks>
-/// Khoảng giá trị khớp với cách hệ thống đọc tham số (clamp trong các lớp Rules) để số Admin
+/// Khoảng giá trị khớp với cách hệ thống đọc tham số để số Admin
 /// thấy trên màn hình đúng bằng số hệ thống chạy, không bị điều chỉnh âm thầm khi đọc.
 /// </remarks>
 public static class SystemSettingRules
@@ -55,8 +55,8 @@ public static class SystemSettingRules
     private static Dictionary<string, IntegerRule> BuildIntegerRules()
     {
         Dictionary<string, IntegerRule> rules = new Dictionary<string, IntegerRule>();
+
         Add(rules, "Handover.ResponseWindowDays", "Hạn người nhận phản hồi lời mời (ngày)", 1, 60);
-        Add(rules, "Handover.DecisionWindowDays", "Hạn người nhận quyết định (ngày)", 1, 60);
         Add(rules, "Handover.GrantWindowDays", "Thời hạn được xem và tải tài sản (ngày)", 1, 365);
         Add(rules, "Handover.RetentionWindowDays", "Thời hạn lưu dữ liệu trước khi xóa (ngày)", 1, 730);
         Add(rules, "Handover.ResendCooldownMinutes", "Khoảng cách giữa hai lần gửi lại lời mời (phút)", 1, 1440);
@@ -64,10 +64,6 @@ public static class SystemSettingRules
         Add(rules, ExecutorExpiresKey, "Hạn lời mời Người thực thi (ngày)", 1, 60);
         Add(rules, ExecutorReminderKey, "Giờ nhắc sau khi mời Người thực thi (giờ)", 1, 1440);
 
-        Add(rules, "DeathCase.SupplementDueDays", "Hạn bổ sung hồ sơ chứng tử (ngày)", 1, 60);
-        Add(rules, "DeathCase.MaxFilesPerVersion", "Số tệp tối đa mỗi bản hồ sơ chứng tử", 1, 50);
-        Add(rules, "DeathCase.MaxFileSizeMb", "Dung lượng tối đa một tệp hồ sơ chứng tử (MiB)", 1, 200);
-        Add(rules, "DeathCase.ReviewDueHours", "Hạn Người xét duyệt hoàn tất thẩm định (giờ)", 1, 720);
 
         Add(rules, "Limits.MaxUploadsPerHour", "Số lần tải lên tối đa mỗi giờ", 1, 10000);
         Add(rules, "Limits.MaxAssetsPerVault", "Số tài sản tối đa trong một kho", 1, 100000);
