@@ -40,6 +40,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly TimeProvider timeProvider;
     private readonly IEmailDomainChecker domainChecker;
     private readonly IEmailBounceStore bounces;
+    private readonly IExecutorInvitationRepository invitationRepository;
 
     public BeneficiaryService(
         ICurrentUser currentUser,
@@ -53,8 +54,10 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IEmailDomainChecker domainChecker,
-        IEmailBounceStore bounces)
+        IEmailBounceStore bounces,
+        IExecutorInvitationRepository invitationRepository)
     {
+        this.invitationRepository = invitationRepository;
         this.domainChecker = domainChecker;
         this.bounces = bounces;
         this.currentUser = currentUser;
@@ -127,6 +130,13 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
 
         // Sau bước tìm trùng: gửi lại đúng hồ sơ cũ (chưa đủ tuổi từ trước) vẫn trả 200, chỉ hồ sơ mới mới bị kiểm tuổi.
         EnsureAdult(data.DateOfBirth, today);
+
+        // Hồ sơ mới thật sự được tạo: email không được trùng Chủ kho, nhân sự, Người thực thi hay người nhận khác.
+        // Kiểm sau bước tìm trùng CCCD để gửi lại đúng người đã có (cùng email) vẫn trả hồ sơ cũ.
+        if (!string.IsNullOrWhiteSpace(data.Email))
+        {
+            await EnsureEmailAvailableAsync(data.Email, vault, null, ct);
+        }
 
         // Giới hạn số hồ sơ người nhận theo tổng suất của kho (suất kèm hạng + suất mua thêm), tính cả hồ sơ chưa ở gói nào.
         // Kiểm sau bước tìm trùng CCCD: gửi lại đúng người đã có vẫn trả hồ sơ cũ dù kho đã đủ suất.
@@ -253,6 +263,17 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         }
     }
 
+    /// <summary>
+    /// Email không trùng Chủ kho, Người thực thi của kho hay người nhận khác (xem RecipientRules). Hồ sơ đang sửa không tính.
+    /// </summary>
+    private async Task EnsureEmailAvailableAsync(string email, Vault vault, Guid? exceptBeneficiaryId, CancellationToken ct)
+    {
+        (List<Beneficiary> Items, int TotalCount) page = await beneficiaryRepository.FindPageByVaultIdAsync(
+            vault.Id, null, 1, 1000, true, ct);
+        await RecipientRules.EnsureEmailAvailableAsync(
+            email, vault, exceptBeneficiaryId, userRepository, invitationRepository, dataProtector, page.Items, ct);
+    }
+
     public async Task<BeneficiaryResponse> GetBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
@@ -316,6 +337,11 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
                 throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
             }
             await EnsureEmailIsNotStaffAsync(updated.Email, ct);
+            // Chỉ kiểm khi đổi email, để sửa tên hay số điện thoại không bị chặn bởi email cũ.
+            if (!string.Equals(updated.Email, current.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                await EnsureEmailAvailableAsync(updated.Email, vault, beneficiaryId, ct);
+            }
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
