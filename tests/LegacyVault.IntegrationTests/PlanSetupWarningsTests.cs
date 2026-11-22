@@ -283,7 +283,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
                 Status = status,
                 CreatedAt = createdAt,
                 CompletedAt = createdAt,
-                CitizenIdLast4 = "",
+                CitizenId = "",
             };
             if (status == EkycStatus.Passed)
             {

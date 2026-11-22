@@ -74,7 +74,7 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         {
             ExecutorPackageRecipientResponse recipient = new ExecutorPackageRecipientResponse
             {
-                CitizenIdLast4 = designation.Beneficiary.CitizenIdLast4,
+                CitizenId = ReadCitizenId(designation.Beneficiary),
                 FullName = ReadFullName(designation.Beneficiary)
             };
             response.Recipients.Add(recipient);
@@ -110,7 +110,20 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         return "FILE";
     }
 
-    /// <summary>Họ tên người nhận; không giải mã được thì null để màn hình hiện 4 số cuối CCCD thay vì lỗi cả danh sách.</summary>
+    /// <summary>Họ tên người nhận; không giải mã được thì null để màn hình hiện số CCCD thay vì lỗi cả danh sách.</summary>
+    /// <summary>Số CCCD đầy đủ của người nhận; không giải mã được thì chuỗi rỗng.</summary>
+    private string ReadCitizenId(Beneficiary beneficiary)
+    {
+        try
+        {
+            return beneficiaryProtector.Unprotect(beneficiary).CitizenId;
+        }
+        catch (CryptographicException)
+        {
+            return string.Empty;
+        }
+    }
+
     private string? ReadFullName(Beneficiary beneficiary)
     {
         try

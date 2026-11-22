@@ -11,9 +11,9 @@ SET QUOTED_IDENTIFIER ON;
 
 DECLARE @VaultId uniqueidentifier = NULL; -- Điền Id kho cần thử.
 DECLARE @OwnerId uniqueidentifier = NULL; -- Điền Id Owner của kho đó.
-DECLARE @CitizenIdLast4 varchar(4) = ''; -- Điền 4 số cuối khi thử luồng chứng tử; không ghi số thật vào file để commit.
+DECLARE @CitizenId varchar(12) = ''; -- Điền số căn cước khi thử luồng chứng tử; không ghi số thật vào file để commit.
 
--- DEATH-13: 4 số cuối phải khớp thông tin Owner sẽ khai trên chứng tử để tránh cờ IDENTITY_MISMATCH.
+-- DEATH-13: số căn cước phải khớp thông tin Owner sẽ khai trên chứng tử để tránh cờ IDENTITY_MISMATCH.
 -- Để trống vẫn thử điều kiện eKYC của màn kích hoạt được; cần điền trước khi thử đối chiếu chứng tử.
 IF @VaultId IS NULL OR @OwnerId IS NULL
 BEGIN
@@ -36,10 +36,10 @@ WHERE VaultId = @VaultId;
 INSERT INTO dbo.EkycVerifications
 (
     Id, UserId, Status, Purpose, BackSideChecked,
-    LivenessPassed, SpoofCheckPassed, CitizenIdLast4, CreatedAt, CompletedAt
+    LivenessPassed, SpoofCheckPassed, CitizenId, CreatedAt, CompletedAt
 )
 VALUES
 (
     NEWID(), @OwnerId, N'Passed', N'OwnerEnrollment', 0,
-    1, 1, @CitizenIdLast4, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET()
+    1, 1, @CitizenId, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET()
 );

@@ -137,7 +137,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         Guid userId = currentUser.RequireUserId();
         HandoverTurn turn = submission.Turn;
 
-        // 2. Các điều kiện: chưa duyệt, đang chờ duyệt, ba trường đều khớp,
+        // 2. Các điều kiện: chưa duyệt, đang chờ duyệt,
         //    kế hoạch đang bàn giao, kho không bị giữ, lượt đang ở bước xác minh
         // Bấm lặp: đã duyệt rồi thì trả lại kết quả cũ.
         if (submission.Status == HandoverSubmissionStatus.Approved)
@@ -148,11 +148,8 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         {
             throw HandoverAccess.NotAllowed("WRONG_STATE", "Hồ sơ này không còn ở trạng thái chờ duyệt.");
         }
+        // Kết quả đối chiếu chỉ để tham khảo: luật sư xem ảnh căn cước và tự quyết định, kể cả khi có trường không khớp.
         await RequireIdentityStepAsync(turn, ct);
-        if (!(submission.NameMatches && submission.CitizenIdMatches && submission.DateOfBirthMatches))
-        {
-            throw HandoverAccess.NotAllowed("FIELDS_MISMATCH", "Có trường không khớp thông tin Chủ kho đã khai. Chỉ yêu cầu bổ sung được.");
-        }
         Vault vault = await RequireVaultInHandoverAsync(turn, ct);
         if (turn.Status != HandoverTurnStatus.IdentityInProgress)
         {

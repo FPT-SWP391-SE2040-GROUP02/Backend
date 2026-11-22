@@ -156,7 +156,7 @@ public sealed class EkycService : IEkycService
         verification.UserId = userId;
         verification.Status = EkycStatus.Pending;
         verification.Purpose = purpose;
-        verification.CitizenIdLast4 = EkycRules.GetCitizenIdLast4(reading.IdNumber);
+        verification.CitizenId = EkycRules.GetCitizenId(reading.IdNumber);
         verification.DocumentToken = reading.DocumentToken;
         verification.DocumentTokenExpiresAt = now + EkycRules.DocumentTokenLifetime;
         verification.CreatedAt = now;
@@ -257,7 +257,7 @@ public sealed class EkycService : IEkycService
         byte[] image = await ReadImageAsync(content, contentType, ct);
         EkycBackReading reading = await ActiveClient().ReadBackAsync(image, fileName, contentType, ct);
 
-        if (reading.IdNumber.Length > 0 && !EkycRules.IsSameCard(reading.IdNumber, verification.CitizenIdLast4))
+        if (reading.IdNumber.Length > 0 && !EkycRules.IsSameCard(reading.IdNumber, EkycRules.GetCitizenIdLast4(verification.CitizenId)))
         {
             throw new AppException(AppErrorType.Validation, ErrorCode.EkycDocumentMismatch,
                 "Hai mặt giấy tờ không cùng một thẻ. Vui lòng chụp lại.");

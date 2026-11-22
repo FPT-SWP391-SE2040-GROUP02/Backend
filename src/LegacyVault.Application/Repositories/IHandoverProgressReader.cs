@@ -23,6 +23,6 @@ public interface IHandoverProgressReader
     /// </summary>
     Task<Dictionary<Guid, DateTimeOffset>> FindFirstDownloadTimesAsync(List<Guid> grantIds, CancellationToken ct);
 
-    /// <summary>4 số cuối CCCD của các người nhận cho trước, theo id người nhận.</summary>
-    Task<Dictionary<Guid, string>> FindCitizenIdLast4Async(List<Guid> beneficiaryIds, CancellationToken ct);
+    /// <summary>Số CCCD đầy đủ (đã giải mã) của các người nhận cho trước, theo id người nhận.</summary>
+    Task<Dictionary<Guid, string>> FindCitizenIdsAsync(List<Guid> beneficiaryIds, CancellationToken ct);
 }

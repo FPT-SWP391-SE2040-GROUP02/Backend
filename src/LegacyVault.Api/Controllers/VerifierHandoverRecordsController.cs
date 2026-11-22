@@ -37,7 +37,7 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.ListForVerifierAsync(ct);
     }
 
-    /// <summary>Một biên bản kèm tài sản, người nhận và file phân chia của Chủ kho để lập.</summary>
+    /// <summary>Một biên bản kèm tài sản, người nhận và biên bản phân chia của Chủ kho để lập.</summary>
     [HttpGet("{recordId:guid}")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -46,7 +46,7 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.GetForVerifierAsync(recordId, ct);
     }
 
-    /// <summary>Lấy file phân chia của Chủ kho làm bản đầu (thay toàn bộ dòng đang có).</summary>
+    /// <summary>Lấy biên bản phân chia của Chủ kho làm bản đầu (thay toàn bộ dòng đang có).</summary>
     [HttpPost("{recordId:guid}/use-owner-split")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

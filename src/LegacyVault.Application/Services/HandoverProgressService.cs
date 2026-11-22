@@ -88,17 +88,17 @@ public sealed class HandoverProgressService : IHandoverProgressService
             }
         }
         Dictionary<Guid, DateTimeOffset> firstDownloads = await progressReader.FindFirstDownloadTimesAsync(grantIds, ct);
-        Dictionary<Guid, string> citizenIdLast4 = await progressReader.FindCitizenIdLast4Async(beneficiaryIds, ct);
+        Dictionary<Guid, string> citizenIds = await progressReader.FindCitizenIdsAsync(beneficiaryIds, ct);
 
         // 4. Dựng từng dòng lượt; lượt còn hiệu lực hoặc đã bàn giao thì kèm liên hệ người nhận; cộng số đếm theo nhóm
         foreach (HandoverTurn turn in turns)
         {
-            string last4 = string.Empty;
-            if (citizenIdLast4.ContainsKey(turn.BeneficiaryId))
+            string citizenId = string.Empty;
+            if (citizenIds.ContainsKey(turn.BeneficiaryId))
             {
-                last4 = citizenIdLast4[turn.BeneficiaryId];
+                citizenId = citizenIds[turn.BeneficiaryId];
             }
-            HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(last4, firstDownloads);
+            HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(citizenId, firstDownloads);
             turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
             HandoverRecordSignature? signature = HandoverRecordRules.FindSignature(
                 record, HandoverSignerRole.Recipient, turn.BeneficiaryId);

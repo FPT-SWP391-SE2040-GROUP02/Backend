@@ -122,7 +122,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
 
     /// <summary>
     /// Kho có một gói READY với một tài sản, chỉ định cho beneficiaryCount người nhận; thêm một tài sản ngoài gói.
-    /// Người thực thi mở bàn giao, luật sư lấy file phân chia làm biên bản rồi chốt: mỗi người nhận một lượt.
+    /// Người thực thi mở bàn giao, luật sư lấy biên bản phân chia làm biên bản rồi chốt: mỗi người nhận một lượt.
     /// </summary>
     private async Task<Scenario> BuildHandoverAsync(int beneficiaryCount)
     {

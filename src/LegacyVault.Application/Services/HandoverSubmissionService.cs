@@ -92,7 +92,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             throw HandoverAccess.NotAllowed("ALREADY_APPROVED", "Hồ sơ của bạn đã được duyệt.");
         }
 
-        // 6. Tạo hồ sơ mới: chỉ giữ 4 số cuối căn cước và ba kết quả đối chiếu tên, số căn cước, ngày sinh
+        // 6. Tạo hồ sơ mới: giữ số căn cước khai và ba kết quả đối chiếu tên, số căn cước, ngày sinh
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverSubmission submission = new HandoverSubmission
         {
@@ -104,7 +104,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             == EkycRules.NormalizeNameForCompare(expected.FullName);
         submission.CitizenIdMatches = string.Equals(request.CitizenId, expected.CitizenId, StringComparison.Ordinal);
         submission.DateOfBirthMatches = request.DateOfBirth == expected.DateOfBirth;
-        submission.CitizenIdLast4 = request.CitizenId.Substring(request.CitizenId.Length - 4);
+        submission.CitizenId = request.CitizenId;
         submission.Acknowledged = true;
         submission.VoluntaryDecline = false;
         submission.CreatedAt = now;

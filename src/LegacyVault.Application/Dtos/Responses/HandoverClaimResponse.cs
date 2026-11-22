@@ -9,7 +9,7 @@ public class HandoverClaimResponse
 
     public string FullName { get; set; } = string.Empty;
 
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    public string CitizenId { get; set; } = string.Empty;
 
     /// <summary>SUBMITTED, SUPPLEMENT_REQUESTED, ACCEPTED hoặc REJECTED.</summary>
     public string Status { get; set; } = string.Empty;

@@ -26,7 +26,7 @@ public interface IHandoverRecordService
     Task<List<HandoverRecordSummaryResponse>> ListForVerifierAsync(CancellationToken ct);
     Task<HandoverRecordResponse> GetForVerifierAsync(Guid recordId, CancellationToken ct);
 
-    /// <summary>Lấy file phân chia của Chủ kho (các gói sẵn sàng) làm bản đầu, thay toàn bộ dòng đang có.</summary>
+    /// <summary>Lấy biên bản phân chia của Chủ kho (các gói sẵn sàng) làm bản đầu, thay toàn bộ dòng đang có.</summary>
     Task<HandoverRecordResponse> UseOwnerSplitAsync(Guid recordId, CancellationToken ct);
 
     /// <summary>Thay toàn bộ dòng "ai nhận tài sản nào". Chỉ khi biên bản đang lập (bước 1).</summary>

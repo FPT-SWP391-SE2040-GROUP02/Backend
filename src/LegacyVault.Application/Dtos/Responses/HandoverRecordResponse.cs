@@ -2,7 +2,7 @@ namespace LegacyVault.Application.Dtos.Responses;
 
 /// <summary>
 /// Biên bản bàn giao của một kho, dùng chung cho luật sư, Người thực thi và người nhận.
-/// Người nhận chỉ thấy dòng của chính mình; luật sư thấy thêm danh sách tài sản, người nhận và file phân chia của Chủ kho.
+/// Người nhận chỉ thấy dòng của chính mình; luật sư thấy thêm danh sách tài sản, người nhận và biên bản phân chia của Chủ kho.
 /// </summary>
 public class HandoverRecordResponse
 {
@@ -35,7 +35,7 @@ public class HandoverRecordResponse
     /// <summary>Chỉ cho luật sư: người nhận Chủ kho đã khai.</summary>
     public List<HandoverRecordPersonResponse> AvailableRecipients { get; set; } = new List<HandoverRecordPersonResponse>();
 
-    /// <summary>Chỉ cho luật sư: file phân chia của Chủ kho (các gói sẵn sàng). Rỗng khi Chủ kho chưa lập.</summary>
+    /// <summary>Chỉ cho luật sư: biên bản phân chia của Chủ kho (các gói sẵn sàng). Rỗng khi Chủ kho chưa lập.</summary>
     public List<OwnerSplitPackageResponse> OwnerSplit { get; set; } = new List<OwnerSplitPackageResponse>();
 
     /// <summary>Yêu cầu nhận tài sản kèm giấy tờ; chỉ luật sư của biên bản thấy, các vai khác nhận danh sách rỗng.</summary>
@@ -50,7 +50,7 @@ public class HandoverRecordRecipientResponse
 {
     public Guid BeneficiaryId { get; set; }
     public string FullName { get; set; } = string.Empty;
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    public string CitizenId { get; set; } = string.Empty;
     public List<HandoverRecordAssetResponse> Assets { get; set; } = new List<HandoverRecordAssetResponse>();
 
     /// <summary>Lượt bàn giao của người này; null khi biên bản chưa chốt lần nào.</summary>
@@ -85,10 +85,10 @@ public class HandoverRecordPersonResponse
 {
     public Guid BeneficiaryId { get; set; }
     public string FullName { get; set; } = string.Empty;
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    public string CitizenId { get; set; } = string.Empty;
 }
 
-/// <summary>Một gói trong file phân chia của Chủ kho: những người nhận và tài sản Chủ kho đã xếp vào gói.</summary>
+/// <summary>Một gói trong biên bản phân chia của Chủ kho: những người nhận và tài sản Chủ kho đã xếp vào gói.</summary>
 public class OwnerSplitPackageResponse
 {
     public string PackageName { get; set; } = string.Empty;

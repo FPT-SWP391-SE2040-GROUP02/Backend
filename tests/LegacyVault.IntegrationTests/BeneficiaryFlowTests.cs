@@ -127,7 +127,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.NotNull(first.Headers.Location);
         JsonElement created = await ApiTestHelpers.ReadJsonAsync(first);
-        Assert.Equal("8901", created.GetProperty("citizenIdLast4").GetString());
+        Assert.Equal(LeadingZeroCitizenId, created.GetProperty("citizenId").GetString());
         Assert.Equal(FullName, created.GetProperty("fullName").GetString());
         Assert.Equal("1990-05-20", created.GetProperty("dateOfBirth").GetString());
         Assert.Equal(Email, created.GetProperty("email").GetString());
@@ -304,7 +304,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Data02_FullCitizenIdIsNeverReturnedAndIsStoredEncrypted()
+    public async Task Data02_FullCitizenIdIsReturnedAndIsStoredEncrypted()
     {
         // Chuẩn bị
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -316,11 +316,11 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         string getBody = await (await client.GetAsync($"{BeneficiariesUrl(vaultId)}/{beneficiaryId}")).Content.ReadAsStringAsync();
         string listBody = await (await client.GetAsync(BeneficiariesUrl(vaultId))).Content.ReadAsStringAsync();
 
-        // Kiểm tra: response không có CCCD đầy đủ.
+        // Kiểm tra: response trả CCCD đầy đủ.
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
-        Assert.DoesNotContain(LeadingZeroCitizenId, createBody);
-        Assert.DoesNotContain(LeadingZeroCitizenId, getBody);
-        Assert.DoesNotContain(LeadingZeroCitizenId, listBody);
+        Assert.Contains(LeadingZeroCitizenId, createBody);
+        Assert.Contains(LeadingZeroCitizenId, getBody);
+        Assert.Contains(LeadingZeroCitizenId, listBody);
 
         // Kiểm tra: DB không chứa CCCD, họ tên, email dạng UTF-8 rõ; DEK đã bọc 60 byte.
         Beneficiary? row = null;
@@ -444,7 +444,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         Assert.Equal("Nguyễn Văn Bình", updated.GetProperty("fullName").GetString());
         JsonElement readBack = await ApiTestHelpers.ReadJsonAsync(get);
         Assert.Equal("Nguyễn Văn Bình", readBack.GetProperty("fullName").GetString());
-        Assert.Equal("8901", readBack.GetProperty("citizenIdLast4").GetString());
+        Assert.Equal(LeadingZeroCitizenId, readBack.GetProperty("citizenId").GetString());
         Assert.Equal(Email, readBack.GetProperty("email").GetString());
         Assert.Equal(updated.GetProperty("etag").GetString(), readBack.GetProperty("etag").GetString());
     }

@@ -22,7 +22,7 @@ namespace LegacyVault.IntegrationTests.Handover;
 /// Chỉ chạy khi có LEGACYVAULT_TEST_CONNECTION; mỗi lớp test dùng một database tạm.
 /// </summary>
 /// <remarks>
-/// Kho đi qua luồng biên bản thật: Người thực thi mở bàn giao, luật sư lấy file phân chia làm biên bản rồi chốt.
+/// Kho đi qua luồng biên bản thật: Người thực thi mở bàn giao, luật sư lấy biên bản phân chia làm biên bản rồi chốt.
 /// Môi trường test bỏ qua xác minh danh tính nên nhận lượt xong là sang bước ký.
 /// Token mời thật chỉ có hash trong DB, nên test thay hash bằng hash của token đã biết.
 /// </remarks>
