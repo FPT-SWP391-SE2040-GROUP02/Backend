@@ -470,46 +470,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("EmailBounces", (string)null);
                 });
 
-            modelBuilder.Entity("LegacyVault.Domain.Entities.EmailTemplate", b =>
-                {
-                    b.Property<string>("Key")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("Body")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
-
-                    b.Property<string>("ButtonText")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Subject")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Title")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Key");
-
-                    b.ToTable("EmailTemplates", (string)null);
-                });
-
             modelBuilder.Entity("LegacyVault.Domain.Entities.EmailVerificationToken", b =>
                 {
                     b.Property<Guid>("Id")

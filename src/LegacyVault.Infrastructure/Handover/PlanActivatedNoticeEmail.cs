@@ -19,30 +19,10 @@ public static class PlanActivatedNoticeEmail
 
     private const string MissingPhone = "chưa cung cấp";
 
-    /// <summary>Dựng thư báo kích hoạt kế hoạch hoàn chỉnh: chữ gốc, thay bằng chữ Admin đã sửa (nếu có), rồi ghép bản chữ và bản HTML.</summary>
+    /// <summary>Dựng thư báo kích hoạt kế hoạch hoàn chỉnh: ghép bản chữ và bản HTML.</summary>
     public static EmailContent Build(PlanActivatedNotice notice, string landingUrl)
     {
-        string ownerPhone = PhoneText(notice.OwnerPhone);
-        string executorPhone = PhoneText(notice.ExecutorPhone);
-        EmailParts defaults = Parts(notice);
-
-        Dictionary<string, string> tokens = new Dictionary<string, string>();
-        tokens["TEN_NGUOI_NHAN"] = notice.FullName;
-        tokens["TEN_CHU_KHO"] = notice.OwnerName;
-        tokens["EMAIL_CHU_KHO"] = notice.OwnerEmail;
-        tokens["SDT_CHU_KHO"] = ownerPhone;
-        tokens["TEN_NGUOI_THUC_THI"] = string.Empty;
-        tokens["EMAIL_NGUOI_THUC_THI"] = string.Empty;
-        if (notice.ExecutorName != null)
-        {
-            tokens["TEN_NGUOI_THUC_THI"] = notice.ExecutorName;
-        }
-        if (notice.ExecutorEmail != null)
-        {
-            tokens["EMAIL_NGUOI_THUC_THI"] = notice.ExecutorEmail;
-        }
-        tokens["SDT_NGUOI_THUC_THI"] = executorPhone;
-        EmailParts parts = EmailTemplateOverrides.Apply(EmailTemplateCatalog.PlanActivated, defaults, tokens);
+        EmailParts parts = Parts(notice);
 
         string text = $"Xin chào {notice.FullName},\n\n{parts.Title}\n\n{parts.Body}\n\n{parts.ButtonText}: {landingUrl}\n\n{parts.Note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(
@@ -52,22 +32,7 @@ public static class PlanActivatedNoticeEmail
             actionUrl: landingUrl,
             actionButtonText: parts.ButtonText,
             securityNotice: parts.Note);
-        return new EmailContent(parts.Subject, text, html, EmailTemplateCatalog.PlanActivated);
-    }
-
-    /// <summary>Chữ gốc với biến {TEN_...} giữ nguyên, để Admin sao chép làm chỗ bắt đầu.</summary>
-    public static EmailParts SampleParts()
-    {
-        PlanActivatedNotice sample = new PlanActivatedNotice
-        {
-            OwnerName = "{TEN_CHU_KHO}",
-            OwnerEmail = "{EMAIL_CHU_KHO}",
-            OwnerPhone = "{SDT_CHU_KHO}",
-            ExecutorName = "{TEN_NGUOI_THUC_THI}",
-            ExecutorEmail = "{EMAIL_NGUOI_THUC_THI}",
-            ExecutorPhone = "{SDT_NGUOI_THUC_THI}"
-        };
-        return Parts(sample);
+        return new EmailContent(parts.Subject, text, html);
     }
 
     /// <summary>Số điện thoại để in trong thư; chưa có thì in chữ "chưa cung cấp".</summary>

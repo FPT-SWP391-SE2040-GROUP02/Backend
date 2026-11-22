@@ -61,7 +61,6 @@ public static class ApplicationConfig
         services.AddScoped<PaymentGranter>();
         services.AddScoped<ISePayWebhookService, SePayWebhookService>();
         services.AddScoped<IAdminPaymentService, AdminPaymentService>();
-        services.AddScoped<IEmailTemplateService, EmailTemplateService>();
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsService, DevToolsService>();
         // Chế độ bảo trì: chặn tài khoản không phải Admin ở đăng nhập, làm mới phiên và middleware API

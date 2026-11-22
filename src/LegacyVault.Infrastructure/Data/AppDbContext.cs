@@ -69,7 +69,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
 
-    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
 
 
 
