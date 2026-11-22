@@ -384,10 +384,10 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ lấy file phân chia khi biên bản đang lập.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ lấy biên bản phân chia khi biên bản đang lập.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
-        // 2. Đọc file phân chia: mỗi người nhận của gói nhận mọi tài sản trong gói (gói nhiều người là đồng thừa kế)
+        // 2. Đọc biên bản phân chia: mỗi người nhận của gói nhận mọi tài sản trong gói (gói nhiều người là đồng thừa kế)
         List<Designation> designations = await handover.FindStartableDesignationsAsync(vault.Id, ct);
         List<(Guid BeneficiaryId, Guid AssetId)> lines = new List<(Guid BeneficiaryId, Guid AssetId)>();
         HashSet<(Guid, Guid)> usedPairs = new HashSet<(Guid, Guid)>();
@@ -413,7 +413,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (lines.Count == 0)
         {
             throw HandoverAccess.NotAllowed("NO_OWNER_SPLIT",
-                "Chủ kho chưa lập file phân chia. Vui lòng tự lập biên bản.");
+                "Chủ kho chưa lập biên bản phân chia. Vui lòng tự lập biên bản.");
         }
 
         // 3. Thay toàn bộ dòng, lưu
@@ -1045,12 +1045,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
             {
                 BeneficiaryId = beneficiary.Id,
                 FullName = ReadFullName(beneficiary),
-                CitizenIdLast4 = beneficiary.CitizenIdLast4
+                CitizenId = ReadCitizenId(beneficiary)
             };
             response.AvailableRecipients.Add(person);
         }
 
-        // File phân chia của Chủ kho: gom chỉ định theo gói.
+        // Biên bản phân chia của Chủ kho: gom chỉ định theo gói.
         List<Designation> designations = await handover.FindStartableDesignationsAsync(vault.Id, ct);
         Dictionary<Guid, OwnerSplitPackageResponse> packages = new Dictionary<Guid, OwnerSplitPackageResponse>();
         foreach (Designation designation in designations)
@@ -1095,7 +1095,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             if (beneficiaryById.ContainsKey(claim.BeneficiaryId))
             {
                 item.FullName = ReadFullName(beneficiaryById[claim.BeneficiaryId]);
-                item.CitizenIdLast4 = beneficiaryById[claim.BeneficiaryId].CitizenIdLast4;
+                item.CitizenId = ReadCitizenId(beneficiaryById[claim.BeneficiaryId]);
             }
             foreach (HandoverRecordFile file in record.Files.OrderBy(f => f.CreatedAt))
             {
@@ -1192,7 +1192,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             if (beneficiariesById.ContainsKey(pair.Key))
             {
                 recipient.FullName = ReadFullName(beneficiariesById[pair.Key]);
-                recipient.CitizenIdLast4 = beneficiariesById[pair.Key].CitizenIdLast4;
+                recipient.CitizenId = ReadCitizenId(beneficiariesById[pair.Key]);
             }
             foreach (Guid assetId in pair.Value)
             {
@@ -1240,6 +1240,19 @@ public sealed class HandoverRecordService : IHandoverRecordService
         catch (Exception)
         {
             // Không giải mã được (thiếu khóa, dữ liệu hỏng) thì để trống thay vì làm hỏng cả màn hình.
+            return string.Empty;
+        }
+    }
+
+    private string ReadCitizenId(Beneficiary beneficiary)
+    {
+        try
+        {
+            return protector.Unprotect(beneficiary).CitizenId;
+        }
+        catch (Exception)
+        {
+            // Không giải mã được thì để trống, giống họ tên.
             return string.Empty;
         }
     }

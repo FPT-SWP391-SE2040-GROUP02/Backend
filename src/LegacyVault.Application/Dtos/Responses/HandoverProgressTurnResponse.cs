@@ -17,8 +17,8 @@ public class HandoverProgressTurnResponse
     /// </summary>
     public Guid BeneficiaryId { get; set; }
 
-    /// <summary>Chỉ 4 số cuối CCCD để Executor phân biệt người nhận; họ tên và số điện thoại trả riêng cho lượt còn hiệu lực hoặc đã bàn giao (xem BeneficiaryFullName).</summary>
-    public string BeneficiaryCitizenIdLast4 { get; set; } = string.Empty;
+    /// <summary>Số CCCD đầy đủ của người nhận; họ tên và số điện thoại trả riêng cho lượt còn hiệu lực hoặc đã bàn giao (xem BeneficiaryFullName).</summary>
+    public string BeneficiaryCitizenId { get; set; } = string.Empty;
 
     /// <summary>
     /// Họ tên người nhận, để Executor liên hệ. Có ở lượt còn hiệu lực (INVITED, INITIAL_RESPONSE_EXPIRED,

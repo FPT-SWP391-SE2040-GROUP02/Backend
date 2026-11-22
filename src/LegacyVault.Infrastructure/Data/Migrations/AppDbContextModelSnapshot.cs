@@ -353,11 +353,11 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("BackSubmittedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("CitizenIdLast4")
+                    b.Property<string>("CitizenId")
                         .IsRequired()
-                        .HasMaxLength(4)
+                        .HasMaxLength(12)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(4)");
+                        .HasColumnType("varchar(12)");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
@@ -1169,10 +1169,11 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("varbinary(max)");
 
-                    b.Property<string>("CitizenIdLast4")
+                    b.Property<string>("CitizenId")
                         .IsRequired()
-                        .HasMaxLength(4)
-                        .HasColumnType("nvarchar(4)");
+                        .HasMaxLength(12)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(12)");
 
                     b.Property<bool>("CitizenIdMatches")
                         .HasColumnType("bit");

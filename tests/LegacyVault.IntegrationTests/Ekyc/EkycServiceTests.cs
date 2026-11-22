@@ -116,7 +116,7 @@ public sealed class EkycServiceTests
     }
 
     [Fact]
-    public async Task Document_SavesOnlyResultAndLast4()
+    public async Task Document_SavesResultAndFullCitizenId()
     {
         EkycDocumentResponse response = await service.SubmitDocumentAsync(Image(), "front.jpg", "image/jpeg", CancellationToken.None);
 
@@ -125,7 +125,7 @@ public sealed class EkycServiceTests
         Assert.Equal(Now + EkycRules.DocumentTokenLifetime, response.ExpiresAt);
         EkycVerification saved = Assert.Single(repository.Verifications);
         Assert.Equal(EkycStatus.Pending, saved.Status);
-        Assert.Equal("2345", saved.CitizenIdLast4);
+        Assert.Equal("079200012345", saved.CitizenId);
         Assert.Equal("token-1", saved.DocumentToken);
         Assert.Equal(response.VerificationId, saved.Id);
     }
@@ -203,7 +203,7 @@ public sealed class EkycServiceTests
             Purpose = EkycPurpose.OwnerEnrollment,
             DocumentToken = "token-custom",
             DocumentTokenExpiresAt = Now + TimeSpan.FromMinutes(30),
-            CitizenIdLast4 = "2345",
+            CitizenId = "079200012345",
             BackSubmittedAt = Now,
             LivenessSessionId = "live-custom",
             LivenessPassed = true,

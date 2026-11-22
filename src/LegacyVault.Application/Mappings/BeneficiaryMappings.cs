@@ -9,14 +9,14 @@ public static class BeneficiaryMappings
 {
     /// <summary>
     /// data là dữ liệu đã giải mã của chính hồ sơ này; containerIds là các gói đang chỉ định hồ sơ này
-    /// (không có thì danh sách rỗng). Không đưa CitizenId đầy đủ vào response (DATA-02).
+    /// (không có thì danh sách rỗng). Trả số CCCD đầy đủ.
     /// </summary>
     public static BeneficiaryResponse ToResponse(this Beneficiary beneficiary, BeneficiaryPersonalData data, List<Guid> containerIds)
     {
         return new BeneficiaryResponse
         {
             Id = beneficiary.Id,
-            CitizenIdLast4 = beneficiary.CitizenIdLast4,
+            CitizenId = data.CitizenId,
             FullName = data.FullName,
             DateOfBirth = data.DateOfBirth,
             Email = data.Email,

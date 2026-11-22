@@ -60,7 +60,25 @@ public static class EkycRules
         return true;
     }
 
-    /// <summary>Lấy 4 số cuối của số CCCD; rỗng nếu không đủ 4 chữ số ở cuối.</summary>
+    /// <summary>Số CCCD đầy đủ đọc từ giấy tờ (bỏ khoảng trắng); rỗng nếu không phải toàn chữ số hoặc dài quá 12.</summary>
+    public static string GetCitizenId(string idNumber)
+    {
+        string trimmed = idNumber.Trim();
+        if (trimmed.Length == 0 || trimmed.Length > 12)
+        {
+            return string.Empty;
+        }
+        foreach (char character in trimmed)
+        {
+            if (!char.IsAsciiDigit(character))
+            {
+                return string.Empty;
+            }
+        }
+        return trimmed;
+    }
+
+    /// <summary>Lấy 4 số cuối của số CCCD (chỉ dùng nội bộ để so mặt trước, mặt sau); rỗng nếu không đủ 4 chữ số ở cuối.</summary>
     public static string GetCitizenIdLast4(string idNumber)
     {
         if (idNumber.Length < 4)
@@ -97,8 +115,8 @@ public static class EkycRules
     }
 
     /// <summary>
-    /// Mặt sau có cùng thẻ với mặt trước không (EKYC-04). Mặt trước chỉ lưu 4 số cuối nên chỉ so 4 số cuối
-    /// của số căn cước đọc từ MRZ mặt sau. Thiếu một bên thì không coi là cùng thẻ.
+    /// Mặt sau có cùng thẻ với mặt trước không (EKYC-04). MRZ mặt sau có thể đọc thiếu đầu số nên chỉ so 4 số cuối
+    /// của hai mặt. Thiếu một bên thì không coi là cùng thẻ.
     /// </summary>
     public static bool IsSameCard(string backIdNumber, string frontLast4)
     {

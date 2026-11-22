@@ -228,7 +228,7 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
             verification.UserId = userId;
             verification.Purpose = EkycPurpose.OwnerEnrollment;
             verification.Status = EkycStatus.Passed;
-            verification.CitizenIdLast4 = "1234";
+            verification.CitizenId = "001099001234";
             verification.CreatedAt = now;
             verification.CompletedAt = now;
             db.Add(verification);

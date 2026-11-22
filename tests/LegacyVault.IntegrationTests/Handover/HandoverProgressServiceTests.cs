@@ -68,7 +68,7 @@ public sealed class HandoverProgressServiceTests
         reader.Turns.Add(accepted);
         reader.Turns.Add(waiting);
         reader.FirstDownloads[accepted.Items[0].Id] = Now.AddHours(1);
-        reader.CitizenIdLast4[first.BeneficiaryId] = "1111";
+        reader.CitizenIds[first.BeneficiaryId] = "001099001111";
 
         // Hành động
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
@@ -82,7 +82,7 @@ public sealed class HandoverProgressServiceTests
 
         HandoverProgressTurnResponse acceptedTurn = result.Turns[0];
         Assert.Equal("HANDOVER_COMMITTED", acceptedTurn.Status);
-        Assert.Equal("1111", acceptedTurn.BeneficiaryCitizenIdLast4);
+        Assert.Equal("001099001111", acceptedTurn.BeneficiaryCitizenId);
         Assert.Equal(first.BeneficiaryId, acceptedTurn.BeneficiaryId);
         Assert.Equal(second.BeneficiaryId, result.Turns[1].BeneficiaryId);
         Assert.Equal("ACTIVE", acceptedTurn.GrantStatus);
@@ -370,7 +370,7 @@ public sealed class FakeHandoverProgressReader : IHandoverProgressReader
 
     public Dictionary<Guid, DateTimeOffset> FirstDownloads { get; } = new Dictionary<Guid, DateTimeOffset>();
 
-    public Dictionary<Guid, string> CitizenIdLast4 { get; } = new Dictionary<Guid, string>();
+    public Dictionary<Guid, string> CitizenIds { get; } = new Dictionary<Guid, string>();
 
     public int TurnQueryCount { get; private set; }
 
@@ -410,8 +410,8 @@ public sealed class FakeHandoverProgressReader : IHandoverProgressReader
         return Task.FromResult(FirstDownloads);
     }
 
-    public Task<Dictionary<Guid, string>> FindCitizenIdLast4Async(List<Guid> beneficiaryIds, CancellationToken ct)
+    public Task<Dictionary<Guid, string>> FindCitizenIdsAsync(List<Guid> beneficiaryIds, CancellationToken ct)
     {
-        return Task.FromResult(CitizenIdLast4);
+        return Task.FromResult(CitizenIds);
     }
 }

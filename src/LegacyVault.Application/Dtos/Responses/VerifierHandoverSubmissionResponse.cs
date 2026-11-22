@@ -12,7 +12,7 @@ public class VerifierHandoverSubmissionResponse : VerifierHandoverSubmissionSumm
 
     public bool DateOfBirthMatches { get; set; }
 
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    public string CitizenId { get; set; } = string.Empty;
 
     public bool Acknowledged { get; set; }
 

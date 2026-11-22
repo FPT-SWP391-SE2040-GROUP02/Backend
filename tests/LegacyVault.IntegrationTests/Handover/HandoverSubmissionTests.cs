@@ -213,7 +213,7 @@ public sealed class HandoverSubmissionTests
     // ---- Người nhận nộp hồ sơ ----
 
     [Fact]
-    public async Task Submit_Accept_KeepsOnlyMatchFlagsAndLast4AndEncryptedImages()
+    public async Task Submit_Accept_KeepsMatchFlagsCitizenIdAndEncryptedImages()
     {
         HandoverSubmissionResponse response = await Submit(Request());
 
@@ -221,7 +221,7 @@ public sealed class HandoverSubmissionTests
         Assert.Equal("ACCEPT", response.Kind);
         Assert.Equal("SUBMITTED", response.Status);
         Assert.True(saved.NameMatches && saved.CitizenIdMatches && saved.DateOfBirthMatches);
-        Assert.Equal("1234", saved.CitizenIdLast4);
+        Assert.Equal("012345671234", saved.CitizenId);
         Assert.Equal(2, store.Contents.Count);
         Assert.Equal("image/png", saved.FrontImageContentType);
         Assert.Equal("image/jpeg", saved.BackImageContentType);
@@ -391,19 +391,19 @@ public sealed class HandoverSubmissionTests
     }
 
     [Fact]
-    public async Task Approve_WhenAnyFieldMismatches_IsRefusedAndOnlySupplementIsOffered()
+    public async Task Approve_WhenAnyFieldMismatches_VerifierStillDecides()
     {
         HandoverSubmission submission = await SubmitAndAttach(Request(citizenId: "999999999999"));
         currentUser.UserId = verifier.Id;
 
         VerifierHandoverSubmissionResponse detail = await reviewService.GetAsync(submission.Id, CancellationToken.None);
-        AppException error = await Assert.ThrowsAsync<AppException>(
-            () => reviewService.ApproveAsync(submission.Id, CancellationToken.None));
+        VerifierHandoverSubmissionResponse approved = await reviewService.ApproveAsync(submission.Id, CancellationToken.None);
 
-        Assert.False(detail.CanApprove);
+        Assert.False(detail.AllMatch);
+        Assert.True(detail.CanApprove);
         Assert.True(detail.CanRequestSupplement);
-        Assert.Equal(AppErrorType.Conflict, error.Type);
-        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
+        Assert.Equal("APPROVED", approved.Status);
+        Assert.NotEqual(HandoverTurnStatus.IdentityInProgress, turn.Status);
     }
 
     [Fact]

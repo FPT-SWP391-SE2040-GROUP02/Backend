@@ -10,8 +10,8 @@ public class InvitationMailCheckRequest
     [MaxLength(16)]
     public string CaseCode { get; set; } = string.Empty;
 
-    /// <summary>4 số cuối căn cước của người nhận.</summary>
-    [Required(ErrorMessage = "Vui lòng nhập 4 số cuối căn cước.")]
-    [RegularExpression("^[0-9]{4}$", ErrorMessage = "Nhập đúng 4 chữ số.")]
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    /// <summary>Số căn cước đầy đủ của người nhận.</summary>
+    [Required(ErrorMessage = "Vui lòng nhập số căn cước.")]
+    [RegularExpression("^[0-9]{12}$", ErrorMessage = "Số căn cước gồm 12 chữ số.")]
+    public string CitizenId { get; set; } = string.Empty;
 }

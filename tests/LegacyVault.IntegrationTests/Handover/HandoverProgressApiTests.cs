@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using LegacyVault.Application.Dtos.Responses;
+using LegacyVault.Application.Security;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.IntegrationTests.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
@@ -47,7 +49,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         VaultTestData.OwnerVault vault = await VaultTestData.CreateOwnerWithRunningPlanAsync(factory);
         VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
         Guid caseId = await AddApprovedCaseAsync(vault, executor.User.Id);
-        Guid beneficiaryId = await AddBeneficiaryAsync(vault.VaultId, "4321");
+        Guid beneficiaryId = await AddBeneficiaryAsync(vault.VaultId, "001099004321");
         SeededTurn seeded = await AddCommittedTurnAsync(vault, beneficiaryId);
         DateTimeOffset firstAt = DateTimeOffset.UtcNow.AddMinutes(-30);
         await AddAccessLogAsync(seeded, seeded.FirstItemId, HandoverAccessOutcome.Denied, firstAt.AddMinutes(-5));
@@ -66,7 +68,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         Assert.Equal(1, body.Summary.Accepted);
         HandoverProgressTurnResponse turn = Assert.Single(body.Turns);
         Assert.Equal("Gói thử", turn.ContainerName);
-        Assert.Equal("4321", turn.BeneficiaryCitizenIdLast4);
+        Assert.Equal("001099004321", turn.BeneficiaryCitizenId);
         Assert.Equal("HANDOVER_COMMITTED", turn.Status);
         Assert.Equal("ACTIVE", turn.GrantStatus);
         Assert.Equal(2, turn.TotalItems);
@@ -172,13 +174,20 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         return record.Id;
     }
 
-    private async Task<Guid> AddBeneficiaryAsync(Guid vaultId, string last4)
+    private async Task<Guid> AddBeneficiaryAsync(Guid vaultId, string citizenId)
     {
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vaultId;
-        beneficiary.CitizenIdLast4 = last4;
-        beneficiary.EncryptionKeyId = "k1";
         beneficiary.CreatedAt = DateTimeOffset.UtcNow;
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IBeneficiaryDataProtector protector = scope.ServiceProvider.GetRequiredService<IBeneficiaryDataProtector>();
+            BeneficiaryPersonalData data = new BeneficiaryPersonalData();
+            data.CitizenId = citizenId;
+            data.FullName = "Người nhận thử";
+            data.DateOfBirth = new DateOnly(1990, 1, 1);
+            protector.Protect(beneficiary, data);
+        }
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             db.Set<Beneficiary>().Add(beneficiary);

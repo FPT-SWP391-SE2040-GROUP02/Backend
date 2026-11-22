@@ -515,7 +515,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (!PlanRules.IsRunning(vault.Plan.Status))
             {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.WillSignNotAllowed,
-                    "Chỉ ký lại file phân chia được khi kế hoạch đang chạy.");
+                    "Chỉ ký lại biên bản phân chia được khi kế hoạch đang chạy.");
             }
             if (request.ConfigVersion != vault.Plan.ConfigVersion)
             {

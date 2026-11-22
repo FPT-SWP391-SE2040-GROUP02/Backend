@@ -6,7 +6,7 @@ public class BeneficiaryResponse
 {
     public Guid Id { get; set; }
 
-    public string CitizenIdLast4 { get; set; } = string.Empty;
+    public string CitizenId { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;
 

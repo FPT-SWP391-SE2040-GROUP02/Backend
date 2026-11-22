@@ -9,7 +9,7 @@ namespace LegacyVault.Domain.Entities;
 /// - Hệ thống chỉ quản lý tài sản, không làm pháp lý: luật sư lập biên bản theo kết quả đã xử lý ở ngoài.
 /// - Người nhận gửi yêu cầu nhận tài sản kèm giấy tờ thì tạo biên bản và phân công một luật sư; mỗi kho chỉ có một
 ///   biên bản đang mở (biên bản Chủ kho đã hủy không tính).
-/// - Luật sư có thể lấy file phân chia của Chủ kho (các gói và người nhận đã khai) làm bản đầu.
+/// - Luật sư có thể lấy biên bản phân chia của Chủ kho (các gói và người nhận đã khai) làm bản đầu.
 /// - RevisionNo tăng mỗi lần luật sư mở lại biên bản; chữ ký của bản cũ không còn hiệu lực (ký lại từ đầu).
 /// - UpdatedAt là concurrency token chống hai thao tác cùng sửa.
 /// </remarks>

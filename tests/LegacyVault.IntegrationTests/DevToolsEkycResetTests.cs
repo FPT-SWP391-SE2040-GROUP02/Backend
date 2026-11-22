@@ -199,7 +199,7 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
         Assert.Equal(HttpStatusCode.OK, designate.StatusCode);
 
-        // Người thực thi mở bàn giao, luật sư lấy file phân chia làm biên bản rồi chốt: kho có một lượt đã ghim tài sản.
+        // Người thực thi mở bàn giao, luật sư lấy biên bản phân chia làm biên bản rồi chốt: kho có một lượt đã ghim tài sản.
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vaultId);
         Assert.Equal(1, record.Body.GetProperty("recipients").GetArrayLength());
         return (owner, vaultId);
@@ -220,7 +220,7 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             verification.UserId = userId;
             verification.Purpose = EkycPurpose.OwnerEnrollment;
             verification.Status = EkycStatus.Passed;
-            verification.CitizenIdLast4 = "1234";
+            verification.CitizenId = "001099001234";
             verification.CreatedAt = now;
             verification.CompletedAt = now;
             db.Add(verification);

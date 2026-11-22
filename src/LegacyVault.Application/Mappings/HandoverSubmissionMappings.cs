@@ -4,7 +4,7 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Mappings;
 
-/// <summary>Đổi hồ sơ người nhận sang dữ liệu trả ra màn hình (người nhận và Người xét duyệt). Không có ảnh căn cước hay số căn cước đầy đủ.</summary>
+/// <summary>Đổi hồ sơ người nhận sang dữ liệu trả ra màn hình (người nhận và Người xét duyệt). Không có ảnh căn cước.</summary>
 public static class HandoverSubmissionMappings
 {
     /// <summary>Kết quả trả cho người nhận sau khi nộp hồ sơ hoặc khi xem hồ sơ mới nhất của mình.</summary>
@@ -29,7 +29,7 @@ public static class HandoverSubmissionMappings
         return response;
     }
 
-    /// <summary>Chi tiết hồ sơ danh tính: luật sư chỉ xác nhận được khi cả ba trường đều khớp.</summary>
+    /// <summary>Chi tiết hồ sơ danh tính: kết quả đối chiếu ba trường chỉ để luật sư tham khảo, luật sư tự quyết xác nhận hay yêu cầu làm lại.</summary>
     public static VerifierHandoverSubmissionResponse ToVerifierDetail(this HandoverSubmission submission)
     {
         VerifierHandoverSubmissionResponse response = new VerifierHandoverSubmissionResponse();
@@ -38,14 +38,15 @@ public static class HandoverSubmissionMappings
         response.NameMatches = submission.NameMatches;
         response.CitizenIdMatches = submission.CitizenIdMatches;
         response.DateOfBirthMatches = submission.DateOfBirthMatches;
-        response.CitizenIdLast4 = submission.CitizenIdLast4;
+        response.CitizenId = submission.CitizenId;
         response.Acknowledged = submission.Acknowledged;
         response.VoluntaryDecline = submission.VoluntaryDecline;
         response.SupplementReason = submission.SupplementReason;
         response.ItemCount = submission.Turn.Items.Count;
         bool waiting = submission.Status == HandoverSubmissionStatus.Submitted
             && submission.Turn.Status == HandoverTurnStatus.IdentityInProgress;
-        response.CanApprove = waiting && response.AllMatch;
+        // Luật sư tự quyết: có trường không khớp vẫn được xác nhận nếu xem ảnh thấy đúng người.
+        response.CanApprove = waiting;
         response.CanRequestSupplement = waiting;
         return response;
     }

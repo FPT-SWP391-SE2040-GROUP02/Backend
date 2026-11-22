@@ -65,7 +65,7 @@ public sealed class HandoverController : ControllerBase
     public Task<InvitationMailCheckResponse> CheckMail(
         string token, InvitationMailCheckRequest request, CancellationToken ct)
     {
-        return mailCheckService.CheckAsync(token, request.CaseCode, request.CitizenIdLast4, ct);
+        return mailCheckService.CheckAsync(token, request.CaseCode, request.CitizenId, ct);
     }
 
     /// <summary>Gắn tài khoản đang đăng nhập vào lượt. Gọi lặp bởi cùng người là an toàn.</summary>
