@@ -518,6 +518,32 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task RecipientEmailCannotRepeatAnotherRecipientInTheSameVault_OnCreateOrUpdate()
+    {
+        // Chuẩn bị: một người nhận đã có email chung
+        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
+        string message = "Email này đã dùng cho một người nhận khác trong kho.";
+
+        // Hành động: người thứ hai khác CCCD nhưng dùng lại email đó
+        HttpResponseMessage create = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId),
+            new { citizenId = SameLast4CitizenId, fullName = "Trần Thị Bình", dateOfBirth = "1990-05-20", email = " " + Email.ToUpperInvariant() + " " });
+
+        // Kiểm tra: 400 ở trường email, chưa tạo thêm hồ sơ
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(create, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(message, problem.GetProperty("errors").GetProperty("email")[0].GetString());
+        Assert.Equal(1, await CountBeneficiariesAsync(vaultId));
+
+        // Sửa người thứ hai sang email của người thứ nhất cũng bị chặn; gửi lại đúng người thứ nhất (cùng email) thì không
+        JsonElement second = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, SameLast4CitizenId, "Trần Thị Bình");
+        HttpResponseMessage update = await client.PutAsJsonAsync($"{BeneficiariesUrl(vaultId)}/{second.GetProperty("id").GetGuid()}",
+            new { etag = second.GetProperty("etag").GetString(), email = Email });
+        await ApiTestHelpers.AssertProblemAsync(update, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        HttpResponseMessage resend = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(LeadingZeroCitizenId, FullName));
+        Assert.True(resend.IsSuccessStatusCode);
+    }
+
+    [SqlFact]
     public async Task OrdinaryAccountEmailIsStillAllowedAsRecipient()
     {
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -656,7 +682,9 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
 
     private static object AdultBody(string citizenId, string fullName)
     {
-        return new { citizenId, fullName, dateOfBirth = "1990-05-20", email = Email };
+        // Mỗi người một email riêng (email không được trùng người nhận khác trong kho); người chính giữ email chung.
+        string email = citizenId == LeadingZeroCitizenId ? Email : $"nn{citizenId.Replace(" ", "")}@example.com";
+        return new { citizenId, fullName, dateOfBirth = "1990-05-20", email };
     }
 
     /// <summary>Số dòng Beneficiaries của kho (đọc thẳng DB).</summary>

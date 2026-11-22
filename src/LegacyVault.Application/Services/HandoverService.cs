@@ -41,6 +41,9 @@ public sealed class HandoverService : IHandoverService
     // Luôn có khi chạy thật; vài test unit bỏ trống. Dùng để biên bản sang bước ký khi danh tính được bỏ qua (chỉ Development).
     private readonly IHandoverRecordService? recordService;
 
+    // Luôn có khi chạy thật; vài test unit bỏ trống (khi đó không biết mục nào đã tải).
+    private readonly IHandoverProgressReader? progressReader;
+
     public HandoverService(
         ICurrentUser currentUser,
         IUserRepository users,
@@ -55,9 +58,11 @@ public sealed class HandoverService : IHandoverService
         IHandoverSubmissionRepository submissions,
         IBeneficiaryRepository beneficiaries,
         IBeneficiaryDataProtector beneficiaryProtector,
-        IHandoverRecordService? recordService = null)
+        IHandoverRecordService? recordService = null,
+        IHandoverProgressReader? progressReader = null)
     {
         this.recordService = recordService;
+        this.progressReader = progressReader;
         this.currentUser = currentUser;
         this.users = users;
         this.vaults = vaults;
@@ -552,9 +557,12 @@ public sealed class HandoverService : IHandoverService
             container.Name = turn.ContainerName;
             response.Container = container;
 
+            Dictionary<Guid, DateTimeOffset> downloads = await FindDownloadsAsync(turn, ct);
             foreach (HandoverSnapshotItem item in turn.Items.OrderBy(i => i.Position))
             {
-                response.Items.Add(item.ToResponse());
+                HandoverItemResponse itemResponse = item.ToResponse();
+                itemResponse.Downloaded = downloads.ContainsKey(item.Id);
+                response.Items.Add(itemResponse);
             }
         }
 
@@ -570,6 +578,16 @@ public sealed class HandoverService : IHandoverService
         }
 
         return response;
+    }
+
+    /// <summary>Lần tải thành công đầu tiên của từng mục trong lượt (khóa là id mục đã ghim). Chưa có quyền tải thì rỗng.</summary>
+    private async Task<Dictionary<Guid, DateTimeOffset>> FindDownloadsAsync(HandoverTurn turn, CancellationToken ct)
+    {
+        if (progressReader == null || turn.Grant == null)
+        {
+            return new Dictionary<Guid, DateTimeOffset>();
+        }
+        return await progressReader.FindFirstDownloadTimesAsync(new List<Guid> { turn.Grant.Id }, ct);
     }
 
     /// <summary>Kho đã cấp khóa mở gói thì người nhận phải nhập khóa; chưa cấp thì bỏ qua.</summary>
@@ -590,9 +608,18 @@ public sealed class HandoverService : IHandoverService
         {
             throw HandoverAccess.NotAllowed("NOT_COMMITTED", "Chỉ xác nhận đã nhận đủ sau khi đồng ý nhận tài sản.");
         }
-        // 3. Ghi mốc nhận đủ một lần; bấm lặp thì giữ mốc cũ
+        // 3. Ghi mốc nhận đủ một lần; bấm lặp thì giữ mốc cũ. Chỉ xác nhận khi đã tải đủ mọi mục.
         if (turn.ReceivedAllAt == null)
         {
+            if (progressReader != null && turn.Items.Count > 0)
+            {
+                Dictionary<Guid, DateTimeOffset> downloads = await FindDownloadsAsync(turn, ct);
+                if (turn.Items.Any(item => !downloads.ContainsKey(item.Id)))
+                {
+                    throw HandoverAccess.NotAllowed("NOT_ALL_DOWNLOADED",
+                        "Bạn chưa tải hết các mục. Hãy tải xong rồi mới xác nhận đã nhận đủ.");
+                }
+            }
             DateTimeOffset now = timeProvider.GetUtcNow();
             turn.ReceivedAllAt = now;
             turn.UpdatedAt = now;

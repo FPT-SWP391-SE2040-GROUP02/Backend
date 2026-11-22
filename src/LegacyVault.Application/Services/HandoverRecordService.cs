@@ -36,6 +36,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private readonly TimeProvider timeProvider;
     private readonly IAssetContentStore contentStore;
     private readonly IHandoverRequestNoticeSender noticeSender;
+    private readonly IExecutorInvitationRepository invitations;
 
     public HandoverRecordService(
         ICurrentUser currentUser,
@@ -51,8 +52,10 @@ public sealed class HandoverRecordService : IHandoverRecordService
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IAssetContentStore contentStore,
-        IHandoverRequestNoticeSender noticeSender)
+        IHandoverRequestNoticeSender noticeSender,
+        IExecutorInvitationRepository invitations)
     {
+        this.invitations = invitations;
         this.currentUser = currentUser;
         this.users = users;
         this.vaults = vaults;
@@ -608,6 +611,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             throw ValidationErrors.For("dateOfBirth", "Thiếu ngày sinh.");
         }
         data.DateOfBirth = request.DateOfBirth.Value;
+        RecipientRules.EnsureAdultBirthDate(data.DateOfBirth, RecipientRules.TodayInVietnam(timeProvider));
         data.Email = NormalizeEmail(request.Email);
         if (!data.Email.Contains('@'))
         {
@@ -617,16 +621,11 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             data.Phone = request.Phone.Trim();
         }
-        User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
-        if (owner != null && NormalizeEmail(owner.Email) == data.Email)
-        {
-            throw ValidationErrors.For("email", "Email người nhận không được trùng email Chủ kho.");
-        }
-
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vault.Id;
         protector.Protect(beneficiary, data);
-        foreach (Beneficiary existing in await records.ListVaultBeneficiariesAsync(vault.Id, ct))
+        List<Beneficiary> vaultBeneficiaries = await records.ListVaultBeneficiariesAsync(vault.Id, ct);
+        foreach (Beneficiary existing in vaultBeneficiaries)
         {
             if (existing.CitizenIdHash != null && beneficiary.CitizenIdHash != null
                 && existing.CitizenIdHash.SequenceEqual(beneficiary.CitizenIdHash))
@@ -634,6 +633,9 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 throw ValidationErrors.For("citizenId", "Người này đã có trong kho.");
             }
         }
+        // Email không trùng Chủ kho, nhân sự (Người xét duyệt, Người thực thi), Người thực thi của kho hay người nhận khác.
+        await RecipientRules.EnsureEmailAvailableAsync(
+            data.Email, vault, null, users, invitations, protector, vaultBeneficiaries, ct);
 
         // 3. Lưu hồ sơ người nhận mới; luật sư ghi tài sản cho người này ở biên bản
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -873,6 +875,86 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (HandoverRecordRules.AllIdentitiesConfirmed(record, turns))
         {
             record.Status = HandoverRecordStatus.Signing;
+            await NotifySigningAsync(record, ct);
+        }
+    }
+
+    /// <summary>
+    /// Báo người nhận và Người thực thi của kho rằng biên bản đã tới bước ký (luật sư xác nhận danh tính xong).
+    /// Gửi lỗi thì bỏ qua từng thư: bước ký đã mở, thư không chặn luồng.
+    /// </summary>
+    private async Task NotifySigningAsync(HandoverRecord record, CancellationToken ct)
+    {
+        try
+        {
+            Vault? vault = await vaults.FindByIdAsync(record.VaultId, ct);
+            if (vault == null)
+            {
+                return;
+            }
+            string ownerName = await FindUserNameAsync(vault.OwnerId, ct);
+            List<(string Email, string FullName, string Audience)> targets = new List<(string, string, string)>();
+
+            HashSet<Guid> recipientIds = new HashSet<Guid>();
+            foreach (HandoverRecordLine line in record.Lines)
+            {
+                recipientIds.Add(line.BeneficiaryId);
+            }
+            foreach (Beneficiary beneficiary in await records.ListVaultBeneficiariesAsync(record.VaultId, ct))
+            {
+                if (!recipientIds.Contains(beneficiary.Id))
+                {
+                    continue;
+                }
+                try
+                {
+                    BeneficiaryPersonalData personal = protector.Unprotect(beneficiary);
+                    if (!string.IsNullOrWhiteSpace(personal.Email))
+                    {
+                        targets.Add((personal.Email, personal.FullName, HandoverRequestNotice.Recipient));
+                    }
+                }
+                catch (System.Security.Cryptography.CryptographicException)
+                {
+                    // Hồ sơ không giải mã được: bỏ qua người này.
+                }
+            }
+            foreach (Executor executor in await executorReader.GetActiveAsync(record.VaultId, ct))
+            {
+                if (executor.UserId == null)
+                {
+                    continue;
+                }
+                User? account = await users.FindByIdAsync(executor.UserId.Value, ct);
+                if (account != null && !string.IsNullOrWhiteSpace(account.Email))
+                {
+                    targets.Add((account.Email, account.FullName, HandoverRequestNotice.Executor));
+                }
+            }
+
+            foreach ((string email, string fullName, string audience) in targets)
+            {
+                try
+                {
+                    HandoverRequestNotice notice = new HandoverRequestNotice
+                    {
+                        ToEmail = email,
+                        FullName = fullName,
+                        Audience = audience,
+                        OwnerName = ownerName,
+                        Stage = HandoverRequestNotice.StageSigning
+                    };
+                    await noticeSender.SendAsync(notice, ct);
+                }
+                catch (Exception) when (!ct.IsCancellationRequested)
+                {
+                    // Một thư lỗi không chặn các thư còn lại.
+                }
+            }
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // Không ném lại: bước ký đã mở.
         }
     }
 

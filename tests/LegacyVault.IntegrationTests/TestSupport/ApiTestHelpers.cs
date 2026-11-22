@@ -18,6 +18,8 @@ public static class ApiTestHelpers
     /// <summary>Email của hồ sơ người nhận tạo bằng CreateBeneficiaryAsync.</summary>
     public const string BeneficiaryEmail = "nguoinhan@example.com";
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, int> BeneficiaryOrderByVault = new();
+
     /// <summary>Mật khẩu tài khoản của Người thực thi tạo bằng EnsureSystemExecutorAsync (dùng để ký nhận vai).</summary>
     public const string ExecutorPassword = "Executor-Test-Pass-1";
 
@@ -155,7 +157,9 @@ public static class ApiTestHelpers
     public static async Task<JsonElement> CreateBeneficiaryAsync(
         HttpClient client, Guid vaultId, string citizenId, string fullName, string? recipientEmail = null)
     {
-        string email = BeneficiaryEmail;
+        // Email không được trùng người nhận khác trong kho: người đầu tiên của kho dùng BeneficiaryEmail, các người sau có email riêng.
+        int order = BeneficiaryOrderByVault.AddOrUpdate(vaultId, 0, (_, count) => count + 1);
+        string email = order == 0 ? BeneficiaryEmail : $"nguoinhan{order}.{citizenId}@example.com";
         if (recipientEmail != null)
         {
             email = recipientEmail;
