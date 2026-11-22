@@ -135,7 +135,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // Kiểm sau bước tìm trùng CCCD để gửi lại đúng người đã có (cùng email) vẫn trả hồ sơ cũ.
         if (!string.IsNullOrWhiteSpace(data.Email))
         {
-            await EnsureEmailAvailableAsync(data.Email, vault, null, ct);
+            await EnsureEmailAvailableAsync(data.Email, vault, null, ct, data.CitizenId);
         }
 
         // Giới hạn số hồ sơ người nhận theo tổng suất của kho (suất kèm hạng + suất mua thêm), tính cả hồ sơ chưa ở gói nào.
@@ -266,12 +266,13 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     /// <summary>
     /// Email không trùng Chủ kho, Người thực thi của kho hay người nhận khác (xem RecipientRules). Hồ sơ đang sửa không tính.
     /// </summary>
-    private async Task EnsureEmailAvailableAsync(string email, Vault vault, Guid? exceptBeneficiaryId, CancellationToken ct)
+    private async Task EnsureEmailAvailableAsync(
+        string email, Vault vault, Guid? exceptBeneficiaryId, CancellationToken ct, string? sameCitizenId = null)
     {
         (List<Beneficiary> Items, int TotalCount) page = await beneficiaryRepository.FindPageByVaultIdAsync(
             vault.Id, null, 1, 1000, true, ct);
         await RecipientRules.EnsureEmailAvailableAsync(
-            email, vault, exceptBeneficiaryId, userRepository, invitationRepository, dataProtector, page.Items, ct);
+            email, vault, exceptBeneficiaryId, userRepository, invitationRepository, dataProtector, page.Items, ct, sameCitizenId);
     }
 
     public async Task<BeneficiaryResponse> GetBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)

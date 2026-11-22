@@ -43,6 +43,8 @@ public static class RecipientRules
     /// Email người nhận không được trùng với: Chủ kho, tài khoản nhân sự (Người xét duyệt, Người thực thi hệ thống,
     /// Quản trị viên), Người thực thi của kho (đã mời hoặc đã nhận việc) và các người nhận khác trong kho.
     /// <paramref name="exceptBeneficiaryId"/> là hồ sơ đang sửa, không tính là "người nhận khác".
+    /// <paramref name="sameCitizenId"/> là số CCCD của người đang thêm: hồ sơ cùng số CCCD là chính người đó (gửi lại, hoặc
+    /// hai request cùng lúc), không tính là người nhận khác.
     /// </summary>
     public static async Task EnsureEmailAvailableAsync(
         string email,
@@ -52,7 +54,8 @@ public static class RecipientRules
         IExecutorInvitationRepository invitations,
         IBeneficiaryDataProtector protector,
         IReadOnlyList<Beneficiary> vaultBeneficiaries,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? sameCitizenId = null)
     {
         string normalized = email.Trim().ToLowerInvariant();
 
@@ -88,7 +91,16 @@ public static class RecipientRules
             {
                 continue;
             }
-            string? otherEmail = ReadEmail(protector, other);
+            BeneficiaryPersonalData? personal = ReadPersonal(protector, other);
+            if (personal == null)
+            {
+                continue;
+            }
+            if (sameCitizenId != null && string.Equals(personal.CitizenId, sameCitizenId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            string? otherEmail = string.IsNullOrWhiteSpace(personal.Email) ? null : personal.Email.Trim().ToLowerInvariant();
             if (otherEmail != null && string.Equals(otherEmail, normalized, StringComparison.OrdinalIgnoreCase))
             {
                 throw ValidationErrors.For("email", "Email này đã dùng cho một người nhận khác trong kho.");
@@ -96,12 +108,11 @@ public static class RecipientRules
         }
     }
 
-    private static string? ReadEmail(IBeneficiaryDataProtector protector, Beneficiary beneficiary)
+    private static BeneficiaryPersonalData? ReadPersonal(IBeneficiaryDataProtector protector, Beneficiary beneficiary)
     {
         try
         {
-            string? value = protector.Unprotect(beneficiary).Email;
-            return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+            return protector.Unprotect(beneficiary);
         }
         catch (CryptographicException)
         {
