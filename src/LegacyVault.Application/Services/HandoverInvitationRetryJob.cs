@@ -33,7 +33,6 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
     private readonly IBeneficiaryDataProtector protector;
     private readonly ITokenService tokens;
     private readonly IHandoverInvitationSender sender;
-    private readonly IHoldReader holdReader;
     private readonly ILogger<HandoverInvitationRetryJob> logger;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -47,7 +46,6 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         IBeneficiaryDataProtector protector,
         ITokenService tokens,
         IHandoverInvitationSender sender,
-        IHoldReader holdReader,
         ILogger<HandoverInvitationRetryJob> logger,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
@@ -60,7 +58,6 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         this.protector = protector;
         this.tokens = tokens;
         this.sender = sender;
-        this.holdReader = holdReader;
         this.logger = logger;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
@@ -92,11 +89,6 @@ public sealed class HandoverInvitationRetryJob : IHandoverInvitationRetryJob
         Vault? vault = await vaults.FindByIdAsync(turn.VaultId, ct);
         if (vault == null || vault.Plan.Status != PlanStatus.HandoverInProgress)
         {
-            return;
-        }
-        if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
-        {
-            // Kho đang bị giữ: tạm dừng, không tính là lần lỗi (cùng luật với gửi lại thủ công).
             return;
         }
 

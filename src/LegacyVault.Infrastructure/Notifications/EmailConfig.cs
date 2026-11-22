@@ -11,7 +11,7 @@ namespace LegacyVault.Infrastructure.Notifications;
 /// <summary>
 /// Đăng ký dịch vụ email. Có đủ Email:Smtp:UserName và Password thì gửi email thật qua Gmail;
 /// chưa cấu hình thì dùng bản chỉ ghi log để dev/test vẫn chạy được. Chọn lúc cần dùng, nên đăng ký này ghi đè
-/// các đăng ký IEmailSender/ICheckInReminderSender khác đặt trước nó.
+/// các đăng ký IEmailSender khác đặt trước nó.
 /// </summary>
 public static class EmailConfig
 {

@@ -121,7 +121,6 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         await context.Set<Beneficiary>().Where(b => b.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
         // Vận hành và thanh toán.
-        await context.Set<Hold>().Where(h => h.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<StorageReservation>().Where(r => r.VaultId == vaultId).ExecuteDeleteAsync(ct);
         var orderIds = context.Set<PaymentOrder>().Where(o => o.VaultId == vaultId).Select(o => o.Id);
         await context.Set<PaymentTransaction>()

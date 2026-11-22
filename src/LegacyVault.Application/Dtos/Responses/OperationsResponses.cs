@@ -1,39 +1,5 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
-public class HoldResponse
-{
-    public Guid Id { get; set; }
-
-    public Guid VaultId { get; set; }
-
-    /// <summary>VAULT | CONTAINER | DESIGNATION | CLAIM | GRANT.</summary>
-    public string Scope { get; set; } = string.Empty;
-
-    public Guid? TargetId { get; set; }
-
-    /// <summary>DISPUTE | ADMIN.</summary>
-    public string Type { get; set; } = string.Empty;
-
-    /// <summary>ACTIVE | RELEASED.</summary>
-    public string Status { get; set; } = string.Empty;
-
-    public string Reason { get; set; } = string.Empty;
-
-    public Guid? ResponsibleUserId { get; set; }
-
-    public DateTimeOffset ReviewAt { get; set; }
-
-    public bool ReviewOverdue { get; set; }
-
-    public DateTimeOffset CreatedAt { get; set; }
-
-    public DateTimeOffset? ReleasedAt { get; set; }
-
-    public string? ReleaseReason { get; set; }
-
-    public string Etag { get; set; } = string.Empty;
-}
-
 /// <summary>Tài khoản cho Admin: không có mật khẩu, không có thông tin kho hay tài sản.</summary>
 public class AdminUserResponse
 {
@@ -109,10 +75,6 @@ public class AdminUserActivityResponse
 
 public class AdminDashboardResponse
 {
-    public int ActiveHolds { get; set; }
-
-    public int HoldsPastReview { get; set; }
-
     public int ActiveVerifiers { get; set; }
 
     public int ActiveAdmins { get; set; }
@@ -137,7 +99,7 @@ public class AdminDashboardResponse
 
 public class DashboardPlanStageResponse
 {
-    /// <summary>PlanStatus dạng API, ví dụ ACTIVE, CHECKIN_OVERDUE.</summary>
+    /// <summary>PlanStatus dạng API, ví dụ ACTIVE, HANDOVER_IN_PROGRESS.</summary>
     public string Stage { get; set; } = string.Empty;
 
     public int Count { get; set; }

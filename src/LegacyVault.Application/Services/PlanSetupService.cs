@@ -53,7 +53,7 @@ public interface IPlanSetupService
 public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository vaults,
     IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
-    IExecutorInvitationSender sender, IHoldReader holdReader, IUnitOfWork unitOfWork,
+    IExecutorInvitationSender sender, IUnitOfWork unitOfWork,
     TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
     ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector,
     ISigningPasswordChecker signingPasswordChecker, IEmailBounceStore bounces,
@@ -612,11 +612,6 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         if (vault.Status != VaultStatus.Open)
         {
             missing.Add("VAULT_NOT_OPEN");
-        }
-        bool hasActiveHold = await holdReader.HasActiveHoldAsync(vault.Id, ct);
-        if (hasActiveHold)
-        {
-            missing.Add("HOLD_ACTIVE");
         }
         if (!Paid(vault))
         {

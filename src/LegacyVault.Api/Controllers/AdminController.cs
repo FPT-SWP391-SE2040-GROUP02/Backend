@@ -23,17 +23,15 @@ namespace LegacyVault.Api.Controllers;
 public sealed class AdminController : ControllerBase
 {
     private readonly IAdminService adminService;
-    private readonly IHoldService holdService;
     private readonly IPlanSetupService planSetupService;
     private readonly INotaryCardService notaryCardService;
 
-    public AdminController(IAdminService adminService, IHoldService holdService,
+    public AdminController(IAdminService adminService,
         IPlanSetupService planSetupService, INotaryCardService notaryCardService)
     {
         this.planSetupService = planSetupService;
         this.notaryCardService = notaryCardService;
         this.adminService = adminService;
-        this.holdService = holdService;
     }
 
     [HttpGet("dashboard")]
@@ -185,32 +183,6 @@ public sealed class AdminController : ControllerBase
     public async Task<ExecutorInvitationResponse> AssignExecutor(Guid vaultId, AssignExecutorRequest request, CancellationToken ct)
     {
         return await planSetupService.AssignByAdminAsync(vaultId, request, ct);
-    }
-
-    // ---- Hold (chỉ xem; hold do hệ thống đặt và gỡ) ----
-
-    [HttpGet("holds")]
-    [ProducesResponseType<PaginatedList<HoldResponse>>(StatusCodes.Status200OK)]
-    public Task<PaginatedList<HoldResponse>> ListHolds(
-        [FromQuery] string? status, [FromQuery] Guid? vaultId, CancellationToken ct,
-        [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
-    {
-        return holdService.ListAsync(status, vaultId, Clamp(pageIndex, 1, int.MaxValue), Clamp(pageSize, 1, 100), ct);
-    }
-
-    /// <summary>Số hold theo trạng thái cho các thẻ lọc.</summary>
-    [HttpGet("holds/counts")]
-    [ProducesResponseType<CountsResponse>(StatusCodes.Status200OK)]
-    public Task<CountsResponse> CountHolds([FromQuery] Guid? vaultId, CancellationToken ct)
-    {
-        return holdService.CountsAsync(vaultId, ct);
-    }
-
-    [HttpGet("holds/{holdId:guid}")]
-    [ProducesResponseType<HoldResponse>(StatusCodes.Status200OK)]
-    public Task<HoldResponse> GetHold(Guid holdId, CancellationToken ct)
-    {
-        return holdService.GetAsync(holdId, ct);
     }
 
     private static int Clamp(int value, int min, int max)

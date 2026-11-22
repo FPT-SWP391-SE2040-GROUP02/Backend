@@ -30,7 +30,6 @@ public sealed class HandoverService : IHandoverService
     private readonly IHandoverRepository handover;
     private readonly ITokenService tokens;
     private readonly IHandoverPolicy policy;
-    private readonly IHoldReader holdReader;
     private readonly IExecutorKeyShardRepository keyShards;
     private readonly IHandoverSubmissionRepository submissions;
     private readonly IBeneficiaryRepository beneficiaries;
@@ -51,7 +50,6 @@ public sealed class HandoverService : IHandoverService
         IHandoverRepository handover,
         ITokenService tokens,
         IHandoverPolicy policy,
-        IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IExecutorKeyShardRepository keyShards,
@@ -69,7 +67,6 @@ public sealed class HandoverService : IHandoverService
         this.handover = handover;
         this.tokens = tokens;
         this.policy = policy;
-        this.holdReader = holdReader;
         this.keyShards = keyShards;
         this.submissions = submissions;
         this.beneficiaries = beneficiaries;
@@ -205,11 +202,6 @@ public sealed class HandoverService : IHandoverService
                 continue;
             }
 
-            if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
-            {
-                continue;
-            }
-
             string? invitedEmail = await FindRecipientEmailAsync(turn, ct);
             if (invitedEmail == null || invitedEmail != accountEmail)
             {
@@ -282,11 +274,6 @@ public sealed class HandoverService : IHandoverService
         if (!HandoverRules.CanClaim(turn.Status))
         {
             throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không còn nhận được.");
-        }
-
-        if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
-        {
-            throw HandoverAccess.NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa nhận được lượt này.");
         }
 
         // Đúng email mới được nhận (tài khoản đã xác minh email ở EnsureAccountUsableAsync).
@@ -369,10 +356,6 @@ public sealed class HandoverService : IHandoverService
 
         // 3. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kế hoạch không còn chạy, hoặc kho đang bị giữ
         string? deniedReason = HandoverRules.GrantDeniedReason(grant, vault.Plan.Status, timeProvider.GetUtcNow());
-        if (deniedReason == null && await holdReader.HasActiveHoldAsync(vault.Id, ct))
-        {
-            deniedReason = "HOLD_ACTIVE";
-        }
         if (deniedReason != null)
         {
             Dictionary<string, object?> extensions = new Dictionary<string, object?>();

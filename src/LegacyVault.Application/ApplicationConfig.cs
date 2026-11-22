@@ -20,7 +20,6 @@ public static class ApplicationConfig
         services.AddScoped<ISystemExecutorDirectoryService, SystemExecutorDirectoryService>();
         services.AddHandoverApplication();
 
-        // Điểm danh (deadman switch)
         services.AddScoped<IExecutorAssetService, ExecutorAssetService>();
         services.AddScoped<IEntitlementExpiryJob, EntitlementExpiryJob>();
 
@@ -30,8 +29,6 @@ public static class ApplicationConfig
         services.AddScoped<IRetentionJob, RetentionJob>();
         services.AddScoped<IExecutorManagementService, ExecutorManagementService>();
         services.AddScoped<IExecutorInvitationJob, ExecutorInvitationJob>();
-        services.AddScoped<IHoldService, HoldService>();
-        services.AddScoped<IHoldReader, HoldReader>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<ISystemConfigService, SystemConfigService>();
 
@@ -64,7 +61,6 @@ public static class ApplicationConfig
         services.AddScoped<PaymentGranter>();
         services.AddScoped<ISePayWebhookService, SePayWebhookService>();
         services.AddScoped<IAdminPaymentService, AdminPaymentService>();
-        services.AddScoped<IEmailTemplateService, EmailTemplateService>();
         // Công cụ thử nghiệm của Admin (controller chỉ mở ở Development)
         services.AddScoped<IDevToolsService, DevToolsService>();
         // Chế độ bảo trì: chặn tài khoản không phải Admin ở đăng nhập, làm mới phiên và middleware API

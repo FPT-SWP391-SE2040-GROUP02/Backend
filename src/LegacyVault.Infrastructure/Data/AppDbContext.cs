@@ -40,8 +40,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();
     public DbSet<Designation> Designations => Set<Designation>();
 
-    // Điểm danh (deadman switch)
-
     /// <summary>Transaction Auth giữ khóa từ lúc đọc refresh token tới commit; dispose rollback khi operation lỗi.</summary>
     public async Task<T> ExecuteSerializableAsync<T>(Func<Task<T>> operation, CancellationToken ct)
     {
@@ -71,7 +69,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
 
-    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
 
 
 

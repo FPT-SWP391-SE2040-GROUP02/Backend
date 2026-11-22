@@ -24,7 +24,6 @@ public sealed class HandoverClaimTests
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FakePolicy policy = new FakePolicy();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
-    private readonly FakeHoldReader holdReader = new FakeHoldReader();
     private readonly FakeEkycBeneficiaryRepository beneficiaryRepository = new FakeEkycBeneficiaryRepository();
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly HandoverService service;
@@ -45,8 +44,7 @@ public sealed class HandoverClaimTests
         RegisterRecipient(designation);
 
         // Cần kho hồ sơ người nhận và bộ giải mã giả để kiểm email người nhận (D2).
-        service = new HandoverService(currentUser, users, vaults, repository, new FakeTokenService(), policy, holdReader,
-            unitOfWork, time, new HandoverKeyTests.FakeKeyShards(), new FakeHandoverSubmissionRepository(), beneficiaryRepository, protector);
+        service = new HandoverService(currentUser, users, vaults, repository, new FakeTokenService(), policy, unitOfWork, time, new HandoverKeyTests.FakeKeyShards(), new FakeHandoverSubmissionRepository(), beneficiaryRepository, protector);
     }
 
     /// <summary>Đưa hồ sơ người nhận của chỉ định vào kho giả để service đọc được email.</summary>
@@ -459,17 +457,6 @@ public sealed class HandoverClaimTests
     }
 
     [Fact]
-    public async Task ClaimByTurn_HoldActive_ThrowsNotAllowed()
-    {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited, null);
-        holdReader.Active = true;
-
-        AppException error = await Assert.ThrowsAsync<AppException>(() => service.ClaimByTurnAsync(turn.Id, CancellationToken.None));
-
-        Assert.Equal("HOLD_ACTIVE", error.Extensions["reason"]);
-    }
-
-    [Fact]
     public async Task ClaimByTurn_EmailNotVerified_ThrowsEmailNotVerified()
     {
         HandoverTurn turn = AddTurn(HandoverTurnStatus.Invited, null);
@@ -547,21 +534,6 @@ public sealed class HandoverClaimTests
         List<PendingInvitationResponse> list = await service.GetMyInvitationsAsync(CancellationToken.None);
 
         Assert.Empty(list);
-    }
-
-    [Fact]
-    public async Task GetMyInvitations_PlanNotInHandoverOrHoldActive_NotListed()
-    {
-        AddTurn(HandoverTurnStatus.Invited, null);
-
-        holdReader.Active = true;
-        List<PendingInvitationResponse> held = await service.GetMyInvitationsAsync(CancellationToken.None);
-        holdReader.Active = false;
-        data.Plan.Status = PlanStatus.Closed;
-        List<PendingInvitationResponse> closed = await service.GetMyInvitationsAsync(CancellationToken.None);
-
-        Assert.Empty(held);
-        Assert.Empty(closed);
     }
 
     [Fact]

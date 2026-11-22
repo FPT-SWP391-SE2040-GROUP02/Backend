@@ -7,26 +7,6 @@ namespace LegacyVault.Application.Mappings;
 
 public static class OperationsMapper
 {
-    public static HoldResponse ToResponse(Hold hold, DateTimeOffset now)
-    {
-        HoldResponse response = new HoldResponse();
-        response.Id = hold.Id;
-        response.VaultId = hold.VaultId;
-        response.Scope = hold.Scope.ToApiString();
-        response.TargetId = hold.TargetId;
-        response.Type = hold.Type.ToApiString();
-        response.Status = hold.Status.ToApiString();
-        response.Reason = hold.Reason;
-        response.ResponsibleUserId = hold.ResponsibleUserId;
-        response.ReviewAt = hold.ReviewAt;
-        response.ReviewOverdue = hold.Status == HoldStatus.Active && now >= hold.ReviewAt;
-        response.CreatedAt = hold.CreatedAt;
-        response.ReleasedAt = hold.ReleasedAt;
-        response.ReleaseReason = hold.ReleaseReason;
-        response.Etag = Etag.From(hold.UpdatedAt);
-        return response;
-    }
-
     public static AdminUserResponse ToAdminUser(User user)
     {
         AdminUserResponse response = new AdminUserResponse();

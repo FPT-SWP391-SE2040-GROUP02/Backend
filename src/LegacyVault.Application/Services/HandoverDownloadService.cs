@@ -17,7 +17,6 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
     private readonly IVaultRepository vaults;
     private readonly IHandoverRepository handover;
     private readonly IAssetContentStore contentStore;
-    private readonly IHoldReader holdReader;
     private readonly IExecutorKeyShardRepository keyShards;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -27,7 +26,6 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         IVaultRepository vaults,
         IHandoverRepository handover,
         IAssetContentStore contentStore,
-        IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IExecutorKeyShardRepository keyShards)
@@ -36,7 +34,6 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
         this.vaults = vaults;
         this.handover = handover;
         this.contentStore = contentStore;
-        this.holdReader = holdReader;
         this.keyShards = keyShards;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
@@ -86,15 +83,6 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
             At = now
         };
         string? deniedReason = HandoverRules.GrantDeniedReason(grant, vault.Plan.Status, now);
-        if (deniedReason == null)
-        {
-            bool vaultIsHeld = await holdReader.HasActiveHoldAsync(vault.Id, ct);
-            if (vaultIsHeld)
-            {
-                // Kho đang bị giữ thì không cho tải, kể cả khi quyền tải vẫn còn hạn.
-                deniedReason = "HOLD_ACTIVE";
-            }
-        }
         if (deniedReason == null && turn.KeyVerifiedAt == null)
         {
             ExecutorKeyShard? shard = await keyShards.FindByVaultIdAsync(turn.VaultId, ct);

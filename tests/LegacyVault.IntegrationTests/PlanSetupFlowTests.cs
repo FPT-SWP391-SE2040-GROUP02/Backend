@@ -16,7 +16,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests;
 
-/// <summary>Real HTTP/SQL Executor → activation → check-in; identity/payment and mail are explicit test fixtures.</summary>
+/// <summary>Real HTTP/SQL Executor → activation; identity/payment and mail are explicit test fixtures.</summary>
 public sealed class PlanSetupFlowTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;

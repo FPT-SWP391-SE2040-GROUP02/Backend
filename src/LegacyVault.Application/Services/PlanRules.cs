@@ -6,7 +6,7 @@ namespace LegacyVault.Application.Services;
 /// <summary>Luật nghiệp vụ của kế hoạch bàn giao (HandoverPlan) dùng chung cho các service.</summary>
 public static class PlanRules
 {
-    /// <summary>Kế hoạch đang chạy: đã kích hoạt và lịch điểm danh đang chạy (SETUP-16, §11.2).</summary>
+    /// <summary>Kế hoạch đang chạy: đã kích hoạt, chưa sang bàn giao (SETUP-16, §11.2).</summary>
     public static bool IsRunning(PlanStatus status)
     {
         if (status == PlanStatus.Active)

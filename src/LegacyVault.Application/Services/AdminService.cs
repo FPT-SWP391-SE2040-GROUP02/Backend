@@ -64,7 +64,6 @@ public sealed class AdminService : IAdminService
     private readonly IVaultRepository vaults;
     private readonly IHandoverRecordRepository records;
     private readonly IExecutorReader executorReader;
-    private readonly IHoldRepository holds;
     private readonly IRefreshTokenRepository refreshTokens;
     private readonly IAuditLogRepository audit;
     private readonly IUnitOfWork unitOfWork;
@@ -82,7 +81,6 @@ public sealed class AdminService : IAdminService
         IVaultRepository vaults,
         IHandoverRecordRepository records,
         IExecutorReader executorReader,
-        IHoldRepository holds,
         IRefreshTokenRepository refreshTokens,
         IAuditLogRepository audit,
         IUnitOfWork unitOfWork,
@@ -104,7 +102,6 @@ public sealed class AdminService : IAdminService
         this.vaults = vaults;
         this.records = records;
         this.executorReader = executorReader;
-        this.holds = holds;
         this.audit = audit;
         this.unitOfWork = unitOfWork;
         this.passwordHasher = passwordHasher;
@@ -401,8 +398,6 @@ public sealed class AdminService : IAdminService
         await RequireAdminAsync(ct);
         DateTimeOffset now = timeProvider.GetUtcNow();
         AdminDashboardResponse response = new AdminDashboardResponse();
-        response.ActiveHolds = await holds.CountActiveAsync(ct);
-        response.HoldsPastReview = await holds.CountReviewOverdueAsync(now, ct);
         response.ActiveAdmins = await adminUsers.CountActiveAdminsAsync(ct);
         (List<User> verifiers, int verifierCount) = await adminUsers.ListAsync(
             null, UserRole.Verifier, UserStatus.Active, 1, 1, ct);

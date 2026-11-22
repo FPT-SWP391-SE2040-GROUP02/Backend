@@ -59,7 +59,7 @@ public sealed class HandoverDownloadTests
         turn.Grant = grant;
         repository.Grants.Add(grant);
 
-        service = new HandoverDownloadService(currentUser, vaults, repository, store, new HandoverKeyTests.NoHoldReaderForTests(), unitOfWork, time, keyShards);
+        service = new HandoverDownloadService(currentUser, vaults, repository, store, unitOfWork, time, keyShards);
     }
 
     [Fact]

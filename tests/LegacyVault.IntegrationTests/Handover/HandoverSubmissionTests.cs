@@ -131,7 +131,6 @@ public sealed class HandoverSubmissionTests
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly InMemoryContentStore store = new InMemoryContentStore();
     private readonly FakeAuditLogRepository audit = new FakeAuditLogRepository();
-    private readonly FakeHoldReader holds = new FakeHoldReader();
     private readonly FakeHandoverRecordRepository records = new FakeHandoverRecordRepository();
     private readonly CountingRecordService recordService = new CountingRecordService();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
@@ -172,7 +171,7 @@ public sealed class HandoverSubmissionTests
         submitService = new HandoverSubmissionService(
             currentUser, handover, submissions, beneficiaries, protector, store, unitOfWork, time);
         reviewService = new HandoverSubmissionReviewService(
-            currentUser, users, vaults, submissions, holds, store, audit, unitOfWork, time, records, recordService);
+            currentUser, users, vaults, submissions, store, audit, unitOfWork, time, records, recordService);
     }
 
     private static SubmitHandoverSubmissionRequest Request(
@@ -454,20 +453,6 @@ public sealed class HandoverSubmissionTests
             () => reviewService.GetAsync(submission.Id, CancellationToken.None));
 
         Assert.Equal(AppErrorType.NotFound, error.Type);
-    }
-
-    [Fact]
-    public async Task Approve_WhenKhoIsHeld_IsConflict()
-    {
-        HandoverSubmission submission = await SubmitAndAttach(Request());
-        currentUser.UserId = verifier.Id;
-        holds.Active = true;
-
-        AppException error = await Assert.ThrowsAsync<AppException>(
-            () => reviewService.ApproveAsync(submission.Id, CancellationToken.None));
-
-        Assert.Equal(AppErrorType.Conflict, error.Type);
-        Assert.Equal(HandoverTurnStatus.IdentityInProgress, turn.Status);
     }
 
     [Fact]

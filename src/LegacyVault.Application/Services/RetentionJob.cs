@@ -32,7 +32,6 @@ public sealed class RetentionJob : IRetentionJob
     private readonly IBeneficiaryDataProtector protector;
     private readonly IAssetContentStore contentStore;
     private readonly IRetentionNoticeSender sender;
-    private readonly IHoldReader holdReader;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
     private readonly IHandoverSubmissionRepository? submissions;
@@ -44,7 +43,6 @@ public sealed class RetentionJob : IRetentionJob
         IBeneficiaryDataProtector protector,
         IAssetContentStore contentStore,
         IRetentionNoticeSender sender,
-        IHoldReader holdReader,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IHandoverSubmissionRepository? submissions = null)
@@ -55,7 +53,6 @@ public sealed class RetentionJob : IRetentionJob
         this.protector = protector;
         this.contentStore = contentStore;
         this.sender = sender;
-        this.holdReader = holdReader;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;
         this.submissions = submissions;
@@ -89,10 +86,9 @@ public sealed class RetentionJob : IRetentionJob
         }
 
         DateTimeOffset now = timeProvider.GetUtcNow();
-        // 2. Với từng lượt: còn lý do giữ (đang nhận, còn quyền tải, kho bị giữ...) thì dừng đồng hồ, hết lý do thì chạy tiếp;
+        // 2. Với từng lượt: còn lý do giữ (đang nhận, còn quyền tải...) thì dừng đồng hồ, hết lý do thì chạy tiếp;
         //    lượt hết thời hạn lưu được đưa vào danh sách cần dọn
         List<HandoverTurn> due = new List<HandoverTurn>();
-        bool vaultHeld = await holdReader.HasActiveHoldAsync(vault.Id, ct);
         foreach (HandoverTurn turn in turns)
         {
             if (!RetentionRules.AppliesToTurn(turn))
@@ -100,11 +96,6 @@ public sealed class RetentionJob : IRetentionJob
                 continue;
             }
             string? reason = RetentionRules.HoldReason(turn, plan.Status, now);
-            if (reason == null && vaultHeld)
-            {
-                // Hold đang hiệu lực giữ dữ liệu; tạm dừng đồng hồ lưu, không xóa.
-                reason = RetentionRules.HoldAdmin;
-            }
             if (RetentionRules.Advance(turn, reason, now))
             {
                 due.Add(turn);

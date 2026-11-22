@@ -88,9 +88,6 @@ public sealed class RemoveEkycLeftoversMigrationTests : IAsyncLifetime
             List<EkycConsent> consents = await db.EkycConsents.ToListAsync();
             Assert.Equal(EkycPurpose.OwnerEnrollment, Assert.Single(consents).Purpose);
 
-            List<Hold> holds = await db.Set<Hold>().ToListAsync();
-            Assert.Equal(HoldType.Dispute, Assert.Single(holds).Type);
-
             int faceTemplateTables = await db.Database
                 .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM sys.tables WHERE name = 'OwnerFaceTemplates'")
                 .SingleAsync();

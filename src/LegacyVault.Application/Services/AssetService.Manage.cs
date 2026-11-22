@@ -14,7 +14,7 @@ namespace LegacyVault.Application.Services;
 /// </summary>
 /// <remarks>
 /// - Nội dung không đổi sau khi tạo; muốn thay thì tạo tài sản mới rồi xóa tài sản cũ.
-/// - Xóa chỉ khi tài sản không còn ở gói nào, chưa được ghim vào snapshot bàn giao và kho không có hold.
+/// - Xóa chỉ khi tài sản không còn ở gói nào, chưa được ghim vào snapshot bàn giao.
 /// - Tên tài sản, tên tệp và nội dung không bao giờ vào nhật ký hoạt động (SEC-07).
 /// </remarks>
 public sealed partial class AssetService
@@ -68,7 +68,6 @@ public sealed partial class AssetService
     {
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
         VaultRules.EnsureEditable(vault);
-        await EnsureNoActiveHoldAsync(vault.Id, ct);
         Asset asset = await LoadAssetAsync(vault.Id, assetId, ct);
         EnsureEtagMatches(request.Etag, asset);
 
@@ -119,7 +118,6 @@ public sealed partial class AssetService
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
         // Xóa là thao tác "giảm": vẫn cho khi dịch vụ đang ân hạn, chặn khi kho đóng hoặc kế hoạch bị khóa.
         VaultRules.EnsureCanReduce(vault);
-        await EnsureNoActiveHoldAsync(vault.Id, ct);
         Asset asset = await LoadAssetAsync(vault.Id, assetId, ct);
 
         ContainerAsset? link = await containerRepository.FindLinkByAssetIdAsync(asset.Id, ct);
@@ -165,18 +163,6 @@ public sealed partial class AssetService
             throw new AppException(AppErrorType.NotFound, ErrorCode.AssetNotFound, "Không tìm thấy tài sản.");
         }
         return asset;
-    }
-
-    private async Task EnsureNoActiveHoldAsync(Guid vaultId, CancellationToken ct)
-    {
-        bool onHold = await holdReader.HasActiveHoldAsync(vaultId, ct);
-        if (onHold)
-        {
-            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-            extensions["reason"] = "HOLD_ACTIVE";
-            throw new AppException(AppErrorType.Conflict, ErrorCode.VaultNotEditable,
-                "Kho đang bị tạm giữ nên không thể thay đổi tài sản.", extensions);
-        }
     }
 
     private static void EnsureEtagMatches(string? etag, Asset asset)

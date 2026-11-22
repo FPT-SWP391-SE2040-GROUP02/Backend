@@ -36,7 +36,7 @@ public sealed class HandoverKeyTests
         Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 2);
         Designation designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
         service = new HandoverService(
-            currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(), new NoHoldReaderForTests(),
+            currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(),
             unitOfWork, time, keyShards, new FakeHandoverSubmissionRepository(), new LegacyVault.IntegrationTests.Ekyc.FakeEkycBeneficiaryRepository(),
             new FakeBeneficiaryDataProtector());
         turn = data.BuildTurn(container, designation, HandoverTurnStatus.ReadyToAccept, "t1", claimantId);
@@ -183,11 +183,4 @@ public sealed class HandoverKeyTests
         }
     }
 
-    internal sealed class NoHoldReaderForTests : IHoldReader
-    {
-        public Task<bool> HasActiveHoldAsync(Guid vaultId, CancellationToken ct)
-        {
-            return Task.FromResult(false);
-        }
-    }
 }

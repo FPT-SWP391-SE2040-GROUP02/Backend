@@ -24,7 +24,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     private readonly IUserRepository users;
     private readonly IVaultRepository vaults;
     private readonly IHandoverSubmissionRepository submissions;
-    private readonly IHoldReader holdReader;
     private readonly IAssetContentStore contentStore;
     private readonly IAuditLogRepository auditLogs;
     private readonly IUnitOfWork unitOfWork;
@@ -37,7 +36,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         IUserRepository users,
         IVaultRepository vaults,
         IHandoverSubmissionRepository submissions,
-        IHoldReader holdReader,
         IAssetContentStore contentStore,
         IAuditLogRepository auditLogs,
         IUnitOfWork unitOfWork,
@@ -49,7 +47,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         this.users = users;
         this.vaults = vaults;
         this.submissions = submissions;
-        this.holdReader = holdReader;
         this.contentStore = contentStore;
         this.auditLogs = auditLogs;
         this.unitOfWork = unitOfWork;
@@ -280,10 +277,6 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         if (vault.Plan.Status != PlanStatus.HandoverInProgress)
         {
             throw HandoverAccess.NotAllowed("PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
-        }
-        if (await holdReader.HasActiveHoldAsync(vault.Id, ct))
-        {
-            throw HandoverAccess.NotAllowed("HOLD_ACTIVE", "Kho đang bị giữ nên chưa duyệt được.");
         }
         return vault;
     }

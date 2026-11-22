@@ -43,7 +43,6 @@ public sealed partial class AssetService : IAssetService
     private readonly IAuditLogRepository auditLogRepository;
     private readonly IStorageReservationRepository reservations;
     private readonly IContainerRepository containerRepository;
-    private readonly IHoldReader holdReader;
     private readonly IVaultPinService vaultPinService;
     private readonly IUnitOfWork unitOfWork;
     private readonly TimeProvider timeProvider;
@@ -56,7 +55,6 @@ public sealed partial class AssetService : IAssetService
         IAuditLogRepository auditLogRepository,
         IStorageReservationRepository reservations,
         IContainerRepository containerRepository,
-        IHoldReader holdReader,
         IVaultPinService vaultPinService,
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider)
@@ -68,7 +66,6 @@ public sealed partial class AssetService : IAssetService
         this.auditLogRepository = auditLogRepository;
         this.reservations = reservations;
         this.containerRepository = containerRepository;
-        this.holdReader = holdReader;
         this.vaultPinService = vaultPinService;
         this.unitOfWork = unitOfWork;
         this.timeProvider = timeProvider;

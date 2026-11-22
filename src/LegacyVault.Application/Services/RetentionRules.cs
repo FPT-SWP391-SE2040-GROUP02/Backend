@@ -19,7 +19,6 @@ public static class RetentionRules
     public const string HoldClaimInProgress = "CLAIM_IN_PROGRESS";
     public const string HoldGrantActive = "GRANT_ACTIVE";
     public const string HoldObjection = "OBJECTION";
-    public const string HoldAdmin = "HOLD";
 
     public const int NoticeNone = 0;
     public const int NoticeStarted = 1;
@@ -45,7 +44,7 @@ public static class RetentionRules
 
     /// <summary>
     /// Lý do đang giữ dữ liệu của lượt tại thời điểm now; null = không còn gì giữ, đồng hồ được chạy.
-    /// Mở link hay đăng nhập không phải lý do giữ; chỉ claim đang xử lý, grant còn hạn hoặc hold đã xác nhận.
+    /// Mở link hay đăng nhập không phải lý do giữ; chỉ claim đang xử lý hoặc grant còn hạn.
     /// </summary>
     public static string? HoldReason(HandoverTurn turn, PlanStatus planStatus, DateTimeOffset now)
     {

@@ -36,13 +36,13 @@ public enum AuditAction
     BeneficiaryUpdated = 12,
     /// <summary>Owner xóa hồ sơ người nhận không còn ở gói nào.</summary>
     BeneficiaryDeleted = 13,
-    /// <summary>Owner điểm danh.</summary>
+    /// <summary>Không còn dùng (đã bỏ điểm danh); giữ giá trị để đọc nhật ký cũ.</summary>
     CheckedIn = 14,
-    /// <summary>Owner đổi chu kỳ hoặc thời gian chờ điểm danh.</summary>
+    /// <summary>Không còn dùng (đã bỏ điểm danh); giữ giá trị để đọc nhật ký cũ.</summary>
     CheckInSettingsUpdated = 15,
-    /// <summary>Admin hoặc job đặt hold.</summary>
+    /// <summary>Không còn dùng (đã bỏ tạm giữ); giữ giá trị để đọc nhật ký cũ.</summary>
     HoldPlaced = 16,
-    /// <summary>Hold được gỡ.</summary>
+    /// <summary>Không còn dùng (đã bỏ tạm giữ); giữ giá trị để đọc nhật ký cũ.</summary>
     HoldReleased = 17,
     /// <summary>Sự cố được giao lại người phụ trách.</summary>
     IncidentAssigned = 18,
