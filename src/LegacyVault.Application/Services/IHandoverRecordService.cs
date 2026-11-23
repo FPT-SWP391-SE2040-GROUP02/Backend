@@ -94,8 +94,15 @@ public interface IHandoverRecordService
 
     /// <summary>
     /// Gọi khi luật sư vừa xác nhận danh tính một người nhận (trước khi lưu): đủ người thì biên bản sang bước ký.
+    /// Người gọi phải gọi <see cref="SendPendingSigningNoticeAsync"/> SAU khi lưu, nếu không thư báo bước ký sẽ không được gửi.
     /// </summary>
     Task AdvanceAfterIdentityAsync(HandoverTurn turn, DateTimeOffset now, CancellationToken ct);
+
+    /// <summary>
+    /// Gọi SAU khi đã lưu: nếu lượt này vừa đưa biên bản sang bước ký thì gửi thư báo người nhận và Người thực thi.
+    /// Không có gì chờ thì không làm gì; gọi lại không gửi lặp.
+    /// </summary>
+    Task SendPendingSigningNoticeAsync(CancellationToken ct);
 
     /// <summary>Luật sư được phân công cho biên bản của kho; null khi kho chưa mở bàn giao.</summary>
     Task<Guid?> FindVerifierUserIdAsync(Guid vaultId, CancellationToken ct);
