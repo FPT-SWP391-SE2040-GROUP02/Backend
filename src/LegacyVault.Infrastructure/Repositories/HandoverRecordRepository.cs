@@ -78,6 +78,21 @@ public sealed class HandoverRecordRepository : IHandoverRecordRepository
             .ToListAsync(ct);
     }
 
+    public Task<List<Beneficiary>> ListBeneficiariesOfActivatedPlansAsync(CancellationToken ct)
+    {
+        return context.Set<Beneficiary>()
+            .AsNoTracking()
+            .Include(b => b.Vault).ThenInclude(v => v.Owner)
+            .Include(b => b.Vault).ThenInclude(v => v.Plan)
+            .Where(b => b.Vault.Plan.Status == PlanStatus.Active
+                || b.Vault.Plan.Status == PlanStatus.HandoverRequested
+                || b.Vault.Plan.Status == PlanStatus.HandoverInProgress
+                || b.Vault.Plan.Status == PlanStatus.Closed)
+            .OrderBy(b => b.CreatedAt)
+            .ThenBy(b => b.Id)
+            .ToListAsync(ct);
+    }
+
     public Task<List<Executor>> ListAcceptedExecutorsAsync(Guid userId, CancellationToken ct)
     {
         return context.Set<Executor>()

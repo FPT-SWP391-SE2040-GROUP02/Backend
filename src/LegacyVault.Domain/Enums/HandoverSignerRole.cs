@@ -1,6 +1,6 @@
 namespace LegacyVault.Domain.Enums;
 
-/// <summary>Người ký biên bản bàn giao. Hiện chỉ luật sư ký; hai vai còn lại giữ để đọc chữ ký cũ.</summary>
+/// <summary>Ba bên ký biên bản bàn giao.</summary>
 public enum HandoverSignerRole
 {
     /// <summary>Luật sư (Người xét duyệt) ký xác minh.</summary>

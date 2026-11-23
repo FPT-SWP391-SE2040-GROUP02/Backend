@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Người thực thi: xem biên bản bàn giao, theo dõi tiến độ, gửi mã nhận, ký phiếu giao nhận.
+/// Người thực thi: mở bàn giao, xem và ký biên bản bàn giao, theo dõi tiến độ, gửi mã nhận cho người nhận.
 /// </summary>
 /// <remarks>
 /// Người gọi phải là Người thực thi đang hiệu lực của kho và không phải Chủ kho; không đủ điều kiện thì 404.
@@ -60,6 +60,16 @@ public sealed class ExecutorHandoverController : ControllerBase
         return Ok(record);
     }
 
+    /// <summary>Người thực thi ký biên bản (bước 3). Ký là bấm xác nhận, lưu người ký và thời điểm.</summary>
+    [HttpPost("vaults/{vaultId:guid}/handover-record/sign")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverRecordResponse> SignRecord(Guid vaultId, CancellationToken ct)
+    {
+        return recordService.SignAsExecutorAsync(vaultId, ct);
+    }
+
     /// <summary>
     /// Trạng thái từng lượt bàn giao và từng tài sản đã tải hay chưa. Không có nội dung tài sản.
     /// Biên bản chưa chốt lần nào thì handoverStarted = false.
@@ -74,7 +84,7 @@ public sealed class ExecutorHandoverController : ControllerBase
     }
 
     /// <summary>
-    /// Người thực thi gửi mã nhận (khóa mở gói) cho người nhận của lượt qua email đã lưu. Chỉ khi luật sư đã ký biên bản.
+    /// Người thực thi gửi mã nhận (khóa mở gói) cho người nhận của lượt qua email đã lưu. Chỉ khi biên bản đã đủ chữ ký.
     /// Body là khóa mình đang giữ để Backend kiểm; khóa sai trả 403 HANDOVER_KEY_INVALID. Khóa không được lưu.
     /// </summary>
     [HttpPost("handover-records/{recordId:guid}/handover-turns/{turnId:guid}/send-key")]

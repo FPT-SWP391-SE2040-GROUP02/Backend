@@ -99,7 +99,7 @@ public sealed class ExecutorInvitationSender(
             "Mở bàn giao trên hệ thống khi Chủ kho qua đời (không cần nộp giấy tờ).",
             "Giữ hộ tài sản, không tự chia, bán hay cho; việc chia do luật sư lập trong biên bản bàn giao.",
             "Ký biên bản bàn giao cùng luật sư và người nhận.",
-            "Gửi mã nhận cho người nhận khi luật sư đã ký biên bản.",
+            "Gửi mã nhận cho người nhận khi biên bản đã đủ chữ ký.",
         }));
 
         List<LegacyVaultEmailTheme.MailParagraph> closing = new List<LegacyVaultEmailTheme.MailParagraph>();

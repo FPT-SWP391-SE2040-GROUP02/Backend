@@ -306,7 +306,7 @@ public sealed class HandoverService : IHandoverService
         await unitOfWork.SaveChangesAsync(ct);
         if (recordService != null)
         {
-            await recordService.SendPendingTransferNoticeAsync(ct);
+            await recordService.SendPendingSigningNoticeAsync(ct);
         }
         return await BuildTurnResponseAsync(turn, ct);
     }

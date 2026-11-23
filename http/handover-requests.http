@@ -1,0 +1,112 @@
+# Người nhận xem các kho mình được để lại và gửi yêu cầu nhận tài sản trong app (không cần link trong thư),
+# và luật sư chốt biên bản kèm xác nhận căn cứ pháp lý. Chỉ Development, dữ liệu mẫu.
+#
+# Chuẩn bị:
+#   1. Chạy migration và API (profile http). Chủ kho có gói sẵn sàng, khai người nhận với email nguoinhan@gmail.com,
+#      rồi kích hoạt kế hoạch (http/plan-setup.http).
+#   2. Tài khoản người nhận đăng ký bằng đúng email đó và ĐÃ xác minh email (http/auth.http).
+#   3. Tệp giấy tờ mẫu: đặt một tệp PDF bất kỳ tên giay-to.pdf cạnh file này (không dùng giấy tờ thật).
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập tài khoản người nhận
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "nguoinhan@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### 1) Các kho tôi là người nhận, kèm bước của tôi và cờ needsAction (chưa xác minh email thì [])
+# status: NOT_REQUESTED, REQUEST_PENDING, SUPPLEMENT_REQUESTED, REJECTED, IN_REVIEW, NEED_MY_SIGNATURE,
+#         WAITING_OTHERS, CODE_READY, RECEIVED, NEED_IDENTITY. Không có tên gói, tên tài sản hay số căn cước.
+# @name available
+GET {{baseUrl}}/handover/requests/available
+Authorization: Bearer {{token}}
+
+###
+@vaultId = {{available.response.body.$[0].vaultId}}
+
+### 2) Gửi yêu cầu nhận tài sản trong app. Không phải người nhận của kho: 404; chưa xác minh email: 403;
+#      kế hoạch chưa kích hoạt hoặc đã gửi rồi: 409 HANDOVER_NOT_ALLOWED
+# @name submit
+POST {{baseUrl}}/handover/requests/by-account
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----LegacyVaultBoundary
+
+------LegacyVaultBoundary
+Content-Disposition: form-data; name="vaultId"
+
+{{vaultId}}
+------LegacyVaultBoundary
+Content-Disposition: form-data; name="note"
+
+Xin nhận tài sản (dữ liệu thử)
+------LegacyVaultBoundary
+Content-Disposition: form-data; name="files"; filename="giay-to.pdf"
+Content-Type: application/pdf
+
+< ./giay-to.pdf
+------LegacyVaultBoundary--
+
+###
+@claimId = {{submit.response.body.$.id}}
+
+### 3) Các yêu cầu tôi đã gửi
+GET {{baseUrl}}/handover/requests/mine
+Authorization: Bearer {{token}}
+
+### 4) Nộp bổ sung khi luật sư yêu cầu (dùng API có sẵn)
+POST {{baseUrl}}/handover/requests/{{claimId}}/supplement
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----LegacyVaultBoundary
+
+------LegacyVaultBoundary
+Content-Disposition: form-data; name="note"
+
+Đã bổ sung (dữ liệu thử)
+------LegacyVaultBoundary
+Content-Disposition: form-data; name="files"; filename="giay-to.pdf"
+Content-Type: application/pdf
+
+< ./giay-to.pdf
+------LegacyVaultBoundary--
+
+### ---------------- Luật sư ----------------
+
+### Đăng nhập luật sư (tài khoản Admin tạo với vai VERIFIER)
+# @name verifierLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "luatsu@example.com", "password": "Password123!" }
+
+###
+@verifierToken = {{verifierLogin.response.body.$.accessToken}}
+
+### 5) Biên bản được giao cho tôi
+# @name records
+GET {{baseUrl}}/verifier/handover-records
+Authorization: Bearer {{verifierToken}}
+
+###
+@recordId = {{records.response.body.$[0].id}}
+
+### 6) Chốt biên bản: bắt buộc tick xác nhận căn cứ pháp lý (thiếu hoặc false: 400 VALIDATION_ERROR).
+#    Chốt xong biên bản ở SIGNING: luật sư và Người thực thi ký được ngay; mỗi người nhận ký khi danh tính của mình xong.
+POST {{baseUrl}}/verifier/handover-records/{{recordId}}/finalize
+Authorization: Bearer {{verifierToken}}
+Content-Type: application/json
+
+{ "confirmLegalBasis": true }
+
+### 7) Luật sư ký biên bản. Có chữ ký luật sư + Người thực thi + người nhận X thì X được mở quyền tải ngay.
+POST {{baseUrl}}/verifier/handover-records/{{recordId}}/sign
+Authorization: Bearer {{verifierToken}}
+
+### 8) Mở lại biên bản: xác nhận căn cứ pháp lý về null, chốt lại phải tick lại.
+#    Đã có người nhận được mở quyền tải thì 409 HANDOVER_NOT_ALLOWED (PARTIALLY_DELIVERED).
+POST {{baseUrl}}/verifier/handover-records/{{recordId}}/reopen
+Authorization: Bearer {{verifierToken}}

@@ -1,7 +1,7 @@
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Một phiên bản di chúc số đã được Chủ kho ký bằng PIN (bảng WillVersions).
+/// Một phiên bản biên bản phân chia đã được Chủ kho ký bằng PIN (bảng WillVersions).
 /// </summary>
 /// <remarks>
 /// - Phiên bản 1 sinh khi kích hoạt kế hoạch; mỗi lần Chủ kho ký lại sau khi đổi cấu hình sinh phiên bản kế tiếp.

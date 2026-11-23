@@ -11,14 +11,14 @@ public static class HandoverRequestNoticeEmail
 {
     public const string Subject = "Có yêu cầu nhận tài sản trên LegacyVault";
 
-    public const string TransferSubject = "Luật sư đã ký biên bản bàn giao trên LegacyVault";
+    public const string SigningSubject = "Biên bản bàn giao chờ bạn ký trên LegacyVault";
 
     public static EmailContent Build(HandoverRequestNotice notice, string clientUrl)
     {
         string baseUrl = clientUrl.TrimEnd('/');
-        if (notice.Stage == HandoverRequestNotice.StageTransfer)
+        if (notice.Stage == HandoverRequestNotice.StageSigning)
         {
-            return BuildTransfer(notice, baseUrl);
+            return BuildSigning(notice, baseUrl);
         }
         string title = "Có yêu cầu nhận tài sản";
         string lead;
@@ -32,7 +32,7 @@ public static class HandoverRequestNoticeEmail
             actionUrl = baseUrl + "/dashboard/wills";
             buttonText = "Xem yêu cầu";
             note = "Nếu bạn vẫn khỏe mạnh và không muốn bàn giao, hãy đăng nhập và bấm Hủy yêu cầu. "
-                + "Bạn hủy được cho tới khi luật sư ký biên bản bàn giao.";
+                + "Bạn hủy được cho tới khi biên bản bàn giao đủ chữ ký.";
         }
         else if (notice.Audience == HandoverRequestNotice.Executor)
         {
@@ -40,7 +40,8 @@ public static class HandoverRequestNoticeEmail
                 + "Luật sư đang xét giấy tờ và sẽ lập biên bản bàn giao.";
             actionUrl = baseUrl + "/executor";
             buttonText = "Mở không gian Người thực thi";
-            note = "Bạn chưa cần làm gì lúc này. Khi luật sư ký biên bản, bạn gửi mã nhận cho từng người.";
+            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt biên bản, bạn ký và gửi mã nhận cho từng người nhận "
+                + "khi người đó ký xong.";
         }
         else
         {
@@ -61,29 +62,34 @@ public static class HandoverRequestNoticeEmail
         return new EmailContent(Subject, text, html);
     }
 
-    /// <summary>Thư báo luật sư đã ký biên bản, gửi người nhận và Người thực thi. Không nêu tài sản hay giấy tờ.</summary>
-    private static EmailContent BuildTransfer(HandoverRequestNotice notice, string baseUrl)
+    /// <summary>
+    /// Thư báo ký biên bản: người nhận (khi danh tính của chính mình đã xong) và Người thực thi (khi luật sư vừa chốt).
+    /// Mỗi người nhận được giao riêng, không chờ người khác. Không nêu tài sản hay giấy tờ.
+    /// </summary>
+    private static EmailContent BuildSigning(HandoverRequestNotice notice, string baseUrl)
     {
-        string title = "Luật sư đã ký biên bản bàn giao";
+        string title = "Biên bản bàn giao chờ bạn ký";
         string lead;
         string actionUrl;
         string buttonText;
         string note;
         if (notice.Audience == HandoverRequestNotice.Recipient)
         {
-            lead = $"Luật sư đã xác minh danh tính của bạn và ký biên bản bàn giao tài sản trong kho của {notice.OwnerName}. "
-                + "Người thực thi sẽ gửi mã mở gói vào email của bạn.";
+            lead = $"Luật sư đã xác minh danh tính của bạn xong. Bạn có thể đọc và ký biên bản bàn giao tài sản trong kho của "
+                + $"{notice.OwnerName} ngay, không cần chờ người nhận khác.";
             actionUrl = baseUrl + "/claim/beneficiary";
-            buttonText = "Xem phần của bạn";
-            note = "Nhập mã, tải và kiểm tra tài sản rồi ký phiếu giao nhận. Hãy đăng nhập bằng đúng email nhận thư này.";
+            buttonText = "Đọc và ký biên bản";
+            note = "Bạn ký xong và luật sư, Người thực thi cũng đã ký thì phần của bạn được mở; Người thực thi gửi mã mở gói "
+                + "để bạn tải tài sản. Hãy đăng nhập bằng đúng email nhận thư này.";
         }
         else
         {
-            lead = $"Luật sư đã ký biên bản bàn giao kho của {notice.OwnerName}. Đây là yêu cầu chuyển giao: "
-                + "bạn giao đúng người, đúng tài sản ghi trong biên bản.";
+            lead = $"Luật sư đã chốt biên bản bàn giao tài sản trong kho của {notice.OwnerName}. "
+                + "Bạn có thể ký biên bản ngay.";
             actionUrl = baseUrl + "/executor";
             buttonText = "Mở không gian Người thực thi";
-            note = "Gửi mã mở gói cho từng người nhận. Khi họ xác nhận đã nhận đủ, bạn ký phiếu giao nhận.";
+            note = "Mỗi người nhận được giao riêng: người nào đã ký (cùng chữ ký của bạn và luật sư) thì bạn gửi mã mở gói "
+                + "cho người đó, không cần chờ người nhận khác.";
         }
         string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(
@@ -93,7 +99,7 @@ public static class HandoverRequestNoticeEmail
             actionUrl: actionUrl,
             actionButtonText: buttonText,
             securityNotice: note);
-        return new EmailContent(TransferSubject, text, html);
+        return new EmailContent(SigningSubject, text, html);
     }
 }
 

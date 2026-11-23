@@ -60,8 +60,6 @@ public static class AuthSecurityConfig
                 (AuthRateLimitPolicies.PasswordReset, AuthRateLimitPolicies.PasswordResetPermitLimit),
                 (AuthRateLimitPolicies.Register, AuthRateLimitPolicies.RegisterPermitLimit),
                 (AuthRateLimitPolicies.GoogleNonce, AuthRateLimitPolicies.GoogleNoncePermitLimit),
-                // R5 (audit 2026-10-27): giới hạn kênh điểm danh DMS (web), chống flood.
-                ("check-ins", 10),
                 // Mã PIN kho: đặt/đổi/quên PIN. Quên PIN kiểm mật khẩu tài khoản nên cần giới hạn dò.
                 ("vault-pin", 10),
                 // Admin thử kết nối dịch vụ ngoài bằng giá trị đang nhập: mỗi lần là một lời gọi thật ra ngoài.

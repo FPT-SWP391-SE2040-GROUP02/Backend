@@ -6,7 +6,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Luật của biên bản bàn giao, không đọc ghi dữ liệu. Thứ tự ba bước: biên bản → danh tính người nhận → luật sư ký.
+/// Luật của biên bản bàn giao, không đọc ghi dữ liệu. Thứ tự ba bước: biên bản → danh tính người nhận → chữ ký ba bên.
 /// Bước trước chưa xong thì chưa mở bước sau.
 /// </summary>
 public static class HandoverRecordRules
@@ -79,43 +79,35 @@ public static class HandoverRecordRules
             || turn.Status == HandoverTurnStatus.HandoverCommitted;
     }
 
-    /// <summary>Mọi người nhận trong biên bản đều đã có lượt và đã được xác nhận danh tính.</summary>
-    public static bool AllIdentitiesConfirmed(HandoverRecord record, Dictionary<Guid, HandoverTurn> turnByRecipient)
+    /// <summary>
+    /// Biên bản đã chốt và đang giao: luật sư, Người thực thi ký được; mỗi người nhận ký khi danh tính của mình xong.
+    /// Signing là trạng thái của biên bản chốt từ nay; IdentityCheck chỉ còn ở biên bản chốt trước khi giao riêng từng người.
+    /// </summary>
+    public static bool IsOpenForSigning(HandoverRecord record)
     {
-        Dictionary<Guid, List<Guid>> recipients = GroupAssetsByRecipient(record.Lines);
-        if (recipients.Count == 0)
+        return record.Status == HandoverRecordStatus.Signing || record.Status == HandoverRecordStatus.IdentityCheck;
+    }
+
+    /// <summary>Đủ chữ ký ba bên của bản hiện tại: luật sư, Người thực thi và từng người nhận trong biên bản.</summary>
+    public static bool AllSigned(HandoverRecord record)
+    {
+        if (FindSignature(record, HandoverSignerRole.Verifier, null) == null)
         {
             return false;
         }
+        if (FindSignature(record, HandoverSignerRole.Executor, null) == null)
+        {
+            return false;
+        }
+        Dictionary<Guid, List<Guid>> recipients = GroupAssetsByRecipient(record.Lines);
         foreach (Guid beneficiaryId in recipients.Keys)
         {
-            if (!turnByRecipient.ContainsKey(beneficiaryId))
-            {
-                return false;
-            }
-            if (!IsIdentityConfirmed(turnByRecipient[beneficiaryId]))
+            if (FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId) == null)
             {
                 return false;
             }
         }
         return true;
-    }
-
-    /// <summary>Luật sư ký được: biên bản đã chốt, chưa ký, có ít nhất một người nhận đã được xác nhận danh tính.</summary>
-    public static bool CanVerifierSign(HandoverRecord record, Dictionary<Guid, HandoverTurn> turnByRecipient)
-    {
-        if (record.Status != HandoverRecordStatus.IdentityCheck && record.Status != HandoverRecordStatus.Signing)
-        {
-            return false;
-        }
-        foreach (HandoverTurn turn in turnByRecipient.Values)
-        {
-            if (IsIdentityConfirmed(turn))
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     /// <summary>

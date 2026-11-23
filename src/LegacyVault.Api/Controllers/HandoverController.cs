@@ -150,6 +150,18 @@ public sealed class HandoverController : ControllerBase
         return recordService.GetForRecipientAsync(turnId, ct);
     }
 
+    /// <summary>
+    /// Người nhận ký biên bản (bước 3). Đủ chữ ký ba bên thì mở quyền xem và tải; Người thực thi gửi mã nhận.
+    /// </summary>
+    [HttpPost("turns/{turnId:guid}/record/sign")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverRecordResponse> SignRecord(Guid turnId, CancellationToken ct)
+    {
+        return recordService.SignAsRecipientAsync(turnId, ct);
+    }
+
     /// <summary>Nhập khóa mở gói do Người thực thi đưa. Sai thì 403 HANDOVER_KEY_INVALID, quá giới hạn thì 423.</summary>
     [HttpPost("turns/{turnId:guid}/verify-key")]
     [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]

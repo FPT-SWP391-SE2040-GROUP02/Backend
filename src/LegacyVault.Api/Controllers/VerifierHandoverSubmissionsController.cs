@@ -76,7 +76,7 @@ public sealed class VerifierHandoverSubmissionsController : ControllerBase
         return new IdentityImageResult(download);
     }
 
-    /// <summary>Xác nhận danh tính người nhận: luật sư tự quyết. Biên bản đã ký thì người này được giao ngay.</summary>
+    /// <summary>Xác nhận danh tính người nhận: chỉ khi cả ba trường khớp. Đủ người thì biên bản sang bước ký.</summary>
     [HttpPost("{submissionId:guid}/approve")]
     [ProducesResponseType<VerifierHandoverSubmissionResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
