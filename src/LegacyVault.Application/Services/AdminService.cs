@@ -530,7 +530,9 @@ public sealed class AdminService : IAdminService
                 : request.Password),
             Role = targetRole,
             Status = UserStatus.Active,
-            EmailVerifiedAt = inviteByEmail ? null : now,
+            // Tài khoản do Admin tạo luôn coi là đã xác minh email (Admin chịu trách nhiệm về địa chỉ). Mời qua email thì
+            // mật khẩu ngẫu nhiên không ai biết, chỉ người mở được link gửi tới email đó mới đặt được mật khẩu.
+            EmailVerifiedAt = now,
             CreatedAt = now,
         };
 
