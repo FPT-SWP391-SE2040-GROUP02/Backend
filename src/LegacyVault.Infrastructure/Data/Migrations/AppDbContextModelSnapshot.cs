@@ -895,6 +895,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("FinalizedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("LegalBasisConfirmedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("LegalBasisConfirmedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uniqueidentifier");
 

@@ -34,6 +34,15 @@ public class HandoverRecord
     /// <summary>Lần chốt biên bản gần nhất; null khi đang lập.</summary>
     public DateTimeOffset? FinalizedAt { get; set; }
 
+    /// <summary>
+    /// Lúc luật sư tick xác nhận căn cứ pháp lý khi chốt (đã kiểm tra di chúc ở ngoài hệ thống hoặc xác định không có
+    /// di chúc, và chịu trách nhiệm về nội dung biên bản). Null khi đang lập; mở lại biên bản thì xóa, phải tick lại.
+    /// </summary>
+    public DateTimeOffset? LegalBasisConfirmedAt { get; set; }
+
+    /// <summary>Luật sư đã tick xác nhận căn cứ pháp lý; null cùng lúc với LegalBasisConfirmedAt.</summary>
+    public Guid? LegalBasisConfirmedByUserId { get; set; }
+
     /// <summary>Lúc đủ chữ ký ba bên; null khi chưa xong.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
 

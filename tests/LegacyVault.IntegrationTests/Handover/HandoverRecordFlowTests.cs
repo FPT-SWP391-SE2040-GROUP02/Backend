@@ -99,6 +99,15 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
+    /// <summary>Luật sư chốt biên bản kèm tick xác nhận căn cứ pháp lý; phải trả 200.</summary>
+    private static async Task<JsonElement> FinalizeOkAsync(HttpClient verifier, string recordUrl)
+    {
+        HttpResponseMessage response = await verifier.PostAsJsonAsync(recordUrl + "/finalize", HandoverRecordTestData.FinalizeBody);
+        string text = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, recordUrl + "/finalize -> " + response.StatusCode + ": " + text);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
     private const string RequestsUrl = "/api/v1/handover/requests";
 
     /// <summary>Người nhận đầu tiên gửi yêu cầu bằng link riêng; trả client của người đó, token và phản hồi.</summary>
@@ -247,7 +256,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         // Chưa xét thì chưa chốt được.
         Assert.Equal(HttpStatusCode.OK, (await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA))).StatusCode);
         JsonElement pending = await ApiTestHelpers.AssertProblemAsync(
-            await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+            await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("CLAIMS_PENDING", pending.GetProperty("reason").GetString());
 
         // Bổ sung phải có lý do; người nhận nộp thêm thì quay về chờ xét.
@@ -274,7 +283,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         await ApiTestHelpers.AssertProblemAsync(
             await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA)), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         JsonElement noAccepted = await ApiTestHelpers.AssertProblemAsync(
-            await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+            await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("RECORD_INVALID", noAccepted.GetProperty("reason").GetString());
     }
 
@@ -357,7 +366,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         string url = HandoverRecordTestData.VerifierRecordUrl(recordId);
 
         // Bước 1 chưa có dòng: chưa chốt được; chưa tới bước ký thì không ai ký được.
-        await ApiTestHelpers.AssertProblemAsync(await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        await ApiTestHelpers.AssertProblemAsync(await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         JsonElement early = await ApiTestHelpers.AssertProblemAsync(
             await verifier.Client.PostAsync(url + "/sign", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("NOT_SIGNING_STEP", early.GetProperty("reason").GetString());
@@ -374,7 +383,17 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
             (vault.FirstRecipient, vault.AssetA), (vault.FirstRecipient, vault.AssetB), (vault.SecondRecipient, vault.AssetB));
         Assert.Equal(HttpStatusCode.OK, set.StatusCode);
         await HandoverRecordTestData.AcceptAllClaimsAsync(verifier.Client, recordId);
-        JsonElement finalized = await PostOkAsync(verifier.Client, url + "/finalize");
+        // Chưa tick xác nhận căn cứ pháp lý (thiếu hoặc false) thì 400, biên bản vẫn đang lập.
+        JsonElement missing = await ApiTestHelpers.AssertProblemAsync(
+            await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(missing.GetProperty("errors").TryGetProperty("confirmLegalBasis", out JsonElement _));
+        await ApiTestHelpers.AssertProblemAsync(
+            await verifier.Client.PostAsJsonAsync(url + "/finalize", new { confirmLegalBasis = false }),
+            HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        JsonElement stillDrafting = await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(url));
+        Assert.Equal("DRAFTING", stillDrafting.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, stillDrafting.GetProperty("legalBasisConfirmedAt").ValueKind);
+        JsonElement finalized = await FinalizeOkAsync(verifier.Client, url);
 
         Assert.Equal("IDENTITY_CHECK", finalized.GetProperty("status").GetString());
         Assert.Equal(2, finalized.GetProperty("recipients").GetArrayLength());
@@ -413,6 +432,10 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Vault2 vault = await BuildVaultAsync();
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vault.VaultId);
         Assert.Equal("IDENTITY_CHECK", record.Body.GetProperty("status").GetString());
+        // Chốt kèm tick căn cứ pháp lý: lưu luật sư và thời điểm.
+        Assert.Equal(JsonValueKind.String, record.Body.GetProperty("legalBasisConfirmedAt").ValueKind);
+        Assert.Equal(record.Verifier.User.Id, record.Body.GetProperty("legalBasisConfirmedByUserId").GetGuid());
+        Assert.False(string.IsNullOrEmpty(record.Body.GetProperty("legalBasisConfirmedByName").GetString()));
         string verifierUrl = HandoverRecordTestData.VerifierRecordUrl(record.RecordId);
 
         // Người nhận mở link và nhận lượt; danh tính đủ thì biên bản sang bước ký.
@@ -431,8 +454,14 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal("DRAFTING", reopened.GetProperty("status").GetString());
         Assert.Equal(2, reopened.GetProperty("revisionNo").GetInt32());
         Assert.Equal(JsonValueKind.Null, reopened.GetProperty("verifierSignedAt").ValueKind);
+        // Mở lại thì xác nhận căn cứ pháp lý mất hiệu lực: phải tick lại mới chốt được.
+        Assert.Equal(JsonValueKind.Null, reopened.GetProperty("legalBasisConfirmedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, reopened.GetProperty("legalBasisConfirmedByUserId").ValueKind);
+        await ApiTestHelpers.AssertProblemAsync(
+            await record.Verifier.Client.PostAsync(verifierUrl + "/finalize", null), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         // Chốt lại: người nhận đã được xác nhận danh tính thì sang bước ký ngay.
-        JsonElement refinalized = await PostOkAsync(record.Verifier.Client, verifierUrl + "/finalize");
+        JsonElement refinalized = await FinalizeOkAsync(record.Verifier.Client, verifierUrl);
+        Assert.Equal(JsonValueKind.String, refinalized.GetProperty("legalBasisConfirmedAt").ValueKind);
         Assert.Equal("SIGNING", refinalized.GetProperty("status").GetString());
 
         await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(record, vault.VaultId);
@@ -477,7 +506,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         await PostOkAsync(record.Verifier.Client, url + "/reopen");
         Assert.Equal(HttpStatusCode.OK, (await SetLinesAsync(record.Verifier.Client, record.RecordId,
             (vault.SecondRecipient, vault.AssetA), (vault.SecondRecipient, vault.AssetB))).StatusCode);
-        await PostOkAsync(record.Verifier.Client, url + "/finalize");
+        await FinalizeOkAsync(record.Verifier.Client, url);
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {

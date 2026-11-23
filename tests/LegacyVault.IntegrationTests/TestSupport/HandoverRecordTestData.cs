@@ -15,6 +15,9 @@ namespace LegacyVault.IntegrationTests.TestSupport;
 /// </summary>
 public static class HandoverRecordTestData
 {
+    /// <summary>Body chốt biên bản: luật sư tick xác nhận căn cứ pháp lý.</summary>
+    public static readonly object FinalizeBody = new { confirmLegalBasis = true };
+
     public static string ExecutorRecordUrl(Guid vaultId)
     {
         return $"/api/v1/executor/vaults/{vaultId}/handover-record";
@@ -144,7 +147,7 @@ public static class HandoverRecordTestData
         await AcceptAllClaimsAsync(verifier, recordId);
         HttpResponseMessage split = await verifier.PostAsync(VerifierRecordUrl(recordId) + "/use-owner-split", null);
         Assert.Equal(HttpStatusCode.OK, split.StatusCode);
-        HttpResponseMessage finalized = await verifier.PostAsync(VerifierRecordUrl(recordId) + "/finalize", null);
+        HttpResponseMessage finalized = await verifier.PostAsJsonAsync(VerifierRecordUrl(recordId) + "/finalize", FinalizeBody);
         Assert.Equal(HttpStatusCode.OK, finalized.StatusCode);
         return await ApiTestHelpers.ReadJsonAsync(finalized);
     }

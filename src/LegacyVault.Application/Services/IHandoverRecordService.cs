@@ -32,10 +32,13 @@ public interface IHandoverRecordService
     /// <summary>Thay toàn bộ dòng "ai nhận tài sản nào". Chỉ khi biên bản đang lập (bước 1).</summary>
     Task<HandoverRecordResponse> SetLinesAsync(Guid recordId, SetHandoverRecordLinesRequest request, CancellationToken ct);
 
-    /// <summary>Chốt biên bản (xong bước 1): tạo lượt cho từng người nhận và gửi thư mời.</summary>
-    Task<HandoverRecordResponse> FinalizeAsync(Guid recordId, CancellationToken ct);
+    /// <summary>
+    /// Chốt biên bản (xong bước 1): luật sư phải xác nhận căn cứ pháp lý (confirmLegalBasis = true, không thì 400);
+    /// lưu người và thời điểm xác nhận, tạo lượt cho từng người nhận và gửi thư mời.
+    /// </summary>
+    Task<HandoverRecordResponse> FinalizeAsync(Guid recordId, FinalizeHandoverRecordRequest request, CancellationToken ct);
 
-    /// <summary>Mở lại biên bản đã chốt để sửa: mọi chữ ký cũ mất hiệu lực.</summary>
+    /// <summary>Mở lại biên bản đã chốt để sửa: mọi chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực.</summary>
     Task<HandoverRecordResponse> ReopenAsync(Guid recordId, CancellationToken ct);
 
     /// <summary>Luật sư ký xác minh ở bước 3.</summary>

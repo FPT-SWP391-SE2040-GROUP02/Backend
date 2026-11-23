@@ -6,6 +6,7 @@ using LegacyVault.Api.Handover;
 using LegacyVault.Application.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace LegacyVault.Api.Controllers;
 
@@ -68,14 +69,31 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.SetLinesAsync(recordId, request, ct);
     }
 
-    /// <summary>Chốt biên bản (xong bước 1): tạo lượt cho từng người nhận và gửi thư mời.</summary>
+    /// <summary>
+    /// Chốt biên bản (xong bước 1): body { "confirmLegalBasis": true } bắt buộc (false hoặc thiếu thì 400 VALIDATION_ERROR).
+    /// Tạo lượt cho từng người nhận và gửi thư mời.
+    /// </summary>
     [HttpPost("{recordId:guid}/finalize")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<HandoverRecordResponse> Finalize(Guid recordId, CancellationToken ct)
+    public Task<HandoverRecordResponse> Finalize(
+        Guid recordId,
+        // Cho phép gửi không có body: service tự trả 400 VALIDATION_ERROR với trường confirmLegalBasis cho dễ hiểu.
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] FinalizeHandoverRecordRequest? request,
+        CancellationToken ct)
     {
-        return recordService.FinalizeAsync(recordId, ct);
+        FinalizeHandoverRecordRequest body;
+        if (request != null)
+        {
+            body = request;
+        }
+        else
+        {
+            body = new FinalizeHandoverRecordRequest();
+        }
+        return recordService.FinalizeAsync(recordId, body, ct);
     }
 
     /// <summary>Mở lại biên bản đã chốt để sửa. Mọi chữ ký cũ mất hiệu lực, phải ký lại từ đầu.</summary>

@@ -1318,6 +1318,19 @@ Theo prototype: người nhận chọn **Chấp nhận** hoặc **Từ chối**,
 - Nhật ký: `HANDOVER_SUBMISSION_APPROVED`, `HANDOVER_SUBMISSION_SUPPLEMENT_REQUESTED` (đối tượng `HANDOVER_TURN`).
 - Chưa làm: dọn ảnh khi lượt bị xóa theo thời hạn lưu (ảnh của hồ sơ đã duyệt còn tới khi có job dọn).
 
+### 6.21c. Biên bản bàn giao: luật sư chốt biên bản
+
+Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp lý. Luật sư (Người xét duyệt) xác thực di chúc và giấy tờ ở ngoài hệ thống, lập biên bản trong hệ thống và chịu trách nhiệm về nội dung.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true }` | 200 `HandoverRecordResponse` (`status = IDENTITY_CHECK` hoặc `SIGNING`) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 |
+
+- `confirmLegalBasis = true` nghĩa là luật sư xác nhận: đã kiểm tra di chúc (bản sau cùng, hợp pháp) hoặc xác định không có di chúc, lập biên bản theo đúng quy định và chịu trách nhiệm về nội dung biên bản. Backend chỉ ghi nhận, không kiểm pháp lý.
+- Chốt thành công thì lưu `legalBasisConfirmedAt` (thời điểm) và `legalBasisConfirmedByUserId` (luật sư). Mở lại thì cả hai về `null`; chốt lại phải tick lại.
+- `HandoverRecordResponse` có thêm `legalBasisConfirmedAt`, `legalBasisConfirmedByUserId`, `legalBasisConfirmedByName` (họ tên luật sư, để in dòng "Luật sư … xác nhận căn cứ pháp lý lúc …"; rỗng khi chưa xác nhận).
+
 ### 6.22. Cấu hình dịch vụ ngoài (Admin)
 
 Admin sửa model, khóa và dịch vụ dự phòng của dịch vụ ngoài ngay trên web, không cần sửa appsettings hay deploy lại. Tất cả cần Bearer; không phải Admin đang hoạt động → `404` (SEC-04). Đã nối năm dịch vụ: `GEMINI` (AI nhận diện giấy chứng tử), `EKYC`, `SMTP` (email), `SEPAY` (nhận tiền) và `R2` (lưu nội dung đã mã hóa). Mọi giá trị trong `settings` và `secrets` là chuỗi, số cũng vậy.

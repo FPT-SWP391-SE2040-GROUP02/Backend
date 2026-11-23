@@ -465,12 +465,20 @@ public sealed class HandoverRecordService : IHandoverRecordService
         return response;
     }
 
-    public async Task<HandoverRecordResponse> FinalizeAsync(Guid recordId, CancellationToken ct)
+    public async Task<HandoverRecordResponse> FinalizeAsync(
+        Guid recordId, FinalizeHandoverRecordRequest request, CancellationToken ct)
     {
-        // 1. Biên bản của luật sư này, đang lập và có dòng hợp lệ
+        // 1. Biên bản của luật sư này, đang lập; luật sư phải tick xác nhận căn cứ pháp lý; dòng phải hợp lệ
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
         RequireStatus(record, HandoverRecordStatus.Drafting, "Biên bản đã chốt.");
+        // Hệ thống không kiểm pháp lý: luật sư xác thực di chúc và giấy tờ ở ngoài, ô tick này ghi nhận luật sư chịu trách nhiệm.
+        bool legalBasisConfirmed = request.ConfirmLegalBasis == true;
+        if (!legalBasisConfirmed)
+        {
+            throw ValidationErrors.For("confirmLegalBasis",
+                "Vui lòng xác nhận đã kiểm tra căn cứ pháp lý (di chúc hoặc không có di chúc) trước khi chốt biên bản.");
+        }
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
         List<(Guid BeneficiaryId, Guid AssetId)> lines = new List<(Guid BeneficiaryId, Guid AssetId)>();
         foreach (HandoverRecordLine line in record.Lines)
@@ -493,6 +501,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
         List<HandoverInvitation> invitations = await turnSync.SyncAsync(record, now, ct);
         record.Status = HandoverRecordStatus.IdentityCheck;
         record.FinalizedAt = now;
+        record.LegalBasisConfirmedAt = now;
+        record.LegalBasisConfirmedByUserId = userId;
         record.UpdatedAt = now;
         vault.Plan.Status = PlanStatus.HandoverInProgress;
         vault.Plan.UpdatedAt = now;
@@ -528,11 +538,13 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
-        // 2. Quay về bước 1, tăng số bản: mọi chữ ký cũ mất hiệu lực
+        // 2. Quay về bước 1, tăng số bản: mọi chữ ký cũ mất hiệu lực; chốt lại thì luật sư phải tick căn cứ pháp lý lần nữa
         DateTimeOffset now = timeProvider.GetUtcNow();
         record.Status = HandoverRecordStatus.Drafting;
         record.RevisionNo = record.RevisionNo + 1;
         record.FinalizedAt = null;
+        record.LegalBasisConfirmedAt = null;
+        record.LegalBasisConfirmedByUserId = null;
         record.UpdatedAt = now;
         await SaveAsync(ct);
 
@@ -1242,9 +1254,15 @@ public sealed class HandoverRecordService : IHandoverRecordService
             RequestedAt = record.RequestedAt,
             FinalizedAt = record.FinalizedAt,
             CompletedAt = record.CompletedAt,
+            LegalBasisConfirmedAt = record.LegalBasisConfirmedAt,
+            LegalBasisConfirmedByUserId = record.LegalBasisConfirmedByUserId,
             VerifierName = await FindUserNameAsync(record.VerifierUserId, ct),
             ExecutorName = await FindExecutorNameAsync(vault.Id, ct)
         };
+        if (record.LegalBasisConfirmedByUserId != null)
+        {
+            response.LegalBasisConfirmedByName = await FindUserNameAsync(record.LegalBasisConfirmedByUserId.Value, ct);
+        }
         HandoverRecordSignature? verifierSignature = HandoverRecordRules.FindSignature(record, HandoverSignerRole.Verifier, null);
         if (verifierSignature != null)
         {
