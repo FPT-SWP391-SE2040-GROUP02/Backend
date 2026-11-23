@@ -1318,7 +1318,7 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 2. Mỗi người nhận đi riêng: nộp ảnh căn cước → luật sư xác nhận danh tính (thư báo riêng người đó ký) → người đó ký. Không chờ người nhận khác.
 3. Có chữ ký luật sư + Người thực thi (bản hiện tại) + chữ ký của người nhận X thì mở quyền tải cho lượt của X ngay (lượt `HANDOVER_COMMITTED`); Người thực thi gửi mã cho X (`send-key` kiểm theo lượt). Luật sư hoặc Người thực thi ký sau cùng thì mở cho mọi người nhận đã ký trước đó.
 4. Mọi người nhận trong biên bản đều đã ký (cùng luật sư, Người thực thi) thì biên bản `COMPLETED`.
-5. Mở lại chỉ khi chưa ai được mở quyền tải (`PARTIALLY_DELIVERED`); không thu hồi quyền tải đã mở.
+5. Mở lại chỉ khi chưa ai được mở quyền tải; đã giao cho ít nhất một người thì 409 `PARTIALLY_DELIVERED` ("Đã giao tài sản cho ít nhất một người nhận nên không mở lại được biên bản. Sai sót sau khi giao xử lý ngoài hệ thống."), không thu hồi quyền tải đã mở. Màn luật sư ẩn nút Mở lại và hiện câu này.
 6. Ký đồng thời không tạo trùng quyền tải: mỗi lần ký đổi `updatedAt` của biên bản (chống ghi đè, bên lưu sau nhận 409 `EDIT_CONFLICT`), DB chỉ cho một quyền tải mỗi lượt.
 7. `IDENTITY_CHECK` chỉ còn ở biên bản chốt trước thay đổi này, được xử lý như `SIGNING`.
 8. Màn tiến độ của Người thực thi: `documentApprovedAt` của từng lượt là lúc lượt đó được mở quyền tải.

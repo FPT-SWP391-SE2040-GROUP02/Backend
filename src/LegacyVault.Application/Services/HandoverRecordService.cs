@@ -679,7 +679,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
             if (turn.Grant != null)
             {
                 throw HandoverAccess.NotAllowed("PARTIALLY_DELIVERED",
-                    "Đã có người nhận được mở quyền tải tài sản theo biên bản này nên không mở lại được.");
+                    "Đã giao tài sản cho ít nhất một người nhận nên không mở lại được biên bản. "
+                    + "Sai sót sau khi giao xử lý ngoài hệ thống.");
             }
         }
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
