@@ -38,14 +38,14 @@ public sealed class AuditLogsApiTests : IAsyncLifetime
         return $"/api/v1/vaults/{vaultId}/audit-logs";
     }
 
-    /// <summary>Owner có kho với 4 dòng nhật ký: tạo kho, tạo 2 gói, tạo 1 tài sản.</summary>
+    /// <summary>Owner có kho với 4 dòng nhật ký: tạo kho, tạo 3 tài sản.</summary>
     private async Task<(HttpClient Client, Guid VaultId)> CreateVaultWithLogsAsync()
     {
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
         Guid vaultId = await ApiTestHelpers.CreateVaultAsync(client);
-        await ApiTestHelpers.CreateContainerAsync(client, vaultId, "Gói A");
-        await ApiTestHelpers.CreateContainerAsync(client, vaultId, "Gói B");
-        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú A");
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú B");
+        await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú C");
         return (client, vaultId);
     }
 
@@ -78,15 +78,15 @@ public sealed class AuditLogsApiTests : IAsyncLifetime
         (HttpClient client, Guid vaultId) = await CreateVaultWithLogsAsync();
 
         // Hành động
-        HttpResponseMessage response = await client.GetAsync($"{Url(vaultId)}?action=CONTAINER_CREATED");
+        HttpResponseMessage response = await client.GetAsync($"{Url(vaultId)}?action=ASSET_CREATED");
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         JsonElement page = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.Equal(2, page.GetProperty("totalCount").GetInt32());
+        Assert.Equal(3, page.GetProperty("totalCount").GetInt32());
         foreach (JsonElement item in page.GetProperty("items").EnumerateArray())
         {
-            Assert.Equal("CONTAINER_CREATED", item.GetProperty("action").GetString());
+            Assert.Equal("ASSET_CREATED", item.GetProperty("action").GetString());
         }
     }
 
@@ -133,7 +133,7 @@ public sealed class AuditLogsApiTests : IAsyncLifetime
         await ApiTestHelpers.AssertProblemAsync(
             await client.GetAsync($"{Url(vaultId)}?action=DELETE_EVERYTHING"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         await ApiTestHelpers.AssertProblemAsync(
-            await client.GetAsync($"{Url(vaultId)}?action=ContainerCreated"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+            await client.GetAsync($"{Url(vaultId)}?action=AssetAssigned"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         await ApiTestHelpers.AssertProblemAsync(
             await client.GetAsync($"{Url(vaultId)}?sortBy=action"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         await ApiTestHelpers.AssertProblemAsync(

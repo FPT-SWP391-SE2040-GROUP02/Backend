@@ -181,27 +181,33 @@ public static class ApiTestHelpers
         return "Người nhận " + letter;
     }
 
-    /// <summary>Tạo gói qua API (POST .../containers, 201), trả JSON gói.</summary>
-    public static async Task<JsonElement> CreateContainerAsync(HttpClient client, Guid vaultId, string name)
+    /// <summary>
+    /// Đặt lại người nhận của một tài sản (PUT .../assets/{assetId}/assignments); trả response để test tự kiểm.
+    /// Danh sách gửi lên là danh sách sau cùng; nhiều người nghĩa là nhận chung.
+    /// </summary>
+    public static Task<HttpResponseMessage> AssignAssetAsync(
+        HttpClient client, Guid vaultId, Guid assetId, params Guid[] beneficiaryIds)
     {
-        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers", new { name });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return client.PutAsJsonAsync(
+            $"/api/v1/vaults/{vaultId}/assets/{assetId}/assignments", new { beneficiaryIds });
+    }
+
+    /// <summary>Gán tài sản cho các người nhận và kiểm trả 200; trả mảng dòng gán của tài sản.</summary>
+    public static async Task<JsonElement> AssignAssetOkAsync(
+        HttpClient client, Guid vaultId, Guid assetId, params Guid[] beneficiaryIds)
+    {
+        HttpResponseMessage response = await AssignAssetAsync(client, vaultId, assetId, beneficiaryIds);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await ReadJsonAsync(response);
     }
 
-    /// <summary>Đưa tài sản vào gói (POST .../containers/{containerId}/assets); trả response để test tự kiểm.</summary>
-    public static Task<HttpResponseMessage> AddAssetToContainerAsync(
-        HttpClient client, Guid vaultId, Guid containerId, Guid assetId)
+    /// <summary>Gỡ một người nhận khỏi tài sản (DELETE .../assets/{assetId}/assignments/{beneficiaryId}); trả response để test tự kiểm.</summary>
+    public static Task<HttpResponseMessage> UnassignAssetAsync(
+        HttpClient client, Guid vaultId, Guid assetId, Guid beneficiaryId, bool confirmPlanDeactivation = false)
     {
-        return client.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers/{containerId}/assets", new { assetId });
-    }
-
-    /// <summary>Chỉ định người nhận cho gói (POST .../containers/{containerId}/beneficiaries); trả response để test tự kiểm.</summary>
-    public static Task<HttpResponseMessage> AddBeneficiaryToContainerAsync(
-        HttpClient client, Guid vaultId, Guid containerId, Guid beneficiaryId)
-    {
-        return client.PostAsJsonAsync(
-            $"/api/v1/vaults/{vaultId}/containers/{containerId}/beneficiaries", new { beneficiaryId });
+        string query = confirmPlanDeactivation ? "?confirmPlanDeactivation=true" : string.Empty;
+        return client.DeleteAsync(
+            $"/api/v1/vaults/{vaultId}/assets/{assetId}/assignments/{beneficiaryId}{query}");
     }
 
     /// <summary>Đổi trạng thái kế hoạch bằng cách sửa thẳng HandoverPlans (chưa có luồng kích hoạt kế hoạch).</summary>

@@ -18,20 +18,19 @@ public sealed class HandoverJobTests
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(Now);
     private readonly HandoverJob job;
-    private readonly Container container;
-    private readonly Designation designation;
+    private readonly Beneficiary recipient;
 
     public HandoverJobTests()
     {
         vaults.Vaults.Add(data.Vault);
-        container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
-        designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
+        recipient = data.AddRecipient("Người Nhận", "nguoi-nhan@example.com");
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
         job = new HandoverJob(vaults, repository, unitOfWork, time);
     }
 
     private HandoverTurn AddTurn(HandoverTurnStatus status, string token)
     {
-        HandoverTurn turn = data.BuildTurn(container, designation, status, token, null);
+        HandoverTurn turn = data.BuildTurn(recipient, status, token, null);
         repository.Turns.Add(turn);
         return turn;
     }

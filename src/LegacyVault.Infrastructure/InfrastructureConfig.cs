@@ -122,7 +122,7 @@ public static class InfrastructureConfig
         services.AddScoped<IServiceConnectionTester, R2ConnectionTester>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IVaultRepository, VaultRepository>();
-        services.AddScoped<IContainerRepository, ContainerRepository>();
+        services.AddScoped<IAssetAssignmentRepository, AssetAssignmentRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
         services.AddScoped<IVaultPinRepository, VaultPinRepository>();
@@ -156,7 +156,6 @@ public static class InfrastructureConfig
     {
         // Bàn giao: Executor
         services.AddScoped<IExecutorReader, ExecutorReader>();
-        services.AddScoped<IExecutorAssetReader, ExecutorAssetReader>();
         services.AddScoped<IExecutorInvitationRepository, ExecutorInvitationRepository>();
         services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
         services.AddScoped<IExecutorReminderSender, ExecutorReminderSender>();

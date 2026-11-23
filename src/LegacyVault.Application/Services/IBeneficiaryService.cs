@@ -10,8 +10,8 @@ namespace LegacyVault.Application.Services;
 /// Luật chung khi cài đặt:
 /// - Dữ liệu cá nhân được mã hóa; response chỉ có 4 số cuối CCCD, không bao giờ có số đầy đủ (DATA-02).
 /// - Không gửi thông báo, không tạo tài khoản cho người nhận (SETUP-02).
-/// - Tạo hồ sơ không chiếm suất, không tăng ConfigVersion: suất chỉ tính khi hồ sơ được chỉ định vào gói (QUOTA-03).
-/// - containerIds trong response là các gói đang chỉ định hồ sơ.
+/// - Tạo hồ sơ không chiếm suất, không tăng ConfigVersion: suất chỉ tính khi hồ sơ được gán tài sản (QUOTA-03).
+/// - assetIds trong response là các tài sản đang được gán cho hồ sơ.
 /// - Thao tác "thêm" (tạo, sửa) chặn khi kho CLOSED / kế hoạch bị khóa / dịch vụ đang ân hạn;
 ///   thao tác "giảm" (xóa) vẫn cho khi ân hạn (OPLAN-01).
 /// Lỗi chung: 401 SESSION_EXPIRED, 404 VAULT_NOT_FOUND (không có kho / kho người khác),
@@ -47,7 +47,7 @@ public interface IBeneficiaryService
 
     /// <summary>
     /// Xóa hồ sơ (thao tác "giảm", vẫn cho khi ân hạn).
-    /// Lỗi: 404 BENEFICIARY_NOT_FOUND, 409 BENEFICIARY_IN_USE (+containerIds, hồ sơ đang ở gói).
+    /// Lỗi: 404 BENEFICIARY_NOT_FOUND, 409 BENEFICIARY_IN_USE (+assetIds, hồ sơ đang được gán tài sản).
     /// </summary>
     Task DeleteBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct);
 }

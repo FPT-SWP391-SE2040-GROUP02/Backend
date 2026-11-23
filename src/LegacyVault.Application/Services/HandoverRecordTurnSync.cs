@@ -95,10 +95,7 @@ public sealed class HandoverRecordTurnSync
                 VaultId = record.VaultId,
                 PlanId = record.PlanId,
                 RecordId = record.Id,
-                // Lượt theo biên bản không gắn với gói hay chỉ định nào; DesignationId chỉ cần khác nhau cho mỗi lượt.
-                ContainerId = Guid.Empty,
                 ContainerName = TurnTitle,
-                DesignationId = Guid.CreateVersion7(),
                 BeneficiaryId = pair.Key,
                 Status = HandoverTurnStatus.Invited,
                 InvitationTokenHash = token.Hash,

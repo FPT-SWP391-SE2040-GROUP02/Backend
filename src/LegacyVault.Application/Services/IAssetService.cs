@@ -8,7 +8,7 @@ namespace LegacyVault.Application.Services;
 /// </summary>
 /// <remarks>
 /// Luật chung:
-/// - Tài sản thuộc kho; đưa vào gói là việc của IContainerService.AddAssetAsync (dùng IAssetRepository.FindByIdAsync).
+/// - Tài sản thuộc kho; gán cho người nhận là việc của IAssetAssignmentService (dùng IAssetRepository.FindByIdAsync).
 /// - Tạo tài sản KHÔNG tăng Plan.ConfigVersion (tài sản chưa ở gói nào thì chưa thuộc cấu hình bàn giao).
 /// - Hạng Free được lưu tài sản trong quota 20 MiB; chỉ bị chặn khi đưa vào gói (SETUP-17).
 /// - Tạo mới là thao tác "thêm": chặn khi kho CLOSED / kế hoạch bị khóa / dịch vụ chỉ đọc (OPLAN-01).
@@ -51,7 +51,7 @@ public interface IAssetService
     Task<AssetResponse> UpdateAssetAsync(Guid vaultId, Guid assetId, UpdateAssetRequest request, CancellationToken ct);
 
     /// <summary>
-    /// Xóa tài sản cùng nội dung. Lỗi: 409 ASSET_IN_USE (reason IN_CONTAINER | PINNED_IN_HANDOVER),
+    /// Xóa tài sản cùng nội dung. Lỗi: 409 ASSET_IN_USE (reason ASSIGNED | PINNED_IN_HANDOVER),
     /// 409 VAULT_NOT_EDITABLE.
     /// </summary>
     Task DeleteAssetAsync(Guid vaultId, Guid assetId, CancellationToken ct);

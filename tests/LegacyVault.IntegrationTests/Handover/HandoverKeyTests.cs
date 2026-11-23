@@ -33,13 +33,13 @@ public sealed class HandoverKeyTests
     {
         vaults.Vaults.Add(data.Vault);
         currentUser.UserId = claimantId;
-        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 2);
-        Designation designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
+        Beneficiary recipient = data.AddRecipient("Người Nhận", "nguoi-nhan@example.com");
+        data.AssignAll(data.AddAssets("Tài sản", 2), recipient);
         service = new HandoverService(
             currentUser, users, vaults, repository, new FakeTokenService(), new FakePolicy(),
             unitOfWork, time, keyShards, new FakeHandoverSubmissionRepository(), new LegacyVault.IntegrationTests.Ekyc.FakeEkycBeneficiaryRepository(),
             new FakeBeneficiaryDataProtector());
-        turn = data.BuildTurn(container, designation, HandoverTurnStatus.ReadyToAccept, "t1", claimantId);
+        turn = data.BuildTurn(recipient, HandoverTurnStatus.ReadyToAccept, "t1", claimantId);
         turn.ReadyAt = Now;
         turn.DecisionDeadline = Now.AddDays(7);
         repository.Turns.Add(turn);

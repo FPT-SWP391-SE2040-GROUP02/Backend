@@ -17,7 +17,6 @@ public sealed class FakeHandoverRepository : IHandoverRepository
     public List<HandoverTurn> Turns { get; } = new List<HandoverTurn>();
     public List<HandoverGrant> Grants { get; } = new List<HandoverGrant>();
     public List<HandoverAccessLog> Logs { get; } = new List<HandoverAccessLog>();
-    public List<Designation> Designations { get; } = new List<Designation>();
     public List<Asset> Assets { get; } = new List<Asset>();
 
     public Task<HandoverTurn?> FindTurnByTokenHashAsync(string tokenHash, CancellationToken ct)
@@ -72,14 +71,6 @@ public sealed class FakeHandoverRepository : IHandoverRepository
     public Task<HandoverGrant?> FindGrantByIdAsync(Guid grantId, CancellationToken ct)
     {
         return Task.FromResult(Grants.FirstOrDefault(g => g.Id == grantId));
-    }
-
-    public Task<List<Designation>> FindStartableDesignationsAsync(Guid vaultId, CancellationToken ct)
-    {
-        List<Designation> found = Designations
-            .Where(d => d.Container.VaultId == vaultId && d.Container.Status == ContainerStatus.Ready)
-            .ToList();
-        return Task.FromResult(found);
     }
 
     public Task<Asset?> FindAssetAsync(Guid assetId, CancellationToken ct)
@@ -224,7 +215,7 @@ public sealed class FakePolicy : IHandoverPolicy
     public bool RequireIdentityVerification { get; set; } = true;
 }
 
-/// <summary>Dựng kho, kế hoạch, gói, tài sản, chỉ định và lượt cho test.</summary>
+/// <summary>Dựng kho, kế hoạch, tài sản, người nhận, dòng gán và lượt cho test.</summary>
 public sealed class HandoverTestData
 {
     public HandoverTestData(DateTimeOffset now)
@@ -243,45 +234,44 @@ public sealed class HandoverTestData
         get { return Vault.Plan; }
     }
 
-    public List<Designation> Designations { get; } = new List<Designation>();
+    public List<AssetAssignment> Assignments { get; } = new List<AssetAssignment>();
     public List<Asset> Assets { get; } = new List<Asset>();
     public Dictionary<Guid, BeneficiaryPersonalData> People { get; } = new Dictionary<Guid, BeneficiaryPersonalData>();
 
-    /// <summary>Thêm một gói có sẵn số tài sản chỉ định (mỗi tài sản một nội dung).</summary>
-    public Container AddContainer(string name, ContainerStatus status, int assetCount)
+    /// <summary>Thêm một tài sản có sẵn nội dung giả (mỗi tài sản một nội dung).</summary>
+    public Asset AddAsset(string name)
     {
-        Container container = new Container { VaultId = Vault.Id, Vault = Vault, Name = name, Status = status, CreatedAt = Now.AddDays(-50) };
-        for (int i = 0; i < assetCount; i++)
+        int number = Assets.Count + 1;
+        Asset asset = new Asset
         {
-            Asset asset = new Asset
-            {
-                VaultId = Vault.Id,
-                Vault = Vault,
-                Kind = AssetKind.File,
-                Name = name + "-tai-san-" + (i + 1),
-                FileName = "tep-" + (i + 1) + ".bin",
-                ContentType = "application/pdf",
-                SizeBytes = 1000 + i,
-                StorageKey = "key-" + Guid.NewGuid().ToString("N"),
-                EncryptionKeyId = "k1",
-                CreatedAt = Now.AddDays(-49)
-            };
-            Assets.Add(asset);
-            container.Assets.Add(new ContainerAsset
-            {
-                ContainerId = container.Id,
-                Container = container,
-                AssetId = asset.Id,
-                Asset = asset,
-                AddedAt = Now.AddDays(-48).AddMinutes(i)
-            });
-        }
-        Vault.Containers.Add(container);
-        return container;
+            VaultId = Vault.Id,
+            Vault = Vault,
+            Kind = AssetKind.File,
+            Name = name,
+            FileName = "tep-" + number + ".bin",
+            ContentType = "application/pdf",
+            SizeBytes = 1000 + number,
+            StorageKey = "key-" + Guid.NewGuid().ToString("N"),
+            EncryptionKeyId = "k1",
+            CreatedAt = Now.AddDays(-49)
+        };
+        Assets.Add(asset);
+        return asset;
     }
 
-    /// <summary>Chỉ định một hồ sơ người nhận mới vào gói.</summary>
-    public Designation Designate(Container container, string fullName, string? email)
+    /// <summary>Thêm nhiều tài sản, tên theo dạng "prefix-1", "prefix-2"...</summary>
+    public List<Asset> AddAssets(string prefix, int count)
+    {
+        List<Asset> added = new List<Asset>();
+        for (int i = 0; i < count; i++)
+        {
+            added.Add(AddAsset(prefix + "-" + (i + 1)));
+        }
+        return added;
+    }
+
+    /// <summary>Thêm một hồ sơ người nhận mới.</summary>
+    public Beneficiary AddRecipient(string fullName, string? email)
     {
         Beneficiary beneficiary = new Beneficiary { VaultId = Vault.Id, Vault = Vault, CitizenIdLast4 = "1234", CreatedAt = Now.AddDays(-40) };
         BeneficiaryPersonalData data = new BeneficiaryPersonalData
@@ -292,31 +282,42 @@ public sealed class HandoverTestData
             Email = email
         };
         People[beneficiary.Id] = data;
-
-        Designation designation = new Designation
-        {
-            ContainerId = container.Id,
-            Container = container,
-            BeneficiaryId = beneficiary.Id,
-            Beneficiary = beneficiary,
-            CreatedAt = Now.AddDays(-30)
-        };
-        container.Designations.Add(designation);
-        Designations.Add(designation);
-        return designation;
+        return beneficiary;
     }
 
-    /// <summary>Dựng lượt ở trạng thái cho trước (kế hoạch được đặt HandoverInProgress) với token cho trước.</summary>
-    public HandoverTurn BuildTurn(Container container, Designation designation, HandoverTurnStatus status, string token, Guid? claimant)
+    /// <summary>Gán một tài sản cho một người nhận.</summary>
+    public AssetAssignment Assign(Asset asset, Beneficiary recipient)
+    {
+        AssetAssignment assignment = new AssetAssignment
+        {
+            AssetId = asset.Id,
+            Asset = asset,
+            BeneficiaryId = recipient.Id,
+            Beneficiary = recipient,
+            CreatedAt = Now.AddDays(-30).AddMinutes(Assignments.Count)
+        };
+        Assignments.Add(assignment);
+        return assignment;
+    }
+
+    /// <summary>Gán mọi tài sản trong danh sách cho một người nhận.</summary>
+    public void AssignAll(List<Asset> assets, Beneficiary recipient)
+    {
+        foreach (Asset asset in assets)
+        {
+            Assign(asset, recipient);
+        }
+    }
+
+    /// <summary>Dựng lượt ở trạng thái cho trước (kế hoạch được đặt HandoverInProgress) với token cho trước; snapshot là các tài sản gán cho người nhận.</summary>
+    public HandoverTurn BuildTurn(Beneficiary recipient, HandoverTurnStatus status, string token, Guid? claimant)
     {
         HandoverTurn turn = new HandoverTurn
         {
             VaultId = Vault.Id,
             PlanId = Plan.Id,
-            ContainerId = container.Id,
-            ContainerName = container.Name,
-            DesignationId = designation.Id,
-            BeneficiaryId = designation.BeneficiaryId,
+            ContainerName = "Biên bản bàn giao",
+            BeneficiaryId = recipient.Id,
             Status = status,
             InvitationTokenHash = new FakeTokenService().HashOpaqueToken(token),
             InvitedAt = Now,
@@ -326,16 +327,20 @@ public sealed class HandoverTestData
         };
 
         int position = 0;
-        foreach (ContainerAsset link in container.Assets)
+        foreach (AssetAssignment assignment in Assignments)
         {
-            Asset asset = link.Asset;
+            if (assignment.BeneficiaryId != recipient.Id)
+            {
+                continue;
+            }
+            Asset asset = assignment.Asset;
             turn.Items.Add(new HandoverSnapshotItem
             {
                 TurnId = turn.Id,
                 Turn = turn,
-                AssetId = link.AssetId,
-                Name = link.Asset.Name,
-                Kind = link.Asset.Kind,
+                AssetId = asset.Id,
+                Name = asset.Name,
+                Kind = asset.Kind,
                 FileName = asset.FileName,
                 ContentType = asset.ContentType,
                 SizeBytes = asset.SizeBytes,

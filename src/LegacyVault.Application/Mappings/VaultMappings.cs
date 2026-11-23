@@ -8,9 +8,9 @@ namespace LegacyVault.Application.Mappings;
 public static class VaultMappings
 {
     /// <summary>
-    /// Cần vault đã nạp Plan và Entitlement; usedBytes/activeContainerCount/usedBeneficiarySlots do service truy vấn riêng.
+    /// Cần vault đã nạp Plan và Entitlement; usedBytes/assignedAssetCount/usedBeneficiarySlots do service truy vấn riêng.
     /// </summary>
-    public static VaultResponse ToResponse(this Vault vault, long usedBytes, int activeContainerCount, int usedBeneficiarySlots)
+    public static VaultResponse ToResponse(this Vault vault, long usedBytes, int assignedAssetCount, int usedBeneficiarySlots)
     {
         var entitlement = vault.Entitlement;
         return new VaultResponse
@@ -35,7 +35,7 @@ public static class VaultMappings
             IncludedBeneficiarySlots = EntitlementLimits.EffectiveIncludedSlots(entitlement),
             ExtraBeneficiarySlots = entitlement.ExtraBeneficiarySlots,
             UsedBeneficiarySlots = usedBeneficiarySlots,
-            ActiveContainerCount = activeContainerCount,
+            AssignedAssetCount = assignedAssetCount,
             CreatedAt = vault.CreatedAt,
             UpdatedAt = vault.UpdatedAt,
             Etag = Etag.From(vault.UpdatedAt),

@@ -150,12 +150,12 @@ public sealed class HandoverSubmissionTests
         users.Users.Add(data.Owner);
         vaults.Vaults.Add(data.Vault);
 
-        Container container = data.AddContainer("Gói gia đình", ContainerStatus.Ready, 2);
-        Designation designation = data.Designate(container, "Trần Minh Anh", "minh-anh@example.com");
-        beneficiaries.Beneficiaries.Add(designation.Beneficiary);
-        protector.Data[designation.BeneficiaryId] = data.People[designation.BeneficiaryId];
+        Beneficiary profile = data.AddRecipient("Trần Minh Anh", "minh-anh@example.com");
+        data.AssignAll(data.AddAssets("Tài sản", 2), profile);
+        beneficiaries.Beneficiaries.Add(profile);
+        protector.Data[profile.Id] = data.People[profile.Id];
 
-        turn = data.BuildTurn(container, designation, HandoverTurnStatus.IdentityInProgress, "token-" + Guid.NewGuid().ToString("N"), recipient.Id);
+        turn = data.BuildTurn(profile, HandoverTurnStatus.IdentityInProgress, "token-" + Guid.NewGuid().ToString("N"), recipient.Id);
         // Biên bản đã chốt, đang ở bước kiểm danh tính: luật sư mới xác nhận được.
         HandoverRecord record = new HandoverRecord();
         record.VaultId = data.Vault.Id;
@@ -336,7 +336,7 @@ public sealed class HandoverSubmissionTests
         List<VerifierHandoverSubmissionSummaryResponse> mine = await reviewService.ListPendingAsync(CancellationToken.None);
 
         VerifierHandoverSubmissionSummaryResponse row = Assert.Single(mine);
-        Assert.Equal("Gói gia đình", row.ContainerName);
+        Assert.Equal("Biên bản bàn giao", row.ContainerName);
         Assert.True(row.AllMatch);
 
         User other = new User { Email = "ls2@example.com", FullName = "Luật sư Khác", Role = UserRole.Verifier, Status = UserStatus.Active, EmailVerifiedAt = Now };

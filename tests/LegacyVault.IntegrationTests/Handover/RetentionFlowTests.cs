@@ -121,7 +121,7 @@ public sealed class RetentionFlowTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Kho có một gói READY với một tài sản, chỉ định cho beneficiaryCount người nhận; thêm một tài sản ngoài gói.
+    /// Kho có một tài sản gán chung cho beneficiaryCount người nhận; thêm một tài sản chưa gán cho ai.
     /// Người thực thi mở bàn giao, luật sư lấy biên bản phân chia làm biên bản rồi chốt: mỗi người nhận một lượt.
     /// </summary>
     private async Task<Scenario> BuildHandoverAsync(int beneficiaryCount)
@@ -131,16 +131,15 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         Guid vaultId = owner.VaultId;
         await ApiTestHelpers.UpgradeVaultToXsAsync(factory, vaultId);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(ownerClient, vaultId, "Ghi chú");
-        Guid extraAssetId = await ApiTestHelpers.CreateTextAssetAsync(ownerClient, vaultId, "Ngoài gói");
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(ownerClient, vaultId, "Gói")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(ownerClient, vaultId, containerId, assetId)).StatusCode);
+        Guid extraAssetId = await ApiTestHelpers.CreateTextAssetAsync(ownerClient, vaultId, "Chưa gán");
         string[] ids = { "001090000001", "001090000002" };
+        List<Guid> beneficiaryIds = new List<Guid>();
         for (int i = 0; i < beneficiaryCount; i++)
         {
             JsonElement b = await ApiTestHelpers.CreateBeneficiaryAsync(ownerClient, vaultId, ids[i], ApiTestHelpers.BeneficiaryName(i));
-            Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-                ownerClient, vaultId, containerId, b.GetProperty("id").GetGuid())).StatusCode);
+            beneficiaryIds.Add(b.GetProperty("id").GetGuid());
         }
+        await ApiTestHelpers.AssignAssetOkAsync(ownerClient, vaultId, assetId, beneficiaryIds.ToArray());
 
         User verifier = await VaultTestData.AddVerifierAsync(factory);
         VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vaultId);

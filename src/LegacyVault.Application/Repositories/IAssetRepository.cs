@@ -7,12 +7,12 @@ public interface IAssetRepository
 {
     /// <summary>
     /// Một tài sản trong ĐÚNG kho, (có theo dõi thay đổi). Không thấy / kho khác → null (SEC-04).
-    /// Module gói dùng hàm này để kiểm tra assetId trước khi đưa vào Container.
+    /// Module gán tài sản dùng hàm này để kiểm tra assetId trước khi gán cho người nhận.
     /// </summary>
     Task<Asset?> FindByIdAsync(Guid vaultId, Guid assetId, CancellationToken ct);
 
-    /// <summary>ASSET-03, AC-68: tài sản chưa thuộc gói nào, sắp theo CreatedAt rồi Id.</summary>
-    Task<List<Asset>> FindOutsideContainerByVaultIdAsync(Guid vaultId, CancellationToken ct);
+    /// <summary>Tài sản chưa gán cho người nhận nào, sắp theo CreatedAt rồi Id.</summary>
+    Task<List<Asset>> FindUnassignedByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>
     /// Một trang tài sản của kho, kèm tổng số bản ghi khớp bộ lọc.

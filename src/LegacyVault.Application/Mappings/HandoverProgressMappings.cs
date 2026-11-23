@@ -13,7 +13,6 @@ public static class HandoverProgressMappings
         HandoverProgressTurnResponse response = new HandoverProgressTurnResponse
         {
             TurnId = turn.Id,
-            ContainerId = turn.ContainerId,
             ContainerName = turn.ContainerName,
             BeneficiaryId = turn.BeneficiaryId,
             BeneficiaryCitizenId = citizenId,

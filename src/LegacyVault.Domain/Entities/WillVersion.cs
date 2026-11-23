@@ -23,6 +23,6 @@ public class WillVersion
 
     public DateTimeOffset SignedAt { get; set; }
 
-    /// <summary>JSON chỉ gồm id: {"recipients":[{containerId,beneficiaryId}],"assets":[{containerId,assetId}]}.</summary>
+    /// <summary>JSON chỉ gồm id: {"assignments":[{assetId,beneficiaryId}]}.</summary>
     public string SnapshotJson { get; set; } = string.Empty;
 }

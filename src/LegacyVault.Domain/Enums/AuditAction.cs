@@ -11,24 +11,24 @@ public enum AuditAction
     VaultUpdated = 1,
     /// <summary>Owner tải lên một tài sản mới.</summary>
     AssetCreated = 2,
-    /// <summary>Owner tạo gói.</summary>
+    /// <summary>Không còn dùng (đã bỏ gói tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     ContainerCreated = 3,
-    /// <summary>Owner đổi tên hoặc mô tả gói.</summary>
+    /// <summary>Không còn dùng (đã bỏ gói tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     ContainerUpdated = 4,
     /// <summary>
     /// Owner xóa gói, tên cũ trước khi đổi Archived thành Removed. Chỉ còn trong nhật ký cũ; thao tác mới
     /// ghi ContainerRemoved. Giữ nguyên để không sửa nhật ký đã ghi.
     /// </summary>
     ContainerArchived = 5,
-    /// <summary>Owner thêm tài sản vào gói.</summary>
+    /// <summary>Không còn dùng (đã bỏ gói tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     ContainerAssetAdded = 6,
-    /// <summary>Owner gỡ tài sản khỏi gói.</summary>
+    /// <summary>Không còn dùng (đã bỏ gói tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     ContainerAssetRemoved = 7,
-    /// <summary>Owner chỉ định người nhận cho gói.</summary>
+    /// <summary>Không còn dùng (đã bỏ gói tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     ContainerBeneficiaryAdded = 8,
-    /// <summary>Owner gỡ người nhận khỏi gói.</summary>
+    /// <summary>Không còn dùng (đã bỏ gói tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     ContainerBeneficiaryRemoved = 9,
-    /// <summary>Kế hoạch về DRAFT vì mất gói READY cuối cùng, Owner đã xác nhận.</summary>
+    /// <summary>Kế hoạch về DRAFT vì không còn tài sản nào được gán cho người nhận, Owner đã xác nhận.</summary>
     PlanDeactivated = 10,
     /// <summary>Owner tạo hồ sơ người nhận.</summary>
     BeneficiaryCreated = 11,
@@ -110,7 +110,7 @@ public enum AuditAction
     VaultPinWrong = 48,
     /// <summary>Mã PIN của kho bị khóa tạm vì nhập sai nhiều lần (kết quả Denied).</summary>
     VaultPinLocked = 49,
-    /// <summary>Owner xóa gói: gói không còn thuộc kế hoạch, không khôi phục được. Thay cho ContainerArchived.</summary>
+    /// <summary>Không còn dùng (đã bỏ gói tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     ContainerRemoved = 50,
     /// <summary>Kho trả phí hết hạn dịch vụ, chưa có kỳ nối tiếp nên sang ân hạn chỉ đọc (do job, không có người dùng).</summary>
     ServiceGraceStarted = 51,
@@ -158,4 +158,8 @@ public enum AuditAction
     EkycPassed = 73,
     /// <summary>Lượt xác minh eKYC không đạt (kết quả Failed).</summary>
     EkycFailed = 74,
+    /// <summary>Owner gán một tài sản cho một người nhận (đích là tài sản; lý do ghi id người nhận).</summary>
+    AssetAssigned = 75,
+    /// <summary>Owner gỡ gán một tài sản khỏi một người nhận (đích là tài sản; lý do ghi id người nhận).</summary>
+    AssetUnassigned = 76,
 }

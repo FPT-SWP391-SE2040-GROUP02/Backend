@@ -13,7 +13,7 @@ public sealed class VaultService(
     ICurrentUser currentUser,
     IUserRepository userRepository,
     IVaultRepository vaultRepository,
-    IContainerRepository containerRepository,
+    IAssetAssignmentRepository assignmentRepository,
     IAuditLogRepository auditLogRepository,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider) : IVaultService
@@ -152,8 +152,8 @@ public sealed class VaultService(
     private async Task<VaultResponse> ToResponseAsync(Vault vault, CancellationToken ct)
     {
         var usedBytes = await vaultRepository.SumUsedBytesAsync(vault.Id, ct);
-        var activeContainers = await containerRepository.CountActiveByVaultIdAsync(vault.Id, ct);
-        var usedBeneficiarySlots = await containerRepository.CountUsedBeneficiarySlotsAsync(vault.Id, ct);
-        return vault.ToResponse(usedBytes, activeContainers, usedBeneficiarySlots);
+        var assignedAssets = await assignmentRepository.CountAssignedAssetsAsync(vault.Id, ct);
+        var usedBeneficiarySlots = await assignmentRepository.CountUsedBeneficiarySlotsAsync(vault.Id, ct);
+        return vault.ToResponse(usedBytes, assignedAssets, usedBeneficiarySlots);
     }
 }

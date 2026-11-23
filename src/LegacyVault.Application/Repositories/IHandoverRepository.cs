@@ -39,12 +39,6 @@ public interface IHandoverRepository
     /// <summary>Grant theo Id, kèm Turn và Turn.Items (có theo dõi). Không có → null.</summary>
     Task<HandoverGrant?> FindGrantByIdAsync(Guid grantId, CancellationToken ct);
 
-    /// <summary>
-    /// Các chỉ định đủ điều kiện để mở bàn giao của một kho: gói đang READY (chưa bị xóa), kèm
-    /// Container.Assets.Asset và Beneficiary.
-    /// </summary>
-    Task<List<Designation>> FindStartableDesignationsAsync(Guid vaultId, CancellationToken ct);
-
     /// <summary>Một tài sản theo Id (không lọc theo kho). Không có → null.</summary>
     Task<Asset?> FindAssetAsync(Guid assetId, CancellationToken ct);
 

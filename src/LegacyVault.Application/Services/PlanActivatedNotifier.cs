@@ -13,13 +13,13 @@ namespace LegacyVault.Application.Services;
 /// - Người nhận lấy từ các gói đã sẵn sàng; một người có trong nhiều gói chỉ nhận một thư.
 /// - Thư có email và số điện thoại của Chủ kho và Người thực thi; hai người này được báo trước ở màn kích hoạt
 ///   và màn nhận lời mời rằng thông tin liên hệ của họ sẽ được chia sẻ cho người nhận.
-/// - Thư không có tên gói hay tài sản. Gửi sau khi đã lưu kích hoạt, nên gửi lỗi không làm hỏng việc kích hoạt.
+/// - Thư không có tên tài sản. Gửi sau khi đã lưu kích hoạt, nên gửi lỗi không làm hỏng việc kích hoạt.
 /// - Mỗi người nhận có link riêng để gửi yêu cầu nhận tài sản khi Chủ kho qua đời; kích hoạt lại thì cấp link mới.
 /// </remarks>
 public sealed class PlanActivatedNotifier(
     IVaultRepository vaults,
     IUserRepository users,
-    IHandoverRepository handover,
+    IAssetAssignmentRepository assignments,
     IBeneficiaryDataProtector protector,
     IPlanActivatedNoticeSender sender,
     IHandoverRecordRepository records,
@@ -39,24 +39,24 @@ public sealed class PlanActivatedNotifier(
         }
         User? executor = await FindAcceptedExecutorAsync(vault, ct);
 
-        List<Designation> designations = await handover.FindStartableDesignationsAsync(vault.Id, ct);
+        List<AssetAssignment> ownerAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
 
         // Cấp link riêng mới cho từng người nhận (link cũ hết hiệu lực), lưu băm trước khi gửi thư.
         Dictionary<Guid, string> tokens = new Dictionary<Guid, string>();
-        foreach (Designation designation in designations)
+        foreach (AssetAssignment assignment in ownerAssignments)
         {
-            if (tokens.ContainsKey(designation.BeneficiaryId))
+            if (tokens.ContainsKey(assignment.BeneficiaryId))
             {
                 continue;
             }
-            Beneficiary? tracked = await records.FindBeneficiaryForUpdateAsync(designation.BeneficiaryId, ct);
+            Beneficiary? tracked = await records.FindBeneficiaryForUpdateAsync(assignment.BeneficiaryId, ct);
             if (tracked == null)
             {
                 continue;
             }
             (string value, string hash) = HandoverRecordRules.CreateRequestToken();
             tracked.RequestTokenHash = hash;
-            tokens[designation.BeneficiaryId] = value;
+            tokens[assignment.BeneficiaryId] = value;
         }
         if (tokens.Count > 0)
         {
@@ -64,15 +64,15 @@ public sealed class PlanActivatedNotifier(
         }
 
         HashSet<Guid> notified = new HashSet<Guid>();
-        foreach (Designation designation in designations)
+        foreach (AssetAssignment assignment in ownerAssignments)
         {
-            if (!notified.Add(designation.BeneficiaryId))
+            if (!notified.Add(assignment.BeneficiaryId))
             {
                 continue;
             }
             try
             {
-                BeneficiaryPersonalData data = protector.Unprotect(designation.Beneficiary);
+                BeneficiaryPersonalData data = protector.Unprotect(assignment.Beneficiary);
                 if (string.IsNullOrWhiteSpace(data.Email))
                 {
                     continue;
@@ -85,9 +85,9 @@ public sealed class PlanActivatedNotifier(
                     OwnerEmail = owner.Email,
                     OwnerPhone = owner.Phone
                 };
-                if (tokens.ContainsKey(designation.BeneficiaryId))
+                if (tokens.ContainsKey(assignment.BeneficiaryId))
                 {
-                    notice.RequestToken = tokens[designation.BeneficiaryId];
+                    notice.RequestToken = tokens[assignment.BeneficiaryId];
                 }
                 if (executor != null)
                 {

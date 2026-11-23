@@ -21,8 +21,7 @@ public sealed class HandoverReceivedAllTests
     private readonly FakeHandoverSubmissionRepository submissions = new FakeHandoverSubmissionRepository();
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly Guid claimantId = Guid.NewGuid();
-    private readonly Container container;
-    private readonly Designation designation;
+    private readonly Beneficiary recipient;
     private readonly HandoverService service;
 
     public HandoverReceivedAllTests()
@@ -30,8 +29,8 @@ public sealed class HandoverReceivedAllTests
         FakeVaultRepository vaults = new FakeVaultRepository();
         vaults.Vaults.Add(data.Vault);
         currentUser.UserId = claimantId;
-        container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
-        designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
+        recipient = data.AddRecipient("Người Nhận", "nguoi-nhan@example.com");
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
         service = new HandoverService(currentUser, new FakeUserRepository(), vaults, repository, new FakeTokenService(),
             new FakePolicy(), unitOfWork, new FixedTimeProvider(Now), new HandoverKeyTests.FakeKeyShards(), submissions,
             new LegacyVault.IntegrationTests.Ekyc.FakeEkycBeneficiaryRepository(), new FakeBeneficiaryDataProtector());
@@ -78,7 +77,7 @@ public sealed class HandoverReceivedAllTests
 
     private HandoverTurn AddTurn(HandoverTurnStatus status)
     {
-        HandoverTurn turn = data.BuildTurn(container, designation, status, "tk", claimantId);
+        HandoverTurn turn = data.BuildTurn(recipient, status, "tk", claimantId);
         repository.Turns.Add(turn);
         if (status == HandoverTurnStatus.HandoverCommitted)
         {

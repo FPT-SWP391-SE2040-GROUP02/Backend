@@ -76,7 +76,7 @@ public sealed class PlanActivationPinTests : IAsyncLifetime
         return client.SendAsync(request);
     }
 
-    /// <summary>Kế hoạch đủ điều kiện kích hoạt: có PIN, gói READY, Người thực thi đã chấp nhận.</summary>
+    /// <summary>Kế hoạch đủ điều kiện kích hoạt: có PIN, có tài sản đã gán cho người nhận, Người thực thi đã chấp nhận.</summary>
     private async Task<(HttpClient Owner, Guid VaultId, ActivatePlanRequest Request)> PrepareReadyPlanAsync()
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -97,11 +97,8 @@ public sealed class PlanActivationPinTests : IAsyncLifetime
             await db.SaveChangesAsync();
         });
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú");
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói")).GetProperty("id").GetGuid();
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "000000001015", "Người nhận");
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-            owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid())).StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, assetId, beneficiary.GetProperty("id").GetGuid());
 
         HttpClient executor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, ExecutorEmail);
         await ApiTestHelpers.EnsureSystemExecutorAsync(factory, ExecutorEmail);

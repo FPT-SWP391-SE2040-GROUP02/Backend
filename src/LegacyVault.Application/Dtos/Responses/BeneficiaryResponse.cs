@@ -19,8 +19,8 @@ public class BeneficiaryResponse
     /// <summary>Lời nhắn Chủ kho để lại cho người nhận; null khi chưa viết.</summary>
     public string? Message { get; set; }
 
-    /// <summary>Id các gói đang chỉ định người này, theo thứ tự gắn. Rỗng khi chưa ở gói nào.</summary>
-    public List<Guid> ContainerIds { get; set; } = new List<Guid>();
+    /// <summary>Id các tài sản đang được gán cho người này, theo thứ tự gán. Rỗng khi chưa được gán tài sản nào.</summary>
+    public List<Guid> AssetIds { get; set; } = new List<Guid>();
 
     public DateTimeOffset CreatedAt { get; set; }
 

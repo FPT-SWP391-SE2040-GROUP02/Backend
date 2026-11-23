@@ -98,8 +98,11 @@ public sealed class EntitlementExpiryTests : IAsyncLifetime
     [SqlFact]
     public async Task Oplan01_Job_ExpiredPaidVault_MovesToGrace_WritesOneAuditLog_AndBlocksAdd()
     {
-        // Chuẩn bị: kho XS hết hạn hôm qua
+        // Chuẩn bị: kho XS có một tài sản và một người nhận, hết hạn hôm qua
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
+        JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
+            client, vaultId, "001090000001", ApiTestHelpers.BeneficiaryName(0));
         await SetServiceExpiresAtAsync(vaultId, DateTimeOffset.UtcNow.AddDays(-1));
 
         // Hành động: job quét rồi xử lý, chạy hai lần như khi job nền chạy lặp
@@ -125,8 +128,9 @@ public sealed class EntitlementExpiryTests : IAsyncLifetime
         Assert.Empty(await FindExpiredAsync());
 
         // Kiểm tra: thao tác "thêm" bị chặn theo luật chỉ đọc đã có (OPLAN-01)
-        HttpResponseMessage create = await client.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers", new { name = "Gói mới" });
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(create, HttpStatusCode.Conflict, "VAULT_NOT_EDITABLE");
+        HttpResponseMessage assign = await ApiTestHelpers.AssignAssetAsync(
+            client, vaultId, assetId, beneficiary.GetProperty("id").GetGuid());
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(assign, HttpStatusCode.Conflict, "VAULT_NOT_EDITABLE");
         Assert.Equal("SERVICE_READ_ONLY", problem.GetProperty("reason").GetString());
     }
 
