@@ -108,11 +108,10 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 throw NotAllowed("OWNER_CANNOT_ACCEPT");
             }
             User? inviteeUser = await users.FindByEmailAsync(email, ct);
-            if (inviteeUser == null || inviteeUser.Role != UserRole.Executor || inviteeUser.Status != UserStatus.Active
-                || inviteeUser.LegalVerifiedAt == null)
+            if (inviteeUser == null || inviteeUser.Role != UserRole.Executor || inviteeUser.Status != UserStatus.Active)
             {
                 throw new AppException(AppErrorType.Validation, ErrorCode.OnlySystemExecutorsAllowed,
-                    "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đã được xác minh pháp lý.");
+                    "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đang hoạt động.");
             }
             accountExists = true;
             DateTimeOffset now = time.GetUtcNow();
@@ -194,7 +193,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (target.Role != UserRole.Executor)
             {
                 throw new AppException(AppErrorType.Validation, ErrorCode.OnlySystemExecutorsAllowed,
-                    "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đã được xác minh pháp lý.");
+                    "Hệ thống hiện chỉ hỗ trợ chỉ định Người thực thi hệ thống đang hoạt động.");
             }
 
             DateTimeOffset now = time.GetUtcNow();

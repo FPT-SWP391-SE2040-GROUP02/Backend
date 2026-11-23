@@ -63,7 +63,6 @@ public sealed class UserRepository : IUserRepository
             .Where(u => u.Id != excludeUserId
                 && u.Status == UserStatus.Active
                 && u.EmailVerifiedAt != null
-                && u.LegalVerifiedAt != null
                 && u.Role == UserRole.Executor
                 && (u.Email.ToLower().Contains(term) || u.FullName.ToLower().Contains(term)))
             .OrderBy(u => u.FullName)

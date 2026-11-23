@@ -98,6 +98,28 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task ExecutorWithoutLegalVerificationIsListedAndCanBeInvited()
+    {
+        var (owner, _, vaultId) = await PrepareAsync();
+        const string email = "chua-xac-minh@example.test";
+        await ApiTestHelpers.EnsureSystemExecutorAsync(factory, email);
+        // Không còn bước xác minh pháp lý cho Người thực thi: tài khoản chưa có LegalVerifiedAt vẫn mời được.
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            User user = await db.Users.SingleAsync(u => u.Email == email);
+            user.LegalVerifiedAt = null;
+            await db.SaveChangesAsync();
+        });
+
+        var found = await owner.GetFromJsonAsync<List<ExecutorCandidateResponse>>(
+            $"/api/v1/vaults/{vaultId}/executor-candidates?q=chua-xac-minh");
+        Assert.Single(found!);
+
+        var response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [SqlFact]
     public async Task FullHttpFlowAcceptActivateAndDuplicateActivationIsIdempotent()
     {
         var (owner, recipient, vaultId) = await PrepareAsync();
