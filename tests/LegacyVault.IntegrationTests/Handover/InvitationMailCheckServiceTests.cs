@@ -32,13 +32,13 @@ public sealed class InvitationMailCheckServiceTests
         data.Owner.FullName = "Nguyễn Văn Chủ";
         users.Users.Add(data.Owner);
         vaults.Vaults.Add(data.Vault);
-        Container container = data.AddContainer("Gói gia đình", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Trần Minh Anh", "minh-anh@example.com");
-        beneficiaries.Beneficiaries.Add(designation.Beneficiary);
-        protector.Data[designation.BeneficiaryId] = data.People[designation.BeneficiaryId];
+        Beneficiary recipient = data.AddRecipient("Trần Minh Anh", "minh-anh@example.com");
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        beneficiaries.Beneficiaries.Add(recipient);
+        protector.Data[recipient.Id] = data.People[recipient.Id];
 
         token = "token-" + Guid.NewGuid().ToString("N");
-        repository.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, token, null));
+        repository.Turns.Add(data.BuildTurn(recipient, HandoverTurnStatus.Invited, token, null));
 
         HandoverRecord record = new HandoverRecord();
         record.VaultId = data.Vault.Id;
@@ -56,7 +56,7 @@ public sealed class InvitationMailCheckServiceTests
         InvitationMailCheckResponse response = await service.CheckAsync(token, caseCode, "012345671234", CancellationToken.None);
 
         Assert.True(response.Verified);
-        Assert.Equal("Gói gia đình", response.ContainerName);
+        Assert.Equal("Biên bản bàn giao", response.ContainerName);
         Assert.Equal("Nguyễn Văn Chủ", response.OwnerFullName);
     }
 

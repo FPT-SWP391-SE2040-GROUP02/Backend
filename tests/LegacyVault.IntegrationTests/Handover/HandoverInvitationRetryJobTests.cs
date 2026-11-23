@@ -27,18 +27,18 @@ public sealed class HandoverInvitationRetryJobTests
     private readonly FakeUnitOfWork unitOfWork = new FakeUnitOfWork();
     private readonly FixedTimeProvider time = new FixedTimeProvider(CreatedAt.AddMinutes(10));
     private readonly HandoverInvitationRetryJob job;
-    private readonly Container container;
-    private readonly Designation designation;
+    private readonly Beneficiary recipient;
 
     public HandoverInvitationRetryJobTests()
     {
         data.Plan.Status = PlanStatus.HandoverInProgress;
         vaults.Vaults.Add(data.Vault);
 
-        container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
-        designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
-        beneficiaries.Beneficiaries.Add(designation.Beneficiary);
-        protector.Data[designation.BeneficiaryId] = data.People[designation.BeneficiaryId];
+        recipient = data.AddRecipient("Người Nhận", "nguoi-nhan@example.com");
+
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        beneficiaries.Beneficiaries.Add(recipient);
+        protector.Data[recipient.Id] = data.People[recipient.Id];
 
         job = new HandoverInvitationRetryJob(
             vaults, repository, beneficiaries, protector, new FakeTokenService(), sender, NullLogger<HandoverInvitationRetryJob>.Instance, unitOfWork, time);
@@ -46,7 +46,7 @@ public sealed class HandoverInvitationRetryJobTests
 
     private HandoverTurn AddUndeliveredTurn()
     {
-        HandoverTurn turn = data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "old-token", null);
+        HandoverTurn turn = data.BuildTurn(recipient, HandoverTurnStatus.Invited, "old-token", null);
         turn.InvitationSentAt = null;
         repository.Turns.Add(turn);
         return turn;
@@ -145,7 +145,7 @@ public sealed class HandoverInvitationRetryJobTests
     [Fact]
     public async Task Process_RecipientWithoutEmail_Stops()
     {
-        protector.Data[designation.BeneficiaryId] = new BeneficiaryPersonalData
+        protector.Data[recipient.Id] = new BeneficiaryPersonalData
         {
             CitizenId = "012345671234", FullName = "Người Nhận", DateOfBirth = new DateOnly(1990, 1, 1), Email = null
         };

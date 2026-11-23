@@ -15,17 +15,17 @@ public sealed class AuditRulesTests
     {
         Guid vaultId = Guid.NewGuid();
         Guid ownerId = Guid.NewGuid();
-        Guid containerId = Guid.NewGuid();
+        Guid assetId = Guid.NewGuid();
 
         AuditLog log = AuditRules.OwnerAction(
-            vaultId, ownerId, AuditAction.ContainerCreated, AuditTargetType.Container, containerId, 3, Now);
+            vaultId, ownerId, AuditAction.AssetAssigned, AuditTargetType.Asset, assetId, 3, Now);
 
         Assert.Equal(vaultId, log.VaultId);
         Assert.Equal(ownerId, log.ActorUserId);
         Assert.Equal(AuditActorRole.Owner, log.ActorRole);
-        Assert.Equal(AuditAction.ContainerCreated, log.Action);
-        Assert.Equal(AuditTargetType.Container, log.TargetType);
-        Assert.Equal(containerId, log.TargetId);
+        Assert.Equal(AuditAction.AssetAssigned, log.Action);
+        Assert.Equal(AuditTargetType.Asset, log.TargetType);
+        Assert.Equal(assetId, log.TargetId);
         Assert.Equal(3, log.TargetVersion);
         Assert.Equal(AuditOutcome.Succeeded, log.Outcome);
         Assert.Null(log.Reason);

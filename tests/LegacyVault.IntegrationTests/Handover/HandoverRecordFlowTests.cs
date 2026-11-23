@@ -54,21 +54,18 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         return "bb-nhan" + index + "@example.com";
     }
 
-    /// <summary>Kho đã kích hoạt: hai tài sản chữ trong một gói, gói chỉ định cho người nhận đầu; người nhận thứ hai chưa có gói.</summary>
+    /// <summary>Kho đã kích hoạt: hai tài sản chữ gán cho người nhận đầu; người nhận thứ hai chưa được gán tài sản nào.</summary>
     private async Task<Vault2> BuildVaultAsync()
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         Guid assetA = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Nhà");
         Guid assetB = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Xe");
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói M")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetA)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetB)).StatusCode);
         JsonElement first = await ApiTestHelpers.CreateBeneficiaryAsync(
             owner, vaultId, "001090000011", ApiTestHelpers.BeneficiaryName(0), RecipientEmail(0));
         JsonElement second = await ApiTestHelpers.CreateBeneficiaryAsync(
             owner, vaultId, "001090000012", ApiTestHelpers.BeneficiaryName(1), RecipientEmail(1));
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-            owner, vaultId, containerId, first.GetProperty("id").GetGuid())).StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, assetA, first.GetProperty("id").GetGuid());
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, assetB, first.GetProperty("id").GetGuid());
         await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, PlanStatus.Active);
 
         Vault2 result = new Vault2();

@@ -474,7 +474,7 @@ public sealed class VaultPinServiceTests
 
         public Task<Asset?> FindByIdAsync(Guid vaultId, Guid assetId, CancellationToken ct) => throw new NotSupportedException();
 
-        public Task<List<Asset>> FindOutsideContainerByVaultIdAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
+        public Task<List<Asset>> FindUnassignedByVaultIdAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
 
         public Task<(List<Asset> Items, int TotalCount)> FindPageByVaultIdAsync(
             Guid vaultId, int pageIndex, int pageSize, string? searchTerm, string sortBy, bool isAscending, CancellationToken ct)

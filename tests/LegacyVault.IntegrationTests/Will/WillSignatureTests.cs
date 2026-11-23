@@ -70,12 +70,11 @@ public sealed class WillSignatureTests : IAsyncLifetime
     {
         public HttpClient Owner { get; set; } = null!;
         public Guid VaultId { get; set; }
-        public Guid ContainerId { get; set; }
         public Guid FirstAssetId { get; set; }
         public Guid SecondAssetId { get; set; }
+        public Guid ThirdAssetId { get; set; }
         public Guid FirstBeneficiaryId { get; set; }
         public Guid SecondBeneficiaryId { get; set; }
-        public Guid SecondContainerId { get; set; }
     }
 
     private static Task<HttpResponseMessage> PostWithPinAsync(HttpClient client, string url, object body, string? pin)
@@ -101,7 +100,7 @@ public sealed class WillSignatureTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Kế hoạch đủ điều kiện kích hoạt. richConfig = true: gói A có 2 tài sản và 2 người nhận, thêm gói B (tài sản thứ 3, người nhận 1).
+    /// Kế hoạch đủ điều kiện kích hoạt. richConfig = true: tài sản 1 và 2 gán chung cho người nhận 1 và 2, tài sản 3 gán cho người nhận 1 (5 cặp).
     /// </summary>
     private async Task<PreparedPlan> PrepareReadyPlanAsync(bool richConfig)
     {
@@ -126,22 +125,17 @@ public sealed class WillSignatureTests : IAsyncLifetime
         plan.Owner = owner;
         plan.VaultId = vaultId;
         plan.FirstAssetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú một");
-        plan.ContainerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói A")).GetProperty("id").GetGuid();
         plan.FirstBeneficiaryId = (await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "000000001015", "Người nhận")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, plan.ContainerId, plan.FirstAssetId)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(owner, vaultId, plan.ContainerId, plan.FirstBeneficiaryId)).StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, plan.FirstAssetId, plan.FirstBeneficiaryId);
 
         if (richConfig)
         {
             plan.SecondAssetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú hai");
             plan.SecondBeneficiaryId = (await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, SecondCitizenId, "Người nhận hai")).GetProperty("id").GetGuid();
-            Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, plan.ContainerId, plan.SecondAssetId)).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(owner, vaultId, plan.ContainerId, plan.SecondBeneficiaryId)).StatusCode);
-
-            Guid thirdAssetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú ba");
-            plan.SecondContainerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói B")).GetProperty("id").GetGuid();
-            Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, plan.SecondContainerId, thirdAssetId)).StatusCode);
-            Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(owner, vaultId, plan.SecondContainerId, plan.FirstBeneficiaryId)).StatusCode);
+            plan.ThirdAssetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú ba");
+            await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, plan.FirstAssetId, plan.FirstBeneficiaryId, plan.SecondBeneficiaryId);
+            await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, plan.SecondAssetId, plan.FirstBeneficiaryId, plan.SecondBeneficiaryId);
+            await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, plan.ThirdAssetId, plan.FirstBeneficiaryId);
         }
 
         HttpClient executor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, ExecutorEmail);
@@ -200,30 +194,25 @@ public sealed class WillSignatureTests : IAsyncLifetime
         return count;
     }
 
-    private static void AssertCounts(JsonElement changes, int removedContainers, int addedContainers, int removedAssets,
-        int addedAssets, int removedRecipients, int addedRecipients, int changedRecipientCount)
+    private static void AssertCounts(JsonElement changes, int addedAssignments, int removedAssignments, int affectedRecipientCount)
     {
-        Assert.Equal(removedContainers, changes.GetProperty("removedContainers").GetInt32());
-        Assert.Equal(addedContainers, changes.GetProperty("addedContainers").GetInt32());
-        Assert.Equal(removedAssets, changes.GetProperty("removedAssets").GetInt32());
-        Assert.Equal(addedAssets, changes.GetProperty("addedAssets").GetInt32());
-        Assert.Equal(removedRecipients, changes.GetProperty("removedRecipients").GetInt32());
-        Assert.Equal(addedRecipients, changes.GetProperty("addedRecipients").GetInt32());
-        Assert.Equal(changedRecipientCount, changes.GetProperty("changedRecipientCount").GetInt32());
+        Assert.Equal(addedAssignments, changes.GetProperty("addedAssignments").GetInt32());
+        Assert.Equal(removedAssignments, changes.GetProperty("removedAssignments").GetInt32());
+        Assert.Equal(affectedRecipientCount, changes.GetProperty("affectedRecipientCount").GetInt32());
     }
 
-    /// <summary>Thêm tài sản mới + người nhận mới vào gói A, tạo gói B mới (đều chưa ký).</summary>
+    /// <summary>
+    /// Thêm một tài sản mới gán chung cho người nhận 1 và một người nhận mới, rồi một tài sản nữa gán cho người nhận 1
+    /// (3 cặp mới, đều chưa ký).
+    /// </summary>
     private async Task AddUnsignedChangesAsync(PreparedPlan plan)
     {
         UsePinForEdits(plan.Owner);
         Guid newAssetId = await ApiTestHelpers.CreateTextAssetAsync(plan.Owner, plan.VaultId, "Ghi chú mới");
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(plan.Owner, plan.VaultId, plan.ContainerId, newAssetId)).StatusCode);
         Guid newBeneficiaryId = (await ApiTestHelpers.CreateBeneficiaryAsync(plan.Owner, plan.VaultId, SecondCitizenId, "Người nhận mới")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(plan.Owner, plan.VaultId, plan.ContainerId, newBeneficiaryId)).StatusCode);
-        Guid assetForNewContainer = await ApiTestHelpers.CreateTextAssetAsync(plan.Owner, plan.VaultId, "Ghi chú gói mới");
-        Guid newContainerId = (await ApiTestHelpers.CreateContainerAsync(plan.Owner, plan.VaultId, "Gói mới")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(plan.Owner, plan.VaultId, newContainerId, assetForNewContainer)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(plan.Owner, plan.VaultId, newContainerId, plan.FirstBeneficiaryId)).StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(plan.Owner, plan.VaultId, newAssetId, plan.FirstBeneficiaryId, newBeneficiaryId);
+        Guid anotherAssetId = await ApiTestHelpers.CreateTextAssetAsync(plan.Owner, plan.VaultId, "Ghi chú thêm");
+        await ApiTestHelpers.AssignAssetOkAsync(plan.Owner, plan.VaultId, anotherAssetId, plan.FirstBeneficiaryId);
         DropPinForEdits(plan.Owner);
     }
 
@@ -244,13 +233,10 @@ public sealed class WillSignatureTests : IAsyncLifetime
         });
         Assert.Equal(configVersion, version.ConfigVersion);
         WillSnapshot snapshot = WillVersionRules.FromJson(version.SnapshotJson);
-        Assert.Single(snapshot.Recipients);
-        Assert.Single(snapshot.Assets);
-        Assert.Equal(plan.ContainerId, snapshot.Recipients[0].ContainerId);
-        Assert.Equal(plan.FirstBeneficiaryId, snapshot.Recipients[0].BeneficiaryId);
-        Assert.Equal(plan.FirstAssetId, snapshot.Assets[0].AssetId);
-        // Chỉ có id: không có tên gói, tên tài sản, tên người nhận.
-        Assert.DoesNotContain("Gói", version.SnapshotJson);
+        Assert.Single(snapshot.Assignments);
+        Assert.Equal(plan.FirstBeneficiaryId, snapshot.Assignments[0].BeneficiaryId);
+        Assert.Equal(plan.FirstAssetId, snapshot.Assignments[0].AssetId);
+        // Chỉ có id: không có tên tài sản, tên người nhận.
         Assert.DoesNotContain("Ghi chú", version.SnapshotJson);
         Assert.DoesNotContain("Người nhận", version.SnapshotJson);
 
@@ -258,7 +244,7 @@ public sealed class WillSignatureTests : IAsyncLifetime
         Assert.Equal(1, setup.GetProperty("willVersion").GetInt32());
         Assert.NotEqual(JsonValueKind.Null, setup.GetProperty("willSignedAt").ValueKind);
         Assert.False(setup.GetProperty("hasUnsignedChanges").GetBoolean());
-        AssertCounts(setup.GetProperty("unsignedChanges"), 0, 0, 0, 0, 0, 0, 0);
+        AssertCounts(setup.GetProperty("unsignedChanges"), 0, 0, 0);
     }
 
     [SqlFact]
@@ -327,7 +313,7 @@ public sealed class WillSignatureTests : IAsyncLifetime
         await AddUnsignedChangesAsync(plan);
         JsonElement before = await GetSetupAsync(plan);
         Assert.True(before.GetProperty("hasUnsignedChanges").GetBoolean());
-        AssertCounts(before.GetProperty("unsignedChanges"), 0, 1, 0, 1, 0, 1, 1);
+        AssertCounts(before.GetProperty("unsignedChanges"), 3, 0, 2);
         int configVersion = before.GetProperty("configVersion").GetInt32();
 
         HttpResponseMessage response = await SignAsync(plan, configVersion, GoodPin);
@@ -336,15 +322,14 @@ public sealed class WillSignatureTests : IAsyncLifetime
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(response);
         Assert.Equal(2, body.GetProperty("willVersion").GetInt32());
         Assert.False(body.GetProperty("hasUnsignedChanges").GetBoolean());
-        AssertCounts(body.GetProperty("unsignedChanges"), 0, 0, 0, 0, 0, 0, 0);
+        AssertCounts(body.GetProperty("unsignedChanges"), 0, 0, 0);
 
         List<WillVersion> versions = await ReadVersionsAsync(plan.VaultId);
         Assert.Equal(2, versions.Count);
         Assert.Equal(2, versions[1].VersionNo);
         Assert.Equal(configVersion, versions[1].ConfigVersion);
         WillSnapshot snapshot = WillVersionRules.FromJson(versions[1].SnapshotJson);
-        Assert.Equal(3, snapshot.Recipients.Count);
-        Assert.Equal(3, snapshot.Assets.Count);
+        Assert.Equal(4, snapshot.Assignments.Count);
 
         List<AuditLog> logs = new List<AuditLog>();
         await ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -415,55 +400,54 @@ public sealed class WillSignatureTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task PlanSetup_CountsRemovedAssetRecipientAndContainer()
+    public async Task PlanSetup_CountsRemovedAssignments()
     {
         PreparedPlan plan = await PrepareReadyPlanAsync(true);
         await ActivateAsync(plan);
         UsePinForEdits(plan.Owner);
 
-        HttpResponseMessage removeAsset = await plan.Owner.DeleteAsync(
-            $"/api/v1/vaults/{plan.VaultId}/containers/{plan.ContainerId}/assets/{plan.SecondAssetId}");
-        HttpResponseMessage removeRecipient = await plan.Owner.DeleteAsync(
-            $"/api/v1/vaults/{plan.VaultId}/containers/{plan.ContainerId}/beneficiaries/{plan.SecondBeneficiaryId}");
-        HttpResponseMessage removeContainer = await plan.Owner.DeleteAsync(
-            $"/api/v1/vaults/{plan.VaultId}/containers/{plan.SecondContainerId}");
+        // Người nhận 2 mất cả hai tài sản; tài sản 3 không còn người nhận nào (người nhận 1 vẫn còn tài sản 1 và 2).
+        HttpResponseMessage removeFirst = await ApiTestHelpers.UnassignAssetAsync(
+            plan.Owner, plan.VaultId, plan.FirstAssetId, plan.SecondBeneficiaryId);
+        HttpResponseMessage removeSecond = await ApiTestHelpers.UnassignAssetAsync(
+            plan.Owner, plan.VaultId, plan.SecondAssetId, plan.SecondBeneficiaryId);
+        HttpResponseMessage clearThird = await ApiTestHelpers.AssignAssetAsync(plan.Owner, plan.VaultId, plan.ThirdAssetId);
         DropPinForEdits(plan.Owner);
 
-        Assert.Equal(HttpStatusCode.OK, removeAsset.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, removeRecipient.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, removeContainer.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, removeFirst.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, removeSecond.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, clearThird.StatusCode);
         JsonElement setup = await GetSetupAsync(plan);
         Assert.True(setup.GetProperty("hasUnsignedChanges").GetBoolean());
-        AssertCounts(setup.GetProperty("unsignedChanges"), 1, 0, 1, 0, 1, 0, 1);
+        AssertCounts(setup.GetProperty("unsignedChanges"), 0, 3, 2);
 
-        // Ký lại: bản mới chỉ còn phần còn lại.
+        // Ký lại: bản mới chỉ còn phần còn lại (tài sản 1 và 2 cho người nhận 1).
         HttpResponseMessage signed = await SignAsync(plan, setup.GetProperty("configVersion").GetInt32(), GoodPin);
         Assert.Equal(HttpStatusCode.OK, signed.StatusCode);
         List<WillVersion> versions = await ReadVersionsAsync(plan.VaultId);
         Assert.Equal(2, versions.Count);
         WillSnapshot latest = WillVersionRules.FromJson(versions[1].SnapshotJson);
-        Assert.Single(latest.Recipients);
-        Assert.Single(latest.Assets);
+        Assert.Equal(2, latest.Assignments.Count);
     }
 
     [SqlFact]
-    public async Task PlanSetup_CountsRecipientMovedBetweenContainers()
+    public async Task PlanSetup_CountsAssignmentMovedToAnotherAsset()
     {
         PreparedPlan plan = await PrepareReadyPlanAsync(true);
         await ActivateAsync(plan);
         UsePinForEdits(plan.Owner);
 
-        // Gói A đang có 2 người nhận: gỡ người 2 khỏi gói A rồi gắn người 2 vào gói B.
-        HttpResponseMessage removeRecipient = await plan.Owner.DeleteAsync(
-            $"/api/v1/vaults/{plan.VaultId}/containers/{plan.ContainerId}/beneficiaries/{plan.SecondBeneficiaryId}");
-        HttpResponseMessage addToOther = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-            plan.Owner, plan.VaultId, plan.SecondContainerId, plan.SecondBeneficiaryId);
+        // Người nhận 2 không còn nhận tài sản 1 mà nhận tài sản 3.
+        HttpResponseMessage remove = await ApiTestHelpers.UnassignAssetAsync(
+            plan.Owner, plan.VaultId, plan.FirstAssetId, plan.SecondBeneficiaryId);
+        HttpResponseMessage addToOther = await ApiTestHelpers.AssignAssetAsync(
+            plan.Owner, plan.VaultId, plan.ThirdAssetId, plan.FirstBeneficiaryId, plan.SecondBeneficiaryId);
         DropPinForEdits(plan.Owner);
 
-        Assert.Equal(HttpStatusCode.OK, removeRecipient.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, remove.StatusCode);
         Assert.Equal(HttpStatusCode.OK, addToOther.StatusCode);
         JsonElement setup = await GetSetupAsync(plan);
-        // Gói A mất 1 người nhận, gói B thêm 1 người nhận: hai gói có người nhận khác bản ký.
-        AssertCounts(setup.GetProperty("unsignedChanges"), 0, 0, 0, 0, 1, 1, 2);
+        // Một cặp mất, một cặp thêm, cùng liên quan người nhận 2.
+        AssertCounts(setup.GetProperty("unsignedChanges"), 1, 1, 1);
     }
 }

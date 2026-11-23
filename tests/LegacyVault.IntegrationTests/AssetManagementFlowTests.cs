@@ -13,7 +13,7 @@ namespace LegacyVault.IntegrationTests;
 
 /// <summary>
 /// Owner tải, đổi tên và xóa tài sản qua HTTP trên SQL Server thật
-/// (docs/api-contract.md mục 6.7, LV-10). Cách chạy giống ContainerFlowTests: [SqlFact] cần LEGACYVAULT_TEST_CONNECTION,
+/// (docs/api-contract.md mục 6.7, LV-10). Cách chạy giống AssetAssignmentFlowTests: [SqlFact] cần LEGACYVAULT_TEST_CONNECTION,
 /// mỗi lớp test dùng một database tạm tên ngẫu nhiên và xóa khi xong.
 /// </summary>
 public sealed class AssetManagementFlowTests : IAsyncLifetime
@@ -124,23 +124,21 @@ public sealed class AssetManagementFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task DeleteIsBlockedWhileInContainerThenFreesQuota()
+    public async Task DeleteIsBlockedWhileAssignedThenFreesQuota()
     {
-        // Đưa tài sản vào gói cần hạng trả phí (SETUP-17).
+        // Gán tài sản cho người nhận cần hạng trả phí.
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement asset = await CreateTextAsync(owner, vaultId, "Sẽ xóa", "nội dung xóa");
         Guid assetId = asset.GetProperty("id").GetGuid();
-        JsonElement container = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói A");
-        Guid containerId = container.GetProperty("id").GetGuid();
-        HttpResponseMessage added = await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId);
-        Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+        JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "001090000001", ApiTestHelpers.BeneficiaryName(0));
+        Guid beneficiaryId = beneficiary.GetProperty("id").GetGuid();
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, assetId, beneficiaryId);
 
         HttpResponseMessage blocked = await owner.DeleteAsync(AssetUrl(vaultId, asset));
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(blocked, HttpStatusCode.Conflict, "ASSET_IN_USE");
-        Assert.Equal("IN_CONTAINER", problem.GetProperty("reason").GetString());
+        Assert.Equal("ASSIGNED", problem.GetProperty("reason").GetString());
 
-        HttpResponseMessage removed = await owner.DeleteAsync(
-            $"/api/v1/vaults/{vaultId}/containers/{containerId}/assets/{assetId}");
+        HttpResponseMessage removed = await ApiTestHelpers.UnassignAssetAsync(owner, vaultId, assetId, beneficiaryId);
         Assert.True(removed.IsSuccessStatusCode);
 
         string[] before = Directory.GetFiles(factory.StorageRoot, "*", SearchOption.AllDirectories);
