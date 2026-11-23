@@ -72,13 +72,13 @@ public sealed class HandoverKeyMailService : IHandoverKeyMailService
         {
             throw NotAllowed(AppErrorType.Conflict, "PLAN_NOT_IN_HANDOVER", "Kế hoạch không còn ở giai đoạn bàn giao.");
         }
-        // Chỉ gửi mã khi biên bản đã đủ chữ ký ba bên (lượt HandoverCommitted) mà người nhận chưa nhập mã.
+        // Chỉ gửi mã khi biên bản đã có chữ ký luật sư (lượt HandoverCommitted) mà người nhận chưa nhập mã.
         // Trước đó biên bản chưa hoàn tất nên người nhận chưa được có mã; nhập rồi thì không cần gửi nữa.
         bool committedWithoutKey = turn.Status == HandoverTurnStatus.HandoverCommitted && turn.KeyVerifiedAt == null;
         if (!committedWithoutKey)
         {
             throw NotAllowed(AppErrorType.Conflict, "WRONG_STATE",
-                "Chỉ gửi được mã khi biên bản bàn giao đã đủ chữ ký ba bên và người nhận chưa nhập mã.");
+                "Chỉ gửi được mã khi luật sư đã ký biên bản, người nhận đã được xác nhận danh tính và người nhận chưa nhập mã.");
         }
 
         // 3. Kho phải đã cấp khóa và khóa Người thực thi nhập phải đúng

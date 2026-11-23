@@ -306,7 +306,7 @@ public sealed class HandoverService : IHandoverService
         await unitOfWork.SaveChangesAsync(ct);
         if (recordService != null)
         {
-            await recordService.SendPendingSigningNoticeAsync(ct);
+            await recordService.SendPendingTransferNoticeAsync(ct);
         }
         return await BuildTurnResponseAsync(turn, ct);
     }
@@ -525,6 +525,9 @@ public sealed class HandoverService : IHandoverService
         };
         response.KeyVerified = !response.KeyRequired || turn.KeyVerifiedAt != null;
         response.ReceivedAllAt = turn.ReceivedAllAt;
+        response.ReceiptExecutorSignedAt = turn.ReceiptExecutorSignedAt;
+        response.ReceiptIssueNote = turn.ReceiptIssueNote;
+        response.ReceiptIssueAt = turn.ReceiptIssueAt;
         response.RecipientFullName = await FindRecipientFullNameAsync(turn, ct);
         ApprovingVerifierRow? reviewer = await submissions.FindApprovingVerifierAsync(turn.VaultId, ct);
         if (reviewer != null)
@@ -612,6 +615,37 @@ public sealed class HandoverService : IHandoverService
             turn.UpdatedAt = now;
             await unitOfWork.SaveChangesAsync(ct);
         }
+        return await BuildTurnResponseAsync(turn, ct);
+    }
+
+    /// <summary>Bước 6 (nhánh lỗi): người nhận báo tài sản thiếu hoặc sai trước khi xác nhận nhận đủ. Báo lại thì thay nội dung cũ.</summary>
+    public async Task<HandoverTurnResponse> ReportReceiptIssueAsync(Guid turnId, string note, CancellationToken ct)
+    {
+        // 1. Nội dung không được để trống; lượt phải thuộc người đang đăng nhập
+        string cleanNote = note.Trim();
+        if (cleanNote.Length == 0)
+        {
+            throw ValidationErrors.For("note", "Vui lòng ghi rõ tài sản nào thiếu hoặc sai.");
+        }
+        Guid userId = currentUser.RequireUserId();
+        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
+
+        // 2. Chỉ báo được khi đang nhận và chưa xác nhận nhận đủ
+        if (turn.Status != HandoverTurnStatus.HandoverCommitted || turn.Grant == null)
+        {
+            throw HandoverAccess.NotAllowed("NOT_COMMITTED", "Chỉ báo được khi tài sản đã được giao cho bạn.");
+        }
+        if (turn.ReceivedAllAt != null)
+        {
+            throw HandoverAccess.NotAllowed("ALREADY_RECEIVED", "Bạn đã xác nhận nhận đủ nên không báo thiếu được nữa.");
+        }
+
+        // 3. Lưu để Người thực thi và luật sư thấy
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        turn.ReceiptIssueNote = cleanNote;
+        turn.ReceiptIssueAt = now;
+        turn.UpdatedAt = now;
+        await unitOfWork.SaveChangesAsync(ct);
         return await BuildTurnResponseAsync(turn, ct);
     }
 

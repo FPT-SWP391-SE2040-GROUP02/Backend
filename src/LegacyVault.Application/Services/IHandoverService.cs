@@ -30,6 +30,9 @@ public interface IHandoverService
     /// <summary>Người nhận xác nhận đã nhận đủ tài sản sau khi tải.</summary>
     Task<HandoverTurnResponse> ConfirmReceivedAllAsync(Guid turnId, CancellationToken ct);
 
+    /// <summary>Người nhận báo tài sản thiếu hoặc sai, trước khi xác nhận nhận đủ.</summary>
+    Task<HandoverTurnResponse> ReportReceiptIssueAsync(Guid turnId, string note, CancellationToken ct);
+
     /// <summary>
     /// Nhập khóa mở gói do Người thực thi đưa. Đúng thì ghi nhận (gọi lặp an toàn); sai thì 403 HANDOVER_KEY_INVALID kèm
     /// attemptsRemaining; quá giới hạn thì 423 HANDOVER_KEY_LOCKED. Kho chưa cấp khóa thì không cần và trả lượt như cũ.

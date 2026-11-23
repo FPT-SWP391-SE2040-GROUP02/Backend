@@ -344,7 +344,7 @@ public sealed class AdminService : IAdminService
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.HandoverNotFound, "Không tìm thấy biên bản bàn giao.");
         }
-        // Biên bản đã đủ chữ ký thì không giao lại nữa.
+        // Luật sư đã ký biên bản thì không giao lại nữa.
         if (record.Status == HandoverRecordStatus.Completed)
         {
             throw NotAllowed("CASE_NOT_PENDING");

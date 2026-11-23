@@ -113,7 +113,12 @@ public sealed class HandoverRulesTests
         Assert.False(HandoverRules.CloseIfAllTerminal(plan, new[] { done, open }, Now));
         Assert.Equal(PlanStatus.HandoverInProgress, plan.Status);
 
+        // Đã giao mà phiếu giao nhận chưa đủ hai bên ký thì chưa đóng.
         open.Status = HandoverTurnStatus.HandoverCommitted;
+        open.ReceivedAllAt = Now;
+        Assert.False(HandoverRules.CloseIfAllTerminal(plan, new[] { done, open }, Now));
+
+        open.ReceiptExecutorSignedAt = Now;
         Assert.True(HandoverRules.CloseIfAllTerminal(plan, new[] { done, open }, Now));
         Assert.Equal(PlanStatus.Closed, plan.Status);
         Assert.Equal(Now, plan.UpdatedAt);

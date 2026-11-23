@@ -57,7 +57,7 @@ public static class HandoverRules
         return grant.Status;
     }
 
-    /// <summary>Luật sư đã xác nhận danh tính: lượt chờ ký biên bản. Không có hạn quyết định, chỉ chờ đủ chữ ký.</summary>
+    /// <summary>Luật sư đã xác nhận danh tính: lượt chờ luật sư ký biên bản. Không có hạn quyết định.</summary>
     public static void MarkReadyToAccept(HandoverTurn turn, DateTimeOffset now)
     {
         turn.Status = HandoverTurnStatus.ReadyToAccept;
@@ -135,7 +135,17 @@ public static class HandoverRules
         return null;
     }
 
-    /// <summary>Mọi lượt của kế hoạch đã kết thúc thì đóng kế hoạch (Closed). Trả true nếu vừa đóng.</summary>
+    /// <summary>Lượt đã xong hẳn: đã giao thì phiếu giao nhận đủ hai bên ký, hoặc nội dung đã bị dọn vì hết hạn lưu.</summary>
+    public static bool IsSettled(HandoverTurn turn)
+    {
+        if (turn.Status != HandoverTurnStatus.HandoverCommitted || turn.RetentionStatus == RetentionStatus.Deleted)
+        {
+            return IsTerminal(turn.Status);
+        }
+        return turn.ReceivedAllAt != null && turn.ReceiptExecutorSignedAt != null;
+    }
+
+    /// <summary>Mọi lượt của kế hoạch đã xong hẳn (xem IsSettled) thì đóng kế hoạch (Closed). Trả true nếu vừa đóng.</summary>
     public static bool CloseIfAllTerminal(HandoverPlan plan, IEnumerable<HandoverTurn> turns, DateTimeOffset now)
     {
         if (plan.Status != PlanStatus.HandoverInProgress)
@@ -145,7 +155,7 @@ public static class HandoverRules
 
         foreach (HandoverTurn turn in turns)
         {
-            if (!IsTerminal(turn.Status))
+            if (!IsSettled(turn))
             {
                 return false;
             }

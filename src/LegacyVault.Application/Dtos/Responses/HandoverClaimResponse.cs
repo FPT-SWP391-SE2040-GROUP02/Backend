@@ -49,7 +49,7 @@ public class HandoverRequestPreviewResponse
     /// <summary>Email Chủ kho đã khai cho người nhận, che bớt; người nhận phải đăng nhập đúng email này.</summary>
     public string InvitedEmailMasked { get; set; } = string.Empty;
 
-    /// <summary>Gửi yêu cầu được không: kế hoạch đang hoạt động hoặc đang có biên bản chưa đủ chữ ký.</summary>
+    /// <summary>Gửi yêu cầu được không: kế hoạch đang hoạt động hoặc đang có biên bản luật sư chưa ký.</summary>
     public bool CanRequest { get; set; }
 }
 
@@ -91,6 +91,6 @@ public class OwnerHandoverRequestResponse
     /// <summary>Họ tên những người nhận đã gửi yêu cầu.</summary>
     public List<string> RequesterNames { get; set; } = new List<string>();
 
-    /// <summary>Hủy được tới khi biên bản đủ chữ ký.</summary>
+    /// <summary>Hủy được tới khi luật sư ký biên bản.</summary>
     public bool CanCancel { get; set; }
 }

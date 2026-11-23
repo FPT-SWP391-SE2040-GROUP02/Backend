@@ -11,7 +11,7 @@ namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
 /// Biên bản bàn giao qua HTTP trên SQL Server thật: người nhận gửi yêu cầu kèm giấy tờ, luật sư xét, lập, chốt, mở lại,
-/// kiểm thứ tự ba bước (biên bản → danh tính → chữ ký ba bên) và quyền của từng vai.
+/// kiểm thứ tự ba bước (biên bản → danh tính → luật sư ký) và quyền của từng vai.
 /// Môi trường test bỏ qua xác minh danh tính nên nhận lượt xong là coi như luật sư đã xác nhận.
 /// </summary>
 public sealed class HandoverRecordFlowTests : IAsyncLifetime
@@ -408,7 +408,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task FullFlow_ThreePartySignatures_OpenDownloads_AndReopenMakesEveryoneSignAgain()
+    public async Task FullFlow_VerifierSignature_OpensDownloads_AndReopenMakesNewRevision()
     {
         Vault2 vault = await BuildVaultAsync();
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vault.VaultId);
@@ -422,11 +422,10 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null)).StatusCode);
         JsonElement view = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync($"/api/v1/handover/turns/{turnId}/record"));
         Assert.Equal("SIGNING", view.GetProperty("status").GetString());
-        Assert.True(view.GetProperty("canSign").GetBoolean());
+        Assert.False(view.GetProperty("canSign").GetBoolean());
         Assert.Equal(1, view.GetProperty("recipients").GetArrayLength());
 
-        // Luật sư ký rồi mở lại: chữ ký cũ mất hiệu lực, bản mới.
-        await PostOkAsync(record.Verifier.Client, verifierUrl + "/sign");
+        // Luật sư mở lại để sửa: thành bản mới.
         JsonElement reopened = await PostOkAsync(record.Verifier.Client, verifierUrl + "/reopen");
         Assert.Equal("DRAFTING", reopened.GetProperty("status").GetString());
         Assert.Equal(2, reopened.GetProperty("revisionNo").GetInt32());
@@ -435,25 +434,24 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         JsonElement refinalized = await PostOkAsync(record.Verifier.Client, verifierUrl + "/finalize");
         Assert.Equal("SIGNING", refinalized.GetProperty("status").GetString());
 
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(record, vault.VaultId);
-        // Người thực thi chưa gửi được mã khi biên bản chưa đủ chữ ký.
+        // Người thực thi chưa gửi được mã khi luật sư chưa ký.
         HttpResponseMessage tooEarly = await record.Executor.Client.PostAsJsonAsync(
             $"/api/v1/executor/handover-records/{record.RecordId}/handover-turns/{turnId}/send-key", new { key = "x" });
         Assert.Equal(HttpStatusCode.Conflict, tooEarly.StatusCode);
 
-        JsonElement completed = await HandoverRecordTestData.SignAsRecipientAsync(recipient, turnId);
+        JsonElement completed = await PostOkAsync(record.Verifier.Client, verifierUrl + "/sign");
         Assert.Equal("COMPLETED", completed.GetProperty("status").GetString());
         JsonElement turn = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync($"/api/v1/handover/turns/{turnId}"));
         Assert.Equal("HANDOVER_COMMITTED", turn.GetProperty("status").GetString());
         Assert.Equal(2, turn.GetProperty("items").GetArrayLength());
 
-        // Đã đủ chữ ký: không ký thêm, không mở lại được.
+        // Luật sư đã ký: không ký thêm, không mở lại được.
         await ApiTestHelpers.AssertProblemAsync(
             await record.Verifier.Client.PostAsync(verifierUrl + "/reopen", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Assert.Equal(1, await db.Set<HandoverGrant>().CountAsync(g => g.TurnId == turnId));
-            Assert.Equal(3, await db.Set<HandoverRecordSignature>().CountAsync(x => x.RecordId == record.RecordId && x.RevisionNo == 2));
+            Assert.Equal(1, await db.Set<HandoverRecordSignature>().CountAsync(x => x.RecordId == record.RecordId && x.RevisionNo == 2));
         });
 
         // Người thực thi xem tiến độ theo biên bản.

@@ -324,9 +324,8 @@ public sealed class RetentionFlowTests : IAsyncLifetime
         JsonElement claimed = await ApiTestHelpers.ReadJsonAsync(
             await client.PostAsync($"/api/v1/handover/invitations/{s.Tokens[0]}/claim", null));
         Guid turnId = claimed.GetProperty("id").GetGuid();
-        // Ba bên ký biên bản: đủ chữ ký thì lượt đã bàn giao, có quyền tải.
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(s.Record, s.VaultId);
-        await HandoverRecordTestData.SignAsRecipientAsync(client, turnId);
+        // Luật sư ký biên bản thì lượt đã bàn giao, có quyền tải.
+        await HandoverRecordTestData.SignAsVerifierAsync(s.Record);
 
         await RunAsync(s.PlanId);
         Assert.Equal(RetentionStatus.NotStarted, Assert.Single(await TurnsAsync(s.PlanId)).RetentionStatus);

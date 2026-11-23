@@ -6,7 +6,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Luật của biên bản bàn giao, không đọc ghi dữ liệu. Thứ tự ba bước: biên bản → danh tính người nhận → chữ ký ba bên.
+/// Luật của biên bản bàn giao, không đọc ghi dữ liệu. Thứ tự ba bước: biên bản → danh tính người nhận → luật sư ký.
 /// Bước trước chưa xong thì chưa mở bước sau.
 /// </summary>
 public static class HandoverRecordRules
@@ -101,26 +101,21 @@ public static class HandoverRecordRules
         return true;
     }
 
-    /// <summary>Đủ chữ ký ba bên của bản hiện tại: luật sư, Người thực thi và từng người nhận trong biên bản.</summary>
-    public static bool AllSigned(HandoverRecord record)
+    /// <summary>Luật sư ký được: biên bản đã chốt, chưa ký, có ít nhất một người nhận đã được xác nhận danh tính.</summary>
+    public static bool CanVerifierSign(HandoverRecord record, Dictionary<Guid, HandoverTurn> turnByRecipient)
     {
-        if (FindSignature(record, HandoverSignerRole.Verifier, null) == null)
+        if (record.Status != HandoverRecordStatus.IdentityCheck && record.Status != HandoverRecordStatus.Signing)
         {
             return false;
         }
-        if (FindSignature(record, HandoverSignerRole.Executor, null) == null)
+        foreach (HandoverTurn turn in turnByRecipient.Values)
         {
-            return false;
-        }
-        Dictionary<Guid, List<Guid>> recipients = GroupAssetsByRecipient(record.Lines);
-        foreach (Guid beneficiaryId in recipients.Keys)
-        {
-            if (FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId) == null)
+            if (IsIdentityConfirmed(turn))
             {
-                return false;
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     /// <summary>

@@ -1294,6 +1294,19 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("ReadyAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("ReceiptExecutorSignedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReceiptExecutorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ReceiptIssueAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ReceiptIssueNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<DateTimeOffset?>("ReceivedAllAt")
                         .HasColumnType("datetimeoffset");
 

@@ -22,7 +22,6 @@ public class HandoverRecordResponse
     public string VerifierName { get; set; } = string.Empty;
     public string ExecutorName { get; set; } = string.Empty;
     public DateTimeOffset? VerifierSignedAt { get; set; }
-    public DateTimeOffset? ExecutorSignedAt { get; set; }
 
     public List<HandoverRecordRecipientResponse> Recipients { get; set; } = new List<HandoverRecordRecipientResponse>();
 
@@ -69,7 +68,17 @@ public class HandoverRecordRecipientResponse
     public string SubmissionStatus { get; set; } = string.Empty;
 
     public DateTimeOffset? IdentityConfirmedAt { get; set; }
-    public DateTimeOffset? SignedAt { get; set; }
+
+    /// <summary>Phiếu giao nhận: lúc bên nhận xác nhận đã nhận đủ; null khi chưa.</summary>
+    public DateTimeOffset? ReceivedAllAt { get; set; }
+
+    /// <summary>Phiếu giao nhận: lúc Người thực thi ký bên giao; null khi chưa.</summary>
+    public DateTimeOffset? ReceiptExecutorSignedAt { get; set; }
+
+    /// <summary>Người nhận báo thiếu hoặc sai; null khi không báo.</summary>
+    public string? ReceiptIssueNote { get; set; }
+
+    public DateTimeOffset? ReceiptIssueAt { get; set; }
 }
 
 public class HandoverRecordAssetResponse

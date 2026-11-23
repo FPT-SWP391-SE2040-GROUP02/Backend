@@ -173,8 +173,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Kịch bản một người nhận: nhận lượt tokenIndex, luật sư và Người thực thi ký, người nhận ký.
-    /// Đủ chữ ký thì lượt đã bàn giao; trả (turnId, grantId, danh sách tài sản).
+    /// Kịch bản một người nhận: nhận lượt tokenIndex, luật sư ký.
+    /// Ký xong thì lượt đã bàn giao; trả (turnId, grantId, danh sách tài sản).
     /// </summary>
     private async Task<(Guid TurnId, Guid GrantId, JsonElement Items)> ClaimAndAcceptAsync(HttpClient client, int tokenIndex)
     {
@@ -182,9 +182,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Assert.Equal("READY_TO_ACCEPT", claimed.GetProperty("status").GetString());
         Guid turnId = claimed.GetProperty("id").GetGuid();
 
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
-        JsonElement signed = await HandoverRecordTestData.SignAsRecipientAsync(client, turnId);
-        Assert.Equal("COMPLETED", signed.GetProperty("status").GetString());
+        await HandoverRecordTestData.SignAsVerifierAsync(current.Record);
 
         JsonElement accepted = await GetTurnAsync(client, turnId);
         Assert.Equal("HANDOVER_COMMITTED", accepted.GetProperty("status").GetString());
@@ -386,7 +384,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
             Assert.Equal(unknown.GetProperty("title").GetString(), other.GetProperty("title").GetString());
         }
 
-        HttpResponseMessage sign = await stranger.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
+        HttpResponseMessage sign = await stranger.PostAsJsonAsync($"/api/v1/handover/turns/{turnId}/receipt-issue", new { note = "x" });
         await ApiTestHelpers.AssertProblemAsync(sign, HttpStatusCode.NotFound, "HANDOVER_NOT_FOUND");
     }
 
@@ -414,16 +412,15 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task RecipientSignsTwiceInParallel_CreatesOneGrant()
+    public async Task VerifierSignsTwiceInParallel_CreatesOneGrant()
     {
         await BuildScenarioAsync(1);
         HttpClient receiver = await NewReceiverAsync();
-        JsonElement claimed = await ClaimAsync(receiver, 0);
-        Guid turnId = claimed.GetProperty("id").GetGuid();
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
+        Guid turnId = (await ClaimAsync(receiver, 0)).GetProperty("id").GetGuid();
+        string url = HandoverRecordTestData.VerifierRecordUrl(current.Record.RecordId) + "/sign";
 
-        Task<HttpResponseMessage> first = receiver.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
-        Task<HttpResponseMessage> second = receiver.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
+        Task<HttpResponseMessage> first = current.Record.Verifier.Client.PostAsync(url, null);
+        Task<HttpResponseMessage> second = current.Record.Verifier.Client.PostAsync(url, null);
         HttpResponseMessage[] responses = await Task.WhenAll(first, second);
 
         foreach (HttpResponseMessage response in responses)
@@ -432,34 +429,28 @@ public sealed class HandoverFlowTests : IAsyncLifetime
                 "Phản hồi bất ngờ: " + response.StatusCode);
         }
         Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
-
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Assert.Single(await db.Set<HandoverGrant>().Where(g => g.TurnId == turnId).ToListAsync());
-            Assert.Equal(1, await db.Set<HandoverRecordSignature>().CountAsync(x => x.Role == HandoverSignerRole.Recipient));
+            Assert.Equal(1, await db.Set<HandoverRecordSignature>().CountAsync(x => x.Role == HandoverSignerRole.Verifier));
         });
     }
 
     [SqlFact]
-    public async Task TwoRecipients_GetGrantsOnlyAfterEveryoneSigned_AndCannotReadEachOther()
+    public async Task TwoRecipients_AreHandedOverSeparately_ReceiptsCloseThePlan()
     {
         await BuildScenarioAsync(2);
         HttpClient receiverA = await NewReceiverAsync();
         HttpClient receiverB = await NewReceiverAsync(1);
 
+        // Mới A xác nhận danh tính: luật sư ký được, A được giao, B chưa.
         Guid turnA = (await ClaimAsync(receiverA, 0)).GetProperty("id").GetGuid();
-        // Mới một người nhận được xác nhận danh tính: chưa tới bước ký.
-        HttpResponseMessage tooEarly = await receiverA.PostAsync($"/api/v1/handover/turns/{turnA}/record/sign", null);
-        await ApiTestHelpers.AssertProblemAsync(tooEarly, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        await HandoverRecordTestData.SignAsVerifierAsync(current.Record);
+        Assert.Equal("HANDOVER_COMMITTED", (await GetTurnAsync(receiverA, turnA)).GetProperty("status").GetString());
 
+        // B xác nhận sau: được giao ngay, không phải ký lại.
         Guid turnB = (await ClaimAsync(receiverB, 1)).GetProperty("id").GetGuid();
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
-        JsonElement afterA = await HandoverRecordTestData.SignAsRecipientAsync(receiverA, turnA);
-        Assert.Equal("SIGNING", afterA.GetProperty("status").GetString());
-        Assert.Equal("READY_TO_ACCEPT", (await GetTurnAsync(receiverA, turnA)).GetProperty("status").GetString());
-
-        JsonElement afterB = await HandoverRecordTestData.SignAsRecipientAsync(receiverB, turnB);
-        Assert.Equal("COMPLETED", afterB.GetProperty("status").GetString());
+        Assert.Equal("HANDOVER_COMMITTED", (await GetTurnAsync(receiverB, turnB)).GetProperty("status").GetString());
 
         JsonElement committedA = await GetTurnAsync(receiverA, turnA);
         Guid grantA = committedA.GetProperty("grant").GetProperty("id").GetGuid();
@@ -470,12 +461,61 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         HttpResponseMessage aDownloads = await receiverA.GetAsync($"/api/v1/handover/grants/{grantA}/assets/{itemId}/content");
         Assert.Equal(HttpStatusCode.OK, aDownloads.StatusCode);
 
+        Assert.Equal(PlanStatus.HandoverInProgress, await PlanStatusAsync());
+        string receipts = $"/api/v1/executor/handover-records/{current.Record.RecordId}/handover-turns/";
+
+        // Người nhận chưa xác nhận thì Người thực thi chưa ký phiếu được; người lạ cũng không.
+        JsonElement early = await ApiTestHelpers.AssertProblemAsync(
+            await current.Record.Executor.Client.PostAsync(receipts + turnA + "/sign-receipt", null),
+            HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("NOT_RECEIVED", early.GetProperty("reason").GetString());
+        await ApiTestHelpers.AssertProblemAsync(
+            await receiverB.PostAsync(receipts + turnA + "/sign-receipt", null), HttpStatusCode.NotFound, "HANDOVER_NOT_FOUND");
+
+        // A báo thiếu: luật sư thấy nội dung; báo rồi vẫn xác nhận nhận đủ được khi đã xong.
+        Assert.Equal(HttpStatusCode.OK, (await receiverA.PostAsJsonAsync(
+            $"/api/v1/handover/turns/{turnA}/receipt-issue", new { note = "Thiếu ảnh" })).StatusCode);
+        JsonElement record = await ApiTestHelpers.ReadJsonAsync(await current.Record.Verifier.Client.GetAsync(
+            HandoverRecordTestData.VerifierRecordUrl(current.Record.RecordId)));
+        Assert.Contains(record.GetProperty("recipients").EnumerateArray(),
+            r => r.GetProperty("receiptIssueNote").GetString() == "Thiếu ảnh");
+
+        // Hai phiếu ký riêng; chỉ khi cả hai đủ chữ ký thì đóng kế hoạch.
+        await ReceiveAllAsync(receiverA, turnA);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await current.Record.Executor.Client.PostAsync(receipts + turnA + "/sign-receipt", null)).StatusCode);
+        Assert.Equal(PlanStatus.HandoverInProgress, await PlanStatusAsync());
+        await VerifyKeyAsync(receiverB, turnB);
+        await ReceiveAllAsync(receiverB, turnB);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await current.Record.Executor.Client.PostAsync(receipts + turnB + "/sign-receipt", null)).StatusCode);
+        Assert.Equal(PlanStatus.Closed, await PlanStatusAsync());
+    }
+
+    private async Task<PlanStatus> PlanStatusAsync()
+    {
+        PlanStatus status = PlanStatus.Draft;
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            Assert.Equal(2, await db.Set<HandoverGrant>().CountAsync());
-            PlanStatus plan = await db.HandoverPlans.Where(p => p.VaultId == current.VaultId).Select(p => p.Status).SingleAsync();
-            Assert.Equal(PlanStatus.Closed, plan);
+            status = await db.HandoverPlans.Where(p => p.VaultId == current.VaultId).Select(p => p.Status).SingleAsync();
         });
+        return status;
+    }
+
+    /// <summary>Tải hết tài sản rồi xác nhận đã nhận đủ.</summary>
+    private static async Task ReceiveAllAsync(HttpClient client, Guid turnId)
+    {
+        JsonElement turn = await GetTurnAsync(client, turnId);
+        Guid grantId = turn.GetProperty("grant").GetProperty("id").GetGuid();
+        foreach (JsonElement item in turn.GetProperty("items").EnumerateArray())
+        {
+            HttpResponseMessage content = await client.GetAsync(
+                $"/api/v1/handover/grants/{grantId}/assets/{item.GetProperty("id").GetGuid()}/content");
+            Assert.Equal(HttpStatusCode.OK, content.StatusCode);
+            await content.Content.ReadAsByteArrayAsync();
+        }
+        HttpResponseMessage received = await client.PostAsync($"/api/v1/handover/turns/{turnId}/received-all", null);
+        Assert.Equal(HttpStatusCode.OK, received.StatusCode);
     }
 
     [SqlFact]

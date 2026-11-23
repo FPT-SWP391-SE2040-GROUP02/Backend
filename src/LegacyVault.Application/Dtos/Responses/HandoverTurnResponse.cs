@@ -45,4 +45,12 @@ public class HandoverTurnResponse
 
     /// <summary>Lúc người nhận xác nhận đã nhận đủ tài sản; null khi chưa.</summary>
     public DateTimeOffset? ReceivedAllAt { get; set; }
+
+    /// <summary>Lúc Người thực thi ký phiếu giao nhận; null khi chưa.</summary>
+    public DateTimeOffset? ReceiptExecutorSignedAt { get; set; }
+
+    /// <summary>Người nhận báo thiếu hoặc sai; null khi không báo.</summary>
+    public string? ReceiptIssueNote { get; set; }
+
+    public DateTimeOffset? ReceiptIssueAt { get; set; }
 }
