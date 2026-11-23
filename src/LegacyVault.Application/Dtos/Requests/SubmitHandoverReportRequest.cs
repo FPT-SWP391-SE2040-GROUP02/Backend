@@ -19,6 +19,7 @@ public class HandoverReportUploads
     /// <summary>Bắt buộc ít nhất một tệp.</summary>
     public List<UploadedFile> DeathCertificates { get; set; } = new List<UploadedFile>();
 
+    /// <summary>Bắt buộc ít nhất một tệp.</summary>
     public List<UploadedFile> Wills { get; set; } = new List<UploadedFile>();
 
     public List<UploadedFile> Others { get; set; } = new List<UploadedFile>();

@@ -6,7 +6,7 @@ public enum HandoverReportFileKind
     /// <summary>Giấy chứng tử của Chủ kho.</summary>
     DeathCertificate = 0,
 
-    /// <summary>Di chúc hoặc văn bản phân chia (không bắt buộc).</summary>
+    /// <summary>Di chúc hoặc văn bản phân chia (bắt buộc).</summary>
     Will = 1,
 
     /// <summary>Giấy tờ khác, gồm cả giấy tờ nộp bổ sung.</summary>

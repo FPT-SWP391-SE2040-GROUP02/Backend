@@ -580,6 +580,10 @@ public sealed class HandoverReportService : IHandoverReportService
         {
             throw ValidationErrors.For("deathCertificates", "Vui lòng đính kèm giấy chứng tử.");
         }
+        if (uploads.Wills.Count == 0)
+        {
+            throw ValidationErrors.For("wills", "Vui lòng đính kèm di chúc.");
+        }
         List<UploadedFile> all = new List<UploadedFile>();
         all.AddRange(uploads.DeathCertificates);
         all.AddRange(uploads.Wills);

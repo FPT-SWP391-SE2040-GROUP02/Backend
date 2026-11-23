@@ -3,7 +3,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Hồ sơ báo tin Chủ kho đã mất (bảng HandoverReports), do người thân nộp kèm giấy chứng tử và di chúc nếu có.
+/// Hồ sơ báo tin Chủ kho đã mất (bảng HandoverReports), do người thân nộp kèm giấy chứng tử và di chúc.
 /// </summary>
 /// <remarks>
 /// - Người nộp không cần được Chủ kho khai từ trước; nộp hồ sơ không làm họ thành người nhận.

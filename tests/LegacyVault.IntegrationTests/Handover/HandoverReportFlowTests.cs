@@ -84,7 +84,7 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         return result;
     }
 
-    private static MultipartFormDataContent ReportForm(string citizenId, string? recipients, bool withDeathCertificate = true)
+    private static MultipartFormDataContent ReportForm(string citizenId, string? recipients, bool withDeathCertificate = true, bool withWill = true)
     {
         MultipartFormDataContent form = new MultipartFormDataContent();
         form.Add(new StringContent("Nguyễn Văn Mất"), "deceasedFullName");
@@ -98,7 +98,10 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         {
             form.Add(new ByteArrayContent(HandoverRecordTestData.SamplePdf()), "deathCertificates", "chung-tu.pdf");
         }
-        form.Add(new ByteArrayContent(HandoverRecordTestData.SamplePdf()), "wills", "di-chuc.pdf");
+        if (withWill)
+        {
+            form.Add(new ByteArrayContent(HandoverRecordTestData.SamplePdf()), "wills", "di-chuc.pdf");
+        }
         return form;
     }
 
@@ -238,7 +241,7 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Submit_RejectsBadInput_Duplicates_AndStaffAccounts()
     {
-        NoRecipientVault vault = await BuildVaultAsync();
+        await BuildVaultAsync();
         HttpClient relative = await NewUserAsync();
         // Chưa có luật sư nào
         await ApiTestHelpers.AssertProblemAsync(
@@ -247,6 +250,9 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
 
         await ApiTestHelpers.AssertProblemAsync(
             await relative.PostAsync(ReportsUrl, ReportForm(OwnerCitizenId, null, withDeathCertificate: false)),
+            HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        await ApiTestHelpers.AssertProblemAsync(
+            await relative.PostAsync(ReportsUrl, ReportForm(OwnerCitizenId, null, withWill: false)),
             HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         await ApiTestHelpers.AssertProblemAsync(
             await relative.PostAsync(ReportsUrl, ReportForm("123", null)), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
@@ -263,15 +269,15 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await unverified.PostAsync(ReportsUrl, ReportForm(OwnerCitizenId, null))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await verifier.Client.PostAsync(ReportsUrl, ReportForm(OwnerCitizenId, null))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await relative.GetAsync(VerifierReportsUrl)).StatusCode);
-        await ApiTestHelpers.AssertProblemAsync(
-            await vault.Owner.PostAsync(ReportsUrl, ReportForm(OwnerCitizenId, null)), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
     }
 
     [SqlFact]
     public async Task Submit_LimitsDuplicatesAndOpenReports()
     {
-        await BuildVaultAsync();
+        NoRecipientVault vault = await BuildVaultAsync();
         await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        await ApiTestHelpers.AssertProblemAsync(
+            await vault.Owner.PostAsync(ReportsUrl, ReportForm(OwnerCitizenId, null)), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         // Nộp trùng và quá ba hồ sơ đang chờ
         HttpClient another = await NewUserAsync();
         await SubmitOkAsync(another, OwnerCitizenId);
