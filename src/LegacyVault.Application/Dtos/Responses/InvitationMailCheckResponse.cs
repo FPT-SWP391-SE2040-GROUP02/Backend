@@ -9,7 +9,7 @@ public class InvitationMailCheckResponse
     /// <summary>Số lần thử còn lại; về 0 thì lần sau nhận 423.</summary>
     public int AttemptsLeft { get; set; }
 
-    /// <summary>Tên gói được chỉ định; chỉ có khi Verified.</summary>
+    /// <summary>Tiêu đề lượt bàn giao; chỉ có khi Verified.</summary>
     public string? ContainerName { get; set; }
 
     /// <summary>Họ tên Chủ kho; chỉ có khi Verified.</summary>

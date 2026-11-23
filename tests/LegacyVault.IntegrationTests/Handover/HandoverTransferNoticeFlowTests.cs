@@ -57,12 +57,9 @@ public sealed class HandoverTransferNoticeFlowTests : IAsyncLifetime
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         Guid asset = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Nhà");
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói M")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, asset)).StatusCode);
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
             owner, vaultId, "001090000011", ApiTestHelpers.BeneficiaryName(0), RecipientEmail);
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-            owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid())).StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, asset, beneficiary.GetProperty("id").GetGuid());
 
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vaultId);
         Assert.Equal("IDENTITY_CHECK", record.Body.GetProperty("status").GetString());

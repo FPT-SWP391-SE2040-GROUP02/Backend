@@ -109,14 +109,11 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         // Biên bản bàn giao: chữ ký và dòng xóa theo biên bản (cascade).
         await context.Set<HandoverRecord>().Where(r => r.VaultId == vaultId).ExecuteDeleteAsync(ct);
 
-        // Nội dung kho: chỉ định, tài sản trong gói, Executor (trỏ vào người nhận) → gói, tài sản, người nhận.
-        var containerIds = context.Set<Container>().Where(c => c.VaultId == vaultId).Select(c => c.Id);
-        await context.Set<Designation>().Where(d => containerIds.Contains(d.ContainerId)).ExecuteDeleteAsync(ct);
-        await context.Set<ContainerAsset>().Where(a => containerIds.Contains(a.ContainerId)).ExecuteDeleteAsync(ct);
+        // Nội dung kho: dòng gán tài sản cho người nhận, Executor (trỏ vào người nhận) → tài sản, người nhận.
+        await context.Set<AssetAssignment>().Where(a => a.Asset.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Executor>().Where(e => e.VaultId == vaultId).ExecuteDeleteAsync(ct);
         // Mã mở gói do server tạo khi kích hoạt kế hoạch: phải xóa trước kho vì khóa ngoại tới Vaults.
         await context.Set<ExecutorKeyShard>().Where(s => s.VaultId == vaultId).ExecuteDeleteAsync(ct);
-        await context.Set<Container>().Where(c => c.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Asset>().Where(a => a.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Beneficiary>().Where(b => b.VaultId == vaultId).ExecuteDeleteAsync(ct);
 

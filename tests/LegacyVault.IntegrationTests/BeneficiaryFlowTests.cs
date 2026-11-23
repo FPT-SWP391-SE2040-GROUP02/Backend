@@ -131,7 +131,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         Assert.Equal(FullName, created.GetProperty("fullName").GetString());
         Assert.Equal("1990-05-20", created.GetProperty("dateOfBirth").GetString());
         Assert.Equal(Email, created.GetProperty("email").GetString());
-        Assert.Equal(0, created.GetProperty("containerIds").GetArrayLength());
+        Assert.Equal(0, created.GetProperty("assetIds").GetArrayLength());
         Assert.Equal("\"0\"", created.GetProperty("etag").GetString());
 
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);

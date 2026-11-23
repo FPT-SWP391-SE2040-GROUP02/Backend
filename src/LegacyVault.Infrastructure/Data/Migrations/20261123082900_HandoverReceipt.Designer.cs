@@ -101,6 +101,31 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.ToTable("Assets", (string)null);
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.AssetAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BeneficiaryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BeneficiaryId");
+
+                    b.HasIndex("AssetId", "BeneficiaryId")
+                        .IsUnique();
+
+                    b.ToTable("AssetAssignments", (string)null);
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.AuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -222,96 +247,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.HasIndex("VaultId", "CreatedAt");
 
                     b.ToTable("Beneficiaries", (string)null);
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTimeOffset?>("RemovedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("VaultId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("VaultId", "Status");
-
-                    b.ToTable("Containers", (string)null);
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.ContainerAsset", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("AddedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("AssetId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ContainerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssetId")
-                        .IsUnique();
-
-                    b.HasIndex("ContainerId");
-
-                    b.ToTable("ContainerAssets", (string)null);
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.Designation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("BeneficiaryId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ContainerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BeneficiaryId");
-
-                    b.HasIndex("ContainerId", "BeneficiaryId")
-                        .IsUnique();
-
-                    b.ToTable("Designations", (string)null);
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.EkycConsent", b =>
@@ -1231,9 +1166,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("ClaimedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<Guid>("ContainerId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("ContainerName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1250,9 +1182,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("DesignationId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("EndedAt")
                         .HasColumnType("datetimeoffset");
@@ -1354,11 +1283,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("DesignationId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_HandoverTurns_ActivePerDesignation")
-                        .HasFilter("[Status] IN ('Invited','InitialResponseExpired','IdentityInProgress','ReadyToAccept','HandoverCommitted')");
 
                     b.HasIndex("InvitationTokenHash")
                         .IsUnique();
@@ -2352,6 +2276,25 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Navigation("Vault");
                 });
 
+            modelBuilder.Entity("LegacyVault.Domain.Entities.AssetAssignment", b =>
+                {
+                    b.HasOne("LegacyVault.Domain.Entities.Asset", "Asset")
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LegacyVault.Domain.Entities.Beneficiary", "Beneficiary")
+                        .WithMany()
+                        .HasForeignKey("BeneficiaryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Asset");
+
+                    b.Navigation("Beneficiary");
+                });
+
             modelBuilder.Entity("LegacyVault.Domain.Entities.AuditLog", b =>
                 {
                     b.HasOne("LegacyVault.Domain.Entities.User", null)
@@ -2374,55 +2317,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Vault");
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.Vault", "Vault")
-                        .WithMany("Containers")
-                        .HasForeignKey("VaultId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Vault");
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.ContainerAsset", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.Asset", "Asset")
-                        .WithMany()
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LegacyVault.Domain.Entities.Container", "Container")
-                        .WithMany("Assets")
-                        .HasForeignKey("ContainerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Asset");
-
-                    b.Navigation("Container");
-                });
-
-            modelBuilder.Entity("LegacyVault.Domain.Entities.Designation", b =>
-                {
-                    b.HasOne("LegacyVault.Domain.Entities.Beneficiary", "Beneficiary")
-                        .WithMany()
-                        .HasForeignKey("BeneficiaryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LegacyVault.Domain.Entities.Container", "Container")
-                        .WithMany("Designations")
-                        .HasForeignKey("ContainerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Beneficiary");
-
-                    b.Navigation("Container");
                 });
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.EkycConsent", b =>
@@ -2736,13 +2630,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("LegacyVault.Domain.Entities.Container", b =>
-                {
-                    b.Navigation("Assets");
-
-                    b.Navigation("Designations");
-                });
-
             modelBuilder.Entity("LegacyVault.Domain.Entities.HandoverRecord", b =>
                 {
                     b.Navigation("Claims");
@@ -2763,8 +2650,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("LegacyVault.Domain.Entities.Vault", b =>
                 {
-                    b.Navigation("Containers");
-
                     b.Navigation("Entitlement")
                         .IsRequired();
 

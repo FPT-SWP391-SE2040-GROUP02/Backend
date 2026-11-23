@@ -194,7 +194,7 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Renewal_ToSmallerPlanThanBeneficiariesInUse_Returns409UsageExceedsPlan()
     {
-        // Chuẩn bị: XS Max (5 suất) đang dùng 3 suất người nhận trong một gói
+        // Chuẩn bị: XS Max (5 suất) đang dùng 3 suất người nhận (một tài sản gán chung cho 3 người)
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(-10));
         await ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -205,17 +205,16 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
                     .SetProperty(e => e.StorageQuotaBytes, 500 * 1048576L)
                     .SetProperty(e => e.IncludedBeneficiarySlots, 5));
         });
-        JsonElement container = await ApiTestHelpers.CreateContainerAsync(client, vaultId, "Gói thử");
-        Guid containerId = container.GetProperty("id").GetGuid();
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú thử");
+        List<Guid> beneficiaryIds = new List<Guid>();
         string[] citizenIds = new string[] { "001090000001", "001090000002", "001090000003" };
         for (int i = 0; i < citizenIds.Length; i++)
         {
             JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
                 client, vaultId, citizenIds[i], ApiTestHelpers.BeneficiaryName(i));
-            HttpResponseMessage added = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-                client, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
-            Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+            beneficiaryIds.Add(beneficiary.GetProperty("id").GetGuid());
         }
+        await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assetId, beneficiaryIds.ToArray());
 
         // Hành động: gia hạn xuống XS (2 suất kèm theo) không mua thêm suất
         HttpResponseMessage tooSmall = await QuoteAsync(

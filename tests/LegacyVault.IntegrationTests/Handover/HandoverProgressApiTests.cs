@@ -67,7 +67,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         Assert.True(body.HandoverStarted);
         Assert.Equal(1, body.Summary.Accepted);
         HandoverProgressTurnResponse turn = Assert.Single(body.Turns);
-        Assert.Equal("Gói thử", turn.ContainerName);
+        Assert.Equal("Biên bản bàn giao", turn.ContainerName);
         Assert.Equal("001099004321", turn.BeneficiaryCitizenId);
         Assert.Equal("HANDOVER_COMMITTED", turn.Status);
         Assert.Equal("ACTIVE", turn.GrantStatus);
@@ -202,9 +202,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         turn.VaultId = vault.VaultId;
         turn.PlanId = vault.PlanId;
         turn.RecordId = lastRecordId;
-        turn.ContainerId = Guid.NewGuid();
-        turn.ContainerName = "Gói thử";
-        turn.DesignationId = Guid.NewGuid();
+        turn.ContainerName = "Biên bản bàn giao";
         turn.BeneficiaryId = beneficiaryId;
         turn.Status = HandoverTurnStatus.HandoverCommitted;
         turn.InvitationTokenHash = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();

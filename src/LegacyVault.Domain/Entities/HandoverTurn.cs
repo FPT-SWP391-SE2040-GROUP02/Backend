@@ -3,14 +3,13 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Một lượt bàn giao: một chỉ định (gói + người nhận) đi qua các bước nhận tài sản (bảng HandoverTurns).
+/// Một lượt bàn giao: một người nhận trong biên bản đi qua các bước nhận tài sản (bảng HandoverTurns).
 /// </summary>
 /// <remarks>
 /// - Mỗi người nhận đi riêng, lượt này không phụ thuộc lượt khác.
 /// - Chỉ lưu MÃ BĂM của token trong link mời; token gốc chỉ nằm trong email.
-/// - ContainerName và các HandoverSnapshotItem được CHÉP lúc ghim, nên đổi tên gói hay tài sản sau đó không đổi bản ghim.
+/// - ContainerName (tiêu đề lượt) và các HandoverSnapshotItem được CHÉP lúc ghim, nên đổi tên tài sản sau đó không đổi bản ghim.
 /// - RowVersion là concurrency token (giống @Version của Hibernate): hai thao tác cùng sửa một lượt thì bên lưu sau bị báo xung đột.
-/// - DB chỉ cho một lượt đang hiệu lực (hoặc đã nhận) cho mỗi chỉ định bằng chỉ mục unique có lọc.
 /// </remarks>
 public class HandoverTurn
 {
@@ -23,12 +22,8 @@ public class HandoverTurn
     /// <summary>Biên bản bàn giao đã tạo lượt này; mỗi người nhận trong biên bản có một lượt.</summary>
     public Guid? RecordId { get; set; }
 
-    public Guid ContainerId { get; set; }
-
-    /// <summary>Tên gói lúc ghim snapshot.</summary>
+    /// <summary>Tiêu đề lượt lúc ghim snapshot (tên cột giữ lại từ thời còn gói tài sản).</summary>
     public string ContainerName { get; set; } = string.Empty;
-
-    public Guid DesignationId { get; set; }
 
     public Guid BeneficiaryId { get; set; }
 

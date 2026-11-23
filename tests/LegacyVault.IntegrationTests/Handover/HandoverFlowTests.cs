@@ -17,7 +17,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
-/// Giai đoạn nhận tài sản qua HTTP trên SQL Server thật: luật sư chốt biên bản, người nhận nhận lượt, ba bên ký,
+/// Giai đoạn nhận tài sản qua HTTP trên SQL Server thật: luật sư chốt biên bản, người nhận nhận lượt, luật sư ký,
 /// tải tệp đúng từng byte, chống người khác đoán id, ký song song và job hết hạn.
 /// Chỉ chạy khi có LEGACYVAULT_TEST_CONNECTION; mỗi lớp test dùng một database tạm.
 /// </summary>
@@ -61,7 +61,6 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     {
         public HttpClient Owner { get; set; } = null!;
         public Guid VaultId { get; set; }
-        public Guid ContainerId { get; set; }
         public Guid FileAssetId { get; set; }
         public byte[] FileBytes { get; set; } = Array.Empty<byte>();
         public int TurnCount { get; set; }
@@ -73,7 +72,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         return "known-token-" + index;
     }
 
-    /// <summary>Dựng kho có 1 tệp 200.000 byte + 1 tài sản chữ trong một gói, rồi mở bàn giao cho beneficiaryCount người nhận.</summary>
+    /// <summary>Dựng kho có 1 tệp 200.000 byte + 1 tài sản chữ gán chung cho các người nhận, rồi mở bàn giao cho beneficiaryCount người nhận.</summary>
     private async Task<Scenario> BuildScenarioAsync(int beneficiaryCount)
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -94,10 +93,6 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, text.StatusCode);
         Guid textAssetId = (await ApiTestHelpers.ReadJsonAsync(text)).GetProperty("id").GetGuid();
 
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói thừa kế")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, fileAssetId)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, textAssetId)).StatusCode);
-
         // Thứ tự người nhận (theo chỉ số) để gán token và email đúng người, không phụ thuộc thứ tự Id của lượt.
         List<Guid> beneficiaryIds = new List<Guid>();
         for (int i = 0; i < beneficiaryCount; i++)
@@ -105,11 +100,12 @@ public sealed class HandoverFlowTests : IAsyncLifetime
             string citizenId = "00109000000" + (i + 1);
             JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
                 owner, vaultId, citizenId, ApiTestHelpers.BeneficiaryName(i), ReceiverEmail(i));
-            HttpResponseMessage designate = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-                owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
-            Assert.Equal(HttpStatusCode.OK, designate.StatusCode);
             beneficiaryIds.Add(beneficiary.GetProperty("id").GetGuid());
         }
+
+        // Cả hai tài sản gán chung cho mọi người nhận (đồng thừa kế).
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, fileAssetId, beneficiaryIds.ToArray());
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, textAssetId, beneficiaryIds.ToArray());
 
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vaultId);
         Assert.Equal(beneficiaryCount, record.Body.GetProperty("recipients").GetArrayLength());
@@ -131,7 +127,6 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Scenario scenario = new Scenario();
         scenario.Owner = owner;
         scenario.VaultId = vaultId;
-        scenario.ContainerId = containerId;
         scenario.FileAssetId = fileAssetId;
         scenario.FileBytes = bytes;
         scenario.TurnCount = beneficiaryCount;
@@ -559,7 +554,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Database_EnforcesOneGrantPerTurnAndOneActiveTurnPerDesignation()
+    public async Task Database_EnforcesOneGrantPerTurn()
     {
         await BuildScenarioAsync(1);
         HttpClient receiver = await NewReceiverAsync();
@@ -576,27 +571,6 @@ public sealed class HandoverFlowTests : IAsyncLifetime
                 ExpiresAt = DateTimeOffset.UtcNow.AddDays(30)
             };
             db.Set<HandoverGrant>().Add(duplicate);
-            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
-        });
-
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            HandoverTurn existing = await db.Set<HandoverTurn>().AsNoTracking().SingleAsync(t => t.Id == turnId);
-            HandoverTurn second = new HandoverTurn
-            {
-                VaultId = existing.VaultId,
-                PlanId = existing.PlanId,
-                ContainerId = existing.ContainerId,
-                ContainerName = existing.ContainerName,
-                DesignationId = existing.DesignationId,
-                BeneficiaryId = existing.BeneficiaryId,
-                Status = HandoverTurnStatus.Invited,
-                InvitationTokenHash = new string('b', 64),
-                InvitedAt = DateTimeOffset.UtcNow,
-                ResponseDeadline = DateTimeOffset.UtcNow.AddDays(5),
-                CreatedAt = DateTimeOffset.UtcNow
-            };
-            db.Set<HandoverTurn>().Add(second);
             await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         });
     }

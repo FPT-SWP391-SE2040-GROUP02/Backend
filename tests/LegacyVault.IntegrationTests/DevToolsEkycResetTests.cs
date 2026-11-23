@@ -116,7 +116,7 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
             Assert.False(await db.Set<HandoverPlan>().AnyAsync(p => p.VaultId == vaultId));
             Assert.False(await db.Set<VaultEntitlement>().AnyAsync(e => e.VaultId == vaultId));
             Assert.False(await db.Set<Asset>().AnyAsync(a => a.VaultId == vaultId));
-            Assert.False(await db.Set<Container>().AnyAsync(c => c.VaultId == vaultId));
+            Assert.False(await db.Set<AssetAssignment>().AnyAsync(a => a.Asset.VaultId == vaultId));
             Assert.False(await db.Set<Beneficiary>().AnyAsync(b => b.VaultId == vaultId));
             Assert.False(await db.Set<Executor>().AnyAsync(e => e.VaultId == vaultId));
             Assert.False(await db.Set<HandoverTurn>().AnyAsync(t => t.VaultId == vaultId));
@@ -181,7 +181,7 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Kho đã trả phí có tài sản chữ trong một gói, một người nhận, Executor đã nhận,
+    /// Kho đã trả phí có tài sản chữ gán cho một người nhận, Executor đã nhận,
     /// và đã chốt biên bản bàn giao (lượt và tài sản đã ghim). Trả client của Owner và id kho.
     /// </summary>
     private async Task<(HttpClient Owner, Guid VaultId)> BuildHandedOverVaultAsync()
@@ -192,12 +192,8 @@ public sealed class DevToolsEkycResetTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, text.StatusCode);
         Guid assetId = (await ApiTestHelpers.ReadJsonAsync(text)).GetProperty("id").GetGuid();
 
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói thử")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId)).StatusCode);
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "001090000001", ApiTestHelpers.BeneficiaryName(0));
-        HttpResponseMessage designate = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-            owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid());
-        Assert.Equal(HttpStatusCode.OK, designate.StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, assetId, beneficiary.GetProperty("id").GetGuid());
 
         // Người thực thi mở bàn giao, luật sư lấy biên bản phân chia làm biên bản rồi chốt: kho có một lượt đã ghim tài sản.
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vaultId);

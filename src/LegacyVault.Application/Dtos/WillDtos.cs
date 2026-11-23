@@ -10,12 +10,10 @@ public sealed class SignWillRequest
 }
 
 /// <summary>
-/// Số lượng thay đổi so với bản ký gần nhất (chỉ số đếm, không có tên). Tài sản và người nhận chỉ đếm trong các gói
-/// có ở cả bản ký lẫn cấu hình hiện tại; changedRecipientCount là số gói như vậy mà tập người nhận khác bản ký.
+/// Số lượng thay đổi so với bản ký gần nhất (chỉ số đếm, không có tên): số cặp tài sản - người nhận mới thêm,
+/// số cặp đã gỡ, và số người nhận bị ảnh hưởng bởi hai loại thay đổi đó.
 /// </summary>
-public sealed record UnsignedWillChangesResponse(
-    int RemovedContainers, int AddedContainers, int RemovedAssets, int AddedAssets,
-    int RemovedRecipients, int AddedRecipients, int ChangedRecipientCount);
+public sealed record UnsignedWillChangesResponse(int AddedAssignments, int RemovedAssignments, int AffectedRecipientCount);
 
 /// <summary>Danh tính đầy đủ của Chủ kho (đã giải mã) để lập di chúc.</summary>
 public sealed record WillOwnerIdentityResponse(string FullName, DateOnly DateOfBirth, string CitizenId, string ResidenceAddress);

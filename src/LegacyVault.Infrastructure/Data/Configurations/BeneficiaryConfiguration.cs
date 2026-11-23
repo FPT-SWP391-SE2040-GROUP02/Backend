@@ -35,7 +35,7 @@ public sealed class BeneficiaryConfiguration : IEntityTypeConfiguration<Benefici
         builder.Property(b => b.ContactEncrypted)
             .IsRequired();
 
-        // ETag của hồ sơ (UpdateBeneficiaryRequest.Etag), giống Container.
+        // ETag của hồ sơ (UpdateBeneficiaryRequest.Etag).
         builder.Property(b => b.UpdatedAt)
             .IsConcurrencyToken();
 

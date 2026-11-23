@@ -28,8 +28,7 @@ public sealed class HandoverClaimTests
     private readonly FakeBeneficiaryDataProtector protector = new FakeBeneficiaryDataProtector();
     private readonly HandoverService service;
     private readonly User claimant;
-    private readonly Container container;
-    private readonly Designation designation;
+    private readonly Beneficiary recipient;
 
     public HandoverClaimTests()
     {
@@ -39,19 +38,19 @@ public sealed class HandoverClaimTests
         vaults.Vaults.Add(data.Vault);
         currentUser.UserId = claimant.Id;
 
-        container = data.AddContainer("Gói A", ContainerStatus.Ready, 2);
-        designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
-        RegisterRecipient(designation);
+        recipient = data.AddRecipient("Người Nhận", "nguoi-nhan@example.com");
+        data.AssignAll(data.AddAssets("Tài sản", 2), recipient);
+        RegisterRecipient(recipient);
 
         // Cần kho hồ sơ người nhận và bộ giải mã giả để kiểm email người nhận (D2).
         service = new HandoverService(currentUser, users, vaults, repository, new FakeTokenService(), policy, unitOfWork, time, new HandoverKeyTests.FakeKeyShards(), new FakeHandoverSubmissionRepository(), beneficiaryRepository, protector);
     }
 
-    /// <summary>Đưa hồ sơ người nhận của chỉ định vào kho giả để service đọc được email.</summary>
-    private void RegisterRecipient(Designation target)
+    /// <summary>Đưa hồ sơ người nhận vào kho giả để service đọc được email.</summary>
+    private void RegisterRecipient(Beneficiary target)
     {
-        beneficiaryRepository.Beneficiaries.Add(target.Beneficiary);
-        protector.Data[target.BeneficiaryId] = data.People[target.BeneficiaryId];
+        beneficiaryRepository.Beneficiaries.Add(target);
+        protector.Data[target.Id] = data.People[target.Id];
     }
 
     /// <summary>Thêm một tài khoản đã xác minh với email cho trước và chuyển người đang đăng nhập sang tài khoản đó.</summary>
@@ -65,7 +64,7 @@ public sealed class HandoverClaimTests
 
     private HandoverTurn AddTurn(HandoverTurnStatus status, Guid? claimantId)
     {
-        HandoverTurn turn = data.BuildTurn(container, designation, status, Token, claimantId);
+        HandoverTurn turn = data.BuildTurn(recipient, status, Token, claimantId);
         repository.Turns.Add(turn);
         return turn;
     }
@@ -120,7 +119,7 @@ public sealed class HandoverClaimTests
     [Fact]
     public async Task GetInvitation_RecipientEmailWithUpperCaseAndSpaces_MatchesAccountCaseInsensitively()
     {
-        data.People[designation.BeneficiaryId].Email = "  Nguoi-Nhan@Example.com ";
+        data.People[recipient.Id].Email = "  Nguoi-Nhan@Example.com ";
         AddTurn(HandoverTurnStatus.Invited, null);
 
         InvitationStatusResponse response = await service.GetInvitationAsync(Token, CancellationToken.None);
@@ -169,7 +168,7 @@ public sealed class HandoverClaimTests
         Assert.Null(response.DecisionDeadline);
         Assert.Equal(Now, repository.Turns[0].ReadyAt);
         Assert.NotNull(response.Container);
-        Assert.Equal("Gói A", response.Container!.Name);
+        Assert.Equal("Biên bản bàn giao", response.Container!.Name);
         Assert.Equal(2, response.Items.Count);
     }
 
@@ -343,7 +342,7 @@ public sealed class HandoverClaimTests
     public async Task Claim_ByToken_EmailDiffersOnlyByCaseAndSpaces_Succeeds()
     {
         claimant.Email = "nguoi-nhan@example.com";
-        data.People[designation.BeneficiaryId].Email = " NGUOI-NHAN@Example.com ";
+        data.People[recipient.Id].Email = " NGUOI-NHAN@Example.com ";
         AddTurn(HandoverTurnStatus.Invited, null);
 
         HandoverTurnResponse response = await service.ClaimAsync(Token, CancellationToken.None);
@@ -354,7 +353,7 @@ public sealed class HandoverClaimTests
     [Fact]
     public async Task Claim_RecipientEmailMissing_ThrowsEmailMismatchWithoutMaskedEmail()
     {
-        data.People[designation.BeneficiaryId].Email = null;
+        data.People[recipient.Id].Email = null;
         AddTurn(HandoverTurnStatus.Invited, null);
 
         AppException error = await Assert.ThrowsAsync<AppException>(() => service.ClaimAsync(Token, CancellationToken.None));
@@ -476,7 +475,7 @@ public sealed class HandoverClaimTests
 
         Assert.Single(list);
         Assert.Equal(turn.Id, list[0].TurnId);
-        Assert.Equal("Gói A", list[0].ContainerName);
+        Assert.Equal("Biên bản bàn giao", list[0].ContainerName);
         Assert.Equal("Chủ Kho", list[0].OwnerFullName);
         Assert.Equal(Now, list[0].InvitedAt);
     }
@@ -527,7 +526,7 @@ public sealed class HandoverClaimTests
     public async Task GetMyInvitations_VaultOwner_DoesNotSeeOwnVaultTurn()
     {
         // Email người nhận trùng email Chủ kho: vẫn không được thấy lượt của kho mình.
-        data.People[designation.BeneficiaryId].Email = data.Owner.Email;
+        data.People[recipient.Id].Email = data.Owner.Email;
         AddTurn(HandoverTurnStatus.Invited, null);
         currentUser.UserId = data.Owner.Id;
 
@@ -567,9 +566,9 @@ public sealed class HandoverClaimTests
     {
         HandoverTurn older = AddTurn(HandoverTurnStatus.IdentityInProgress, claimant.Id);
         older.InvitedAt = Now.AddDays(-2);
-        HandoverTurn newer = data.BuildTurn(container, designation, HandoverTurnStatus.IdentityInProgress, "token-2", claimant.Id);
+        HandoverTurn newer = data.BuildTurn(recipient, HandoverTurnStatus.IdentityInProgress, "token-2", claimant.Id);
         repository.Turns.Add(newer);
-        HandoverTurn notMine = data.BuildTurn(container, designation, HandoverTurnStatus.IdentityInProgress, "token-3", Guid.NewGuid());
+        HandoverTurn notMine = data.BuildTurn(recipient, HandoverTurnStatus.IdentityInProgress, "token-3", Guid.NewGuid());
         repository.Turns.Add(notMine);
 
         List<HandoverTurnResponse> mine = await service.GetMyTurnsAsync(CancellationToken.None);

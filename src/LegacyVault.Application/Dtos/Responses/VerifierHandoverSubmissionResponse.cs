@@ -20,7 +20,7 @@ public class VerifierHandoverSubmissionResponse : VerifierHandoverSubmissionSumm
 
     public string? SupplementReason { get; set; }
 
-    /// <summary>Số tài sản trong gói (người nhận chỉ nhận khi chấp nhận).</summary>
+    /// <summary>Số tài sản của lượt (người nhận chỉ nhận khi chấp nhận).</summary>
     public int ItemCount { get; set; }
 
 

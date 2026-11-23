@@ -53,12 +53,14 @@ public sealed class HandoverProgressServiceTests
     [Fact]
     public async Task Progress_CountsTurnsByGroupAndMarksDownloadedItems()
     {
-        // Chuẩn bị: một gói hai tài sản, hai người nhận; một người đã đồng ý và tải một tài sản
-        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 2);
-        Designation first = data.Designate(container, "Người Một", "mot@example.com");
-        Designation second = data.Designate(container, "Người Hai", "hai@example.com");
-        HandoverTurn accepted = data.BuildTurn(container, first, HandoverTurnStatus.HandoverCommitted, "t1", Guid.NewGuid());
-        HandoverTurn waiting = data.BuildTurn(container, second, HandoverTurnStatus.Invited, "t2", null);
+        // Chuẩn bị: hai tài sản gán chung cho hai người nhận; một người đã đồng ý và tải một tài sản
+        List<Asset> shared = data.AddAssets("Tài sản", 2);
+        Beneficiary first = data.AddRecipient("Người Một", "mot@example.com");
+        Beneficiary second = data.AddRecipient("Người Hai", "hai@example.com");
+        data.AssignAll(shared, first);
+        data.AssignAll(shared, second);
+        HandoverTurn accepted = data.BuildTurn(first, HandoverTurnStatus.HandoverCommitted, "t1", Guid.NewGuid());
+        HandoverTurn waiting = data.BuildTurn(second, HandoverTurnStatus.Invited, "t2", null);
         HandoverGrant grant = new HandoverGrant();
         grant.TurnId = accepted.Id;
         grant.Status = HandoverGrantStatus.Active;
@@ -68,7 +70,7 @@ public sealed class HandoverProgressServiceTests
         reader.Turns.Add(accepted);
         reader.Turns.Add(waiting);
         reader.FirstDownloads[accepted.Items[0].Id] = Now.AddHours(1);
-        reader.CitizenIds[first.BeneficiaryId] = "001099001111";
+        reader.CitizenIds[first.Id] = "001099001111";
 
         // Hành động
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
@@ -83,8 +85,8 @@ public sealed class HandoverProgressServiceTests
         HandoverProgressTurnResponse acceptedTurn = result.Turns[0];
         Assert.Equal("HANDOVER_COMMITTED", acceptedTurn.Status);
         Assert.Equal("001099001111", acceptedTurn.BeneficiaryCitizenId);
-        Assert.Equal(first.BeneficiaryId, acceptedTurn.BeneficiaryId);
-        Assert.Equal(second.BeneficiaryId, result.Turns[1].BeneficiaryId);
+        Assert.Equal(first.Id, acceptedTurn.BeneficiaryId);
+        Assert.Equal(second.Id, result.Turns[1].BeneficiaryId);
         Assert.Equal("ACTIVE", acceptedTurn.GrantStatus);
         Assert.Equal(2, acceptedTurn.TotalItems);
         Assert.Equal(1, acceptedTurn.DownloadedItems);
@@ -92,7 +94,6 @@ public sealed class HandoverProgressServiceTests
         Assert.Equal(Now.AddHours(1), acceptedTurn.Items[0].FirstDownloadedAt);
         Assert.False(acceptedTurn.Items[1].Downloaded);
         Assert.Equal("FILE", acceptedTurn.Items[0].Kind);
-        Assert.Equal(container.Id, acceptedTurn.ContainerId);
         Assert.Equal(accepted.Items[0].AssetId, acceptedTurn.Items[0].AssetId);
 
         HandoverProgressTurnResponse waitingTurn = result.Turns[1];
@@ -101,13 +102,13 @@ public sealed class HandoverProgressServiceTests
         Assert.Equal(0, waitingTurn.DownloadedItems);
     }
 
-    /// <summary>Đưa hồ sơ người nhận của chỉ định vào kho giả kèm họ tên và số điện thoại rõ.</summary>
-    private void RegisterBeneficiary(Designation designation, string phone)
+    /// <summary>Đưa hồ sơ người nhận vào kho giả kèm họ tên và số điện thoại rõ.</summary>
+    private void RegisterBeneficiary(Beneficiary recipient, string phone)
     {
-        beneficiaries.Beneficiaries.Add(designation.Beneficiary);
-        BeneficiaryPersonalData personal = data.People[designation.BeneficiaryId];
+        beneficiaries.Beneficiaries.Add(recipient);
+        BeneficiaryPersonalData personal = data.People[recipient.Id];
         personal.Phone = phone;
-        protector.Data[designation.BeneficiaryId] = personal;
+        protector.Data[recipient.Id] = personal;
     }
 
     [Theory]
@@ -119,10 +120,10 @@ public sealed class HandoverProgressServiceTests
     public async Task Progress_ShowsNameAndPhoneForActiveOrHandedOverTurn(HandoverTurnStatus status)
     {
         // Executor cần liên hệ người nhận ngay từ lúc mời, không phải chờ tới khi đã bàn giao
-        Container container = data.AddContainer("Gói D", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Nguyễn Văn Một", "mot@example.com");
-        RegisterBeneficiary(designation, "0901234567");
-        reader.Turns.Add(data.BuildTurn(container, designation, status, "d1", null));
+        Beneficiary recipient = data.AddRecipient("Nguyễn Văn Một", "mot@example.com");
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        RegisterBeneficiary(recipient, "0901234567");
+        reader.Turns.Add(data.BuildTurn(recipient, status, "d1", null));
 
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
@@ -138,10 +139,10 @@ public sealed class HandoverProgressServiceTests
     [InlineData(HandoverTurnStatus.Lapsed)]
     public async Task Progress_HidesNameAndPhoneForEndedTurn(HandoverTurnStatus status)
     {
-        Container container = data.AddContainer("Gói E", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Lê Văn Ba", null);
-        RegisterBeneficiary(designation, "0911111111");
-        reader.Turns.Add(data.BuildTurn(container, designation, status, "e1", null));
+        Beneficiary recipient = data.AddRecipient("Lê Văn Ba", null);
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        RegisterBeneficiary(recipient, "0911111111");
+        reader.Turns.Add(data.BuildTurn(recipient, status, "e1", null));
 
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
@@ -154,11 +155,11 @@ public sealed class HandoverProgressServiceTests
     public async Task Progress_UndecryptableBeneficiaryLeavesContactEmptyInsteadOfFailing()
     {
         // Không giải mã được (thiếu KEK, dữ liệu hỏng) thì để trống, không làm hỏng cả màn tiến độ
-        Container container = data.AddContainer("Gói F", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Người Bốn", null);
-        beneficiaries.Beneficiaries.Add(designation.Beneficiary);
+        Beneficiary recipient = data.AddRecipient("Người Bốn", null);
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        beneficiaries.Beneficiaries.Add(recipient);
         protector.Failing = true;
-        reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "f1", null));
+        reader.Turns.Add(data.BuildTurn(recipient, HandoverTurnStatus.Invited, "f1", null));
 
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
@@ -172,9 +173,9 @@ public sealed class HandoverProgressServiceTests
     public async Task Progress_ReturnsTimesForEachStepOfTheTurn()
     {
         // FE vẽ 5 bước có giờ: đã mời, đồng ý, biên bản được duyệt, nhập mã mở gói, nhận xong
-        Container container = data.AddContainer("Gói G", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Người Năm", "nam@example.com");
-        HandoverTurn turn = data.BuildTurn(container, designation, HandoverTurnStatus.HandoverCommitted, "g1", Guid.NewGuid());
+        Beneficiary recipient = data.AddRecipient("Người Năm", "nam@example.com");
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        HandoverTurn turn = data.BuildTurn(recipient, HandoverTurnStatus.HandoverCommitted, "g1", Guid.NewGuid());
         turn.InvitationSentAt = Now.AddDays(-5);
         turn.DecidedAt = Now.AddDays(-4);
         turn.KeyVerifiedAt = Now.AddDays(-2);
@@ -198,9 +199,9 @@ public sealed class HandoverProgressServiceTests
     [Fact]
     public async Task Progress_TurnWithoutDocumentOrKeyHasNullStepTimes()
     {
-        Container container = data.AddContainer("Gói H", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Người Sáu", null);
-        reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "h1", null));
+        Beneficiary recipient = data.AddRecipient("Người Sáu", null);
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        reader.Turns.Add(data.BuildTurn(recipient, HandoverTurnStatus.Invited, "h1", null));
 
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
@@ -214,7 +215,7 @@ public sealed class HandoverProgressServiceTests
     [Fact]
     public async Task Progress_EndedStatusesAreGroupedTogether()
     {
-        Container container = data.AddContainer("Gói B", ContainerStatus.Ready, 1);
+        List<Asset> assets = data.AddAssets("Tài sản", 1);
         HandoverTurnStatus[] statuses = new HandoverTurnStatus[]
         {
             HandoverTurnStatus.InitialResponseExpired,
@@ -228,8 +229,9 @@ public sealed class HandoverProgressServiceTests
         int index = 0;
         foreach (HandoverTurnStatus status in statuses)
         {
-            Designation designation = data.Designate(container, "Người " + index, null);
-            reader.Turns.Add(data.BuildTurn(container, designation, status, "s" + index, null));
+            Beneficiary recipient = data.AddRecipient("Người " + index, null);
+            data.AssignAll(assets, recipient);
+            reader.Turns.Add(data.BuildTurn(recipient, status, "s" + index, null));
             index++;
         }
 
@@ -247,9 +249,9 @@ public sealed class HandoverProgressServiceTests
     public async Task Progress_DownloadWithoutGrantIsIgnored()
     {
         // Lượt chưa có quyền tải thì không thể có lần tải; dữ liệu lạ không được tính
-        Container container = data.AddContainer("Gói C", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Người Ba", null);
-        HandoverTurn turn = data.BuildTurn(container, designation, HandoverTurnStatus.ReadyToAccept, "t3", Guid.NewGuid());
+        Beneficiary recipient = data.AddRecipient("Người Ba", null);
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        HandoverTurn turn = data.BuildTurn(recipient, HandoverTurnStatus.ReadyToAccept, "t3", Guid.NewGuid());
         reader.Turns.Add(turn);
         reader.FirstDownloads[turn.Items[0].Id] = Now;
 
@@ -264,9 +266,9 @@ public sealed class HandoverProgressServiceTests
     {
         record.Status = HandoverRecordStatus.Drafting;
         record.FinalizedAt = null;
-        Container container = data.AddContainer("Gói D", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Người Bốn", null);
-        reader.Turns.Add(data.BuildTurn(container, designation, HandoverTurnStatus.Invited, "t4", null));
+        Beneficiary recipient = data.AddRecipient("Người Bốn", null);
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        reader.Turns.Add(data.BuildTurn(recipient, HandoverTurnStatus.Invited, "t4", null));
 
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 

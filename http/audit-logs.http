@@ -1,8 +1,8 @@
 # Thử nhật ký hoạt động của kho (docs/api-contract.md mục 6.13) — chỉ Development.
 #
-# Chuẩn bị giống http/containers.http: chạy migration (có AddAuditLogs), chạy API (profile http),
-# tạo tài khoản bằng http/auth.http rồi tạo kho bằng POST /vaults. Mỗi thao tác trên kho, tài sản, gói,
-# người nhận, điểm danh sẽ thêm một dòng nhật ký; thao tác bị từ chối không ghi gì.
+# Chuẩn bị giống http/assignments.http: chạy migration (có AddAuditLogs), chạy API (profile http),
+# tạo tài khoản bằng http/auth.http rồi tạo kho bằng POST /vaults. Mỗi thao tác trên kho, tài sản, gán tài sản,
+# người nhận sẽ thêm một dòng nhật ký; thao tác bị từ chối không ghi gì.
 #
 # Thay <vaultId> bằng id kho của tài khoản đang đăng nhập (GET /vaults/me).
 
@@ -23,8 +23,8 @@ Content-Type: application/json
 GET {{baseUrl}}/vaults/{{vaultId}}/audit-logs?pageIndex=1&pageSize=20&isAscending=false
 Authorization: Bearer {{token}}
 
-### Chỉ các lần thêm người nhận vào gói
-GET {{baseUrl}}/vaults/{{vaultId}}/audit-logs?action=CONTAINER_BENEFICIARY_ADDED
+### Chỉ các lần gán tài sản cho người nhận
+GET {{baseUrl}}/vaults/{{vaultId}}/audit-logs?action=ASSET_ASSIGNED
 Authorization: Bearer {{token}}
 
 ### Trong một khoảng thời gian [from, to)

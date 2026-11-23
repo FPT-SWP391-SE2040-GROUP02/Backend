@@ -6,11 +6,11 @@ namespace LegacyVault.Domain.Entities;
 /// Tài sản số trong một kho (bảng Assets), SRS §5.2.
 /// </summary>
 /// <remarks>
-/// - Tài sản thuộc KHO, không thuộc gói: Owner tạo tài sản trước, sau đó mới đưa vào Container (SETUP-03).
+/// - Tài sản thuộc KHO: Owner tạo tài sản trước, sau đó gán trực tiếp cho từng người nhận (AssetAssignment).
 /// - Mỗi tài sản có đúng một nội dung, không đổi sau khi tạo (muốn thay thì tạo tài sản mới và xóa tài sản cũ).
-///   Container liên kết với tài sản, nội dung bàn giao là nội dung này (SETUP-03).
+///   Phần gán người nhận trỏ tới tài sản, nội dung bàn giao là nội dung này.
 /// - Nội dung không nằm trong DB; StorageKey trỏ tới object trong kho lưu trữ private (IAssetContentStore).
-/// - QUOTA-01: SizeBytes tính vào dung lượng đã dùng của kho; gỡ khỏi gói không giải phóng (QUOTA-02).
+/// - QUOTA-01: SizeBytes tính vào dung lượng đã dùng của kho; gỡ gán người nhận không giải phóng (QUOTA-02).
 /// - Nội dung được mã hóa envelope: DEK riêng mỗi tài sản, DEK lưu ở đây dưới dạng ĐÃ BỌC bằng KEK;
 ///   KEK nằm trong cấu hình server, không nằm trong DB. Lộ DB + tệp mà không có KEK vẫn không đọc được nội dung.
 /// - Tên/mô tả KHÔNG mã hóa: không ghi mật khẩu, seed phrase vào đây (ASSET-02).

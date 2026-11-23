@@ -6,7 +6,7 @@ namespace LegacyVault.Domain.Entities;
 /// Kế hoạch bàn giao của một kho (bảng HandoverPlans), quan hệ 1–1 với Vault.
 /// </summary>
 /// <remarks>
-/// Mỗi Vault có một kế hoạch hiện hành và một lịch điểm danh; Container không có đồng hồ riêng.
+/// Mỗi Vault có một kế hoạch hiện hành.
 /// Kế hoạch mới luôn Draft; chỉ Owner chủ động kích hoạt mới chuyển Active.
 /// Lịch điểm danh, Executor, chính sách đã chấp thuận sẽ thêm khi làm phần kích hoạt kế hoạch.
 /// </remarks>
@@ -21,7 +21,7 @@ public class HandoverPlan
     public PlanStatus Status { get; set; }
 
     /// <summary>
-    /// Tăng mỗi khi cấu hình kế hoạch đổi (tạo/đổi tên/xóa Container, thêm/gỡ tài sản/chỉ định...).
+    /// Tăng mỗi khi cấu hình kế hoạch đổi (gán hoặc gỡ gán tài sản cho người nhận...).
     /// Snapshot khi nộp chứng tử ghi lại số này. Bắt đầu từ 1.
     /// </summary>
     public int ConfigVersion { get; set; }

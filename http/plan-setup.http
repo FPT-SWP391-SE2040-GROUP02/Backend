@@ -1,7 +1,7 @@
 # Thử thiết lập và kích hoạt kế hoạch — CHỈ môi trường local.
-# SETUP-01, SETUP-10, EKYC-01, AC-46, ASSET-03/AC-68.
-# Chuẩn bị Owner đã xác minh email, kho trả phí còn hạn, eKYC OwnerEnrollment đạt và ít nhất một gói READY.
-# Tạo gói/tài sản/người nhận bằng http/containers.http; dữ liệu trả phí/eKYC giả lập xem http/plan-dev.sql.
+# SETUP-10, EKYC-01, AC-46.
+# Chuẩn bị Owner đã xác minh email, kho trả phí còn hạn, eKYC OwnerEnrollment đạt và ít nhất một tài sản đã gán cho người nhận.
+# Tạo tài sản/người nhận và gán bằng http/assignments.http; dữ liệu trả phí/eKYC giả lập xem http/plan-dev.sql.
 # Đăng nhập bằng http/auth.http rồi điền các token bên dưới. Không commit token hay dữ liệu thật.
 # Primary và Backup phải là các tài khoản hoạt động, đã xác minh email, khác Owner và khác nhau.
 # Token lời mời lấy từ link trong thư đã nhận; API không trả token. Cấu hình gửi thư Executor xem docs/PLAN-SETUP-API.md.
@@ -20,8 +20,8 @@
 @configVersion = 0
 
 ### GET màn kích hoạt — 200; không tự kích hoạt
-# containers: READY sẽ bàn giao, DRAFT còn thiếu; không có ARCHIVED.
-# assetsOutsideContainer: tài sản lẻ, không lặp tài sản trong gói DRAFT.
+# assignedAssetCount: số tài sản đã gán; recipients[].assets: tài sản của từng người nhận (sharedWithCount > 1 là nhận chung).
+# unassignedAssets: tài sản chưa gán cho ai.
 # warnings: thiếu Backup đã chấp nhận thì có NO_BACKUP_EXECUTOR; nút kích hoạt theo canActivate.
 GET {{baseUrl}}/vaults/{{vaultId}}/plan-setup
 Authorization: Bearer {{ownerToken}}
@@ -84,12 +84,12 @@ Content-Type: application/json
 
 ### GET lại ngay trước kích hoạt — sao chép configVersion vào biến đầu file
 # Mời/chấp nhận làm đổi configVersion; bản cũ trả 409 EDIT_CONFLICT.
-# Backup đã chấp nhận và đủ điều kiện: warnings = []; kiểm lại containers và assetsOutsideContainer.
+# Backup đã chấp nhận và đủ điều kiện: warnings = []; kiểm lại assignedAssetCount và unassignedAssets.
 GET {{baseUrl}}/vaults/{{vaultId}}/plan-setup
 Authorization: Bearer {{ownerToken}}
 
 ### Owner đọc chính sách hiện hành rồi xác nhận kích hoạt — 200 khi đủ điều kiện
-# Body dùng configVersion của GET mới nhất. Response vẫn có containers, assetsOutsideContainer, warnings.
+# Body dùng configVersion của GET mới nhất. Response vẫn có assignedAssetCount, unassignedAssets, warnings.
 # Thiếu điều kiện: 409 PLAN_ACTIVATION_REQUIREMENTS_NOT_MET kèm missingRequirements.
 POST {{baseUrl}}/vaults/{{vaultId}}/activate
 Authorization: Bearer {{ownerToken}}

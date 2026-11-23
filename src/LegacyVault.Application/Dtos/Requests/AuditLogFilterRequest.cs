@@ -5,7 +5,7 @@ namespace LegacyVault.Application.Dtos.Requests;
 /// <summary>Bộ lọc nhật ký hoạt động đọc từ query string (ADMIN-06: lọc theo thời gian, loại thao tác).</summary>
 public class AuditLogFilterRequest
 {
-    /// <summary>Loại thao tác dạng UPPER_SNAKE_CASE, ví dụ CONTAINER_CREATED; bỏ trống = mọi loại.</summary>
+    /// <summary>Loại thao tác dạng UPPER_SNAKE_CASE, ví dụ ASSET_ASSIGNED; bỏ trống = mọi loại.</summary>
     [MaxLength(64, ErrorMessage = "Loại thao tác tối đa 64 ký tự.")]
     public string? Action { get; set; }
 

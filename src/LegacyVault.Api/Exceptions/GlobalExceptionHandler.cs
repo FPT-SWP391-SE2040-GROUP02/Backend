@@ -10,7 +10,7 @@ namespace LegacyVault.Api.Exceptions;
 /// <summary>
 /// Đổi exception thành ProblemDetails (docs/api-contract.md mục 2):
 /// - ApiException (module Auth): status/code theo exception, kèm ExtraData.
-/// - AppException (kho, tài sản, gói): status theo AppErrorType, code UPPER_SNAKE_CASE, kèm Extensions.
+/// - AppException (kho, tài sản, người nhận): status theo AppErrorType, code UPPER_SNAKE_CASE, kèm Extensions.
 /// - Request vượt giới hạn kích thước → 413 FILE_TOO_LARGE.
 /// - DbUpdateConcurrencyException (UpdatedAt là concurrency token) → 409 EDIT_CONFLICT.
 /// - SQL Server chọn request làm nạn nhân deadlock (lỗi 1205, kể cả lúc đọc) → 409 EDIT_CONFLICT.

@@ -48,12 +48,6 @@ public sealed class HandoverTurnConfiguration : IEntityTypeConfiguration<Handove
         builder.HasIndex(t => t.InvitationTokenHash)
             .IsUnique();
 
-        // Mỗi chỉ định chỉ một lượt đang hiệu lực hoặc đã nhận.
-        builder.HasIndex(t => t.DesignationId)
-            .IsUnique()
-            .HasFilter("[Status] IN ('Invited','InitialResponseExpired','IdentityInProgress','ReadyToAccept','HandoverCommitted')")
-            .HasDatabaseName("UX_HandoverTurns_ActivePerDesignation");
-
         builder.HasIndex(t => new { t.ClaimantUserId, t.Status });
         builder.HasIndex(t => new { t.Status, t.ResponseDeadline });
         builder.HasIndex(t => new { t.Status, t.DecisionDeadline });

@@ -40,7 +40,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 ```
 
 - **FE dựa vào `code`**, không dựa vào `title` (title là câu hiển thị, có thể đổi).
-- Một số lỗi có trường phụ ở cấp cao nhất (`attemptsRemaining`, `remainingSeconds`, `reason`, `maxContainers`, `containerId`, `method`).
+- Một số lỗi có trường phụ ở cấp cao nhất (`attemptsRemaining`, `remainingSeconds`, `reason`, `method`).
 - Lỗi validate (`400 VALIDATION_ERROR`) có `errors` dạng **object theo tên trường**, khác `errors: string[]` trong `ApiResponse` của FE:
 
 ```json
@@ -70,14 +70,13 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 403 | `ACCOUNT_NOT_ACTIVE` | Tài khoản bị khóa/vô hiệu | |
 | 403 | `EMAIL_NOT_VERIFIED` | Tạo kho khi email chưa xác minh | |
 | 403 | `ROLE_NOT_ALLOWED` | Gọi API Verifier khi tài khoản (đọc từ DB, không tin claim trong token) không phải Verifier | |
-| 403 | `PAID_TIER_REQUIRED` | Hạng Free đưa tài sản vào gói, tạo hồ sơ người nhận hoặc gắn người nhận vào gói | |
+| 403 | `PAID_TIER_REQUIRED` | Hạng Free gán tài sản cho người nhận hoặc tạo hồ sơ người nhận | |
 | 404 | `VAULT_NOT_FOUND` | Chưa có kho, hoặc kho của người khác | |
-| 404 | `CONTAINER_NOT_FOUND` | Không có gói, hoặc gói của kho khác | |
 | 404 | `ASSET_NOT_FOUND` | Tài sản không thuộc kho | |
 | 404 | `AVATAR_NOT_FOUND` | Tài khoản chưa có ảnh đại diện | |
 | 404 | `IDENTITY_IMAGE_NOT_FOUND` | Verifier xem ảnh CCCD lúc eKYC mà Owner xác minh trước khi có chức năng lưu ảnh, hoặc xem selfie báo còn sống khi chưa có lần thử nào được so khớp | |
 | 409 | `PHONE_ALREADY_EXISTS` | Số điện thoại (sau khi bỏ dấu cách, chấm, gạch, ngoặc) đã thuộc một tài khoản khác, mọi vai trò: đăng ký, `PUT /v1/me/phone`, Admin tạo tài khoản. Mỗi số chỉ thuộc một tài khoản (index unique `IX_Users_Phone`, bỏ qua tài khoản chưa có số) | `field` |
-| 409 | `ASSET_IN_USE` | Tài sản còn trong gói hoặc đã ghim vào bàn giao nên không xóa được (+`reason`) | |
+| 409 | `ASSET_IN_USE` | Tài sản đang được gán cho người nhận hoặc đã ghim vào bàn giao nên không xóa được (+`reason`: `ASSIGNED` / `PINNED_IN_HANDOVER`) | |
 | 404 | `BENEFICIARY_NOT_FOUND` | Không có hồ sơ người nhận, hoặc hồ sơ của kho khác | |
 | 409 | `STORAGE_QUOTA_EXCEEDED` | Tạo tài sản vượt dung lượng còn lại của kho | `storageQuotaBytes`, `storageRemainingBytes` |
 | 413 | `FILE_TOO_LARGE` | Request tải lên vượt giới hạn server (500 MiB) | |
@@ -98,12 +97,9 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `DEATH_CASE_FILE_LIMIT_EXCEEDED` | Bản hồ sơ đã đủ 10 trang giấy | `maxFiles` |
 | 503 | `STORAGE_UNAVAILABLE` | Không ghi/đọc được kho lưu nội dung tài sản (R2 lỗi mạng, sai khóa). Object không còn trên R2 thì báo lỗi toàn vẹn như khi lưu trên đĩa, không dùng mã này | |
 | 409 | `VAULT_NOT_EDITABLE` | Kho không cho sửa lúc này | `reason`: `VAULT_CLOSED` / `PLAN_LOCKED` / `SERVICE_READ_ONLY` |
-| 409 | `CONTAINER_LIMIT_EXCEEDED` | Đủ 50 gói chưa bị xóa | `maxContainers` |
-| 409 | `CONTAINER_REMOVED` | Sửa gói đã bị xóa | |
-| 409 | `ASSET_ALREADY_IN_CONTAINER` | Tài sản đang ở gói khác | `containerId` |
-| 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kế hoạch không còn gói sẵn sàng; cần Owner xác nhận | |
+| 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kho không còn dòng gán tài sản nào khi kế hoạch đang chạy; cần Owner xác nhận | |
 | 409 | `BENEFICIARY_IDENTITY_CONFLICT` | Kho đã có hồ sơ cùng số CCCD nhưng khác họ tên hoặc ngày sinh | `beneficiaryId` |
-| 409 | `BENEFICIARY_IN_USE` | Xóa hồ sơ người nhận đang ở gói; gỡ khỏi các gói trước | `containerIds` |
+| 409 | `BENEFICIARY_IN_USE` | Xóa hồ sơ người nhận đang được gán tài sản; gỡ gán trước | `assetIds` |
 | 409 | `BENEFICIARY_SLOTS_EXCEEDED` | Gắn thêm một người nhận mới vượt số suất của kho | `usedSlots`, `maxSlots` |
 | 409 | `GOOGLE_ACCOUNT_ALREADY_LINKED` | Google này đã gắn tài khoản khác / tài khoản đã có Google | |
 | 409 | `LAST_LOGIN_METHOD` | Gỡ phương thức đăng nhập cuối cùng | |
@@ -155,7 +151,7 @@ Refresh xoay token: token cũ bị thu hồi; gửi lại token cũ làm thu h�
 
 ## 4. Chống ghi đè (etag)
 
-- `VaultResponse` và `ContainerResponse` có trường `etag`.
+- `VaultResponse` có trường `etag`.
 - Khi `PUT`, gửi lại `etag` đó trong body. Nếu ai khác đã sửa trước → `409 EDIT_CONFLICT`; FE tải lại dữ liệu rồi cho người dùng sửa trên bản mới.
 - Sau mỗi lần sửa thành công, dùng `etag` mới trong response cho lần sửa tiếp theo.
 
@@ -383,7 +379,7 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
   "includedBeneficiarySlots": 0,
   "extraBeneficiarySlots": 0,
   "usedBeneficiarySlots": 0,
-  "activeContainerCount": 0,
+  "assignedAssetCount": 0,
   "createdAt": "2026-10-13T08:30:00+00:00",
   "updatedAt": null,
   "etag": "\"0\""
@@ -399,54 +395,43 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
 
 Ba trạng thái **độc lập**: kho đã trả tiền vẫn có thể `planStatus = DRAFT`. Dung lượng tính bằng byte, `1 MiB = 1.048.576 byte`.
 
-Suất người nhận (QUOTA-06): `beneficiarySlots` = tổng = `includedBeneficiarySlots` (kèm hạng) + `extraBeneficiarySlots` (mua thêm). `usedBeneficiarySlots` = số **người** khác nhau đang ở ít nhất một gói; một người ở nhiều gói tính một suất, hồ sơ chưa ở gói nào không tính.
+Suất người nhận (QUOTA-06): `beneficiarySlots` = tổng = `includedBeneficiarySlots` (kèm hạng) + `extraBeneficiarySlots` (mua thêm). `usedBeneficiarySlots` = số **người** khác nhau đang được gán ít nhất một tài sản; một người nhận nhiều tài sản tính một suất, hồ sơ chưa được gán tài sản nào không tính. `assignedAssetCount` = số tài sản đã gán cho ít nhất một người.
 
-### 6.6. Gói (Container)
+### 6.6. Gán tài sản cho người nhận
 
-Endpoint gốc theo kho: `/v1/vaults/{vaultId}/containers`. FE có thể tạo service bằng `createBaseService({ endpoint: \`/v1/vaults/${vaultId}/containers\` })`.
+Chủ kho gán **trực tiếp từng tài sản cho từng người nhận**; không còn "gói" làm trung gian. Một tài sản gán cho nhiều người thì những người đó **nhận chung** (đồng thừa kế): mỗi người một dòng gán và cùng phải ký biên bản. Mỗi cặp (tài sản, người nhận) chỉ có một dòng (DB chặn bằng chỉ mục duy nhất).
+
+Endpoint gốc theo kho: `/v1/vaults/{vaultId}`.
 
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| GET | `.../containers` | Đăng nhập | Query phân trang + `includeRemoved` (mặc định `false`); `sortBy`: `createdAt` (mặc định) \| `name` | 200 `PaginatedList<ContainerResponse>` | 400, 404 |
-| POST | `.../containers` | Đăng nhập | `{ name, description? }` | **201** `ContainerResponse` | 400, 404, 409 `CONTAINER_LIMIT_EXCEEDED`, 409 `VAULT_NOT_EDITABLE` |
-| GET | `.../containers/{containerId}` | Đăng nhập | — | 200 `ContainerResponse` | 404 |
-| PUT | `.../containers/{containerId}` | Đăng nhập | `{ etag, name?, description? }` | 200 `ContainerResponse` | 400, 404, 409 `EDIT_CONFLICT` / `CONTAINER_REMOVED` / `VAULT_NOT_EDITABLE` |
-| DELETE | `.../containers/{containerId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` (đã `REMOVED`) | 404, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
-| POST | `.../containers/{containerId}/assets` | Đăng nhập | `{ assetId }` | 200 `ContainerResponse` | 403 `PAID_TIER_REQUIRED`, 404, 409 `ASSET_ALREADY_IN_CONTAINER` / `CONTAINER_REMOVED` |
-| DELETE | `.../containers/{containerId}/assets/{assetId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` | 404, 409 `CONTAINER_REMOVED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
-| POST | `.../containers/{containerId}/beneficiaries` | Đăng nhập | `{ beneficiaryId }` | 200 `ContainerResponse` | 400, 403 `PAID_TIER_REQUIRED`, 404 `CONTAINER_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `BENEFICIARY_SLOTS_EXCEEDED` / `CONTAINER_REMOVED` / `VAULT_NOT_EDITABLE` |
-| DELETE | `.../containers/{containerId}/beneficiaries/{beneficiaryId}?confirmPlanDeactivation=false` | Đăng nhập | — | 200 `ContainerResponse` | 404, 409 `CONTAINER_REMOVED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` |
+| GET | `.../assignments` | Đăng nhập | — | 200 `AssetAssignmentResponse[]` (mọi dòng gán của kho, theo thứ tự gán) | 404 |
+| PUT | `.../assets/{assetId}/assignments` | Đăng nhập + PIN kho | `{ beneficiaryIds: [guid], confirmPlanDeactivation? }` | 200 `AssetAssignmentResponse[]` (các dòng gán của tài sản sau khi đổi) | 400, 403 `PAID_TIER_REQUIRED`, 404 `ASSET_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `BENEFICIARY_SLOTS_EXCEEDED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` / `EDIT_CONFLICT` |
+| DELETE | `.../assets/{assetId}/assignments/{beneficiaryId}?confirmPlanDeactivation=false` | Đăng nhập + PIN kho | — | 200 `AssetAssignmentResponse[]` (các dòng còn lại của tài sản) | 404 `ASSET_NOT_FOUND`, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` / `EDIT_CONFLICT` |
 
 ```json
-// ContainerResponse
+// AssetAssignmentResponse
 {
   "id": "0199e7b0-...",
-  "vaultId": "0199e7a4-...",
-  "name": "Tài liệu gia đình",
-  "description": null,
-  "status": "DRAFT",
-  "assetIds": [],
-  "beneficiaryIds": [],
-  "missingRequirements": ["NO_ASSET", "NO_DESIGNATION"],
-  "createdAt": "2026-10-13T08:35:00+00:00",
-  "updatedAt": null,
-  "removedAt": null,
-  "etag": "\"0\""
+  "assetId": "0199e7a9-...",
+  "beneficiaryId": "0199e7ab-...",
+  "createdAt": "2026-10-13T08:35:00+00:00"
 }
 ```
 
-- `DELETE` gói = **xóa gói**, không xóa hẳn dòng và **không khôi phục được**: gói chuyển `REMOVED`, tài sản và người nhận được gỡ ra nhưng **không bị xóa**. Người nhận không còn ở gói nào khác thì hết chiếm suất.
-- Gặp `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED`: FE hiện cảnh báo "kế hoạch sẽ trở về bản nháp"; Owner đồng ý thì gọi lại với `?confirmPlanDeactivation=true`.
-- Hạng Free: được tạo/đổi tên/xóa gói rỗng; đưa tài sản hoặc người nhận vào gói → `403 PAID_TIER_REQUIRED` (FE hiện gợi ý nâng cấp).
-- `status`: `DRAFT` (thiếu tài sản hoặc người nhận), `READY` (có ≥1 tài sản **và** ≥1 người nhận), `REMOVED` (Owner đã xóa, không khôi phục được). BE tự tính, FE không gửi trạng thái. `missingRequirements` cho biết còn thiếu gì: `NO_ASSET`, `NO_DESIGNATION`. Người nhận chưa đủ 18 tuổi (đã xác nhận) vẫn tính.
-- `beneficiaryIds`: id hồ sơ người nhận trong gói, theo thứ tự gắn; FE lấy họ tên từ danh sách người nhận của kho (mục 6.8).
-- **Gắn người nhận** (`POST .../beneficiaries`): hồ sơ phải thuộc kho này (tạo trước ở mục 6.8). Gắn lại người đã có trong gói → 200, không đổi gì. Người **chưa ở gói nào** chiếm thêm một suất; vượt suất → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots`, `maxSlots` (FE gợi ý mua thêm suất). Người đã ở gói khác thì không tốn thêm suất.
-- **Gỡ người nhận** không xóa hồ sơ. Người còn ở gói khác vẫn chiếm suất; gỡ khỏi mọi gói thì trả suất. Gỡ người cuối cùng của gói READY cuối cùng khi kế hoạch đang chạy → `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` như gỡ tài sản.
-- Mọi thay đổi gói (kể cả gắn/gỡ người nhận) tăng `planConfigVersion`. Dịch vụ đang ân hạn: gắn bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), gỡ vẫn được.
+- `PUT` **đặt lại toàn bộ** người nhận của tài sản: danh sách gửi lên là danh sách sau cùng. Người mới được thêm, người không còn trong danh sách bị gỡ; danh sách rỗng là gỡ hết. Id trùng trong danh sách chỉ tính một lần. Gửi đúng danh sách hiện có (bấm lặp) → 200, **không ghi gì**, không tăng `planConfigVersion`, không có dòng nhật ký.
+- Hồ sơ người nhận phải thuộc kho này (tạo trước ở mục 6.8); tài sản phải thuộc kho này. Của kho khác → 404.
+- Hạng Free: **không** gán được (`403 PAID_TIER_REQUIRED`, FE hiện gợi ý nâng cấp); gỡ thì được.
+- **Suất người nhận:** `usedBeneficiarySlots` của kho là số **người** khác nhau có ít nhất một dòng gán. Một người nhận nhiều tài sản chỉ tốn một suất. Thao tác làm tăng số người vượt `beneficiarySlots` → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots`, `maxSlots` (FE gợi ý mua thêm suất). Người rời đi trong cùng thao tác (mất dòng gán cuối cùng) được trừ trước khi so, nên đổi người khi suất đã đầy vẫn được.
+- **Gỡ về không còn dòng gán nào khi kế hoạch đang chạy** → `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED`: FE hiện cảnh báo "kế hoạch sẽ trở về bản nháp"; Owner đồng ý thì gọi lại với `confirmPlanDeactivation=true` (query với `DELETE`, trường body với `PUT`) → kế hoạch về `DRAFT`.
+- Mọi thay đổi gán tăng `planConfigVersion` đúng một lần cho cả thao tác. Dịch vụ đang ân hạn: thêm bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), gỡ vẫn được.
+- Hai yêu cầu cùng đổi kho một lúc: bên đến sau nhận `409 EDIT_CONFLICT` (tải lại rồi làm lại); không bao giờ có hai dòng cho cùng một cặp.
+- Màn kích hoạt (`plan-setup`) lấy dữ liệu từ các dòng gán: `assignedAssetCount`, `unassignedAssets` (tài sản chưa gán cho ai), và `recipients[].assets[]` kèm `sharedWithCount` (số người cùng nhận tài sản đó, lớn hơn 1 là nhận chung). Điều kiện kích hoạt mới: `ASSIGNMENT_REQUIRED` khi kho chưa có dòng gán nào (thay cho `READY_CONTAINER_REQUIRED`).
+- Dữ liệu cũ: migration `ReplaceContainersWithAssetAssignments` đổi mỗi cặp (người nhận của gói, tài sản trong gói) thành một dòng gán và đổi các bản chụp di chúc đã ký sang dạng cặp tài sản - người nhận, rồi xóa bảng `Containers`, `ContainerAssets`, `Designations`.
 
 ### 6.7. Tài sản (Asset)
 
-Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồi mới đưa vào gói bằng `POST .../containers/{containerId}/assets`.
+Tài sản thuộc **kho**: tạo tài sản trước, rồi gán cho người nhận bằng `PUT .../assets/{assetId}/assignments` (mục 6.6).
 
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
@@ -456,7 +441,7 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 | GET | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 200 `AssetResponse` | 404 `VAULT_NOT_FOUND` / `ASSET_NOT_FOUND` |
 | GET | `/v1/vaults/{vaultId}/assets/{assetId}/content` | Đăng nhập (Owner) | — | 200 nội dung gốc (`application/octet-stream`, `Content-Disposition: attachment`, `Cache-Control: no-store`) | 404 `ASSET_NOT_FOUND` (kể cả nội dung đã dọn), 500 `CONTENT_INTEGRITY_FAILED` |
 | PUT | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập + `X-Vault-Pin` (mục 6.20) | `{ name?, description?, etag }` | 200 `AssetResponse` | 400, 403/409/423 lỗi PIN, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
-| DELETE | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 204 | 404, 409 `ASSET_IN_USE` (+`reason`: `IN_CONTAINER` \| `PINNED_IN_HANDOVER`) / `VAULT_NOT_EDITABLE` |
+| DELETE | `/v1/vaults/{vaultId}/assets/{assetId}` | Đăng nhập | — | 204 | 404, 409 `ASSET_IN_USE` (+`reason`: `ASSIGNED` \| `PINNED_IN_HANDOVER`) / `VAULT_NOT_EDITABLE` |
 
 ```json
 // AssetResponse — chỉ metadata, KHÔNG có nội dung tài sản
@@ -478,16 +463,16 @@ Tài sản thuộc **kho**, không thuộc gói: tạo tài sản trước, rồ
 - `kind`: `FILE` (tệp tải lên) | `TEXT` (nội dung chữ: thông tin tài khoản, ghi chú...). `fileName` là `null` với `TEXT`.
 - `name` của tệp không gửi thì lấy theo tên tệp. Tên/mô tả **không mã hóa**: không ghi mật khẩu vào đây; bí mật để trong `content`/tệp.
 - Nội dung tệp và `content` được BE mã hóa (AES-256-GCM, khóa riêng mỗi tài sản) trước khi lưu. FE gửi nội dung gốc qua HTTPS, **không** tự mã hóa hay Base64 nội dung. `sizeBytes` là kích thước nội dung gốc, cũng là số tính vào quota.
-- Hạng Free được lưu tài sản trong 20 MiB; mọi nội dung đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản không ở gói nào.
+- Hạng Free được lưu tài sản trong 20 MiB; mọi nội dung đã lưu đều tính vào `storageUsedBytes` của kho, kể cả khi tài sản chưa gán cho ai.
 - **Tải nội dung (LV-10):** chỉ Owner của kho. Server giải mã hai lượt: lượt đầu vào `Stream.Null` để kiểm kích thước và SHA-256 trước khi gửi byte đầu tiên; nội dung hỏng trả 500 và không có byte nội dung nào. Mỗi lần tải ghi nhật ký `AssetContentDownloaded` (chỉ id, không tên tài sản).
 - **Nội dung không đổi sau khi tạo:** không có phiên bản. Muốn thay nội dung, tạo tài sản mới rồi xóa tài sản cũ (các đường dẫn `/versions` và tham số `?version` đã bỏ).
 - **Đổi tên/mô tả** là thao tác "thêm": chặn khi kho đóng, kế hoạch bị khóa (đang chờ/bàn giao) hoặc dịch vụ chỉ đọc. Kho đang có hold: `409 VAULT_NOT_EDITABLE` với `reason = HOLD_ACTIVE`.
-- **Xóa** là thao tác "giảm" (vẫn cho khi ân hạn, chặn khi kho đóng/kế hoạch khóa). Chỉ xóa được khi tài sản không còn trong gói nào (gỡ khỏi gói trước), chưa ghim vào snapshot của lượt bàn giao nào và kho không có hold. Xóa nội dung đã mã hóa, giải phóng quota. Nội dung được xóa sau khi bản ghi đã xóa; nếu kho lưu trữ lỗi, object mồ côi (đã mã hóa) có thể còn lại.
+- **Xóa** là thao tác "giảm" (vẫn cho khi ân hạn, chặn khi kho đóng/kế hoạch khóa). Chỉ xóa được khi tài sản không còn được gán cho người nhận nào (gỡ gán trước), chưa ghim vào snapshot của lượt bàn giao nào và kho không có hold. Xóa nội dung đã mã hóa, giải phóng quota. Nội dung được xóa sau khi bản ghi đã xóa; nếu kho lưu trữ lỗi, object mồ côi (đã mã hóa) có thể còn lại.
 - Xuất cấu hình PDF (XS Max) và khôi phục tài sản đã xóa chưa có.
 
 ### 6.8. Người nhận (Beneficiary)
 
-Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lại cho nhiều gói. Endpoint gốc: `/v1/vaults/{vaultId}/beneficiaries`. Gắn/gỡ hồ sơ vào gói ở mục 6.6 (`.../containers/{containerId}/beneficiaries`).
+Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lại cho nhiều tài sản. Endpoint gốc: `/v1/vaults/{vaultId}/beneficiaries`. Gán/gỡ tài sản cho hồ sơ ở mục 6.6.
 
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
@@ -515,7 +500,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
   "dateOfBirth": "1990-05-20",
   "email": "an.nguyen@example.com",
   "phone": "0901234567",
-  "containerIds": [],
+  "assetIds": [],
   "createdAt": "2026-10-14T08:00:00+00:00",
   "updatedAt": null,
   "etag": "\"0\""
@@ -533,11 +518,11 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **Trùng CCCD trong kho:** cùng CCCD, cùng họ tên (không phân biệt hoa thường, bỏ khoảng trắng thừa) và cùng ngày sinh → **200** trả hồ sơ cũ, không đổi gì (kể cả liên hệ). Khác họ tên hoặc ngày sinh → `409 BENEFICIARY_IDENTITY_CONFLICT` kèm `beneficiaryId`; FE mở hồ sơ đó cho Owner sửa cho thống nhất.
 - **Tuổi:** người nhận phải đủ 18 tuổi tính theo ngày hiện tại (giờ Việt Nam); thiếu tuổi → `400 VALIDATION_ERROR` ở trường `dateOfBirth`: "Người nhận phải đủ 18 tuổi." Khi sửa, chỉ kiểm tuổi nếu `dateOfBirth` được đổi (hồ sơ cũ chưa đủ tuổi vẫn sửa được các trường khác). Không trả nhãn tuổi (đã bỏ `isMinor`) và không còn trường `minorAcknowledgedAt`. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
-- `containerIds`: các gói đang có người này, theo thứ tự gắn; rỗng khi chưa ở gói nào.
-- **Giới hạn số hồ sơ:** số hồ sơ của kho (tính cả hồ sơ chưa ở gói nào) không vượt tổng suất `beneficiarySlots`. Tạo hồ sơ mới khi đã đủ → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots` (số hồ sơ hiện có) và `maxSlots`; FE gợi ý mua thêm suất hoặc xóa hồ sơ chưa dùng. Gửi lại đúng người đã có (trùng CCCD, cùng họ tên và ngày sinh) vẫn **200** dù đã đủ. FE lấy số hồ sơ từ `totalCount` của danh sách.
-- Tạo hồ sơ **không** tăng `planConfigVersion`. `usedBeneficiarySlots` của kho vẫn chỉ đếm người đang ở gói (mục 6.6).
-- Sửa hồ sơ **đang ở gói** (có thay đổi thật) → `planConfigVersion` tăng 1; hồ sơ chưa ở gói nào thì không tăng.
-- Xóa hồ sơ đang ở gói → `409 BENEFICIARY_IN_USE` kèm `containerIds`; FE hướng dẫn gỡ khỏi các gói đó trước.
+- `assetIds`: các tài sản đang được gán cho người này, theo thứ tự gán; rỗng khi chưa được gán tài sản nào.
+- **Giới hạn số hồ sơ:** số hồ sơ của kho (tính cả hồ sơ chưa được gán tài sản nào) không vượt tổng suất `beneficiarySlots`. Tạo hồ sơ mới khi đã đủ → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots` (số hồ sơ hiện có) và `maxSlots`; FE gợi ý mua thêm suất hoặc xóa hồ sơ chưa dùng. Gửi lại đúng người đã có (trùng CCCD, cùng họ tên và ngày sinh) vẫn **200** dù đã đủ. FE lấy số hồ sơ từ `totalCount` của danh sách.
+- Tạo hồ sơ **không** tăng `planConfigVersion`. `usedBeneficiarySlots` của kho vẫn chỉ đếm người đang được gán tài sản (mục 6.6).
+- Sửa hồ sơ **đang được gán tài sản** (có thay đổi thật) → `planConfigVersion` tăng 1; hồ sơ chưa được gán tài sản nào thì không tăng.
+- Xóa hồ sơ đang được gán tài sản → `409 BENEFICIARY_IN_USE` kèm `assetIds`; FE hướng dẫn gỡ gán các tài sản đó trước.
 - BE không gửi thông báo, không tạo tài khoản cho người nhận.
 
 ---
@@ -817,8 +802,8 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
   "at": "2026-10-15T08:30:00+00:00",
   "actorRole": "OWNER",
   "actorUserId": "0199e7a4-0000-7c3e-9a51-3f0f5d2b8a10",
-  "action": "CONTAINER_BENEFICIARY_ADDED",
-  "targetType": "CONTAINER",
+  "action": "ASSET_ASSIGNED",
+  "targetType": "ASSET",
   "targetId": "0199e7a4-1111-7c3e-9a51-3f0f5d2b8a10",
   "targetVersion": 7,
   "outcome": "SUCCEEDED",
@@ -828,7 +813,7 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 
 - **Sắp xếp:** `sortBy` chỉ nhận `at` (mặc định). `isAscending` mặc định `true` như mọi danh sách khác; FE gửi `isAscending=false` để xem mới nhất trước. `searchTerm` không dùng.
 - **Lọc:** `action` là một giá trị trong bảng dưới (đúng dạng `UPPER_SNAKE_CASE`, giá trị khác → 400). `from` tính cả mốc, `to` không tính mốc, cả hai là ISO 8601; `from` phải trước `to`.
-- **`targetVersion`:** phiên bản đối tượng **sau** thao tác. Với thao tác đổi cấu hình bàn giao (gói, người nhận đang ở gói, kế hoạch về nháp) là `config_version` của kế hoạch (SETUP-04, STATE-03); với điểm danh là số thứ tự kỳ mới; còn lại `null`.
+- **`targetVersion`:** phiên bản đối tượng **sau** thao tác. Với thao tác đổi cấu hình bàn giao (gán hoặc gỡ gán tài sản, người nhận đang được gán, kế hoạch về nháp) là `config_version` của kế hoạch (SETUP-04, STATE-03); với điểm danh là số thứ tự kỳ mới; còn lại `null`.
 - **Không có dữ liệu nhạy cảm (SEC-07):** không ghi tên tài sản, tên tệp, họ tên, số CCCD, liên hệ hay nội dung. Thao tác có đối tượng thứ hai chỉ ghi id của nó trong `reason` (`"Tài sản <id>"`, `"Người nhận <id>"`); FE tự tra tên qua API tài sản hoặc người nhận nếu cần.
 - **Chỉ ghi thao tác đã lưu:** nhật ký lưu cùng giao dịch với thao tác (STATE-02), nên thao tác bị từ chối, lỗi hoặc bấm lặp không đổi gì thì không có dòng nào. Hiện mọi dòng đều có `outcome = SUCCEEDED`.
 
@@ -837,10 +822,8 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 | `VAULT_CREATED` | `VAULT` | Tạo kho lần đầu (mở lại kho cũ không ghi) |
 | `VAULT_UPDATED` | `VAULT` | Sửa tên hoặc mô tả kho |
 | `ASSET_CREATED` | `ASSET` | Tải tài sản lên |
-| `CONTAINER_CREATED` / `CONTAINER_UPDATED` / `CONTAINER_REMOVED` | `CONTAINER` | Tạo, đổi tên/mô tả, xóa gói. Nhật ký trước khi đổi tên còn `CONTAINER_ARCHIVED` (cùng nghĩa xóa gói) |
-| `CONTAINER_ASSET_ADDED` / `CONTAINER_ASSET_REMOVED` | `CONTAINER` | Thêm, gỡ tài sản khỏi gói (`reason` có id tài sản) |
-| `CONTAINER_BENEFICIARY_ADDED` / `CONTAINER_BENEFICIARY_REMOVED` | `CONTAINER` | Thêm, gỡ người nhận khỏi gói (`reason` có id hồ sơ) |
-| `PLAN_DEACTIVATED` | `PLAN` | Owner xác nhận cảnh báo, kế hoạch về `DRAFT` vì mất gói `READY` cuối cùng (SETUP-16) |
+| `ASSET_ASSIGNED` / `ASSET_UNASSIGNED` | `ASSET` | Gán, gỡ gán một tài sản cho một người nhận (`reason` có id hồ sơ người nhận). Nhật ký cũ còn các dòng `CONTAINER_*` với `targetType = CONTAINER` từ thời có gói tài sản |
+| `PLAN_DEACTIVATED` | `PLAN` | Owner xác nhận cảnh báo, kế hoạch về `DRAFT` vì không còn tài sản nào được gán cho người nhận |
 | `BENEFICIARY_CREATED` / `BENEFICIARY_UPDATED` / `BENEFICIARY_DELETED` | `BENEFICIARY` | Thêm, sửa, xóa hồ sơ người nhận |
 | `CHECKED_IN` | `CHECK_IN` | Điểm danh, `targetId` là kỳ mới |
 | `CHECK_IN_SETTINGS_UPDATED` | `CHECK_IN` | Đổi chu kỳ hoặc thời gian chờ; `reason` ghi lựa chọn mới và áp dụng ngay hay từ kỳ sau |
@@ -927,8 +910,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
   "turns": [
     {
       "turnId": "0199...",
-      "containerId": "0199...",
-      "containerName": "Tài liệu gia đình",
+      "containerName": "Biên bản bàn giao",
       "beneficiaryId": "0199...",
       "beneficiaryCitizenIdLast4": "8901",
       "beneficiaryFullName": "Nguyễn Văn An",
@@ -950,7 +932,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 
 - **Chưa duyệt:** hồ sơ chưa ở `APPROVED_FOR_HANDOVER` thì `handoverStarted = false`, `turns` rỗng, `summary` toàn 0.
 - **Nhóm trạng thái trong `summary`:** `waitingResponse` = `INVITED`, `INITIAL_RESPONSE_EXPIRED`; `inVerification` = `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`; `accepted` = `HANDOVER_COMMITTED`; `declined` = `DECLINED`; `ended` = `DECISION_EXPIRED`, `CANCELLED`, `LAPSED`.
-- **Gắn với danh sách gói:** `containerId` (mã gói) và `items[].assetId` (mã tài sản gốc, không phải `itemId` của bản ghim) để FE nối lượt với gói và tài sản trong `GET /executor/vaults/{vaultId}/assets`.
+- **Gắn với danh sách tài sản:** `beneficiaryId` và `items[].assetId` (mã tài sản gốc, không phải `itemId` của bản ghim) để FE nối lượt với người nhận và tài sản trong `GET /executor/vaults/{vaultId}/assets`. `containerName` là tiêu đề lượt (tên trường giữ lại từ thời còn gói tài sản).
 - **Đã tải:** tài sản có ít nhất một lần tải thành công. Lần tải bị từ chối hoặc lỗi toàn vẹn không tính. `firstDownloadedAt` là lần tải thành công đầu tiên.
 - **Dữ liệu nhạy cảm:** tài sản chỉ có tên và loại; không có nội dung tài sản hay số CCCD đầy đủ. Người nhận được phân biệt bằng 4 số cuối CCCD.
 - **Liên hệ người nhận:** `beneficiaryFullName`, `beneficiaryPhone` và `beneficiaryEmail` để Executor liên hệ, chỉ có ở lượt `INVITED`, `INITIAL_RESPONSE_EXPIRED`, `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`, `HANDOVER_COMMITTED`. Lượt `DECLINED`, `DECISION_EXPIRED`, `CANCELLED`, `LAPSED` trả `null`. Không giải mã được hoặc người nhận không có số/email thì trường tương ứng cũng `null` (không lỗi cả màn). Không có ngày sinh.
@@ -1196,11 +1178,11 @@ Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Own
 - `GET /vaults/{vaultId}/assets/{assetId}/content` (tải nội dung tài sản), `PUT /vaults/{vaultId}/assets/{assetId}` (sửa tên/mô tả) và `DELETE /vaults/{vaultId}/assets/{assetId}`.
 - `POST /vaults/{vaultId}/pin/verify`: chỉ kiểm PIN, không làm gì thêm. FE gọi khi bấm "Sửa" tài sản, đúng PIN mới mở form sửa; PIN đã đúng được gửi lại kèm `PUT` khi lưu. Sai PIN vẫn tính một lần đoán và khóa như các thao tác khác.
 - `POST`, `PUT`, `DELETE /vaults/{vaultId}/beneficiaries...` (tạo, sửa, xóa hồ sơ người nhận).
-- `DELETE /vaults/{vaultId}/containers/{containerId}` (xóa gói), `DELETE .../containers/{containerId}/assets/{assetId}` (gỡ tài sản khỏi gói), `POST` và `DELETE .../containers/{containerId}/beneficiaries...` (gán, gỡ người nhận của gói).
+- `PUT /vaults/{vaultId}/assets/{assetId}/assignments` (đặt lại người nhận của tài sản) và `DELETE .../assets/{assetId}/assignments/{beneficiaryId}` (gỡ gán).
 - `POST /vaults/{vaultId}/executors` (mời Executor) và `POST /vaults/{vaultId}/executors/{executorId}/revoke` (thu hồi).
 - `POST /vaults/{vaultId}/activate` (kích hoạt kế hoạch = Chủ kho ký di chúc bằng PIN), `POST /vaults/{vaultId}/will/sign` (ký lại di chúc) và `POST /vaults/{vaultId}/executor-key/reissue` (đổi mã mở gói).
 
-Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem "Ép đặt PIN"), liệt kê, xem thông tin, đưa tài sản vào gói.
+Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem "Ép đặt PIN"), liệt kê, xem thông tin, xem danh sách gán (`GET .../assignments`).
 
 **Luật kiểm tra** (theo thứ tự):
 
@@ -1267,25 +1249,25 @@ Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem
 
 | Method | URL | Quyền | Thành công | Lỗi |
 |---|---|---|---|---|
-| GET | `/v1/executor/vaults/{vaultId}/assets` | Executor đang hiệu lực của kho (không phải chủ kho) | 200 `ExecutorVaultPackageResponse[]` | 401, 404 `VAULT_NOT_FOUND` |
+| GET | `/v1/executor/vaults/{vaultId}/assets` | Executor đang hiệu lực của kho (không phải chủ kho) | 200 `ExecutorVaultRecipientResponse[]` | 401, 404 `VAULT_NOT_FOUND`, 403 `HANDOVER_NOT_STARTED` |
 
 ```json
 [
   {
-    "containerId": "0199e7a4-...",
-    "containerName": "Gói gia đình",
-    "recipients": [{ "fullName": "Trần Minh Anh", "citizenIdLast4": "0791" }],
+    "beneficiaryId": "0199e7a4-...",
+    "fullName": "Trần Minh Anh",
+    "citizenId": "079123456789",
     "assets": [
-      { "id": "0199e7a5-...", "name": "Email gia đình", "kind": "TEXT", "sizeBytes": 640 },
-      { "id": "0199e7a6-...", "name": "Sổ tiết kiệm", "kind": "FILE", "sizeBytes": 2457600 }
+      { "id": "0199e7a5-...", "name": "Email gia đình", "kind": "TEXT", "sizeBytes": 640, "sharedWithCount": 1 },
+      { "id": "0199e7a6-...", "name": "Sổ tiết kiệm", "kind": "FILE", "sizeBytes": 2457600, "sharedWithCount": 2 }
     ]
   }
 ]
 ```
 
-- Chỉ các gói `READY` (không có bản nháp hay gói đã xóa). Tài sản đã bị xóa nội dung không hiện. Gói sắp theo tên.
+- Mỗi phần tử là một người nhận có ít nhất một tài sản được gán, theo thứ tự gán. Tài sản đã bị xóa nội dung không hiện. `sharedWithCount` là số người nhận tài sản đó, tính cả người này; lớn hơn 1 nghĩa là nhận chung.
 - **Chỉ danh sách:** không có nội dung tài sản, mô tả hay tên tệp gốc. Nội dung chỉ người nhận mở được.
-- `recipients[].fullName` là null khi không giải mã được; FE hiện 4 số cuối CCCD thay thế.
+- `fullName` là null khi không giải mã được; FE hiện số CCCD thay thế.
 - Người không phải Executor đang hiệu lực, hoặc chính chủ kho, nhận `404 VAULT_NOT_FOUND`.
 
 ### 6.21b. Hồ sơ người nhận (thay eKYC camera ở bước danh tính)
@@ -1384,10 +1366,10 @@ Mỗi lượt bàn giao có **một biên bản** đi qua hai người ký theo 
 # Executor setup and activation (15/10/2026)
 
 See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.
-Màn kích hoạt (SETUP-01, SETUP-10, ASSET-03/AC-68): xem [PLAN-SETUP-API.md](PLAN-SETUP-API.md) để biết các field `containers`, `assetsOutsideContainer`, `warnings` và cách thử tay.
+Màn kích hoạt (SETUP-10): xem [PLAN-SETUP-API.md](PLAN-SETUP-API.md) để biết các field `assignedAssetCount`, `unassignedAssets`, `warnings` và cách thử tay.
 
 Di chúc điện tử (nhánh feat/will-signature), chi tiết ở mục cuối [PLAN-SETUP-API.md](PLAN-SETUP-API.md):
-- `GET .../plan-setup` thêm `ownerFullName`, `ownerEmail`, `activatedAt`, `recipients[]` (`beneficiaryId`, `fullName`, `hasMessage`, `containers[]`; không trả nội dung lời nhắn) và `executors[].fullName`.
+- `GET .../plan-setup` thêm `ownerFullName`, `ownerEmail`, `activatedAt`, `recipients[]` (`beneficiaryId`, `fullName`, `hasMessage`, `assets[]` gồm `id`, `name`, `kind`, `sharedWithCount`; không trả nội dung lời nhắn) và `executors[].fullName`.
 - `POST .../activate` cần header `X-Vault-Pin`; thành công thì server tự tạo mã mở gói (không trả mã) và ghi nhật ký `PlanActivated`. Người thực thi chấp nhận lời mời ghi `ExecutorAccepted`.
 - `POST .../executor-key` (Chủ kho cấp mã lần đầu) đã **xóa**. `POST .../executor-key/reissue` cần PIN và trả `{ hasKey, version, issuedAt, reissuedAt, canIssue }`, không có `shard`.
 - `GET /executor/vaults/{vaultId}/handover-key`: chỉ đọc được khi kế hoạch `HANDOVER_IN_PROGRESS`; trước đó 409 `HANDOVER_NOT_ALLOWED` (`reason = HANDOVER_NOT_STARTED`).

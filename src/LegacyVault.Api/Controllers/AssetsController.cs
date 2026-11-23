@@ -133,7 +133,7 @@ public sealed class AssetsController(IAssetService assetService, ILogger<AssetsC
         return assetService.UpdateAssetAsync(vaultId, assetId, request, ct);
     }
 
-    /// <summary>Xóa tài sản (chỉ khi không còn ở gói nào, chưa ghim vào bàn giao và kho không bị tạm giữ).</summary>
+    /// <summary>Xóa tài sản (chỉ khi chưa gán cho người nhận nào, chưa ghim vào bàn giao và kho không bị tạm giữ).</summary>
     [RequireVaultPin]
     [HttpDelete("{assetId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

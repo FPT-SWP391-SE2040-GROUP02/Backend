@@ -85,17 +85,6 @@ public sealed class HandoverRepository : IHandoverRepository
             .FirstOrDefaultAsync(g => g.Id == grantId, ct);
     }
 
-    public Task<List<Designation>> FindStartableDesignationsAsync(Guid vaultId, CancellationToken ct)
-    {
-        return context.Set<Designation>()
-            .Include(d => d.Beneficiary)
-            .Include(d => d.Container).ThenInclude(c => c.Assets).ThenInclude(ca => ca.Asset)
-            .Where(d => d.Container.VaultId == vaultId && d.Container.Status == ContainerStatus.Ready)
-            .OrderBy(d => d.CreatedAt)
-            .ThenBy(d => d.Id)
-            .ToListAsync(ct);
-    }
-
     public Task<Asset?> FindAssetAsync(Guid assetId, CancellationToken ct)
     {
         return context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, ct);

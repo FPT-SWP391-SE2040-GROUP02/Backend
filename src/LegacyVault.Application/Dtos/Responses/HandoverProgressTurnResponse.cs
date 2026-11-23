@@ -1,19 +1,15 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
-/// <summary>Tiến độ của một lượt bàn giao: một gói cho một người nhận.</summary>
+/// <summary>Tiến độ của một lượt bàn giao: một người nhận trong biên bản.</summary>
 public class HandoverProgressTurnResponse
 {
     public Guid TurnId { get; set; }
 
-    /// <summary>Mã gói, để màn hình Tài sản gắn lượt vào đúng gói (hai gói có thể trùng tên).</summary>
-    public Guid ContainerId { get; set; }
-
-    /// <summary>Tên gói lúc mở bàn giao.</summary>
+    /// <summary>Tiêu đề lượt lúc mở bàn giao (tên trường giữ lại từ thời còn gói tài sản).</summary>
     public string ContainerName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Mã hồ sơ người nhận trong kho (không phải tài khoản). Một người nhận nhiều gói thì các lượt cùng mã,
-    /// để màn hình gom lượt theo người; không dùng 4 số cuối CCCD vì hai người có thể trùng.
+    /// Mã hồ sơ người nhận trong kho (không phải tài khoản). Mã này dùng để màn hình gom lượt theo người; không dùng 4 số cuối CCCD vì hai người có thể trùng.
     /// </summary>
     public Guid BeneficiaryId { get; set; }
 
