@@ -110,6 +110,103 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
 
     private const string RequestsUrl = "/api/v1/handover/requests";
 
+    /// <summary>GET /handover/requests/available của một tài khoản; phải trả 200.</summary>
+    private static async Task<JsonElement> ReadAvailableAsync(HttpClient client)
+    {
+        HttpResponseMessage response = await client.GetAsync(RequestsUrl + "/available");
+        string text = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, "available -> " + response.StatusCode + ": " + text);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
+    [SqlFact]
+    public async Task Available_ListsMyVaultsByVerifiedEmail_AndSubmitByAccountUsesTheSameRules()
+    {
+        // Chuẩn bị: kho đã kích hoạt có hai người nhận; người thứ hai chưa xác minh email; một người lạ
+        Vault2 vault = await BuildVaultAsync();
+        await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        HttpClient first = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, RecipientEmail(0));
+        HttpClient second = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: false, RecipientEmail(1));
+        HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
+
+        // Hành động: xem danh sách trước khi ai gửi yêu cầu
+        JsonElement firstBefore = await ReadAvailableAsync(first);
+        JsonElement secondUnverified = await ReadAvailableAsync(second);
+        JsonElement strangerList = await ReadAvailableAsync(stranger);
+        JsonElement ownerList = await ReadAvailableAsync(vault.Owner);
+
+        // Kiểm tra: chỉ đúng người nhận đã xác minh email thấy kho; không lộ CCCD, gói hay tài sản
+        Assert.Equal(1, firstBefore.GetArrayLength());
+        JsonElement row = firstBefore[0];
+        Assert.Equal(vault.VaultId, row.GetProperty("vaultId").GetGuid());
+        Assert.Equal(vault.FirstRecipient, row.GetProperty("beneficiaryId").GetGuid());
+        Assert.Equal("NOT_REQUESTED", row.GetProperty("status").GetString());
+        Assert.False(row.GetProperty("needsAction").GetBoolean());
+        Assert.True(row.GetProperty("canRequest").GetBoolean());
+        Assert.False(string.IsNullOrEmpty(row.GetProperty("ownerName").GetString()));
+        Assert.False(row.TryGetProperty("citizenId", out JsonElement _));
+        Assert.False(row.TryGetProperty("containerName", out JsonElement _));
+        Assert.False(row.TryGetProperty("assets", out JsonElement _));
+        Assert.Equal(0, secondUnverified.GetArrayLength());
+        Assert.Equal(0, strangerList.GetArrayLength());
+        Assert.Equal(0, ownerList.GetArrayLength());
+
+        // Hành động: gửi yêu cầu trong app (không cần link)
+        HttpResponseMessage strangerSubmit = await stranger.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Tôi là người lạ"));
+        HttpResponseMessage unverifiedSubmit = await second.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Chưa xác minh"));
+        HttpResponseMessage firstSubmit = await first.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Bố tôi mất"));
+        HttpResponseMessage firstAgain = await first.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Gửi lại"));
+
+        // Kiểm tra: người lạ 404, chưa xác minh 403; gửi trùng bị chặn như luồng link
+        await ApiTestHelpers.AssertProblemAsync(strangerSubmit, HttpStatusCode.NotFound, "HANDOVER_NOT_FOUND");
+        await ApiTestHelpers.AssertProblemAsync(unverifiedSubmit, HttpStatusCode.Forbidden, "EMAIL_NOT_VERIFIED");
+        Assert.Equal(HttpStatusCode.OK, firstSubmit.StatusCode);
+        JsonElement claim = await ApiTestHelpers.ReadJsonAsync(firstSubmit);
+        Guid claimId = claim.GetProperty("id").GetGuid();
+        Guid recordId = claim.GetProperty("recordId").GetGuid();
+        JsonElement duplicate = await ApiTestHelpers.AssertProblemAsync(firstAgain, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("ALREADY_REQUESTED", duplicate.GetProperty("reason").GetString());
+        JsonElement pendingRow = (await ReadAvailableAsync(first))[0];
+        Assert.Equal("REQUEST_PENDING", pendingRow.GetProperty("status").GetString());
+        Assert.Equal(claimId, pendingRow.GetProperty("claimId").GetGuid());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(PlanStatus.HandoverRequested, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
+        });
+
+        // Hành động: người thứ hai xác minh email; luật sư yêu cầu người đầu bổ sung
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            User secondUser = await db.Users.SingleAsync(u => u.Email == RecipientEmail(1));
+            secondUser.EmailVerifiedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        });
+        JsonElement secondRow = (await ReadAvailableAsync(second))[0];
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        HttpResponseMessage reviewed = await verifier.Client.PostAsJsonAsync(
+            HandoverRecordTestData.VerifierRecordUrl(recordId) + "/claims/" + claimId + "/review",
+            new { decision = "REQUEST_SUPPLEMENT", reason = "Thiếu bản sao di chúc" });
+        HttpResponseMessage secondSubmit = await second.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Tôi cũng là người nhận"));
+
+        // Kiểm tra: người khác đã gửi nên người thứ hai cần gửi; người đầu cần nộp bổ sung kèm lý do
+        Assert.Equal("NOT_REQUESTED", secondRow.GetProperty("status").GetString());
+        Assert.True(secondRow.GetProperty("needsAction").GetBoolean());
+        Assert.True(secondRow.GetProperty("canRequest").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, reviewed.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondSubmit.StatusCode);
+        Assert.Equal(recordId, (await ApiTestHelpers.ReadJsonAsync(secondSubmit)).GetProperty("recordId").GetGuid());
+        JsonElement supplementRow = (await ReadAvailableAsync(first))[0];
+        Assert.Equal("SUPPLEMENT_REQUESTED", supplementRow.GetProperty("status").GetString());
+        Assert.True(supplementRow.GetProperty("needsAction").GetBoolean());
+        Assert.Equal("Thiếu bản sao di chúc", supplementRow.GetProperty("reviewReason").GetString());
+    }
+
     /// <summary>Người nhận đầu tiên gửi yêu cầu bằng link riêng; trả client của người đó, token và phản hồi.</summary>
     private async Task<(HttpClient Client, string Token, HttpResponseMessage Response)> SubmitRequestAsync(Guid vaultId)
     {
@@ -447,6 +544,11 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal("SIGNING", view.GetProperty("status").GetString());
         Assert.True(view.GetProperty("canSign").GetBoolean());
         Assert.Equal(1, view.GetProperty("recipients").GetArrayLength());
+        // Mục "Nhận tài sản": tới bước ký thì người nhận cần ký, kèm lượt để vào cổng người nhận.
+        JsonElement signingRow = (await ReadAvailableAsync(recipient))[0];
+        Assert.Equal("NEED_MY_SIGNATURE", signingRow.GetProperty("status").GetString());
+        Assert.True(signingRow.GetProperty("needsAction").GetBoolean());
+        Assert.Equal(turnId, signingRow.GetProperty("turnId").GetGuid());
 
         // Luật sư ký rồi mở lại: chữ ký cũ mất hiệu lực, bản mới.
         await PostOkAsync(record.Verifier.Client, verifierUrl + "/sign");
@@ -475,6 +577,20 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         JsonElement turn = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync($"/api/v1/handover/turns/{turnId}"));
         Assert.Equal("HANDOVER_COMMITTED", turn.GetProperty("status").GetString());
         Assert.Equal(2, turn.GetProperty("items").GetArrayLength());
+        // Đủ chữ ký: người nhận nhập mã và tải; bấm "Tôi đã nhận đủ" thì xong.
+        JsonElement readyRow = (await ReadAvailableAsync(recipient))[0];
+        Assert.Equal("CODE_READY", readyRow.GetProperty("status").GetString());
+        Assert.True(readyRow.GetProperty("needsAction").GetBoolean());
+        // "Tôi đã nhận đủ" cần tải hết từng mục; ở đây ghi thẳng mốc nhận đủ để kiểm trạng thái RECEIVED.
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            HandoverTurn receivedTurn = await db.Set<HandoverTurn>().SingleAsync(t => t.Id == turnId);
+            receivedTurn.ReceivedAllAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        });
+        JsonElement receivedRow = (await ReadAvailableAsync(recipient))[0];
+        Assert.Equal("RECEIVED", receivedRow.GetProperty("status").GetString());
+        Assert.False(receivedRow.GetProperty("needsAction").GetBoolean());
 
         // Đã đủ chữ ký: không ký thêm, không mở lại được.
         await ApiTestHelpers.AssertProblemAsync(

@@ -1331,6 +1331,40 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 - Chốt thành công thì lưu `legalBasisConfirmedAt` (thời điểm) và `legalBasisConfirmedByUserId` (luật sư). Mở lại thì cả hai về `null`; chốt lại phải tick lại.
 - `HandoverRecordResponse` có thêm `legalBasisConfirmedAt`, `legalBasisConfirmedByUserId`, `legalBasisConfirmedByName` (họ tên luật sư, để in dòng "Luật sư … xác nhận căn cứ pháp lý lúc …"; rỗng khi chưa xác nhận).
 
+### 6.21d. Người nhận: các kho được để lại cho tôi và gửi yêu cầu trong app
+
+Lối vào trong app, không cần link trong thư. Người nhận do luật sư thêm (`POST /verifier/handover-records/{id}/recipients`) cũng tính.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/handover/requests/available` | Đăng nhập | — | 200 `[{ vaultId, beneficiaryId, ownerName, status, needsAction, canRequest, reviewReason?, claimId?, turnId? }]`, dòng `needsAction` xếp trước; email chưa xác minh thì `[]` | 401 |
+| POST | `/api/v1/handover/requests/by-account` | Đăng nhập, đã xác minh email | multipart: `vaultId`, `note` (tối đa 1000 ký tự), `files` (PDF hoặc ảnh, 1 tới 10 tệp, mỗi tệp 10 MiB) | 200 `MyHandoverClaimResponse` (giống gửi bằng link) | 400, 403 `EMAIL_NOT_VERIFIED`, 404 `HANDOVER_NOT_FOUND` (kho lạ hoặc tài khoản không phải người nhận của kho), 409 `HANDOVER_NOT_ALLOWED` (`PLAN_NOT_ACTIVE`, `ALREADY_REQUESTED`, `RECORD_COMPLETED`, `NO_VERIFIER`, `OWNER_CANNOT_CLAIM`), 413 |
+| POST | `/api/v1/handover/requests/{claimId}/supplement` | Người gửi yêu cầu | multipart: `note`, `files` | 200 (API có sẵn, dùng cho cả hai cách gửi) | như cũ |
+
+- **Chỉ tính** kho có kế hoạch `ACTIVE`, `HANDOVER_REQUESTED`, `HANDOVER_IN_PROGRESS`, `CLOSED` và người nhận có email (Chủ kho hoặc luật sư khai) trùng email **đã xác minh** của tài khoản (bỏ khoảng trắng hai đầu, không phân biệt hoa thường). Kho của chính mình không tính.
+- **Không trả** tên gói, tên tài sản, số căn cước.
+- `by-account` dùng chung luật với `POST /api/v1/handover/requests` (gửi bằng link): server tự tìm người nhận của kho mang đúng email tài khoản.
+- `canRequest`: chỉ `true` khi `status = NOT_REQUESTED` và gửi được lúc này (kho chưa có biên bản thì kế hoạch phải `ACTIVE`; có biên bản thì biên bản chưa hoàn tất).
+- `reviewReason`: lý do luật sư yêu cầu bổ sung hoặc từ chối (chỉ khi `SUPPLEMENT_REQUESTED` hoặc `REJECTED`). `claimId` để nộp bổ sung; `turnId` để vào cổng người nhận (`/claim/beneficiary`) ở các bước sau khi biên bản chốt.
+
+Bảng `status` (xét từ trên xuống, gặp dòng đúng đầu tiên thì dừng):
+
+| Điều kiện | `status` | `needsAction` |
+|---|---|---|
+| Kho chưa có biên bản đang mở | `NOT_REQUESTED` | `false` |
+| Yêu cầu của tôi đang chờ xét (`Submitted`) | `REQUEST_PENDING` | `false` |
+| Luật sư yêu cầu bổ sung | `SUPPLEMENT_REQUESTED` | `true` |
+| Luật sư từ chối | `REJECTED` | `false` |
+| Tôi chưa gửi yêu cầu, không có tên trong biên bản, không có lượt | `NOT_REQUESTED` | `true` khi biên bản chưa hoàn tất (người khác đã gửi), `false` khi đã hoàn tất |
+| Đã được nhận vào biên bản (yêu cầu được chấp nhận hoặc luật sư tự thêm), biên bản đang lập hoặc chờ danh tính | `IN_REVIEW` | `false` |
+| Bước ký, không có tên tôi trong biên bản | `IN_REVIEW` | `false` |
+| Bước ký, tôi chưa ký bản hiện tại | `NEED_MY_SIGNATURE` | `true` |
+| Bước ký, tôi đã ký bản hiện tại | `WAITING_OTHERS` | `false` |
+| Biên bản hoàn tất, không có tên tôi | `REJECTED` | `false` |
+| Biên bản hoàn tất, tôi đã bấm "Tôi đã nhận đủ" | `RECEIVED` | `false` |
+| Biên bản hoàn tất, lượt của tôi đã có quyền tải | `CODE_READY` | `true` |
+| Biên bản hoàn tất, lượt chưa có quyền tải | `WAITING_OTHERS` | `false` |
+
 ### 6.22. Cấu hình dịch vụ ngoài (Admin)
 
 Admin sửa model, khóa và dịch vụ dự phòng của dịch vụ ngoài ngay trên web, không cần sửa appsettings hay deploy lại. Tất cả cần Bearer; không phải Admin đang hoạt động → `404` (SEC-04). Đã nối năm dịch vụ: `GEMINI` (AI nhận diện giấy chứng tử), `EKYC`, `SMTP` (email), `SEPAY` (nhận tiền) và `R2` (lưu nội dung đã mã hóa). Mọi giá trị trong `settings` và `secrets` là chuỗi, số cũng vậy.

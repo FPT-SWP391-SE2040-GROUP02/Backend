@@ -168,11 +168,135 @@ public sealed class HandoverRecordService : IHandoverRecordService
     public async Task<MyHandoverClaimResponse> SubmitClaimAsync(
         string token, string? note, List<UploadedFile> files, CancellationToken ct)
     {
-        // 1. Người gửi phải đăng nhập đúng email Chủ kho đã khai cho người nhận này
+        // 1. Người gửi phải đăng nhập đúng email Chủ kho đã khai cho người nhận của link này
         User user = await RequireVerifiedUserAsync(ct);
         Beneficiary beneficiary = await RequireBeneficiaryByTokenAsync(token, ct);
         Vault vault = await RequireVaultAsync(beneficiary.VaultId, ct);
         EnsureEmailMatches(user, beneficiary);
+
+        // 2. Các bước còn lại dùng chung với gửi trong app (không cần link)
+        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, files, ct);
+        return response;
+    }
+
+    public async Task<MyHandoverClaimResponse> SubmitClaimByAccountAsync(
+        Guid vaultId, string? note, List<UploadedFile> files, CancellationToken ct)
+    {
+        // 1. Tài khoản đã xác minh email; kho phải có người nhận mang đúng email đó, không có thì 404 như kho lạ
+        User user = await RequireVerifiedUserAsync(ct);
+        Vault? vault = await vaults.FindByIdAsync(vaultId, ct);
+        if (vault == null)
+        {
+            throw HandoverAccess.NotFound();
+        }
+        Beneficiary? beneficiary = await FindMyBeneficiaryInVaultAsync(user, vault.Id, ct);
+        if (beneficiary == null)
+        {
+            throw HandoverAccess.NotFound();
+        }
+
+        // 2. Các bước còn lại dùng chung với gửi bằng link riêng
+        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, files, ct);
+        return response;
+    }
+
+    /// <summary>
+    /// Bảng ánh xạ trạng thái ở <see cref="RecipientStepRules"/>. Chỉ tính kho có kế hoạch đã kích hoạt trở đi và người nhận
+    /// mang đúng email đã xác minh của tài khoản (kể cả người nhận do luật sư thêm). Chưa xác minh email thì danh sách rỗng.
+    /// </summary>
+    /// <remarks>
+    /// Email người nhận nằm trong dữ liệu mã hóa, không có cột băm để tra, nên phải giải mã từng người nhận của các kho đã
+    /// kích hoạt để so (giống GetMyInvitationsAsync). Chấp nhận được ở quy mô đồ án. Không log email.
+    /// </remarks>
+    public async Task<List<AvailableHandoverVaultResponse>> ListAvailableVaultsAsync(CancellationToken ct)
+    {
+        // 1. Người đang đăng nhập; chưa xác minh email thì không có kho nào
+        Guid userId = currentUser.RequireUserId();
+        User? user = await users.FindByIdAsync(userId, ct);
+        if (user == null)
+        {
+            throw new AppException(AppErrorType.Unauthorized, ErrorCode.SessionExpired,
+                "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        }
+        List<AvailableHandoverVaultResponse> needAction = new List<AvailableHandoverVaultResponse>();
+        List<AvailableHandoverVaultResponse> others = new List<AvailableHandoverVaultResponse>();
+        if (user.EmailVerifiedAt == null)
+        {
+            return needAction;
+        }
+
+        // 2. Người nhận mang đúng email của tôi ở các kho đã kích hoạt (bỏ kho của chính mình)
+        string accountEmail = NormalizeEmail(user.Email);
+        List<Beneficiary> candidates = await records.ListBeneficiariesOfActivatedPlansAsync(ct);
+        foreach (Beneficiary beneficiary in candidates)
+        {
+            if (beneficiary.Vault.OwnerId == userId)
+            {
+                continue;
+            }
+            if (!BeneficiaryEmailMatches(beneficiary, accountEmail))
+            {
+                continue;
+            }
+
+            // 3. Suy ra bước hiện tại của tôi từ biên bản đang mở, yêu cầu, lượt, chữ ký và quyền tải
+            HandoverRecord? record = await records.FindByVaultIdAsync(beneficiary.VaultId, ct);
+            HandoverTurn? turn = null;
+            HandoverClaim? claim = null;
+            if (record != null)
+            {
+                Dictionary<Guid, HandoverTurn> turns = await turnSync.FindActiveTurnsAsync(record, ct);
+                if (turns.ContainsKey(beneficiary.Id))
+                {
+                    turn = turns[beneficiary.Id];
+                }
+                claim = FindClaim(record, beneficiary.Id);
+            }
+            string status = RecipientStepRules.ResolveStatus(record, beneficiary.Id, turn);
+            AvailableHandoverVaultResponse item = new AvailableHandoverVaultResponse
+            {
+                VaultId = beneficiary.VaultId,
+                BeneficiaryId = beneficiary.Id,
+                OwnerName = beneficiary.Vault.Owner.FullName,
+                Status = status,
+                NeedsAction = RecipientStepRules.NeedsAction(status, record),
+                CanRequest = RecipientStepRules.CanRequest(status, beneficiary.Vault.Plan.Status, record)
+            };
+            if (claim != null)
+            {
+                item.ClaimId = claim.Id;
+                if (status == RecipientStepRules.SupplementRequested || status == RecipientStepRules.Rejected)
+                {
+                    item.ReviewReason = claim.ReviewReason;
+                }
+            }
+            if (turn != null)
+            {
+                item.TurnId = turn.Id;
+            }
+
+            // 4. Kho cần tôi làm gì đó xếp lên đầu
+            if (item.NeedsAction)
+            {
+                needAction.Add(item);
+            }
+            else
+            {
+                others.Add(item);
+            }
+        }
+        needAction.AddRange(others);
+        return needAction;
+    }
+
+    /// <summary>
+    /// Phần lõi của gửi yêu cầu nhận tài sản, dùng chung cho gửi bằng link riêng và gửi trong app. Người gọi đã kiểm tài
+    /// khoản đã xác minh email và email trùng người nhận.
+    /// </summary>
+    private async Task<MyHandoverClaimResponse> SubmitClaimForBeneficiaryAsync(
+        User user, Beneficiary beneficiary, Vault vault, string? note, List<UploadedFile> files, CancellationToken ct)
+    {
+        // 1. Chủ kho không tự gửi; lời nhắn và tệp phải hợp lệ
         if (vault.OwnerId == user.Id)
         {
             throw HandoverAccess.NotAllowed("OWNER_CANNOT_CLAIM", "Chủ kho không tự gửi yêu cầu nhận tài sản của kho mình.");
@@ -1548,6 +1672,41 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
         throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverEmailMismatch,
             "Link này dành cho một email khác. Hãy đăng nhập bằng đúng email Chủ kho đã khai.", extensions);
+    }
+
+    /// <summary>Người nhận của kho mang đúng email (đã xác minh) của tài khoản; null khi không có.</summary>
+    private async Task<Beneficiary?> FindMyBeneficiaryInVaultAsync(User user, Guid vaultId, CancellationToken ct)
+    {
+        string accountEmail = NormalizeEmail(user.Email);
+        List<Beneficiary> beneficiaries = await records.ListVaultBeneficiariesAsync(vaultId, ct);
+        foreach (Beneficiary beneficiary in beneficiaries)
+        {
+            if (BeneficiaryEmailMatches(beneficiary, accountEmail))
+            {
+                return beneficiary;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Email Chủ kho (hoặc luật sư) khai cho người nhận có trùng email tài khoản (đã chuẩn hóa) không.</summary>
+    private bool BeneficiaryEmailMatches(Beneficiary beneficiary, string normalizedAccountEmail)
+    {
+        BeneficiaryPersonalData data;
+        try
+        {
+            data = protector.Unprotect(beneficiary);
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            // Hồ sơ không giải mã được: coi như không trùng.
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(data.Email))
+        {
+            return false;
+        }
+        return NormalizeEmail(data.Email) == normalizedAccountEmail;
     }
 
     private async Task<(HandoverRecord Record, HandoverClaim Claim)> RequireMyClaimAsync(

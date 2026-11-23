@@ -78,6 +78,18 @@ public static class HandoverRecordTestData
         return form;
     }
 
+    /// <summary>Multipart gửi yêu cầu nhận trong app (không cần link): id kho, lời nhắn và một tệp PDF.</summary>
+    public static MultipartFormDataContent ByAccountForm(Guid vaultId, string note)
+    {
+        MultipartFormDataContent form = new MultipartFormDataContent();
+        form.Add(new StringContent(vaultId.ToString()), "vaultId");
+        form.Add(new StringContent(note), "note");
+        ByteArrayContent file = new ByteArrayContent(SamplePdf());
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(file, "files", "giay-to.pdf");
+        return form;
+    }
+
     /// <summary>
     /// Cấp link riêng cho người nhận đầu tiên có email của kho (như lúc kích hoạt kế hoạch). Trả token và email người nhận.
     /// </summary>

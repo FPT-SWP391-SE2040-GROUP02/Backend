@@ -70,6 +70,20 @@ public interface IHandoverRecordService
     /// </summary>
     Task<MyHandoverClaimResponse> SubmitClaimAsync(string token, string? note, List<UploadedFile> files, CancellationToken ct);
 
+    /// <summary>
+    /// Gửi yêu cầu nhận tài sản trong app, không cần link: server tự tìm người nhận của kho mang đúng email đã xác minh của
+    /// tài khoản. Cùng luật với gửi bằng link. Lỗi: 403 chưa xác minh email, 404 kho lạ hoặc không phải người nhận,
+    /// 409 HANDOVER_NOT_ALLOWED.
+    /// </summary>
+    Task<MyHandoverClaimResponse> SubmitClaimByAccountAsync(
+        Guid vaultId, string? note, List<UploadedFile> files, CancellationToken ct);
+
+    /// <summary>
+    /// Các kho mà tài khoản đang đăng nhập là người nhận (email đã xác minh trùng email người nhận, kế hoạch đã kích hoạt
+    /// trở đi), kèm bước hiện tại của tôi; kho cần tôi làm gì xếp lên đầu. Chưa xác minh email thì rỗng.
+    /// </summary>
+    Task<List<AvailableHandoverVaultResponse>> ListAvailableVaultsAsync(CancellationToken ct);
+
     Task<List<MyHandoverClaimResponse>> ListMyClaimsAsync(CancellationToken ct);
 
     /// <summary>Nộp thêm giấy tờ khi luật sư yêu cầu bổ sung; yêu cầu quay về chờ xét.</summary>

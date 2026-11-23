@@ -89,6 +89,12 @@ public sealed class FakeHandoverRecordRepository : IHandoverRecordRepository
         return Task.FromResult(result);
     }
 
+    public Task<List<Beneficiary>> ListBeneficiariesOfActivatedPlansAsync(CancellationToken ct)
+    {
+        // Fake không giữ kho và kế hoạch: test thuần dùng fake này không gọi danh sách kho của người nhận.
+        throw new NotSupportedException();
+    }
+
     public Task<List<Executor>> ListAcceptedExecutorsAsync(Guid userId, CancellationToken ct)
     {
         List<Executor> result = new List<Executor>();
