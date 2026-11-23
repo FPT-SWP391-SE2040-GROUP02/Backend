@@ -180,7 +180,11 @@ public sealed class HandoverProgressServiceTests
         turn.KeyVerifiedAt = Now.AddDays(-2);
         turn.ReceivedAllAt = Now.AddDays(-1);
         reader.Turns.Add(turn);
-        // Người nhận ký biên bản, rồi biên bản đủ chữ ký ba bên.
+        // Người nhận ký biên bản, rồi lượt này đủ chữ ký ba bên và được mở quyền tải (mỗi người nhận mở riêng).
+        HandoverGrant grant = new HandoverGrant();
+        grant.TurnId = turn.Id;
+        grant.GrantedAt = Now.AddDays(-3);
+        turn.Grant = grant;
         HandoverRecordSignature signature = new HandoverRecordSignature();
         signature.RecordId = record.Id;
         signature.RevisionNo = record.RevisionNo;

@@ -106,7 +106,11 @@ public sealed class HandoverProgressService : IHandoverProgressService
             {
                 turnResponse.RecipientSignedAt = signature.SignedAt;
             }
-            turnResponse.DocumentApprovedAt = record.CompletedAt;
+            // Mỗi người nhận được mở quyền tải riêng: mốc đủ chữ ký của lượt này là lúc mở quyền tải.
+            if (turn.Grant != null)
+            {
+                turnResponse.DocumentApprovedAt = turn.Grant.GrantedAt;
+            }
             if (ShowsBeneficiaryContact(turn.Status))
             {
                 await FillBeneficiaryContactAsync(turnResponse, vault.Id, turn.BeneficiaryId, ct);

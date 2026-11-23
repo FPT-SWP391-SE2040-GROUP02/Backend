@@ -79,26 +79,13 @@ public static class HandoverRecordRules
             || turn.Status == HandoverTurnStatus.HandoverCommitted;
     }
 
-    /// <summary>Mọi người nhận trong biên bản đều đã có lượt và đã được xác nhận danh tính.</summary>
-    public static bool AllIdentitiesConfirmed(HandoverRecord record, Dictionary<Guid, HandoverTurn> turnByRecipient)
+    /// <summary>
+    /// Biên bản đã chốt và đang giao: luật sư, Người thực thi ký được; mỗi người nhận ký khi danh tính của mình xong.
+    /// Signing là trạng thái của biên bản chốt từ nay; IdentityCheck chỉ còn ở biên bản chốt trước khi giao riêng từng người.
+    /// </summary>
+    public static bool IsOpenForSigning(HandoverRecord record)
     {
-        Dictionary<Guid, List<Guid>> recipients = GroupAssetsByRecipient(record.Lines);
-        if (recipients.Count == 0)
-        {
-            return false;
-        }
-        foreach (Guid beneficiaryId in recipients.Keys)
-        {
-            if (!turnByRecipient.ContainsKey(beneficiaryId))
-            {
-                return false;
-            }
-            if (!IsIdentityConfirmed(turnByRecipient[beneficiaryId]))
-            {
-                return false;
-            }
-        }
-        return true;
+        return record.Status == HandoverRecordStatus.Signing || record.Status == HandoverRecordStatus.IdentityCheck;
     }
 
     /// <summary>Đủ chữ ký ba bên của bản hiện tại: luật sư, Người thực thi và từng người nhận trong biên bản.</summary>

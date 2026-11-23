@@ -12,9 +12,8 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
-/// Thư báo "biên bản tới bước ký" chỉ gửi sau khi trạng thái đã lưu: chưa tới bước ký thì không có thư,
-/// tới bước ký thì gửi đúng một thư cho người nhận và một cho Người thực thi, không gửi lặp;
-/// lưu lỗi thì không có thư nào.
+/// Thư báo ký biên bản chỉ gửi sau khi trạng thái đã lưu: luật sư chốt thì báo Người thực thi ký (một thư); danh tính
+/// người nhận xong thì báo riêng người đó ký (một thư), không gửi lặp; lưu lỗi thì không có thư nào.
 /// </summary>
 public sealed class HandoverSigningNoticeFlowTests : IAsyncLifetime
 {
@@ -52,7 +51,7 @@ public sealed class HandoverSigningNoticeFlowTests : IAsyncLifetime
         await factory.DisposeAsync();
     }
 
-    /// <summary>Biên bản đã chốt (bước xác minh danh tính) và người nhận đã đăng nhập, chưa nhận lượt.</summary>
+    /// <summary>Biên bản đã chốt (đang giao) và người nhận đã đăng nhập, chưa nhận lượt.</summary>
     private async Task<(HttpClient Recipient, Guid TurnId)> PrepareFinalizedRecordAsync()
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -65,8 +64,10 @@ public sealed class HandoverSigningNoticeFlowTests : IAsyncLifetime
             owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid())).StatusCode);
 
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vaultId);
-        Assert.Equal("IDENTITY_CHECK", record.Body.GetProperty("status").GetString());
-        Assert.Empty(notices.Signing());
+        Assert.Equal("SIGNING", record.Body.GetProperty("status").GetString());
+        // Chốt xong: chỉ báo Người thực thi ký, chưa báo người nhận (danh tính chưa xong).
+        Assert.Single(notices.Signing());
+        Assert.Equal(HandoverRequestNotice.Executor, notices.Signing()[0].Audience);
 
         HttpClient recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, RecipientEmail);
         JsonElement invitations = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync("/api/v1/handover/invitations/mine"));
@@ -74,11 +75,11 @@ public sealed class HandoverSigningNoticeFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task SigningNotice_IsSentOnlyOnceTheRecordIsInSigningStep()
+    public async Task SigningNotice_IsSentToRecipientOnlyOnceTheirIdentityIsConfirmed()
     {
         (HttpClient recipient, Guid turnId) = await PrepareFinalizedRecordAsync();
 
-        // Môi trường test bỏ qua xác minh danh tính nên nhận lượt là biên bản sang bước ký.
+        // Môi trường test bỏ qua xác minh danh tính nên nhận lượt là danh tính người này xong: báo người này ký.
         Assert.Equal(HttpStatusCode.OK, (await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null)).StatusCode);
         JsonElement view = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync($"/api/v1/handover/turns/{turnId}/record"));
         Assert.Equal("SIGNING", view.GetProperty("status").GetString());
@@ -98,11 +99,11 @@ public sealed class HandoverSigningNoticeFlowTests : IAsyncLifetime
     {
         (HttpClient recipient, Guid turnId) = await PrepareFinalizedRecordAsync();
 
-        // Lưu lỗi giữa chừng: người nhận nhận lượt không thành, không có thư báo nào được gửi.
+        // Lưu lỗi giữa chừng: người nhận nhận lượt không thành, không có thư báo người nhận nào được gửi.
         gate.FailNextSave = true;
         HttpResponseMessage failed = await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null);
         Assert.False(failed.IsSuccessStatusCode, "Lưu lỗi thì request phải lỗi.");
-        Assert.Empty(notices.Signing());
+        Assert.Single(notices.Signing());
 
         // Thử lại thành công: đúng một thư cho mỗi người, không còn thư của lần lỗi.
         Assert.Equal(HttpStatusCode.OK, (await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null)).StatusCode);

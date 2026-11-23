@@ -1324,8 +1324,22 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true }` | 200 `HandoverRecordResponse` (`status = IDENTITY_CHECK` hoặc `SIGNING`) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`) |
-| POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 |
+| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `PARTIALLY_DELIVERED` khi đã có người nhận được mở quyền tải) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/sign` | như trên | — | 200 `HandoverRecordResponse` | 404, 409 (`NOT_SIGNING_STEP` khi chưa chốt, `RECORD_COMPLETED`) |
+| POST | `/api/v1/executor/vaults/{vaultId}/handover-record/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` | 404, 409 (như trên) |
+| POST | `/api/v1/handover/turns/{turnId}/record/sign` | Người nhận của lượt | — | 200 `HandoverRecordResponse` (chỉ phần của mình) | 404, 409 (như trên; `IDENTITY_NOT_CONFIRMED` khi danh tính của chính mình chưa được xác nhận) |
+
+**Giao riêng từng người nhận** (ba bên vẫn đều ký):
+
+1. Luật sư chốt: biên bản sang `SIGNING`; luật sư và Người thực thi ký được ngay (thư báo Người thực thi ký).
+2. Mỗi người nhận đi riêng: nộp ảnh căn cước → luật sư xác nhận danh tính (thư báo riêng người đó ký) → người đó ký. Không chờ người nhận khác.
+3. Có chữ ký luật sư + Người thực thi (bản hiện tại) + chữ ký của người nhận X thì mở quyền tải cho lượt của X ngay (lượt `HANDOVER_COMMITTED`); Người thực thi gửi mã cho X (`send-key` kiểm theo lượt). Luật sư hoặc Người thực thi ký sau cùng thì mở cho mọi người nhận đã ký trước đó.
+4. Mọi người nhận trong biên bản đều đã ký (cùng luật sư, Người thực thi) thì biên bản `COMPLETED`.
+5. Mở lại chỉ khi chưa ai được mở quyền tải (`PARTIALLY_DELIVERED`); không thu hồi quyền tải đã mở.
+6. Ký đồng thời không tạo trùng quyền tải: mỗi lần ký đổi `updatedAt` của biên bản (chống ghi đè, bên lưu sau nhận 409 `EDIT_CONFLICT`), DB chỉ cho một quyền tải mỗi lượt.
+7. `IDENTITY_CHECK` chỉ còn ở biên bản chốt trước thay đổi này, được xử lý như `SIGNING`.
+8. Màn tiến độ của Người thực thi: `documentApprovedAt` của từng lượt là lúc lượt đó được mở quyền tải.
 
 - `confirmLegalBasis = true` nghĩa là luật sư xác nhận: đã kiểm tra di chúc (bản sau cùng, hợp pháp) hoặc xác định không có di chúc, lập biên bản theo đúng quy định và chịu trách nhiệm về nội dung biên bản. Backend chỉ ghi nhận, không kiểm pháp lý.
 - Chốt thành công thì lưu `legalBasisConfirmedAt` (thời điểm) và `legalBasisConfirmedByUserId` (luật sư). Mở lại thì cả hai về `null`; chốt lại phải tick lại.
@@ -1357,15 +1371,17 @@ Bảng `status` (xét từ trên xuống, gặp dòng đúng đầu tiên thì d
 | Luật sư yêu cầu bổ sung | `SUPPLEMENT_REQUESTED` | `true` |
 | Luật sư từ chối | `REJECTED` | `false` |
 | Tôi chưa gửi yêu cầu, không có tên trong biên bản, không có lượt | `NOT_REQUESTED` | `true` khi biên bản chưa hoàn tất (người khác đã gửi), `false` khi đã hoàn tất |
-| Biên bản chờ danh tính, tôi có tên trong biên bản, lượt chưa được xác nhận danh tính và chưa nộp ảnh căn cước (hoặc hồ sơ mới nhất bị yêu cầu bổ sung) | `NEED_IDENTITY` | `true` |
-| Đã được nhận vào biên bản (yêu cầu được chấp nhận hoặc luật sư tự thêm), biên bản đang lập, hoặc chờ danh tính mà đã nộp ảnh căn cước và đang chờ duyệt (hoặc đã được xác nhận) | `IN_REVIEW` | `false` |
-| Bước ký, không có tên tôi trong biên bản | `IN_REVIEW` | `false` |
-| Bước ký, tôi chưa ký bản hiện tại | `NEED_MY_SIGNATURE` | `true` |
-| Bước ký, tôi đã ký bản hiện tại | `WAITING_OTHERS` | `false` |
+| Biên bản đang lập (yêu cầu đã chấp nhận, hoặc luật sư tự thêm tôi) | `IN_REVIEW` | `false` |
 | Biên bản hoàn tất, không có tên tôi | `REJECTED` | `false` |
-| Biên bản hoàn tất, tôi đã bấm "Tôi đã nhận đủ" | `RECEIVED` | `false` |
-| Biên bản hoàn tất, lượt của tôi đã có quyền tải | `CODE_READY` | `true` |
-| Biên bản hoàn tất, lượt chưa có quyền tải | `WAITING_OTHERS` | `false` |
+| Biên bản đã chốt, không có tên tôi, hoặc tôi chưa có lượt | `IN_REVIEW` | `false` |
+| Lượt của tôi: đã bấm "Tôi đã nhận đủ" | `RECEIVED` | `false` |
+| Lượt của tôi đã có quyền tải (dù người nhận khác chưa ký) | `CODE_READY` | `true` |
+| Lượt của tôi chưa xác nhận danh tính, chưa nộp ảnh căn cước hoặc bị yêu cầu bổ sung | `NEED_IDENTITY` | `true` |
+| Lượt của tôi chưa xác nhận danh tính, đã nộp ảnh và đang chờ luật sư duyệt | `IN_REVIEW` | `false` |
+| Danh tính của tôi xong, tôi chưa ký bản hiện tại | `NEED_MY_SIGNATURE` | `true` |
+| Tôi đã ký, luật sư hoặc Người thực thi chưa ký | `WAITING_OTHERS` | `false` |
+
+Các bước sau khi chốt tính theo **lượt của chính tôi**, không theo bước chung của biên bản.
 
 ### 6.22. Cấu hình dịch vụ ngoài (Admin)
 

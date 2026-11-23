@@ -492,7 +492,9 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, stillDrafting.GetProperty("legalBasisConfirmedAt").ValueKind);
         JsonElement finalized = await FinalizeOkAsync(verifier.Client, url);
 
-        Assert.Equal("IDENTITY_CHECK", finalized.GetProperty("status").GetString());
+        // Chốt xong là biên bản đang giao: luật sư ký được ngay, không chờ danh tính người nhận.
+        Assert.Equal("SIGNING", finalized.GetProperty("status").GetString());
+        Assert.True(finalized.GetProperty("canSign").GetBoolean());
         Assert.Equal(2, finalized.GetProperty("recipients").GetArrayLength());
         // Đã chốt thì không sửa dòng được nữa.
         await ApiTestHelpers.AssertProblemAsync(
@@ -528,14 +530,14 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     {
         Vault2 vault = await BuildVaultAsync();
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vault.VaultId);
-        Assert.Equal("IDENTITY_CHECK", record.Body.GetProperty("status").GetString());
+        Assert.Equal("SIGNING", record.Body.GetProperty("status").GetString());
         // Chốt kèm tick căn cứ pháp lý: lưu luật sư và thời điểm.
         Assert.Equal(JsonValueKind.String, record.Body.GetProperty("legalBasisConfirmedAt").ValueKind);
         Assert.Equal(record.Verifier.User.Id, record.Body.GetProperty("legalBasisConfirmedByUserId").GetGuid());
         Assert.False(string.IsNullOrEmpty(record.Body.GetProperty("legalBasisConfirmedByName").GetString()));
         string verifierUrl = HandoverRecordTestData.VerifierRecordUrl(record.RecordId);
 
-        // Người nhận mở link và nhận lượt; danh tính đủ thì biên bản sang bước ký.
+        // Người nhận mở link và nhận lượt; danh tính của người này xong thì người này ký được.
         HttpClient recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, RecipientEmail(0));
         JsonElement invitations = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync("/api/v1/handover/invitations/mine"));
         Guid turnId = invitations[0].GetProperty("turnId").GetGuid();

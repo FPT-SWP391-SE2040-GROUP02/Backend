@@ -17,17 +17,16 @@ namespace LegacyVault.Application.Services;
 /// | Có yêu cầu của tôi, trạng thái SupplementRequested                           | SUPPLEMENT_REQUESTED | true        |
 /// | Có yêu cầu của tôi, trạng thái Rejected                                      | REJECTED             | false       |
 /// | Không có yêu cầu của tôi, không có tên trong biên bản, không có lượt          | NOT_REQUESTED        | true khi biên bản chưa hoàn tất (người khác đã gửi, tôi gửi được), false khi đã hoàn tất |
-/// | Biên bản chờ danh tính, tôi có tên trong biên bản, lượt chưa được xác nhận danh tính và chưa nộp hồ sơ (hoặc hồ sơ mới nhất bị yêu cầu bổ sung) | NEED_IDENTITY | true |
-/// | (Yêu cầu đã chấp nhận, hoặc luật sư tự thêm tôi vào biên bản) biên bản đang lập, hoặc chờ danh tính mà tôi đã nộp hồ sơ / đã được xác nhận | IN_REVIEW | false |
-/// | Biên bản ở bước ký, không có tên tôi trong biên bản                           | IN_REVIEW            | false       |
-/// | Biên bản ở bước ký, tôi chưa ký bản hiện tại                                  | NEED_MY_SIGNATURE    | true        |
-/// | Biên bản ở bước ký, tôi đã ký bản hiện tại                                    | WAITING_OTHERS       | false       |
-/// | Biên bản đã hoàn tất, không có tên tôi trong biên bản                         | REJECTED             | false       |
-/// | Biên bản đã hoàn tất, lượt của tôi đã bấm "Tôi đã nhận đủ" (ReceivedAllAt)    | RECEIVED             | false       |
-/// | Biên bản đã hoàn tất, lượt của tôi đã có quyền tải (Grant)                    | CODE_READY           | true        |
-/// | Biên bản đã hoàn tất, lượt chưa có quyền tải (trường hợp lạ)                  | WAITING_OTHERS       | false       |
-/// Ở bước danh tính (IdentityCheck) người nhận nộp ảnh căn cước ở cổng người nhận (HandoverSubmission); nộp rồi thì chờ
-/// luật sư duyệt (IN_REVIEW).
+/// | Biên bản đang lập (yêu cầu đã chấp nhận, hoặc luật sư tự thêm tôi)            | IN_REVIEW            | false       |
+/// | Biên bản đã hoàn tất, không có tên tôi                                       | REJECTED             | false       |
+/// | Biên bản đã chốt, không có tên tôi, hoặc tôi chưa có lượt                     | IN_REVIEW            | false       |
+/// | Lượt của tôi đã bấm "Tôi đã nhận đủ" (ReceivedAllAt)                          | RECEIVED             | false       |
+/// | Lượt của tôi đã có quyền tải (Grant), dù người nhận khác chưa ký              | CODE_READY           | true        |
+/// | Lượt chưa xác nhận danh tính, chưa nộp ảnh căn cước hoặc bị yêu cầu bổ sung   | NEED_IDENTITY        | true        |
+/// | Lượt chưa xác nhận danh tính, đã nộp ảnh căn cước, đang chờ luật sư duyệt     | IN_REVIEW            | false       |
+/// | Danh tính của tôi đã xong, tôi chưa ký bản hiện tại                           | NEED_MY_SIGNATURE    | true        |
+/// | Tôi đã ký, luật sư hoặc Người thực thi chưa ký (chưa được mở quyền tải)       | WAITING_OTHERS       | false       |
+/// Mỗi người nhận đi riêng theo lượt của chính mình: không chờ người nhận khác nộp ảnh hay ký.
 /// </remarks>
 public static class RecipientStepRules
 {
@@ -80,55 +79,69 @@ public static class RecipientStepRules
             return NotRequested;
         }
 
-        // 3. Đã được nhận vào biên bản: theo bước của biên bản
-        if (record.Status == HandoverRecordStatus.Signing)
+        // 3. Biên bản đang lập: luật sư đang xử lý
+        if (record.Status == HandoverRecordStatus.Drafting)
         {
-            if (!inRecord)
-            {
-                return InReview;
-            }
-            HandoverRecordSignature? mySignature =
-                HandoverRecordRules.FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId);
-            if (mySignature == null)
-            {
-                return NeedMySignature;
-            }
-            return WaitingOthers;
+            return InReview;
         }
-        if (record.Status == HandoverRecordStatus.Completed)
+
+        // 4. Biên bản đã chốt mà không có tên tôi
+        if (!inRecord)
         {
-            if (!inRecord)
+            if (record.Status == HandoverRecordStatus.Completed)
             {
                 return Rejected;
             }
-            if (turn != null && turn.ReceivedAllAt != null)
-            {
-                return Received;
-            }
-            if (turn != null && turn.Grant != null)
-            {
-                return CodeReady;
-            }
-            return WaitingOthers;
+            return InReview;
         }
-        if (record.Status == HandoverRecordStatus.IdentityCheck && inRecord
-            && NeedsIdentitySubmission(turn, latestSubmission))
+
+        // 5. Có tên tôi: đi theo lượt của chính tôi, không chờ người nhận khác
+        if (turn == null)
         {
-            return NeedIdentity;
+            return InReview;
         }
-        return InReview;
+        if (turn.ReceivedAllAt != null)
+        {
+            return Received;
+        }
+        if (turn.Grant != null)
+        {
+            return CodeReady;
+        }
+        if (!IsIdentityConfirmed(turn))
+        {
+            if (NeedsIdentitySubmission(latestSubmission))
+            {
+                return NeedIdentity;
+            }
+            return InReview;
+        }
+        HandoverRecordSignature? mySignature =
+            HandoverRecordRules.FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId);
+        if (mySignature == null)
+        {
+            return NeedMySignature;
+        }
+        // Tôi đã ký nhưng luật sư hoặc Người thực thi chưa ký nên chưa được mở quyền tải.
+        return WaitingOthers;
+    }
+
+    /// <summary>Danh tính của lượt đã được luật sư xác nhận (lượt đã sẵn sàng hoặc đã giao, hoặc có mốc xác nhận).</summary>
+    private static bool IsIdentityConfirmed(HandoverTurn turn)
+    {
+        if (HandoverRecordRules.IsIdentityConfirmed(turn))
+        {
+            return true;
+        }
+        return turn.IdentityConfirmedAt != null;
     }
 
     /// <summary>
-    /// Người nhận phải nộp ảnh căn cước: lượt chưa được luật sư xác nhận danh tính và chưa có hồ sơ, hoặc hồ sơ mới nhất
-    /// bị yêu cầu bổ sung. Chưa có lượt thì chưa nộp được, coi như không cần.
+    /// Lượt chưa xác nhận danh tính: người nhận phải nộp ảnh căn cước khi chưa có hồ sơ, hoặc hồ sơ mới nhất bị yêu cầu
+    /// bổ sung. Đã nộp và đang chờ duyệt thì không cần làm gì.
     /// </summary>
-    private static bool NeedsIdentitySubmission(HandoverTurn? turn, HandoverSubmission? latestSubmission)
+    private static bool NeedsIdentitySubmission(HandoverSubmission? latestSubmission)
     {
-        if (turn == null || turn.IdentityConfirmedAt != null)
-        {
-            return false;
-        }
         if (latestSubmission == null)
         {
             return true;

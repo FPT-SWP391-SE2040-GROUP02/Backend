@@ -441,28 +441,87 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task TwoRecipients_GetGrantsOnlyAfterEveryoneSigned_AndCannotReadEachOther()
+    public async Task RecipientSignsFirst_GrantOpensWhenVerifierSignsLast()
     {
+        // Chuẩn bị: người nhận xong danh tính; Người thực thi đã ký, luật sư chưa ký
+        await BuildScenarioAsync(1);
+        HttpClient receiver = await NewReceiverAsync();
+        Guid turnId = (await ClaimAsync(receiver, 0)).GetProperty("id").GetGuid();
+        HttpResponseMessage executorSigned = await current.Record.Executor.Client.PostAsync(
+            HandoverRecordTestData.ExecutorRecordUrl(current.VaultId) + "/sign", null);
+        Assert.Equal(HttpStatusCode.OK, executorSigned.StatusCode);
+
+        // Hành động: người nhận ký trước, luật sư ký sau cùng
+        JsonElement afterRecipient = await HandoverRecordTestData.SignAsRecipientAsync(receiver, turnId);
+        string statusBeforeVerifier = (await GetTurnAsync(receiver, turnId)).GetProperty("status").GetString()!;
+        HttpResponseMessage verifierSigned = await current.Record.Verifier.Client.PostAsync(
+            HandoverRecordTestData.VerifierRecordUrl(current.Record.RecordId) + "/sign", null);
+
+        // Kiểm tra: chưa đủ chữ ký luật sư thì chưa mở; luật sư ký xong thì mở cho người đã ký và biên bản hoàn tất
+        Assert.Equal("SIGNING", afterRecipient.GetProperty("status").GetString());
+        Assert.Equal("READY_TO_ACCEPT", statusBeforeVerifier);
+        Assert.Equal(HttpStatusCode.OK, verifierSigned.StatusCode);
+        Assert.Equal("COMPLETED", (await ApiTestHelpers.ReadJsonAsync(verifierSigned)).GetProperty("status").GetString());
+        JsonElement committed = await GetTurnAsync(receiver, turnId);
+        Assert.Equal("HANDOVER_COMMITTED", committed.GetProperty("status").GetString());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Single(await db.Set<HandoverGrant>().Where(g => g.TurnId == turnId).ToListAsync());
+        });
+    }
+
+    [SqlFact]
+    public async Task RecipientCannotSignBeforeOwnIdentityIsConfirmed()
+    {
+        // Chuẩn bị: người nhận đã nhận lượt nhưng danh tính chưa được xác nhận (đang chờ duyệt ảnh căn cước)
+        await BuildScenarioAsync(1);
+        HttpClient receiver = await NewReceiverAsync();
+        Guid turnId = (await ClaimAsync(receiver, 0)).GetProperty("id").GetGuid();
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            HandoverTurn turn = await db.Set<HandoverTurn>().SingleAsync(t => t.Id == turnId);
+            turn.Status = HandoverTurnStatus.IdentityInProgress;
+            await db.SaveChangesAsync();
+        });
+
+        // Hành động
+        HttpResponseMessage response = await receiver.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
+
+        // Kiểm tra
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("IDENTITY_NOT_CONFIRMED", problem.GetProperty("reason").GetString());
+    }
+
+    [SqlFact]
+    public async Task TwoRecipients_EachGetsGrantOnOwnSignature_WithoutWaitingForTheOther()
+    {
+        // Chuẩn bị: hai người nhận; chỉ người A xong danh tính, người B chưa nộp ảnh căn cước (chưa nhận lượt)
         await BuildScenarioAsync(2);
         HttpClient receiverA = await NewReceiverAsync();
         HttpClient receiverB = await NewReceiverAsync(1);
-
         Guid turnA = (await ClaimAsync(receiverA, 0)).GetProperty("id").GetGuid();
-        // Mới một người nhận được xác nhận danh tính: chưa tới bước ký.
-        HttpResponseMessage tooEarly = await receiverA.PostAsync($"/api/v1/handover/turns/{turnA}/record/sign", null);
-        await ApiTestHelpers.AssertProblemAsync(tooEarly, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        string verifierUrl = HandoverRecordTestData.VerifierRecordUrl(current.Record.RecordId);
 
-        Guid turnB = (await ClaimAsync(receiverB, 1)).GetProperty("id").GetGuid();
+        // Hành động: luật sư và Người thực thi ký ngay sau khi chốt; A ký
         await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
         JsonElement afterA = await HandoverRecordTestData.SignAsRecipientAsync(receiverA, turnA);
+
+        // Kiểm tra: A được mở quyền tải dù B chưa nộp ảnh; biên bản vẫn đang giao; đã có người nhận thì không mở lại được
         Assert.Equal("SIGNING", afterA.GetProperty("status").GetString());
-        Assert.Equal("READY_TO_ACCEPT", (await GetTurnAsync(receiverA, turnA)).GetProperty("status").GetString());
-
-        JsonElement afterB = await HandoverRecordTestData.SignAsRecipientAsync(receiverB, turnB);
-        Assert.Equal("COMPLETED", afterB.GetProperty("status").GetString());
-
         JsonElement committedA = await GetTurnAsync(receiverA, turnA);
+        Assert.Equal("HANDOVER_COMMITTED", committedA.GetProperty("status").GetString());
         Guid grantA = committedA.GetProperty("grant").GetProperty("id").GetGuid();
+        JsonElement reopen = await ApiTestHelpers.AssertProblemAsync(
+            await current.Record.Verifier.Client.PostAsync(verifierUrl + "/reopen", null),
+            HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("PARTIALLY_DELIVERED", reopen.GetProperty("reason").GetString());
+
+        // Hành động: B nhận lượt (xong danh tính) rồi ký sau
+        Guid turnB = (await ClaimAsync(receiverB, 1)).GetProperty("id").GetGuid();
+        JsonElement afterB = await HandoverRecordTestData.SignAsRecipientAsync(receiverB, turnB);
+
+        // Kiểm tra: mọi người nhận đã ký thì biên bản hoàn tất; mỗi người chỉ đọc được phần của mình
+        Assert.Equal("COMPLETED", afterB.GetProperty("status").GetString());
         await VerifyKeyAsync(receiverA, turnA);
         Guid itemId = FindItemId(committedA.GetProperty("items"), "FILE");
         HttpResponseMessage bTries = await receiverB.GetAsync($"/api/v1/handover/grants/{grantA}/assets/{itemId}/content");

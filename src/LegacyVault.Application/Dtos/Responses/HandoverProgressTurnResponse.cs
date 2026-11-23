@@ -58,7 +58,10 @@ public class HandoverProgressTurnResponse
     /// <summary>Lúc người nhận ký biên bản bàn giao (bản hiện tại); null khi chưa ký.</summary>
     public DateTimeOffset? RecipientSignedAt { get; set; }
 
-    /// <summary>Lúc biên bản bàn giao đủ chữ ký ba bên; null khi chưa đủ.</summary>
+    /// <summary>
+    /// Lúc lượt này đủ chữ ký ba bên (luật sư, Người thực thi và chính người nhận) và được mở quyền tải; null khi chưa.
+    /// Mỗi người nhận được mở riêng, không chờ người nhận khác.
+    /// </summary>
     public DateTimeOffset? DocumentApprovedAt { get; set; }
 
     /// <summary>Lúc người nhận nhập đúng mã mở gói; null khi chưa nhập hoặc kho không dùng mã.</summary>

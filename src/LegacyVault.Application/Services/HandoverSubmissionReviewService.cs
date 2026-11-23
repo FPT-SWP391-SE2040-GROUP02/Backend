@@ -253,7 +253,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         return submission;
     }
 
-    /// <summary>Biên bản của lượt phải đang ở bước kiểm danh tính (đã chốt, chưa mở lại để sửa).</summary>
+    /// <summary>Biên bản của lượt phải đã chốt và đang giao (chưa mở lại để sửa, chưa hoàn tất).</summary>
     private async Task RequireIdentityStepAsync(HandoverTurn turn, CancellationToken ct)
     {
         if (turn.RecordId == null)
@@ -261,7 +261,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không thuộc biên bản bàn giao nào.");
         }
         HandoverRecord? record = await records.FindByIdAsync(turn.RecordId.Value, ct);
-        if (record == null || record.Status != HandoverRecordStatus.IdentityCheck)
+        if (record == null || !HandoverRecordRules.IsOpenForSigning(record))
         {
             throw HandoverAccess.NotAllowed("NOT_IDENTITY_STEP",
                 "Biên bản chưa ở bước kiểm danh tính. Hãy chốt biên bản trước.");

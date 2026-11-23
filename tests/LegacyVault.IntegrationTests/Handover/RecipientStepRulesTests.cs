@@ -169,12 +169,13 @@ public sealed class RecipientStepRulesTests
         string confirmed = RecipientStepRules.ResolveStatus(
             record, Me, turn, Submission(HandoverSubmissionStatus.Approved));
 
-        // Kiểm tra: đã nộp chờ duyệt thì luật sư đang xử lý; bị yêu cầu bổ sung thì phải nộp lại
+        // Kiểm tra: đã nộp chờ duyệt thì luật sư đang xử lý; bị yêu cầu bổ sung thì phải nộp lại;
+        // danh tính của tôi xong thì ký được ngay
         Assert.Equal(RecipientStepRules.InReview, waiting);
         Assert.False(RecipientStepRules.NeedsAction(waiting, record));
         Assert.Equal(RecipientStepRules.NeedIdentity, supplement);
         Assert.True(RecipientStepRules.NeedsAction(supplement, record));
-        Assert.Equal(RecipientStepRules.InReview, confirmed);
+        Assert.Equal(RecipientStepRules.NeedMySignature, confirmed);
     }
 
     [Fact]
@@ -199,21 +200,57 @@ public sealed class RecipientStepRulesTests
     [Fact]
     public void Signing_BeforeAndAfterMySignature()
     {
-        // Chuẩn bị
+        // Chuẩn bị: danh tính của tôi đã xong (lượt sẵn sàng)
         HandoverRecord record = Record(HandoverRecordStatus.Signing);
         AddClaim(record, Me, HandoverClaimStatus.Accepted);
         AddLine(record, Me);
+        HandoverTurn turn = new HandoverTurn();
+        turn.Status = HandoverTurnStatus.ReadyToAccept;
 
         // Hành động
-        string beforeSign = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn(), null);
+        string beforeSign = RecipientStepRules.ResolveStatus(record, Me, turn, null);
         AddMySignature(record);
-        string afterSign = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn(), null);
+        string afterSign = RecipientStepRules.ResolveStatus(record, Me, turn, null);
 
-        // Kiểm tra
+        // Kiểm tra: ký xong mà luật sư hoặc Người thực thi chưa ký thì chờ các bên
         Assert.Equal(RecipientStepRules.NeedMySignature, beforeSign);
         Assert.True(RecipientStepRules.NeedsAction(beforeSign, record));
         Assert.Equal(RecipientStepRules.WaitingOthers, afterSign);
         Assert.False(RecipientStepRules.NeedsAction(afterSign, record));
+    }
+
+    [Fact]
+    public void Signing_MyGrantOpened_IsCodeReady_EvenIfOthersNotSigned()
+    {
+        // Chuẩn bị: biên bản còn đang giao (người khác chưa ký) nhưng lượt của tôi đã có quyền tải
+        HandoverRecord record = Record(HandoverRecordStatus.Signing);
+        AddLine(record, Me);
+        AddLine(record, Other);
+        AddMySignature(record);
+        HandoverTurn turn = new HandoverTurn();
+        turn.Status = HandoverTurnStatus.HandoverCommitted;
+        turn.Grant = new HandoverGrant();
+
+        // Hành động
+        string status = RecipientStepRules.ResolveStatus(record, Me, turn, null);
+
+        // Kiểm tra
+        Assert.Equal(RecipientStepRules.CodeReady, status);
+        Assert.True(RecipientStepRules.NeedsAction(status, record));
+    }
+
+    [Fact]
+    public void Signing_MyIdentityNotDone_NeedsIdentity_WhileRecordIsSigning()
+    {
+        // Chuẩn bị: biên bản đã chốt (luật sư và Người thực thi ký được), lượt của tôi chưa nộp ảnh căn cước
+        HandoverRecord record = Record(HandoverRecordStatus.Signing);
+        AddLine(record, Me);
+
+        // Hành động
+        string status = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn(), null);
+
+        // Kiểm tra
+        Assert.Equal(RecipientStepRules.NeedIdentity, status);
     }
 
     [Fact]
