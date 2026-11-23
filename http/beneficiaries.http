@@ -1,6 +1,6 @@
 # Thử CRUD hồ sơ người nhận cấp kho — chỉ Development (docs/api-contract.md mục 6.8).
 #
-# Chuẩn bị giống http/containers.http: chạy migration, chạy API (profile http), tạo tài khoản bằng http/auth.http,
+# Chuẩn bị giống http/assignments.http: chạy migration, chạy API (profile http), tạo tài khoản bằng http/auth.http,
 # đăng nhập bên dưới để lấy token, tạo kho rồi điền vaultId.
 # Hạng Free thêm người nhận → 403 PAID_TIER_REQUIRED (SETUP-17). Nâng kho lên XS trong SSMS
 # (CHỈ DB local, không chạy trên môi trường thật):
@@ -92,6 +92,6 @@ Content-Type: application/json
 
 { "etag": "{{etag}}", "email": "", "phone": "" }
 
-### Xóa hồ sơ (204; đang ở gói → 409 BENEFICIARY_IN_USE kèm containerIds; gọi lại → 404 BENEFICIARY_NOT_FOUND)
+### Xóa hồ sơ (204; đang được gán tài sản → 409 BENEFICIARY_IN_USE kèm assetIds; gọi lại → 404 BENEFICIARY_NOT_FOUND)
 DELETE {{baseUrl}}/vaults/{{vaultId}}/beneficiaries/{{beneficiaryId}}
 Authorization: Bearer {{token}}

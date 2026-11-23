@@ -1,0 +1,85 @@
+# Thử gán tài sản cho người nhận (docs/api-contract.md mục 6.6) — chỉ Development.
+#
+# Chuẩn bị giống http/vault-assets.http: chạy migration, chạy API (profile http), tạo tài khoản bằng http/auth.http,
+# đăng nhập bên dưới để lấy token, tạo kho rồi điền vaultId.
+# Chủ kho gán trực tiếp từng tài sản cho từng người nhận. Tài sản gán cho nhiều người thì những người đó nhận chung.
+# Gán và gỡ gán cần mã PIN của kho: kho đã đặt PIN thì thêm header X-Vault-Pin (xem http/vault-pin.http).
+
+@baseUrl = http://localhost:5000/api/v1
+
+### Đăng nhập — lấy access token (hết hạn sau 15 phút thì gửi lại request này)
+# Tài khoản tạo bằng http/auth.http: đăng ký → xác minh email (token xác minh in ở console của API).
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@gmail.com", "password": "Password123!" }
+
+###
+@token = {{login.response.body.$.accessToken}}
+
+### Kho của tôi — lấy vaultId, xem planConfigVersion
+GET {{baseUrl}}/vaults/me
+Authorization: Bearer {{token}}
+
+### Điền vaultId từ response trên
+@vaultId = 00000000-0000-0000-0000-000000000000
+
+# Hạng Free gán tài sản → 403 PAID_TIER_REQUIRED.
+# Muốn thử luồng trả phí: nâng kho lên XS trong SSMS (CHỈ DB local, không chạy trên môi trường thật):
+#    UPDATE VaultEntitlements
+#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200, IncludedBeneficiarySlots = 2,
+#        ServiceExpiresAt = DATEADD(DAY, 365, SYSDATETIMEOFFSET())
+#    WHERE VaultId = '<vaultId>';
+# Hoặc dùng http/plan-dev.sql.
+
+### Tạo tài sản dạng chữ — lấy id từ response
+POST {{baseUrl}}/vaults/{{vaultId}}/assets/text
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Sổ tiết kiệm", "content": "Ngân hàng A, số sổ ..." }
+
+### Điền assetId từ response trên
+@assetId = 00000000-0000-0000-0000-000000000000
+
+### Điền beneficiaryId, beneficiaryId2 từ http/beneficiaries.http (kho XS có 2 suất người nhận)
+@beneficiaryId = 00000000-0000-0000-0000-000000000000
+@beneficiaryId2 = 00000000-0000-0000-0000-000000000000
+
+### Mọi dòng gán của kho
+GET {{baseUrl}}/vaults/{{vaultId}}/assignments
+Authorization: Bearer {{token}}
+
+### Gán tài sản cho một người nhận (200; gửi lại đúng danh sách vẫn 200 và không ghi gì)
+PUT {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/assignments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "beneficiaryIds": ["{{beneficiaryId}}"] }
+
+### Gán chung cho hai người nhận (đồng thừa kế). Người mới vượt suất → 409 BENEFICIARY_SLOTS_EXCEEDED
+PUT {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/assignments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "beneficiaryIds": ["{{beneficiaryId}}", "{{beneficiaryId2}}"] }
+
+### Xem suất đang dùng (usedBeneficiarySlots), tổng suất và số tài sản đã gán (assignedAssetCount)
+GET {{baseUrl}}/vaults/me
+Authorization: Bearer {{token}}
+
+### Gỡ một người nhận khỏi tài sản (người còn được gán tài sản khác vẫn chiếm suất)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/assignments/{{beneficiaryId2}}
+Authorization: Bearer {{token}}
+
+### Gỡ hết người nhận của tài sản (danh sách rỗng)
+PUT {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/assignments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "beneficiaryIds": [] }
+
+### Gỡ dòng gán cuối cùng của kho khi kế hoạch đang chạy: xác nhận cho kế hoạch về DRAFT (409 nếu chưa xác nhận)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/assignments/{{beneficiaryId}}?confirmPlanDeactivation=true
+Authorization: Bearer {{token}}

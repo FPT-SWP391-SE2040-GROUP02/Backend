@@ -16,7 +16,7 @@ Tài liệu này mô tả **đúng những gì code hiện làm**, đọc từ n
 
 1. Chủ kho đăng ký, xác minh email, bắt buộc nhập số điện thoại Việt Nam trước khi vào dashboard.
 2. Chủ kho làm eKYC mục đích `OWNER_ENROLLMENT` (mục 9) rồi mới kích hoạt được kế hoạch (`OWNER_EKYC_REQUIRED`).
-3. Chủ kho tạo gói (Container), tài sản trong gói, người nhận được chỉ định cho từng gói; tài sản được mã hóa phía server.
+3. Chủ kho tạo tài sản rồi gán trực tiếp từng tài sản cho từng người nhận (bảng `AssetAssignments`); tài sản gán cho nhiều người thì nhận chung; tài sản được mã hóa phía server.
 4. Chủ kho mời Người thực thi (chính, có thể thêm dự phòng). Lời mời hết hạn sau 7 ngày (`Executor.InvitationExpiresDays`), nhắc sau 48 giờ (`Executor.ReminderAfterHours`).
 5. Kích hoạt kế hoạch: kế hoạch chuyển `DRAFT` thành `ACTIVE`, mở kỳ điểm danh đầu tiên và gửi thư báo cho người nhận kèm liên hệ Chủ kho và Người thực thi.
 6. Admin có thể giao hoặc đổi Người thực thi cho kho (nhật ký `EXECUTOR_ASSIGNED_BY_ADMIN`, kèm lý do); người được giao phải chấp nhận lời mời, thư mời ghi rõ do quản trị viên giao.

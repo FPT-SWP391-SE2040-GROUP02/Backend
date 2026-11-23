@@ -15,7 +15,7 @@ Implemented 15/10/2026. Canonical prefix is `/api/v1` only. Swagger UI: `/swagge
 
 Paths in the table follow `/api/v1`. Request/response schemas are generated from DTOs in OpenAPI. FE validates wire responses with Zod.
 
-Activation requires an active email-verified Owner, open vault, unexpired paid service, latest Passed Owner eKYC with purpose OWNER_ENROLLMENT, a Ready container, and an active verified distinct primary Executor who accepted the current scope. (Executor dự phòng đã bỏ từ 30/10/2026; một Người thực thi là nhân sự role EXECUTOR, không phải người nhận.) Policy acknowledgement is explicit and stores version/time. A stale configVersion returns EDIT_CONFLICT. Duplicate activation does not reset deadlines. Deactivation suspends accepted Executors; reactivation requires fresh acceptance. Existing pending check-in settings apply when a new period starts.
+Activation requires an active email-verified Owner, open vault, unexpired paid service, latest Passed Owner eKYC with purpose OWNER_ENROLLMENT, at least one asset assigned to a recipient (`ASSIGNMENT_REQUIRED` when none), and an active verified distinct primary Executor who accepted the current scope. (Executor dự phòng đã bỏ từ 30/10/2026; một Người thực thi là nhân sự role EXECUTOR, không phải người nhận.) Policy acknowledgement is explicit and stores version/time. A stale configVersion returns EDIT_CONFLICT. Duplicate activation does not reset deadlines. Deactivation suspends accepted Executors; reactivation requires fresh acceptance. Existing pending check-in settings apply when a new period starts.
 
 **Lời mời của tôi (FE: mục Lời mời).** Người được mời xem và trả lời lời mời ngay trong app, không cần link email: `GET /executor-invitations/mine` rồi `POST /executor-invitations/{invitationId}/respond`. Vẫn phải bấm chấp nhận rõ ràng; chỉ email đã xác minh trùng email được mời mới thấy và trả lời được. `GET mine` không áp giới hạn tần suất `executor-invitations` (chỉ đọc theo tài khoản).
 
@@ -48,16 +48,16 @@ PlanSetupFlowTests exercise real HTTP/SQL against isolated GUID test databases, 
 
 ## Màn kích hoạt: gói, tài sản ngoài gói, cảnh báo (bổ sung 17/10/2026)
 
-`GET /api/v1/vaults/{vaultId}/plan-setup` và phản hồi `200` của `POST /api/v1/vaults/{vaultId}/activate` có thêm ba field ở cuối phản hồi:
+`GET /api/v1/vaults/{vaultId}/plan-setup` và phản hồi `200` của `POST /api/v1/vaults/{vaultId}/activate` có thêm các field ở cuối phản hồi:
 
 | Field | Kiểu | Nội dung |
 |---|---|---|
-| `containers` | Mảng object | Gói `READY` và `DRAFT`, không có `ARCHIVED`. Mỗi phần tử gồm `id`, `name`, `status`, `assetCount`, `designationCount`, `missingRequirements`. |
-| `assetsOutsideContainer` | Mảng object | Tài sản chưa có liên kết trong `ContainerAssets`. Mỗi phần tử gồm `id`, `name`, `kind` (`FILE` hoặc `TEXT`). Chỉ trả metadata, không chứa nội dung tài sản. |
+| `assignedAssetCount` | int | Số tài sản khác nhau đã được gán cho ít nhất một người nhận (tài sản nhận chung chỉ đếm một lần). |
+| `unassignedAssets` | Mảng object | Tài sản chưa gán cho người nhận nào (không có dòng trong `AssetAssignments`). Mỗi phần tử gồm `id`, `name`, `kind` (`FILE` hoặc `TEXT`). Chỉ trả metadata, không chứa nội dung tài sản. |
 | `warnings` | Mảng chuỗi | Cảnh báo cấu hình; hiện có `NO_BACKUP_EXECUTOR`. Không có cảnh báo thì trả `[]`. |
 
-- **SETUP-01:** `containers` sắp theo `CreatedAt`, rồi `Id`, tăng dần. `missingRequirements` của từng gói dùng `ContainerRules.GetMissingRequirements`: `NO_ASSET`, `NO_DESIGNATION`; gói `READY` có danh sách rỗng. FE có thể tách nhóm "Sẽ bàn giao" (`READY`) và "Gói chưa đủ" (`DRAFT`).
-- **ASSET-03 / AC-68:** `assetsOutsideContainer` sắp theo `CreatedAt`, rồi `Id`, tăng dần. Tài sản trong gói `DRAFT` đã được tính ở `containers[].assetCount`, không lặp lại trong danh sách này. Gói lưu trữ đã gỡ các liên kết tài sản. Hai danh sách không phân trang.
+- **Gán tài sản:** kho phải có ít nhất một dòng gán (tài sản - người nhận) thì mới kích hoạt được; chưa có thì `missingRequirements` chứa `ASSIGNMENT_REQUIRED` (thay cho `READY_CONTAINER_REQUIRED` thời còn gói tài sản). FE có thể hiện nhóm "Sẽ bàn giao" từ `recipients[].assets[]` và nhóm "Chưa gán cho ai" từ `unassignedAssets`.
+- **Tài sản chưa gán:** `unassignedAssets` sắp theo `CreatedAt`, rồi `Id`, tăng dần; không phân trang.
 - **SETUP-10:** chỉ bỏ `NO_BACKUP_EXECUTOR` khi có Executor vai trò Backup trong danh sách đã chấp nhận, đúng scope version hiện hành, có tài khoản hoạt động, email đã xác minh và khác Owner. Backup mới được mời (`INVITED`) vẫn có cảnh báo.
 - **Cảnh báo không chặn kích hoạt:** `warnings` không được thêm vào `missingRequirements`, không đổi cách tính `canActivate` hay điều kiện của `POST /activate`. Nếu Executor chính cũng là người nhận và thiếu Backup độc lập đủ điều kiện, mã chặn `BACKUP_EXECUTOR_REQUIRED` vẫn có thể xuất hiện cùng cảnh báo `NO_BACKUP_EXECUTOR`.
 - **EKYC-01 / AC-46:** `OWNER_EKYC_REQUIRED` xét lượt mới nhất theo `CreatedAt`, rồi `Id`, giảm dần, có mục đích `OWNER_ENROLLMENT` và yêu cầu lượt đó `PASSED`. Mục đích eKYC duy nhất còn lại là `OWNER_ENROLLMENT` (hai mục đích cũ đã bỏ). Dữ liệu dev cũ có mục đích mặc định OwnerEnrollment vẫn được tính, kể cả chưa có cờ liveness.
@@ -70,28 +70,11 @@ Ví dụ GET rút gọn, giả định các điều kiện kích hoạt khác đ
   "configVersion": 7,
   "canActivate": true,
   "missingRequirements": [],
-  "containers": [
-    {
-      "id": "00000000-0000-0000-0000-000000000001",
-      "name": "Gói tài liệu thử nghiệm",
-      "status": "READY",
-      "assetCount": 1,
-      "designationCount": 1,
-      "missingRequirements": []
-    },
-    {
-      "id": "00000000-0000-0000-0000-000000000002",
-      "name": "Gói chưa có người nhận",
-      "status": "DRAFT",
-      "assetCount": 1,
-      "designationCount": 0,
-      "missingRequirements": ["NO_DESIGNATION"]
-    }
-  ],
-  "assetsOutsideContainer": [
+  "assignedAssetCount": 1,
+  "unassignedAssets": [
     {
       "id": "00000000-0000-0000-0000-000000000003",
-      "name": "Ghi chú thử nghiệm ngoài gói",
+      "name": "Ghi chú thử nghiệm chưa gán",
       "kind": "TEXT"
     }
   ],
@@ -99,7 +82,7 @@ Ví dụ GET rút gọn, giả định các điều kiện kích hoạt khác đ
 }
 ```
 
-Lỗi `409 PLAN_ACTIVATION_REQUIREMENTS_NOT_MET` giữ nguyên ProblemDetails với `missingRequirements`; ba field mới thuộc phản hồi thành công. Thử tay bằng `http/plan-setup.http`; dữ liệu giả lập cho DB local nằm trong `http/plan-dev.sql`.
+Lỗi `409 PLAN_ACTIVATION_REQUIREMENTS_NOT_MET` giữ nguyên ProblemDetails với `missingRequirements`; các field mới thuộc phản hồi thành công. Thử tay bằng `http/plan-setup.http`; dữ liệu giả lập cho DB local nằm trong `http/plan-dev.sql`.
 
 ## Di chúc điện tử, mã mở gói do server tạo, người nhận (bổ sung 16/11/2026, nhánh feat/will-signature)
 
@@ -111,7 +94,7 @@ Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự 
 |---|---|---|
 | `ownerFullName`, `ownerEmail` | string | Họ tên và email tài khoản Chủ kho. |
 | `activatedAt` | ISO hoặc null | Thời điểm kích hoạt. FE chỉ coi Chủ kho "đã ký" khi `planStatus != DRAFT` và `activatedAt != null`. |
-| `recipients[]` | mảng | Người nhận theo từng người, lấy từ chỉ định của các gói đang mở (không gồm gói đã xóa), sắp theo `fullName`; người không có gói nào thì không xuất hiện. Mỗi phần tử: `beneficiaryId`, `fullName` (giải mã từ dữ liệu cá nhân, không log), `hasMessage` (đã có lời nhắn; **không trả nội dung lời nhắn**), `containers[]` (`id`, `name`, `assetCount`, `status` `READY`/`DRAFT`). |
+| `recipients[]` | mảng | Người nhận theo từng người, lấy từ các dòng gán tài sản của kho, sắp theo `fullName`; người chưa được gán tài sản nào thì không xuất hiện. Mỗi phần tử: `beneficiaryId`, `fullName` (giải mã từ dữ liệu cá nhân, không log), `hasMessage` (đã có lời nhắn; **không trả nội dung lời nhắn**), `assets[]` (`id`, `name`, `kind`, `sharedWithCount` là số người cùng nhận tài sản đó, tính cả người này; lớn hơn 1 là nhận chung). |
 | `executors[].fullName` | string hoặc null | Họ tên tài khoản Người thực thi nếu đã liên kết (sau khi chấp nhận), ngược lại null. |
 
 **Kích hoạt (`POST .../activate`).** Bắt buộc header `X-Vault-Pin` (thiếu/sai/khóa PIN trả cùng mã lỗi `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN` / `VAULT_PIN_LOCKED` như các thao tác PIN khác). Cùng một giao dịch: đặt kế hoạch `ACTIVE`, mở kỳ điểm danh đầu, **tự tạo mã mở gói** nếu kho chưa có (hoặc chỉ có bản cũ chỉ-hash thì tạo mới, version + 1; không trả mã trong response) và ghi nhật ký `PlanActivated` (actor Owner, đích Vault). Gọi lặp khi đã `ACTIVE` không ghi thêm.
@@ -142,11 +125,11 @@ Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự 
 **Quy tắc nghiệp vụ.** Bàn giao chỉ theo **bản ký gần nhất**. Mỗi lần Chủ kho ký (kích hoạt hoặc ký lại bằng PIN) server lưu một phiên bản trong bảng `WillVersions`; khi bắt đầu bàn giao, `HandoverStarter` chỉ dùng phần **có trong bản ký gần nhất VÀ vẫn còn tồn tại** (giao của bản chụp và cấu hình hiện tại):
 
 - Xóa gói/tài sản/người nhận sau khi ký: có hiệu lực ngay (không bàn giao thứ đã xóa); phần còn lại vẫn bàn giao theo bản ký.
-- Thêm gói, thêm tài sản vào gói, đổi người nhận hoặc gắn người nhận mới mà **chưa ký lại**: bị **bỏ qua** khi bàn giao. Gói mà mọi tài sản trong bản ký đã bị gỡ (chỉ còn tài sản thêm sau khi ký) cũng không tạo lượt; không còn lượt nào → 409 `HANDOVER_NOT_ALLOWED`, `reason = NOTHING_TO_HAND_OVER`.
+- Gán thêm tài sản cho người nhận, đổi người nhận hoặc gán cho người nhận mới mà **chưa ký lại**: khác bản ký nên được đếm ở `unsignedChanges` và chờ Chủ kho ký lại.
 - Kế hoạch đang chạy từ trước khi có tính năng này và **chưa có dòng `WillVersions` nào**: giữ cách cũ (theo cấu hình hiện tại). Người thực thi vẫn **không** ký lại khi đổi tài sản/người nhận (chỉ ký lại khi phạm vi nhiệm vụ đổi, như trước).
 - Chưa có hạn ân hạn hay tự động đưa kế hoạch về nháp.
 
-**Bảng `WillVersions`** (migration `AddWillVersions`): `Id`, `VaultId` (FK, unique cùng `VersionNo`), `VersionNo` (1, 2, ...), `ConfigVersion` (lúc ký), `SignedAt`, `SnapshotJson` (nvarchar(max)): `{"recipients":[{"containerId","beneficiaryId"}],"assets":[{"containerId","assetId"}]}`. Chỉ có id, không có tên tài sản/người nhận hay nội dung nhạy cảm; chỉ gói `READY` vào bản chụp. Kích hoạt tạo phiên bản kế tiếp trong cùng giao dịch (phiên bản 1 ở lần kích hoạt đầu; kích hoạt lại sau khi về nháp tạo phiên bản N+1).
+**Bảng `WillVersions`** (migration `AddWillVersions`): `Id`, `VaultId` (FK, unique cùng `VersionNo`), `VersionNo` (1, 2, ...), `ConfigVersion` (lúc ký), `SignedAt`, `SnapshotJson` (nvarchar(max)): `{"assignments":[{"assetId","beneficiaryId"}]}`. Chỉ có id, không có tên tài sản/người nhận hay nội dung nhạy cảm; mỗi dòng gán là một phần tử, tài sản nhận chung có nhiều phần tử. Bản ký cũ (dạng gói) được migration `ReplaceContainersWithAssetAssignments` đổi sang dạng này. Kích hoạt tạo phiên bản kế tiếp trong cùng giao dịch (phiên bản 1 ở lần kích hoạt đầu; kích hoạt lại sau khi về nháp tạo phiên bản N+1).
 
 | Method / path | Caller / body | Result |
 |---|---|---|
@@ -160,6 +143,6 @@ Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự 
 | `willVersion` | int hoặc null | Số phiên bản ký gần nhất; null nếu chưa có phiên bản nào. |
 | `willSignedAt` | ISO hoặc null | Thời điểm ký phiên bản gần nhất. |
 | `hasUnsignedChanges` | bool | Cấu hình hiện tại khác bản chụp gần nhất. Chỉ tính khi kế hoạch đang chạy; nháp hoặc chưa có phiên bản → `false`. |
-| `unsignedChanges` | object | Chỉ **số đếm**, không có tên: `removedContainers`, `addedContainers`, `removedAssets`, `addedAssets`, `removedRecipients`, `addedRecipients`, `changedRecipientCount`. Gói thêm/xóa tính ở mức gói; tài sản và người nhận chỉ đếm trong các gói có ở **cả** bản ký lẫn cấu hình hiện tại; `changedRecipientCount` = số gói như vậy mà tập người nhận khác bản ký. Gói đang `READY` mà về `DRAFT` tính là gói bị xóa. Không có thay đổi: toàn số 0. |
+| `unsignedChanges` | object | Chỉ **số đếm**, không có tên: `addedAssignments` (cặp tài sản - người nhận mới thêm), `removedAssignments` (cặp đã gỡ), `affectedRecipientCount` (số người nhận có cặp thêm hoặc gỡ). Không có thay đổi: toàn số 0. |
 
 Lỗi mới: `WILL_SIGN_NOT_ALLOWED` (409). Nhật ký mới (`AuditAction`, lưu dạng chuỗi): `WillResigned = 64`, `WillIdentityViewed = 65`. Thử tay: `http/plan-setup.http`.

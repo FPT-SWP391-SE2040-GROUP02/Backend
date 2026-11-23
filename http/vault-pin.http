@@ -1,6 +1,6 @@
 # Thử mã PIN kho — chỉ Development (docs/api-contract.md mục 6.20).
 #
-# Chuẩn bị giống http/containers.http: chạy migration (AddVaultPins), chạy API (profile http), tạo tài khoản bằng
+# Chuẩn bị giống http/assignments.http: chạy migration (AddVaultPins), chạy API (profile http), tạo tài khoản bằng
 # http/auth.http, đăng nhập bên dưới để lấy token, tạo kho rồi điền vaultId và assetId.
 # PIN gồm đúng 6 chữ số, không dùng số giống nhau hay dãy liên tiếp (123456, 654321...).
 # Dữ liệu dưới đây là dữ liệu giả.
@@ -82,7 +82,7 @@ DELETE {{baseUrl}}/vaults/{{vaultId}}/beneficiaries/00000000-0000-0000-0000-0000
 Authorization: Bearer {{token}}
 X-Vault-Pin: 482913
 
-### Xóa gói — cần PIN (điền containerId)
-DELETE {{baseUrl}}/vaults/{{vaultId}}/containers/00000000-0000-0000-0000-000000000000
+### Gỡ gán tài sản — cần PIN (điền assetId và beneficiaryId)
+DELETE {{baseUrl}}/vaults/{{vaultId}}/assets/00000000-0000-0000-0000-000000000000/assignments/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{token}}
 X-Vault-Pin: 482913
