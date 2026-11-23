@@ -51,7 +51,7 @@ public interface IPlanSetupService
 
 /// <summary>Owner setup and explicit recipient acceptance. No identity/payment bypass and no implicit activation.</summary>
 public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository vaults,
-    IUserRepository users, IContainerRepository containers, IBeneficiaryRepository beneficiaries,
+    IUserRepository users, IAssetAssignmentRepository assignments, IBeneficiaryRepository beneficiaries,
     IEkycVerificationRepository ekyc, IExecutorInvitationRepository invitations, ITokenService tokens,
     IExecutorInvitationSender sender, IUnitOfWork unitOfWork,
     TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
@@ -497,8 +497,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             // Mã mở gói do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
             await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
             // Ký bằng PIN cũng là lúc chụp lại cấu hình: bàn giao chỉ theo bản ký này cho tới khi Chủ kho ký lại.
-            List<Container> signedContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
-            await AddWillVersionAsync(vault, signedContainers, now, ct);
+            List<AssetAssignment> signedAssignments = await assignments.FindByVaultIdAsync(vault.Id, ct);
+            await AddWillVersionAsync(vault, signedAssignments, now, ct);
             audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.PlanActivated,
                 AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
             await unitOfWork.SaveChangesAsync(ct);
@@ -523,12 +523,12 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                     "Cấu hình kế hoạch đã thay đổi. Tải lại trước khi ký.");
             }
 
-            List<Container> openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
+            List<AssetAssignment> currentAssignments = await assignments.FindByVaultIdAsync(vault.Id, ct);
             WillVersion? latest = await willVersions.FindLatestByVaultIdAsync(vault.Id, ct);
             if (latest != null)
             {
                 WillSnapshot signed = WillVersionRules.FromJson(latest.SnapshotJson);
-                WillSnapshot current = WillVersionRules.BuildSnapshot(openContainers);
+                WillSnapshot current = WillVersionRules.BuildSnapshot(currentAssignments);
                 UnsignedWillChangesResponse changes = WillVersionRules.Compare(signed, current);
                 if (!WillVersionRules.HasChanges(changes))
                 {
@@ -538,7 +538,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             }
 
             DateTimeOffset now = time.GetUtcNow();
-            WillVersion created = await AddWillVersionAsync(vault, openContainers, now, ct);
+            WillVersion created = await AddWillVersionAsync(vault, currentAssignments, now, ct);
             audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.WillResigned,
                 AuditTargetType.Vault, vault.Id, created.VersionNo, AuditOutcome.Succeeded, null, now));
             await unitOfWork.SaveChangesAsync(ct);
@@ -548,7 +548,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
     /// <summary>Tạo phiên bản di chúc kế tiếp từ cấu hình hiện tại (chưa lưu; người gọi SaveChanges cùng thao tác chính).</summary>
     private async Task<WillVersion> AddWillVersionAsync(
-        Vault vault, List<Container> openContainers, DateTimeOffset now, CancellationToken ct)
+        Vault vault, List<AssetAssignment> currentAssignments, DateTimeOffset now, CancellationToken ct)
     {
         WillVersion? latest = await willVersions.FindLatestByVaultIdAsync(vault.Id, ct);
         int nextNo = 1;
@@ -556,7 +556,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         {
             nextNo = latest.VersionNo + 1;
         }
-        WillSnapshot snapshot = WillVersionRules.BuildSnapshot(openContainers);
+        WillSnapshot snapshot = WillVersionRules.BuildSnapshot(currentAssignments);
         WillVersion version = WillVersionRules.CreateVersion(vault.Id, nextNo, vault.Plan.ConfigVersion, snapshot, now);
         willVersions.Add(version);
         return version;
@@ -623,10 +623,10 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         {
             missing.Add("OWNER_EKYC_REQUIRED");
         }
-        int readyContainersCount = await containers.CountReadyByVaultIdAsync(vault.Id, ct);
-        if (readyContainersCount == 0)
+        int assignmentCount = await assignments.CountByVaultIdAsync(vault.Id, ct);
+        if (assignmentCount == 0)
         {
-            missing.Add("READY_CONTAINER_REQUIRED");
+            missing.Add("ASSIGNMENT_REQUIRED");
         }
         List<Executor> accepted = new List<Executor>();
         foreach (Executor item in vault.Executors)
@@ -664,9 +664,9 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         {
             missing.Add("PLAN_NOT_DRAFT");
         }
-        List<Container> openContainers = await containers.FindOpenByVaultIdAsync(vault.Id, ct);
-        List<Asset> outsideAssets = await assets.FindOutsideContainerByVaultIdAsync(vault.Id, ct);
-        List<PlanSetupRecipientResponse> recipients = await BuildRecipientsAsync(vault, openContainers, ct);
+        List<AssetAssignment> vaultAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
+        List<Asset> unassignedAssets = await assets.FindUnassignedByVaultIdAsync(vault.Id, ct);
+        List<PlanSetupRecipientResponse> recipients = await BuildRecipientsAsync(vault, vaultAssignments, ct);
         List<ExecutorInvitationResponse> executorItems = new List<ExecutorInvitationResponse>();
         foreach (Executor executorItem in vault.Executors.OrderByDescending(e => e.InvitedAt))
         {
@@ -709,7 +709,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             if (PlanRules.IsRunning(vault.Plan.Status))
             {
                 WillSnapshot signedSnapshot = WillVersionRules.FromJson(latestWill.SnapshotJson);
-                WillSnapshot currentSnapshot = WillVersionRules.BuildSnapshot(openContainers);
+                WillSnapshot currentSnapshot = WillVersionRules.BuildSnapshot(vaultAssignments);
                 unsignedChanges = WillVersionRules.Compare(signedSnapshot, currentSnapshot);
                 hasUnsignedChanges = WillVersionRules.HasChanges(unsignedChanges);
             }
@@ -718,59 +718,83 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
             executorItems,
-            PlanSetupMappings.ToContainerItems(openContainers), PlanSetupMappings.ToAssetItems(outsideAssets), Array.Empty<string>(),
+            CountDistinctAssets(vaultAssignments), PlanSetupMappings.ToAssetItems(unassignedAssets), Array.Empty<string>(),
             ownerFullName, ownerEmail, vault.Plan.ActivatedAt, recipients,
             willVersionNo, willSignedAt, hasUnsignedChanges, unsignedChanges);
     }
 
     /// <summary>
-    /// Người nhận theo từng người, lấy từ chỉ định của các gói đang mở. Tên được giải mã từ dữ liệu cá nhân đã mã hóa;
-    /// chỉ trả hasMessage chứ không trả nội dung lời nhắn, và không ghi log dữ liệu cá nhân (SEC-07).
+    /// Người nhận theo từng người, lấy từ các dòng gán của kho. Tên được giải mã từ dữ liệu cá nhân đã mã hóa;
+    /// chỉ trả hasMessage chứ không trả nội dung lời nhắn, và không ghi log dữ liệu cá nhân.
+    /// Mỗi người kèm các tài sản được gán, và số người cùng nhận chung từng tài sản.
     /// </summary>
     private async Task<List<PlanSetupRecipientResponse>> BuildRecipientsAsync(
-        Vault vault, List<Container> openContainers, CancellationToken ct)
+        Vault vault, List<AssetAssignment> vaultAssignments, CancellationToken ct)
     {
+        // Số người nhận của từng tài sản, để biết tài sản nào đang nhận chung.
+        Dictionary<Guid, int> recipientCountByAsset = new Dictionary<Guid, int>();
+        foreach (AssetAssignment assignment in vaultAssignments)
+        {
+            if (recipientCountByAsset.ContainsKey(assignment.AssetId))
+            {
+                recipientCountByAsset[assignment.AssetId] = recipientCountByAsset[assignment.AssetId] + 1;
+            }
+            else
+            {
+                recipientCountByAsset[assignment.AssetId] = 1;
+            }
+        }
+
         Dictionary<Guid, PlanSetupRecipientResponse> byBeneficiary = new Dictionary<Guid, PlanSetupRecipientResponse>();
         HashSet<Guid> skipped = new HashSet<Guid>();
-        foreach (Container container in openContainers)
+        foreach (AssetAssignment assignment in vaultAssignments)
         {
-            foreach (Designation designation in container.Designations)
+            Guid beneficiaryId = assignment.BeneficiaryId;
+            if (skipped.Contains(beneficiaryId))
             {
-                Guid beneficiaryId = designation.BeneficiaryId;
-                if (skipped.Contains(beneficiaryId))
+                continue;
+            }
+            if (!byBeneficiary.ContainsKey(beneficiaryId))
+            {
+                Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, beneficiaryId, ct);
+                if (beneficiary == null)
                 {
+                    skipped.Add(beneficiaryId);
                     continue;
                 }
-                if (!byBeneficiary.ContainsKey(beneficiaryId))
+                string fullName = string.Empty;
+                bool hasMessage = false;
+                try
                 {
-                    Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(vault.Id, beneficiaryId, ct);
-                    if (beneficiary == null)
-                    {
-                        skipped.Add(beneficiaryId);
-                        continue;
-                    }
-                    string fullName = string.Empty;
-                    bool hasMessage = false;
-                    try
-                    {
-                        BeneficiaryPersonalData data = beneficiaryProtector.Unprotect(beneficiary);
-                        fullName = data.FullName;
-                        hasMessage = !string.IsNullOrWhiteSpace(data.Message);
-                    }
-                    catch (System.Security.Cryptography.CryptographicException)
-                    {
-                        // Không giải mã được thì vẫn liệt kê người nhận (tên rỗng), không làm hỏng cả màn kích hoạt.
-                    }
-                    byBeneficiary[beneficiaryId] = new PlanSetupRecipientResponse(
-                        beneficiaryId, fullName, hasMessage, new List<PlanSetupRecipientContainerResponse>());
+                    BeneficiaryPersonalData data = beneficiaryProtector.Unprotect(beneficiary);
+                    fullName = data.FullName;
+                    hasMessage = !string.IsNullOrWhiteSpace(data.Message);
                 }
-                byBeneficiary[beneficiaryId].Containers.Add(new PlanSetupRecipientContainerResponse(
-                    container.Id, container.Name, container.Assets.Count, container.Status.ToApiString()));
+                catch (System.Security.Cryptography.CryptographicException)
+                {
+                    // Không giải mã được thì vẫn liệt kê người nhận (tên rỗng), không làm hỏng cả màn kích hoạt.
+                }
+                byBeneficiary[beneficiaryId] = new PlanSetupRecipientResponse(
+                    beneficiaryId, fullName, hasMessage, new List<PlanSetupRecipientAssetResponse>());
             }
+            byBeneficiary[beneficiaryId].Assets.Add(new PlanSetupRecipientAssetResponse(
+                assignment.Asset.Id, assignment.Asset.Name, assignment.Asset.Kind.ToApiString(),
+                recipientCountByAsset[assignment.AssetId]));
         }
         List<PlanSetupRecipientResponse> result = new List<PlanSetupRecipientResponse>(byBeneficiary.Values);
         result.Sort(CompareRecipientsByName);
         return result;
+    }
+
+    /// <summary>Số tài sản khác nhau trong các dòng gán (tài sản nhận chung chỉ đếm một lần).</summary>
+    private static int CountDistinctAssets(List<AssetAssignment> vaultAssignments)
+    {
+        HashSet<Guid> assetIds = new HashSet<Guid>();
+        foreach (AssetAssignment assignment in vaultAssignments)
+        {
+            assetIds.Add(assignment.AssetId);
+        }
+        return assetIds.Count;
     }
 
     private static int CompareRecipientsByName(PlanSetupRecipientResponse left, PlanSetupRecipientResponse right)

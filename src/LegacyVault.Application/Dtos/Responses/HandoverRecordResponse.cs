@@ -35,8 +35,8 @@ public class HandoverRecordResponse
     /// <summary>Chỉ cho luật sư: người nhận Chủ kho đã khai.</summary>
     public List<HandoverRecordPersonResponse> AvailableRecipients { get; set; } = new List<HandoverRecordPersonResponse>();
 
-    /// <summary>Chỉ cho luật sư: biên bản phân chia của Chủ kho (các gói sẵn sàng). Rỗng khi Chủ kho chưa lập.</summary>
-    public List<OwnerSplitPackageResponse> OwnerSplit { get; set; } = new List<OwnerSplitPackageResponse>();
+    /// <summary>Chỉ cho luật sư: biên bản phân chia của Chủ kho, gom theo người nhận. Rỗng khi Chủ kho chưa gán tài sản nào.</summary>
+    public List<OwnerSplitRecipientResponse> OwnerSplit { get; set; } = new List<OwnerSplitRecipientResponse>();
 
     /// <summary>Yêu cầu nhận tài sản kèm giấy tờ; chỉ luật sư của biên bản thấy, các vai khác nhận danh sách rỗng.</summary>
     public List<HandoverClaimResponse> Claims { get; set; } = new List<HandoverClaimResponse>();
@@ -88,11 +88,10 @@ public class HandoverRecordPersonResponse
     public string CitizenId { get; set; } = string.Empty;
 }
 
-/// <summary>Một gói trong biên bản phân chia của Chủ kho: những người nhận và tài sản Chủ kho đã xếp vào gói.</summary>
-public class OwnerSplitPackageResponse
+/// <summary>Một người nhận trong biên bản phân chia của Chủ kho và các tài sản Chủ kho đã gán cho người đó.</summary>
+public class OwnerSplitRecipientResponse
 {
-    public string PackageName { get; set; } = string.Empty;
-    public List<Guid> BeneficiaryIds { get; set; } = new List<Guid>();
+    public Guid BeneficiaryId { get; set; }
     public List<Guid> AssetIds { get; set; } = new List<Guid>();
 }
 

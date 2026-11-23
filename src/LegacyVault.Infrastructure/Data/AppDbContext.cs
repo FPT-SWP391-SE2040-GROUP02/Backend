@@ -29,16 +29,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Vault> Vaults => Set<Vault>();
     public DbSet<HandoverPlan> HandoverPlans => Set<HandoverPlan>();
     public DbSet<VaultEntitlement> VaultEntitlements => Set<VaultEntitlement>();
-    public DbSet<Container> Containers => Set<Container>();
-    public DbSet<ContainerAsset> ContainerAssets => Set<ContainerAsset>();
     public DbSet<WillVersion> WillVersions => Set<WillVersion>();
 
     // Tài sản
     public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<AssetAssignment> AssetAssignments => Set<AssetAssignment>();
 
     // Người nhận
     public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();
-    public DbSet<Designation> Designations => Set<Designation>();
 
     /// <summary>Transaction Auth giữ khóa từ lúc đọc refresh token tới commit; dispose rollback khi operation lỗi.</summary>
     public async Task<T> ExecuteSerializableAsync<T>(Func<Task<T>> operation, CancellationToken ct)

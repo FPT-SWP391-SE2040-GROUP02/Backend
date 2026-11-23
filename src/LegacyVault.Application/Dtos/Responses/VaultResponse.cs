@@ -45,11 +45,11 @@ public class VaultResponse
     /// <summary>Suất mua thêm (QUOTA-06).</summary>
     public int ExtraBeneficiarySlots { get; set; }
 
-    /// <summary>Số người nhận khác nhau đang có chỉ định trong kho (QUOTA-03, QUOTA-06).</summary>
+    /// <summary>Số người nhận khác nhau đang được gán tài sản trong kho (QUOTA-03, QUOTA-06).</summary>
     public int UsedBeneficiarySlots { get; set; }
 
-    /// <summary>Số gói chưa bị xóa (NFR-14: tối đa 50).</summary>
-    public int ActiveContainerCount { get; set; }
+    /// <summary>Số tài sản của kho đã được gán cho ít nhất một người nhận.</summary>
+    public int AssignedAssetCount { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }

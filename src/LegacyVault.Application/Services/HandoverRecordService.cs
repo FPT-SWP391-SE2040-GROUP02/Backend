@@ -37,6 +37,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private readonly IAssetContentStore contentStore;
     private readonly IHandoverRequestNoticeSender noticeSender;
     private readonly IExecutorInvitationRepository invitations;
+    private readonly IAssetAssignmentRepository assignments;
 
     public HandoverRecordService(
         ICurrentUser currentUser,
@@ -53,9 +54,11 @@ public sealed class HandoverRecordService : IHandoverRecordService
         TimeProvider timeProvider,
         IAssetContentStore contentStore,
         IHandoverRequestNoticeSender noticeSender,
-        IExecutorInvitationRepository invitations)
+        IExecutorInvitationRepository invitations,
+        IAssetAssignmentRepository assignments)
     {
         this.invitations = invitations;
+        this.assignments = assignments;
         this.currentUser = currentUser;
         this.users = users;
         this.vaults = vaults;
@@ -390,28 +393,22 @@ public sealed class HandoverRecordService : IHandoverRecordService
         RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ lấy biên bản phân chia khi biên bản đang lập.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
-        // 2. Đọc biên bản phân chia: mỗi người nhận của gói nhận mọi tài sản trong gói (gói nhiều người là đồng thừa kế)
-        List<Designation> designations = await handover.FindStartableDesignationsAsync(vault.Id, ct);
+        // 2. Đọc biên bản phân chia: mỗi dòng gán của Chủ kho thành một dòng biên bản (tài sản gán cho nhiều người là đồng thừa kế)
+        List<AssetAssignment> ownerAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
         List<(Guid BeneficiaryId, Guid AssetId)> lines = new List<(Guid BeneficiaryId, Guid AssetId)>();
-        HashSet<(Guid, Guid)> usedPairs = new HashSet<(Guid, Guid)>();
         HashSet<Guid> rejected = RejectedBeneficiaries(record);
-        foreach (Designation designation in designations)
+        foreach (AssetAssignment assignment in ownerAssignments)
         {
-            if (rejected.Contains(designation.BeneficiaryId))
+            if (rejected.Contains(assignment.BeneficiaryId))
             {
                 // Người bị luật sư từ chối không được ghi vào biên bản.
                 continue;
             }
-            List<ContainerAsset> links = designation.Container.Assets.OrderBy(a => a.AddedAt).ThenBy(a => a.Id).ToList();
-            foreach (ContainerAsset link in links)
+            if (assignment.Asset.ContentDeletedAt != null)
             {
-                if (link.Asset.ContentDeletedAt != null || usedPairs.Contains((designation.BeneficiaryId, link.AssetId)))
-                {
-                    continue;
-                }
-                usedPairs.Add((designation.BeneficiaryId, link.AssetId));
-                lines.Add((designation.BeneficiaryId, link.AssetId));
+                continue;
             }
+            lines.Add((assignment.BeneficiaryId, assignment.AssetId));
         }
         if (lines.Count == 0)
         {
@@ -1132,28 +1129,25 @@ public sealed class HandoverRecordService : IHandoverRecordService
             response.AvailableRecipients.Add(person);
         }
 
-        // Biên bản phân chia của Chủ kho: gom chỉ định theo gói.
-        List<Designation> designations = await handover.FindStartableDesignationsAsync(vault.Id, ct);
-        Dictionary<Guid, OwnerSplitPackageResponse> packages = new Dictionary<Guid, OwnerSplitPackageResponse>();
-        foreach (Designation designation in designations)
+        // Biên bản phân chia của Chủ kho: gom các dòng gán theo từng người nhận.
+        List<AssetAssignment> ownerAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
+        Dictionary<Guid, OwnerSplitRecipientResponse> ownerSplitByBeneficiary = new Dictionary<Guid, OwnerSplitRecipientResponse>();
+        foreach (AssetAssignment assignment in ownerAssignments)
         {
-            if (!packages.ContainsKey(designation.ContainerId))
+            if (assignment.Asset.ContentDeletedAt != null)
             {
-                OwnerSplitPackageResponse package = new OwnerSplitPackageResponse
-                {
-                    PackageName = designation.Container.Name
-                };
-                foreach (ContainerAsset link in designation.Container.Assets.OrderBy(a => a.AddedAt))
-                {
-                    if (link.Asset.ContentDeletedAt == null)
-                    {
-                        package.AssetIds.Add(link.AssetId);
-                    }
-                }
-                packages[designation.ContainerId] = package;
-                response.OwnerSplit.Add(package);
+                continue;
             }
-            packages[designation.ContainerId].BeneficiaryIds.Add(designation.BeneficiaryId);
+            if (!ownerSplitByBeneficiary.ContainsKey(assignment.BeneficiaryId))
+            {
+                OwnerSplitRecipientResponse entry = new OwnerSplitRecipientResponse
+                {
+                    BeneficiaryId = assignment.BeneficiaryId
+                };
+                ownerSplitByBeneficiary[assignment.BeneficiaryId] = entry;
+                response.OwnerSplit.Add(entry);
+            }
+            ownerSplitByBeneficiary[assignment.BeneficiaryId].AssetIds.Add(assignment.AssetId);
         }
 
         // Yêu cầu nhận tài sản kèm giấy tờ, và tệp căn cứ: chỉ luật sư thấy.

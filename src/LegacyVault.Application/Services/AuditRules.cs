@@ -77,7 +77,7 @@ public static class AuditRules
     }
 
     /// <summary>
-    /// Đổi chuỗi UPPER_SNAKE_CASE FE gửi (ví dụ CONTAINER_CREATED) sang enum; trống → null (mọi loại).
+    /// Đổi chuỗi UPPER_SNAKE_CASE FE gửi (ví dụ ASSET_ASSIGNED) sang enum; trống → null (mọi loại).
     /// Không dùng Enum.Parse thẳng để FE không gửi được số hay tên C# (đúng contract chuỗi). Lạ → 400 VALIDATION_ERROR.
     /// </summary>
     public static AuditAction? ParseAction(string? action)

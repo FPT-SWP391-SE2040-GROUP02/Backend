@@ -20,6 +20,6 @@ public class HandoverProgressResponse
 
     public HandoverProgressSummaryResponse Summary { get; set; } = new HandoverProgressSummaryResponse();
 
-    /// <summary>Mỗi phần tử là một lượt bàn giao (một gói cho một người nhận), xếp theo gói rồi theo lúc mời.</summary>
+    /// <summary>Mỗi phần tử là một lượt bàn giao (một người nhận trong biên bản), xếp theo tiêu đề rồi theo lúc mời.</summary>
     public List<HandoverProgressTurnResponse> Turns { get; set; } = new List<HandoverProgressTurnResponse>();
 }

@@ -12,7 +12,7 @@ public static class ApplicationConfig
         services.AddScoped<IPlanSetupService, PlanSetupService>();
         services.AddScoped<IWillIdentityService, WillIdentityService>();
         services.AddScoped<IAssetService, AssetService>();
-        services.AddScoped<IContainerService, ContainerService>();
+        services.AddScoped<IAssetAssignmentService, AssetAssignmentService>();
         services.AddScoped<IBeneficiaryService, BeneficiaryService>();
         services.AddScoped<IVaultPinService, VaultPinService>();
         services.AddScoped<ExecutorKeyIssuer>();

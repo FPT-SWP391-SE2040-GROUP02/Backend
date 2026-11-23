@@ -51,7 +51,5 @@ public sealed class VaultConfiguration : IEntityTypeConfiguration<Vault>
             .WithOne(e => e.Vault)
             .HasForeignKey<VaultEntitlement>(e => e.VaultId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        // Quan hệ Vault → Containers khai báo ở ContainerConfiguration (Restrict).
     }
 }

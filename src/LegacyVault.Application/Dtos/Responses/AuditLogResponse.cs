@@ -13,10 +13,10 @@ public class AuditLogResponse
     /// <summary>Tài khoản thực hiện; null khi job nền thực hiện.</summary>
     public Guid? ActorUserId { get; set; }
 
-    /// <summary>Ví dụ CONTAINER_CREATED, BENEFICIARY_UPDATED, CHECKED_IN.</summary>
+    /// <summary>Ví dụ ASSET_ASSIGNED, BENEFICIARY_UPDATED, PLAN_ACTIVATED.</summary>
     public string Action { get; set; } = string.Empty;
 
-    /// <summary>VAULT / PLAN / ASSET / CONTAINER / BENEFICIARY / CHECK_IN.</summary>
+    /// <summary>VAULT / PLAN / ASSET / BENEFICIARY (CONTAINER chỉ còn trong nhật ký cũ).</summary>
     public string TargetType { get; set; } = string.Empty;
 
     public Guid? TargetId { get; set; }

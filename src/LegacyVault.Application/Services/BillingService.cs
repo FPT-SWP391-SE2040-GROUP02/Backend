@@ -21,7 +21,7 @@ public sealed class BillingService : IBillingService
 
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
-    private readonly IContainerRepository containerRepository;
+    private readonly IAssetAssignmentRepository assignmentRepository;
     private readonly IEkycVerificationRepository ekycRepository;
     private readonly IPaymentOrderRepository paymentOrderRepository;
     private readonly IAuditLogRepository auditLogRepository;
@@ -35,7 +35,7 @@ public sealed class BillingService : IBillingService
     public BillingService(
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
-        IContainerRepository containerRepository,
+        IAssetAssignmentRepository assignmentRepository,
         IEkycVerificationRepository ekycRepository,
         IPaymentOrderRepository paymentOrderRepository,
         IAuditLogRepository auditLogRepository,
@@ -48,7 +48,7 @@ public sealed class BillingService : IBillingService
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
-        this.containerRepository = containerRepository;
+        this.assignmentRepository = assignmentRepository;
         this.ekycRepository = ekycRepository;
         this.paymentOrderRepository = paymentOrderRepository;
         this.auditLogRepository = auditLogRepository;
@@ -363,7 +363,7 @@ public sealed class BillingService : IBillingService
         if (quote.Kind == PaymentOrderKind.Renewal)
         {
             long usedBytes = await vaultRepository.SumUsedBytesAsync(eligibility.Vault.Id, ct);
-            int usedSlots = await containerRepository.CountUsedBeneficiarySlotsAsync(eligibility.Vault.Id, ct);
+            int usedSlots = await assignmentRepository.CountUsedBeneficiarySlotsAsync(eligibility.Vault.Id, ct);
             BillingRules.EnsureUsageFitsRenewal(quote, usedBytes, usedSlots);
         }
         return quote;

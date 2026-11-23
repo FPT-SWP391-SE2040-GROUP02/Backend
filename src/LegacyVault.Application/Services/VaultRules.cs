@@ -6,7 +6,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Luật kiểm tra kho dùng chung cho các service thao tác trên kho (Vault, Asset, Container...).
+/// Luật kiểm tra kho dùng chung cho các service thao tác trên kho (Vault, Asset, gán tài sản...).
 /// </summary>
 public static class VaultRules
 {
