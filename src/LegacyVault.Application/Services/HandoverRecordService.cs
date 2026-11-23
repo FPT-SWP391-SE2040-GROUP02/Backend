@@ -239,20 +239,22 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 continue;
             }
 
-            // 3. Suy ra bước hiện tại của tôi từ biên bản đang mở, yêu cầu, lượt, chữ ký và quyền tải
+            // 3. Suy ra bước hiện tại của tôi từ biên bản đang mở, yêu cầu, lượt, hồ sơ danh tính, chữ ký và quyền tải
             HandoverRecord? record = await records.FindByVaultIdAsync(beneficiary.VaultId, ct);
             HandoverTurn? turn = null;
             HandoverClaim? claim = null;
+            HandoverSubmission? latestSubmission = null;
             if (record != null)
             {
                 Dictionary<Guid, HandoverTurn> turns = await turnSync.FindActiveTurnsAsync(record, ct);
                 if (turns.ContainsKey(beneficiary.Id))
                 {
                     turn = turns[beneficiary.Id];
+                    latestSubmission = await FindLatestSubmissionAsync(turn.Id, ct);
                 }
                 claim = FindClaim(record, beneficiary.Id);
             }
-            string status = RecipientStepRules.ResolveStatus(record, beneficiary.Id, turn);
+            string status = RecipientStepRules.ResolveStatus(record, beneficiary.Id, turn, latestSubmission);
             AvailableHandoverVaultResponse item = new AvailableHandoverVaultResponse
             {
                 VaultId = beneficiary.VaultId,
@@ -1672,6 +1674,27 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
         throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverEmailMismatch,
             "Link này dành cho một email khác. Hãy đăng nhập bằng đúng email Chủ kho đã khai.", extensions);
+    }
+
+    /// <summary>Hồ sơ danh tính (ảnh căn cước) mới nhất chưa bị thay thế của một lượt; null khi chưa nộp.</summary>
+    private async Task<HandoverSubmission?> FindLatestSubmissionAsync(Guid turnId, CancellationToken ct)
+    {
+        List<Guid> turnIds = new List<Guid>();
+        turnIds.Add(turnId);
+        List<HandoverSubmission> all = await submissions.ListByTurnIdsAsync(turnIds, ct);
+        HandoverSubmission? latest = null;
+        foreach (HandoverSubmission submission in all)
+        {
+            if (submission.Status == HandoverSubmissionStatus.Superseded)
+            {
+                continue;
+            }
+            if (latest == null || submission.CreatedAt > latest.CreatedAt)
+            {
+                latest = submission;
+            }
+        }
+        return latest;
     }
 
     /// <summary>Người nhận của kho mang đúng email (đã xác minh) của tài khoản; null khi không có.</summary>

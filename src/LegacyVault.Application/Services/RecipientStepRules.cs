@@ -17,7 +17,8 @@ namespace LegacyVault.Application.Services;
 /// | Có yêu cầu của tôi, trạng thái SupplementRequested                           | SUPPLEMENT_REQUESTED | true        |
 /// | Có yêu cầu của tôi, trạng thái Rejected                                      | REJECTED             | false       |
 /// | Không có yêu cầu của tôi, không có tên trong biên bản, không có lượt          | NOT_REQUESTED        | true khi biên bản chưa hoàn tất (người khác đã gửi, tôi gửi được), false khi đã hoàn tất |
-/// | (Yêu cầu đã chấp nhận, hoặc luật sư tự thêm tôi vào biên bản) biên bản đang lập hoặc chờ danh tính | IN_REVIEW | false |
+/// | Biên bản chờ danh tính, tôi có tên trong biên bản, lượt chưa được xác nhận danh tính và chưa nộp hồ sơ (hoặc hồ sơ mới nhất bị yêu cầu bổ sung) | NEED_IDENTITY | true |
+/// | (Yêu cầu đã chấp nhận, hoặc luật sư tự thêm tôi vào biên bản) biên bản đang lập, hoặc chờ danh tính mà tôi đã nộp hồ sơ / đã được xác nhận | IN_REVIEW | false |
 /// | Biên bản ở bước ký, không có tên tôi trong biên bản                           | IN_REVIEW            | false       |
 /// | Biên bản ở bước ký, tôi chưa ký bản hiện tại                                  | NEED_MY_SIGNATURE    | true        |
 /// | Biên bản ở bước ký, tôi đã ký bản hiện tại                                    | WAITING_OTHERS       | false       |
@@ -25,8 +26,8 @@ namespace LegacyVault.Application.Services;
 /// | Biên bản đã hoàn tất, lượt của tôi đã bấm "Tôi đã nhận đủ" (ReceivedAllAt)    | RECEIVED             | false       |
 /// | Biên bản đã hoàn tất, lượt của tôi đã có quyền tải (Grant)                    | CODE_READY           | true        |
 /// | Biên bản đã hoàn tất, lượt chưa có quyền tải (trường hợp lạ)                  | WAITING_OTHERS       | false       |
-/// Ở bước danh tính (IdentityCheck) người nhận vẫn nộp ảnh căn cước ở cổng người nhận; bảng xếp vào IN_REVIEW vì đó là
-/// bước luật sư đang kiểm.
+/// Ở bước danh tính (IdentityCheck) người nhận nộp ảnh căn cước ở cổng người nhận (HandoverSubmission); nộp rồi thì chờ
+/// luật sư duyệt (IN_REVIEW).
 /// </remarks>
 public static class RecipientStepRules
 {
@@ -39,12 +40,15 @@ public static class RecipientStepRules
     public const string WaitingOthers = "WAITING_OTHERS";
     public const string CodeReady = "CODE_READY";
     public const string Received = "RECEIVED";
+    public const string NeedIdentity = "NEED_IDENTITY";
 
     /// <summary>
     /// Trạng thái bước của người nhận. record là biên bản đang mở của kho (null khi chưa có), turn là lượt đang hiệu lực
-    /// của người nhận trong biên bản đó (null khi chưa có).
+    /// của người nhận trong biên bản đó (null khi chưa có), latestSubmission là hồ sơ danh tính (ảnh căn cước) mới nhất
+    /// chưa bị thay thế của lượt đó (null khi chưa nộp).
     /// </summary>
-    public static string ResolveStatus(HandoverRecord? record, Guid beneficiaryId, HandoverTurn? turn)
+    public static string ResolveStatus(
+        HandoverRecord? record, Guid beneficiaryId, HandoverTurn? turn, HandoverSubmission? latestSubmission)
     {
         if (record == null)
         {
@@ -107,16 +111,38 @@ public static class RecipientStepRules
             }
             return WaitingOthers;
         }
+        if (record.Status == HandoverRecordStatus.IdentityCheck && inRecord
+            && NeedsIdentitySubmission(turn, latestSubmission))
+        {
+            return NeedIdentity;
+        }
         return InReview;
     }
 
     /// <summary>
+    /// Người nhận phải nộp ảnh căn cước: lượt chưa được luật sư xác nhận danh tính và chưa có hồ sơ, hoặc hồ sơ mới nhất
+    /// bị yêu cầu bổ sung. Chưa có lượt thì chưa nộp được, coi như không cần.
+    /// </summary>
+    private static bool NeedsIdentitySubmission(HandoverTurn? turn, HandoverSubmission? latestSubmission)
+    {
+        if (turn == null || turn.IdentityConfirmedAt != null)
+        {
+            return false;
+        }
+        if (latestSubmission == null)
+        {
+            return true;
+        }
+        return latestSubmission.Status == HandoverSubmissionStatus.SupplementRequested;
+    }
+
+    /// <summary>
     /// Có cần người nhận làm gì không. NOT_REQUESTED chỉ cần khi kho đã có biên bản đang mở chưa hoàn tất (người khác đã
-    /// gửi yêu cầu); SUPPLEMENT_REQUESTED, NEED_MY_SIGNATURE, CODE_READY luôn cần.
+    /// gửi yêu cầu); SUPPLEMENT_REQUESTED, NEED_IDENTITY, NEED_MY_SIGNATURE, CODE_READY luôn cần.
     /// </summary>
     public static bool NeedsAction(string status, HandoverRecord? record)
     {
-        if (status == SupplementRequested || status == NeedMySignature || status == CodeReady)
+        if (status == SupplementRequested || status == NeedIdentity || status == NeedMySignature || status == CodeReady)
         {
             return true;
         }

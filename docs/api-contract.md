@@ -1346,6 +1346,7 @@ Lối vào trong app, không cần link trong thư. Người nhận do luật s�
 - `by-account` dùng chung luật với `POST /api/v1/handover/requests` (gửi bằng link): server tự tìm người nhận của kho mang đúng email tài khoản.
 - `canRequest`: chỉ `true` khi `status = NOT_REQUESTED` và gửi được lúc này (kho chưa có biên bản thì kế hoạch phải `ACTIVE`; có biên bản thì biên bản chưa hoàn tất).
 - `reviewReason`: lý do luật sư yêu cầu bổ sung hoặc từ chối (chỉ khi `SUPPLEMENT_REQUESTED` hoặc `REJECTED`). `claimId` để nộp bổ sung; `turnId` để vào cổng người nhận (`/claim/beneficiary`) ở các bước sau khi biên bản chốt.
+- `NEED_IDENTITY` (thêm sau cùng trong danh sách `status`): người nhận vào cổng người nhận để nộp ảnh căn cước (`POST /api/v1/handover/turns/{turnId}/submission`).
 
 Bảng `status` (xét từ trên xuống, gặp dòng đúng đầu tiên thì dừng):
 
@@ -1356,7 +1357,8 @@ Bảng `status` (xét từ trên xuống, gặp dòng đúng đầu tiên thì d
 | Luật sư yêu cầu bổ sung | `SUPPLEMENT_REQUESTED` | `true` |
 | Luật sư từ chối | `REJECTED` | `false` |
 | Tôi chưa gửi yêu cầu, không có tên trong biên bản, không có lượt | `NOT_REQUESTED` | `true` khi biên bản chưa hoàn tất (người khác đã gửi), `false` khi đã hoàn tất |
-| Đã được nhận vào biên bản (yêu cầu được chấp nhận hoặc luật sư tự thêm), biên bản đang lập hoặc chờ danh tính | `IN_REVIEW` | `false` |
+| Biên bản chờ danh tính, tôi có tên trong biên bản, lượt chưa được xác nhận danh tính và chưa nộp ảnh căn cước (hoặc hồ sơ mới nhất bị yêu cầu bổ sung) | `NEED_IDENTITY` | `true` |
+| Đã được nhận vào biên bản (yêu cầu được chấp nhận hoặc luật sư tự thêm), biên bản đang lập, hoặc chờ danh tính mà đã nộp ảnh căn cước và đang chờ duyệt (hoặc đã được xác nhận) | `IN_REVIEW` | `false` |
 | Bước ký, không có tên tôi trong biên bản | `IN_REVIEW` | `false` |
 | Bước ký, tôi chưa ký bản hiện tại | `NEED_MY_SIGNATURE` | `true` |
 | Bước ký, tôi đã ký bản hiện tại | `WAITING_OTHERS` | `false` |

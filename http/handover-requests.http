@@ -21,7 +21,7 @@ Content-Type: application/json
 
 ### 1) Các kho tôi là người nhận, kèm bước của tôi và cờ needsAction (chưa xác minh email thì [])
 # status: NOT_REQUESTED, REQUEST_PENDING, SUPPLEMENT_REQUESTED, REJECTED, IN_REVIEW, NEED_MY_SIGNATURE,
-#         WAITING_OTHERS, CODE_READY, RECEIVED. Không có tên gói, tên tài sản hay số căn cước.
+#         WAITING_OTHERS, CODE_READY, RECEIVED, NEED_IDENTITY. Không có tên gói, tên tài sản hay số căn cước.
 # @name available
 GET {{baseUrl}}/handover/requests/available
 Authorization: Bearer {{token}}

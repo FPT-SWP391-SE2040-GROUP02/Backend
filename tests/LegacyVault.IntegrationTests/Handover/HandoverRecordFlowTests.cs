@@ -539,6 +539,11 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         HttpClient recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, RecipientEmail(0));
         JsonElement invitations = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync("/api/v1/handover/invitations/mine"));
         Guid turnId = invitations[0].GetProperty("turnId").GetGuid();
+        // Biên bản chờ danh tính, chưa nộp ảnh căn cước: mục "Nhận tài sản" nhắc người nhận nộp.
+        JsonElement identityRow = (await ReadAvailableAsync(recipient))[0];
+        Assert.Equal("NEED_IDENTITY", identityRow.GetProperty("status").GetString());
+        Assert.True(identityRow.GetProperty("needsAction").GetBoolean());
+        Assert.Equal(turnId, identityRow.GetProperty("turnId").GetGuid());
         Assert.Equal(HttpStatusCode.OK, (await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null)).StatusCode);
         JsonElement view = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync($"/api/v1/handover/turns/{turnId}/record"));
         Assert.Equal("SIGNING", view.GetProperty("status").GetString());

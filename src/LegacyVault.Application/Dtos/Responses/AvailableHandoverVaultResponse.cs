@@ -15,7 +15,7 @@ public class AvailableHandoverVaultResponse
 
     /// <summary>
     /// NOT_REQUESTED, REQUEST_PENDING, SUPPLEMENT_REQUESTED, REJECTED, IN_REVIEW, NEED_MY_SIGNATURE, WAITING_OTHERS,
-    /// CODE_READY, RECEIVED (bảng ánh xạ ở RecipientStepRules).
+    /// CODE_READY, RECEIVED, NEED_IDENTITY (bảng ánh xạ ở RecipientStepRules).
     /// </summary>
     public string Status { get; set; } = string.Empty;
 

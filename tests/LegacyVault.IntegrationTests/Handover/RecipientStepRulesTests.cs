@@ -54,7 +54,7 @@ public sealed class RecipientStepRulesTests
         HandoverRecord? record = null;
 
         // Hành động
-        string status = RecipientStepRules.ResolveStatus(record, Me, null);
+        string status = RecipientStepRules.ResolveStatus(record, Me, null, null);
 
         // Kiểm tra
         Assert.Equal(RecipientStepRules.NotRequested, status);
@@ -71,7 +71,7 @@ public sealed class RecipientStepRulesTests
         AddClaim(record, Other, HandoverClaimStatus.Submitted);
 
         // Hành động
-        string status = RecipientStepRules.ResolveStatus(record, Me, null);
+        string status = RecipientStepRules.ResolveStatus(record, Me, null, null);
 
         // Kiểm tra
         Assert.Equal(RecipientStepRules.NotRequested, status);
@@ -88,7 +88,7 @@ public sealed class RecipientStepRulesTests
         AddLine(record, Other);
 
         // Hành động
-        string status = RecipientStepRules.ResolveStatus(record, Me, null);
+        string status = RecipientStepRules.ResolveStatus(record, Me, null, null);
 
         // Kiểm tra
         Assert.Equal(RecipientStepRules.Rejected, status);
@@ -107,7 +107,7 @@ public sealed class RecipientStepRulesTests
         AddClaim(record, Me, claimStatus);
 
         // Hành động
-        string status = RecipientStepRules.ResolveStatus(record, Me, null);
+        string status = RecipientStepRules.ResolveStatus(record, Me, null, null);
 
         // Kiểm tra
         Assert.Equal(expected, status);
@@ -116,18 +116,84 @@ public sealed class RecipientStepRulesTests
     }
 
     [Fact]
-    public void AddedByVerifierWithoutClaim_IsInReview()
+    public void AddedByVerifierWithoutClaim_WhileDrafting_IsInReview()
     {
-        // Chuẩn bị: luật sư thêm tôi vào biên bản, tôi chưa gửi yêu cầu
-        HandoverRecord record = Record(HandoverRecordStatus.IdentityCheck);
+        // Chuẩn bị: luật sư thêm tôi vào biên bản đang lập, tôi chưa gửi yêu cầu
+        HandoverRecord record = Record(HandoverRecordStatus.Drafting);
         AddLine(record, Me);
 
         // Hành động
-        string status = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn());
+        string status = RecipientStepRules.ResolveStatus(record, Me, null, null);
 
         // Kiểm tra
         Assert.Equal(RecipientStepRules.InReview, status);
         Assert.False(RecipientStepRules.NeedsAction(status, record));
+    }
+
+    private static HandoverSubmission Submission(HandoverSubmissionStatus status)
+    {
+        HandoverSubmission submission = new HandoverSubmission();
+        submission.Status = status;
+        return submission;
+    }
+
+    [Fact]
+    public void IdentityCheck_NoSubmissionYet_NeedsIdentity()
+    {
+        // Chuẩn bị: biên bản đã chốt, tôi có tên, lượt chưa được xác nhận danh tính, chưa nộp hồ sơ
+        HandoverRecord record = Record(HandoverRecordStatus.IdentityCheck);
+        AddLine(record, Me);
+
+        // Hành động
+        string status = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn(), null);
+
+        // Kiểm tra
+        Assert.Equal(RecipientStepRules.NeedIdentity, status);
+        Assert.True(RecipientStepRules.NeedsAction(status, record));
+    }
+
+    [Fact]
+    public void IdentityCheck_SubmissionDependsOnLatestStatus()
+    {
+        // Chuẩn bị
+        HandoverRecord record = Record(HandoverRecordStatus.IdentityCheck);
+        AddLine(record, Me);
+        HandoverTurn turn = new HandoverTurn();
+
+        // Hành động
+        string waiting = RecipientStepRules.ResolveStatus(
+            record, Me, turn, Submission(HandoverSubmissionStatus.Submitted));
+        string supplement = RecipientStepRules.ResolveStatus(
+            record, Me, turn, Submission(HandoverSubmissionStatus.SupplementRequested));
+        turn.IdentityConfirmedAt = DateTimeOffset.UtcNow;
+        string confirmed = RecipientStepRules.ResolveStatus(
+            record, Me, turn, Submission(HandoverSubmissionStatus.Approved));
+
+        // Kiểm tra: đã nộp chờ duyệt thì luật sư đang xử lý; bị yêu cầu bổ sung thì phải nộp lại
+        Assert.Equal(RecipientStepRules.InReview, waiting);
+        Assert.False(RecipientStepRules.NeedsAction(waiting, record));
+        Assert.Equal(RecipientStepRules.NeedIdentity, supplement);
+        Assert.True(RecipientStepRules.NeedsAction(supplement, record));
+        Assert.Equal(RecipientStepRules.InReview, confirmed);
+    }
+
+    [Fact]
+    public void IdentityCheck_NotInRecordOrNoTurn_IsInReview()
+    {
+        // Chuẩn bị: tôi được chấp nhận giấy tờ nhưng không có tên trong biên bản đã chốt
+        HandoverRecord withoutMe = Record(HandoverRecordStatus.IdentityCheck);
+        AddClaim(withoutMe, Me, HandoverClaimStatus.Accepted);
+        AddLine(withoutMe, Other);
+        HandoverRecord noTurn = Record(HandoverRecordStatus.IdentityCheck);
+        AddLine(noTurn, Me);
+
+        // Hành động
+        string notInRecord = RecipientStepRules.ResolveStatus(withoutMe, Me, null, null);
+        string withoutTurn = RecipientStepRules.ResolveStatus(noTurn, Me, null, null);
+
+        // Kiểm tra
+        Assert.Equal(RecipientStepRules.InReview, notInRecord);
+        Assert.Equal(RecipientStepRules.InReview, withoutTurn);
     }
 
     [Fact]
@@ -139,9 +205,9 @@ public sealed class RecipientStepRulesTests
         AddLine(record, Me);
 
         // Hành động
-        string beforeSign = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn());
+        string beforeSign = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn(), null);
         AddMySignature(record);
-        string afterSign = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn());
+        string afterSign = RecipientStepRules.ResolveStatus(record, Me, new HandoverTurn(), null);
 
         // Kiểm tra
         Assert.Equal(RecipientStepRules.NeedMySignature, beforeSign);
@@ -161,9 +227,9 @@ public sealed class RecipientStepRulesTests
         turn.Grant = new HandoverGrant();
 
         // Hành động
-        string ready = RecipientStepRules.ResolveStatus(record, Me, turn);
+        string ready = RecipientStepRules.ResolveStatus(record, Me, turn, null);
         turn.ReceivedAllAt = DateTimeOffset.UtcNow;
-        string received = RecipientStepRules.ResolveStatus(record, Me, turn);
+        string received = RecipientStepRules.ResolveStatus(record, Me, turn, null);
 
         // Kiểm tra
         Assert.Equal(RecipientStepRules.CodeReady, ready);
