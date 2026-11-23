@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
@@ -38,6 +39,10 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private readonly IHandoverRequestNoticeSender noticeSender;
     private readonly IExecutorInvitationRepository invitations;
     private readonly IAssetAssignmentRepository assignments;
+    private readonly ILogger<HandoverRecordService> logger;
+
+    // Biên bản vừa sang bước ký trong lượt này; thư báo chỉ gửi sau khi đã lưu (SendPendingSigningNoticeAsync).
+    private HandoverRecord? signingNoticePending;
 
     public HandoverRecordService(
         ICurrentUser currentUser,
@@ -55,8 +60,10 @@ public sealed class HandoverRecordService : IHandoverRecordService
         IAssetContentStore contentStore,
         IHandoverRequestNoticeSender noticeSender,
         IExecutorInvitationRepository invitations,
-        IAssetAssignmentRepository assignments)
+        IAssetAssignmentRepository assignments,
+        ILogger<HandoverRecordService> logger)
     {
+        this.logger = logger;
         this.invitations = invitations;
         this.assignments = assignments;
         this.currentUser = currentUser;
@@ -494,12 +501,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
         await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.System, null, now, ct);
         await SaveAsync(ct);
 
-        // 5. Gửi thư mời sau khi lưu, rồi lưu kết quả gửi
+        // 5. Gửi thư sau khi lưu (thư báo bước ký, thư mời), rồi lưu kết quả gửi
         if (invitations.Count > 0)
         {
             await turnSync.SendInvitationsAsync(invitations, ct);
             await unitOfWork.SaveChangesAsync(ct);
         }
+        // Thư báo bước ký gửi sau thư mời: một máy chủ thư chậm không làm trễ thư mời.
+        await SendPendingSigningNoticeAsync(ct);
 
         HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
         return response;
@@ -872,6 +881,20 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (HandoverRecordRules.AllIdentitiesConfirmed(record, turns))
         {
             record.Status = HandoverRecordStatus.Signing;
+            // Chỉ ghi nhớ: thư gửi sau khi người gọi lưu xong, để lưu lỗi/xung đột không để lại thư báo sai.
+            signingNoticePending = record;
+        }
+    }
+
+    /// <summary>
+    /// Người gọi chạy sau khi đã lưu: nếu biên bản vừa sang bước ký trong lượt này thì gửi thư báo. Gọi lại không gửi lặp.
+    /// </summary>
+    public async Task SendPendingSigningNoticeAsync(CancellationToken ct)
+    {
+        HandoverRecord? record = signingNoticePending;
+        signingNoticePending = null;
+        if (record != null)
+        {
             await NotifySigningAsync(record, ct);
         }
     }
@@ -943,15 +966,19 @@ public sealed class HandoverRecordService : IHandoverRecordService
                     };
                     await noticeSender.SendAsync(notice, ct);
                 }
-                catch (Exception) when (!ct.IsCancellationRequested)
+                catch (Exception exception) when (!ct.IsCancellationRequested)
                 {
-                    // Một thư lỗi không chặn các thư còn lại.
+                    // Một thư lỗi không chặn các thư còn lại. Chỉ log id và loại lỗi, không log email.
+                    logger.LogWarning("Gửi thư báo bước ký lỗi ({Audience}, biên bản {RecordId}): {ErrorType}",
+                        audience, record.Id, exception.GetType().Name);
                 }
             }
         }
-        catch (Exception) when (!ct.IsCancellationRequested)
+        catch (Exception exception) when (!ct.IsCancellationRequested)
         {
             // Không ném lại: bước ký đã mở.
+            logger.LogWarning("Không soạn được thư báo bước ký (biên bản {RecordId}): {ErrorType}",
+                record.Id, exception.GetType().Name);
         }
     }
 

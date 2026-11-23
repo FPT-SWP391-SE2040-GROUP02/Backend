@@ -487,6 +487,8 @@ public sealed class CountingRecordService : IHandoverRecordService
         return Task.CompletedTask;
     }
 
+    public Task SendPendingSigningNoticeAsync(CancellationToken ct) => Task.CompletedTask;
+
     public Task<Guid?> FindVerifierUserIdAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
     public Task<List<ExecutorVaultResponse>> ListMyVaultsAsync(CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse?> GetForExecutorAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();

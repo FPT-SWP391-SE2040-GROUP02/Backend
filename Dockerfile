@@ -22,8 +22,9 @@ RUN dotnet publish src/LegacyVault.Api/LegacyVault.Api.csproj -c Release -o /app
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Create directory for local encrypted asset storage if local provider is used
-RUN mkdir -p /app/App_Data/asset-content
+# Create directory for local encrypted asset storage if local provider is used.
+# Owned by the non-root user below ($APP_UID is set by the aspnet image) so the local provider can still write.
+RUN mkdir -p /app/App_Data/asset-content && chown -R "$APP_UID" /app/App_Data
 
 # Copy compiled binaries from build stage
 COPY --from=build /app/publish .
@@ -36,5 +37,8 @@ ENV ASPNETCORE_HTTP_PORTS=8080
 ENV AllowedHosts="*"
 
 EXPOSE 8080
+
+# Do not run the API as root: a code-execution bug then has no root rights inside the container.
+USER $APP_UID
 
 ENTRYPOINT ["dotnet", "LegacyVault.Api.dll"]

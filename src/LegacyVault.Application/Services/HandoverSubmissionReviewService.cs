@@ -174,6 +174,8 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             turn.VaultId, userId, AuditActorRole.Verifier, AuditAction.HandoverSubmissionApproved,
             AuditTargetType.HandoverTurn, turn.Id, null, AuditOutcome.Succeeded, null, now));
         await unitOfWork.SaveChangesAsync(ct);
+        // Thư báo bước ký chỉ gửi khi đã lưu thành công.
+        await recordService.SendPendingSigningNoticeAsync(ct);
         return submission.ToVerifierDetail();
     }
 
