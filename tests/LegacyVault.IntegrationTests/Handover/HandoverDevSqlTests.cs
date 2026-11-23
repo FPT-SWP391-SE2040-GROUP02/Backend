@@ -57,11 +57,8 @@ public sealed class HandoverDevSqlTests : IAsyncLifetime
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú dev");
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói dev")).GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId)).StatusCode);
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "001090000001", "Người nhận dev");
-        Assert.Equal(HttpStatusCode.OK,
-            (await ApiTestHelpers.AddBeneficiaryToContainerAsync(owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid())).StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, assetId, beneficiary.GetProperty("id").GetGuid());
 
         string script = (await File.ReadAllTextAsync(FindScript())).Replace("<vaultId>", vaultId.ToString());
         await ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -77,7 +74,7 @@ public sealed class HandoverDevSqlTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
         JsonElement turn = await ApiTestHelpers.ReadJsonAsync(claim);
         Assert.Equal("READY_TO_ACCEPT", turn.GetProperty("status").GetString());
-        Assert.Equal("Gói dev", turn.GetProperty("container").GetProperty("name").GetString());
+        Assert.Equal("Biên bản bàn giao", turn.GetProperty("container").GetProperty("name").GetString());
         Assert.Equal(1, turn.GetProperty("items").GetArrayLength());
 
         // Chạy lại script không lỗi và đưa lượt về trạng thái mời ban đầu.

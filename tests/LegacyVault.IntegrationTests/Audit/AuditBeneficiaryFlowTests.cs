@@ -74,19 +74,19 @@ public sealed class AuditBeneficiaryFlowTests : IAsyncLifetime
             Assert.Equal(beneficiaryId, log.TargetId);
             Assert.Null(log.Reason);
         }
-        // Hồ sơ chưa ở gói nào: sửa không đổi cấu hình bàn giao nên không có config_version (QUOTA-03).
+        // Hồ sơ chưa được gán tài sản nào: sửa không đổi cấu hình bàn giao nên không có config_version (QUOTA-03).
         Assert.Null(logs[1].TargetVersion);
     }
 
     [SqlFact]
     public async Task Setup04_UpdateDesignatedBeneficiary_LogsConfigVersion()
     {
-        // Chuẩn bị: hồ sơ đang ở một gói
+        // Chuẩn bị: hồ sơ đang được gán một tài sản
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, CitizenId, FullName);
         Guid beneficiaryId = beneficiary.GetProperty("id").GetGuid();
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(client, vaultId, "Gói A")).GetProperty("id").GetGuid();
-        await ApiTestHelpers.AddBeneficiaryToContainerAsync(client, vaultId, containerId, beneficiaryId);
+        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú A");
+        await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assetId, beneficiaryId);
         string url = $"/api/v1/vaults/{vaultId}/beneficiaries/{beneficiaryId}";
         string etag = (await ApiTestHelpers.ReadJsonAsync(await client.GetAsync(url))).GetProperty("etag").GetString()!;
 

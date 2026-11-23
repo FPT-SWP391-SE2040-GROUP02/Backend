@@ -40,11 +40,13 @@ public enum ErrorCode
     StorageQuotaExceeded,
     FileTooLarge,
     InternalError,
+    // Ba mã dưới đây không còn dùng (đã bỏ gói tài sản). Giữ nguyên vị trí trong enum để không đổi giá trị các mã phía sau.
     ContainerNotFound,
     ContainerLimitExceeded,
     ContainerRemoved,
     PlanDeactivationConfirmationRequired,
     PaidTierRequired,
+    // Không còn dùng (đã bỏ gói tài sản). Giữ nguyên vị trí trong enum.
     AssetAlreadyInContainer,
     BeneficiaryNotFound,
     BeneficiaryIdentityConflict,

@@ -1,6 +1,6 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
-/// <summary>Một lượt bàn giao nhìn từ phía người nhận: trạng thái, các hạn, điều kiện khóa mở gói, gói và tài sản (khi đủ điều kiện), quyền tải.</summary>
+/// <summary>Một lượt bàn giao nhìn từ phía người nhận: trạng thái, các hạn, điều kiện khóa mở gói, tiêu đề lượt và tài sản (khi đủ điều kiện), quyền tải.</summary>
 public class HandoverTurnResponse
 {
     public Guid Id { get; set; }

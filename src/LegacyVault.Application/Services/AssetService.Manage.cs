@@ -120,10 +120,10 @@ public sealed partial class AssetService
         VaultRules.EnsureCanReduce(vault);
         Asset asset = await LoadAssetAsync(vault.Id, assetId, ct);
 
-        ContainerAsset? link = await containerRepository.FindLinkByAssetIdAsync(asset.Id, ct);
-        if (link != null)
+        bool assigned = await assignmentRepository.IsAssetAssignedAsync(asset.Id, ct);
+        if (assigned)
         {
-            throw AssetInUse("Tài sản đang nằm trong một gói. Hãy gỡ khỏi gói trước khi xóa.", "IN_CONTAINER");
+            throw AssetInUse("Tài sản đang được gán cho người nhận. Hãy gỡ gán trước khi xóa.", "ASSIGNED");
         }
         bool pinned = await assetRepository.IsPinnedInHandoverAsync(asset.Id, ct);
         if (pinned)

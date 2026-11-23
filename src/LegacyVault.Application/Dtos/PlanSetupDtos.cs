@@ -14,18 +14,21 @@ public sealed record ExecutorCandidateResponse(Guid UserId, string FullName, str
 public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, bool CanActivate,
     string[] MissingRequirements, string PolicyVersion, string PolicyText, string ExecutorScopeVersion,
     string ExecutorScopeText, List<ExecutorInvitationResponse> Executors,
-    List<PlanSetupContainerResponse> Containers, List<PlanSetupAssetResponse> AssetsOutsideContainer, string[] Warnings,
+    int AssignedAssetCount, List<PlanSetupAssetResponse> UnassignedAssets, string[] Warnings,
     string OwnerFullName = "", string OwnerEmail = "",
     DateTimeOffset? ActivatedAt = null, List<PlanSetupRecipientResponse>? Recipients = null,
     int? WillVersion = null, DateTimeOffset? WillSignedAt = null, bool HasUnsignedChanges = false,
     UnsignedWillChangesResponse? UnsignedChanges = null);
 
-/// <summary>Một gói của người nhận trên màn kích hoạt (chỉ tên, số tài sản và trạng thái, không có nội dung).</summary>
-public sealed record PlanSetupRecipientContainerResponse(Guid Id, string Name, int AssetCount, string Status);
+/// <summary>
+/// Một tài sản được gán cho người nhận trên màn kích hoạt (chỉ tên và loại, không có nội dung).
+/// SharedWithCount là số người nhận tài sản này, tính cả người đang xem; lớn hơn 1 nghĩa là nhận chung.
+/// </summary>
+public sealed record PlanSetupRecipientAssetResponse(Guid Id, string Name, string Kind, int SharedWithCount);
 
 /// <summary>Người nhận theo từng người (di chúc điện tử). Chỉ cho biết đã có lời nhắn hay chưa, không trả nội dung lời nhắn.</summary>
 public sealed record PlanSetupRecipientResponse(Guid BeneficiaryId, string FullName, bool HasMessage,
-    List<PlanSetupRecipientContainerResponse> Containers);
+    List<PlanSetupRecipientAssetResponse> Assets);
 public sealed record ExecutorInvitationInfo(DateTimeOffset ExpiresAt, string Status,
     string ScopeVersion, string ScopeText);
 

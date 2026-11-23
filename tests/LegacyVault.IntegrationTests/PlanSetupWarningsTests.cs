@@ -14,7 +14,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests;
 
-/// <summary>SETUP-01, SETUP-10, EKYC-01, AC-46, AC-68: dữ liệu và cảnh báo trên màn kích hoạt.</summary>
+/// <summary>SETUP-10, EKYC-01, AC-46: dữ liệu và cảnh báo trên màn kích hoạt.</summary>
 public sealed class PlanSetupWarningsTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;
@@ -92,55 +92,50 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task SETUP01_PlanSetupListsReadyAndDraftContainersButNotRemoved()
+    public async Task PlanSetupListsRecipientsWithTheirAssetsAndSharedCount()
     {
-        // Chuẩn bị
+        // Chuẩn bị: người nhận A có 2 tài sản (một tài sản nhận chung với B), người nhận B có 1 tài sản
         (HttpClient owner, Guid vaultId, _) = await PrepareAsync();
-        (Guid readyContainerId, Guid draftContainerId, _) = await PrepareContainersAsync(owner, vaultId);
+        (Guid firstBeneficiaryId, Guid secondBeneficiaryId, Guid sharedAssetId) = await AddSharedAssignmentAsync(owner, vaultId);
 
         // Hành động
         JsonElement setup = await GetSetupAsync(owner, vaultId);
 
-        // Kiểm tra
-        JsonElement containers = setup.GetProperty("containers");
-        Assert.Equal(2, containers.GetArrayLength());
-        JsonElement ready = containers[0];
-        Assert.Equal(readyContainerId, ready.GetProperty("id").GetGuid());
-        Assert.Equal("Gói thử nghiệm SETUP-01", ready.GetProperty("name").GetString());
-        Assert.Equal("READY", ready.GetProperty("status").GetString());
-        Assert.Equal(1, ready.GetProperty("assetCount").GetInt32());
-        Assert.Equal(1, ready.GetProperty("designationCount").GetInt32());
-        Assert.Equal(0, ready.GetProperty("missingRequirements").GetArrayLength());
-
-        JsonElement draft = containers[1];
-        Assert.Equal(draftContainerId, draft.GetProperty("id").GetGuid());
-        Assert.Equal("Gói DRAFT thử nghiệm SETUP-01", draft.GetProperty("name").GetString());
-        Assert.Equal("DRAFT", draft.GetProperty("status").GetString());
-        Assert.Equal(1, draft.GetProperty("assetCount").GetInt32());
-        Assert.Equal(0, draft.GetProperty("designationCount").GetInt32());
-        Assert.Equal(1, draft.GetProperty("missingRequirements").GetArrayLength());
-        Assert.Equal("NO_DESIGNATION", draft.GetProperty("missingRequirements")[0].GetString());
+        // Kiểm tra: 2 tài sản đã gán, 2 người nhận
+        Assert.Equal(2, setup.GetProperty("assignedAssetCount").GetInt32());
+        JsonElement recipients = setup.GetProperty("recipients");
+        Assert.Equal(2, recipients.GetArrayLength());
+        JsonElement first = FindRecipient(recipients, firstBeneficiaryId);
+        JsonElement second = FindRecipient(recipients, secondBeneficiaryId);
+        Assert.Equal(2, first.GetProperty("assets").GetArrayLength());
+        Assert.Equal(1, second.GetProperty("assets").GetArrayLength());
+        JsonElement sharedForSecond = second.GetProperty("assets")[0];
+        Assert.Equal(sharedAssetId, sharedForSecond.GetProperty("id").GetGuid());
+        Assert.Equal(2, sharedForSecond.GetProperty("sharedWithCount").GetInt32());
+        foreach (JsonElement asset in first.GetProperty("assets").EnumerateArray())
+        {
+            int expected = asset.GetProperty("id").GetGuid() == sharedAssetId ? 2 : 1;
+            Assert.Equal(expected, asset.GetProperty("sharedWithCount").GetInt32());
+        }
     }
 
     [SqlFact]
-    public async Task ASSET03_AC68_AssetOutsideContainerListedAndDraftAssetNotRepeated()
+    public async Task UnassignedAssetListedAndAssignedAssetNotRepeated()
     {
-        // Chuẩn bị
+        // Chuẩn bị: một tài sản đã gán (PrepareAsync) và một tài sản chưa gán cho ai
         (HttpClient owner, Guid vaultId, _) = await PrepareAsync();
-        (_, _, Guid draftAssetId) = await PrepareContainersAsync(owner, vaultId);
-        Guid outsideAssetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Tài sản lẻ thử nghiệm ASSET-03");
+        Guid looseAssetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Tài sản lẻ chưa gán");
 
         // Hành động
         JsonElement setup = await GetSetupAsync(owner, vaultId);
 
-        // Kiểm tra
-        JsonElement outsideAssets = setup.GetProperty("assetsOutsideContainer");
-        Assert.Equal(1, outsideAssets.GetArrayLength());
-        JsonElement outside = outsideAssets[0];
-        Assert.Equal(outsideAssetId, outside.GetProperty("id").GetGuid());
-        Assert.Equal("Tài sản lẻ thử nghiệm ASSET-03", outside.GetProperty("name").GetString());
-        Assert.Equal("TEXT", outside.GetProperty("kind").GetString());
-        Assert.NotEqual(draftAssetId, outside.GetProperty("id").GetGuid());
+        // Kiểm tra: chỉ tài sản chưa gán nằm trong danh sách
+        JsonElement unassigned = setup.GetProperty("unassignedAssets");
+        Assert.Equal(1, unassigned.GetArrayLength());
+        JsonElement loose = unassigned[0];
+        Assert.Equal(looseAssetId, loose.GetProperty("id").GetGuid());
+        Assert.Equal("Tài sản lẻ chưa gán", loose.GetProperty("name").GetString());
+        Assert.Equal("TEXT", loose.GetProperty("kind").GetString());
     }
 
     [SqlFact]
@@ -171,11 +166,11 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         JsonElement activated = await ApiTestHelpers.ReadJsonAsync(activation);
         Assert.Equal("ACTIVE", activated.GetProperty("planStatus").GetString());
         AssertNoWarnings(activated);
-        Assert.Equal(1, activated.GetProperty("containers").GetArrayLength());
-        Assert.Equal(0, activated.GetProperty("assetsOutsideContainer").GetArrayLength());
+        Assert.Equal(1, activated.GetProperty("assignedAssetCount").GetInt32());
+        Assert.Equal(0, activated.GetProperty("unassignedAssets").GetArrayLength());
     }
 
-    // SETUP-01: chuẩn bị kho trả phí và gói READY; từng test tự quyết định dữ liệu eKYC.
+    // Chuẩn bị kho trả phí và một tài sản đã gán cho một người nhận; từng test tự quyết định dữ liệu eKYC.
     private async Task<(HttpClient Owner, Guid VaultId, Guid OwnerId)> PrepareAsync()
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -192,45 +187,47 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
         });
 
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Tài sản thử nghiệm SETUP-01");
-        JsonElement container = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói thử nghiệm SETUP-01");
-        Guid containerId = container.GetProperty("id").GetGuid();
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
             owner, vaultId, "000000001017", "Người nhận thử nghiệm");
         Guid beneficiaryId = beneficiary.GetProperty("id").GetGuid();
 
-        HttpResponseMessage addAsset = await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId);
-        Assert.Equal(HttpStatusCode.OK, addAsset.StatusCode);
-        HttpResponseMessage addBeneficiary = await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-            owner, vaultId, containerId, beneficiaryId);
-        Assert.Equal(HttpStatusCode.OK, addBeneficiary.StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, assetId, beneficiaryId);
 
         return (owner, vaultId, ownerId);
     }
 
-    // SETUP-01, AC-68: bổ sung gói DRAFT có tài sản và gói đã xóa qua HTTP.
-    private async Task<(Guid ReadyContainerId, Guid DraftContainerId, Guid DraftAssetId)> PrepareContainersAsync(
+    /// <summary>
+    /// Thêm người nhận thứ hai và một tài sản thứ hai gán chung cho cả hai người nhận (đồng thừa kế).
+    /// Người nhận thứ nhất là người đã có từ PrepareAsync.
+    /// </summary>
+    private async Task<(Guid FirstBeneficiaryId, Guid SecondBeneficiaryId, Guid SharedAssetId)> AddSharedAssignmentAsync(
         HttpClient owner, Guid vaultId)
     {
-        HttpResponseMessage listResponse = await owner.GetAsync($"/api/v1/vaults/{vaultId}/containers");
+        HttpResponseMessage listResponse = await owner.GetAsync($"/api/v1/vaults/{vaultId}/assignments");
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
-        JsonElement page = await ApiTestHelpers.ReadJsonAsync(listResponse);
-        JsonElement existingContainers = page.GetProperty("items");
-        Assert.Equal(1, existingContainers.GetArrayLength());
-        Guid readyContainerId = existingContainers[0].GetProperty("id").GetGuid();
+        JsonElement existing = await ApiTestHelpers.ReadJsonAsync(listResponse);
+        Assert.Equal(1, existing.GetArrayLength());
+        Guid firstBeneficiaryId = existing[0].GetProperty("beneficiaryId").GetGuid();
 
-        Guid draftAssetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Tài sản trong gói DRAFT ASSET-03");
-        JsonElement draft = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói DRAFT thử nghiệm SETUP-01");
-        Guid draftContainerId = draft.GetProperty("id").GetGuid();
-        HttpResponseMessage addAsset = await ApiTestHelpers.AddAssetToContainerAsync(
-            owner, vaultId, draftContainerId, draftAssetId);
-        Assert.Equal(HttpStatusCode.OK, addAsset.StatusCode);
+        JsonElement second = await ApiTestHelpers.CreateBeneficiaryAsync(
+            owner, vaultId, "000000001018", ApiTestHelpers.BeneficiaryName(1));
+        Guid secondBeneficiaryId = second.GetProperty("id").GetGuid();
+        Guid sharedAssetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Tài sản nhận chung");
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, sharedAssetId, firstBeneficiaryId, secondBeneficiaryId);
 
-        JsonElement removedContainer = await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói đã xóa thử nghiệm SETUP-01");
-        Guid removedContainerId = removedContainer.GetProperty("id").GetGuid();
-        HttpResponseMessage removeResponse = await owner.DeleteAsync($"/api/v1/vaults/{vaultId}/containers/{removedContainerId}");
-        Assert.Equal(HttpStatusCode.OK, removeResponse.StatusCode);
+        return (firstBeneficiaryId, secondBeneficiaryId, sharedAssetId);
+    }
 
-        return (readyContainerId, draftContainerId, draftAssetId);
+    private static JsonElement FindRecipient(JsonElement recipients, Guid beneficiaryId)
+    {
+        foreach (JsonElement recipient in recipients.EnumerateArray())
+        {
+            if (recipient.GetProperty("beneficiaryId").GetGuid() == beneficiaryId)
+            {
+                return recipient;
+            }
+        }
+        throw new InvalidOperationException("Không thấy người nhận trên màn kích hoạt.");
     }
 
     // SETUP-10: mời và chấp nhận qua HTTP; token chỉ giữ trong RAM của test.

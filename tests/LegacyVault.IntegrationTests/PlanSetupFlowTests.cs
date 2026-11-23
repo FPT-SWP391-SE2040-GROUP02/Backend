@@ -53,11 +53,8 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
             await db.SaveChangesAsync();
         });
         var asset = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "E2E fixture asset");
-        var container = await ApiTestHelpers.ReadJsonAsync(await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers", new { name = "E2E fixture container" }));
-        var containerId = container.GetProperty("id").GetGuid();
         var beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "000000001015", "Người nhận thử nghiệm");
-        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers/{containerId}/assets", new { assetId = asset })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/containers/{containerId}/beneficiaries", new { beneficiaryId = beneficiary.GetProperty("id").GetGuid() })).StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, asset, beneficiary.GetProperty("id").GetGuid());
         return (owner, recipient, vaultId);
     }
 
@@ -224,9 +221,15 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, resent.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await RespondAsync(recipient, mail.Token)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", await ActivationAsync(owner, vaultId))).StatusCode);
-        Guid containerId = Guid.Empty;
-        await ApiTestHelpers.WithDbAsync(factory, async db => containerId = await db.Containers.Where(c => c.VaultId == vaultId).Select(c => c.Id).SingleAsync());
-        Assert.Equal(HttpStatusCode.OK, (await owner.DeleteAsync($"/api/v1/vaults/{vaultId}/containers/{containerId}?confirmPlanDeactivation=true")).StatusCode);
+        Guid assignedAssetId = Guid.Empty;
+        Guid assignedBeneficiaryId = Guid.Empty;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            AssetAssignment assignment = await db.AssetAssignments.Where(a => a.Asset.VaultId == vaultId).SingleAsync();
+            assignedAssetId = assignment.AssetId;
+            assignedBeneficiaryId = assignment.BeneficiaryId;
+        });
+        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.UnassignAssetAsync(owner, vaultId, assignedAssetId, assignedBeneficiaryId, true)).StatusCode);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Assert.Equal(ExecutorStatus.Suspended, (await db.Set<Executor>().SingleAsync(e => e.VaultId == vaultId)).Status);
@@ -248,7 +251,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task ExpiredPaidServiceAndNoReadyContainerAreIndependentActivationBlockers()
+    public async Task ExpiredPaidServiceAndNoAssignmentAreIndependentActivationBlockers()
     {
         var (owner, recipient, vaultId) = await PrepareAsync();
         await InviteAsync(owner, vaultId);
@@ -260,10 +263,10 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             await db.VaultEntitlements.Where(e => e.VaultId == vaultId).ExecuteUpdateAsync(s => s.SetProperty(e => e.ServiceExpiresAt, DateTimeOffset.UtcNow.AddDays(30)));
-            await db.Containers.Where(c => c.VaultId == vaultId).ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, ContainerStatus.Draft));
+            await db.AssetAssignments.Where(a => a.Asset.VaultId == vaultId).ExecuteDeleteAsync();
         });
         response = await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup");
-        Assert.Contains("READY_CONTAINER_REQUIRED", response!.MissingRequirements);
+        Assert.Contains("ASSIGNMENT_REQUIRED", response!.MissingRequirements);
         Assert.False(response.CanActivate);
     }
 

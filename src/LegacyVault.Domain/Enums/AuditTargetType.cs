@@ -6,6 +6,7 @@ public enum AuditTargetType
     Vault = 0,
     Plan = 1,
     Asset = 2,
+    /// <summary>Không còn dùng (đã bỏ gói tài sản); giữ giá trị để đọc nhật ký cũ.</summary>
     Container = 3,
     Beneficiary = 4,
     /// <summary>Không còn dùng (đã bỏ điểm danh); giữ giá trị để đọc nhật ký cũ.</summary>

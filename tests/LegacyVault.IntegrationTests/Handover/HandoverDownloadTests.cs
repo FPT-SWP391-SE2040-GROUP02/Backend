@@ -35,9 +35,10 @@ public sealed class HandoverDownloadTests
         vaults.Vaults.Add(data.Vault);
         currentUser.UserId = claimantId;
 
-        Container container = data.AddContainer("Gói A", ContainerStatus.Ready, 1);
-        Designation designation = data.Designate(container, "Người Nhận", "nguoi-nhan@example.com");
-        turn = data.BuildTurn(container, designation, HandoverTurnStatus.HandoverCommitted, "t1", claimantId);
+        Beneficiary recipient = data.AddRecipient("Người Nhận", "nguoi-nhan@example.com");
+
+        data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
+        turn = data.BuildTurn(recipient, HandoverTurnStatus.HandoverCommitted, "t1", claimantId);
         repository.Turns.Add(turn);
 
         item = turn.Items[0];

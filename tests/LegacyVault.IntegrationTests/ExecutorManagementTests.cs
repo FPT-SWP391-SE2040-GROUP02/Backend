@@ -79,7 +79,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
         }
     }
 
-    /// <summary>Kho trả phí, eKYC đạt, một gói READY; trả Owner và kho.</summary>
+    /// <summary>Kho trả phí, eKYC đạt, một tài sản đã gán cho một người nhận; trả Owner và kho.</summary>
     private async Task<(HttpClient Owner, Guid VaultId)> PrepareOwnerAsync()
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -96,11 +96,8 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
             await db.SaveChangesAsync();
         });
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú");
-        Guid containerId = (await ApiTestHelpers.CreateContainerAsync(owner, vaultId, "Gói")).GetProperty("id").GetGuid();
         JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(owner, vaultId, "000000001015", "Người nhận");
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddAssetToContainerAsync(owner, vaultId, containerId, assetId)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await ApiTestHelpers.AddBeneficiaryToContainerAsync(
-            owner, vaultId, containerId, beneficiary.GetProperty("id").GetGuid())).StatusCode);
+        await ApiTestHelpers.AssignAssetOkAsync(owner, vaultId, assetId, beneficiary.GetProperty("id").GetGuid());
         return (owner, vaultId);
     }
 
@@ -296,11 +293,10 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
         Assert.Equal(beneficiaryId, recipients[0].GetProperty("beneficiaryId").GetGuid());
         Assert.Equal("Người nhận", recipients[0].GetProperty("fullName").GetString());
         Assert.True(recipients[0].GetProperty("hasMessage").GetBoolean());
-        JsonElement packs = recipients[0].GetProperty("containers");
-        Assert.Equal(1, packs.GetArrayLength());
-        Assert.Equal("Gói", packs[0].GetProperty("name").GetString());
-        Assert.Equal(1, packs[0].GetProperty("assetCount").GetInt32());
-        Assert.Equal("READY", packs[0].GetProperty("status").GetString());
+        JsonElement recipientAssets = recipients[0].GetProperty("assets");
+        Assert.Equal(1, recipientAssets.GetArrayLength());
+        Assert.Equal("Ghi chú", recipientAssets[0].GetProperty("name").GetString());
+        Assert.Equal(1, recipientAssets[0].GetProperty("sharedWithCount").GetInt32());
         // Chưa chấp nhận thì chưa liên kết tài khoản nên chưa có fullName.
         Assert.Equal(JsonValueKind.Null, before.GetProperty("executors")[0].GetProperty("fullName").ValueKind);
 

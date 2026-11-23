@@ -8,10 +8,10 @@ namespace LegacyVault.Application.Mappings;
 public static class BeneficiaryMappings
 {
     /// <summary>
-    /// data là dữ liệu đã giải mã của chính hồ sơ này; containerIds là các gói đang chỉ định hồ sơ này
+    /// data là dữ liệu đã giải mã của chính hồ sơ này; assetIds là các tài sản đang được gán cho hồ sơ này
     /// (không có thì danh sách rỗng). Trả số CCCD đầy đủ.
     /// </summary>
-    public static BeneficiaryResponse ToResponse(this Beneficiary beneficiary, BeneficiaryPersonalData data, List<Guid> containerIds)
+    public static BeneficiaryResponse ToResponse(this Beneficiary beneficiary, BeneficiaryPersonalData data, List<Guid> assetIds)
     {
         return new BeneficiaryResponse
         {
@@ -22,7 +22,7 @@ public static class BeneficiaryMappings
             Email = data.Email,
             Phone = data.Phone,
             Message = data.Message,
-            ContainerIds = containerIds,
+            AssetIds = assetIds,
             CreatedAt = beneficiary.CreatedAt,
             UpdatedAt = beneficiary.UpdatedAt,
             Etag = Etag.From(beneficiary.UpdatedAt),

@@ -31,7 +31,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
     private readonly IBeneficiaryRepository beneficiaryRepository;
-    private readonly IContainerRepository containerRepository;
+    private readonly IAssetAssignmentRepository assignmentRepository;
     private readonly IBeneficiaryDataProtector dataProtector;
     private readonly IAuditLogRepository auditLogRepository;
     private readonly IUserRepository userRepository;
@@ -46,7 +46,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
         IBeneficiaryRepository beneficiaryRepository,
-        IContainerRepository containerRepository,
+        IAssetAssignmentRepository assignmentRepository,
         IBeneficiaryDataProtector dataProtector,
         IAuditLogRepository auditLogRepository,
         IUserRepository userRepository,
@@ -63,7 +63,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.beneficiaryRepository = beneficiaryRepository;
-        this.containerRepository = containerRepository;
+        this.assignmentRepository = assignmentRepository;
         this.dataProtector = dataProtector;
         this.auditLogRepository = auditLogRepository;
         this.userRepository = userRepository;
@@ -189,10 +189,10 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         {
             throw IdentityConflict(existing.Beneficiary.Id);
         }
-        List<Guid> existingContainerIds = await LoadContainerIdsAsync(existing.Beneficiary.Id, ct);
+        List<Guid> existingAssetIds = await LoadAssetIdsAsync(existing.Beneficiary.Id, ct);
         CreateBeneficiaryResult same = new CreateBeneficiaryResult();
         same.Created = false;
-        same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, existingContainerIds);
+        same.Beneficiary = existing.Beneficiary.ToResponse(existing.Data, existingAssetIds);
         same.Beneficiary.IsExisting = true;
         return same;
     }
@@ -219,21 +219,21 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         (List<Beneficiary> Items, int TotalCount) page = await beneficiaryRepository.FindPageByVaultIdAsync(
             vaultId, searchTerm, pagination.PageIndex, pagination.PageSize, pagination.IsAscending, ct);
 
-        // Lấy containerIds của cả trang bằng một truy vấn (tránh N+1).
+        // Lấy assetIds của cả trang bằng một truy vấn (tránh N+1).
         List<Guid> beneficiaryIds = new List<Guid>();
         foreach (Beneficiary beneficiary in page.Items)
         {
             beneficiaryIds.Add(beneficiary.Id);
         }
-        Dictionary<Guid, List<Guid>> containerIdsByBeneficiary =
-            await containerRepository.FindContainerIdsByBeneficiaryIdsAsync(beneficiaryIds, ct);
+        Dictionary<Guid, List<Guid>> assetIdsByBeneficiary =
+            await assignmentRepository.FindAssetIdsByBeneficiaryIdsAsync(beneficiaryIds, ct);
 
         List<BeneficiaryResponse> responses = new List<BeneficiaryResponse>();
         foreach (Beneficiary beneficiary in page.Items)
         {
             BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
-            List<Guid> containerIds = GetContainerIds(containerIdsByBeneficiary, beneficiary.Id);
-            responses.Add(beneficiary.ToResponse(data, containerIds));
+            List<Guid> assetIds = GetAssetIds(assetIdsByBeneficiary, beneficiary.Id);
+            responses.Add(beneficiary.ToResponse(data, assetIds));
         }
         HashSet<string> bouncedEmails = await bounces.FindBouncedAsync(responses.Select(r => r.Email ?? string.Empty), ct);
         foreach (BeneficiaryResponse response in responses)
@@ -280,8 +280,8 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         Vault vault = await LoadOwnedVaultAsync(vaultId, ct);
         Beneficiary beneficiary = await LoadBeneficiaryAsync(vault.Id, beneficiaryId, ct);
         BeneficiaryPersonalData data = dataProtector.Unprotect(beneficiary);
-        List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
-        return beneficiary.ToResponse(data, containerIds);
+        List<Guid> assetIds = await LoadAssetIdsAsync(beneficiary.Id, ct);
+        return beneficiary.ToResponse(data, assetIds);
     }
 
     public async Task<BeneficiaryResponse> UpdateBeneficiaryAsync(
@@ -360,28 +360,28 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             || !string.Equals(updated.Phone, current.Phone, StringComparison.Ordinal)
             || !string.Equals(updated.Message, current.Message, StringComparison.Ordinal);
 
-        List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
+        List<Guid> assetIds = await LoadAssetIdsAsync(beneficiary.Id, ct);
 
         // Không có gì đổi: không mã hóa lại, không lưu, etag giữ nguyên.
         if (!changed)
         {
-            return beneficiary.ToResponse(current, containerIds);
+            return beneficiary.ToResponse(current, assetIds);
         }
 
         // Mỗi lần lưu dùng DEK mới.
         dataProtector.Protect(beneficiary, updated);
         beneficiary.UpdatedAt = now;
-        // hồ sơ đang ở gói thì sửa người nhận là đổi cấu hình bàn giao → tăng ConfigVersion
+        // hồ sơ đang được gán tài sản thì sửa người nhận là đổi cấu hình bàn giao → tăng ConfigVersion
         // (lưu cùng một lần SaveChanges với hồ sơ).
         int? configVersion = null;
-        if (containerIds.Count > 0)
+        if (assetIds.Count > 0)
         {
             PlanRules.BumpConfigVersion(vault.Plan, now);
             configVersion = vault.Plan.ConfigVersion;
         }
         AddAudit(vault, AuditAction.BeneficiaryUpdated, beneficiary.Id, configVersion, now);
         await unitOfWork.SaveChangesAsync(ct);
-        return beneficiary.ToResponse(updated, containerIds);
+        return beneficiary.ToResponse(updated, assetIds);
     }
 
     public async Task DeleteBeneficiaryAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
@@ -391,14 +391,14 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         VaultRules.EnsureCanReduce(vault);
         Beneficiary beneficiary = await LoadBeneficiaryAsync(vault.Id, beneficiaryId, ct);
 
-        // Hồ sơ đang ở gói thì phải gỡ khỏi gói trước; containerIds để FE chỉ ra các gói đó.
-        List<Guid> containerIds = await LoadContainerIdsAsync(beneficiary.Id, ct);
-        if (containerIds.Count > 0)
+        // Hồ sơ đang được gán tài sản thì phải gỡ gán trước; assetIds để FE chỉ ra các tài sản đó.
+        List<Guid> assetIds = await LoadAssetIdsAsync(beneficiary.Id, ct);
+        if (assetIds.Count > 0)
         {
-            throw InUse(containerIds);
+            throw InUse(assetIds);
         }
 
-        // TODO: request khác gắn hồ sơ này vào gói đúng lúc này thì FK Restrict ở DB chặn việc xóa,
+        // TODO: request khác gán tài sản cho hồ sơ này đúng lúc này thì FK Restrict ở DB chặn việc xóa,
         // nhưng lỗi đó hiện ra 500 thay vì 409 BENEFICIARY_IN_USE.
         beneficiaryRepository.Remove(beneficiary);
         // AuditLogs.TargetId không có khóa ngoại nên dòng nhật ký vẫn giữ sau khi hồ sơ bị xóa.
@@ -599,33 +599,33 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         return beneficiary;
     }
 
-    /// <summary>Các gói đang chỉ định một hồ sơ (sắp theo thời điểm gắn); không có → danh sách rỗng.</summary>
-    private async Task<List<Guid>> LoadContainerIdsAsync(Guid beneficiaryId, CancellationToken ct)
+    /// <summary>Các tài sản đang được gán cho một hồ sơ (sắp theo thời điểm gán); không có → danh sách rỗng.</summary>
+    private async Task<List<Guid>> LoadAssetIdsAsync(Guid beneficiaryId, CancellationToken ct)
     {
         List<Guid> beneficiaryIds = new List<Guid>();
         beneficiaryIds.Add(beneficiaryId);
-        Dictionary<Guid, List<Guid>> containerIdsByBeneficiary =
-            await containerRepository.FindContainerIdsByBeneficiaryIdsAsync(beneficiaryIds, ct);
-        return GetContainerIds(containerIdsByBeneficiary, beneficiaryId);
+        Dictionary<Guid, List<Guid>> assetIdsByBeneficiary =
+            await assignmentRepository.FindAssetIdsByBeneficiaryIdsAsync(beneficiaryIds, ct);
+        return GetAssetIds(assetIdsByBeneficiary, beneficiaryId);
     }
 
-    /// <summary>Hồ sơ không có chỉ định nào thì không có key trong dictionary → danh sách rỗng.</summary>
-    private static List<Guid> GetContainerIds(Dictionary<Guid, List<Guid>> containerIdsByBeneficiary, Guid beneficiaryId)
+    /// <summary>Hồ sơ chưa được gán tài sản nào thì không có key trong dictionary → danh sách rỗng.</summary>
+    private static List<Guid> GetAssetIds(Dictionary<Guid, List<Guid>> assetIdsByBeneficiary, Guid beneficiaryId)
     {
-        List<Guid>? containerIds;
-        if (containerIdsByBeneficiary.TryGetValue(beneficiaryId, out containerIds))
+        List<Guid>? assetIds;
+        if (assetIdsByBeneficiary.TryGetValue(beneficiaryId, out assetIds))
         {
-            return containerIds;
+            return assetIds;
         }
         return new List<Guid>();
     }
 
-    private static AppException InUse(List<Guid> containerIds)
+    private static AppException InUse(List<Guid> assetIds)
     {
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["containerIds"] = containerIds;
+        extensions["assetIds"] = assetIds;
         return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiaryInUse,
-            "Người nhận đang ở trong gói. Vui lòng gỡ khỏi các gói trước khi xóa.", extensions);
+            "Người nhận đang được gán tài sản. Vui lòng gỡ gán trước khi xóa.", extensions);
     }
 
     /// <summary>Đã đủ số hồ sơ theo suất của kho; kèm số hồ sơ hiện có và số suất tối đa để FE gợi ý mua thêm.</summary>

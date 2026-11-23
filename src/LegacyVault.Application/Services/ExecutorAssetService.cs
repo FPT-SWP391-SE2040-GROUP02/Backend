@@ -8,31 +8,31 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Màn Tài sản của Người thực thi: các gói sẵn sàng của kho, chỉ có tên, không có nội dung tài sản.</summary>
+/// <summary>Màn Tài sản của Người thực thi: các người nhận của kho kèm tài sản được gán, chỉ có tên, không có nội dung tài sản.</summary>
 public sealed class ExecutorAssetService : IExecutorAssetService
 {
     private readonly ICurrentUser currentUser;
     private readonly IVaultRepository vaultRepository;
     private readonly IExecutorReader executorReader;
-    private readonly IExecutorAssetReader assetReader;
+    private readonly IAssetAssignmentRepository assignmentRepository;
     private readonly IBeneficiaryDataProtector beneficiaryProtector;
 
     public ExecutorAssetService(
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
         IExecutorReader executorReader,
-        IExecutorAssetReader assetReader,
+        IAssetAssignmentRepository assignmentRepository,
         IBeneficiaryDataProtector beneficiaryProtector)
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.executorReader = executorReader;
-        this.assetReader = assetReader;
+        this.assignmentRepository = assignmentRepository;
         this.beneficiaryProtector = beneficiaryProtector;
     }
 
-    // Màn Tài sản của Người thực thi: các gói sẵn sàng của kho, mỗi gói kèm người nhận và tên tài sản (không có nội dung).
-    public async Task<List<ExecutorVaultPackageResponse>> ListPackagesAsync(Guid vaultId, CancellationToken ct)
+    // Màn Tài sản của Người thực thi: các người nhận của kho, mỗi người kèm tên tài sản được gán (không có nội dung).
+    public async Task<List<ExecutorVaultRecipientResponse>> ListRecipientsAsync(Guid vaultId, CancellationToken ct)
     {
         // 1. Người gọi phải là Người thực thi đang phụ trách kho; không thì báo không tìm thấy kho
         Guid userId = currentUser.RequireUserId();
@@ -50,54 +50,52 @@ public sealed class ExecutorAssetService : IExecutorAssetService
                 "Chỉ xem được tài sản sau khi luật sư chốt biên bản bàn giao.");
         }
 
-        // 2. Lấy các gói sẵn sàng rồi dựng kết quả từng gói (bỏ tài sản đã bị xóa nội dung)
-        List<Container> packages = await assetReader.FindReadyPackagesAsync(vault.Id, ct);
-        List<ExecutorVaultPackageResponse> responses = new List<ExecutorVaultPackageResponse>();
-        foreach (Container package in packages)
+        // 2. Lấy các dòng gán của kho rồi gom theo người nhận (theo thứ tự gán), bỏ tài sản đã bị xóa nội dung
+        List<AssetAssignment> assignments = await assignmentRepository.FindDetailedByVaultIdAsync(vault.Id, ct);
+        Dictionary<Guid, int> recipientCountByAsset = new Dictionary<Guid, int>();
+        foreach (AssetAssignment assignment in assignments)
         {
-            responses.Add(ToResponse(package));
-        }
-        return responses;
-    }
-
-    /// <summary>Đổi một gói sang dữ liệu trả ra màn hình: các người nhận (theo ngày tạo) và các tài sản còn nội dung (theo ngày thêm). Không có nội dung tài sản.</summary>
-    private ExecutorVaultPackageResponse ToResponse(Container package)
-    {
-        ExecutorVaultPackageResponse response = new ExecutorVaultPackageResponse
-        {
-            ContainerId = package.Id,
-            ContainerName = package.Name
-        };
-
-        List<Designation> designations = package.Designations.OrderBy(designation => designation.CreatedAt).ToList();
-        foreach (Designation designation in designations)
-        {
-            ExecutorPackageRecipientResponse recipient = new ExecutorPackageRecipientResponse
+            if (recipientCountByAsset.ContainsKey(assignment.AssetId))
             {
-                CitizenId = ReadCitizenId(designation.Beneficiary),
-                FullName = ReadFullName(designation.Beneficiary)
-            };
-            response.Recipients.Add(recipient);
+                recipientCountByAsset[assignment.AssetId] = recipientCountByAsset[assignment.AssetId] + 1;
+            }
+            else
+            {
+                recipientCountByAsset[assignment.AssetId] = 1;
+            }
         }
 
-        List<ContainerAsset> links = package.Assets.OrderBy(link => link.AddedAt).ToList();
-        foreach (ContainerAsset link in links)
+        List<ExecutorVaultRecipientResponse> responses = new List<ExecutorVaultRecipientResponse>();
+        Dictionary<Guid, ExecutorVaultRecipientResponse> byBeneficiary = new Dictionary<Guid, ExecutorVaultRecipientResponse>();
+        foreach (AssetAssignment assignment in assignments)
         {
-            Asset asset = link.Asset;
+            Asset asset = assignment.Asset;
             if (asset.ContentDeletedAt != null)
             {
                 continue;
             }
-            ExecutorPackageAssetResponse item = new ExecutorPackageAssetResponse
+            if (!byBeneficiary.ContainsKey(assignment.BeneficiaryId))
+            {
+                ExecutorVaultRecipientResponse recipient = new ExecutorVaultRecipientResponse
+                {
+                    BeneficiaryId = assignment.BeneficiaryId,
+                    CitizenId = ReadCitizenId(assignment.Beneficiary),
+                    FullName = ReadFullName(assignment.Beneficiary)
+                };
+                byBeneficiary[assignment.BeneficiaryId] = recipient;
+                responses.Add(recipient);
+            }
+            ExecutorRecipientAssetResponse item = new ExecutorRecipientAssetResponse
             {
                 Id = asset.Id,
                 Name = asset.Name,
                 Kind = ToKind(asset.Kind),
-                SizeBytes = asset.SizeBytes
+                SizeBytes = asset.SizeBytes,
+                SharedWithCount = recipientCountByAsset[asset.Id]
             };
-            response.Assets.Add(item);
+            byBeneficiary[assignment.BeneficiaryId].Assets.Add(item);
         }
-        return response;
+        return responses;
     }
 
     /// <summary>Loại tài sản dạng chữ trả ra API: TEXT cho ghi chú văn bản, FILE cho tệp.</summary>

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 namespace LegacyVault.Api.Security;
 
 /// <summary>
-/// Đặt trên action cần mã PIN của kho (tải nội dung tài sản, xóa tài sản, đổi người nhận/Executor, xóa gói...).
+/// Đặt trên action cần mã PIN của kho (tải nội dung tài sản, xóa tài sản, đổi người nhận/Executor, gán hoặc gỡ gán tài sản...).
 /// Đọc <c>vaultId</c> trong route và PIN trong header <c>X-Vault-Pin</c>, rồi gọi
 /// <see cref="IVaultPinService.VerifyAsync"/>. Route của action phải có tham số <c>vaultId</c>.
 /// </summary>

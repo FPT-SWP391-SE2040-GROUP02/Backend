@@ -84,7 +84,7 @@ Ví dụ `HandoverTurn`:
   "responseDeadline": "2026-10-19T07:00:00+00:00",
   "decisionDeadline": "2026-10-21T08:00:00+00:00",
   "identityBypassed": true,
-  "container": { "name": "Gói thừa kế" },
+  "container": { "name": "Biên bản bàn giao" },
   "items": [
     { "id": "0198...", "name": "Giấy tờ nhà", "kind": "FILE", "fileName": "giay-to.pdf", "contentType": "application/pdf", "sizeBytes": 200000 }
   ],
@@ -127,7 +127,7 @@ Lỗi trả `application/problem+json` có trường `code` (UPPER_SNAKE) và đ
 - Chủ kho không thể tự nhận lượt của mình (`OWNER_CANNOT_CLAIM`).
 - Tài khoản nhân sự (role EXECUTOR, VERIFIER, ADMIN) không nhận được tài sản bàn giao (`STAFF_CANNOT_CLAIM`).
 - Snapshot ghim phiên bản tài sản lúc mở bàn giao; chủ kho sửa tài sản sau đó không đổi gì ở lượt.
-- Chỉ mục unique: một grant cho mỗi lượt; mỗi chỉ định chỉ một lượt đang hiệu lực/đã nhận (`UX_HandoverTurns_ActivePerDesignation`).
+- Chỉ mục unique: một grant cho mỗi lượt.
 - Nhật ký truy cập (`HandoverAccessLogs`) chỉ ghi id và kết quả (`Succeeded`, `Denied`, `IntegrityFailed`), không ghi tên tệp hay nội dung.
 
 ## 8. Khi gộp với nhánh khác
