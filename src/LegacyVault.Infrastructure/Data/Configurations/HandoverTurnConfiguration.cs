@@ -27,6 +27,9 @@ public sealed class HandoverTurnConfiguration : IEntityTypeConfiguration<Handove
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(t => t.ReceiptIssueNote)
+            .HasMaxLength(1000);
+
         // Job lưu dữ liệu tìm các lượt chưa dọn theo kế hoạch.
         builder.HasIndex(t => new { t.PlanId, t.RetentionStatus });
 

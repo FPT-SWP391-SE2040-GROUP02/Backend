@@ -100,12 +100,6 @@ public sealed class HandoverProgressService : IHandoverProgressService
             }
             HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(citizenId, firstDownloads);
             turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
-            HandoverRecordSignature? signature = HandoverRecordRules.FindSignature(
-                record, HandoverSignerRole.Recipient, turn.BeneficiaryId);
-            if (signature != null)
-            {
-                turnResponse.RecipientSignedAt = signature.SignedAt;
-            }
             turnResponse.DocumentApprovedAt = record.CompletedAt;
             if (ShowsBeneficiaryContact(turn.Status))
             {

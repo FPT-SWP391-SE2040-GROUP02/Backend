@@ -34,7 +34,7 @@ public class HandoverRecord
     /// <summary>Lần chốt biên bản gần nhất; null khi đang lập.</summary>
     public DateTimeOffset? FinalizedAt { get; set; }
 
-    /// <summary>Lúc đủ chữ ký ba bên; null khi chưa xong.</summary>
+    /// <summary>Lúc luật sư ký biên bản (thành yêu cầu chuyển giao); null khi chưa ký.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
 
     /// <summary>Lúc Chủ kho hủy yêu cầu nhận tài sản; null khi không hủy.</summary>

@@ -121,7 +121,7 @@ public sealed class HandoverController : ControllerBase
         return handoverService.GetTurnAsync(turnId, ct);
     }
 
-    /// <summary>Người nhận xác nhận đã nhận đủ tài sản.</summary>
+    /// <summary>Người nhận xác nhận đã nhận đủ tài sản (ký bên nhận của phiếu giao nhận).</summary>
     [HttpPost("turns/{turnId:guid}/received-all")]
     [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -131,6 +131,16 @@ public sealed class HandoverController : ControllerBase
         return handoverService.ConfirmReceivedAllAsync(turnId, ct);
     }
 
+    /// <summary>Người nhận báo tài sản thiếu hoặc sai trước khi xác nhận nhận đủ.</summary>
+    [HttpPost("turns/{turnId:guid}/receipt-issue")]
+    [ProducesResponseType<HandoverTurnResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverTurnResponse> ReportReceiptIssue(Guid turnId, ReportReceiptIssueRequest request, CancellationToken ct)
+    {
+        return handoverService.ReportReceiptIssueAsync(turnId, request.Note, ct);
+    }
+
     /// <summary>Biên bản bàn giao nhìn từ lượt của tôi: chỉ phần tài sản của tôi và tình trạng chữ ký.</summary>
     [HttpGet("turns/{turnId:guid}/record")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
@@ -138,18 +148,6 @@ public sealed class HandoverController : ControllerBase
     public Task<HandoverRecordResponse> GetRecord(Guid turnId, CancellationToken ct)
     {
         return recordService.GetForRecipientAsync(turnId, ct);
-    }
-
-    /// <summary>
-    /// Người nhận ký biên bản (bước 3). Đủ chữ ký ba bên thì mở quyền xem và tải; Người thực thi gửi mã nhận.
-    /// </summary>
-    [HttpPost("turns/{turnId:guid}/record/sign")]
-    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<HandoverRecordResponse> SignRecord(Guid turnId, CancellationToken ct)
-    {
-        return recordService.SignAsRecipientAsync(turnId, ct);
     }
 
     /// <summary>Nhập khóa mở gói do Người thực thi đưa. Sai thì 403 HANDOVER_KEY_INVALID, quá giới hạn thì 423.</summary>

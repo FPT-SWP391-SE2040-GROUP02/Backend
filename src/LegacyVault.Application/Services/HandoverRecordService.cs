@@ -17,9 +17,10 @@ namespace LegacyVault.Application.Services;
 //   2. Luật sư lập biên bản ................... UseOwnerSplitAsync, SetLinesAsync
 //   3. Luật sư chốt biên bản .................. FinalizeAsync (tạo lượt, gửi thư mời)
 //   4. Luật sư xác nhận danh tính ............. HandoverSubmissionReviewService.ApproveAsync → AdvanceAfterIdentityAsync
-//   5. Ba bên ký ............................... SignAsVerifierAsync, SignAsExecutorAsync, SignAsRecipientAsync
-//   6. Đủ chữ ký: mở quyền tải cho người nhận (CompleteIfAllSigned), Người thực thi gửi mã nhận
-// Luật sư mở lại được ở bước 2 hoặc 3 (ReopenAsync): chữ ký cũ mất hiệu lực, phải ký lại từ đầu.
+//   5. Luật sư ký biên bản ..................... SignAsVerifierAsync: thành yêu cầu chuyển giao cho Người thực thi
+//   6. Mở quyền tải từng người đã xác nhận danh tính (CommitIfIdentityConfirmed); người tới sau mở sau
+//   7. Phiếu giao nhận ký SAU khi giao ......... HandoverReceiptService
+// Luật sư mở lại được trước khi ký (ReopenAsync).
 /// <summary>Biên bản bàn giao: hệ thống chỉ làm theo biên bản luật sư lập, không tự chia tài sản.</summary>
 public sealed class HandoverRecordService : IHandoverRecordService
 {
@@ -41,8 +42,9 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private readonly IAssetAssignmentRepository assignments;
     private readonly ILogger<HandoverRecordService> logger;
 
-    // Biên bản vừa sang bước ký trong lượt này; thư báo chỉ gửi sau khi đã lưu (SendPendingSigningNoticeAsync).
-    private HandoverRecord? signingNoticePending;
+    // Biên bản và những người nhận vừa được mở giao; thư báo chỉ gửi sau khi đã lưu (SendPendingTransferNoticeAsync).
+    private HandoverRecord? transferNoticeRecord;
+    private readonly HashSet<Guid> transferNoticeRecipients = new HashSet<Guid>();
 
     public HandoverRecordService(
         ICurrentUser currentUser,
@@ -132,11 +134,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
             return null;
         }
 
-        // 3. Dựng biên bản; ký được khi đang ở bước ký và chưa ký bản này
-        HandoverRecordResponse response = await BuildResponseAsync(record, vault, null, ct);
-        response.CanSign = record.Status == HandoverRecordStatus.Signing
-            && HandoverRecordRules.FindSignature(record, HandoverSignerRole.Executor, null) == null;
-        return response;
+        // 3. Dựng biên bản; Người thực thi chỉ làm theo, không ký biên bản
+        return await BuildResponseAsync(record, vault, null, ct);
     }
 
     // ---------------- Người nhận gửi yêu cầu nhận tài sản ----------------
@@ -148,7 +147,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         Vault vault = await RequireVaultAsync(beneficiary.VaultId, ct);
         BeneficiaryPersonalData data = protector.Unprotect(beneficiary);
 
-        // 2. Gửi được khi kế hoạch đang hoạt động, hoặc đang có biên bản chưa đủ chữ ký
+        // 2. Gửi được khi kế hoạch đang hoạt động, hoặc đang có biên bản luật sư chưa ký
         HandoverRecord? record = await records.FindByVaultIdAsync(vault.Id, ct);
         bool canRequest = vault.Plan.Status == PlanStatus.Active && record == null;
         if (record != null && record.Status != HandoverRecordStatus.Completed)
@@ -221,7 +220,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             if (record.Status == HandoverRecordStatus.Completed)
             {
-                throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Biên bản bàn giao của kho này đã đủ chữ ký.");
+                throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Luật sư đã ký biên bản bàn giao của kho này.");
             }
             if (FindClaim(record, beneficiary.Id) != null)
             {
@@ -325,27 +324,6 @@ public sealed class HandoverRecordService : IHandoverRecordService
             throw HandoverAccess.NotFound();
         }
         return await HandoverRecordFileStorage.PrepareAsync(contentStore, file, ct);
-    }
-
-    public async Task<HandoverRecordResponse> SignAsExecutorAsync(Guid vaultId, CancellationToken ct)
-    {
-        // 1. Người gọi phải là Người thực thi đang phụ trách kho, kho phải có biên bản
-        Guid userId = currentUser.RequireUserId();
-        Vault vault = await RequireExecutorVaultAsync(vaultId, userId, ct);
-        HandoverRecord? record = await records.FindByVaultIdAsync(vault.Id, ct);
-        if (record == null)
-        {
-            throw RecordNotFound();
-        }
-
-        // 2. Ký (bấm lặp thì giữ chữ ký cũ), đủ chữ ký thì hoàn tất, lưu
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        AddSignature(record, HandoverSignerRole.Executor, userId, null, now);
-        await CompleteIfAllSignedAsync(record, vault, now, ct);
-        await SaveAsync(ct);
-
-        HandoverRecordResponse response = await BuildResponseAsync(record, vault, null, ct);
-        return response;
     }
 
     // ---------------- Luật sư ----------------
@@ -501,14 +479,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
         await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.System, null, now, ct);
         await SaveAsync(ct);
 
-        // 5. Gửi thư sau khi lưu (thư báo bước ký, thư mời), rồi lưu kết quả gửi
+        // 5. Gửi thư mời sau khi lưu, rồi lưu kết quả gửi
         if (invitations.Count > 0)
         {
             await turnSync.SendInvitationsAsync(invitations, ct);
             await unitOfWork.SaveChangesAsync(ct);
         }
-        // Thư báo bước ký gửi sau thư mời: một máy chủ thư chậm không làm trễ thư mời.
-        await SendPendingSigningNoticeAsync(ct);
 
         HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
         return response;
@@ -748,7 +724,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
 
     public async Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct)
     {
-        // 1. Chủ kho của kho; phải đang có yêu cầu và biên bản chưa đủ chữ ký
+        // 1. Chủ kho của kho; phải đang có yêu cầu và luật sư chưa ký biên bản
         Vault vault = await RequireOwnerVaultAsync(vaultId, ct);
         HandoverRecord? record = await records.FindByVaultIdAsync(vault.Id, ct);
         if (record == null)
@@ -757,7 +733,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
         if (record.Status == HandoverRecordStatus.Completed)
         {
-            throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Biên bản đã đủ chữ ký nên không hủy được nữa.");
+            throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Luật sư đã ký biên bản nên không hủy được nữa.");
         }
 
         // 2. Hủy biên bản và mọi lượt đang chạy; kho mở khóa, kế hoạch về Đang hoạt động
@@ -787,11 +763,24 @@ public sealed class HandoverRecordService : IHandoverRecordService
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
-        // 2. Ký, đủ chữ ký thì hoàn tất, lưu
+        // 2. Phải đã chốt và có ít nhất một người nhận được xác nhận danh tính
+        Dictionary<Guid, HandoverTurn> turns = await turnSync.FindActiveTurnsAsync(record, ct);
+        EnsureCanSign(record, turns);
+
+        // 3. Ký: biên bản thành yêu cầu chuyển giao, mở quyền tải cho từng người đã xác nhận danh tính; lưu
         DateTimeOffset now = timeProvider.GetUtcNow();
-        AddSignature(record, HandoverSignerRole.Verifier, userId, null, now);
-        await CompleteIfAllSignedAsync(record, vault, now, ct);
+        AddVerifierSignature(record, userId, now);
+        record.Status = HandoverRecordStatus.Completed;
+        record.CompletedAt = now;
+        vault.Plan.UpdatedAt = now;
+        foreach (HandoverTurn turn in turns.Values)
+        {
+            CommitIfIdentityConfirmed(record, turn, now);
+        }
         await SaveAsync(ct);
+
+        // 4. Báo người nhận và Người thực thi sau khi lưu
+        await SendPendingTransferNoticeAsync(ct);
 
         HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
         return response;
@@ -808,32 +797,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
         // 2. Chỉ trả phần của người nhận này
-        HandoverRecordResponse response = await BuildResponseAsync(record, vault, turn.BeneficiaryId, ct);
-        response.CanSign = record.Status == HandoverRecordStatus.Signing
-            && HandoverRecordRules.FindSignature(record, HandoverSignerRole.Recipient, turn.BeneficiaryId) == null;
-        return response;
-    }
-
-    public async Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct)
-    {
-        // 1. Lượt phải thuộc người đang đăng nhập, người này phải có tên trong biên bản
-        Guid userId = currentUser.RequireUserId();
-        HandoverTurn turn = await HandoverAccess.FindMyTurnAsync(handover, turnId, userId, ct);
-        HandoverRecord record = await RequireRecordOfTurnAsync(turn, ct);
-        Vault vault = await RequireVaultAsync(record.VaultId, ct);
-        if (!HandoverRecordRules.GroupAssetsByRecipient(record.Lines).ContainsKey(turn.BeneficiaryId))
-        {
-            throw HandoverAccess.NotFound();
-        }
-
-        // 2. Ký, đủ chữ ký thì hoàn tất, lưu
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        AddSignature(record, HandoverSignerRole.Recipient, userId, turn.BeneficiaryId, now);
-        await CompleteIfAllSignedAsync(record, vault, now, ct);
-        await SaveAsync(ct);
-
-        HandoverRecordResponse response = await BuildResponseAsync(record, vault, turn.BeneficiaryId, ct);
-        return response;
+        return await BuildResponseAsync(record, vault, turn.BeneficiaryId, ct);
     }
 
     // ---------------- Dùng nội bộ ----------------
@@ -849,8 +813,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             return;
         }
-        // Lượt theo biên bản không có hạn quyết định: người nhận chỉ còn việc ký biên bản.
+        // Lượt theo biên bản không có hạn quyết định: người nhận chỉ còn chờ giao.
         turn.DecisionDeadline = null;
+        // Luật sư đã ký: người xác nhận danh tính sau được giao ngay, không phải chờ ai.
+        if (record.Status == HandoverRecordStatus.Completed)
+        {
+            CommitIfIdentityConfirmed(record, turn, now);
+            return;
+        }
         await AdvanceIfIdentitiesConfirmedAsync(record, ct);
         if (record.Status == HandoverRecordStatus.Signing)
         {
@@ -881,29 +851,29 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (HandoverRecordRules.AllIdentitiesConfirmed(record, turns))
         {
             record.Status = HandoverRecordStatus.Signing;
-            // Chỉ ghi nhớ: thư gửi sau khi người gọi lưu xong, để lưu lỗi/xung đột không để lại thư báo sai.
-            signingNoticePending = record;
         }
     }
 
     /// <summary>
-    /// Người gọi chạy sau khi đã lưu: nếu biên bản vừa sang bước ký trong lượt này thì gửi thư báo. Gọi lại không gửi lặp.
+    /// Người gọi chạy sau khi đã lưu: nếu vừa mở giao cho người nhận nào thì gửi thư báo người đó và Người thực thi. Gọi lại không gửi lặp.
     /// </summary>
-    public async Task SendPendingSigningNoticeAsync(CancellationToken ct)
+    public async Task SendPendingTransferNoticeAsync(CancellationToken ct)
     {
-        HandoverRecord? record = signingNoticePending;
-        signingNoticePending = null;
+        HandoverRecord? record = transferNoticeRecord;
+        HashSet<Guid> recipientIds = new HashSet<Guid>(transferNoticeRecipients);
+        transferNoticeRecord = null;
+        transferNoticeRecipients.Clear();
         if (record != null)
         {
-            await NotifySigningAsync(record, ct);
+            await NotifyTransferAsync(record, recipientIds, ct);
         }
     }
 
     /// <summary>
-    /// Báo người nhận và Người thực thi của kho rằng biên bản đã tới bước ký (luật sư xác nhận danh tính xong).
-    /// Gửi lỗi thì bỏ qua từng thư: bước ký đã mở, thư không chặn luồng.
+    /// Báo người nhận được giao và Người thực thi của kho rằng luật sư đã ký, bắt đầu giao.
+    /// Gửi lỗi thì bỏ qua từng thư: quyền tải đã mở, thư không chặn luồng.
     /// </summary>
-    private async Task NotifySigningAsync(HandoverRecord record, CancellationToken ct)
+    private async Task NotifyTransferAsync(HandoverRecord record, HashSet<Guid> recipientIds, CancellationToken ct)
     {
         try
         {
@@ -915,11 +885,6 @@ public sealed class HandoverRecordService : IHandoverRecordService
             string ownerName = await FindUserNameAsync(vault.OwnerId, ct);
             List<(string Email, string FullName, string Audience)> targets = new List<(string, string, string)>();
 
-            HashSet<Guid> recipientIds = new HashSet<Guid>();
-            foreach (HandoverRecordLine line in record.Lines)
-            {
-                recipientIds.Add(line.BeneficiaryId);
-            }
             foreach (Beneficiary beneficiary in await records.ListVaultBeneficiariesAsync(record.VaultId, ct))
             {
                 if (!recipientIds.Contains(beneficiary.Id))
@@ -962,42 +927,45 @@ public sealed class HandoverRecordService : IHandoverRecordService
                         FullName = fullName,
                         Audience = audience,
                         OwnerName = ownerName,
-                        Stage = HandoverRequestNotice.StageSigning
+                        Stage = HandoverRequestNotice.StageTransfer
                     };
                     await noticeSender.SendAsync(notice, ct);
                 }
                 catch (Exception exception) when (!ct.IsCancellationRequested)
                 {
                     // Một thư lỗi không chặn các thư còn lại. Chỉ log id và loại lỗi, không log email.
-                    logger.LogWarning("Gửi thư báo bước ký lỗi ({Audience}, biên bản {RecordId}): {ErrorType}",
+                    logger.LogWarning("Gửi thư báo chuyển giao lỗi ({Audience}, biên bản {RecordId}): {ErrorType}",
                         audience, record.Id, exception.GetType().Name);
                 }
             }
         }
         catch (Exception exception) when (!ct.IsCancellationRequested)
         {
-            // Không ném lại: bước ký đã mở.
-            logger.LogWarning("Không soạn được thư báo bước ký (biên bản {RecordId}): {ErrorType}",
+            // Không ném lại: quyền tải đã mở.
+            logger.LogWarning("Không soạn được thư báo chuyển giao (biên bản {RecordId}): {ErrorType}",
                 record.Id, exception.GetType().Name);
         }
     }
 
-    /// <summary>
-    /// Thêm chữ ký của bản hiện tại. Chỉ ký được ở bước 3; ký lặp thì giữ chữ ký cũ.
-    /// </summary>
-    private void AddSignature(
-        HandoverRecord record, HandoverSignerRole role, Guid signerUserId, Guid? beneficiaryId, DateTimeOffset now)
+    /// <summary>Luật sư ký được khi biên bản đã chốt và có ít nhất một người nhận đã được xác nhận danh tính.</summary>
+    private static void EnsureCanSign(HandoverRecord record, Dictionary<Guid, HandoverTurn> turns)
     {
-        if (record.Status != HandoverRecordStatus.Signing)
+        if (record.Status == HandoverRecordStatus.Completed)
         {
-            if (record.Status == HandoverRecordStatus.Completed)
-            {
-                throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Biên bản đã đủ chữ ký.");
-            }
-            throw HandoverAccess.NotAllowed("NOT_SIGNING_STEP",
-                "Chưa tới bước ký: biên bản phải được chốt và mọi người nhận phải được xác nhận danh tính.");
+            throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Luật sư đã ký biên bản.");
         }
-        if (HandoverRecordRules.FindSignature(record, role, beneficiaryId) != null)
+        if (!HandoverRecordRules.CanVerifierSign(record, turns))
+        {
+            throw HandoverAccess.NotAllowed("NOT_SIGNING_STEP",
+                "Chưa tới bước ký: biên bản phải được chốt và có ít nhất một người nhận được xác nhận danh tính.");
+        }
+    }
+
+    /// <summary>Thêm chữ ký luật sư của bản hiện tại; đã có (dữ liệu cũ) thì giữ chữ ký cũ.</summary>
+    private void AddVerifierSignature(HandoverRecord record, Guid signerUserId, DateTimeOffset now)
+    {
+        record.UpdatedAt = now;
+        if (HandoverRecordRules.FindSignature(record, HandoverSignerRole.Verifier, null) != null)
         {
             return;
         }
@@ -1005,47 +973,34 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             RecordId = record.Id,
             RevisionNo = record.RevisionNo,
-            Role = role,
+            Role = HandoverSignerRole.Verifier,
             SignerUserId = signerUserId,
-            BeneficiaryId = beneficiaryId,
             SignedAt = now
         };
         record.Signatures.Add(signature);
         records.AddSignature(signature);
-        record.UpdatedAt = now;
     }
 
-    /// <summary>Đủ chữ ký ba bên thì biên bản hoàn tất: mỗi người nhận được mở quyền tải tài sản của mình.</summary>
-    private async Task CompleteIfAllSignedAsync(HandoverRecord record, Vault vault, DateTimeOffset now, CancellationToken ct)
+    /// <summary>
+    /// Mở quyền tải cho một người nhận đã được xác nhận danh tính (biên bản đã có chữ ký luật sư). Người chưa xác nhận
+    /// thì bỏ qua: được mở khi luật sư xác nhận xong, không làm người khác phải chờ.
+    /// </summary>
+    private void CommitIfIdentityConfirmed(HandoverRecord record, HandoverTurn turn, DateTimeOffset now)
     {
-        if (record.Status != HandoverRecordStatus.Signing || !HandoverRecordRules.AllSigned(record))
+        if (turn.Status != HandoverTurnStatus.ReadyToAccept || turn.ClaimantUserId == null)
         {
             return;
         }
-        Dictionary<Guid, HandoverTurn> turns = await turnSync.FindActiveTurnsAsync(record, ct);
-        foreach (HandoverTurn turn in turns.Values)
+        if (turn.Grant != null)
         {
-            if (turn.Grant != null)
-            {
-                // Một lần ký khác vừa hoàn tất biên bản và mở quyền tải cho lượt này (ví dụ người nhận bấm ký hai lần
-                // cùng lúc). Lượt đã đọc trước đó đã cũ, nên dừng thay vì tạo thêm quyền tải.
-                throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
-                    "Biên bản vừa được hoàn tất ở nơi khác. Vui lòng tải lại.");
-            }
-            if (turn.Status != HandoverTurnStatus.ReadyToAccept || turn.ClaimantUserId == null)
-            {
-                continue;
-            }
-            HandoverGrant grant = HandoverRules.CommitAccept(turn, turn.ClaimantUserId.Value, now);
-            handover.AddGrant(grant);
+            throw new AppException(AppErrorType.Conflict, ErrorCode.EditConflict,
+                "Biên bản vừa được xử lý ở nơi khác. Vui lòng tải lại.");
         }
-        record.Status = HandoverRecordStatus.Completed;
-        record.CompletedAt = now;
-        record.UpdatedAt = now;
-        vault.Plan.UpdatedAt = now;
-        // Kế hoạch vẫn ở giai đoạn bàn giao để Người thực thi gửi mã và người nhận tải; HandoverRules đóng khi mọi lượt xong.
-        List<HandoverTurn> allTurns = await handover.FindTurnsByPlanAsync(vault.Plan.Id, ct);
-        HandoverRules.CloseIfAllTerminal(vault.Plan, allTurns, now);
+        HandoverGrant grant = HandoverRules.CommitAccept(turn, turn.ClaimantUserId.Value, now);
+        handover.AddGrant(grant);
+        // Chỉ ghi nhớ: thư gửi sau khi người gọi lưu xong, để lưu lỗi/xung đột không để lại thư báo sai.
+        transferNoticeRecord = record;
+        transferNoticeRecipients.Add(turn.BeneficiaryId);
     }
 
     private void ReplaceLines(HandoverRecord record, List<(Guid BeneficiaryId, Guid AssetId)> lines, DateTimeOffset now)
@@ -1132,8 +1087,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
         HandoverRecord record, Vault vault, CancellationToken ct)
     {
         HandoverRecordResponse response = await BuildResponseAsync(record, vault, null, ct);
-        response.CanSign = record.Status == HandoverRecordStatus.Signing
-            && HandoverRecordRules.FindSignature(record, HandoverSignerRole.Verifier, null) == null;
+        Dictionary<Guid, HandoverTurn> signTurns = await turnSync.FindActiveTurnsAsync(record, ct);
+        response.CanSign = HandoverRecordRules.CanVerifierSign(record, signTurns);
 
         foreach (Asset asset in await records.ListVaultAssetsAsync(vault.Id, ct))
         {
@@ -1244,11 +1199,6 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             response.VerifierSignedAt = verifierSignature.SignedAt;
         }
-        HandoverRecordSignature? executorSignature = HandoverRecordRules.FindSignature(record, HandoverSignerRole.Executor, null);
-        if (executorSignature != null)
-        {
-            response.ExecutorSignedAt = executorSignature.SignedAt;
-        }
 
         // Tên tài sản lấy theo kho hiện tại; tài sản đã bị xóa nội dung vẫn hiện tên rỗng thay vì làm hỏng màn hình.
         Dictionary<Guid, Asset> assetsById = new Dictionary<Guid, Asset>();
@@ -1317,17 +1267,16 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 recipient.TurnStatus = turn.Status.ToApiString();
                 recipient.Claimed = turn.ClaimantUserId != null;
                 recipient.IdentityConfirmedAt = turn.IdentityConfirmedAt;
+                recipient.ReceivedAllAt = turn.ReceivedAllAt;
+                recipient.ReceiptExecutorSignedAt = turn.ReceiptExecutorSignedAt;
+                recipient.ReceiptIssueNote = turn.ReceiptIssueNote;
+                recipient.ReceiptIssueAt = turn.ReceiptIssueAt;
                 if (latestSubmissionByTurn.ContainsKey(turn.Id))
                 {
                     HandoverSubmission submission = latestSubmissionByTurn[turn.Id];
                     recipient.SubmissionId = submission.Id;
                     recipient.SubmissionStatus = submission.Status.ToApiString();
                 }
-            }
-            HandoverRecordSignature? signature = HandoverRecordRules.FindSignature(record, HandoverSignerRole.Recipient, pair.Key);
-            if (signature != null)
-            {
-                recipient.SignedAt = signature.SignedAt;
             }
             response.Recipients.Add(recipient);
         }

@@ -11,7 +11,7 @@ namespace LegacyVault.Api.Controllers;
 
 /// <summary>
 /// Luật sư lập và kiểm biên bản bàn giao theo đúng thứ tự: xét giấy tờ và lập biên bản → danh tính người nhận →
-/// chữ ký ba bên.
+/// luật sư ký.
 /// Danh tính người nhận kiểm ở VerifierHandoverSubmissionsController.
 /// </summary>
 /// <remarks>Vai trò luật sư được service kiểm từ DB; biên bản không được giao cho mình luôn là 404.</remarks>

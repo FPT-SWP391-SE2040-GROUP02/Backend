@@ -170,21 +170,11 @@ public static class HandoverRecordTestData
         return result;
     }
 
-    /// <summary>Luật sư và Người thực thi ký biên bản (bước 3). Biên bản phải đang ở bước ký.</summary>
-    public static async Task SignAsVerifierAndExecutorAsync(FinalizedRecord record, Guid vaultId)
+    /// <summary>Luật sư ký biên bản: người nhận đã xác nhận danh tính được mở quyền tải.</summary>
+    public static async Task SignAsVerifierAsync(FinalizedRecord record)
     {
         HttpResponseMessage verifier = await record.Verifier.Client.PostAsync(VerifierRecordUrl(record.RecordId) + "/sign", null);
         Assert.Equal(HttpStatusCode.OK, verifier.StatusCode);
-        HttpResponseMessage executor = await record.Executor.Client.PostAsync(ExecutorRecordUrl(vaultId) + "/sign", null);
-        Assert.Equal(HttpStatusCode.OK, executor.StatusCode);
-    }
-
-    /// <summary>Người nhận ký biên bản từ lượt của mình; trả biên bản sau khi ký.</summary>
-    public static async Task<JsonElement> SignAsRecipientAsync(HttpClient recipient, Guid turnId)
-    {
-        HttpResponseMessage response = await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
     public sealed class FinalizedRecord

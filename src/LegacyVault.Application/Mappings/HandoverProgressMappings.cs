@@ -26,7 +26,10 @@ public static class HandoverProgressMappings
             IdentityConfirmedByExecutor = turn.IdentityConfirmedByUserId != null,
             DecisionDeadline = turn.DecisionDeadline,
             DecidedAt = turn.DecidedAt,
-            ReceivedAllAt = turn.ReceivedAllAt
+            ReceivedAllAt = turn.ReceivedAllAt,
+            ReceiptExecutorSignedAt = turn.ReceiptExecutorSignedAt,
+            ReceiptIssueNote = turn.ReceiptIssueNote,
+            ReceiptIssueAt = turn.ReceiptIssueAt
         };
         if (turn.Grant != null)
         {

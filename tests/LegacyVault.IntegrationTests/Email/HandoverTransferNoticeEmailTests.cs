@@ -5,8 +5,8 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Email;
 
-/// <summary>Thư báo biên bản đã tới bước ký (người nhận và Người thực thi). Hàm thuần, không cần SQL.</summary>
-public sealed class HandoverSigningNoticeEmailTests
+/// <summary>Thư báo luật sư đã ký biên bản (người nhận và Người thực thi). Hàm thuần, không cần SQL.</summary>
+public sealed class HandoverTransferNoticeEmailTests
 {
     private const string ClientUrl = "https://app.legacyvault.test/";
 
@@ -18,27 +18,27 @@ public sealed class HandoverSigningNoticeEmailTests
             FullName = "Phan Khánh Duy",
             Audience = audience,
             OwnerName = "Nguyễn Thanh Duy",
-            Stage = HandoverRequestNotice.StageSigning
+            Stage = HandoverRequestNotice.StageTransfer
         };
     }
 
     [Fact]
-    public void RecipientSigningNotice_PointsToRecipientPortalAndAsksToSign()
+    public void RecipientTransferNotice_PointsToRecipientPortal()
     {
         EmailContent content = HandoverRequestNoticeEmail.Build(Notice(HandoverRequestNotice.Recipient), ClientUrl);
 
-        Assert.Equal(HandoverRequestNoticeEmail.SigningSubject, content.Subject);
+        Assert.Equal(HandoverRequestNoticeEmail.TransferSubject, content.Subject);
         Assert.Contains("https://app.legacyvault.test/claim/beneficiary", content.TextBody);
         Assert.Contains("ký", content.TextBody);
         Assert.Contains("Nguyễn Thanh Duy", content.TextBody);
     }
 
     [Fact]
-    public void ExecutorSigningNotice_PointsToExecutorWorkspace()
+    public void ExecutorTransferNotice_PointsToExecutorWorkspace()
     {
         EmailContent content = HandoverRequestNoticeEmail.Build(Notice(HandoverRequestNotice.Executor), ClientUrl);
 
-        Assert.Equal(HandoverRequestNoticeEmail.SigningSubject, content.Subject);
+        Assert.Equal(HandoverRequestNoticeEmail.TransferSubject, content.Subject);
         Assert.Contains("https://app.legacyvault.test/executor", content.TextBody);
         Assert.Contains("mã mở gói", content.TextBody);
     }

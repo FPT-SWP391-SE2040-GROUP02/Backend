@@ -9,14 +9,14 @@ public sealed class HandoverRequestNotice
 
     public const string Verifier = "VERIFIER";
 
-    /// <summary>Người nhận của biên bản (chỉ dùng với thư báo tới bước ký).</summary>
+    /// <summary>Người nhận của biên bản (chỉ dùng với thư báo chuyển giao).</summary>
     public const string Recipient = "RECIPIENT";
 
     /// <summary>Thư báo có yêu cầu nhận tài sản (mặc định).</summary>
     public const string StageRequest = "REQUEST";
 
-    /// <summary>Thư báo biên bản đã tới bước ký: luật sư xác nhận danh tính xong, người nhận và Người thực thi cần ký.</summary>
-    public const string StageSigning = "SIGNING";
+    /// <summary>Thư báo luật sư đã ký biên bản: Người thực thi bắt đầu giao.</summary>
+    public const string StageTransfer = "TRANSFER";
 
     public string ToEmail { get; set; } = string.Empty;
 
@@ -25,7 +25,7 @@ public sealed class HandoverRequestNotice
     /// <summary>OWNER, EXECUTOR, VERIFIER hoặc RECIPIENT: quyết định lời thư và đường dẫn.</summary>
     public string Audience { get; set; } = string.Empty;
 
-    /// <summary>REQUEST (có yêu cầu nhận tài sản) hoặc SIGNING (biên bản tới bước ký).</summary>
+    /// <summary>REQUEST (có yêu cầu nhận tài sản) hoặc TRANSFER (luật sư đã ký biên bản, bắt đầu giao).</summary>
     public string Stage { get; set; } = StageRequest;
 
     public string OwnerName { get; set; } = string.Empty;

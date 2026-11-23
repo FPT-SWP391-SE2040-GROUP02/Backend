@@ -79,9 +79,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         Assert.True(Math.Abs((turn.Items[0].FirstDownloadedAt!.Value - firstAt).TotalSeconds) < 1);
         Assert.False(turn.Items[1].Downloaded);
         Assert.NotNull(turn.KeyVerifiedAt);
-        Assert.NotNull(turn.RecipientSignedAt);
         Assert.NotNull(turn.DocumentApprovedAt);
-        Assert.True(turn.RecipientSignedAt!.Value < turn.DocumentApprovedAt!.Value);
 
         string json = await response.Content.ReadAsStringAsync();
         // Email người nhận chỉ trả qua beneficiaryEmail (lượt còn hiệu lực/đã bàn giao); không có khóa "email" trần hay CCCD đầy đủ.
@@ -230,19 +228,9 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         grant.ExpiresAt = now.AddDays(30);
         turn.Grant = grant;
 
-        // Người nhận đã ký biên bản trước lúc biên bản đủ chữ ký, để kiểm tra hai mốc trả về cho Người thực thi.
-        HandoverRecordSignature signature = new HandoverRecordSignature();
-        signature.RecordId = lastRecordId;
-        signature.RevisionNo = 1;
-        signature.Role = HandoverSignerRole.Recipient;
-        signature.SignerUserId = turn.ClaimantUserId.Value;
-        signature.BeneficiaryId = beneficiaryId;
-        signature.SignedAt = now.AddHours(-3);
-
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             db.Set<HandoverTurn>().Add(turn);
-            db.Set<HandoverRecordSignature>().Add(signature);
             await db.SaveChangesAsync();
         });
 

@@ -487,12 +487,11 @@ public sealed class CountingRecordService : IHandoverRecordService
         return Task.CompletedTask;
     }
 
-    public Task SendPendingSigningNoticeAsync(CancellationToken ct) => Task.CompletedTask;
+    public Task SendPendingTransferNoticeAsync(CancellationToken ct) => Task.CompletedTask;
 
     public Task<Guid?> FindVerifierUserIdAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
     public Task<List<ExecutorVaultResponse>> ListMyVaultsAsync(CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse?> GetForExecutorAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
-    public Task<HandoverRecordResponse> SignAsExecutorAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
     public Task<List<HandoverRecordSummaryResponse>> ListForVerifierAsync(CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> GetForVerifierAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> UseOwnerSplitAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
@@ -501,7 +500,6 @@ public sealed class CountingRecordService : IHandoverRecordService
     public Task<HandoverRecordResponse> ReopenAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> GetForRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
-    public Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> ReviewClaimAsync(Guid recordId, Guid claimId, ReviewHandoverClaimRequest request, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> AddRecipientAsync(Guid recordId, AddHandoverRecipientRequest request, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> AddEvidenceAsync(Guid recordId, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();

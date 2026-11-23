@@ -6,7 +6,7 @@ namespace LegacyVault.Application.Services;
 
 /// <summary>
 /// Biên bản bàn giao: căn cứ duy nhất để giao tài sản. Hệ thống chỉ quản lý tài sản, không làm pháp lý.
-/// Người thực thi mở bàn giao; luật sư lập, chốt, mở lại và ký; người nhận ký; đủ chữ ký thì mở quyền tải.
+/// Luật sư lập, chốt, mở lại và ký; ký xong thì mở quyền tải cho người đã xác nhận danh tính.
 /// </summary>
 public interface IHandoverRecordService
 {
@@ -17,9 +17,6 @@ public interface IHandoverRecordService
 
     /// <summary>Biên bản của kho; null khi chưa mở bàn giao. Lỗi: 404 VAULT_NOT_FOUND khi không phải Người thực thi.</summary>
     Task<HandoverRecordResponse?> GetForExecutorAsync(Guid vaultId, CancellationToken ct);
-
-    /// <summary>Người thực thi ký biên bản ở bước 3.</summary>
-    Task<HandoverRecordResponse> SignAsExecutorAsync(Guid vaultId, CancellationToken ct);
 
     // Luật sư
 
@@ -35,10 +32,10 @@ public interface IHandoverRecordService
     /// <summary>Chốt biên bản (xong bước 1): tạo lượt cho từng người nhận và gửi thư mời.</summary>
     Task<HandoverRecordResponse> FinalizeAsync(Guid recordId, CancellationToken ct);
 
-    /// <summary>Mở lại biên bản đã chốt để sửa: mọi chữ ký cũ mất hiệu lực.</summary>
+    /// <summary>Mở lại biên bản đã chốt để sửa: chỉ khi luật sư chưa ký.</summary>
     Task<HandoverRecordResponse> ReopenAsync(Guid recordId, CancellationToken ct);
 
-    /// <summary>Luật sư ký xác minh ở bước 3.</summary>
+    /// <summary>Luật sư ký biên bản: thành yêu cầu chuyển giao gửi Người thực thi.</summary>
     Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct);
 
     /// <summary>Xét giấy tờ của một yêu cầu nhận: chấp nhận, yêu cầu bổ sung (kèm lý do) hoặc từ chối (kèm lý do).</summary>
@@ -79,7 +76,7 @@ public interface IHandoverRecordService
     /// <summary>Yêu cầu nhận tài sản đang mở của kho; null khi không có.</summary>
     Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct);
 
-    /// <summary>Chủ kho hủy yêu cầu trước khi biên bản đủ chữ ký: hủy biên bản và lượt, kho mở khóa.</summary>
+    /// <summary>Chủ kho hủy yêu cầu trước khi luật sư ký biên bản: hủy biên bản và lượt, kho mở khóa.</summary>
     Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct);
 
     // Người nhận
@@ -87,22 +84,19 @@ public interface IHandoverRecordService
     /// <summary>Biên bản nhìn từ một lượt của người nhận (chỉ thấy phần của mình).</summary>
     Task<HandoverRecordResponse> GetForRecipientAsync(Guid turnId, CancellationToken ct);
 
-    /// <summary>Người nhận ký biên bản ở bước 3.</summary>
-    Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct);
-
     // Dùng nội bộ
 
     /// <summary>
     /// Gọi khi luật sư vừa xác nhận danh tính một người nhận (trước khi lưu): đủ người thì biên bản sang bước ký.
-    /// Người gọi phải gọi <see cref="SendPendingSigningNoticeAsync"/> SAU khi lưu, nếu không thư báo bước ký sẽ không được gửi.
+    /// Người gọi phải gọi <see cref="SendPendingTransferNoticeAsync"/> SAU khi lưu, nếu không thư báo chuyển giao sẽ không được gửi.
     /// </summary>
     Task AdvanceAfterIdentityAsync(HandoverTurn turn, DateTimeOffset now, CancellationToken ct);
 
     /// <summary>
-    /// Gọi SAU khi đã lưu: nếu lượt này vừa đưa biên bản sang bước ký thì gửi thư báo người nhận và Người thực thi.
+    /// Gọi SAU khi đã lưu: nếu vừa mở giao cho người nhận nào thì gửi thư báo người đó và Người thực thi.
     /// Không có gì chờ thì không làm gì; gọi lại không gửi lặp.
     /// </summary>
-    Task SendPendingSigningNoticeAsync(CancellationToken ct);
+    Task SendPendingTransferNoticeAsync(CancellationToken ct);
 
     /// <summary>Luật sư được phân công cho biên bản của kho; null khi kho chưa mở bàn giao.</summary>
     Task<Guid?> FindVerifierUserIdAsync(Guid vaultId, CancellationToken ct);

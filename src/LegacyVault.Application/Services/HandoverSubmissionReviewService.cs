@@ -126,7 +126,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         return await IdentityImageStorage.PrepareAsync(contentStore, stored, contentType, fileName, ct);
     }
 
-    // Bước 4: luật sư xác nhận danh tính người nhận; đủ người thì biên bản sang bước ký ba bên.
+    // Bước 4: luật sư xác nhận danh tính người nhận; luật sư đã ký biên bản thì người này được giao ngay.
     public async Task<VerifierHandoverSubmissionResponse> ApproveAsync(Guid submissionId, CancellationToken ct)
     {
         // 1. Tìm hồ sơ và lượt của nó
@@ -166,7 +166,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         // Chạm kế hoạch để RowVersion của nó chặn việc này chạy cùng lúc với đặt hold hay báo còn sống.
         vault.Plan.UpdatedAt = now;
 
-        // Đủ người nhận đã được xác nhận thì biên bản sang bước ký.
+        // Biên bản đã ký thì giao ngay; chưa ký mà đủ người thì sang bước ký.
         await recordService.AdvanceAfterIdentityAsync(turn, now, ct);
 
         // 4. Ghi nhật ký rồi lưu một lần
@@ -174,8 +174,8 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             turn.VaultId, userId, AuditActorRole.Verifier, AuditAction.HandoverSubmissionApproved,
             AuditTargetType.HandoverTurn, turn.Id, null, AuditOutcome.Succeeded, null, now));
         await unitOfWork.SaveChangesAsync(ct);
-        // Thư báo bước ký chỉ gửi khi đã lưu thành công.
-        await recordService.SendPendingSigningNoticeAsync(ct);
+        // Thư báo chuyển giao chỉ gửi khi đã lưu thành công.
+        await recordService.SendPendingTransferNoticeAsync(ct);
         return submission.ToVerifierDetail();
     }
 
@@ -261,7 +261,12 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
             throw HandoverAccess.NotAllowed("WRONG_STATE", "Lượt này không thuộc biên bản bàn giao nào.");
         }
         HandoverRecord? record = await records.FindByIdAsync(turn.RecordId.Value, ct);
-        if (record == null || record.Status != HandoverRecordStatus.IdentityCheck)
+        if (record == null)
+        {
+            throw HandoverAccess.DeathCaseNotFound();
+        }
+        // Luật sư đã ký (Completed) thì vẫn kiểm tiếp người nhận tới sau.
+        if (record.Status != HandoverRecordStatus.IdentityCheck && record.Status != HandoverRecordStatus.Completed)
         {
             throw HandoverAccess.NotAllowed("NOT_IDENTITY_STEP",
                 "Biên bản chưa ở bước kiểm danh tính. Hãy chốt biên bản trước.");

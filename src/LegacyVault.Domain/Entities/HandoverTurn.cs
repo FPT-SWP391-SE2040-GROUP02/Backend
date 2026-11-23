@@ -85,6 +85,16 @@ public class HandoverTurn
     /// <summary>Lúc người nhận bấm "Tôi đã nhận đủ" sau khi tải tài sản; Người thực thi thấy để biết lượt xong.</summary>
     public DateTimeOffset? ReceivedAllAt { get; set; }
 
+    /// <summary>Phiếu giao nhận: lúc Người thực thi ký bên giao, sau khi người nhận xác nhận đã nhận đủ.</summary>
+    public DateTimeOffset? ReceiptExecutorSignedAt { get; set; }
+
+    public Guid? ReceiptExecutorUserId { get; set; }
+
+    /// <summary>Người nhận báo tài sản thiếu hoặc sai khi nhận; null khi không báo.</summary>
+    public string? ReceiptIssueNote { get; set; }
+
+    public DateTimeOffset? ReceiptIssueAt { get; set; }
+
     /// <summary>Lúc lượt kết thúc (đã nhận, từ chối hoặc hết hạn quyết định).</summary>
     public DateTimeOffset? EndedAt { get; set; }
 
