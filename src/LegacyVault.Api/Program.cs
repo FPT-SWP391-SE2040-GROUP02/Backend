@@ -77,6 +77,8 @@ if (builder.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
     {
         Console.WriteLine($"--> [Database Migration LỖI]: {ex.Message}");
         app.Logger.LogError(ex, "Lỗi khi chạy Migration tự động lúc khởi động.");
+        // Không chạy tiếp trên schema cũ: để lần deploy thất bại rõ ràng và nền tảng giữ bản đang chạy.
+        throw;
     }
 }
 
