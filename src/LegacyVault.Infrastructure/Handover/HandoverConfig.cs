@@ -20,6 +20,7 @@ public static class HandoverConfig
     {
         services.AddScoped<IHandoverRepository, HandoverRepository>();
         services.AddScoped<IHandoverRecordRepository, HandoverRecordRepository>();
+        services.AddScoped<IHandoverReportRepository, HandoverReportRepository>();
         // Khóa ký sai nhiều lần của luật sư và Người thực thi.
         services.AddScoped<IVerifierSigningGuardRepository, VerifierSigningGuardRepository>();
         services.AddScoped<IHandoverSubmissionRepository, HandoverSubmissionRepository>();

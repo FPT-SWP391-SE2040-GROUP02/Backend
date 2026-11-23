@@ -41,6 +41,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private readonly IHandoverRequestNoticeSender noticeSender;
     private readonly IExecutorInvitationRepository invitations;
     private readonly IAssetAssignmentRepository assignments;
+    private readonly IHandoverReportRepository reports;
+    private readonly IHandoverReportProtector reportProtector;
     private readonly ILogger<HandoverRecordService> logger;
 
     // Thư báo ký ghi nhớ trong lượt này; chỉ gửi sau khi đã lưu (SendPendingSigningNoticeAsync).
@@ -65,8 +67,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
         IHandoverRequestNoticeSender noticeSender,
         IExecutorInvitationRepository invitations,
         IAssetAssignmentRepository assignments,
+        IHandoverReportRepository reports,
+        IHandoverReportProtector reportProtector,
         ILogger<HandoverRecordService> logger)
     {
+        this.reports = reports;
+        this.reportProtector = reportProtector;
         this.logger = logger;
         this.invitations = invitations;
         this.assignments = assignments;
@@ -617,7 +623,9 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             throw HandoverAccess.NotAllowed("RECORD_INVALID", error);
         }
-        string? claimError = HandoverRecordRules.ValidateClaimsForFinalize(record.Claims);
+        // Hồ sơ báo tin chỉ gắn vào biên bản khi luật sư đã chấp nhận.
+        List<HandoverReport> acceptedReports = await reports.ListByRecordAsync(record.Id, ct);
+        string? claimError = HandoverRecordRules.ValidateClaimsForFinalize(record.Claims, acceptedReports.Count > 0);
         if (claimError != null)
         {
             throw HandoverAccess.NotAllowed("CLAIMS_PENDING", claimError);
@@ -903,6 +911,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 {
                     response.RequesterNames.Add(ReadFullName(beneficiary));
                 }
+            }
+        }
+        foreach (HandoverReport report in await reports.ListByRecordAsync(record.Id, ct))
+        {
+            string submitterName = await FindUserNameAsync(report.SubmitterUserId, ct);
+            if (submitterName.Length > 0 && !response.RequesterNames.Contains(submitterName))
+            {
+                response.RequesterNames.Add(submitterName);
             }
         }
         return response;
@@ -1437,7 +1453,56 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 response.EvidenceFiles.Add(ToFileResponse(file));
             }
         }
+
+        // Hồ sơ báo tin đã chấp nhận: người nhận người nộp khai, để luật sư điền sẵn rồi kiểm lại.
+        foreach (HandoverReport report in await reports.ListByRecordAsync(record.Id, ct))
+        {
+            HandoverRecordReportResponse item = new HandoverRecordReportResponse
+            {
+                Id = report.Id,
+                SubmitterName = await FindUserNameAsync(report.SubmitterUserId, ct),
+                Note = report.Note,
+                CreatedAt = report.CreatedAt
+            };
+            foreach (SuggestedRecipient suggested in ReadSuggestedRecipients(report))
+            {
+                SuggestedRecipientResponse recipient = new SuggestedRecipientResponse
+                {
+                    FullName = suggested.FullName,
+                    Email = suggested.Email,
+                    Phone = suggested.Phone
+                };
+                item.Recipients.Add(recipient);
+            }
+            foreach (HandoverReportFile file in report.Files.OrderBy(f => f.Kind).ThenBy(f => f.CreatedAt))
+            {
+                HandoverReportFileResponse fileResponse = new HandoverReportFileResponse
+                {
+                    Id = file.Id,
+                    Kind = file.Kind.ToApiString(),
+                    FileName = file.FileName,
+                    ContentType = file.ContentType,
+                    SizeBytes = file.SizeBytes,
+                    CreatedAt = file.CreatedAt
+                };
+                item.Files.Add(fileResponse);
+            }
+            response.Reports.Add(item);
+        }
         return response;
+    }
+
+    private List<SuggestedRecipient> ReadSuggestedRecipients(HandoverReport report)
+    {
+        try
+        {
+            return reportProtector.Unprotect(report.DataProtected).Recipients;
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            // Hồ sơ không giải mã được: biên bản vẫn mở được, chỉ không có gợi ý.
+            return new List<SuggestedRecipient>();
+        }
     }
 
     /// <summary>

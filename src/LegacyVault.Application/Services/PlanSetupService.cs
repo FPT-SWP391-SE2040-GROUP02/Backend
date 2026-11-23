@@ -623,9 +623,11 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             missing.Add("OWNER_EKYC_REQUIRED");
         }
         int assignmentCount = await assignments.CountByVaultIdAsync(vault.Id, ct);
-        if (assignmentCount == 0)
+        List<Asset> unassignedAssets = await assets.FindUnassignedByVaultIdAsync(vault.Id, ct);
+        // Không bắt buộc khai người nhận trước (luật sư xác định khi bàn giao); chỉ cần kho có tài sản.
+        if (assignmentCount == 0 && unassignedAssets.Count == 0)
         {
-            missing.Add("ASSIGNMENT_REQUIRED");
+            missing.Add("ASSET_REQUIRED");
         }
         List<Executor> accepted = new List<Executor>();
         foreach (Executor item in vault.Executors)
@@ -664,7 +666,6 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             missing.Add("PLAN_NOT_DRAFT");
         }
         List<AssetAssignment> vaultAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
-        List<Asset> unassignedAssets = await assets.FindUnassignedByVaultIdAsync(vault.Id, ct);
         List<PlanSetupRecipientResponse> recipients = await BuildRecipientsAsync(vault, vaultAssignments, ct);
         List<ExecutorInvitationResponse> executorItems = new List<ExecutorInvitationResponse>();
         foreach (Executor executorItem in vault.Executors.OrderByDescending(e => e.InvitedAt))
