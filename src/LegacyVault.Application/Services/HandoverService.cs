@@ -304,6 +304,10 @@ public sealed class HandoverService : IHandoverService
 
         // 5. Lưu một lần rồi trả trạng thái mới của lượt
         await unitOfWork.SaveChangesAsync(ct);
+        if (recordService != null)
+        {
+            await recordService.SendPendingSigningNoticeAsync(ct);
+        }
         return await BuildTurnResponseAsync(turn, ct);
     }
 
