@@ -57,7 +57,7 @@ public static class HandoverRules
         return grant.Status;
     }
 
-    /// <summary>Luật sư đã xác nhận danh tính: lượt chờ luật sư ký biên bản. Không có hạn quyết định.</summary>
+    /// <summary>Luật sư đã xác nhận danh tính: lượt chờ ký biên bản. Không có hạn quyết định, chỉ chờ đủ chữ ký.</summary>
     public static void MarkReadyToAccept(HandoverTurn turn, DateTimeOffset now)
     {
         turn.Status = HandoverTurnStatus.ReadyToAccept;

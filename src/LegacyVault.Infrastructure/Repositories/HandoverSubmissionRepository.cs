@@ -39,13 +39,13 @@ public sealed class HandoverSubmissionRepository : IHandoverSubmissionRepository
 
     public Task<List<HandoverSubmission>> ListPendingForVerifierAsync(Guid verifierUserId, CancellationToken ct)
     {
-        // Chỉ hồ sơ của lượt thuộc biên bản đang kiểm danh tính hoặc luật sư đã ký, được giao cho luật sư này.
+        // Chỉ hồ sơ của lượt thuộc biên bản đã chốt, đang giao (Signing; IdentityCheck là biên bản cũ), được giao cho luật sư này.
         return context.Set<HandoverSubmission>()
             .Include(s => s.Turn)
             .Where(s => s.Status == HandoverSubmissionStatus.Submitted
                 && context.Set<HandoverRecord>().Any(r => r.Id == s.Turn.RecordId
                     && r.VerifierUserId == verifierUserId
-                    && (r.Status == HandoverRecordStatus.IdentityCheck || r.Status == HandoverRecordStatus.Completed)))
+                    && (r.Status == HandoverRecordStatus.Signing || r.Status == HandoverRecordStatus.IdentityCheck)))
             .OrderBy(s => s.CreatedAt)
             .ToListAsync(ct);
     }

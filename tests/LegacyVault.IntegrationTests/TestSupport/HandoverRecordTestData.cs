@@ -15,6 +15,9 @@ namespace LegacyVault.IntegrationTests.TestSupport;
 /// </summary>
 public static class HandoverRecordTestData
 {
+    /// <summary>Body chốt biên bản: luật sư tick xác nhận căn cứ pháp lý.</summary>
+    public static readonly object FinalizeBody = new { confirmLegalBasis = true };
+
     public static string ExecutorRecordUrl(Guid vaultId)
     {
         return $"/api/v1/executor/vaults/{vaultId}/handover-record";
@@ -68,6 +71,18 @@ public static class HandoverRecordTestData
     {
         MultipartFormDataContent form = new MultipartFormDataContent();
         form.Add(new StringContent(token), "token");
+        form.Add(new StringContent(note), "note");
+        ByteArrayContent file = new ByteArrayContent(SamplePdf());
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(file, "files", "giay-to.pdf");
+        return form;
+    }
+
+    /// <summary>Multipart gửi yêu cầu nhận trong app (không cần link): id kho, lời nhắn và một tệp PDF.</summary>
+    public static MultipartFormDataContent ByAccountForm(Guid vaultId, string note)
+    {
+        MultipartFormDataContent form = new MultipartFormDataContent();
+        form.Add(new StringContent(vaultId.ToString()), "vaultId");
         form.Add(new StringContent(note), "note");
         ByteArrayContent file = new ByteArrayContent(SamplePdf());
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
@@ -144,7 +159,7 @@ public static class HandoverRecordTestData
         await AcceptAllClaimsAsync(verifier, recordId);
         HttpResponseMessage split = await verifier.PostAsync(VerifierRecordUrl(recordId) + "/use-owner-split", null);
         Assert.Equal(HttpStatusCode.OK, split.StatusCode);
-        HttpResponseMessage finalized = await verifier.PostAsync(VerifierRecordUrl(recordId) + "/finalize", null);
+        HttpResponseMessage finalized = await verifier.PostAsJsonAsync(VerifierRecordUrl(recordId) + "/finalize", FinalizeBody);
         Assert.Equal(HttpStatusCode.OK, finalized.StatusCode);
         return await ApiTestHelpers.ReadJsonAsync(finalized);
     }
@@ -170,11 +185,21 @@ public static class HandoverRecordTestData
         return result;
     }
 
-    /// <summary>Luật sư ký biên bản: người nhận đã xác nhận danh tính được mở quyền tải.</summary>
-    public static async Task SignAsVerifierAsync(FinalizedRecord record)
+    /// <summary>Luật sư và Người thực thi ký biên bản (bước 3). Biên bản phải đang ở bước ký.</summary>
+    public static async Task SignAsVerifierAndExecutorAsync(FinalizedRecord record, Guid vaultId)
     {
         HttpResponseMessage verifier = await record.Verifier.Client.PostAsync(VerifierRecordUrl(record.RecordId) + "/sign", null);
         Assert.Equal(HttpStatusCode.OK, verifier.StatusCode);
+        HttpResponseMessage executor = await record.Executor.Client.PostAsync(ExecutorRecordUrl(vaultId) + "/sign", null);
+        Assert.Equal(HttpStatusCode.OK, executor.StatusCode);
+    }
+
+    /// <summary>Người nhận ký biên bản từ lượt của mình; trả biên bản sau khi ký.</summary>
+    public static async Task<JsonElement> SignAsRecipientAsync(HttpClient recipient, Guid turnId)
+    {
+        HttpResponseMessage response = await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
     public sealed class FinalizedRecord

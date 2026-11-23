@@ -9,8 +9,8 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Người nhận gửi yêu cầu nhận tài sản kèm giấy tờ, qua link riêng trong thư báo kích hoạt kế hoạch, rồi theo dõi
-/// kết quả luật sư xét và nộp bổ sung khi được yêu cầu.
+/// Người nhận gửi yêu cầu nhận tài sản kèm giấy tờ, qua link riêng trong thư báo kích hoạt kế hoạch hoặc ngay trong app
+/// (mục "Nhận tài sản"), rồi theo dõi kết quả luật sư xét và nộp bổ sung khi được yêu cầu.
 /// </summary>
 /// <remarks>
 /// Phải đăng nhập đúng email Chủ kho đã khai cho người nhận (sai thì 403 HANDOVER_EMAIL_MISMATCH). Link sai là 404.
@@ -57,6 +57,39 @@ public sealed class HandoverRequestsController : ControllerBase
     {
         List<UploadedFile> uploaded = await UploadedFileReader.ReadAllAsync(files, ct);
         return await recordService.SubmitClaimAsync(token, note, uploaded, ct);
+    }
+
+    /// <summary>
+    /// Gửi yêu cầu nhận tài sản trong app, không cần link: server tự tìm người nhận của kho mang đúng email đã xác minh của
+    /// tài khoản (không có thì 404). Tệp và lời nhắn giống gửi bằng link.
+    /// </summary>
+    [HttpPost("by-account")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(UploadedFileReader.MaxRequestBytes)]
+    [EnableRateLimiting("plan-setup")]
+    [ProducesResponseType<MyHandoverClaimResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
+    public async Task<MyHandoverClaimResponse> SubmitByAccount(
+        [FromForm] Guid vaultId, [FromForm] string? note, [FromForm] List<IFormFile> files, CancellationToken ct)
+    {
+        List<UploadedFile> uploaded = await UploadedFileReader.ReadAllAsync(files, ct);
+        return await recordService.SubmitClaimByAccountAsync(vaultId, note, uploaded, ct);
+    }
+
+    /// <summary>
+    /// Các kho mà tôi là người nhận (email đã xác minh trùng email người nhận, kế hoạch đã kích hoạt trở đi), kèm bước hiện
+    /// tại của tôi và cờ needsAction. Không có tên gói, tài sản hay số căn cước. Chưa xác minh email thì danh sách rỗng.
+    /// </summary>
+    [HttpGet("available")]
+    [ProducesResponseType<List<AvailableHandoverVaultResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public Task<List<AvailableHandoverVaultResponse>> Available(CancellationToken ct)
+    {
+        return recordService.ListAvailableVaultsAsync(ct);
     }
 
     /// <summary>Các yêu cầu tôi đã gửi, mới nhất trước, kèm kết quả xét và tệp đã nộp.</summary>

@@ -71,7 +71,7 @@ public sealed class AdminController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Xem ảnh thẻ của Người xét duyệt hoặc Người thực thi hệ thống (nội dung ảnh, không phải JSON). 404 khi chưa có ảnh.</summary>
+    /// <summary>Xem ảnh thẻ của Người xét duyệt (nội dung ảnh, không phải JSON). 404 khi chưa có ảnh.</summary>
     [HttpGet("users/{userId:guid}/notary-card")]
     [Produces("image/jpeg", "image/png", "image/webp", "application/json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -174,7 +174,7 @@ public sealed class AdminController : ControllerBase
 
     /// <summary>
     /// Giao hoặc đổi Người thực thi của kho (lý do bắt buộc). Người được giao nhận lời mời và phải chấp nhận; người cũ giữ vai trò
-    /// tới khi người mới chấp nhận. Kế hoạch đã nộp giấy chứng tử hoặc kho đã đóng → 409 EXECUTOR_NOT_ALLOWED (PLAN_LOCKED).
+    /// tới khi người mới chấp nhận. Kế hoạch đang bàn giao hoặc bị chặn, hoặc kho đã đóng → 409 EXECUTOR_NOT_ALLOWED (PLAN_LOCKED).
     /// </summary>
     [HttpPost("vaults/{vaultId:guid}/executor")]
     [ProducesResponseType<ExecutorInvitationResponse>(StatusCodes.Status200OK)]

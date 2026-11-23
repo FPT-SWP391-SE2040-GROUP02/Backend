@@ -100,7 +100,17 @@ public sealed class HandoverProgressService : IHandoverProgressService
             }
             HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(citizenId, firstDownloads);
             turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
-            turnResponse.DocumentApprovedAt = record.CompletedAt;
+            HandoverRecordSignature? signature = HandoverRecordRules.FindSignature(
+                record, HandoverSignerRole.Recipient, turn.BeneficiaryId);
+            if (signature != null)
+            {
+                turnResponse.RecipientSignedAt = signature.SignedAt;
+            }
+            // Mỗi người nhận được mở quyền tải riêng: mốc đủ chữ ký của lượt này là lúc mở quyền tải.
+            if (turn.Grant != null)
+            {
+                turnResponse.DocumentApprovedAt = turn.Grant.GrantedAt;
+            }
             if (ShowsBeneficiaryContact(turn.Status))
             {
                 await FillBeneficiaryContactAsync(turnResponse, vault.Id, turn.BeneficiaryId, ct);

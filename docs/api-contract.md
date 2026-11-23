@@ -1300,6 +1300,71 @@ Theo prototype: người nhận chọn **Chấp nhận** hoặc **Từ chối**,
 - Nhật ký: `HANDOVER_SUBMISSION_APPROVED`, `HANDOVER_SUBMISSION_SUPPLEMENT_REQUESTED` (đối tượng `HANDOVER_TURN`).
 - Chưa làm: dọn ảnh khi lượt bị xóa theo thời hạn lưu (ảnh của hồ sơ đã duyệt còn tới khi có job dọn).
 
+### 6.21c. Biên bản bàn giao: luật sư chốt biên bản
+
+Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp lý. Luật sư (Người xét duyệt) xác thực di chúc và giấy tờ ở ngoài hệ thống, lập biên bản trong hệ thống và chịu trách nhiệm về nội dung.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `PARTIALLY_DELIVERED` khi đã có người nhận được mở quyền tải) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/sign` | như trên | — | 200 `HandoverRecordResponse` | 404, 409 (`NOT_SIGNING_STEP` khi chưa chốt, `RECORD_COMPLETED`) |
+| POST | `/api/v1/executor/vaults/{vaultId}/handover-record/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` | 404, 409 (như trên) |
+| POST | `/api/v1/handover/turns/{turnId}/record/sign` | Người nhận của lượt | — | 200 `HandoverRecordResponse` (chỉ phần của mình) | 404, 409 (như trên; `IDENTITY_NOT_CONFIRMED` khi danh tính của chính mình chưa được xác nhận) |
+
+**Giao riêng từng người nhận** (ba bên vẫn đều ký):
+
+1. Luật sư chốt: biên bản sang `SIGNING`; luật sư và Người thực thi ký được ngay (thư báo Người thực thi ký).
+2. Mỗi người nhận đi riêng: nộp ảnh căn cước → luật sư xác nhận danh tính (thư báo riêng người đó ký) → người đó ký. Không chờ người nhận khác.
+3. Có chữ ký luật sư + Người thực thi (bản hiện tại) + chữ ký của người nhận X thì mở quyền tải cho lượt của X ngay (lượt `HANDOVER_COMMITTED`); Người thực thi gửi mã cho X (`send-key` kiểm theo lượt). Luật sư hoặc Người thực thi ký sau cùng thì mở cho mọi người nhận đã ký trước đó.
+4. Mọi người nhận trong biên bản đều đã ký (cùng luật sư, Người thực thi) thì biên bản `COMPLETED`.
+5. Mở lại chỉ khi chưa ai được mở quyền tải; đã giao cho ít nhất một người thì 409 `PARTIALLY_DELIVERED` ("Đã giao tài sản cho ít nhất một người nhận nên không mở lại được biên bản. Sai sót sau khi giao xử lý ngoài hệ thống."), không thu hồi quyền tải đã mở. Màn luật sư ẩn nút Mở lại và hiện câu này.
+6. Ký đồng thời không tạo trùng quyền tải: mỗi lần ký đổi `updatedAt` của biên bản (chống ghi đè, bên lưu sau nhận 409 `EDIT_CONFLICT`), DB chỉ cho một quyền tải mỗi lượt.
+7. `IDENTITY_CHECK` chỉ còn ở biên bản chốt trước thay đổi này, được xử lý như `SIGNING`.
+8. Màn tiến độ của Người thực thi: `documentApprovedAt` của từng lượt là lúc lượt đó được mở quyền tải.
+
+- `confirmLegalBasis = true` nghĩa là luật sư xác nhận: đã kiểm tra di chúc (bản sau cùng, hợp pháp) hoặc xác định không có di chúc, lập biên bản theo đúng quy định và chịu trách nhiệm về nội dung biên bản. Backend chỉ ghi nhận, không kiểm pháp lý.
+- Chốt thành công thì lưu `legalBasisConfirmedAt` (thời điểm) và `legalBasisConfirmedByUserId` (luật sư). Mở lại thì cả hai về `null`; chốt lại phải tick lại.
+- `HandoverRecordResponse` có thêm `legalBasisConfirmedAt`, `legalBasisConfirmedByUserId`, `legalBasisConfirmedByName` (họ tên luật sư, để in dòng "Luật sư … xác nhận căn cứ pháp lý lúc …"; rỗng khi chưa xác nhận).
+
+### 6.21d. Người nhận: các kho được để lại cho tôi và gửi yêu cầu trong app
+
+Lối vào trong app, không cần link trong thư. Người nhận do luật sư thêm (`POST /verifier/handover-records/{id}/recipients`) cũng tính.
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/handover/requests/available` | Đăng nhập | — | 200 `[{ vaultId, beneficiaryId, ownerName, status, needsAction, canRequest, reviewReason?, claimId?, turnId? }]`, dòng `needsAction` xếp trước; email chưa xác minh thì `[]` | 401 |
+| POST | `/api/v1/handover/requests/by-account` | Đăng nhập, đã xác minh email | multipart: `vaultId`, `note` (tối đa 1000 ký tự), `files` (PDF hoặc ảnh, 1 tới 10 tệp, mỗi tệp 10 MiB) | 200 `MyHandoverClaimResponse` (giống gửi bằng link) | 400, 403 `EMAIL_NOT_VERIFIED`, 404 `HANDOVER_NOT_FOUND` (kho lạ hoặc tài khoản không phải người nhận của kho), 409 `HANDOVER_NOT_ALLOWED` (`PLAN_NOT_ACTIVE`, `ALREADY_REQUESTED`, `RECORD_COMPLETED`, `NO_VERIFIER`, `OWNER_CANNOT_CLAIM`), 413 |
+| POST | `/api/v1/handover/requests/{claimId}/supplement` | Người gửi yêu cầu | multipart: `note`, `files` | 200 (API có sẵn, dùng cho cả hai cách gửi) | như cũ |
+
+- **Chỉ tính** kho có kế hoạch `ACTIVE`, `HANDOVER_REQUESTED`, `HANDOVER_IN_PROGRESS`, `CLOSED` và người nhận có email (Chủ kho hoặc luật sư khai) trùng email **đã xác minh** của tài khoản (bỏ khoảng trắng hai đầu, không phân biệt hoa thường). Kho của chính mình không tính.
+- **Không trả** tên gói, tên tài sản, số căn cước.
+- `by-account` dùng chung luật với `POST /api/v1/handover/requests` (gửi bằng link): server tự tìm người nhận của kho mang đúng email tài khoản.
+- `canRequest`: chỉ `true` khi `status = NOT_REQUESTED` và gửi được lúc này (kho chưa có biên bản thì kế hoạch phải `ACTIVE`; có biên bản thì biên bản chưa hoàn tất).
+- `reviewReason`: lý do luật sư yêu cầu bổ sung hoặc từ chối (chỉ khi `SUPPLEMENT_REQUESTED` hoặc `REJECTED`). `claimId` để nộp bổ sung; `turnId` để vào cổng người nhận (`/claim/beneficiary`) ở các bước sau khi biên bản chốt.
+- `NEED_IDENTITY` (thêm sau cùng trong danh sách `status`): người nhận vào cổng người nhận để nộp ảnh căn cước (`POST /api/v1/handover/turns/{turnId}/submission`).
+
+Bảng `status` (xét từ trên xuống, gặp dòng đúng đầu tiên thì dừng):
+
+| Điều kiện | `status` | `needsAction` |
+|---|---|---|
+| Kho chưa có biên bản đang mở | `NOT_REQUESTED` | `false` |
+| Yêu cầu của tôi đang chờ xét (`Submitted`) | `REQUEST_PENDING` | `false` |
+| Luật sư yêu cầu bổ sung | `SUPPLEMENT_REQUESTED` | `true` |
+| Luật sư từ chối | `REJECTED` | `false` |
+| Tôi chưa gửi yêu cầu, không có tên trong biên bản, không có lượt | `NOT_REQUESTED` | `true` khi biên bản chưa hoàn tất (người khác đã gửi), `false` khi đã hoàn tất |
+| Biên bản đang lập (yêu cầu đã chấp nhận, hoặc luật sư tự thêm tôi) | `IN_REVIEW` | `false` |
+| Biên bản hoàn tất, không có tên tôi | `REJECTED` | `false` |
+| Biên bản đã chốt, không có tên tôi, hoặc tôi chưa có lượt | `IN_REVIEW` | `false` |
+| Lượt của tôi: đã bấm "Tôi đã nhận đủ" | `RECEIVED` | `false` |
+| Lượt của tôi đã có quyền tải (dù người nhận khác chưa ký) | `CODE_READY` | `true` |
+| Lượt của tôi chưa xác nhận danh tính, chưa nộp ảnh căn cước hoặc bị yêu cầu bổ sung | `NEED_IDENTITY` | `true` |
+| Lượt của tôi chưa xác nhận danh tính, đã nộp ảnh và đang chờ luật sư duyệt | `IN_REVIEW` | `false` |
+| Danh tính của tôi xong, tôi chưa ký bản hiện tại | `NEED_MY_SIGNATURE` | `true` |
+| Tôi đã ký, luật sư hoặc Người thực thi chưa ký | `WAITING_OTHERS` | `false` |
+
+Các bước sau khi chốt tính theo **lượt của chính tôi**, không theo bước chung của biên bản.
+
 ### 6.22. Cấu hình dịch vụ ngoài (Admin)
 
 Admin sửa model, khóa và dịch vụ dự phòng của dịch vụ ngoài ngay trên web, không cần sửa appsettings hay deploy lại. Tất cả cần Bearer; không phải Admin đang hoạt động → `404` (SEC-04). Đã nối năm dịch vụ: `GEMINI` (AI nhận diện giấy chứng tử), `EKYC`, `SMTP` (email), `SEPAY` (nhận tiền) và `R2` (lưu nội dung đã mã hóa). Mọi giá trị trong `settings` và `secrets` là chuỗi, số cũng vậy.

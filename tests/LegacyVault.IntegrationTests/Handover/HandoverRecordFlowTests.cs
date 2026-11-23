@@ -11,7 +11,7 @@ namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
 /// Biên bản bàn giao qua HTTP trên SQL Server thật: người nhận gửi yêu cầu kèm giấy tờ, luật sư xét, lập, chốt, mở lại,
-/// kiểm thứ tự ba bước (biên bản → danh tính → luật sư ký) và quyền của từng vai.
+/// kiểm thứ tự ba bước (biên bản → danh tính → chữ ký ba bên) và quyền của từng vai.
 /// Môi trường test bỏ qua xác minh danh tính nên nhận lượt xong là coi như luật sư đã xác nhận.
 /// </summary>
 public sealed class HandoverRecordFlowTests : IAsyncLifetime
@@ -96,7 +96,113 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
+    /// <summary>Luật sư chốt biên bản kèm tick xác nhận căn cứ pháp lý; phải trả 200.</summary>
+    private static async Task<JsonElement> FinalizeOkAsync(HttpClient verifier, string recordUrl)
+    {
+        HttpResponseMessage response = await verifier.PostAsJsonAsync(recordUrl + "/finalize", HandoverRecordTestData.FinalizeBody);
+        string text = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, recordUrl + "/finalize -> " + response.StatusCode + ": " + text);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
     private const string RequestsUrl = "/api/v1/handover/requests";
+
+    /// <summary>GET /handover/requests/available của một tài khoản; phải trả 200.</summary>
+    private static async Task<JsonElement> ReadAvailableAsync(HttpClient client)
+    {
+        HttpResponseMessage response = await client.GetAsync(RequestsUrl + "/available");
+        string text = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, "available -> " + response.StatusCode + ": " + text);
+        return await ApiTestHelpers.ReadJsonAsync(response);
+    }
+
+    [SqlFact]
+    public async Task Available_ListsMyVaultsByVerifiedEmail_AndSubmitByAccountUsesTheSameRules()
+    {
+        // Chuẩn bị: kho đã kích hoạt có hai người nhận; người thứ hai chưa xác minh email; một người lạ
+        Vault2 vault = await BuildVaultAsync();
+        await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        HttpClient first = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, RecipientEmail(0));
+        HttpClient second = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: false, RecipientEmail(1));
+        HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
+
+        // Hành động: xem danh sách trước khi ai gửi yêu cầu
+        JsonElement firstBefore = await ReadAvailableAsync(first);
+        JsonElement secondUnverified = await ReadAvailableAsync(second);
+        JsonElement strangerList = await ReadAvailableAsync(stranger);
+        JsonElement ownerList = await ReadAvailableAsync(vault.Owner);
+
+        // Kiểm tra: chỉ đúng người nhận đã xác minh email thấy kho; không lộ CCCD, gói hay tài sản
+        Assert.Equal(1, firstBefore.GetArrayLength());
+        JsonElement row = firstBefore[0];
+        Assert.Equal(vault.VaultId, row.GetProperty("vaultId").GetGuid());
+        Assert.Equal(vault.FirstRecipient, row.GetProperty("beneficiaryId").GetGuid());
+        Assert.Equal("NOT_REQUESTED", row.GetProperty("status").GetString());
+        Assert.False(row.GetProperty("needsAction").GetBoolean());
+        Assert.True(row.GetProperty("canRequest").GetBoolean());
+        Assert.False(string.IsNullOrEmpty(row.GetProperty("ownerName").GetString()));
+        Assert.False(row.TryGetProperty("citizenId", out JsonElement _));
+        Assert.False(row.TryGetProperty("containerName", out JsonElement _));
+        Assert.False(row.TryGetProperty("assets", out JsonElement _));
+        Assert.Equal(0, secondUnverified.GetArrayLength());
+        Assert.Equal(0, strangerList.GetArrayLength());
+        Assert.Equal(0, ownerList.GetArrayLength());
+
+        // Hành động: gửi yêu cầu trong app (không cần link)
+        HttpResponseMessage strangerSubmit = await stranger.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Tôi là người lạ"));
+        HttpResponseMessage unverifiedSubmit = await second.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Chưa xác minh"));
+        HttpResponseMessage firstSubmit = await first.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Bố tôi mất"));
+        HttpResponseMessage firstAgain = await first.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Gửi lại"));
+
+        // Kiểm tra: người lạ 404, chưa xác minh 403; gửi trùng bị chặn như luồng link
+        await ApiTestHelpers.AssertProblemAsync(strangerSubmit, HttpStatusCode.NotFound, "HANDOVER_NOT_FOUND");
+        await ApiTestHelpers.AssertProblemAsync(unverifiedSubmit, HttpStatusCode.Forbidden, "EMAIL_NOT_VERIFIED");
+        Assert.Equal(HttpStatusCode.OK, firstSubmit.StatusCode);
+        JsonElement claim = await ApiTestHelpers.ReadJsonAsync(firstSubmit);
+        Guid claimId = claim.GetProperty("id").GetGuid();
+        Guid recordId = claim.GetProperty("recordId").GetGuid();
+        JsonElement duplicate = await ApiTestHelpers.AssertProblemAsync(firstAgain, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("ALREADY_REQUESTED", duplicate.GetProperty("reason").GetString());
+        JsonElement pendingRow = (await ReadAvailableAsync(first))[0];
+        Assert.Equal("REQUEST_PENDING", pendingRow.GetProperty("status").GetString());
+        Assert.Equal(claimId, pendingRow.GetProperty("claimId").GetGuid());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(PlanStatus.HandoverRequested, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
+        });
+
+        // Hành động: người thứ hai xác minh email; luật sư yêu cầu người đầu bổ sung
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            User secondUser = await db.Users.SingleAsync(u => u.Email == RecipientEmail(1));
+            secondUser.EmailVerifiedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        });
+        JsonElement secondRow = (await ReadAvailableAsync(second))[0];
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        HttpResponseMessage reviewed = await verifier.Client.PostAsJsonAsync(
+            HandoverRecordTestData.VerifierRecordUrl(recordId) + "/claims/" + claimId + "/review",
+            new { decision = "REQUEST_SUPPLEMENT", reason = "Thiếu bản sao di chúc" });
+        HttpResponseMessage secondSubmit = await second.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Tôi cũng là người nhận"));
+
+        // Kiểm tra: người khác đã gửi nên người thứ hai cần gửi; người đầu cần nộp bổ sung kèm lý do
+        Assert.Equal("NOT_REQUESTED", secondRow.GetProperty("status").GetString());
+        Assert.True(secondRow.GetProperty("needsAction").GetBoolean());
+        Assert.True(secondRow.GetProperty("canRequest").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, reviewed.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondSubmit.StatusCode);
+        Assert.Equal(recordId, (await ApiTestHelpers.ReadJsonAsync(secondSubmit)).GetProperty("recordId").GetGuid());
+        JsonElement supplementRow = (await ReadAvailableAsync(first))[0];
+        Assert.Equal("SUPPLEMENT_REQUESTED", supplementRow.GetProperty("status").GetString());
+        Assert.True(supplementRow.GetProperty("needsAction").GetBoolean());
+        Assert.Equal("Thiếu bản sao di chúc", supplementRow.GetProperty("reviewReason").GetString());
+    }
 
     /// <summary>Người nhận đầu tiên gửi yêu cầu bằng link riêng; trả client của người đó, token và phản hồi.</summary>
     private async Task<(HttpClient Client, string Token, HttpResponseMessage Response)> SubmitRequestAsync(Guid vaultId)
@@ -244,7 +350,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         // Chưa xét thì chưa chốt được.
         Assert.Equal(HttpStatusCode.OK, (await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA))).StatusCode);
         JsonElement pending = await ApiTestHelpers.AssertProblemAsync(
-            await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+            await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("CLAIMS_PENDING", pending.GetProperty("reason").GetString());
 
         // Bổ sung phải có lý do; người nhận nộp thêm thì quay về chờ xét.
@@ -271,7 +377,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         await ApiTestHelpers.AssertProblemAsync(
             await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA)), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         JsonElement noAccepted = await ApiTestHelpers.AssertProblemAsync(
-            await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+            await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("RECORD_INVALID", noAccepted.GetProperty("reason").GetString());
     }
 
@@ -354,7 +460,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         string url = HandoverRecordTestData.VerifierRecordUrl(recordId);
 
         // Bước 1 chưa có dòng: chưa chốt được; chưa tới bước ký thì không ai ký được.
-        await ApiTestHelpers.AssertProblemAsync(await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        await ApiTestHelpers.AssertProblemAsync(await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         JsonElement early = await ApiTestHelpers.AssertProblemAsync(
             await verifier.Client.PostAsync(url + "/sign", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("NOT_SIGNING_STEP", early.GetProperty("reason").GetString());
@@ -371,9 +477,21 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
             (vault.FirstRecipient, vault.AssetA), (vault.FirstRecipient, vault.AssetB), (vault.SecondRecipient, vault.AssetB));
         Assert.Equal(HttpStatusCode.OK, set.StatusCode);
         await HandoverRecordTestData.AcceptAllClaimsAsync(verifier.Client, recordId);
-        JsonElement finalized = await PostOkAsync(verifier.Client, url + "/finalize");
+        // Chưa tick xác nhận căn cứ pháp lý (thiếu hoặc false) thì 400, biên bản vẫn đang lập.
+        JsonElement missing = await ApiTestHelpers.AssertProblemAsync(
+            await verifier.Client.PostAsync(url + "/finalize", null), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(missing.GetProperty("errors").TryGetProperty("confirmLegalBasis", out JsonElement _));
+        await ApiTestHelpers.AssertProblemAsync(
+            await verifier.Client.PostAsJsonAsync(url + "/finalize", new { confirmLegalBasis = false }),
+            HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        JsonElement stillDrafting = await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(url));
+        Assert.Equal("DRAFTING", stillDrafting.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, stillDrafting.GetProperty("legalBasisConfirmedAt").ValueKind);
+        JsonElement finalized = await FinalizeOkAsync(verifier.Client, url);
 
-        Assert.Equal("IDENTITY_CHECK", finalized.GetProperty("status").GetString());
+        // Chốt xong là biên bản đang giao: luật sư ký được ngay, không chờ danh tính người nhận.
+        Assert.Equal("SIGNING", finalized.GetProperty("status").GetString());
+        Assert.True(finalized.GetProperty("canSign").GetBoolean());
         Assert.Equal(2, finalized.GetProperty("recipients").GetArrayLength());
         // Đã chốt thì không sửa dòng được nữa.
         await ApiTestHelpers.AssertProblemAsync(
@@ -405,50 +523,86 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task FullFlow_VerifierSignature_OpensDownloads_AndReopenMakesNewRevision()
+    public async Task FullFlow_ThreePartySignatures_OpenDownloads_AndReopenMakesEveryoneSignAgain()
     {
         Vault2 vault = await BuildVaultAsync();
         HandoverRecordTestData.FinalizedRecord record = await HandoverRecordTestData.FinalizeFromOwnerSplitAsync(factory, vault.VaultId);
-        Assert.Equal("IDENTITY_CHECK", record.Body.GetProperty("status").GetString());
+        Assert.Equal("SIGNING", record.Body.GetProperty("status").GetString());
+        // Chốt kèm tick căn cứ pháp lý: lưu luật sư và thời điểm.
+        Assert.Equal(JsonValueKind.String, record.Body.GetProperty("legalBasisConfirmedAt").ValueKind);
+        Assert.Equal(record.Verifier.User.Id, record.Body.GetProperty("legalBasisConfirmedByUserId").GetGuid());
+        Assert.False(string.IsNullOrEmpty(record.Body.GetProperty("legalBasisConfirmedByName").GetString()));
         string verifierUrl = HandoverRecordTestData.VerifierRecordUrl(record.RecordId);
 
-        // Người nhận mở link và nhận lượt; danh tính đủ thì biên bản sang bước ký.
+        // Người nhận mở link và nhận lượt; danh tính của người này xong thì người này ký được.
         HttpClient recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, RecipientEmail(0));
         JsonElement invitations = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync("/api/v1/handover/invitations/mine"));
         Guid turnId = invitations[0].GetProperty("turnId").GetGuid();
+        // Biên bản chờ danh tính, chưa nộp ảnh căn cước: mục "Nhận tài sản" nhắc người nhận nộp.
+        JsonElement identityRow = (await ReadAvailableAsync(recipient))[0];
+        Assert.Equal("NEED_IDENTITY", identityRow.GetProperty("status").GetString());
+        Assert.True(identityRow.GetProperty("needsAction").GetBoolean());
+        Assert.Equal(turnId, identityRow.GetProperty("turnId").GetGuid());
         Assert.Equal(HttpStatusCode.OK, (await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null)).StatusCode);
         JsonElement view = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync($"/api/v1/handover/turns/{turnId}/record"));
         Assert.Equal("SIGNING", view.GetProperty("status").GetString());
-        Assert.False(view.GetProperty("canSign").GetBoolean());
+        Assert.True(view.GetProperty("canSign").GetBoolean());
         Assert.Equal(1, view.GetProperty("recipients").GetArrayLength());
+        // Mục "Nhận tài sản": tới bước ký thì người nhận cần ký, kèm lượt để vào cổng người nhận.
+        JsonElement signingRow = (await ReadAvailableAsync(recipient))[0];
+        Assert.Equal("NEED_MY_SIGNATURE", signingRow.GetProperty("status").GetString());
+        Assert.True(signingRow.GetProperty("needsAction").GetBoolean());
+        Assert.Equal(turnId, signingRow.GetProperty("turnId").GetGuid());
 
-        // Luật sư mở lại để sửa: thành bản mới.
+        // Luật sư ký rồi mở lại: chữ ký cũ mất hiệu lực, bản mới.
+        await PostOkAsync(record.Verifier.Client, verifierUrl + "/sign");
         JsonElement reopened = await PostOkAsync(record.Verifier.Client, verifierUrl + "/reopen");
         Assert.Equal("DRAFTING", reopened.GetProperty("status").GetString());
         Assert.Equal(2, reopened.GetProperty("revisionNo").GetInt32());
         Assert.Equal(JsonValueKind.Null, reopened.GetProperty("verifierSignedAt").ValueKind);
+        // Mở lại thì xác nhận căn cứ pháp lý mất hiệu lực: phải tick lại mới chốt được.
+        Assert.Equal(JsonValueKind.Null, reopened.GetProperty("legalBasisConfirmedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, reopened.GetProperty("legalBasisConfirmedByUserId").ValueKind);
+        await ApiTestHelpers.AssertProblemAsync(
+            await record.Verifier.Client.PostAsync(verifierUrl + "/finalize", null), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         // Chốt lại: người nhận đã được xác nhận danh tính thì sang bước ký ngay.
-        JsonElement refinalized = await PostOkAsync(record.Verifier.Client, verifierUrl + "/finalize");
+        JsonElement refinalized = await FinalizeOkAsync(record.Verifier.Client, verifierUrl);
+        Assert.Equal(JsonValueKind.String, refinalized.GetProperty("legalBasisConfirmedAt").ValueKind);
         Assert.Equal("SIGNING", refinalized.GetProperty("status").GetString());
 
-        // Người thực thi chưa gửi được mã khi luật sư chưa ký.
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(record, vault.VaultId);
+        // Người thực thi chưa gửi được mã khi biên bản chưa đủ chữ ký.
         HttpResponseMessage tooEarly = await record.Executor.Client.PostAsJsonAsync(
             $"/api/v1/executor/handover-records/{record.RecordId}/handover-turns/{turnId}/send-key", new { key = "x" });
         Assert.Equal(HttpStatusCode.Conflict, tooEarly.StatusCode);
 
-        JsonElement completed = await PostOkAsync(record.Verifier.Client, verifierUrl + "/sign");
+        JsonElement completed = await HandoverRecordTestData.SignAsRecipientAsync(recipient, turnId);
         Assert.Equal("COMPLETED", completed.GetProperty("status").GetString());
         JsonElement turn = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync($"/api/v1/handover/turns/{turnId}"));
         Assert.Equal("HANDOVER_COMMITTED", turn.GetProperty("status").GetString());
         Assert.Equal(2, turn.GetProperty("items").GetArrayLength());
+        // Đủ chữ ký: người nhận nhập mã và tải; bấm "Tôi đã nhận đủ" thì xong.
+        JsonElement readyRow = (await ReadAvailableAsync(recipient))[0];
+        Assert.Equal("CODE_READY", readyRow.GetProperty("status").GetString());
+        Assert.True(readyRow.GetProperty("needsAction").GetBoolean());
+        // "Tôi đã nhận đủ" cần tải hết từng mục; ở đây ghi thẳng mốc nhận đủ để kiểm trạng thái RECEIVED.
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            HandoverTurn receivedTurn = await db.Set<HandoverTurn>().SingleAsync(t => t.Id == turnId);
+            receivedTurn.ReceivedAllAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        });
+        JsonElement receivedRow = (await ReadAvailableAsync(recipient))[0];
+        Assert.Equal("RECEIVED", receivedRow.GetProperty("status").GetString());
+        Assert.False(receivedRow.GetProperty("needsAction").GetBoolean());
 
-        // Luật sư đã ký: không ký thêm, không mở lại được.
+        // Đã đủ chữ ký: không ký thêm, không mở lại được.
         await ApiTestHelpers.AssertProblemAsync(
             await record.Verifier.Client.PostAsync(verifierUrl + "/reopen", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Assert.Equal(1, await db.Set<HandoverGrant>().CountAsync(g => g.TurnId == turnId));
-            Assert.Equal(1, await db.Set<HandoverRecordSignature>().CountAsync(x => x.RecordId == record.RecordId && x.RevisionNo == 2));
+            Assert.Equal(3, await db.Set<HandoverRecordSignature>().CountAsync(x => x.RecordId == record.RecordId && x.RevisionNo == 2));
         });
 
         // Người thực thi xem tiến độ theo biên bản.
@@ -472,7 +626,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         await PostOkAsync(record.Verifier.Client, url + "/reopen");
         Assert.Equal(HttpStatusCode.OK, (await SetLinesAsync(record.Verifier.Client, record.RecordId,
             (vault.SecondRecipient, vault.AssetA), (vault.SecondRecipient, vault.AssetB))).StatusCode);
-        await PostOkAsync(record.Verifier.Client, url + "/finalize");
+        await FinalizeOkAsync(record.Verifier.Client, url);
 
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {

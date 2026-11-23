@@ -181,8 +181,18 @@ public sealed class HandoverProgressServiceTests
         turn.KeyVerifiedAt = Now.AddDays(-2);
         turn.ReceivedAllAt = Now.AddDays(-1);
         reader.Turns.Add(turn);
-        turn.ReceiptExecutorSignedAt = Now;
-        // Luật sư đã ký biên bản.
+        // Người nhận ký biên bản, rồi lượt này đủ chữ ký ba bên và được mở quyền tải (mỗi người nhận mở riêng).
+        HandoverGrant grant = new HandoverGrant();
+        grant.TurnId = turn.Id;
+        grant.GrantedAt = Now.AddDays(-3);
+        turn.Grant = grant;
+        HandoverRecordSignature signature = new HandoverRecordSignature();
+        signature.RecordId = record.Id;
+        signature.RevisionNo = record.RevisionNo;
+        signature.Role = HandoverSignerRole.Recipient;
+        signature.BeneficiaryId = recipient.Id;
+        signature.SignedAt = Now.AddDays(-3).AddHours(-1);
+        record.Signatures.Add(signature);
         record.CompletedAt = Now.AddDays(-3);
 
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
@@ -190,7 +200,7 @@ public sealed class HandoverProgressServiceTests
         HandoverProgressTurnResponse turnResponse = result.Turns[0];
         Assert.Equal(Now.AddDays(-5), turnResponse.InvitationSentAt);
         Assert.Equal(Now.AddDays(-4), turnResponse.DecidedAt);
-        Assert.Equal(Now, turnResponse.ReceiptExecutorSignedAt);
+        Assert.Equal(Now.AddDays(-3).AddHours(-1), turnResponse.RecipientSignedAt);
         Assert.Equal(Now.AddDays(-3), turnResponse.DocumentApprovedAt);
         Assert.Equal(Now.AddDays(-2), turnResponse.KeyVerifiedAt);
         Assert.Equal(Now.AddDays(-1), turnResponse.ReceivedAllAt);
@@ -206,7 +216,7 @@ public sealed class HandoverProgressServiceTests
         HandoverProgressResponse result = await service.GetProgressAsync(record.Id, CancellationToken.None);
 
         Assert.Null(result.Turns[0].InvitationSentAt);
-        Assert.Null(result.Turns[0].ReceiptExecutorSignedAt);
+        Assert.Null(result.Turns[0].RecipientSignedAt);
         Assert.Null(result.Turns[0].DocumentApprovedAt);
         Assert.Null(result.Turns[0].KeyVerifiedAt);
         Assert.Null(result.Turns[0].ReceivedAllAt);

@@ -12,7 +12,7 @@ public interface INotaryCardService
     /// </summary>
     Task UploadAsync(Guid userId, Stream content, long length, CancellationToken ct);
 
-    /// <summary>Ảnh thẻ của chính mình đã có chưa (chỉ Người xét duyệt hoặc Người thực thi hệ thống; vai trò khác 404).</summary>
+    /// <summary>Ảnh thẻ của chính mình đã có chưa (chỉ Người xét duyệt; vai trò khác 404).</summary>
     Task<NotaryCardStatusResponse> GetStatusAsync(CancellationToken ct);
 
     /// <summary>
@@ -22,7 +22,7 @@ public interface INotaryCardService
     Task<PreparedDownload> PrepareAsync(CancellationToken ct);
 
     /// <summary>
-    /// Admin xem ảnh thẻ của một Người xét duyệt hoặc Người thực thi hệ thống, đã giải mã và kiểm toàn vẹn.
+    /// Admin xem ảnh thẻ của một Người xét duyệt, đã giải mã và kiểm toàn vẹn.
     /// 404 khi không phải Admin, không có tài khoản, tài khoản không giữ ảnh thẻ hoặc chưa có ảnh.
     /// </summary>
     Task<PreparedDownload> PrepareForAdminAsync(Guid userId, CancellationToken ct);

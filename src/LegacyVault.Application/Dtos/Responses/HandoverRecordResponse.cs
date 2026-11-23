@@ -19,9 +19,19 @@ public class HandoverRecordResponse
     public DateTimeOffset? FinalizedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
 
+    /// <summary>Lúc luật sư xác nhận căn cứ pháp lý khi chốt; null khi đang lập (mở lại thì về null).</summary>
+    public DateTimeOffset? LegalBasisConfirmedAt { get; set; }
+
+    /// <summary>Luật sư đã xác nhận căn cứ pháp lý; null cùng lúc với LegalBasisConfirmedAt.</summary>
+    public Guid? LegalBasisConfirmedByUserId { get; set; }
+
+    /// <summary>Họ tên luật sư đã xác nhận căn cứ pháp lý (để in biên bản); rỗng khi chưa xác nhận.</summary>
+    public string LegalBasisConfirmedByName { get; set; } = string.Empty;
+
     public string VerifierName { get; set; } = string.Empty;
     public string ExecutorName { get; set; } = string.Empty;
     public DateTimeOffset? VerifierSignedAt { get; set; }
+    public DateTimeOffset? ExecutorSignedAt { get; set; }
 
     public List<HandoverRecordRecipientResponse> Recipients { get; set; } = new List<HandoverRecordRecipientResponse>();
 
@@ -68,6 +78,7 @@ public class HandoverRecordRecipientResponse
     public string SubmissionStatus { get; set; } = string.Empty;
 
     public DateTimeOffset? IdentityConfirmedAt { get; set; }
+    public DateTimeOffset? SignedAt { get; set; }
 
     /// <summary>Phiếu giao nhận: lúc bên nhận xác nhận đã nhận đủ; null khi chưa.</summary>
     public DateTimeOffset? ReceivedAllAt { get; set; }

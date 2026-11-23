@@ -25,7 +25,7 @@ public sealed class SystemExecutorDirectoryService : ISystemExecutorDirectorySer
 
     public async Task<List<SystemExecutorResponse>> ListAvailableExecutorsAsync(CancellationToken ct)
     {
-        // Danh bạ có email và số thẻ luật sư: chỉ Chủ kho (người có kho) được xem, vai trò tài khoản không đủ để phân biệt.
+        // Danh bạ có email: chỉ Chủ kho (người có kho) được xem, vai trò tài khoản không đủ để phân biệt.
         if (await vaultRepository.FindByOwnerIdAsync(currentUser.RequireUserId(), ct) == null)
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
@@ -45,15 +45,6 @@ public sealed class SystemExecutorDirectoryService : ISystemExecutorDirectorySer
                 PhoneMasked = phoneMasked,
                 AvatarUrl = null,
                 ExecutorRoleTitle = user.ExecutorRoleTitle ?? string.Empty,
-                LegalVerification = new SystemExecutorLegalVerification
-                {
-                    // Chỉ báo "đã xác minh" khi Admin đã ghi nhận; thiếu số thẻ thì để trống, không điền số giả.
-                    Status = user.LegalVerifiedAt == null ? "UNVERIFIED" : "VERIFIED",
-                    LawyerCardNumber = user.LawyerCardNumber,
-                    PracticeCertificateNumber = user.PracticeCertificateNumber,
-                    Organization = user.LegalOrganization,
-                    VerifiedAt = user.LegalVerifiedAt
-                },
                 AssignedVaultsCount = 0,
                 IsAvailable = true
             });

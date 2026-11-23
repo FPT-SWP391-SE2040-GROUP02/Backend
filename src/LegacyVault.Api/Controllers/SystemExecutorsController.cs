@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Danh bạ Người thực thi hệ thống cho Chủ kho lựa chọn (giảm scope, chỉ mời Người thực thi hệ thống).
+/// Danh bạ Người thực thi hệ thống cho Chủ kho lựa chọn (giảm scope, chỉ mời Người thực thi hệ thống). Người thực thi là nhân viên hệ thống, không có ảnh thẻ hay thông tin xác minh pháp lý.
 /// </summary>
 [ApiController]
 [Authorize]
