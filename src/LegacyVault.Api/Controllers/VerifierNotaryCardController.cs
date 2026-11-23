@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>Ảnh thẻ công chứng viên của chính Người xét duyệt, chỉ xem (Admin là người nộp, xem PUT admin/users/{id}/notary-card).</summary>
-/// <remarks>Controller chỉ [Authorize]; vai trò được service kiểm từ DB (ROLE-04), vai trò khác nhận 404.</remarks>
+/// <remarks>Controller chỉ [Authorize]; vai trò được service kiểm từ DB (ROLE-04), chỉ Người xét duyệt (luật sư) có ảnh thẻ, vai trò khác (kể cả Người thực thi) nhận 404.</remarks>
 [ApiController]
 [Authorize]
 [Route("api/v1/verifier/notary-card")]
