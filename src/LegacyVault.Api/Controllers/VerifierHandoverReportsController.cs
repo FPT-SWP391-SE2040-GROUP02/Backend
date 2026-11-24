@@ -4,6 +4,7 @@ using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace LegacyVault.Api.Controllers;
 
@@ -41,6 +42,19 @@ public sealed class VerifierHandoverReportsController : ControllerBase
         Guid reportId, ReviewHandoverReportRequest request, CancellationToken ct)
     {
         return reportService.ReviewAsync(reportId, request, ct);
+    }
+
+    /// <summary>Tìm lại kho theo họ tên và số căn cước đúng trên giấy chứng tử (người nộp có thể ghi sai).</summary>
+    [HttpPost("{reportId:guid}/find-vault")]
+    [EnableRateLimiting("plan-setup")]
+    [ProducesResponseType<VerifierHandoverReportResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<VerifierHandoverReportResponse> FindVault(
+        Guid reportId, FindReportVaultRequest request, CancellationToken ct)
+    {
+        return reportService.FindVaultAsync(reportId, request, ct);
     }
 
     /// <summary>Tải một tệp giấy tờ của hồ sơ.</summary>

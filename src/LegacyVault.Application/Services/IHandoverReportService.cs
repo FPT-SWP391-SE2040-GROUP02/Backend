@@ -30,5 +30,10 @@ public interface IHandoverReportService
     Task<VerifierHandoverReportResponse> ReviewAsync(
         Guid reportId, ReviewHandoverReportRequest request, CancellationToken ct);
 
+    /// <summary>
+    /// Luật sư tìm lại kho, sửa họ tên và số căn cước theo giấy chứng tử nếu người nộp ghi sai. Chỉ khi hồ sơ chưa có kết quả.
+    /// </summary>
+    Task<VerifierHandoverReportResponse> FindVaultAsync(Guid reportId, FindReportVaultRequest request, CancellationToken ct);
+
     Task<PreparedDownload> PrepareVerifierFileAsync(Guid reportId, Guid fileId, CancellationToken ct);
 }

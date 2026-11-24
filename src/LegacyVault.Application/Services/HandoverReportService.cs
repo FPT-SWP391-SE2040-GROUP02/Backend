@@ -291,6 +291,33 @@ public sealed partial class HandoverReportService : IHandoverReportService
         return await BuildForVerifierAsync(report, ct);
     }
 
+    public async Task<VerifierHandoverReportResponse> FindVaultAsync(
+        Guid reportId, FindReportVaultRequest request, CancellationToken ct)
+    {
+        // 1. Hồ sơ được giao cho luật sư này và chưa có kết quả cuối; thông tin sửa phải hợp lệ
+        Guid userId = await RequireActiveVerifierAsync(ct);
+        HandoverReport report = await RequireAssignedAsync(reportId, userId, ct);
+        if (report.Status == HandoverClaimStatus.Accepted || report.Status == HandoverClaimStatus.Rejected)
+        {
+            throw HandoverAccess.NotAllowed("ALREADY_REVIEWED", "Hồ sơ này đã có kết quả xét.");
+        }
+        HandoverReportData data = ReadData(report);
+        data.DeceasedFullName = ReadDeceasedName(request.DeceasedFullName);
+        data.DeceasedCitizenId = CitizenIdRules.NormalizeCitizenId(request.DeceasedCitizenId, "deceasedCitizenId");
+
+        // 2. Tìm lại kho; kho của chính người nộp hoặc của luật sư này thì coi như không có
+        Vault? vault = await FindVaultAsync(data.DeceasedCitizenId, ct);
+        report.VaultId = null;
+        if (vault != null && vault.OwnerId != report.SubmitterUserId && vault.OwnerId != userId)
+        {
+            report.VaultId = vault.Id;
+        }
+        report.DataProtected = protector.Protect(data);
+        report.UpdatedAt = timeProvider.GetUtcNow();
+        await SaveAsync(ct);
+        return await BuildForVerifierAsync(report, ct);
+    }
+
     public async Task<PreparedDownload> PrepareVerifierFileAsync(Guid reportId, Guid fileId, CancellationToken ct)
     {
         Guid userId = await RequireActiveVerifierAsync(ct);
@@ -551,14 +578,20 @@ public sealed partial class HandoverReportService : IHandoverReportService
 
     // ---------------- Hàm phụ: kiểm dữ liệu ----------------
 
-    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request)
+    private static string ReadDeceasedName(string? value)
     {
-        HandoverReportData data = new HandoverReportData();
-        data.DeceasedFullName = CleanText(request.DeceasedFullName);
-        if (data.DeceasedFullName.Length == 0 || data.DeceasedFullName.Length > 200)
+        string name = CleanText(value);
+        if (name.Length == 0 || name.Length > 200)
         {
             throw ValidationErrors.For("deceasedFullName", "Vui lòng nhập họ tên người mất (tối đa 200 ký tự).");
         }
+        return name;
+    }
+
+    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request)
+    {
+        HandoverReportData data = new HandoverReportData();
+        data.DeceasedFullName = ReadDeceasedName(request.DeceasedFullName);
         data.DeceasedCitizenId = CitizenIdRules.NormalizeCitizenId(request.DeceasedCitizenId, "deceasedCitizenId");
         if (!request.Attested)
         {

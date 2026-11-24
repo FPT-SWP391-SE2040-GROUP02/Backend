@@ -31,6 +31,14 @@ public class ReviewHandoverReportRequest : ReviewHandoverClaimRequest
     public bool ConfirmDocuments { get; set; }
 }
 
+/// <summary>Body của POST /verifier/handover-reports/{id}/find-vault: thông tin đúng theo giấy chứng tử.</summary>
+public class FindReportVaultRequest
+{
+    public string DeceasedFullName { get; set; } = string.Empty;
+
+    public string DeceasedCitizenId { get; set; } = string.Empty;
+}
+
 /// <summary>Body của POST /verifier/handover-records/{id}/cancel.</summary>
 public class CancelHandoverRecordRequest
 {

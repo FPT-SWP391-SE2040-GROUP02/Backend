@@ -432,6 +432,34 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Verifier_FindsVaultAgain_AfterCorrectingCitizenId_ThenCanAccept()
+    {
+        await BuildVaultAsync();
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        HttpClient relative = await NewUserAsync();
+        Guid reportId = (await SubmitOkAsync(relative, "001099009999")).GetProperty("id").GetGuid();
+        string findUrl = $"{VerifierReportsUrl}/{reportId}/find-vault";
+
+        HttpResponseMessage stillMissing = await verifier.Client.PostAsJsonAsync(
+            findUrl, new { deceasedFullName = "Nguyễn Văn Mất", deceasedCitizenId = "001099009998" });
+        Assert.False((await ApiTestHelpers.ReadJsonAsync(stillMissing)).GetProperty("vaultFound").GetBoolean());
+        await ApiTestHelpers.AssertProblemAsync(
+            await verifier.Client.PostAsJsonAsync(findUrl, new { deceasedFullName = "A", deceasedCitizenId = "12" }),
+            HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(HttpStatusCode.Forbidden, (await relative.PostAsJsonAsync(
+            findUrl, new { deceasedFullName = "Nguyễn Văn Mất", deceasedCitizenId = OwnerCitizenId })).StatusCode);
+
+        HttpResponseMessage found = await verifier.Client.PostAsJsonAsync(
+            findUrl, new { deceasedFullName = "Nguyễn Văn Mất", deceasedCitizenId = OwnerCitizenId });
+        JsonElement body = await ApiTestHelpers.ReadJsonAsync(found);
+        Assert.True(body.GetProperty("vaultFound").GetBoolean());
+        Assert.True(body.GetProperty("nameMatches").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await ReviewAsync(verifier.Client, reportId, "ACCEPT")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await verifier.Client.PostAsJsonAsync(
+            findUrl, new { deceasedFullName = "Nguyễn Văn Mất", deceasedCitizenId = OwnerCitizenId })).StatusCode);
+    }
+
+    [SqlFact]
     public async Task Accept_IsBlockedWhenPlanIsNotActive()
     {
         NoRecipientVault vault = await BuildVaultAsync(PlanStatus.Draft);
