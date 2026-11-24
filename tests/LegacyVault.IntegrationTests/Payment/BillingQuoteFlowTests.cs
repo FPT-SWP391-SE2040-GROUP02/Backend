@@ -104,13 +104,11 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         JsonElement tiers = plans.GetProperty("tiers");
         Assert.Equal(2, tiers.GetArrayLength());
         Assert.Equal("XS", tiers[0].GetProperty("tier").GetString());
-        Assert.Equal(2, tiers[0].GetProperty("includedBeneficiarySlots").GetInt32());
         Assert.Equal(200 * 1048576L, tiers[0].GetProperty("storageQuotaBytes").GetInt64());
         Assert.Equal(199000, tiers[0].GetProperty("prices")[0].GetProperty("amount").GetInt64());
         Assert.Equal("XS_MAX", tiers[1].GetProperty("tier").GetString());
         Assert.Equal(1599000, tiers[1].GetProperty("prices")[2].GetProperty("amount").GetInt64());
         Assert.Equal(1825, tiers[1].GetProperty("prices")[2].GetProperty("serviceDays").GetInt32());
-        Assert.Equal(50, plans.GetProperty("maxTotalSlots").GetInt32());
     }
 
     [SqlFact]
@@ -147,7 +145,6 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         Assert.Equal(499000, quote.GetProperty("tierAmount").GetInt64());
         Assert.Equal(499000, quote.GetProperty("totalAmount").GetInt64());
         Assert.Equal("VND", quote.GetProperty("currency").GetString());
-        Assert.Equal(2, quote.GetProperty("includedBeneficiarySlots").GetInt32());
         Assert.Equal(1095, quote.GetProperty("serviceDays").GetInt32());
         Assert.Equal(200 * 1048576L, quote.GetProperty("storageQuotaBytes").GetInt64());
         Assert.Equal("ON_PAYMENT", quote.GetProperty("serviceStartsAt").GetString());
@@ -169,7 +166,6 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         JsonElement quote = await ApiTestHelpers.ReadJsonAsync(response);
         Assert.Equal(1599000, quote.GetProperty("totalAmount").GetInt64());
-        Assert.Equal(5, quote.GetProperty("includedBeneficiarySlots").GetInt32());
         Assert.Equal(1825, quote.GetProperty("serviceDays").GetInt32());
     }
 
@@ -236,11 +232,10 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Sec81_GetPlansAndQuote_AdminChangesQuotaAndSlots_UsesNewLimits()
+    public async Task Sec81_GetPlansAndQuote_AdminChangesQuota_UsesNewLimits()
     {
-        // Chuẩn bị: Admin đổi dung lượng XS Max lên 800 MiB và suất người nhận kèm lên 9
+        // Chuẩn bị: Admin đổi dung lượng XS Max lên 800 MiB
         await SetAdminSettingAsync("Plans.XsMax.QuotaMb", "800", "NUMBER");
-        await SetAdminSettingAsync("Plans.XsMax.Slots", "9", "NUMBER");
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
 
         // Hành động
@@ -251,21 +246,18 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers");
         Assert.Equal(200 * 1048576L, tiers[0].GetProperty("storageQuotaBytes").GetInt64());
         Assert.Equal(800 * 1048576L, tiers[1].GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(9, tiers[1].GetProperty("includedBeneficiarySlots").GetInt32());
         JsonElement quoted = await ApiTestHelpers.ReadJsonAsync(quote);
         Assert.Equal(800 * 1048576L, quoted.GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(9, quoted.GetProperty("includedBeneficiarySlots").GetInt32());
     }
 
     [SqlFact]
     public async Task Sec81_GetPlans_AdminHidesXsAndEditsXsMax_ReturnsEditedXsMax()
     {
-        // Chuẩn bị: đúng trạng thái admin đã lưu trên máy phát triển (XS Max kèm 90 suất, vượt tổng người nhận mặc định 50)
+        // Chuẩn bị: đúng trạng thái admin đã lưu trên máy phát triển (ẩn XS, sửa giá và dung lượng XS Max)
         await SetAdminSettingAsync("Plans.Xs.Hidden", "true", "BOOLEAN");
         await SetAdminSettingAsync("Plans.Xs.Price1Y", "10000", "NUMBER");
         await SetAdminSettingAsync("Plans.XsMax.Price1Y", "50000", "NUMBER");
         await SetAdminSettingAsync("Plans.XsMax.QuotaMb", "45234", "NUMBER");
-        await SetAdminSettingAsync("Plans.XsMax.Slots", "90", "NUMBER");
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
 
         // Hành động
@@ -279,18 +271,16 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         Assert.True(tiers[0].GetProperty("hidden").GetBoolean(), plans.ToString());
         Assert.Equal("XS_MAX", tiers[1].GetProperty("tier").GetString());
         Assert.Equal(45234 * 1048576L, tiers[1].GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(90, tiers[1].GetProperty("includedBeneficiarySlots").GetInt32());
         Assert.Equal(50000, tiers[1].GetProperty("prices")[0].GetProperty("amount").GetInt64());
         Assert.StartsWith("DB-", plans.GetProperty("policyVersion").GetString());
     }
 
-    /// <summary>Admin tạo gói GOLD (đứng sau XS Max) với giá ba kỳ, dung lượng 1000 MiB, 7 suất, đang mở bán.</summary>
+    /// <summary>Admin tạo gói GOLD (đứng sau XS Max) với giá ba kỳ, dung lượng 1000 MiB, đang mở bán.</summary>
     private async Task CreateGoldPlanAsync(bool onSale)
     {
         await SetAdminSettingAsync("Plans.Catalog", "[{\"code\":\"GOLD\",\"name\":\"Gold\",\"subtitle\":\"Cao nhất\",\"order\":30}]", "JSON");
         await SetAdminSettingAsync("Plans.GOLD.On", onSale ? "true" : "false", "BOOLEAN");
         await SetAdminSettingAsync("Plans.GOLD.QuotaMb", "1000", "NUMBER");
-        await SetAdminSettingAsync("Plans.GOLD.Slots", "7", "NUMBER");
         await SetAdminSettingAsync("Plans.GOLD.Price1Y", "599000", "NUMBER");
         await SetAdminSettingAsync("Plans.GOLD.Price3Y", "1499000", "NUMBER");
         await SetAdminSettingAsync("Plans.GOLD.Price5Y", "2399000", "NUMBER");
@@ -307,7 +297,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
         HttpResponseMessage purchase = await QuoteAsync(client, new { tier = "GOLD", years = 3 });
 
-        // Kiểm tra 1: GOLD đứng cuối bảng giá với tên và giá do Admin đặt; báo giá đúng tiền, dung lượng, suất
+        // Kiểm tra 1: GOLD đứng cuối bảng giá với tên và giá do Admin đặt; báo giá đúng tiền, dung lượng
         JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers");
         Assert.Equal(3, tiers.GetArrayLength());
         Assert.Equal("GOLD", tiers[2].GetProperty("tier").GetString());
@@ -318,7 +308,6 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         Assert.Equal("PURCHASE", quoted.GetProperty("kind").GetString());
         Assert.Equal("GOLD", quoted.GetProperty("tier").GetString());
         Assert.Equal(1499000, quoted.GetProperty("tierAmount").GetInt64());
-        Assert.Equal(7, quoted.GetProperty("includedBeneficiarySlots").GetInt32());
 
         // Hành động 2: kho thành XS còn hạn rồi báo giá nâng lên GOLD
         await MakePaidActiveAsync(vaultId, daysLeft: 180);
@@ -328,7 +317,6 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         JsonElement upgraded = await ApiTestHelpers.ReadJsonAsync(upgrade);
         Assert.Equal("UPGRADE", upgraded.GetProperty("kind").GetString());
         Assert.Equal("GOLD", upgraded.GetProperty("tier").GetString());
-        Assert.Equal(7, upgraded.GetProperty("includedBeneficiarySlots").GetInt32());
         long difference = 599000 - 199000;
         Assert.InRange(upgraded.GetProperty("tierAmount").GetInt64(), 1, difference);
     }

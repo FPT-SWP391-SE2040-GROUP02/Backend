@@ -14,9 +14,6 @@ public interface IBillingPriceSettings
     /// <summary>Phiên bản chính sách giá, ghi vào đơn lúc tạo (PAY-11). Mỗi lần đổi giá phải đổi giá trị này.</summary>
     string PolicyVersion { get; }
 
-    /// <summary>Số suất người nhận tối đa một gói được kèm theo cấu hình hiện hành (Admin chỉnh được).</summary>
-    int MaxTotalSlotsPerAccount { get; }
-
     /// <summary>Thời gian đơn chờ thanh toán kể từ lúc tạo theo cấu hình hiện hành (Admin chỉnh được).</summary>
     TimeSpan OrderLifetime { get; }
 
@@ -34,9 +31,6 @@ public interface IBillingPriceSettings
 
     /// <summary>Dung lượng của hạng theo cấu hình hiện hành (Admin chỉnh được). Hạng không bán → ArgumentOutOfRangeException.</summary>
     long GetStorageQuotaBytes(ServiceTier tier);
-
-    /// <summary>Số suất người nhận kèm theo hạng theo cấu hình hiện hành (Admin chỉnh được).</summary>
-    int GetIncludedSlots(ServiceTier tier);
 
     /// <summary>Giá hạng cho cả kỳ (không nhân thêm theo năm). Hạng hoặc số năm không bán → ArgumentOutOfRangeException.</summary>
     long GetTierPrice(ServiceTier tier, int years);

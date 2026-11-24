@@ -362,8 +362,7 @@ public sealed class BillingService : IBillingService
         if (quote.Kind == PaymentOrderKind.Renewal)
         {
             long usedBytes = await vaultRepository.SumUsedBytesAsync(eligibility.Vault.Id, ct);
-            int usedSlots = await assignmentRepository.CountUsedBeneficiarySlotsAsync(eligibility.Vault.Id, ct);
-            BillingRules.EnsureUsageFitsRenewal(quote, usedBytes, usedSlots);
+            BillingRules.EnsureUsageFitsRenewal(quote, usedBytes);
         }
         return quote;
     }
@@ -398,7 +397,6 @@ public sealed class BillingService : IBillingService
         order.TierAmount = quote.TierAmount;
         order.TotalAmount = quote.TotalAmount;
         order.StorageQuotaBytes = quote.StorageQuotaBytes;
-        order.IncludedBeneficiarySlots = quote.IncludedBeneficiarySlots;
         order.BaseServiceExpiresAt = quote.BaseServiceExpiresAt;
         order.PolicyVersion = quote.PolicyVersion;
         order.PaymentCode = BillingRules.NewPaymentCode();

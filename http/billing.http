@@ -98,13 +98,13 @@ POST {{baseUrl}}/billing/orders/{{orderId}}/cancel
 Authorization: Bearer {{token}}
 
 ### Giả lập trả tiền (chỉ Development) — 200, đơn PAID và quyền dịch vụ của kho được cấp một lần
-# Mua mới: hạng, dung lượng, suất kèm theo, hạn = lúc trả + số năm x 365 ngày; kế hoạch vẫn DRAFT.
-# Nâng hạng: đổi gói, dung lượng, suất kèm theo, giữ nguyên hạn. Gia hạn: cộng thêm kỳ mới.
+# Mua mới: hạng, dung lượng, hạn = lúc trả + số năm x 365 ngày; kế hoạch vẫn DRAFT.
+# Nâng hạng: đổi gói, dung lượng, giữ nguyên hạn. Gia hạn: cộng thêm kỳ mới.
 # 409 PAYMENT_ORDER_NOT_PAYABLE + reason: CANCELLED / EXPIRED / VAULT_CLOSED / ENTITLEMENT_CHANGED.
-# Kiểm tra kết quả bằng GET {{baseUrl}}/vaults/me (serviceTier, serviceStatus, serviceExpiresAt, beneficiarySlots).
+# Kiểm tra kết quả bằng GET {{baseUrl}}/vaults/me (serviceTier, serviceStatus, serviceExpiresAt).
 POST {{baseUrl}}/billing/orders/{{orderId}}/dev-pay
 Authorization: Bearer {{token}}
 
-### Xem kho sau khi trả — serviceTier, serviceStatus, storageQuotaBytes, beneficiarySlots
+### Xem kho sau khi trả — serviceTier, serviceStatus, storageQuotaBytes
 GET {{baseUrl}}/vaults/me
 Authorization: Bearer {{token}}

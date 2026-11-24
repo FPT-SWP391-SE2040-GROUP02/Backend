@@ -27,9 +27,6 @@ public class VaultEntitlement
 
     public long StorageQuotaBytes { get; set; }
 
-    /// <summary>Suất người nhận kèm theo hạng.</summary>
-    public int IncludedBeneficiarySlots { get; set; }
-
     /// <summary>Hết kỳ dịch vụ trả phí; null với Free.</summary>
     public DateTimeOffset? ServiceExpiresAt { get; set; }
 

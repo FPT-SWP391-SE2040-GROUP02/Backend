@@ -100,7 +100,6 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kho không còn dòng gán tài sản nào khi kế hoạch đang chạy; cần Owner xác nhận | |
 | 409 | `BENEFICIARY_IDENTITY_CONFLICT` | Kho đã có hồ sơ cùng số CCCD nhưng khác họ tên hoặc ngày sinh | `beneficiaryId` |
 | 409 | `BENEFICIARY_IN_USE` | Xóa hồ sơ người nhận đang được gán tài sản; gỡ gán trước | `assetIds` |
-| 409 | `BENEFICIARY_SLOTS_EXCEEDED` | Gắn thêm một người nhận mới vượt số suất của kho | `usedSlots`, `maxSlots` |
 | 409 | `GOOGLE_ACCOUNT_ALREADY_LINKED` | Google này đã gắn tài khoản khác / tài khoản đã có Google | |
 | 409 | `LAST_LOGIN_METHOD` | Gỡ phương thức đăng nhập cuối cùng | |
 | 409 | `LOGIN_METHOD_ALREADY_EXISTS` | Đã có phương thức này | `method` |
@@ -375,8 +374,6 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
   "storageQuotaBytes": 20971520,
   "storageUsedBytes": 0,
   "storageRemainingBytes": 20971520,
-  "beneficiarySlots": 0,
-  "usedBeneficiarySlots": 0,
   "assignedAssetCount": 0,
   "createdAt": "2026-10-13T08:30:00+00:00",
   "updatedAt": null,
@@ -393,7 +390,7 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
 
 Ba trạng thái **độc lập**: kho đã trả tiền vẫn có thể `planStatus = DRAFT`. Dung lượng tính bằng byte, `1 MiB = 1.048.576 byte`.
 
-Suất người nhận (QUOTA-06): `beneficiarySlots` = số suất kèm theo gói (không có mua thêm suất; muốn nhiều suất hơn thì nâng lên gói khác). `usedBeneficiarySlots` = số **người** khác nhau đang được gán ít nhất một tài sản; một người nhận nhiều tài sản tính một suất, hồ sơ chưa được gán tài sản nào không tính. `assignedAssetCount` = số tài sản đã gán cho ít nhất một người.
+Số người nhận **không bị giới hạn** theo gói: các gói chỉ khác nhau về dung lượng và giá (kho Free vẫn không tạo được người nhận hay gán tài sản, `403 PAID_TIER_REQUIRED`). `assignedAssetCount` = số tài sản đã gán cho ít nhất một người.
 
 ### 6.6. Gán tài sản cho người nhận
 
@@ -404,7 +401,7 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}`.
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `.../assignments` | Đăng nhập | — | 200 `AssetAssignmentResponse[]` (mọi dòng gán của kho, theo thứ tự gán) | 404 |
-| PUT | `.../assets/{assetId}/assignments` | Đăng nhập + PIN kho | `{ beneficiaryIds: [guid], confirmPlanDeactivation? }` | 200 `AssetAssignmentResponse[]` (các dòng gán của tài sản sau khi đổi) | 400, 403 `PAID_TIER_REQUIRED`, 404 `ASSET_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `BENEFICIARY_SLOTS_EXCEEDED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` / `EDIT_CONFLICT` |
+| PUT | `.../assets/{assetId}/assignments` | Đăng nhập + PIN kho | `{ beneficiaryIds: [guid], confirmPlanDeactivation? }` | 200 `AssetAssignmentResponse[]` (các dòng gán của tài sản sau khi đổi) | 400, 403 `PAID_TIER_REQUIRED`, 404 `ASSET_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` / `EDIT_CONFLICT` |
 | DELETE | `.../assets/{assetId}/assignments/{beneficiaryId}?confirmPlanDeactivation=false` | Đăng nhập + PIN kho | — | 200 `AssetAssignmentResponse[]` (các dòng còn lại của tài sản) | 404 `ASSET_NOT_FOUND`, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` / `EDIT_CONFLICT` |
 
 ```json
@@ -420,7 +417,6 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}`.
 - `PUT` **đặt lại toàn bộ** người nhận của tài sản: danh sách gửi lên là danh sách sau cùng. Người mới được thêm, người không còn trong danh sách bị gỡ; danh sách rỗng là gỡ hết. Id trùng trong danh sách chỉ tính một lần. Gửi đúng danh sách hiện có (bấm lặp) → 200, **không ghi gì**, không tăng `planConfigVersion`, không có dòng nhật ký.
 - Hồ sơ người nhận phải thuộc kho này (tạo trước ở mục 6.8); tài sản phải thuộc kho này. Của kho khác → 404.
 - Hạng Free: **không** gán được (`403 PAID_TIER_REQUIRED`, FE hiện gợi ý nâng cấp); gỡ thì được.
-- **Suất người nhận:** `usedBeneficiarySlots` của kho là số **người** khác nhau có ít nhất một dòng gán. Một người nhận nhiều tài sản chỉ tốn một suất. Thao tác làm tăng số người vượt `beneficiarySlots` → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots`, `maxSlots` (FE gợi ý nâng gói). Người rời đi trong cùng thao tác (mất dòng gán cuối cùng) được trừ trước khi so, nên đổi người khi suất đã đầy vẫn được.
 - **Gỡ về không còn dòng gán nào khi kế hoạch đang chạy** → `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED`: FE hiện cảnh báo "kế hoạch sẽ trở về bản nháp"; Owner đồng ý thì gọi lại với `confirmPlanDeactivation=true` (query với `DELETE`, trường body với `PUT`) → kế hoạch về `DRAFT`.
 - Mọi thay đổi gán tăng `planConfigVersion` đúng một lần cho cả thao tác. Dịch vụ đang ân hạn: thêm bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), gỡ vẫn được.
 - Hai yêu cầu cùng đổi kho một lúc: bên đến sau nhận `409 EDIT_CONFLICT` (tải lại rồi làm lại); không bao giờ có hai dòng cho cùng một cặp.
@@ -475,7 +471,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `.../beneficiaries` | Đăng nhập | Query phân trang; `sortBy`: chỉ `createdAt` (mặc định); `searchTerm`: 1–4 chữ số | 200 `PaginatedList<BeneficiaryResponse>` | 400, 404 |
-| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `BENEFICIARY_SLOTS_EXCEEDED` / `VAULT_NOT_EDITABLE` |
+| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `VAULT_NOT_EDITABLE` |
 | GET | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | 200 `BeneficiaryResponse` | 404 `VAULT_NOT_FOUND` / `BENEFICIARY_NOT_FOUND` |
 | PUT | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | `{ etag, fullName?, dateOfBirth?, email?, phone? }` | 200 `BeneficiaryResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
 | DELETE | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | **204** | 404, 409 `BENEFICIARY_IN_USE` / `VAULT_NOT_EDITABLE` |
@@ -517,8 +513,8 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **Tuổi:** người nhận phải đủ 18 tuổi tính theo ngày hiện tại (giờ Việt Nam); thiếu tuổi → `400 VALIDATION_ERROR` ở trường `dateOfBirth`: "Người nhận phải đủ 18 tuổi." Khi sửa, chỉ kiểm tuổi nếu `dateOfBirth` được đổi (hồ sơ cũ chưa đủ tuổi vẫn sửa được các trường khác). Không trả nhãn tuổi (đã bỏ `isMinor`) và không còn trường `minorAcknowledgedAt`. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
 - `assetIds`: các tài sản đang được gán cho người này, theo thứ tự gán; rỗng khi chưa được gán tài sản nào.
-- **Giới hạn số hồ sơ:** số hồ sơ của kho (tính cả hồ sơ chưa được gán tài sản nào) không vượt tổng suất `beneficiarySlots`. Tạo hồ sơ mới khi đã đủ → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots` (số hồ sơ hiện có) và `maxSlots`; FE gợi ý nâng gói hoặc xóa hồ sơ chưa dùng. Gửi lại đúng người đã có (trùng CCCD, cùng họ tên và ngày sinh) vẫn **200** dù đã đủ. FE lấy số hồ sơ từ `totalCount` của danh sách.
-- Tạo hồ sơ **không** tăng `planConfigVersion`. `usedBeneficiarySlots` của kho vẫn chỉ đếm người đang được gán tài sản (mục 6.6).
+- **Không giới hạn số hồ sơ:** một kho trả phí tạo bao nhiêu hồ sơ người nhận cũng được; gửi lại đúng người đã có (trùng CCCD, cùng họ tên và ngày sinh) trả **200** với hồ sơ cũ. FE lấy số hồ sơ từ `totalCount` của danh sách.
+- Tạo hồ sơ **không** tăng `planConfigVersion`.
 - Sửa hồ sơ **đang được gán tài sản** (có thay đổi thật) → `planConfigVersion` tăng 1; hồ sơ chưa được gán tài sản nào thì không tăng.
 - Xóa hồ sơ đang được gán tài sản → `409 BENEFICIARY_IN_USE` kèm `assetIds`; FE hướng dẫn gỡ gán các tài sản đó trước.
 - BE không gửi thông báo, không tạo tài khoản cho người nhận.
@@ -993,16 +989,14 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
     {
       "tier": "XS",
       "storageQuotaBytes": 209715200,
-      "includedBeneficiarySlots": 2,
       "prices": [
         { "years": 1, "amount": 199000, "serviceDays": 365 },
         { "years": 3, "amount": 499000, "serviceDays": 1095 },
         { "years": 5, "amount": 799000, "serviceDays": 1825 }
       ]
     },
-    { "tier": "XS_MAX", "storageQuotaBytes": 524288000, "includedBeneficiarySlots": 5, "prices": [ "..." ] }
+    { "tier": "XS_MAX", "storageQuotaBytes": 524288000, "prices": [ "..." ] }
   ],
-  "maxTotalSlots": 50,
   "notice": "Thanh toán không tự kích hoạt bàn giao."
 }
 
@@ -1015,7 +1009,6 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
   "totalAmount": 499000,
   "currency": "VND",
   "storageQuotaBytes": 209715200,
-  "includedBeneficiarySlots": 2,
   "serviceDays": 1095,
   "serviceStartsAt": "ON_PAYMENT",
   "serviceExpiresAt": null,
@@ -1035,7 +1028,6 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
   "totalAmount": 499000,
   "currency": "VND",
   "storageQuotaBytes": 209715200,
-  "includedBeneficiarySlots": 2,
   "paymentCode": "LV7K2M9QXA",
   "transferContent": "LV7K2M9QXA",
   "bank": { "bankCode": "MBBank", "accountNumber": "0000000000", "accountName": "LEGACYVAULT TEST" },
@@ -1055,19 +1047,19 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
 | `status` | `PENDING`, `PAID`, `EXPIRED`, `CANCELLED` |
 | `tier` | `XS`, `XS_MAX` (đơn `UPGRADE` là gói đích; đơn `RENEWAL` là hạng của kỳ mới: giữ nguyên hạng hiện tại khi còn hạn, tự do khi đã hết hạn) |
 
-- **Giá gia hạn** (`RENEWAL`): giá hạng của kỳ mới (như mua mới). Ví dụ XS 3 năm = 499.000 đ. Phản hồi quote/order: `serviceStartsAt` = `AFTER_CURRENT_TERM` (còn hạn: nối tiếp, `serviceExpiresAt` là hạn hiện tại) hoặc `ON_PAYMENT` (đã hết hạn: tính từ lúc trả). Gia hạn sang gói **nhỏ hơn mức đang dùng** (dung lượng đã dùng, số suất người nhận đã dùng) → 409 `PAYMENT_NOT_ALLOWED` / `USAGE_EXCEEDS_PLAN`; không tự xóa dữ liệu. Hạn đơn là 15 phút (không bị chặn bởi hết kỳ).
-- **Giá nâng hạng** (`UPGRADE`): phần chênh giá theo thời gian còn lại của kỳ hiện tại = `ceil((giá XS_MAX − giá XS của kỳ N năm) × số giây còn lại / (N × 31.536.000))`, N là số năm của đơn `PURCHASE` đã thanh toán gần nhất của kho (không có đơn mua thì N = 1); số giây còn lại không vượt tổng số giây của kỳ. Ví dụ mua XS 3 năm, còn 1,5 năm: (999.000 − 499.000) × 1/2 = 250.000 đ. Phản hồi: `years = null`, `tierAmount` = số tiền nâng hạng, `serviceExpiresAt` = hạn hiện tại (giữ nguyên), `includedBeneficiarySlots` = suất kèm của gói đích. Hạn đơn là mốc sớm hơn giữa 15 phút và hết kỳ hiện tại.
-- **Giá do backend tính:** mua mới và gia hạn = giá hạng của kỳ được chọn. Giá, dung lượng, số suất và `policyVersion` được **chốt trên đơn** lúc tạo (PAY-11).
+- **Giá gia hạn** (`RENEWAL`): giá hạng của kỳ mới (như mua mới). Ví dụ XS 3 năm = 499.000 đ. Phản hồi quote/order: `serviceStartsAt` = `AFTER_CURRENT_TERM` (còn hạn: nối tiếp, `serviceExpiresAt` là hạn hiện tại) hoặc `ON_PAYMENT` (đã hết hạn: tính từ lúc trả). Gia hạn sang gói **nhỏ hơn mức đang dùng** (dung lượng đã dùng) → 409 `PAYMENT_NOT_ALLOWED` / `USAGE_EXCEEDS_PLAN`; không tự xóa dữ liệu. Hạn đơn là 15 phút (không bị chặn bởi hết kỳ).
+- **Giá nâng hạng** (`UPGRADE`): phần chênh giá theo thời gian còn lại của kỳ hiện tại = `ceil((giá XS_MAX − giá XS của kỳ N năm) × số giây còn lại / (N × 31.536.000))`, N là số năm của đơn `PURCHASE` đã thanh toán gần nhất của kho (không có đơn mua thì N = 1); số giây còn lại không vượt tổng số giây của kỳ. Ví dụ mua XS 3 năm, còn 1,5 năm: (999.000 − 499.000) × 1/2 = 250.000 đ. Phản hồi: `years = null`, `tierAmount` = số tiền nâng hạng, `serviceExpiresAt` = hạn hiện tại (giữ nguyên). Hạn đơn là mốc sớm hơn giữa 15 phút và hết kỳ hiện tại.
+- **Giá do backend tính:** mua mới và gia hạn = giá hạng của kỳ được chọn. Giá, dung lượng và `policyVersion` được **chốt trên đơn** lúc tạo (PAY-11).
 - **Lịch sử đơn** (`GET /billing/orders`): chỉ đơn của kho mình, mặc định thứ tự theo `createdAt` (gửi `isAscending=false` để mới nhất trước). Mỗi phần tử `PaymentOrderSummaryResponse`: `id`, `kind`, `status`, `tier`, `years` (null với `UPGRADE`), `totalAmount`, `currency`, `paymentCode` (mã tham chiếu đơn), `createdAt`, `expiresAt`, `paidAt`, `cancelledAt`. **Không có** thông tin ngân hàng, mã QR hay nội dung chuyển khoản (xem một đơn đầy đủ bằng `GET /billing/orders/{orderId}`). Đơn `PENDING` đã quá hạn hiện là `EXPIRED` khi đọc lịch sử, không ghi DB. `sortBy` khác `createdAt` → 400.
 - **Một đơn chờ mỗi kho** (PAY-04): tạo lại cùng lựa chọn khi đang có đơn `PENDING` còn hạn thì trả lại đơn cũ (200); khác lựa chọn thì 409 `PAYMENT_ORDER_PENDING` kèm `orderId`. Muốn đổi thì hủy đơn cũ trước. Hai request cùng lúc vẫn chỉ ra một đơn.
 - **Hạn đơn:** mua mới và gia hạn = lúc tạo + thời gian chờ (mặc định 15 phút); nâng hạng = mốc sớm hơn giữa lúc tạo + thời gian chờ và hết kỳ hiện tại. FE tính thời gian còn lại theo `serverTime`, không theo đồng hồ máy khách.
 - **Chưa có job hết hạn đơn:** đơn `PENDING` đã quá hạn được đổi sang `EXPIRED` ngay trong lần đọc, tạo hoặc hủy tiếp theo. `GET /orders/current` trả 204 sau khi đánh dấu. Đơn không còn `PENDING` thì `qrImageUrl = null`.
-- **Mã thanh toán:** `LV` + 8 ký tự ngẫu nhiên (bỏ `0`, `O`, `1`, `I`), duy nhất toàn hệ thống; nội dung chuyển khoản phải đúng bằng mã này. Đơn không trả `ownerId`, `vaultId`, `rowVersion`. `includedBeneficiarySlots` là suất kèm theo hạng đã chốt; tổng suất của kho đọc ở `GET /vaults/me`.
+- **Mã thanh toán:** `LV` + 8 ký tự ngẫu nhiên (bỏ `0`, `O`, `1`, `I`), duy nhất toàn hệ thống; nội dung chuyển khoản phải đúng bằng mã này. Đơn không trả `ownerId`, `vaultId`, `rowVersion`.
 - **Hủy đơn:** hủy lặp vẫn 200 (trả đơn đã hủy). Đơn đã `PAID` → 409 `PAYMENT_ORDER_NOT_PAYABLE` (`reason = PAID`), đã quá hạn → `EXPIRED`.
-- **Cấp quyền** (D8): khi đơn được thanh toán, **chỉ** quyền dịch vụ của kho được ghi. Mua mới: hạng, `PAID_ACTIVE`, dung lượng, suất kèm theo, hạn = lúc trả + số năm × 365 ngày (PAY-08). Gia hạn: hạng, dung lượng và suất kèm theo của đơn, trạng thái về `PAID_ACTIVE`; hạn mới = (hạn cũ nếu đơn gia hạn sớm và hạn đó chưa qua, ngược lại lúc trả) + số năm × 365 ngày; chỉ cấp khi kỳ chưa đổi so với lúc tạo đơn (gia hạn sớm cần đúng hạn cũ; gia hạn muộn cần kho chưa có kỳ còn hạn), ngược lại `ENTITLEMENT_CHANGED`. Nâng hạng: hạng, dung lượng và suất kèm theo của gói đích; giữ nguyên hạn; chỉ cấp khi quyền vẫn là `PAID_ACTIVE` ở gói thấp hơn, đúng hạn lúc tạo đơn và kỳ chưa hết, ngược lại `ENTITLEMENT_CHANGED`. Mỗi đơn chỉ cấp một lần (trả lặp trả lại đơn `PAID`). Không đổi kế hoạch (vẫn `DRAFT` nếu đang `DRAFT`, SETUP-14), không tính là điểm danh, không gỡ chặn (PAY-09). Đơn tạo trước khi kế hoạch bị khóa, tiền tới đúng hạn vẫn được cấp (§8.3). Không cấp và trả 409 `PAYMENT_ORDER_NOT_PAYABLE` khi: đơn đã hủy (`CANCELLED`), tiền tới sau hạn đơn (`EXPIRED`), kho đã đóng (`VAULT_CLOSED`), hoặc quyền dịch vụ đã đổi so với lúc tạo đơn (`ENTITLEMENT_CHANGED`: mua mới nhưng kho không còn Free; gia hạn hoặc nâng hạng nhưng hạn đã đổi, đã hết hạn hoặc không còn `PAID_ACTIVE`).
+- **Cấp quyền** (D8): khi đơn được thanh toán, **chỉ** quyền dịch vụ của kho được ghi. Mua mới: hạng, `PAID_ACTIVE`, dung lượng, hạn = lúc trả + số năm × 365 ngày (PAY-08). Gia hạn: hạng và dung lượng của đơn, trạng thái về `PAID_ACTIVE`; hạn mới = (hạn cũ nếu đơn gia hạn sớm và hạn đó chưa qua, ngược lại lúc trả) + số năm × 365 ngày; chỉ cấp khi kỳ chưa đổi so với lúc tạo đơn (gia hạn sớm cần đúng hạn cũ; gia hạn muộn cần kho chưa có kỳ còn hạn), ngược lại `ENTITLEMENT_CHANGED`. Nâng hạng: hạng và dung lượng của gói đích; giữ nguyên hạn; chỉ cấp khi quyền vẫn là `PAID_ACTIVE` ở gói thấp hơn, đúng hạn lúc tạo đơn và kỳ chưa hết, ngược lại `ENTITLEMENT_CHANGED`. Mỗi đơn chỉ cấp một lần (trả lặp trả lại đơn `PAID`). Không đổi kế hoạch (vẫn `DRAFT` nếu đang `DRAFT`, SETUP-14), không tính là điểm danh, không gỡ chặn (PAY-09). Đơn tạo trước khi kế hoạch bị khóa, tiền tới đúng hạn vẫn được cấp (§8.3). Không cấp và trả 409 `PAYMENT_ORDER_NOT_PAYABLE` khi: đơn đã hủy (`CANCELLED`), tiền tới sau hạn đơn (`EXPIRED`), kho đã đóng (`VAULT_CLOSED`), hoặc quyền dịch vụ đã đổi so với lúc tạo đơn (`ENTITLEMENT_CHANGED`: mua mới nhưng kho không còn Free; gia hạn hoặc nâng hạng nhưng hạn đã đổi, đã hết hạn hoặc không còn `PAID_ACTIVE`).
 - **`dev-pay` (chỉ Development):** giả lập trả tiền cho đơn của kho mình, gọi đúng hàm cấp quyền mà webhook SePay sẽ dùng. Không có body. Route chỉ được đăng ký khi môi trường là Development **và** `Billing:DevPaymentEnabled = true`; ngoài ra là 404. Hai thao tác trả tiền chạy cùng lúc có thể nhận 409 `EDIT_CONFLICT`; thử lại sẽ thấy đơn `PAID`.
 - **Cấu hình** (`Billing`): `Bank.BankCode`, `Bank.AccountNumber`, `Bank.AccountName` (thông tin công khai để hiện QR; `appsettings.Development.json` dùng số tài khoản giả, tài khoản thật đặt trong user-secrets hoặc biến môi trường), `DevPaymentEnabled` (mặc định tắt), `SePay:Environment` (`Test` mặc định hoặc `Live`; giá trị khác là lỗi cấu hình) và `SePay:WebhookApiKey` (**secret**, xem dưới). Chưa cấu hình ngân hàng thì tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
-- **Bảng giá** (`Billing:Pricing`, trong `appsettings.json`): `PolicyVersion` (tối đa 16 ký tự), `Xs` và `XsMax` mỗi hạng có `OneYear`, `ThreeYears`, `FiveYears` (đồng). Đây là con số công khai, không phải secret. Dung lượng, số suất kèm theo, các mốc 1/3/5 năm, hạn đơn 15 phút và hạn eKYC 90 ngày vẫn là luật trong code. **Đổi giá:** sửa các giá trị này (hoặc ghi đè bằng biến môi trường, ví dụ `Billing__Pricing__Xs__OneYear`), đổi `PolicyVersion`, rồi khởi động lại API. Đơn đã tạo giữ giá và `policyVersion` đã chốt (PAY-11); báo giá, `GET /billing/plans` và đơn mới dùng giá mới ngay sau khi khởi động. Giá nâng hạng giữa kỳ tính theo bảng giá hiện hành. Cấu hình sai (thiếu giá, giá ≤ 0, `XsMax` rẻ hơn `Xs` cùng kỳ, `PolicyVersion` rỗng hoặc quá dài) là lỗi cấu hình máy chủ: báo giá và tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
+- **Bảng giá** (`Billing:Pricing`, trong `appsettings.json`): `PolicyVersion` (tối đa 16 ký tự), `Xs` và `XsMax` mỗi hạng có `OneYear`, `ThreeYears`, `FiveYears` (đồng). Đây là con số công khai, không phải secret. Dung lượng, các mốc 1/3/5 năm, hạn đơn 15 phút và hạn eKYC 90 ngày vẫn là luật trong code. **Đổi giá:** sửa các giá trị này (hoặc ghi đè bằng biến môi trường, ví dụ `Billing__Pricing__Xs__OneYear`), đổi `PolicyVersion`, rồi khởi động lại API. Đơn đã tạo giữ giá và `policyVersion` đã chốt (PAY-11); báo giá, `GET /billing/plans` và đơn mới dùng giá mới ngay sau khi khởi động. Giá nâng hạng giữa kỳ tính theo bảng giá hiện hành. Cấu hình sai (thiếu giá, giá ≤ 0, `XsMax` rẻ hơn `Xs` cùng kỳ, `PolicyVersion` rỗng hoặc quá dài) là lỗi cấu hình máy chủ: báo giá và tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
 - **Hết hạn dịch vụ (OPLAN-01):** job nền (`EntitlementExpiry:Enabled`, `EntitlementExpiry:PollSeconds` mặc định 300) chuyển kho `PAID_ACTIVE` đã tới hạn `serviceExpiresAt` sang `GRACE_READ_ONLY` và ghi nhật ký `SERVICE_GRACE_STARTED`. Kiểm lại điều kiện trong transaction Serializable như cấp quyền thanh toán, nên webhook gia hạn chạy cùng lúc không bị ghi đè. Ở ân hạn: chặn thao tác thêm (`VAULT_NOT_EDITABLE` / `SERVICE_READ_ONLY`), vẫn cho thao tác giảm, điểm danh và gia hạn (`RENEWAL` tính kỳ mới từ lúc trả). `serviceExpiresAt` giữ nguyên làm mốc bắt đầu ân hạn.
 - **Chưa làm:** chuyển `GRACE_READ_ONLY` → `EXPIRED_REVIEW` và tự xóa sau thời hạn lưu (chờ nhóm chốt sửa SRS OPLAN-01, OPLAN-04), kỳ chờ, nhắc hạn, job hết hạn đơn; xác thực HMAC; thao tác Admin đóng giao dịch (`RESOLVED` chưa được dùng); hoàn tiền (làm thủ công ngoài app, PAY-07).
 
@@ -1418,7 +1410,7 @@ Mỗi lượt bàn giao có **một biên bản** đi qua hai người ký theo 
 | 4 | Không dùng `ApiResponse<T>` cho API này (BE không bọc envelope) | `shared/types` |
 | 5 | Bổ sung hằng trạng thái: `LOCKED`, `DISABLED`, `OPEN`, `CLOSED`, `READY`, `REMOVED`, `PAID_ACTIVE`... (hiện `STATUS` chưa có) | `shared/constants` |
 | 6 | Gọi route có tiền tố `/v1` (base URL đã có `/api`) | các `features/*/api` |
-| 7 | Màn thanh toán đang mock contract cũ: đổi sang DTO và endpoint `/billing/*` ở mục 6.18 (hạng `XS` / `XS_MAX`, năm 1/3/5, suất thêm; không còn `RECIPIENT_PLUS`, voucher, monthly/lifetime); không gửi số tiền, chỉ hiển thị `totalAmount` từ response | `features/billing/*` |
+| 7 | Màn thanh toán đang mock contract cũ: đổi sang DTO và endpoint `/billing/*` ở mục 6.18 (hạng `XS` / `XS_MAX`, năm 1/3/5; không còn `RECIPIENT_PLUS`, voucher, monthly/lifetime); không gửi số tiền, chỉ hiển thị `totalAmount` từ response | `features/billing/*` |
 # Executor setup and activation (15/10/2026)
 
 See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.

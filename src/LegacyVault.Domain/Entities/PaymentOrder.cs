@@ -40,9 +40,6 @@ public class PaymentOrder
     /// <summary>Dung lượng chốt theo bảng giá.</summary>
     public long StorageQuotaBytes { get; set; }
 
-    /// <summary>Suất kèm theo hạng, chốt theo bảng giá.</summary>
-    public int IncludedBeneficiarySlots { get; set; }
-
     /// <summary>Nâng hạng và gia hạn sớm: hạn kỳ dịch vụ lúc tạo đơn, để lúc trả phát hiện kỳ đã đổi; PURCHASE: null.</summary>
     public DateTimeOffset? BaseServiceExpiresAt { get; set; }
 

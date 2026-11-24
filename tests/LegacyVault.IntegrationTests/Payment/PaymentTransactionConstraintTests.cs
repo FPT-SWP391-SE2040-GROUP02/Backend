@@ -54,7 +54,6 @@ public sealed class PaymentTransactionConstraintTests : IAsyncLifetime
             order.TierAmount = 199000;
             order.TotalAmount = 199000;
             order.StorageQuotaBytes = 200 * 1_048_576L;
-            order.IncludedBeneficiarySlots = 2;
             order.PolicyVersion = "2026-10";
             order.PaymentCode = paymentCode;
             order.Status = PaymentOrderStatus.Expired;

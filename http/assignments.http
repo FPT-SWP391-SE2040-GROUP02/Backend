@@ -28,7 +28,7 @@ Authorization: Bearer {{token}}
 # Hạng Free gán tài sản → 403 PAID_TIER_REQUIRED.
 # Muốn thử luồng trả phí: nâng kho lên XS trong SSMS (CHỈ DB local, không chạy trên môi trường thật):
 #    UPDATE VaultEntitlements
-#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200, IncludedBeneficiarySlots = 2,
+#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200,
 #        ServiceExpiresAt = DATEADD(DAY, 365, SYSDATETIMEOFFSET())
 #    WHERE VaultId = '<vaultId>';
 # Hoặc dùng http/plan-dev.sql.
@@ -43,7 +43,7 @@ Content-Type: application/json
 ### Điền assetId từ response trên
 @assetId = 00000000-0000-0000-0000-000000000000
 
-### Điền beneficiaryId, beneficiaryId2 từ http/beneficiaries.http (kho XS có 2 suất người nhận)
+### Điền beneficiaryId, beneficiaryId2 từ http/beneficiaries.http (kho trả phí không giới hạn số người nhận)
 @beneficiaryId = 00000000-0000-0000-0000-000000000000
 @beneficiaryId2 = 00000000-0000-0000-0000-000000000000
 
@@ -58,14 +58,14 @@ Content-Type: application/json
 
 { "beneficiaryIds": ["{{beneficiaryId}}"] }
 
-### Gán chung cho hai người nhận (đồng thừa kế). Người mới vượt suất → 409 BENEFICIARY_SLOTS_EXCEEDED
+### Gán chung cho hai người nhận (đồng thừa kế). Gán không bị giới hạn số người
 PUT {{baseUrl}}/vaults/{{vaultId}}/assets/{{assetId}}/assignments
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "beneficiaryIds": ["{{beneficiaryId}}", "{{beneficiaryId2}}"] }
 
-### Xem suất đang dùng (usedBeneficiarySlots), tổng suất và số tài sản đã gán (assignedAssetCount)
+### Xem số tài sản đã gán (assignedAssetCount)
 GET {{baseUrl}}/vaults/me
 Authorization: Bearer {{token}}
 

@@ -20,7 +20,6 @@ public static class BillingMappings
         response.TotalAmount = quote.TotalAmount;
         response.Currency = BillingPrices.Currency;
         response.StorageQuotaBytes = quote.StorageQuotaBytes;
-        response.IncludedBeneficiarySlots = quote.IncludedBeneficiarySlots;
         response.ServiceDays = quote.ServiceDays;
         if (quote.Kind == PaymentOrderKind.Purchase)
         {
@@ -94,7 +93,6 @@ public static class BillingMappings
         response.TotalAmount = order.TotalAmount;
         response.Currency = BillingPrices.Currency;
         response.StorageQuotaBytes = order.StorageQuotaBytes;
-        response.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
         response.PaymentCode = order.PaymentCode;
         response.TransferContent = order.PaymentCode;
         response.Bank.BankCode = bank.BankCode;
@@ -134,8 +132,6 @@ public static class BillingMappings
         response.Notice = NoAutoHandoverNotice;
         response.FreeFeatures = prices.FreeFeatures.ToList();
         response.Free.StorageQuotaBytes = StorageLimits.FreeQuotaBytes;
-        response.Free.IncludedBeneficiarySlots = RuntimeSettings.NonNegativeInt("Plans.Free.Slots", 0);
-        response.MaxTotalSlots = prices.MaxTotalSlotsPerAccount;
 
         foreach (PlanInfo plan in prices.Plans)
         {
@@ -148,7 +144,6 @@ public static class BillingMappings
             tierResponse.OnSale = plan.CanBuy;
             tierResponse.Hidden = plan.Hidden;
             tierResponse.StorageQuotaBytes = plan.StorageQuotaBytes;
-            tierResponse.IncludedBeneficiarySlots = plan.IncludedSlots;
             foreach (int years in prices.SaleYears)
             {
                 long amount;

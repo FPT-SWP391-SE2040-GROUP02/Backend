@@ -21,10 +21,8 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
 
     private const long BytesPerMiB = 1048576;
 
-    /// <summary>Dung lượng và suất mặc định của gói Admin tạo thêm khi chưa đặt.</summary>
+    /// <summary>Dung lượng mặc định của gói Admin tạo thêm khi chưa đặt.</summary>
     private const long CustomDefaultQuotaMb = 100;
-
-    private const int CustomDefaultSlots = 1;
 
     private static readonly int[] DefaultSaleYears = new int[] { 1, 3, 5 };
 
@@ -54,11 +52,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         get { return pricing.PolicyVersion; }
     }
 
-    public int MaxTotalSlotsPerAccount
-    {
-        get { return pricing.MaxTotalSlots ?? BillingPrices.DefaultMaxTotalSlots; }
-    }
-
     public TimeSpan OrderLifetime
     {
         get
@@ -86,22 +79,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         get { return pricing.FreeFeatures ?? new List<string>(); }
     }
 
-    /// <summary>
-    /// Gói chưa xóa có số suất kèm lớn hơn tổng người nhận tối đa mỗi tài khoản; null nếu không có. Chỉ dùng khi Admin lưu cấu hình
-    /// (chặn đặt sai); lúc chạy không ném lỗi để dữ liệu đã lưu từ trước (ví dụ gói kèm 90 suất) không làm cả bảng giá quay về mặc định.
-    /// </summary>
-    public PlanInfo? FindPlanExceedingTotalSlots()
-    {
-        foreach (PlanInfo plan in plans)
-        {
-            if (!plan.Hidden && plan.IncludedSlots > MaxTotalSlotsPerAccount)
-            {
-                return plan;
-            }
-        }
-        return null;
-    }
-
     public PlanInfo? FindPlan(string code)
     {
         string wanted = code.Trim().ToUpperInvariant();
@@ -123,16 +100,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
             return BillingPrices.GetStorageQuotaBytes(tier);
         }
         return mb.Value * BytesPerMiB;
-    }
-
-    public int GetIncludedSlots(ServiceTier tier)
-    {
-        int? slots = SectionOf(tier).IncludedSlots;
-        if (slots == null)
-        {
-            return BillingPrices.GetIncludedSlots(tier);
-        }
-        return slots.Value;
     }
 
     public long GetTierPrice(ServiceTier tier, int years)
@@ -219,12 +186,10 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         if (tier == ServiceTier.Custom)
         {
             plan.StorageQuotaBytes = (section.QuotaMb ?? CustomDefaultQuotaMb) * BytesPerMiB;
-            plan.IncludedSlots = section.IncludedSlots ?? CustomDefaultSlots;
         }
         else
         {
             plan.StorageQuotaBytes = GetStorageQuotaBytes(tier);
-            plan.IncludedSlots = GetIncludedSlots(tier);
         }
         Dictionary<int, long> prices = new Dictionary<int, long>();
         foreach (int years in saleYears)
@@ -261,11 +226,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
             throw new InvalidOperationException(
                 "Billing:Pricing:PolicyVersion là bắt buộc và tối đa " + MaxPolicyVersionLength + " ký tự.");
         }
-        if (MaxTotalSlotsPerAccount < 1 || MaxTotalSlotsPerAccount > BillingPrices.MaxTotalSlotsLimit)
-        {
-            throw new InvalidOperationException(
-                "Tổng suất người nhận tối đa mỗi tài khoản phải từ 1 đến " + BillingPrices.MaxTotalSlotsLimit + ".");
-        }
         if (OrderLifetime <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("Hạn đơn chờ thanh toán phải lớn hơn 0 phút.");
@@ -290,10 +250,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
             if (section.QuotaMb != null && section.QuotaMb.Value <= 0)
             {
                 throw new InvalidOperationException("Gói " + plan.Name + " phải có dung lượng lớn hơn 0.");
-            }
-            if (section.IncludedSlots != null && section.IncludedSlots.Value < 0)
-            {
-                throw new InvalidOperationException("Gói " + plan.Name + " không được có số suất người nhận âm.");
             }
             if (plan.Hidden)
             {

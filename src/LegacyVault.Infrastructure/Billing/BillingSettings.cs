@@ -46,9 +46,6 @@ public class BillingPricingSection
     /// <summary>Phiên bản chính sách giá, ghi vào đơn lúc tạo (PAY-11). Đổi giá thì đổi giá trị này.</summary>
     public string PolicyVersion { get; set; } = string.Empty;
 
-    /// <summary>Số suất người nhận kèm tối đa của một gói do Admin đặt; null = mức gốc trong BillingPrices.</summary>
-    public int? MaxTotalSlots { get; set; }
-
     /// <summary>Số phút đơn chờ thanh toán do Admin đặt; null = mức gốc trong BillingPrices.</summary>
     public int? OrderTimeoutMinutes { get; set; }
 
@@ -101,9 +98,6 @@ public class BillingTierPricesSection
 
     /// <summary>Dung lượng của hạng (MiB) do Admin đặt; null = dùng mức mặc định trong BillingPrices.</summary>
     public long? QuotaMb { get; set; }
-
-    /// <summary>Số suất người nhận kèm theo hạng do Admin đặt; null = dùng mức mặc định trong BillingPrices.</summary>
-    public int? IncludedSlots { get; set; }
 
     /// <summary>Giá các kỳ ngoài 1, 3, 5 năm (Admin thêm kỳ bán mới). Khóa là số năm.</summary>
     public Dictionary<int, long> Extra { get; set; } = new Dictionary<int, long>();

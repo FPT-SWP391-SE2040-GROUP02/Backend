@@ -26,7 +26,6 @@ public sealed class BillingUpgradeRulesTests
         entitlement.Status = EntitlementStatus.PaidActive;
         entitlement.ServiceExpiresAt = expiresAt;
         entitlement.StorageQuotaBytes = 200 * 1048576L;
-        entitlement.IncludedBeneficiarySlots = 2;
         return entitlement;
     }
 
@@ -97,7 +96,6 @@ public sealed class BillingUpgradeRulesTests
         Assert.Null(quote.Years);
         Assert.Null(quote.ServiceDays);
         Assert.Equal(500 * 1048576L, quote.StorageQuotaBytes);
-        Assert.Equal(5, quote.IncludedBeneficiarySlots);
         Assert.Equal(expiresAt, quote.BaseServiceExpiresAt);
     }
 
@@ -178,13 +176,12 @@ public sealed class BillingUpgradeRulesTests
         order.Kind = PaymentOrderKind.Upgrade;
         order.Tier = ServiceTier.XsMax;
         order.StorageQuotaBytes = 500 * 1048576L;
-        order.IncludedBeneficiarySlots = 5;
         order.BaseServiceExpiresAt = baseExpiresAt;
         return order;
     }
 
     [Fact]
-    public void ApplyUpgrade_ChangesTierQuotaAndIncludedSlots_KeepsExpiry()
+    public void ApplyUpgrade_ChangesTierAndQuota_KeepsExpiry()
     {
         // Chuẩn bị
         DateTimeOffset expiresAt = Now.AddDays(100);
@@ -197,7 +194,6 @@ public sealed class BillingUpgradeRulesTests
         // Kiểm tra
         Assert.Equal(ServiceTier.XsMax, entitlement.Tier);
         Assert.Equal(500 * 1048576L, entitlement.StorageQuotaBytes);
-        Assert.Equal(5, entitlement.IncludedBeneficiarySlots);
         Assert.Equal(expiresAt, entitlement.ServiceExpiresAt);
         Assert.Equal(EntitlementStatus.PaidActive, entitlement.Status);
     }

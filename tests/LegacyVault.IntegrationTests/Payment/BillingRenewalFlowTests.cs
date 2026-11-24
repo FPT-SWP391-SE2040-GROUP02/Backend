@@ -171,7 +171,6 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
         VaultEntitlement after = await LoadEntitlementAsync(vaultId);
         Assert.Equal(ServiceTier.XsMax, after.Tier);
         Assert.Equal(500 * 1048576L, after.StorageQuotaBytes);
-        Assert.Equal(5, after.IncludedBeneficiarySlots);
         Assert.Equal(EntitlementStatus.PaidActive, after.Status);
     }
 
@@ -190,47 +189,6 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
         await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         Assert.Equal(0, await BillingTestData.CountOrdersAsync(factory, vaultId, null));
         Assert.Equal(ServiceTier.Xs, (await LoadEntitlementAsync(vaultId)).Tier);
-    }
-
-    [SqlFact]
-    public async Task Renewal_ToSmallerPlanThanBeneficiariesInUse_Returns409UsageExceedsPlan()
-    {
-        // Chuẩn bị: XS Max (5 suất) đang dùng 3 suất người nhận (một tài sản gán chung cho 3 người)
-        (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
-        await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(-10));
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            await db.VaultEntitlements.Where(e => e.VaultId == vaultId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(e => e.Tier, ServiceTier.XsMax)
-                    .SetProperty(e => e.StorageQuotaBytes, 500 * 1048576L)
-                    .SetProperty(e => e.IncludedBeneficiarySlots, 5));
-        });
-        Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú thử");
-        List<Guid> beneficiaryIds = new List<Guid>();
-        string[] citizenIds = new string[] { "001090000001", "001090000002", "001090000003" };
-        for (int i = 0; i < citizenIds.Length; i++)
-        {
-            JsonElement beneficiary = await ApiTestHelpers.CreateBeneficiaryAsync(
-                client, vaultId, citizenIds[i], ApiTestHelpers.BeneficiaryName(i));
-            beneficiaryIds.Add(beneficiary.GetProperty("id").GetGuid());
-        }
-        await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assetId, beneficiaryIds.ToArray());
-
-        // Hành động: gia hạn xuống XS (2 suất kèm theo) hoặc giữ XS Max (5 suất kèm theo)
-        HttpResponseMessage tooSmall = await QuoteAsync(
-            client, new { tier = "XS", years = 1, renew = true });
-        HttpResponseMessage enough = await QuoteAsync(
-            client, new { tier = "XS_MAX", years = 1, renew = true });
-
-        // Kiểm tra: 3 suất đang dùng > 2 thì chặn; XS Max đủ 5 suất thì được
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
-            tooSmall, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
-        Assert.Equal("USAGE_EXCEEDS_PLAN", problem.GetProperty("reason").GetString());
-        Assert.Equal(HttpStatusCode.OK, enough.StatusCode);
-        JsonElement quote = await ApiTestHelpers.ReadJsonAsync(enough);
-        Assert.Equal(5, quote.GetProperty("includedBeneficiarySlots").GetInt32());
-        Assert.Equal(0, await BillingTestData.CountOrdersAsync(factory, vaultId, null));
     }
 
     [SqlFact]

@@ -131,7 +131,6 @@ public sealed class AssetAssignmentService(
                 throw new AppException(AppErrorType.Forbidden, ErrorCode.PaidTierRequired,
                     "Hạng miễn phí chưa được gán tài sản cho người nhận. Vui lòng nâng cấp dịch vụ.");
             }
-            EnsureSlotsEnough(vault, vaultAssignments, toRemove, toAdd);
         }
         else
         {
@@ -185,48 +184,6 @@ public sealed class AssetAssignmentService(
                 "Dữ liệu vừa thay đổi. Vui lòng tải lại.");
         }
         return current.ToResponses();
-    }
-
-    /// <summary>
-    /// Suất người nhận đếm theo số NGƯỜI khác nhau có dòng gán trong kho. Người đã được gán tài sản khác không tốn thêm suất;
-    /// người mới thì phải còn suất. Đã trừ những người mất dòng gán cuối cùng trong cùng thao tác.
-    /// </summary>
-    private static void EnsureSlotsEnough(
-        Vault vault, List<AssetAssignment> vaultAssignments, List<AssetAssignment> toRemove, List<Guid> toAdd)
-    {
-        HashSet<Guid> before = new HashSet<Guid>();
-        foreach (AssetAssignment assignment in vaultAssignments)
-        {
-            before.Add(assignment.BeneficiaryId);
-        }
-
-        HashSet<Guid> removedIds = new HashSet<Guid>();
-        foreach (AssetAssignment assignment in toRemove)
-        {
-            removedIds.Add(assignment.Id);
-        }
-        HashSet<Guid> after = new HashSet<Guid>();
-        foreach (AssetAssignment assignment in vaultAssignments)
-        {
-            if (!removedIds.Contains(assignment.Id))
-            {
-                after.Add(assignment.BeneficiaryId);
-            }
-        }
-        foreach (Guid beneficiaryId in toAdd)
-        {
-            after.Add(beneficiaryId);
-        }
-
-        int maxSlots = EntitlementLimits.EffectiveIncludedSlots(vault.Entitlement);
-        if (after.Count > before.Count && after.Count > maxSlots)
-        {
-            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-            extensions["usedSlots"] = before.Count;
-            extensions["maxSlots"] = maxSlots;
-            throw new AppException(AppErrorType.Conflict, ErrorCode.BeneficiarySlotsExceeded,
-                "Kho đã dùng hết suất người nhận. Vui lòng nâng lên gói nhiều suất hơn.", extensions);
-        }
     }
 
     /// <summary>Một dòng nhật ký cho thao tác gán, lưu cùng lần lưu của thao tác. Chỉ ghi id người nhận, không ghi tên hay số CCCD.</summary>

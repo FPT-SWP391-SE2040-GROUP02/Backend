@@ -76,7 +76,6 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         Assert.Equal(499000, order.GetProperty("totalAmount").GetInt64());
         Assert.Equal("VND", order.GetProperty("currency").GetString());
         Assert.Equal(200 * 1048576L, order.GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(2, order.GetProperty("includedBeneficiarySlots").GetInt32());
 
         string paymentCode = order.GetProperty("paymentCode").GetString()!;
         Assert.Matches("^LV[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$", paymentCode);

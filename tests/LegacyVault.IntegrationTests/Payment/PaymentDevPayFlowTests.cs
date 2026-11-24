@@ -107,7 +107,6 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         Assert.Equal("XS", vault.GetProperty("serviceTier").GetString());
         Assert.Equal("PAID_ACTIVE", vault.GetProperty("serviceStatus").GetString());
         Assert.Equal(200 * 1048576L, vault.GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(2, vault.GetProperty("beneficiarySlots").GetInt32());
         DateTimeOffset serviceExpiresAt = vault.GetProperty("serviceExpiresAt").GetDateTimeOffset();
         Assert.InRange(serviceExpiresAt, before.AddDays(1095).AddSeconds(-1), after.AddDays(1095).AddSeconds(1));
         Assert.Equal("DRAFT", vault.GetProperty("planStatus").GetString());

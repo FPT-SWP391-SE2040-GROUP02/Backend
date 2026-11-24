@@ -19,7 +19,6 @@ public class BillingQuoteResponse
     public string Currency { get; set; } = string.Empty;
 
     public long StorageQuotaBytes { get; set; }
-    public int IncludedBeneficiarySlots { get; set; }
 
     /// <summary>Số ngày của kỳ mới; null với nâng hạng.</summary>
     public int? ServiceDays { get; set; }

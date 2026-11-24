@@ -26,7 +26,6 @@ public sealed class BillingRenewalRulesTests
         entitlement.Status = status;
         entitlement.ServiceExpiresAt = expiresAt;
         entitlement.StorageQuotaBytes = 200 * MiB;
-        entitlement.IncludedBeneficiarySlots = 2;
         return entitlement;
     }
 
@@ -87,7 +86,6 @@ public sealed class BillingRenewalRulesTests
         Assert.Equal(499000, quote.TotalAmount);
         Assert.Equal(1095, quote.ServiceDays);
         Assert.Equal(200 * MiB, quote.StorageQuotaBytes);
-        Assert.Equal(2, quote.IncludedBeneficiarySlots);
         Assert.Equal(expiresAt, quote.BaseServiceExpiresAt);
     }
 
@@ -121,7 +119,6 @@ public sealed class BillingRenewalRulesTests
         // Kiểm tra: giá niêm yết XS Max 1 năm, 500 MiB, 5 suất kèm
         Assert.Equal(399000, quote.TotalAmount);
         Assert.Equal(500 * MiB, quote.StorageQuotaBytes);
-        Assert.Equal(5, quote.IncludedBeneficiarySlots);
     }
 
     [Theory]
@@ -158,11 +155,11 @@ public sealed class BillingRenewalRulesTests
     [Fact]
     public void EnsureUsageFits_UsageWithinPlan_IsAllowed()
     {
-        // Chuẩn bị: XS (200 MiB, 2 suất) đúng bằng mức đang dùng
+        // Chuẩn bị: XS (200 MiB) đúng bằng mức đang dùng
         BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1);
 
         // Hành động / Kiểm tra: dùng đúng bằng hạn mức vẫn được
-        BillingRules.EnsureUsageFitsRenewal(quote, 200 * MiB, 2);
+        BillingRules.EnsureUsageFitsRenewal(quote, 200 * MiB);
     }
 
     [Fact]
@@ -170,16 +167,7 @@ public sealed class BillingRenewalRulesTests
     {
         BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1);
         AppException exception = Assert.Throws<AppException>(
-            () => BillingRules.EnsureUsageFitsRenewal(quote, 200 * MiB + 1, 0));
-        AssertPaymentNotAllowed(exception, "USAGE_EXCEEDS_PLAN");
-    }
-
-    [Fact]
-    public void EnsureUsageFits_MoreBeneficiariesThanSlots_IsRejected()
-    {
-        // Chuẩn bị: XS có 2 suất, đang dùng 3
-        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1);
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.EnsureUsageFitsRenewal(quote, 0, 3));
+            () => BillingRules.EnsureUsageFitsRenewal(quote, 200 * MiB + 1));
         AssertPaymentNotAllowed(exception, "USAGE_EXCEEDS_PLAN");
     }
 
@@ -191,7 +179,6 @@ public sealed class BillingRenewalRulesTests
         order.Tier = tier;
         order.Years = years;
         order.StorageQuotaBytes = BillingPrices.GetStorageQuotaBytes(tier);
-        order.IncludedBeneficiarySlots = BillingPrices.GetIncludedSlots(tier);
         order.BaseServiceExpiresAt = baseExpiresAt;
         return order;
     }
@@ -245,7 +232,7 @@ public sealed class BillingRenewalRulesTests
     }
 
     [Fact]
-    public void ApplyRenewal_AfterExpiry_ChangesTierQuotaAndSlotsToTheOrder()
+    public void ApplyRenewal_AfterExpiry_ChangesTierAndQuotaToTheOrder()
     {
         // Chuẩn bị: kho XS đang ân hạn, gia hạn lên XS Max
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.GraceReadOnly, Now.AddDays(-10));
@@ -257,7 +244,6 @@ public sealed class BillingRenewalRulesTests
         // Kiểm tra
         Assert.Equal(ServiceTier.XsMax, entitlement.Tier);
         Assert.Equal(500 * MiB, entitlement.StorageQuotaBytes);
-        Assert.Equal(5, entitlement.IncludedBeneficiarySlots);
     }
 
     [Fact]

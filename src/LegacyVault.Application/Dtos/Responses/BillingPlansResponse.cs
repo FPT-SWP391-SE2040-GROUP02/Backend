@@ -10,15 +10,12 @@ public class BillingPlansResponse
 
     public List<BillingTierResponse> Tiers { get; set; } = new List<BillingTierResponse>();
 
-    /// <summary>Số người nhận tối đa mà một gói được kèm (Admin đặt); gói kèm nhiều hơn mức này không được lưu.</summary>
-    public int MaxTotalSlots { get; set; }
-
     public string Notice { get; set; } = string.Empty;
 
     /// <summary>Mô tả tính năng của gói Free do Admin viết; rỗng thì Client dùng mô tả mặc định.</summary>
     public List<string> FreeFeatures { get; set; } = new List<string>();
 
-    /// <summary>Dung lượng và số suất người nhận của gói Free theo cấu hình Admin hiện hành.</summary>
+    /// <summary>Dung lượng của gói Free theo cấu hình Admin hiện hành.</summary>
     public FreePlanResponse Free { get; set; } = new FreePlanResponse();
 }
 
@@ -26,8 +23,6 @@ public class BillingPlansResponse
 public class FreePlanResponse
 {
     public long StorageQuotaBytes { get; set; }
-
-    public int IncludedBeneficiarySlots { get; set; }
 }
 
 /// <summary>Một hạng bán được: "XS" hoặc "XS_MAX".</summary>
@@ -53,7 +48,6 @@ public class BillingTierResponse
     public List<string> Features { get; set; } = new List<string>();
 
     public long StorageQuotaBytes { get; set; }
-    public int IncludedBeneficiarySlots { get; set; }
     public List<BillingPriceResponse> Prices { get; set; } = new List<BillingPriceResponse>();
 }
 

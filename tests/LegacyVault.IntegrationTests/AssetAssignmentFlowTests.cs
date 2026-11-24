@@ -58,7 +58,7 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
         // Hành động
         JsonElement rows = await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assetId, a);
 
-        // Kiểm tra: một dòng gán, có trong danh sách của kho, kho đếm 1 tài sản đã gán và 1 suất, phiên bản cấu hình tăng
+        // Kiểm tra: một dòng gán, có trong danh sách của kho, kho đếm 1 tài sản đã gán, phiên bản cấu hình tăng
         Assert.Equal(1, rows.GetArrayLength());
         Assert.Equal(assetId, rows[0].GetProperty("assetId").GetGuid());
         Assert.Equal(a, rows[0].GetProperty("beneficiaryId").GetGuid());
@@ -66,7 +66,6 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
         Assert.Equal(1, list.GetArrayLength());
         JsonElement vault = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
         Assert.Equal(1, vault.GetProperty("assignedAssetCount").GetInt32());
-        Assert.Equal(1, vault.GetProperty("usedBeneficiarySlots").GetInt32());
         Assert.Equal(versionBefore + 1, await ApiTestHelpers.GetPlanConfigVersionAsync(client));
     }
 
@@ -82,13 +81,12 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
         // Hành động
         JsonElement rows = await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assetId, a, b);
 
-        // Kiểm tra: hai dòng cùng tài sản, hai suất, tài sản đếm một lần
+        // Kiểm tra: hai dòng cùng tài sản, tài sản đếm một lần
         Assert.Equal(2, rows.GetArrayLength());
         Assert.Equal(new List<Guid> { a, b }, ReadGuids(rows, "beneficiaryId"));
         Assert.Equal(2, await CountAssignmentsAsync(vaultId));
         JsonElement vault = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
         Assert.Equal(1, vault.GetProperty("assignedAssetCount").GetInt32());
-        Assert.Equal(2, vault.GetProperty("usedBeneficiarySlots").GetInt32());
     }
 
     [SqlFact]
@@ -127,29 +125,25 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task SetRecipients_ReplacesTheWholeSet_EvenWhenSlotsAreFull()
+    public async Task SetRecipients_ReplacesTheWholeSet()
     {
-        // Chuẩn bị: XS có 2 suất; hồ sơ C tạo khi kho tạm có 3 suất rồi giảm về 2, vì tạo hồ sơ cũng bị giới hạn theo suất.
-        // Tài sản đang gán cho A và B (dùng hết 2 suất).
+        // Chuẩn bị: tài sản đang gán cho A và B; hồ sơ C đã có nhưng chưa được gán.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 3);
         Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
         Guid c = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");
-        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 2);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assetId, a, b);
 
         // Hành động: đổi danh sách thành B và C (A rời đi, C vào)
         JsonElement rows = await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assetId, b, c);
 
-        // Kiểm tra: danh sách mới là B, C; A không còn chiếm suất; tổng vẫn 2 suất
+        // Kiểm tra: danh sách mới là B, C; A không còn được gán
         List<Guid> recipients = ReadGuids(rows, "beneficiaryId");
         Assert.Equal(2, recipients.Count);
         Assert.Contains(b, recipients);
         Assert.Contains(c, recipients);
         Assert.Equal(2, await CountAssignmentsAsync(vaultId));
-        Assert.Equal(2, await GetUsedSlotsAsync(client));
     }
 
     [SqlFact]
@@ -168,7 +162,6 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
         // Kiểm tra
         Assert.Equal(0, rows.GetArrayLength());
         Assert.Equal(0, await CountAssignmentsAsync(vaultId));
-        Assert.Equal(0, await GetUsedSlotsAsync(client));
     }
 
     [SqlFact]
@@ -245,47 +238,10 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Assign_ThirdDistinctBeneficiary_ExceedsSlots()
+    public async Task Assign_ThreeDistinctBeneficiaries_HasNoRecipientLimit()
     {
-        // Chuẩn bị: XS có 2 suất; A nhận 3 tài sản, B nhận 1 tài sản; tài sản thứ 4 còn trống.
-        // Hồ sơ C tạo khi kho tạm có 3 suất rồi giảm về 2, vì tạo hồ sơ cũng bị giới hạn theo suất.
+        // Chuẩn bị: gói trả phí không giới hạn số người nhận; A và B đã được gán
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 3);
-        Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
-        Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
-        Guid c = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");
-        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 2);
-        List<Guid> assets = new List<Guid>();
-        for (int i = 1; i <= 4; i++)
-        {
-            assets.Add(await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, $"Ghi chú {i}"));
-        }
-        for (int i = 1; i < 3; i++)
-        {
-            await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assets[i], a);
-        }
-        await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assets[0], a, b);
-
-        // Hành động
-        JsonElement vault = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
-        HttpResponseMessage addC = await ApiTestHelpers.AssignAssetAsync(client, vaultId, assets[3], c);
-        HttpResponseMessage addAToFourth = await ApiTestHelpers.AssignAssetAsync(client, vaultId, assets[3], a);
-
-        // Kiểm tra: A nhận nhiều tài sản chỉ chiếm một suất; người thứ ba bị chặn; người đã có suất gán thêm được
-        Assert.Equal(2, vault.GetProperty("usedBeneficiarySlots").GetInt32());
-        Assert.Equal(2, vault.GetProperty("beneficiarySlots").GetInt32());
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(addC, HttpStatusCode.Conflict, "BENEFICIARY_SLOTS_EXCEEDED");
-        Assert.Equal(2, problem.GetProperty("usedSlots").GetInt32());
-        Assert.Equal(2, problem.GetProperty("maxSlots").GetInt32());
-        Assert.Equal(HttpStatusCode.OK, addAToFourth.StatusCode);
-    }
-
-    [SqlFact]
-    public async Task Quota05_ThreeSlotsAllowThirdBeneficiary()
-    {
-        // Chuẩn bị: kho có 3 suất; A và B đã được gán
-        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 3);
         Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
         Guid c = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");
@@ -297,15 +253,13 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, addC.StatusCode);
-        JsonElement vault = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
-        Assert.Equal(3, vault.GetProperty("usedBeneficiarySlots").GetInt32());
-        Assert.Equal(3, vault.GetProperty("beneficiarySlots").GetInt32());
+        Assert.Equal(3, await CountAssignmentsAsync(vaultId));
     }
 
     [SqlFact]
-    public async Task Unassign_KeepsSlotUntilRemovedFromEveryAsset()
+    public async Task Unassign_RemovesOnlyTheGivenPair()
     {
-        // Chuẩn bị: A nhận 2 tài sản, B nhận 1 tài sản → dùng 2 suất
+        // Chuẩn bị: A nhận 2 tài sản, B nhận 1 tài sản → 3 dòng gán
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
@@ -317,16 +271,16 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
         // Hành động: gỡ A khỏi tài sản thứ nhất
         HttpResponseMessage removeOne = await ApiTestHelpers.UnassignAssetAsync(client, vaultId, first, a);
 
-        // Kiểm tra: A vẫn còn tài sản thứ hai nên vẫn chiếm suất
+        // Kiểm tra: chỉ mất đúng một dòng gán
         Assert.Equal(HttpStatusCode.OK, removeOne.StatusCode);
-        Assert.Equal(2, await GetUsedSlotsAsync(client));
+        Assert.Equal(2, await CountAssignmentsAsync(vaultId));
 
         // Hành động: gỡ A khỏi tài sản còn lại
         HttpResponseMessage removeAll = await ApiTestHelpers.UnassignAssetAsync(client, vaultId, second, a);
 
-        // Kiểm tra: A trả suất
+        // Kiểm tra: chỉ còn dòng gán của B
         Assert.Equal(HttpStatusCode.OK, removeAll.StatusCode);
-        Assert.Equal(1, await GetUsedSlotsAsync(client));
+        Assert.Equal(1, await CountAssignmentsAsync(vaultId));
     }
 
     [SqlFact]
@@ -492,11 +446,6 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
         return beneficiary.GetProperty("id").GetGuid();
     }
 
-    private static async Task<int> GetUsedSlotsAsync(HttpClient client)
-    {
-        JsonElement vault = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync("/api/v1/vaults/me"));
-        return vault.GetProperty("usedBeneficiarySlots").GetInt32();
-    }
 
     /// <summary>Số dòng AssetAssignments của kho (đọc thẳng DB).</summary>
     private async Task<int> CountAssignmentsAsync(Guid vaultId)

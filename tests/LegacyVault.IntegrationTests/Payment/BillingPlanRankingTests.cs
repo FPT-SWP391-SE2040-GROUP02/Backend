@@ -73,22 +73,6 @@ public sealed class BillingPlanRankingTests
         Assert.Equal(BillingPrices.MaxTierPrice, prices.FindPlan("XS")!.Prices[1]);
     }
 
-    [Fact]
-    public void IncludedSlotsAboveTotalCap_IsReportedForSaving_ButDoesNotBreakPricing()
-    {
-        BillingSettings settings = new BillingSettings();
-        settings.Pricing.PolicyVersion = "TEST";
-        settings.Pricing.MaxTotalSlots = 3;
-        settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
-        settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 2, ThreeYears = 2, FiveYears = 2 };
-
-        // XS Max kèm 5 suất, trần chỉ 3: lúc chạy vẫn dựng được bảng giá, lúc Admin lưu thì bị báo
-        BillingPriceSettings prices = new BillingPriceSettings(Options.Create(settings));
-
-        Assert.Equal("XS_MAX", prices.FindPlanExceedingTotalSlots()!.Code);
-        Assert.Equal(2, prices.Plans.Count);
-    }
-
     [Theory]
     [InlineData("  Gold  PLUS ", "gold plus")]
     [InlineData("GOLD", "gold")]

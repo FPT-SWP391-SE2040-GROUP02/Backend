@@ -104,33 +104,20 @@ public sealed class SystemSettingService : ISystemSettingService
             }
             else if (PlanPriceRules.IsOrderRuleKey(key))
             {
-                bool isTotal = key == PlanPriceRules.MaxTotalSlotsKey;
-                int maxValue = 1440;
-                if (isTotal)
-                {
-                    maxValue = BillingPrices.MaxTotalSlotsLimit;
-                }
                 int count;
-                if (!int.TryParse(text, out count) || count < 1 || count > maxValue)
+                if (!int.TryParse(text, out count) || count < 1 || count > 1440)
                 {
-                    string orderRuleMessage = "Hạn đơn chờ thanh toán phải là số phút nguyên từ 1 đến 1440.";
-                    if (isTotal)
-                    {
-                        orderRuleMessage = $"Số người nhận kèm tối đa mỗi gói phải là số nguyên từ 1 đến {BillingPrices.MaxTotalSlotsLimit}.";
-                    }
-                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError, orderRuleMessage);
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
+                        "Hạn đơn chờ thanh toán phải là số phút nguyên từ 1 đến 1440.");
                 }
             }
             else if (PlanPriceRules.IsLimitKey(key))
             {
                 long limit;
-                bool isQuota = key.EndsWith(".QuotaMb", StringComparison.Ordinal);
-                if (!long.TryParse(text, out limit) || limit > 1000000 || (isQuota ? limit < 1 : limit < 0))
+                if (!long.TryParse(text, out limit) || limit > 1000000 || limit < 1)
                 {
                     throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
-                        isQuota
-                            ? $"Dung lượng của '{key}' phải là số nguyên từ 1 đến 1.000.000 MiB."
-                            : $"Số suất của '{key}' phải là số nguyên từ 0 đến 1.000.000.");
+                        $"Dung lượng của '{key}' phải là số nguyên từ 1 đến 1.000.000 MiB.");
                 }
             }
             else if (key == PlanPriceRules.CatalogKey)
@@ -215,13 +202,8 @@ public sealed class SystemSettingService : ISystemSettingService
         BillingPricingSection effective = PlanPriceRules.BuildEffective(billingOptions.Value.Pricing, rows, out hasOverride);
         try
         {
-            BillingPriceSettings merged = new BillingPriceSettings(effective);
-            PlanInfo? tooMany = merged.FindPlanExceedingTotalSlots();
-            if (tooMany != null)
-            {
-                throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
-                    $"Gói {tooMany.Name} có {tooMany.IncludedSlots} suất kèm, vượt tổng người nhận tối đa mỗi tài khoản ({merged.MaxTotalSlotsPerAccount}). Hãy tăng số này hoặc giảm suất kèm của gói.");
-            }
+            // Dựng thử bảng giá sau khi ghép; giá trị sai sẽ ném InvalidOperationException.
+            _ = new BillingPriceSettings(effective);
         }
         catch (InvalidOperationException ex)
         {
@@ -508,23 +490,19 @@ public sealed class SystemSettingService : ISystemSettingService
 
             // Gói dịch vụ (Plans)
             new() { Key = "Plans.Free.QuotaMb", Value = "20", DataType = "NUMBER", Category = "Plans", Description = "Dung lượng lưu trữ gói Free (MiB)" },
-            new() { Key = "Plans.Free.Slots", Value = "0", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm theo gói Free" },
 
             new() { Key = "Plans.Xs.On", Value = "true", DataType = "BOOLEAN", Category = "Plans", Description = "Trạng thái mở bán gói XS" },
             new() { Key = "Plans.Xs.Price1Y", Value = "199000", DataType = "NUMBER", Category = "Plans", Description = "Giá gói XS kỳ 1 năm (VNĐ)" },
             new() { Key = "Plans.Xs.Price3Y", Value = "499000", DataType = "NUMBER", Category = "Plans", Description = "Giá gói XS kỳ 3 năm (VNĐ)" },
             new() { Key = "Plans.Xs.Price5Y", Value = "799000", DataType = "NUMBER", Category = "Plans", Description = "Giá gói XS kỳ 5 năm (VNĐ)" },
             new() { Key = "Plans.Xs.QuotaMb", Value = "200", DataType = "NUMBER", Category = "Plans", Description = "Dung lượng lưu trữ gói XS (MiB)" },
-            new() { Key = "Plans.Xs.Slots", Value = "2", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm theo gói XS" },
 
             new() { Key = "Plans.XsMax.On", Value = "true", DataType = "BOOLEAN", Category = "Plans", Description = "Trạng thái mở bán gói XS Max" },
             new() { Key = "Plans.XsMax.Price1Y", Value = "399000", DataType = "NUMBER", Category = "Plans", Description = "Giá gói XS Max kỳ 1 năm (VNĐ)" },
             new() { Key = "Plans.XsMax.Price3Y", Value = "999000", DataType = "NUMBER", Category = "Plans", Description = "Giá gói XS Max kỳ 3 năm (VNĐ)" },
             new() { Key = "Plans.XsMax.Price5Y", Value = "1599000", DataType = "NUMBER", Category = "Plans", Description = "Giá gói XS Max kỳ 5 năm (VNĐ)" },
             new() { Key = "Plans.XsMax.QuotaMb", Value = "500", DataType = "NUMBER", Category = "Plans", Description = "Dung lượng lưu trữ gói XS Max (MiB)" },
-            new() { Key = "Plans.XsMax.Slots", Value = "5", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm theo gói XS Max" },
 
-            new() { Key = "Plans.MaxTotalSlots", Value = "50", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm tối đa của một gói" },
             new() { Key = "Plans.OrderTimeoutMinutes", Value = "15", DataType = "NUMBER", Category = "Plans", Description = "Thời hạn đơn hàng chờ thanh toán SePay (phút)" },
 
             // Thông tin công ty hiện trong mọi thư gửi người nhận (cảnh báo lừa đảo kèm số liên lạc để họ tự xác minh)

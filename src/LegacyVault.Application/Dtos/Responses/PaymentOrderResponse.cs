@@ -28,9 +28,6 @@ public class PaymentOrderResponse
 
     public long StorageQuotaBytes { get; set; }
 
-    /// <summary>Suất người nhận kèm theo hạng, đã chốt lúc tạo đơn.</summary>
-    public int IncludedBeneficiarySlots { get; set; }
-
     public string PaymentCode { get; set; } = string.Empty;
 
     /// <summary>Nội dung chuyển khoản: đúng bằng PaymentCode.</summary>

@@ -25,12 +25,6 @@ public static class BillingPrices
     /// </summary>
     public const long MaxOrderAmount = 500_000_000;
 
-    /// <summary>Tổng số suất người nhận tối đa của một kho nếu Admin chưa đặt (mức trần của suất kèm gói).</summary>
-    public const int DefaultMaxTotalSlots = 50;
-
-    /// <summary>Mức Admin được đặt cho tổng suất người nhận mỗi kho.</summary>
-    public const int MaxTotalSlotsLimit = 1000;
-
     /// <summary>Số tiền viết theo kiểu Việt Nam (dấu chấm ngăn nghìn), không phụ thuộc ngôn ngữ máy chủ.</summary>
     public static string FormatMoney(long amount)
     {
@@ -65,20 +59,6 @@ public static class BillingPrices
         if (tier == ServiceTier.XsMax)
         {
             return 500 * MiB;
-        }
-        throw new ArgumentOutOfRangeException(nameof(tier), "Hạng không có trong bảng giá.");
-    }
-
-    /// <summary>Số suất người nhận kèm theo hạng, giữ nguyên suốt kỳ.</summary>
-    public static int GetIncludedSlots(ServiceTier tier)
-    {
-        if (tier == ServiceTier.Xs)
-        {
-            return 2;
-        }
-        if (tier == ServiceTier.XsMax)
-        {
-            return 5;
         }
         throw new ArgumentOutOfRangeException(nameof(tier), "Hạng không có trong bảng giá.");
     }

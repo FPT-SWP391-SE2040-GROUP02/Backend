@@ -135,7 +135,6 @@ public static class BillingRules
         quote.TierAmount = tierPrice;
         quote.TotalAmount = tierPrice;
         quote.StorageQuotaBytes = plan.StorageQuotaBytes;
-        quote.IncludedBeneficiarySlots = plan.IncludedSlots;
         quote.ServiceDays = years.Value * BillingPrices.DaysPerYear;
         quote.BaseServiceExpiresAt = null;
         quote.PolicyVersion = prices.PolicyVersion;
@@ -170,25 +169,20 @@ public static class BillingRules
     }
 
     /// <summary>
-    /// Gia hạn sang gói không đủ chứa dữ liệu đang dùng (dung lượng đã dùng hoặc suất người nhận đã dùng)
-    /// thì không cho tạo đơn (409 PAYMENT_NOT_ALLOWED / USAGE_EXCEEDS_PLAN); không tự xóa dữ liệu để vừa hạng.
+    /// Gia hạn sang gói không đủ chứa dung lượng đang dùng thì không cho tạo đơn
+    /// (409 PAYMENT_NOT_ALLOWED / USAGE_EXCEEDS_PLAN); không tự xóa dữ liệu để vừa hạng.
     /// </summary>
-    public static void EnsureUsageFitsRenewal(BillingQuote quote, long usedBytes, int usedBeneficiarySlots)
+    public static void EnsureUsageFitsRenewal(BillingQuote quote, long usedBytes)
     {
         if (usedBytes > quote.StorageQuotaBytes)
         {
             throw NotAllowed(PaymentNotAllowedReason.UsageExceedsPlan,
                 "Dung lượng đang dùng vượt hạn mức của hạng được chọn. Chọn hạng lớn hơn hoặc giảm dữ liệu trước.");
         }
-        if (usedBeneficiarySlots > quote.IncludedBeneficiarySlots)
-        {
-            throw NotAllowed(PaymentNotAllowedReason.UsageExceedsPlan,
-                "Số suất người nhận đang dùng vượt số suất của gói được chọn. Chọn gói nhiều suất hơn hoặc gỡ bớt người nhận trước.");
-        }
     }
 
     /// <summary>
-    /// Cấp quyền cho đơn RENEWAL: hạng, dung lượng và suất kèm theo của đơn; trạng thái về PaidActive.
+    /// Cấp quyền cho đơn RENEWAL: hạng và dung lượng của đơn; trạng thái về PaidActive.
     /// Hạn mới = (hạn cũ nếu đơn tạo lúc còn hạn và hạn đó chưa qua, ngược lại lúc trả) + số năm × 365 ngày.
     /// Chỉ cấp khi quyền chưa đổi so với lúc tạo đơn: đơn nối tiếp cần đúng hạn cũ; đơn tính từ lúc trả cần kho vẫn đang
     /// hết hạn hoặc ân hạn (chưa có kỳ mới).
@@ -236,7 +230,6 @@ public static class BillingRules
         entitlement.PlanCode = PlanCodes.Resolve(order.Tier, order.PlanCode);
         entitlement.Status = EntitlementStatus.PaidActive;
         entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
-        entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
         entitlement.ServiceExpiresAt = start.AddDays(order.Years.Value * BillingPrices.DaysPerYear);
         entitlement.UpdatedAt = paidAt;
     }
@@ -314,7 +307,6 @@ public static class BillingRules
         quote.TierAmount = price;
         quote.TotalAmount = price;
         quote.StorageQuotaBytes = target.StorageQuotaBytes;
-        quote.IncludedBeneficiarySlots = target.IncludedSlots;
         quote.ServiceDays = null;
         quote.BaseServiceExpiresAt = entitlement.ServiceExpiresAt;
         quote.PolicyVersion = prices.PolicyVersion;
@@ -361,7 +353,6 @@ public static class BillingRules
         entitlement.PlanCode = PlanCodes.Resolve(order.Tier, order.PlanCode);
         entitlement.Status = EntitlementStatus.PaidActive;
         entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
-        entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
         entitlement.ServiceExpiresAt = paidAt.AddDays(order.Years.Value * BillingPrices.DaysPerYear);
         entitlement.UpdatedAt = paidAt;
     }
@@ -388,7 +379,6 @@ public static class BillingRules
         entitlement.Tier = order.Tier;
         entitlement.PlanCode = PlanCodes.Resolve(order.Tier, order.PlanCode);
         entitlement.StorageQuotaBytes = order.StorageQuotaBytes;
-        entitlement.IncludedBeneficiarySlots = order.IncludedBeneficiarySlots;
         entitlement.UpdatedAt = paidAt;
     }
 

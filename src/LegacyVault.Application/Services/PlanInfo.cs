@@ -32,8 +32,6 @@ public sealed class PlanInfo
 
     public long StorageQuotaBytes { get; set; }
 
-    public int IncludedSlots { get; set; }
-
     /// <summary>Giá cả kỳ theo số năm, chỉ gồm các kỳ đang bán và có giá.</summary>
     public IReadOnlyDictionary<int, long> Prices { get; set; } = new Dictionary<int, long>();
 

@@ -614,32 +614,6 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task ProfileLimit_CreatingBeyondSlotsIsRejected_MoreSlotsAllowIt()
-    {
-        // Chuẩn bị: XS có 2 suất, kho đã có 2 hồ sơ chưa ở gói nào.
-        (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, LeadingZeroCitizenId, FullName);
-        await ApiTestHelpers.CreateBeneficiaryAsync(client, vaultId, SameLast4CitizenId, FullName);
-
-        // Hành động: tạo hồ sơ thứ 3 khi đã đủ suất.
-        HttpResponseMessage overLimit = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(ThirdCitizenId, FullName));
-
-        // Kiểm tra: bị chặn, không thêm dòng nào.
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(overLimit, HttpStatusCode.Conflict, "BENEFICIARY_SLOTS_EXCEEDED");
-        Assert.Equal(2, problem.GetProperty("usedSlots").GetInt32());
-        Assert.Equal(2, problem.GetProperty("maxSlots").GetInt32());
-        Assert.Equal(2, await CountBeneficiariesAsync(vaultId));
-
-        // Hành động: kho có 3 suất rồi tạo lại.
-        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 3);
-        HttpResponseMessage withMoreSlots = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(ThirdCitizenId, FullName));
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.Created, withMoreSlots.StatusCode);
-        Assert.Equal(3, await CountBeneficiariesAsync(vaultId));
-    }
-
-    [SqlFact]
     public async Task ProfileLimit_ResendingExistingPersonAtLimitReturnsExisting()
     {
         // Chuẩn bị: kho đã đủ 2 hồ sơ.

@@ -23,7 +23,6 @@ public sealed class BillingRulesTests
         if (tier == ServiceTier.Xs)
         {
             entitlement.StorageQuotaBytes = 200 * 1048576L;
-            entitlement.IncludedBeneficiarySlots = 2;
         }
         return entitlement;
     }
@@ -52,7 +51,6 @@ public sealed class BillingRulesTests
         Assert.Equal(PaymentOrderKind.Purchase, quote.Kind);
         Assert.Equal(499000, quote.TierAmount);
         Assert.Equal(499000, quote.TotalAmount);
-        Assert.Equal(2, quote.IncludedBeneficiarySlots);
         Assert.Equal(1095, quote.ServiceDays);
         Assert.Equal(200 * 1048576L, quote.StorageQuotaBytes);
     }
@@ -65,7 +63,6 @@ public sealed class BillingRulesTests
 
         // Kiểm tra
         Assert.Equal(1599000, quote.TotalAmount);
-        Assert.Equal(5, quote.IncludedBeneficiarySlots);
         Assert.Equal(1825, quote.ServiceDays);
         Assert.Equal(500 * 1048576L, quote.StorageQuotaBytes);
     }
@@ -320,7 +317,6 @@ public sealed class BillingRulesTests
         order.Tier = quote.Tier;
         order.Years = quote.Years;
         order.StorageQuotaBytes = quote.StorageQuotaBytes;
-        order.IncludedBeneficiarySlots = quote.IncludedBeneficiarySlots;
         order.Status = PaymentOrderStatus.Pending;
         return order;
     }
@@ -333,7 +329,7 @@ public sealed class BillingRulesTests
     }
 
     [Fact]
-    public void Ac90_Pay08_ApplyPurchase_SetsTierQuotaSlotsAndPeriodFromPaymentTime()
+    public void Ac90_Pay08_ApplyPurchase_SetsTierQuotaAndPeriodFromPaymentTime()
     {
         // Chuẩn bị: kho Free, đơn XS 3 năm
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Free, EntitlementStatus.Free, null);
@@ -346,13 +342,12 @@ public sealed class BillingRulesTests
         Assert.Equal(ServiceTier.Xs, entitlement.Tier);
         Assert.Equal(EntitlementStatus.PaidActive, entitlement.Status);
         Assert.Equal(200 * 1048576L, entitlement.StorageQuotaBytes);
-        Assert.Equal(2, entitlement.IncludedBeneficiarySlots);
         Assert.Equal(Now.AddDays(1095), entitlement.ServiceExpiresAt);
         Assert.Equal(Now, entitlement.UpdatedAt);
     }
 
     [Fact]
-    public void Ac94_ApplyPurchase_XsMaxFiveYears_Is500MiBFiveSlots1825Days()
+    public void Ac94_ApplyPurchase_XsMaxFiveYears_Is500MiB1825Days()
     {
         // Chuẩn bị
         VaultEntitlement entitlement = NewEntitlement(ServiceTier.Free, EntitlementStatus.Free, null);
@@ -364,7 +359,6 @@ public sealed class BillingRulesTests
         // Kiểm tra
         Assert.Equal(ServiceTier.XsMax, entitlement.Tier);
         Assert.Equal(500 * 1048576L, entitlement.StorageQuotaBytes);
-        Assert.Equal(5, entitlement.IncludedBeneficiarySlots);
         Assert.Equal(Now.AddDays(1825), entitlement.ServiceExpiresAt);
     }
 

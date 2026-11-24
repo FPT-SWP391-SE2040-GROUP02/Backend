@@ -77,7 +77,6 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
         Assert.InRange(total, 98000, 99000);
         Assert.Equal(total, quote.GetProperty("tierAmount").GetInt64());
         Assert.Equal(500 * 1048576L, quote.GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(5, quote.GetProperty("includedBeneficiarySlots").GetInt32());
         Assert.Equal(0, await BillingTestData.CountOrdersAsync(factory, vaultId, null));
     }
 
@@ -123,7 +122,6 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
         Assert.Equal(ServiceTier.XsMax, after.Tier);
         Assert.Equal(EntitlementStatus.PaidActive, after.Status);
         Assert.Equal(500 * 1048576L, after.StorageQuotaBytes);
-        Assert.Equal(5, after.IncludedBeneficiarySlots);
         Assert.Equal(before.ServiceExpiresAt, after.ServiceExpiresAt);
     }
 

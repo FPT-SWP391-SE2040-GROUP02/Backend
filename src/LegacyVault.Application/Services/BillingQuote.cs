@@ -25,8 +25,6 @@ public class BillingQuote
 
     public long StorageQuotaBytes { get; set; }
 
-    public int IncludedBeneficiarySlots { get; set; }
-
     /// <summary>Số ngày của kỳ mới (số năm × 365); null với nâng hạng vì không đổi hạn.</summary>
     public int? ServiceDays { get; set; }
 

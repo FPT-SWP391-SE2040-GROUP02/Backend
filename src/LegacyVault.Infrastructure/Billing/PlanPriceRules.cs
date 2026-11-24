@@ -12,9 +12,9 @@ namespace LegacyVault.Infrastructure.Billing;
 /// <remarks>
 /// Khóa Admin điều khiển:
 /// Plans.{Gói}.Price{N}Y (giá kỳ N năm, N từ 1 đến 10), Plans.{Gói}.On (mở bán), Plans.{Gói}.Hidden (đã xóa),
-/// Plans.{Gói}.QuotaMb (dung lượng), Plans.{Gói}.Slots (suất người nhận kèm), với {Gói} là Xs, XsMax hoặc mã gói Admin tạo;
-/// Plans.Periods (danh sách kỳ bán, JSON), Plans.Catalog (danh sách gói Admin tạo thêm, JSON), Plans.MaxTotalSlots (số suất kèm tối đa mỗi gói),
-/// Plans.OrderTimeoutMinutes (số phút đơn chờ thanh toán).
+/// Plans.{Gói}.QuotaMb (dung lượng), với {Gói} là Xs, XsMax hoặc mã gói Admin tạo;
+/// Plans.Periods (danh sách kỳ bán, JSON), Plans.Catalog (danh sách gói Admin tạo thêm, JSON),
+/// Plans.OrderTimeoutMinutes (số phút đơn chờ thanh toán). Gói không giới hạn số người nhận nên không có khóa suất.
 /// </remarks>
 public static class PlanPriceRules
 {
@@ -46,7 +46,7 @@ public static class PlanPriceRules
     private static readonly string[] ReservedSegments = new string[] { "Free", "Periods", "Catalog" };
 
     private static readonly Regex PlanKeyPattern = new Regex(
-        @"^Plans\.([A-Za-z][A-Za-z0-9_]{0,31})\.(?:Price(\d{1,2})Y|(On|Hidden|QuotaMb|Slots|Features))$",
+        @"^Plans\.([A-Za-z][A-Za-z0-9_]{0,31})\.(?:Price(\d{1,2})Y|(On|Hidden|QuotaMb|Features))$",
         RegexOptions.CultureInvariant);
 
     /// <summary>Mã gói Admin đặt: chữ hoa, số, gạch dưới, bắt đầu bằng chữ cái; không trùng mã gốc.</summary>
@@ -59,7 +59,7 @@ public static class PlanPriceRules
     {
         public string Plan { get; set; } = string.Empty;
 
-        /// <summary>Price, On, Hidden, QuotaMb hoặc Slots.</summary>
+        /// <summary>Price, On, Hidden, QuotaMb hoặc Features.</summary>
         public string Field { get; set; } = string.Empty;
 
         /// <summary>Số năm khi Field là Price.</summary>
@@ -103,11 +103,11 @@ public static class PlanPriceRules
         return parsed != null && parsed.Field == "Price";
     }
 
-    /// <summary>Khóa hạn mức của gói: dung lượng (MiB) hoặc số suất người nhận kèm theo.</summary>
+    /// <summary>Khóa hạn mức của gói: dung lượng (MiB).</summary>
     public static bool IsLimitKey(string key)
     {
         PlanKey? parsed = ParsePlanKey(key);
-        return parsed != null && (parsed.Field == "QuotaMb" || parsed.Field == "Slots");
+        return parsed != null && parsed.Field == "QuotaMb";
     }
 
     /// <summary>Khóa mô tả tính năng của một gói (kể cả Free).</summary>
@@ -169,8 +169,6 @@ public static class PlanPriceRules
 
     public const string OrderTimeoutKey = "Plans.OrderTimeoutMinutes";
 
-    public const string MaxTotalSlotsKey = "Plans.MaxTotalSlots";
-
     /// <summary>Tên hiển thị của gói gốc (đã chuẩn hóa); gói Admin tạo không được trùng.</summary>
     public static readonly string[] ReservedDisplayNames = new string[] { "free", "xs", "xs max", "xsmax", "legacy xs", "legacy xs max" };
 
@@ -180,10 +178,10 @@ public static class PlanPriceRules
         return Regex.Replace(name.Trim(), @"\s+", " ").ToLowerInvariant();
     }
 
-    /// <summary>Khóa luật chung của bảng giá: số suất kèm tối đa mỗi gói, số phút đơn chờ thanh toán.</summary>
+    /// <summary>Khóa luật chung của bảng giá: số phút đơn chờ thanh toán.</summary>
     public static bool IsOrderRuleKey(string key)
     {
-        return key == OrderTimeoutKey || key == MaxTotalSlotsKey;
+        return key == OrderTimeoutKey;
     }
 
     /// <summary>Khóa ảnh hưởng tới bảng giá, kỳ bán, danh sách gói hoặc hạn mức, nên phải kiểm tra bảng giá sau khi ghép trước khi lưu.</summary>
@@ -386,12 +384,9 @@ public static class PlanPriceRules
             if (parsed.Field == "QuotaMb")
             {
                 section.QuotaMb = amount;
+                return true;
             }
-            else
-            {
-                section.IncludedSlots = (int)amount;
-            }
-            return true;
+            return false;
         }
         if (IsOrderRuleKey(key))
         {
@@ -400,14 +395,7 @@ public static class PlanPriceRules
             {
                 return false;
             }
-            if (key == MaxTotalSlotsKey)
-            {
-                pricing.MaxTotalSlots = count;
-            }
-            else
-            {
-                pricing.OrderTimeoutMinutes = count;
-            }
+            pricing.OrderTimeoutMinutes = count;
             return true;
         }
         if (key == PeriodsKey)
@@ -446,7 +434,6 @@ public static class PlanPriceRules
         BillingPricingSection copy = new BillingPricingSection();
         copy.PolicyVersion = source.PolicyVersion;
         copy.OrderTimeoutMinutes = source.OrderTimeoutMinutes;
-        copy.MaxTotalSlots = source.MaxTotalSlots;
         CopyTier(source.Xs, copy.Xs);
         CopyTier(source.XsMax, copy.XsMax);
         copy.SaleYears = source.SaleYears == null ? null : new List<int>(source.SaleYears);
@@ -470,7 +457,6 @@ public static class PlanPriceRules
         to.ThreeYears = from.ThreeYears;
         to.FiveYears = from.FiveYears;
         to.QuotaMb = from.QuotaMb;
-        to.IncludedSlots = from.IncludedSlots;
         to.Features = from.Features == null ? null : new List<string>(from.Features);
         to.OnSale = from.OnSale;
         to.Hidden = from.Hidden;

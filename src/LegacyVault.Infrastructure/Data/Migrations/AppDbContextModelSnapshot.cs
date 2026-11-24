@@ -1593,9 +1593,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<int>("IncludedBeneficiarySlots")
-                        .HasColumnType("int");
-
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -2248,9 +2245,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("IncludedBeneficiarySlots")
-                        .HasColumnType("int");
 
                     b.Property<string>("PlanCode")
                         .HasMaxLength(32)
