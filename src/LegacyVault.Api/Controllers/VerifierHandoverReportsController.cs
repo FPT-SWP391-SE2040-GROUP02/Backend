@@ -38,7 +38,7 @@ public sealed class VerifierHandoverReportsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public Task<VerifierHandoverReportResponse> Review(
-        Guid reportId, ReviewHandoverClaimRequest request, CancellationToken ct)
+        Guid reportId, ReviewHandoverReportRequest request, CancellationToken ct)
     {
         return reportService.ReviewAsync(reportId, request, ct);
     }

@@ -8,7 +8,7 @@ public interface IHandoverReportService
 {
     /// <summary>
     /// Nộp hồ sơ. Luôn báo đã tiếp nhận dù có tìm thấy kho hay không. Lỗi: 400 dữ liệu/tệp sai, 403 email chưa xác minh
-    /// hoặc không phải tài khoản người dùng, 409 ALREADY_REPORTED, TOO_MANY_REPORTS, OWNER_CANNOT_CLAIM, NO_VERIFIER.
+    /// hoặc không phải tài khoản người dùng, 409 ALREADY_REPORTED, TOO_MANY_REPORTS, REPORT_LIMIT_REACHED, OWNER_CANNOT_CLAIM, NO_VERIFIER.
     /// </summary>
     Task<MyHandoverReportResponse> SubmitAsync(
         SubmitHandoverReportRequest request, HandoverReportUploads uploads, CancellationToken ct);
@@ -24,10 +24,11 @@ public interface IHandoverReportService
     Task<List<VerifierHandoverReportResponse>> ListForVerifierAsync(CancellationToken ct);
 
     /// <summary>
-    /// Luật sư xét: ACCEPT (tạo hoặc gắn vào biên bản, khóa kho, báo Chủ kho), REQUEST_SUPPLEMENT hoặc REJECT (kèm lý do).
+    /// Luật sư xét: ACCEPT (tạo hoặc gắn vào biên bản, khóa kho, báo Chủ kho; có cảnh báo thì
+    /// phải xác nhận đã đối chiếu giấy tờ và ghi lý do), REQUEST_SUPPLEMENT hoặc REJECT (kèm lý do).
     /// </summary>
     Task<VerifierHandoverReportResponse> ReviewAsync(
-        Guid reportId, ReviewHandoverClaimRequest request, CancellationToken ct);
+        Guid reportId, ReviewHandoverReportRequest request, CancellationToken ct);
 
     Task<PreparedDownload> PrepareVerifierFileAsync(Guid reportId, Guid fileId, CancellationToken ct);
 }

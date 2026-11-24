@@ -74,7 +74,7 @@ public static class HandoverRecordTestData
         form.Add(new StringContent(note), "note");
         ByteArrayContent file = new ByteArrayContent(SamplePdf());
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
-        form.Add(file, "files", "giay-to.pdf");
+        form.Add(file, "wills", "giay-to.pdf");
         return form;
     }
 
@@ -86,7 +86,7 @@ public static class HandoverRecordTestData
         form.Add(new StringContent(note), "note");
         ByteArrayContent file = new ByteArrayContent(SamplePdf());
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
-        form.Add(file, "files", "giay-to.pdf");
+        form.Add(file, "wills", "giay-to.pdf");
         return form;
     }
 

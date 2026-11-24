@@ -14,6 +14,7 @@ public sealed class HandoverReportConfiguration : IEntityTypeConfiguration<Hando
         builder.Property(r => r.Status).IsRequired().HasConversion<string>().HasMaxLength(32);
         builder.Property(r => r.Note).IsRequired().HasMaxLength(1000);
         builder.Property(r => r.ReviewReason).HasMaxLength(1000);
+        builder.Property(r => r.AcceptNote).HasMaxLength(1000);
         builder.Property(r => r.DataProtected).IsRequired();
         builder.Property(r => r.UpdatedAt).IsConcurrencyToken();
 

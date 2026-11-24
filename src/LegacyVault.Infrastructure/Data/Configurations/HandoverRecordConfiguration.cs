@@ -16,6 +16,8 @@ public sealed class HandoverRecordConfiguration : IEntityTypeConfiguration<Hando
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(r => r.CancelReason).HasMaxLength(1000);
+
         builder.Property(r => r.UpdatedAt)
             .IsConcurrencyToken();
 

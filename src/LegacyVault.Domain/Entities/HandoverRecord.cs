@@ -46,8 +46,14 @@ public class HandoverRecord
     /// <summary>Lúc đủ chữ ký ba bên; null khi chưa xong.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
 
-    /// <summary>Lúc Chủ kho hủy yêu cầu nhận tài sản; null khi không hủy.</summary>
+    /// <summary>Lúc Chủ kho hoặc luật sư hủy yêu cầu nhận tài sản; null khi không hủy.</summary>
     public DateTimeOffset? CancelledAt { get; set; }
+
+    /// <summary>Luật sư hủy biên bản; null khi Chủ kho tự hủy hoặc chưa hủy.</summary>
+    public Guid? CancelledByVerifierUserId { get; set; }
+
+    /// <summary>Lý do luật sư hủy; null cùng lúc với CancelledByVerifierUserId.</summary>
+    public string? CancelReason { get; set; }
 
     /// <summary>Đổi sau mỗi lần sửa; concurrency token.</summary>
     public DateTimeOffset? UpdatedAt { get; set; }

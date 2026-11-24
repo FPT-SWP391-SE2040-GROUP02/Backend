@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
@@ -19,12 +21,20 @@ namespace LegacyVault.Application.Services;
 //   2. Luật sư xét giấy tờ .......... ReviewAsync (chấp nhận thì tạo biên bản bàn giao, khóa kho, báo Chủ kho)
 //   3. Từ đây đi tiếp như biên bản thường: HandoverRecordService (thêm người nhận, lập, chốt, ký)
 /// <summary>Hồ sơ báo tin Chủ kho đã mất. Hệ thống chỉ lưu giấy tờ; luật sư xác minh ở ngoài hệ thống.</summary>
-public sealed class HandoverReportService : IHandoverReportService
+public sealed partial class HandoverReportService : IHandoverReportService
 {
     /// <summary>Số hồ sơ đang chờ xét tối đa của một tài khoản, để chống nộp hàng loạt.</summary>
     public const int MaxOpenReports = 3;
 
     public const int MaxRecipients = 20;
+
+    /// <summary>Số hồ sơ tối đa một tài khoản nộp cho cùng một người mất trong ReportLimitDays ngày.</summary>
+    public const int MaxReportsPerPerson = 3;
+
+    public const int ReportLimitDays = 30;
+
+    /// <summary>Tổng số tệp của một hồ sơ, gồm cả các lần bổ sung.</summary>
+    public const int MaxFilesPerReport = 30;
 
     private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 
@@ -37,6 +47,7 @@ public sealed class HandoverReportService : IHandoverReportService
     private readonly IHandoverRecordRepository records;
     private readonly IHandoverReportRepository reports;
     private readonly IHandoverRepository handover;
+    private readonly IRefreshTokenRepository refreshTokens;
     private readonly IBeneficiaryDataProtector beneficiaryProtector;
     private readonly IHandoverReportProtector protector;
     private readonly IAssetContentStore contentStore;
@@ -55,6 +66,7 @@ public sealed class HandoverReportService : IHandoverReportService
         IHandoverRecordRepository records,
         IHandoverReportRepository reports,
         IHandoverRepository handover,
+        IRefreshTokenRepository refreshTokens,
         IBeneficiaryDataProtector beneficiaryProtector,
         IHandoverReportProtector protector,
         IAssetContentStore contentStore,
@@ -72,6 +84,7 @@ public sealed class HandoverReportService : IHandoverReportService
         this.records = records;
         this.reports = reports;
         this.handover = handover;
+        this.refreshTokens = refreshTokens;
         this.beneficiaryProtector = beneficiaryProtector;
         this.protector = protector;
         this.contentStore = contentStore;
@@ -88,7 +101,7 @@ public sealed class HandoverReportService : IHandoverReportService
     {
         // 1. Tài khoản người dùng đã xác minh email; thông tin khai và tệp phải hợp lệ
         User user = await RequireSubmitterAsync(ct);
-        HandoverReportData data = ReadRequest(request);
+        HandoverReportData data = ReadRequest(request, RecipientRules.TodayInVietnam(timeProvider));
         string note = NormalizeNote(request.Note);
         ValidateUploads(uploads);
 
@@ -166,6 +179,10 @@ public sealed class HandoverReportService : IHandoverReportService
             throw HandoverAccess.NotAllowed("NOT_SUPPLEMENT_REQUESTED", "Luật sư chưa yêu cầu bổ sung giấy tờ cho hồ sơ này.");
         }
         HandoverRecordFileStorage.Validate(files, true);
+        if (report.Files.Count + files.Count > MaxFilesPerReport)
+        {
+            throw ValidationErrors.For("files", "Mỗi hồ sơ tối đa 30 tệp, gồm cả các lần bổ sung.");
+        }
         string cleanNote = NormalizeNote(note);
 
         // 2. Thêm tệp, quay về chờ xét
@@ -210,7 +227,7 @@ public sealed class HandoverReportService : IHandoverReportService
     }
 
     public async Task<VerifierHandoverReportResponse> ReviewAsync(
-        Guid reportId, ReviewHandoverClaimRequest request, CancellationToken ct)
+        Guid reportId, ReviewHandoverReportRequest request, CancellationToken ct)
     {
         // 1. Hồ sơ được giao cho luật sư này và chưa có kết quả cuối
         Guid userId = await RequireActiveVerifierAsync(ct);
@@ -248,8 +265,14 @@ public sealed class HandoverReportService : IHandoverReportService
         // 3. Chấp nhận: gắn vào biên bản đang mở của kho, chưa có thì tạo mới và khóa kho
         else if (decision == "ACCEPT")
         {
+            await EnsureWarningsConfirmedAsync(report, request.ConfirmDocuments, reason, ct);
             lockedVault = await AttachToRecordAsync(report, userId, now, ct);
             report.ReviewReason = null;
+            report.AcceptNote = null;
+            if (reason.Length > 0)
+            {
+                report.AcceptNote = reason;
+            }
             report.Status = HandoverClaimStatus.Accepted;
         }
         else
@@ -330,6 +353,41 @@ public sealed class HandoverReportService : IHandoverReportService
         vault.Plan.Status = PlanStatus.HandoverRequested;
         vault.Plan.UpdatedAt = now;
         return vault;
+    }
+
+    /// <summary>Hồ sơ có cảnh báo thì luật sư phải xác nhận đã đối chiếu giấy tờ và ghi lý do mới chấp nhận được.</summary>
+    private async Task EnsureWarningsConfirmedAsync(
+        HandoverReport report, bool confirmDocuments, string reason, CancellationToken ct)
+    {
+        VerifierHandoverReportResponse view = await BuildForVerifierAsync(report, ct);
+        bool hasWarning = view.VaultFound && (!view.NameMatches || view.ActiveAfterDeath);
+        if (!hasWarning)
+        {
+            return;
+        }
+        if (!confirmDocuments)
+        {
+            throw ValidationErrors.For("confirmDocuments",
+                "Hồ sơ có cảnh báo. Vui lòng xác nhận đã đối chiếu giấy chứng tử.");
+        }
+        if (reason.Length == 0)
+        {
+            throw ValidationErrors.For("reason", "Hồ sơ có cảnh báo. Vui lòng ghi lý do chấp nhận.");
+        }
+    }
+
+    /// <summary>Lần hoạt động gần nhất: đăng nhập, hoặc gia hạn phiên đang còn hiệu lực.</summary>
+    private async Task<DateTimeOffset?> FindLastActiveAsync(User owner, CancellationToken ct)
+    {
+        DateTimeOffset? last = owner.LastLoginAt;
+        foreach (RefreshToken token in await refreshTokens.FindActiveByUserAsync(owner.Id, ct))
+        {
+            if (last == null || token.CreatedAt > last.Value)
+            {
+                last = token.CreatedAt;
+            }
+        }
+        return last;
     }
 
     /// <summary>Kho có Chủ kho đã eKYC mang đúng số căn cước này; null khi không có.</summary>
@@ -414,8 +472,15 @@ public sealed class HandoverReportService : IHandoverReportService
     private async Task EnsureNotDuplicateAsync(Guid userId, string citizenId, CancellationToken ct)
     {
         int open = 0;
+        int recentForPerson = 0;
+        DateTimeOffset since = timeProvider.GetUtcNow().AddDays(-ReportLimitDays);
         foreach (HandoverReport existing in await reports.ListBySubmitterAsync(userId, ct))
         {
+            bool samePerson = string.Equals(ReadData(existing).DeceasedCitizenId, citizenId, StringComparison.Ordinal);
+            if (samePerson && existing.CreatedAt >= since)
+            {
+                recentForPerson = recentForPerson + 1;
+            }
             bool waiting = existing.Status == HandoverClaimStatus.Submitted
                 || existing.Status == HandoverClaimStatus.SupplementRequested;
             if (!waiting)
@@ -423,11 +488,16 @@ public sealed class HandoverReportService : IHandoverReportService
                 continue;
             }
             open = open + 1;
-            if (string.Equals(ReadData(existing).DeceasedCitizenId, citizenId, StringComparison.Ordinal))
+            if (samePerson)
             {
                 throw HandoverAccess.NotAllowed("ALREADY_REPORTED",
                     "Bạn đã nộp hồ sơ cho người này và luật sư đang xét.");
             }
+        }
+        if (recentForPerson >= MaxReportsPerPerson)
+        {
+            throw HandoverAccess.NotAllowed("REPORT_LIMIT_REACHED",
+                "Bạn đã nộp 3 hồ sơ cho người này trong 30 ngày. Vui lòng liên hệ luật sư hoặc thử lại sau.");
         }
         if (open >= MaxOpenReports)
         {
@@ -481,7 +551,7 @@ public sealed class HandoverReportService : IHandoverReportService
 
     // ---------------- Hàm phụ: kiểm dữ liệu ----------------
 
-    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request)
+    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request, DateOnly today)
     {
         HandoverReportData data = new HandoverReportData();
         data.DeceasedFullName = CleanText(request.DeceasedFullName);
@@ -490,9 +560,24 @@ public sealed class HandoverReportService : IHandoverReportService
             throw ValidationErrors.For("deceasedFullName", "Vui lòng nhập họ tên người mất (tối đa 200 ký tự).");
         }
         data.DeceasedCitizenId = CitizenIdRules.NormalizeCitizenId(request.DeceasedCitizenId, "deceasedCitizenId");
+        if (request.DateOfDeath == null)
+        {
+            throw ValidationErrors.For("dateOfDeath", "Vui lòng nhập ngày mất.");
+        }
+        if (request.DateOfDeath.Value > today || request.DateOfDeath.Value < EarliestDateOfDeath)
+        {
+            throw ValidationErrors.For("dateOfDeath", "Ngày mất không hợp lệ hoặc ở tương lai.");
+        }
+        data.DateOfDeath = request.DateOfDeath;
+        if (!request.Attested)
+        {
+            throw ValidationErrors.For("attested", "Vui lòng cam đoan giấy tờ là thật.");
+        }
         data.Recipients = ReadRecipients(request.Recipients);
         return data;
     }
+
+    private static readonly DateOnly EarliestDateOfDeath = new DateOnly(1900, 1, 1);
 
     private static List<SuggestedRecipient> ReadRecipients(string? json)
     {
@@ -518,6 +603,7 @@ public sealed class HandoverReportService : IHandoverReportService
         {
             throw ValidationErrors.For("recipients", "Khai tối đa 20 người nhận.");
         }
+        HashSet<string> emails = new HashSet<string>();
         foreach (SuggestedRecipient? item in items)
         {
             if (item == null)
@@ -527,7 +613,7 @@ public sealed class HandoverReportService : IHandoverReportService
             SuggestedRecipient clean = new SuggestedRecipient();
             clean.FullName = CleanText(item.FullName);
             clean.Email = CleanText(item.Email).ToLowerInvariant();
-            clean.Phone = CleanText(item.Phone);
+            clean.Phone = NormalizePhone(item.Phone);
             if (clean.FullName.Length == 0 || clean.FullName.Length > 200)
             {
                 throw ValidationErrors.For("recipients", "Mỗi người nhận cần có họ tên (tối đa 200 ký tự).");
@@ -540,14 +626,35 @@ public sealed class HandoverReportService : IHandoverReportService
             {
                 throw ValidationErrors.For("recipients", "Email của người nhận không hợp lệ.");
             }
-            if (clean.Phone.Length > 32)
+            if (clean.Email.Length > 0 && !emails.Add(clean.Email))
             {
-                throw ValidationErrors.For("recipients", "Số điện thoại tối đa 32 ký tự.");
+                throw ValidationErrors.For("recipients", "Email của người nhận bị trùng.");
+            }
+            if (clean.Phone.Length > 0 && !PhonePattern().IsMatch(clean.Phone))
+            {
+                throw ValidationErrors.For("recipients", "Số điện thoại của người nhận không hợp lệ (9 đến 15 chữ số).");
             }
             result.Add(clean);
         }
         return result;
     }
+
+    /// <summary>Bỏ khoảng trắng, dấu chấm, dấu gạch (cùng luật với người nhận của Chủ kho).</summary>
+    private static string NormalizePhone(string? phone)
+    {
+        StringBuilder builder = new StringBuilder();
+        foreach (char c in CleanText(phone))
+        {
+            if (!char.IsWhiteSpace(c) && c != '.' && c != '-')
+            {
+                builder.Append(c);
+            }
+        }
+        return builder.ToString();
+    }
+
+    [GeneratedRegex("^\\+?[0-9]{9,15}$")]
+    private static partial Regex PhonePattern();
 
     private static bool IsEmail(string email)
     {
@@ -661,6 +768,7 @@ public sealed class HandoverReportService : IHandoverReportService
         await FillAsync(response, report, data, ct);
         response.DeceasedCitizenId = data.DeceasedCitizenId;
         response.RecordId = report.RecordId;
+        response.AcceptNote = report.AcceptNote;
         User? submitter = await users.FindByIdAsync(report.SubmitterUserId, ct);
         if (submitter != null)
         {
@@ -677,18 +785,35 @@ public sealed class HandoverReportService : IHandoverReportService
             if (vault != null)
             {
                 response.VaultFound = true;
-                response.OwnerName = await FindUserNameAsync(vault.OwnerId, ct);
+                User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+                if (owner != null)
+                {
+                    response.OwnerName = owner.FullName;
+                    response.OwnerLastActiveAt = await FindLastActiveAsync(owner, ct);
+                    response.ActiveAfterDeath = IsAfterDeath(response.OwnerLastActiveAt, data.DateOfDeath);
+                }
                 OwnerIdentity? identity = await identities.FindByUserIdAsync(vault.OwnerId, ct);
                 if (identity != null)
                 {
-                    OwnerIdentityData? owner = ReadIdentity(identity);
-                    response.NameMatches = owner != null
-                        && EkycRules.NormalizeNameForCompare(owner.FullName)
+                    OwnerIdentityData? ownerData = ReadIdentity(identity);
+                    response.NameMatches = ownerData != null
+                        && EkycRules.NormalizeNameForCompare(ownerData.FullName)
                             == EkycRules.NormalizeNameForCompare(data.DeceasedFullName);
                 }
             }
         }
         return response;
+    }
+
+    /// <summary>So theo ngày ở Việt Nam; hoạt động đúng ngày mất không tính là cảnh báo.</summary>
+    private static bool IsAfterDeath(DateTimeOffset? lastActive, DateOnly? dateOfDeath)
+    {
+        if (lastActive == null || dateOfDeath == null)
+        {
+            return false;
+        }
+        DateOnly activeDay = DateOnly.FromDateTime(lastActive.Value.ToOffset(TimeSpan.FromHours(7)).DateTime);
+        return activeDay > dateOfDeath.Value;
     }
 
     private async Task FillAsync(
@@ -697,6 +822,7 @@ public sealed class HandoverReportService : IHandoverReportService
         response.Id = report.Id;
         response.DeceasedFullName = data.DeceasedFullName;
         response.Status = report.Status.ToApiString();
+        response.DateOfDeath = data.DateOfDeath;
         response.Note = report.Note;
         response.ReviewReason = report.ReviewReason;
         response.CreatedAt = report.CreatedAt;
@@ -704,7 +830,11 @@ public sealed class HandoverReportService : IHandoverReportService
         if (report.RecordId != null)
         {
             HandoverRecord? record = await records.FindByIdAsync(report.RecordId.Value, ct);
-            response.CancelledByOwner = record != null && record.Status == HandoverRecordStatus.Cancelled;
+            if (record != null && record.Status == HandoverRecordStatus.Cancelled)
+            {
+                response.CancelledByOwner = record.CancelledByVerifierUserId == null;
+                response.CancelReason = record.CancelReason;
+            }
         }
         foreach (SuggestedRecipient item in data.Recipients)
         {

@@ -106,6 +106,17 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.ReopenAsync(recordId, ct);
     }
 
+    /// <summary>Hủy biên bản đang lập kèm lý do (mở nhầm, giấy tờ sai); kho mở khóa, Chủ kho và Người thực thi được báo.</summary>
+    [HttpPost("{recordId:guid}/cancel")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverRecordResponse> Cancel(Guid recordId, CancelHandoverRecordRequest request, CancellationToken ct)
+    {
+        return recordService.CancelByVerifierAsync(recordId, request, ct);
+    }
+
     /// <summary>Luật sư ký xác minh biên bản (bước 3).</summary>
     [HttpPost("{recordId:guid}/sign")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]

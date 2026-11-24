@@ -89,6 +89,8 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         MultipartFormDataContent form = new MultipartFormDataContent();
         form.Add(new StringContent("Nguyễn Văn Mất"), "deceasedFullName");
         form.Add(new StringContent(citizenId), "deceasedCitizenId");
+        form.Add(new StringContent("2026-11-01"), "dateOfDeath");
+        form.Add(new StringContent("true"), "attested");
         form.Add(new StringContent("Tôi là con của người mất"), "note");
         if (recipients != null)
         {
@@ -113,9 +115,10 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
 
-    private static Task<HttpResponseMessage> ReviewAsync(HttpClient verifier, Guid reportId, string decision, string? reason = null)
+    private static Task<HttpResponseMessage> ReviewAsync(
+        HttpClient verifier, Guid reportId, string decision, string? reason = null, bool confirmDocuments = false)
     {
-        return verifier.PostAsJsonAsync($"{VerifierReportsUrl}/{reportId}/review", new { decision, reason });
+        return verifier.PostAsJsonAsync($"{VerifierReportsUrl}/{reportId}/review", new { decision, reason, confirmDocuments });
     }
 
     private Task<PlanStatus> ReadPlanStatusAsync(Guid vaultId)
@@ -319,6 +322,120 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         Assert.True(mine[0].GetProperty("cancelledByOwner").GetBoolean());
         // Hủy rồi thì nộp lại được
         await SubmitOkAsync(relative, OwnerCitizenId);
+    }
+
+    /// <summary>Form hợp lệ nhưng thay một trường chữ bằng giá trị khác.</summary>
+    private static MultipartFormDataContent FormWith(string name, string value)
+    {
+        MultipartFormDataContent form = new MultipartFormDataContent();
+        Dictionary<string, string> fields = new Dictionary<string, string>();
+        fields["deceasedFullName"] = "Nguyễn Văn Mất";
+        fields["deceasedCitizenId"] = OwnerCitizenId;
+        fields["dateOfDeath"] = "2026-11-01";
+        fields["attested"] = "true";
+        fields[name] = value;
+        foreach (KeyValuePair<string, string> field in fields)
+        {
+            form.Add(new StringContent(field.Value), field.Key);
+        }
+        form.Add(new ByteArrayContent(HandoverRecordTestData.SamplePdf()), "deathCertificates", "chung-tu.pdf");
+        form.Add(new ByteArrayContent(HandoverRecordTestData.SamplePdf()), "wills", "di-chuc.pdf");
+        return form;
+    }
+
+    [SqlFact]
+    public async Task Submit_ChecksDateOfDeath_Attestation_AndRecipientContacts()
+    {
+        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        HttpClient relative = await NewUserAsync();
+        string tomorrow = DateTimeOffset.UtcNow.AddDays(2).ToString("yyyy-MM-dd");
+        MultipartFormDataContent[] bad = new MultipartFormDataContent[]
+        {
+            FormWith("dateOfDeath", ""),
+            FormWith("dateOfDeath", tomorrow),
+            FormWith("dateOfDeath", "1800-01-01"),
+            FormWith("attested", "false"),
+            FormWith("recipients", "[{\"fullName\":\"A\",\"phone\":\"12ab\"}]"),
+            FormWith("recipients", "[{\"fullName\":\"A\",\"email\":\"a@x.vn\"},{\"fullName\":\"B\",\"email\":\"A@x.vn\"}]")
+        };
+        foreach (MultipartFormDataContent form in bad)
+        {
+            await ApiTestHelpers.AssertProblemAsync(
+                await relative.PostAsync(ReportsUrl, form), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        }
+        HttpResponseMessage ok = await relative.PostAsync(
+            ReportsUrl, FormWith("recipients", "[{\"fullName\":\"A\",\"phone\":\"090 123-45.67\"}]"));
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        JsonElement body = await ApiTestHelpers.ReadJsonAsync(ok);
+        Assert.Equal("0901234567", body.GetProperty("recipients")[0].GetProperty("phone").GetString());
+        Assert.Equal("2026-11-01", body.GetProperty("dateOfDeath").GetString());
+    }
+
+    [SqlFact]
+    public async Task Accept_WithWarnings_NeedsConfirmationAndReason()
+    {
+        NoRecipientVault vault = await BuildVaultAsync();
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        // Chủ kho đăng nhập sau ngày mất đã khai.
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Guid ownerId = await db.Set<Vault>().Where(v => v.Id == vault.VaultId).Select(v => v.OwnerId).SingleAsync();
+            DateTimeOffset loginAt = new DateTimeOffset(2026, 11, 5, 0, 0, 0, TimeSpan.Zero);
+            await db.Users.Where(u => u.Id == ownerId).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAt, loginAt));
+        });
+        HttpClient relative = await NewUserAsync();
+        Guid reportId = (await SubmitOkAsync(relative, OwnerCitizenId)).GetProperty("id").GetGuid();
+        JsonElement seen = (await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(VerifierReportsUrl)))[0];
+        Assert.True(seen.GetProperty("activeAfterDeath").GetBoolean());
+
+        await ApiTestHelpers.AssertProblemAsync(
+            await ReviewAsync(verifier.Client, reportId, "ACCEPT", "Đã kiểm"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        await ApiTestHelpers.AssertProblemAsync(
+            await ReviewAsync(verifier.Client, reportId, "ACCEPT", null, true), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.Equal(PlanStatus.Active, await ReadPlanStatusAsync(vault.VaultId));
+        HttpResponseMessage accepted = await ReviewAsync(verifier.Client, reportId, "ACCEPT", "Người nhà dùng máy", true);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.Equal("Người nhà dùng máy", (await ApiTestHelpers.ReadJsonAsync(accepted)).GetProperty("acceptNote").GetString());
+        // Ghi chú nội bộ không lộ cho người nộp.
+        JsonElement mine = (await ApiTestHelpers.ReadJsonAsync(await relative.GetAsync(ReportsUrl + "/mine")))[0];
+        Assert.False(mine.TryGetProperty("acceptNote", out _));
+        Assert.False(mine.TryGetProperty("ownerLastActiveAt", out _));
+    }
+
+    [SqlFact]
+    public async Task Verifier_CancelsDraftRecord_UnlocksVault_AndRepeatReportsAreLimited()
+    {
+        NoRecipientVault vault = await BuildVaultAsync();
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        HttpClient relative = await NewUserAsync();
+        Guid reportId = (await SubmitOkAsync(relative, OwnerCitizenId)).GetProperty("id").GetGuid();
+        JsonElement accepted = await ApiTestHelpers.ReadJsonAsync(await ReviewAsync(verifier.Client, reportId, "ACCEPT"));
+        string cancelUrl = HandoverRecordTestData.VerifierRecordUrl(accepted.GetProperty("recordId").GetGuid()) + "/cancel";
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await verifier.Client.PostAsJsonAsync(cancelUrl, new { reason = " " })).StatusCode);
+        VaultTestData.ExecutorClient other = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        if (other.User.Id != verifier.User.Id)
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await other.Client.PostAsJsonAsync(cancelUrl, new { reason = "x" })).StatusCode);
+        }
+        HttpResponseMessage cancelled = await verifier.Client.PostAsJsonAsync(cancelUrl, new { reason = "Mở nhầm hồ sơ" });
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+        Assert.Equal("CANCELLED", (await ApiTestHelpers.ReadJsonAsync(cancelled)).GetProperty("status").GetString());
+        Assert.Equal(PlanStatus.Active, await ReadPlanStatusAsync(vault.VaultId));
+        Assert.Equal(HttpStatusCode.Conflict, (await verifier.Client.PostAsJsonAsync(cancelUrl, new { reason = "lại" })).StatusCode);
+        JsonElement mine = (await ApiTestHelpers.ReadJsonAsync(await relative.GetAsync(ReportsUrl + "/mine")))[0];
+        Assert.False(mine.GetProperty("cancelledByOwner").GetBoolean());
+        Assert.Equal("Mở nhầm hồ sơ", mine.GetProperty("cancelReason").GetString());
+
+        // Nộp lại được, nhưng tối đa ba hồ sơ cho cùng một người trong 30 ngày.
+        for (int i = 0; i < 2; i++)
+        {
+            Guid again = (await SubmitOkAsync(relative, OwnerCitizenId)).GetProperty("id").GetGuid();
+            await ApiTestHelpers.WithDbAsync(factory, async db => await db.Set<HandoverReport>().Where(r => r.Id == again)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, HandoverClaimStatus.Rejected)));
+        }
+        await ApiTestHelpers.AssertProblemAsync(
+            await relative.PostAsync(ReportsUrl, ReportForm(OwnerCitizenId, null)), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
     }
 
     [SqlFact]

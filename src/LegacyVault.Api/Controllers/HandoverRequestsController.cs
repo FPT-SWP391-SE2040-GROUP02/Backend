@@ -40,7 +40,7 @@ public sealed class HandoverRequestsController : ControllerBase
     }
 
     /// <summary>
-    /// Gửi yêu cầu nhận tài sản kèm giấy tờ (PDF hoặc ảnh, 1 tới 10 tệp, mỗi tệp tối đa 10 MiB) và lời nhắn cho luật sư.
+    /// Gửi yêu cầu nhận tài sản kèm di chúc (bắt buộc) và giấy tờ khác (PDF hoặc ảnh, tổng tối đa 10 tệp, mỗi tệp tối đa 10 MiB) và lời nhắn cho luật sư.
     /// </summary>
     [HttpPost]
     [Consumes("multipart/form-data")]
@@ -53,10 +53,12 @@ public sealed class HandoverRequestsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     public async Task<MyHandoverClaimResponse> Submit(
-        [FromForm] string token, [FromForm] string? note, [FromForm] List<IFormFile> files, CancellationToken ct)
+        [FromForm] string token, [FromForm] string? note, [FromForm] List<IFormFile>? wills, [FromForm] List<IFormFile>? files,
+        CancellationToken ct)
     {
+        List<UploadedFile> willFiles = await UploadedFileReader.ReadAllAsync(wills, ct);
         List<UploadedFile> uploaded = await UploadedFileReader.ReadAllAsync(files, ct);
-        return await recordService.SubmitClaimAsync(token, note, uploaded, ct);
+        return await recordService.SubmitClaimAsync(token, note, willFiles, uploaded, ct);
     }
 
     /// <summary>
@@ -74,10 +76,12 @@ public sealed class HandoverRequestsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     public async Task<MyHandoverClaimResponse> SubmitByAccount(
-        [FromForm] Guid vaultId, [FromForm] string? note, [FromForm] List<IFormFile> files, CancellationToken ct)
+        [FromForm] Guid vaultId, [FromForm] string? note, [FromForm] List<IFormFile>? wills, [FromForm] List<IFormFile>? files,
+        CancellationToken ct)
     {
+        List<UploadedFile> willFiles = await UploadedFileReader.ReadAllAsync(wills, ct);
         List<UploadedFile> uploaded = await UploadedFileReader.ReadAllAsync(files, ct);
-        return await recordService.SubmitClaimByAccountAsync(vaultId, note, uploaded, ct);
+        return await recordService.SubmitClaimByAccountAsync(vaultId, note, willFiles, uploaded, ct);
     }
 
     /// <summary>

@@ -10,8 +10,14 @@ public class MyHandoverReportResponse
     /// <summary>SUBMITTED, SUPPLEMENT_REQUESTED, ACCEPTED hoặc REJECTED.</summary>
     public string Status { get; set; } = string.Empty;
 
+    /// <summary>Ngày mất do người nộp khai; null với hồ sơ cũ.</summary>
+    public DateOnly? DateOfDeath { get; set; }
+
     /// <summary>Chủ kho đã hủy biên bản sau khi hồ sơ được chấp nhận.</summary>
     public bool CancelledByOwner { get; set; }
+
+    /// <summary>Lý do luật sư hủy biên bản sau khi hồ sơ được chấp nhận; null khi không hủy.</summary>
+    public string? CancelReason { get; set; }
 
     public string Note { get; set; } = string.Empty;
 
@@ -46,6 +52,15 @@ public class VerifierHandoverReportResponse : MyHandoverReportResponse
     /// <summary>Họ tên người nộp khai khớp họ tên eKYC của Chủ kho.</summary>
     public bool NameMatches { get; set; }
 
+    /// <summary>Lần Chủ kho hoạt động gần nhất (đăng nhập hoặc gia hạn phiên); null khi không có kho.</summary>
+    public DateTimeOffset? OwnerLastActiveAt { get; set; }
+
+    /// <summary>Chủ kho còn hoạt động sau ngày mất đã khai.</summary>
+    public bool ActiveAfterDeath { get; set; }
+
+    /// <summary>Lý do luật sư đã ghi khi chấp nhận hồ sơ có cảnh báo.</summary>
+    public string? AcceptNote { get; set; }
+
     public Guid? RecordId { get; set; }
 }
 
@@ -58,9 +73,7 @@ public class SuggestedRecipientResponse
     public string Phone { get; set; } = string.Empty;
 }
 
-/// <summary>Một tệp giấy tờ: chỉ tên và kích thước, nội dung tải qua API riêng có kiểm quyền.</summary>
+/// <summary>Một tệp giấy tờ của hồ sơ báo tin (Kind là DEATH_CERTIFICATE, WILL hoặc OTHER): chỉ tên và kích thước, nội dung tải qua API riêng có kiểm quyền.</summary>
 public class HandoverReportFileResponse : HandoverRecordFileResponse
 {
-    /// <summary>DEATH_CERTIFICATE, WILL hoặc OTHER.</summary>
-    public string Kind { get; set; } = string.Empty;
 }

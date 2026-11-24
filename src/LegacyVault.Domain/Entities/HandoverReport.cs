@@ -32,9 +32,12 @@ public class HandoverReport
 
     public string? ReviewReason { get; set; }
 
+    /// <summary>Lý do luật sư vẫn chấp nhận dù có cảnh báo; chỉ luật sư xem. Null khi không có cảnh báo.</summary>
+    public string? AcceptNote { get; set; }
+
     public DateTimeOffset? ReviewedAt { get; set; }
 
-    /// <summary>Đã mã hóa: họ tên, số căn cước người mất và danh sách người nhận người nộp khai.</summary>
+    /// <summary>Đã mã hóa: họ tên, số căn cước, ngày mất của người mất và danh sách người nhận người nộp khai.</summary>
     public string DataProtected { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; set; }
