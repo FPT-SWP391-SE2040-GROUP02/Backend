@@ -172,7 +172,7 @@ public sealed class HandoverProgressServiceTests
     [Fact]
     public async Task Progress_ReturnsTimesForEachStepOfTheTurn()
     {
-        // FE vẽ 5 bước có giờ: đã mời, đồng ý, biên bản được duyệt, nhập mã mở gói, nhận xong
+        // FE vẽ 5 bước có giờ: đã mời, đồng ý, biên bản được duyệt, nhập mã nhận, nhận xong
         Beneficiary recipient = data.AddRecipient("Người Năm", "nam@example.com");
         data.AssignAll(data.AddAssets("Tài sản", 1), recipient);
         HandoverTurn turn = data.BuildTurn(recipient, HandoverTurnStatus.HandoverCommitted, "g1", Guid.NewGuid());

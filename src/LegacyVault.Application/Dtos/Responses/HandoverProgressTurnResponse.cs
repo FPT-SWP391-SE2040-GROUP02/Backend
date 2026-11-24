@@ -68,7 +68,7 @@ public class HandoverProgressTurnResponse
     /// </summary>
     public DateTimeOffset? DocumentApprovedAt { get; set; }
 
-    /// <summary>Lúc người nhận nhập đúng mã mở gói; null khi chưa nhập hoặc kho không dùng mã.</summary>
+    /// <summary>Lúc người nhận nhập đúng mã nhận; null khi chưa nhập hoặc kho không dùng mã.</summary>
     public DateTimeOffset? KeyVerifiedAt { get; set; }
 
     public DateTimeOffset ResponseDeadline { get; set; }

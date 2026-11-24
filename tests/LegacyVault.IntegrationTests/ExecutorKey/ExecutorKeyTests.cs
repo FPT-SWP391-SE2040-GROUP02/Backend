@@ -83,7 +83,7 @@ public sealed class ExecutorKeyRulesTests
     }
 }
 
-/// <summary>Mã mở gói do server tạo: Chủ kho xem trạng thái và đổi mã, Người thực thi đọc khi bàn giao bắt đầu (SQL Server thật).</summary>
+/// <summary>Mã nhận do server tạo: Chủ kho xem trạng thái và đổi mã, Người thực thi đọc khi bàn giao bắt đầu (SQL Server thật).</summary>
 public sealed class ExecutorKeyFlowTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;

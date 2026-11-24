@@ -51,7 +51,7 @@ public static class HandoverConfig
         return services;
     }
 
-    /// <summary>Thư gửi khóa mở gói: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
+    /// <summary>Thư gửi mã nhận: có cấu hình SMTP thì gửi thật, không thì chỉ ghi log.</summary>
     private static IHandoverKeySender ChooseKeySender(IServiceProvider provider)
     {
         SmtpSettings smtp = provider.GetRequiredService<IOptions<SmtpSettings>>().Value;

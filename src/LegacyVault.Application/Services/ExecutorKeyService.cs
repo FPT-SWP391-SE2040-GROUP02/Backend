@@ -63,7 +63,7 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         if (!rotated)
         {
             throw new AppException(AppErrorType.Conflict, ErrorCode.ExecutorKeyNotIssued,
-                "Kho chưa có mã mở gói nên chưa có gì để đổi.");
+                "Kho chưa có mã nhận nên chưa có gì để đổi.");
         }
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -91,13 +91,13 @@ public sealed class ExecutorKeyService : IExecutorKeyService
             Dictionary<string, object?> extensions = new Dictionary<string, object?>();
             extensions["reason"] = "HANDOVER_NOT_STARTED";
             throw new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed,
-                "Mã mở gói chỉ xem được sau khi luật sư chốt biên bản bàn giao.", extensions);
+                "Mã nhận chỉ xem được sau khi luật sư chốt biên bản bàn giao.", extensions);
         }
 
         ExecutorKeyShard? shard = await shardRepository.FindByVaultIdAsync(vault.Id, ct);
         if (shard == null)
         {
-            throw new AppException(AppErrorType.NotFound, ErrorCode.ExecutorKeyNotIssued, "Kho chưa được cấp mã mở gói.");
+            throw new AppException(AppErrorType.NotFound, ErrorCode.ExecutorKeyNotIssued, "Kho chưa được cấp mã nhận.");
         }
 
         string shardText;
@@ -115,7 +115,7 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         {
             // Mã cấp trước khi có tính năng gửi trên hệ thống (chỉ có hash) hoặc không giải mã được.
             throw new AppException(AppErrorType.Conflict, ErrorCode.ExecutorKeyNotIssued,
-                "Mã mở gói của kho này chưa đọc được trên hệ thống. Chủ kho cần đổi mã.");
+                "Mã nhận của kho này chưa đọc được trên hệ thống. Chủ kho cần đổi mã.");
         }
 
         User? owner = await userRepository.FindByIdAsync(vault.OwnerId, ct);

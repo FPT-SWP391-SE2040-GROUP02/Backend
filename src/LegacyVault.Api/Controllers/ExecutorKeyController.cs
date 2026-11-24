@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace LegacyVault.Api.Controllers;
 
-/// <summary>Mã mở gói bàn giao: server tự tạo lúc kích hoạt; Chủ kho xem trạng thái và đổi mã.</summary>
+/// <summary>Mã nhận bàn giao: server tự tạo lúc kích hoạt; Chủ kho xem trạng thái và đổi mã.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/vaults/{vaultId:guid}/executor-key")]
@@ -24,7 +24,7 @@ public sealed class ExecutorKeyController(IExecutorKeyService service) : Control
         return service.GetStatusAsync(vaultId, ct);
     }
 
-    /// <summary>Đổi mã mở gói: mã mới thay mã cũ, không trả mã gốc. Chưa có mã → 409 EXECUTOR_KEY_NOT_ISSUED.</summary>
+    /// <summary>Đổi mã nhận: mã mới thay mã cũ, không trả mã gốc. Chưa có mã → 409 EXECUTOR_KEY_NOT_ISSUED.</summary>
     [RequireVaultPin]
     [HttpPost("reissue")]
     [ProducesResponseType<ExecutorKeyStatusResponse>(StatusCodes.Status200OK)]
@@ -35,7 +35,7 @@ public sealed class ExecutorKeyController(IExecutorKeyService service) : Control
     }
 }
 
-/// <summary>Cổng Người thực thi: đọc mã mở gói bàn giao do Chủ kho gửi trực tiếp trên hệ thống.</summary>
+/// <summary>Cổng Người thực thi: đọc mã nhận bàn giao do Chủ kho gửi trực tiếp trên hệ thống.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/executor/vaults/{vaultId:guid}/handover-key")]
@@ -46,7 +46,7 @@ public sealed class ExecutorKeyController(IExecutorKeyService service) : Control
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
 public sealed class ExecutorHandoverKeyController(IExecutorKeyService service) : ControllerBase
 {
-    /// <summary>Đọc mã mở gói bàn giao; chỉ được sau khi bàn giao đã bắt đầu (HandoverInProgress), chưa tới lúc → 409.</summary>
+    /// <summary>Đọc mã nhận bàn giao; chỉ được sau khi bàn giao đã bắt đầu (HandoverInProgress), chưa tới lúc → 409.</summary>
     [HttpGet]
     [ProducesResponseType<ExecutorHandoverKeyResponse>(StatusCodes.Status200OK)]
     public Task<ExecutorHandoverKeyResponse> Get(Guid vaultId, CancellationToken ct) =>
