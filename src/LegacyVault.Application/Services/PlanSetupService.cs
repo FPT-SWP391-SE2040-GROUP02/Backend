@@ -44,7 +44,8 @@ public interface IPlanSetupService
 
     /// <summary>
     /// Admin giao hoặc đổi Người thực thi của kho (lý do bắt buộc, có nhật ký). Người được giao nhận lời mời qua email và phải
-    /// chấp nhận; người cũ (nếu kế hoạch đang chạy) giữ vai trò tới khi người mới chấp nhận. Không phải Admin → 404.
+    /// chấp nhận; người cũ (nếu kế hoạch đang chạy) giữ vai trò tới khi người mới chấp nhận. Kho đang bàn giao thì người mới
+    /// nhận việc ngay (ACCEPTED), người cũ thôi vai trò cùng giao dịch, báo thư người mới, người cũ và luật sư. Không phải Admin → 404.
     /// </summary>
     Task<ExecutorInvitationResponse> AssignByAdminAsync(Guid vaultId, AssignExecutorRequest request, CancellationToken ct);
 }
@@ -57,7 +58,8 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     TimeProvider time, IAssetRepository assets, IPlanActivatedNotifier activatedNotifier, IAuditLogRepository audit,
     ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector,
     ISigningPasswordChecker signingPasswordChecker, IEmailBounceStore bounces,
-    IWillVersionRepository willVersions) : IPlanSetupService
+    IWillVersionRepository willVersions, IHandoverRecordRepository handoverRecords,
+    IHandoverRequestNoticeSender handoverNotices) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-11-20";
     public const string ScopeVersion = "executor-2026-11-23";
@@ -167,8 +169,12 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
 
         OpaqueToken token = tokens.CreateOpaqueToken();
         bool accountExists = true;
+        bool assignedImmediately = false;
+        Guid? formerExecutorUserId = null;
         Executor executor = await unitOfWork.ExecuteSerializableAsync(async () =>
         {
+            assignedImmediately = false;
+            formerExecutorUserId = null;
             Vault vault = await vaults.FindByIdAsync(vaultId, ct)
                 ?? throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
             if (!ExecutorAssignRules.PlanAllowsAssign(vault.Status, vault.Plan.Status))
@@ -197,18 +203,28 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             }
 
             DateTimeOffset now = time.GetUtcNow();
+            bool duringHandover = ExecutorAssignRules.IsHandoverUnderway(vault.Plan.Status);
             bool hadAccepted = false;
             foreach (Executor existingExecutor in vault.Executors)
             {
                 if (existingExecutor.Status == ExecutorStatus.Accepted)
                 {
                     hadAccepted = true;
+                    if (existingExecutor.UserId == target.Id && duringHandover)
+                    {
+                        throw NotAllowed("ALREADY_EXECUTOR");
+                    }
+                    if (existingExecutor.UserId != null)
+                    {
+                        formerExecutorUserId = existingExecutor.UserId;
+                    }
                 }
             }
             Guid? replaces = ExecutorAssignRules.PrepareForAssign(vault.Executors, vault.Plan.Status, now);
-            if (hadAccepted && replaces == null)
+            if (hadAccepted && replaces == null && !duringHandover)
             {
                 // Người đã chấp nhận bị thu hồi ngay (kế hoạch chưa chạy): đổi mã nếu kho đã có mã, để người cũ không còn mã đúng.
+                // Đang bàn giao thì KHÔNG đổi mã: mã có thể đã gửi cho người nhận; người cũ mất quyền đọc mã trên hệ thống ngay.
                 await keyIssuer.RotateIfExistsAsync(vault, AuditActorRole.System, null, now, ct);
             }
             Executor item = new Executor
@@ -218,6 +234,17 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 InvitedAt = now, ExpiresAt = now.AddDays(RuntimeSettings.Int("Executor.InvitationExpiresDays", 7)),
                 ReplacesExecutorId = replaces,
             };
+            if (duringHandover)
+            {
+                // Đang bàn giao: người mới nhận việc ngay (không chờ chấp nhận) để ký, gửi mã nhận, ký phiếu giao nhận.
+                // Chữ ký Người thực thi người cũ đã ký trên bản hiện tại vẫn giữ hiệu lực.
+                item.Status = ExecutorStatus.Accepted;
+                item.UserId = target.Id;
+                item.AcceptedAt = now;
+                item.AcceptedScopeVersion = ScopeVersion;
+                item.UpdatedAt = now;
+                assignedImmediately = true;
+            }
             invitations.Add(item);
             PlanRules.BumpConfigVersion(vault.Plan, now);
             audit.Add(AuditRules.Create(vault.Id, adminId, AuditActorRole.Admin, AuditAction.ExecutorAssignedByAdmin,
@@ -225,8 +252,69 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             await unitOfWork.SaveChangesAsync(ct);
             return item;
         }, ct);
+        if (assignedImmediately)
+        {
+            // Đang bàn giao: không có lời mời; báo người mới, người cũ và luật sư của biên bản sau khi lưu.
+            await NotifyExecutorChangedAsync(executor, formerExecutorUserId, ct);
+            return Map(executor);
+        }
         // Thư do quản trị viên giao, lời thư không nói "Chủ kho mời".
         return await DeliverAsync(executor, token.Value, accountExists, ct, assignedByAdmin: true);
+    }
+
+    /// <summary>
+    /// Báo đổi Người thực thi khi đang bàn giao: người mới (nhận việc ngay), người cũ (thôi vai trò) và luật sư của biên bản
+    /// đang mở. Thư lỗi thì bỏ qua: việc đổi người đã lưu.
+    /// </summary>
+    private async Task NotifyExecutorChangedAsync(Executor executor, Guid? formerExecutorUserId, CancellationToken ct)
+    {
+        Vault? vault = await vaults.FindByIdAsync(executor.VaultId, ct);
+        if (vault == null)
+        {
+            return;
+        }
+        User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+        string ownerName = string.Empty;
+        if (owner != null)
+        {
+            ownerName = owner.FullName;
+        }
+        List<(Guid UserId, string Audience)> targets = new List<(Guid UserId, string Audience)>();
+        if (executor.UserId != null)
+        {
+            targets.Add((executor.UserId.Value, HandoverRequestNotice.Executor));
+        }
+        if (formerExecutorUserId != null)
+        {
+            targets.Add((formerExecutorUserId.Value, HandoverRequestNotice.FormerExecutor));
+        }
+        HandoverRecord? record = await handoverRecords.FindByVaultIdAsync(vault.Id, ct);
+        if (record != null)
+        {
+            targets.Add((record.VerifierUserId, HandoverRequestNotice.Verifier));
+        }
+        foreach ((Guid userId, string audience) in targets)
+        {
+            try
+            {
+                User? target = await users.FindByIdAsync(userId, ct);
+                if (target == null || string.IsNullOrWhiteSpace(target.Email))
+                {
+                    continue;
+                }
+                HandoverRequestNotice notice = new HandoverRequestNotice();
+                notice.ToEmail = target.Email;
+                notice.FullName = target.FullName;
+                notice.Audience = audience;
+                notice.Stage = HandoverRequestNotice.StageExecutorChanged;
+                notice.OwnerName = ownerName;
+                await handoverNotices.SendAsync(notice, ct);
+            }
+            catch (Exception) when (!ct.IsCancellationRequested)
+            {
+                // Không ném lại: Người thực thi đã đổi; một thư lỗi không chặn các thư còn lại.
+            }
+        }
     }
 
     public async Task<ExecutorInvitationResponse> ResendAsync(Guid vaultId, Guid executorId, ResendExecutorRequest request, CancellationToken ct)

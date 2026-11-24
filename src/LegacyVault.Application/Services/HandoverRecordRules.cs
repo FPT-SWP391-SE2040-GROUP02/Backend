@@ -88,6 +88,64 @@ public static class HandoverRecordRules
         return record.Status == HandoverRecordStatus.Signing || record.Status == HandoverRecordStatus.IdentityCheck;
     }
 
+    /// <summary>Khoảng cách tối thiểu giữa hai lần luật sư nhắc Người thực thi ký (giờ).</summary>
+    public const int ExecutorReminderIntervalHours = 24;
+
+    /// <summary>
+    /// Lúc luật sư được nhắc Người thực thi lại: lần nhắc trước + 24 giờ. Null khi chưa nhắc lần nào (nhắc được ngay).
+    /// </summary>
+    public static DateTimeOffset? ExecutorRemindAvailableAt(HandoverRecord record)
+    {
+        if (record.ExecutorReminderSentAt == null)
+        {
+            return null;
+        }
+        return record.ExecutorReminderSentAt.Value.AddHours(ExecutorReminderIntervalHours);
+    }
+
+    /// <summary>
+    /// Luật sư nhắc được Người thực thi lúc now chưa: chưa nhắc lần nào, hoặc lần nhắc trước đã quá 24 giờ.
+    /// Hàm này chỉ xét thời gian; trạng thái biên bản và chữ ký do người gọi kiểm trước.
+    /// </summary>
+    public static bool CanRemindExecutor(HandoverRecord record, DateTimeOffset now)
+    {
+        DateTimeOffset? availableAt = ExecutorRemindAvailableAt(record);
+        if (availableAt == null)
+        {
+            return true;
+        }
+        return now >= availableAt.Value;
+    }
+
+    /// <summary>
+    /// Biên bản đã chốt, chưa hoàn tất và chỉ còn thiếu chữ ký luật sư để mở quyền tải: Người thực thi đã ký, ít nhất một
+    /// người nhận trong biên bản đã ký, luật sư chưa ký (đều tính theo bản hiện tại).
+    /// </summary>
+    public static bool OnlyVerifierSignatureMissing(HandoverRecord record)
+    {
+        if (!IsOpenForSigning(record))
+        {
+            return false;
+        }
+        if (FindSignature(record, HandoverSignerRole.Verifier, null) != null)
+        {
+            return false;
+        }
+        if (FindSignature(record, HandoverSignerRole.Executor, null) == null)
+        {
+            return false;
+        }
+        Dictionary<Guid, List<Guid>> recipients = GroupAssetsByRecipient(record.Lines);
+        foreach (Guid beneficiaryId in recipients.Keys)
+        {
+            if (FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId) != null)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>Đủ chữ ký ba bên của bản hiện tại: luật sư, Người thực thi và từng người nhận trong biên bản.</summary>
     public static bool AllSigned(HandoverRecord record)
     {
@@ -164,6 +222,216 @@ public static class HandoverRecordRules
             return "Chưa có yêu cầu nhận tài sản nào được chấp nhận.";
         }
         return null;
+    }
+
+    /// <summary>
+    /// So dòng biên bản với cách chia ban đầu của Chủ kho (mỗi cặp người nhận - tài sản). Trả các khác biệt theo thứ tự:
+    /// người nhận được thêm, người nhận bị bỏ, rồi tài sản đổi người nhận (thêm/bớt người cùng nhận). Rỗng khi giống hệt.
+    /// Người gọi bỏ trước các dòng gán trỏ tới tài sản đã bị xóa nội dung (biên bản không ghi được tài sản đó).
+    /// </summary>
+    public static List<HandoverSplitDifference> FindSplitDifferences(
+        List<(Guid BeneficiaryId, Guid AssetId)> recordLines, List<(Guid BeneficiaryId, Guid AssetId)> ownerLines)
+    {
+        Dictionary<Guid, List<Guid>> recordByAsset = GroupRecipientsByAsset(recordLines);
+        Dictionary<Guid, List<Guid>> ownerByAsset = GroupRecipientsByAsset(ownerLines);
+        List<Guid> recordRecipients = DistinctRecipients(recordLines);
+        List<Guid> ownerRecipients = DistinctRecipients(ownerLines);
+        List<HandoverSplitDifference> result = new List<HandoverSplitDifference>();
+
+        // 1. Người nhận có trong biên bản mà Chủ kho không chia cho
+        foreach (Guid beneficiaryId in recordRecipients)
+        {
+            if (!ownerRecipients.Contains(beneficiaryId))
+            {
+                HandoverSplitDifference added = new HandoverSplitDifference();
+                added.Kind = HandoverSplitDifference.RecipientAdded;
+                added.BeneficiaryId = beneficiaryId;
+                result.Add(added);
+            }
+        }
+
+        // 2. Người nhận Chủ kho đã chia mà biên bản bỏ ra
+        foreach (Guid beneficiaryId in ownerRecipients)
+        {
+            if (!recordRecipients.Contains(beneficiaryId))
+            {
+                HandoverSplitDifference removed = new HandoverSplitDifference();
+                removed.Kind = HandoverSplitDifference.RecipientRemoved;
+                removed.BeneficiaryId = beneficiaryId;
+                result.Add(removed);
+            }
+        }
+
+        // 3. Tài sản có nhóm người nhận khác nhau (theo thứ tự tài sản của Chủ kho rồi tới tài sản chỉ có trong biên bản)
+        List<Guid> assetIds = new List<Guid>(ownerByAsset.Keys);
+        foreach (Guid assetId in recordByAsset.Keys)
+        {
+            if (!assetIds.Contains(assetId))
+            {
+                assetIds.Add(assetId);
+            }
+        }
+        foreach (Guid assetId in assetIds)
+        {
+            List<Guid> ownerSet = new List<Guid>();
+            if (ownerByAsset.ContainsKey(assetId))
+            {
+                ownerSet = ownerByAsset[assetId];
+            }
+            List<Guid> recordSet = new List<Guid>();
+            if (recordByAsset.ContainsKey(assetId))
+            {
+                recordSet = recordByAsset[assetId];
+            }
+            if (SameMembers(ownerSet, recordSet))
+            {
+                continue;
+            }
+            HandoverSplitDifference changed = new HandoverSplitDifference();
+            changed.Kind = HandoverSplitDifference.AssetRecipientsChanged;
+            changed.AssetId = assetId;
+            changed.OwnerBeneficiaryIds = new List<Guid>(ownerSet);
+            changed.RecordBeneficiaryIds = new List<Guid>(recordSet);
+            result.Add(changed);
+        }
+        return result;
+    }
+
+    private static Dictionary<Guid, List<Guid>> GroupRecipientsByAsset(List<(Guid BeneficiaryId, Guid AssetId)> lines)
+    {
+        Dictionary<Guid, List<Guid>> result = new Dictionary<Guid, List<Guid>>();
+        foreach ((Guid beneficiaryId, Guid assetId) in lines)
+        {
+            if (!result.ContainsKey(assetId))
+            {
+                result[assetId] = new List<Guid>();
+            }
+            if (!result[assetId].Contains(beneficiaryId))
+            {
+                result[assetId].Add(beneficiaryId);
+            }
+        }
+        return result;
+    }
+
+    private static List<Guid> DistinctRecipients(List<(Guid BeneficiaryId, Guid AssetId)> lines)
+    {
+        List<Guid> result = new List<Guid>();
+        foreach ((Guid beneficiaryId, Guid _) in lines)
+        {
+            if (!result.Contains(beneficiaryId))
+            {
+                result.Add(beneficiaryId);
+            }
+        }
+        return result;
+    }
+
+    private static bool SameMembers(List<Guid> first, List<Guid> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+        foreach (Guid item in first)
+        {
+            if (!second.Contains(item))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Lý do ghi vào biên bản khi hệ thống tự đóng vì mọi yêu cầu, hồ sơ đều bị luật sư từ chối.</summary>
+    public const string AllRejectedReason = "Mọi yêu cầu bị từ chối";
+
+    /// <summary>
+    /// Kho đã khóa cho bàn giao chưa: khóa từ lúc luật sư chấp nhận giấy tờ đầu tiên (HandoverRequested), qua lúc chốt
+    /// biên bản (HandoverInProgress) tới khi đóng (Closed). Có biên bản đang lập chưa chắc đã khóa: người nhận gửi yêu cầu
+    /// chỉ tạo biên bản, Chủ kho vẫn sửa được kho cho tới khi luật sư chấp nhận.
+    /// </summary>
+    public static bool IsVaultLocked(PlanStatus planStatus)
+    {
+        if (planStatus == PlanStatus.HandoverRequested
+            || planStatus == PlanStatus.HandoverInProgress
+            || planStatus == PlanStatus.Closed)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Luật sư chấp nhận một yêu cầu hoặc hồ sơ báo tin: kế hoạch đang hoạt động thì khóa kho (HandoverRequested).
+    /// Trả true khi lần này vừa khóa (người gọi báo Chủ kho và Người thực thi); kho đã khóa từ trước thì trả false.
+    /// </summary>
+    public static bool LockVaultOnAccept(HandoverPlan plan, DateTimeOffset now)
+    {
+        if (plan.Status != PlanStatus.Active)
+        {
+            return false;
+        }
+        plan.Status = PlanStatus.HandoverRequested;
+        plan.UpdatedAt = now;
+        return true;
+    }
+
+    /// <summary>
+    /// Biên bản đang lập mà kho chưa khóa (chưa chấp nhận giấy tờ nào), mọi yêu cầu đã bị từ chối và không còn hồ sơ báo tin
+    /// nào của kho chờ xét: biên bản không còn ai để giao, phải đóng để lần gửi sau tạo biên bản mới.
+    /// </summary>
+    public static bool ShouldCloseAfterAllRejected(HandoverRecord record, PlanStatus planStatus, int pendingReportCount)
+    {
+        if (record.Status != HandoverRecordStatus.Drafting)
+        {
+            return false;
+        }
+        if (IsVaultLocked(planStatus))
+        {
+            return false;
+        }
+        if (pendingReportCount > 0)
+        {
+            return false;
+        }
+        foreach (HandoverClaim claim in record.Claims)
+        {
+            if (claim.Status != HandoverClaimStatus.Rejected)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Đóng biên bản chưa khóa kho vì mọi yêu cầu bị từ chối (chưa có lượt nào vì chưa chốt). Chưa lưu.</summary>
+    public static void CloseAfterAllRejected(HandoverRecord record, DateTimeOffset now)
+    {
+        record.Status = HandoverRecordStatus.Cancelled;
+        record.CancelledAt = now;
+        record.CancelReason = AllRejectedReason;
+        record.UpdatedAt = now;
+    }
+
+    /// <summary>Người nhận có trong biên bản (đã gửi yêu cầu hoặc được ghi tài sản) không.</summary>
+    public static bool HasRecipient(HandoverRecord record, Guid beneficiaryId)
+    {
+        foreach (HandoverClaim claim in record.Claims)
+        {
+            if (claim.BeneficiaryId == beneficiaryId)
+            {
+                return true;
+            }
+        }
+        foreach (HandoverRecordLine line in record.Lines)
+        {
+            if (line.BeneficiaryId == beneficiaryId)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>Link riêng gửi yêu cầu nhận tài sản: chuỗi ngẫu nhiên 32 byte (base64url) và băm SHA-256 để lưu DB.</summary>

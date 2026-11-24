@@ -57,6 +57,19 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.UseOwnerSplitAsync(recordId, ct);
     }
 
+    /// <summary>
+    /// Nhắc Người thực thi ký biên bản đã chốt (gửi thư). Mỗi biên bản nhắc một lần mỗi 24 giờ; 409 kèm
+    /// <c>reason</c> (WRONG_STATE, EXECUTOR_ALREADY_SIGNED, NO_EXECUTOR, REMINDED_RECENTLY và <c>remindAvailableAt</c>).
+    /// </summary>
+    [HttpPost("{recordId:guid}/remind-executor")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverRecordResponse> RemindExecutor(Guid recordId, CancellationToken ct)
+    {
+        return recordService.RemindExecutorAsync(recordId, ct);
+    }
+
     /// <summary>Thay toàn bộ danh sách "ai nhận tài sản nào". Chỉ khi biên bản đang lập.</summary>
     [HttpPut("{recordId:guid}/lines")]
     [Consumes("application/json")]

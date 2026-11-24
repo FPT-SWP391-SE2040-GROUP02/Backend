@@ -171,9 +171,10 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         JsonElement pendingRow = (await ReadAvailableAsync(first))[0];
         Assert.Equal("REQUEST_PENDING", pendingRow.GetProperty("status").GetString());
         Assert.Equal(claimId, pendingRow.GetProperty("claimId").GetGuid());
+        // Gửi yêu cầu chưa khóa kho: chỉ khóa khi luật sư chấp nhận giấy tờ.
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
-            Assert.Equal(PlanStatus.HandoverRequested, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
+            Assert.Equal(PlanStatus.Active, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
         });
 
         // Hành động: người thứ hai xác minh email; luật sư yêu cầu người đầu bổ sung
@@ -214,7 +215,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Request_CreatesOneRecordLocksVaultAndAssignsAVerifier()
+    public async Task Request_CreatesOneRecordAndAssignsAVerifier_WithoutLockingTheVault()
     {
         Vault2 vault = await BuildVaultAsync();
         VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
@@ -250,17 +251,18 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
             HandoverRecord record = await db.Set<HandoverRecord>().SingleAsync(r => r.VaultId == vault.VaultId);
             Assert.Equal(recordId, record.Id);
             Assert.Equal(UserRole.Verifier, (await db.Users.SingleAsync(u => u.Id == record.VerifierUserId)).Role);
-            Assert.Equal(PlanStatus.HandoverRequested, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
+            Assert.Equal(PlanStatus.Active, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
         });
 
-        // Người thực thi thấy biên bản đang lập; kho đã khóa nên Chủ kho không thêm tài sản được nữa.
+        // Người thực thi thấy biên bản đang lập; luật sư chưa chấp nhận giấy tờ nên kho chưa khóa, Chủ kho vẫn thêm tài sản.
         JsonElement executorView = await ApiTestHelpers.ReadJsonAsync(
             await executor.Client.GetAsync(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId)));
         Assert.Equal("DRAFTING", executorView.GetProperty("status").GetString());
         Assert.Equal(0, executorView.GetProperty("claims").GetArrayLength());
-        HttpResponseMessage locked = await vault.Owner.PostAsJsonAsync(
+        Assert.False(executorView.GetProperty("vaultLocked").GetBoolean());
+        HttpResponseMessage stillEditable = await vault.Owner.PostAsJsonAsync(
             $"/api/v1/vaults/{vault.VaultId}/assets/text", new { name = "Mới", content = "x" });
-        Assert.Equal(HttpStatusCode.Conflict, locked.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, stillEditable.StatusCode);
     }
 
     [SqlFact]
@@ -292,7 +294,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Owner_CanCancelUntilSigned_ThenVaultUnlocksAndRecipientCanRequestAgain()
+    public async Task Owner_ViewsRequest_VerifierCancelUnlocksVaultAndRecipientCanRequestAgain()
     {
         Vault2 vault = await BuildVaultAsync();
         await HandoverRecordTestData.CreateVerifierClientAsync(factory);
@@ -301,15 +303,17 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         string ownerUrl = $"/api/v1/vaults/{vault.VaultId}/handover-request";
 
         JsonElement request = await ApiTestHelpers.ReadJsonAsync(await vault.Owner.GetAsync(ownerUrl));
-        Assert.True(request.GetProperty("canCancel").GetBoolean());
         Assert.Equal(ApiTestHelpers.BeneficiaryName(0), request.GetProperty("requesterNames")[0].GetString());
 
-        // Người khác không xem, không hủy được.
-        HttpResponseMessage byRecipient = await recipient.PostAsync(ownerUrl + "/cancel", null);
-        Assert.Equal(HttpStatusCode.NotFound, byRecipient.StatusCode);
+        // Người nhận không xem được yêu cầu của kho.
+        Assert.Equal(HttpStatusCode.NotFound, (await recipient.GetAsync(ownerUrl)).StatusCode);
 
-        HttpResponseMessage cancelled = await vault.Owner.PostAsync(ownerUrl + "/cancel", null);
-        Assert.Equal(HttpStatusCode.NoContent, cancelled.StatusCode);
+        // Luật sư hủy biên bản đang lập thì kho mở khóa.
+        Guid recordId = request.GetProperty("recordId").GetGuid();
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        HttpResponseMessage cancelled = await verifier.Client.PostAsJsonAsync(
+            HandoverRecordTestData.VerifierRecordUrl(recordId) + "/cancel", new { reason = "Mở nhầm hồ sơ" });
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await vault.Owner.GetAsync(ownerUrl)).StatusCode);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
@@ -370,16 +374,16 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal("SUBMITTED", after.GetProperty("status").GetString());
         Assert.Equal(2, after.GetProperty("files").GetArrayLength());
 
-        // Từ chối: người này ra khỏi biên bản và không ghi tài sản cho họ được nữa.
+        // Từ chối yêu cầu duy nhất khi kho chưa khóa: người này ra khỏi biên bản và biên bản tự đóng.
+        // (Trường hợp kho đã khóa, người bị từ chối không ghi tài sản được nữa: xem HandoverVaultLockFlowTests.)
         Assert.Equal(HttpStatusCode.OK,
             (await verifier.Client.PostAsJsonAsync(review, new { decision = "REJECT", reason = "Giấy tờ không hợp lệ" })).StatusCode);
         JsonElement rejected = await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(url));
         Assert.Equal(0, rejected.GetProperty("recipients").GetArrayLength());
-        await ApiTestHelpers.AssertProblemAsync(
-            await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA)), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        JsonElement noAccepted = await ApiTestHelpers.AssertProblemAsync(
-            await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
-        Assert.Equal("RECORD_INVALID", noAccepted.GetProperty("reason").GetString());
+        Assert.Equal("CANCELLED", rejected.GetProperty("status").GetString());
+        JsonElement closed = await ApiTestHelpers.AssertProblemAsync(
+            await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA)), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("WRONG_STATE", closed.GetProperty("reason").GetString());
     }
 
     [SqlFact]

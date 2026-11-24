@@ -500,6 +500,7 @@ public sealed class CountingRecordService : IHandoverRecordService
     public Task<HandoverRecordResponse> FinalizeAsync(Guid recordId, FinalizeHandoverRecordRequest request, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> ReopenAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> RemindExecutorAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> GetForRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> ReviewClaimAsync(Guid recordId, Guid claimId, ReviewHandoverClaimRequest request, CancellationToken ct) => throw new NotSupportedException();
@@ -516,5 +517,4 @@ public sealed class CountingRecordService : IHandoverRecordService
     public Task<MyHandoverClaimResponse> SupplementClaimAsync(Guid claimId, string? note, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
     public Task<PreparedDownload> PrepareMyClaimFileAsync(Guid claimId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
     public Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
-    public Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
 }

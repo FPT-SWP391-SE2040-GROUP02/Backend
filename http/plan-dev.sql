@@ -21,12 +21,11 @@ BEGIN
     RETURN;
 END;
 
--- SETUP-01: quyền dịch vụ XS còn hạn một năm, 200 MiB và hai suất người nhận.
+-- SETUP-01: quyền dịch vụ XS còn hạn một năm, 200 MiB.
 UPDATE dbo.VaultEntitlements
 SET Tier = N'Xs',
     Status = N'PaidActive',
     StorageQuotaBytes = 209715200,
-    IncludedBeneficiarySlots = 2,
     ServiceExpiresAt = DATEADD(DAY, 365, SYSDATETIMEOFFSET())
 WHERE VaultId = @VaultId;
 

@@ -17,6 +17,12 @@ public class FinalizeHandoverRecordRequest
     /// và chịu trách nhiệm về nội dung. Phải là true; false hoặc thiếu thì 400 VALIDATION_ERROR.
     /// </summary>
     public bool? ConfirmLegalBasis { get; set; }
+
+    /// <summary>
+    /// Luật sư xác nhận biên bản khác cách chia ban đầu của Chủ kho là theo di chúc hoặc quy định pháp luật. Bắt buộc true
+    /// khi biên bản có khác biệt (splitDifferences không rỗng), thiếu thì 400 VALIDATION_ERROR; không khác thì bỏ qua.
+    /// </summary>
+    public bool? ConfirmSplitDeviation { get; set; }
 }
 
 /// <summary>Một dòng biên bản: người nhận nhận một tài sản.</summary>

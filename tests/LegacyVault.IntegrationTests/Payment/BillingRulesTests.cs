@@ -14,17 +14,15 @@ public sealed class BillingRulesTests
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
 
     private static VaultEntitlement NewEntitlement(
-        ServiceTier tier, EntitlementStatus status, DateTimeOffset? expiresAt, int extraSlots)
+        ServiceTier tier, EntitlementStatus status, DateTimeOffset? expiresAt)
     {
         VaultEntitlement entitlement = new VaultEntitlement();
         entitlement.Tier = tier;
         entitlement.Status = status;
         entitlement.ServiceExpiresAt = expiresAt;
-        entitlement.ExtraBeneficiarySlots = extraSlots;
         if (tier == ServiceTier.Xs)
         {
             entitlement.StorageQuotaBytes = 200 * 1048576L;
-            entitlement.IncludedBeneficiarySlots = 2;
         }
         return entitlement;
     }
@@ -44,17 +42,15 @@ public sealed class BillingRulesTests
     }
 
     [Fact]
-    public void Ac94_Addon01_PurchaseXsThreeYearsOneSlot_Is646000()
+    public void Ac94_PurchaseXsThreeYears_Is499000()
     {
         // Chuẩn bị / Hành động
-        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 3, 1);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 3);
 
         // Kiểm tra
         Assert.Equal(PaymentOrderKind.Purchase, quote.Kind);
         Assert.Equal(499000, quote.TierAmount);
-        Assert.Equal(147000, quote.SlotAmount);
-        Assert.Equal(646000, quote.TotalAmount);
-        Assert.Equal(3, quote.TotalBeneficiarySlots);
+        Assert.Equal(499000, quote.TotalAmount);
         Assert.Equal(1095, quote.ServiceDays);
         Assert.Equal(200 * 1048576L, quote.StorageQuotaBytes);
     }
@@ -63,12 +59,10 @@ public sealed class BillingRulesTests
     public void Ac94_PurchaseXsMaxFiveYears_Is1599000()
     {
         // Chuẩn bị / Hành động
-        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS_MAX", 5, 0);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS_MAX", 5);
 
         // Kiểm tra
         Assert.Equal(1599000, quote.TotalAmount);
-        Assert.Equal(0, quote.SlotAmount);
-        Assert.Equal(5, quote.TotalBeneficiarySlots);
         Assert.Equal(1825, quote.ServiceDays);
         Assert.Equal(500 * 1048576L, quote.StorageQuotaBytes);
     }
@@ -81,68 +75,17 @@ public sealed class BillingRulesTests
     public void Sec81_PurchaseTierPrice_MatchesPriceTable(string tier, int years, long expected)
     {
         // Chuẩn bị / Hành động
-        BillingQuote quote = BillingRules.QuotePurchase(Prices, tier, years, 0);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, tier, years);
 
         // Kiểm tra
         Assert.Equal(expected, quote.TotalAmount);
     }
 
     [Fact]
-    public void TotalSlots_Addon_BeyondAccountCap_IsRejectedWithRoomLeft()
-    {
-        // Chuẩn bị: XS kèm 2 suất, đã mua thêm 47 suất = 49; trần mặc định 50
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(180), 47);
-
-        // Hành động / Kiểm tra: mua thêm 2 vượt trần, mua thêm 1 vừa chạm trần
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteAddon(Prices, entitlement, 2, Now));
-        AssertValidationOnField(exception, "extraSlots");
-        Dictionary<string, string[]> errors = (Dictionary<string, string[]>)exception.Extensions["errors"]!;
-        Assert.Contains("tối đa 1 suất", errors["extraSlots"][0]);
-        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
-        Assert.Equal(50, quote.TotalBeneficiarySlots);
-    }
-
-    [Fact]
-    public void TotalSlots_PlanWithManyIncludedSlots_CanStillBePurchasedWithoutExtras()
-    {
-        // Trần mặc định 50 nhưng XS kèm 2 suất; không mua thêm suất thì không bị trần chặn
-        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 0);
-        Assert.Equal(2, quote.TotalBeneficiarySlots);
-    }
-
-    [Fact]
-    public void TotalSlots_Purchase_IncludesSlotsComingWithThePlan()
-    {
-        // XS kèm 2 suất; trần 50 nên mua mới tối đa 48 suất thêm (bị chặn thêm bởi 20 suất mỗi đơn, nên thử 20 vẫn qua)
-        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 20);
-        Assert.Equal(22, quote.TotalBeneficiarySlots);
-    }
-
-    [Fact]
-    public void Addon01_Purchase_ExtraSlotsTwentyOne_Rejected()
-    {
-        // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", 1, 21));
-
-        // Kiểm tra
-        AssertValidationOnField(exception, "extraSlots");
-    }
-
-    [Fact]
-    public void Addon01_Purchase_ExtraSlotsTwenty_Allowed()
-    {
-        // Chuẩn bị / Hành động
-        BillingQuote quote = BillingRules.QuotePurchase(Prices, "XS", 1, 20);
-
-        // Kiểm tra: 199.000 + 49.000 × 20
-        Assert.Equal(1179000, quote.TotalAmount);
-    }
-
-    [Fact]
     public void Sec81_Purchase_YearsTwo_Rejected()
     {
         // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", 2, 0));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", 2));
 
         // Kiểm tra
         AssertValidationOnField(exception, "years");
@@ -152,7 +95,7 @@ public sealed class BillingRulesTests
     public void Sec81_Purchase_MissingYears_Rejected()
     {
         // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", null, 0));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", null));
 
         // Kiểm tra
         AssertValidationOnField(exception, "years");
@@ -166,127 +109,30 @@ public sealed class BillingRulesTests
     public void Sec81_Purchase_TierNotSellable_Rejected(string? tier)
     {
         // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, tier, 1, 0));
+        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, tier, 1));
 
         // Kiểm tra: Free không có đơn 0 đồng
         AssertValidationOnField(exception, "tier");
     }
 
     [Fact]
-    public void Addon01_Purchase_NegativeExtraSlots_Rejected()
-    {
-        // Chuẩn bị / Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuotePurchase(Prices, "XS", 1, -1));
-
-        // Kiểm tra
-        AssertValidationOnField(exception, "extraSlots");
-    }
-
-    [Fact]
-    public void Ac95_Addon02_OneSlotWith180DaysLeft_Is24165()
-    {
-        // Chuẩn bị: còn đúng 180 ngày
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(180), 0);
-
-        // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
-
-        // Kiểm tra: ceil(49.000 × 180 / 365) = 24.165, không đổi hạn
-        Assert.Equal(PaymentOrderKind.Addon, quote.Kind);
-        Assert.Equal(24165, quote.TotalAmount);
-        Assert.Equal(24165, quote.SlotAmount);
-        Assert.Equal(0, quote.TierAmount);
-        Assert.Null(quote.Years);
-        Assert.Equal(Now.AddDays(180), quote.BaseServiceExpiresAt);
-    }
-
-    [Fact]
-    public void Addon02_FullYearLeft_PriceIsExactlySlotPricePerSlot()
-    {
-        // Chuẩn bị: còn đúng 365 ngày, mua 3 suất
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(365), 0);
-
-        // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 3, Now);
-
-        // Kiểm tra: không dư nên không làm tròn lên
-        Assert.Equal(147000, quote.TotalAmount);
-    }
-
-    [Fact]
-    public void Addon02_OneSecondLeft_RoundsUpToOneDong()
-    {
-        // Chuẩn bị
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddSeconds(1), 0);
-
-        // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
-
-        // Kiểm tra: ceil(49.000 / 31.536.000) = 1
-        Assert.Equal(1, quote.TotalAmount);
-    }
-
-    [Fact]
-    public void Addon02_RemainingSecondsAreTruncatedToWholeSeconds()
-    {
-        // Chuẩn bị: còn 180 ngày + 0,9 giây; phần lẻ giây bị bỏ nên giá bằng khi còn đúng 180 ngày
-        VaultEntitlement entitlement = NewEntitlement(
-            ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(180).AddMilliseconds(900), 0);
-
-        // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
-
-        // Kiểm tra
-        Assert.Equal(24165, quote.TotalAmount);
-    }
-
-    [Fact]
-    public void Addon01_Addon_TotalSlotsIncludeExistingExtraSlots()
-    {
-        // Chuẩn bị: XS (2 suất kèm) đã mua thêm 1 suất, mua tiếp 2 suất
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 1);
-
-        // Hành động
-        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, 2, Now);
-
-        // Kiểm tra
-        Assert.Equal(5, quote.TotalBeneficiarySlots);
-        Assert.Equal(2, quote.IncludedBeneficiarySlots);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(21)]
-    public void Addon01_Addon_ExtraSlotsOutOfRange_Rejected(int extraSlots)
-    {
-        // Chuẩn bị
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 0);
-
-        // Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.QuoteAddon(Prices, entitlement, extraSlots, Now));
-
-        // Kiểm tra
-        AssertValidationOnField(exception, "extraSlots");
-    }
-
-    [Fact]
-    public void Addon03_OrderExpiry_ServiceEndsBeforeFifteenMinutes_UsesServiceEnd()
+    public void Upgrade_OrderExpiry_ServiceEndsBeforeFifteenMinutes_UsesServiceEnd()
     {
         // Chuẩn bị: kỳ hết sau 5 phút
         DateTimeOffset serviceEnd = Now.AddMinutes(5);
 
         // Hành động
-        DateTimeOffset expiresAt = BillingRules.ComputeOrderExpiresAt(PaymentOrderKind.Addon, Now, serviceEnd);
+        DateTimeOffset expiresAt = BillingRules.ComputeOrderExpiresAt(PaymentOrderKind.Upgrade, Now, serviceEnd);
 
         // Kiểm tra
         Assert.Equal(serviceEnd, expiresAt);
     }
 
     [Fact]
-    public void Addon03_OrderExpiry_ServiceEndsAfterFifteenMinutes_UsesFifteenMinutes()
+    public void Upgrade_OrderExpiry_ServiceEndsAfterFifteenMinutes_UsesFifteenMinutes()
     {
         // Chuẩn bị / Hành động
-        DateTimeOffset expiresAt = BillingRules.ComputeOrderExpiresAt(PaymentOrderKind.Addon, Now, Now.AddDays(30));
+        DateTimeOffset expiresAt = BillingRules.ComputeOrderExpiresAt(PaymentOrderKind.Upgrade, Now, Now.AddDays(30));
 
         // Kiểm tra
         Assert.Equal(Now.AddMinutes(15), expiresAt);
@@ -298,12 +144,12 @@ public sealed class BillingRulesTests
         // Chuẩn bị / Hành động: Admin đặt hạn đơn 20 phút
         DateTimeOffset purchase = BillingRules.ComputeOrderExpiresAt(
             PaymentOrderKind.Purchase, Now, null, TimeSpan.FromMinutes(20));
-        DateTimeOffset addonNearEnd = BillingRules.ComputeOrderExpiresAt(
-            PaymentOrderKind.Addon, Now, Now.AddMinutes(5), TimeSpan.FromMinutes(20));
+        DateTimeOffset upgradeNearEnd = BillingRules.ComputeOrderExpiresAt(
+            PaymentOrderKind.Upgrade, Now, Now.AddMinutes(5), TimeSpan.FromMinutes(20));
 
         // Kiểm tra: vẫn lấy mốc sớm hơn khi kỳ sắp hết
         Assert.Equal(Now.AddMinutes(20), purchase);
-        Assert.Equal(Now.AddMinutes(5), addonNearEnd);
+        Assert.Equal(Now.AddMinutes(5), upgradeNearEnd);
     }
 
     [Fact]
@@ -320,20 +166,47 @@ public sealed class BillingRulesTests
     public void Sec83_DetermineKind_FreeEntitlement_IsPurchase()
     {
         // Chuẩn bị
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Free, EntitlementStatus.Free, null, 0);
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Free, EntitlementStatus.Free, null);
 
         // Hành động / Kiểm tra
-        Assert.Equal(PaymentOrderKind.Purchase, BillingRules.DetermineKind(entitlement, Now));
+        Assert.Equal(PaymentOrderKind.Purchase, BillingRules.DetermineKind(Prices, entitlement, "XS", false, Now));
     }
 
     [Fact]
-    public void Sec83_DetermineKind_PaidActiveNotExpired_IsAddon()
+    public void Sec83_DetermineKind_PaidActiveNotExpired_WithRenewFlag_IsRenewal()
     {
         // Chuẩn bị
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(10), 0);
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(10));
 
-        // Hành động / Kiểm tra
-        Assert.Equal(PaymentOrderKind.Addon, BillingRules.DetermineKind(entitlement, Now));
+        // Hành động / Kiểm tra: gia hạn sớm
+        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(Prices, entitlement, "XS", true, Now));
+    }
+
+    [Fact]
+    public void Sec83_DetermineKind_PaidActiveNotExpired_HigherPlan_IsUpgrade()
+    {
+        // Chuẩn bị
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(10));
+
+        // Hành động / Kiểm tra: chọn gói đứng sau gói đang dùng
+        Assert.Equal(PaymentOrderKind.Upgrade, BillingRules.DetermineKind(Prices, entitlement, "XS_MAX", false, Now));
+    }
+
+    [Theory]
+    [InlineData("XS")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void Sec83_DetermineKind_PaidActiveNotExpired_NothingToBuy(string? tier)
+    {
+        // Chuẩn bị
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(10));
+
+        // Hành động
+        AppException exception = Assert.Throws<AppException>(
+            () => BillingRules.DetermineKind(Prices, entitlement, tier, false, Now));
+
+        // Kiểm tra: còn hạn, không gia hạn, không nâng hạng thì không có gì để mua
+        AssertPaymentNotAllowed(exception, "NOTHING_TO_BUY");
     }
 
     [Theory]
@@ -343,20 +216,20 @@ public sealed class BillingRulesTests
     public void Sec83_DetermineKind_NeedsRenewal_IsRenewal(EntitlementStatus status, int daysUntilExpiry)
     {
         // Chuẩn bị: hết hạn, ân hạn hoặc chờ rà soát đều thuộc RENEWAL
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, status, Now.AddDays(daysUntilExpiry), 0);
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, status, Now.AddDays(daysUntilExpiry));
 
         // Hành động / Kiểm tra: chỉ còn đường gia hạn
-        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(entitlement, Now));
+        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(Prices, entitlement, "XS", false, Now));
     }
 
     [Fact]
-    public void Sec83_PaidActiveWithoutExpiry_NotTreatedAsAddon()
+    public void Sec83_PaidActiveWithoutExpiry_IsRenewal()
     {
-        // Chuẩn bị: dữ liệu bất thường, không có hạn thì không bán thêm suất, chỉ cho gia hạn
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, null, 0);
+        // Chuẩn bị: dữ liệu bất thường, không có hạn thì chỉ cho gia hạn
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, null);
 
         // Hành động / Kiểm tra
-        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(entitlement, Now));
+        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(Prices, entitlement, "XS", false, Now));
     }
 
     [Theory]
@@ -397,7 +270,6 @@ public sealed class BillingRulesTests
         order.Kind = PaymentOrderKind.Purchase;
         order.Tier = ServiceTier.Xs;
         order.Years = 3;
-        order.ExtraSlots = 1;
         order.Status = status;
         order.ExpiresAt = expiresAt;
         return order;
@@ -420,47 +292,31 @@ public sealed class BillingRulesTests
     }
 
     [Fact]
-    public void Sec83_IsSameSelection_ComparesKindTierYearsAndExtraSlots()
+    public void Sec83_IsSameSelection_ComparesKindTierAndYears()
     {
         // Chuẩn bị
         PaymentOrder order = NewOrder(PaymentOrderStatus.Pending, Now.AddMinutes(15));
-        BillingQuote same = BillingRules.QuotePurchase(Prices, "XS", 3, 1);
-        BillingQuote otherTier = BillingRules.QuotePurchase(Prices, "XS_MAX", 3, 1);
-        BillingQuote otherYears = BillingRules.QuotePurchase(Prices, "XS", 1, 1);
-        BillingQuote otherSlots = BillingRules.QuotePurchase(Prices, "XS", 3, 2);
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 0);
-        BillingQuote addon = BillingRules.QuoteAddon(Prices, entitlement, 1, Now);
+        BillingQuote same = BillingRules.QuotePurchase(Prices, "XS", 3);
+        BillingQuote otherTier = BillingRules.QuotePurchase(Prices, "XS_MAX", 3);
+        BillingQuote otherYears = BillingRules.QuotePurchase(Prices, "XS", 1);
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100));
+        BillingQuote renewal = BillingRules.QuoteRenewal(Prices, entitlement, "XS", 3, Now);
 
         // Hành động / Kiểm tra
         Assert.True(BillingRules.IsSameSelection(order, same));
         Assert.False(BillingRules.IsSameSelection(order, otherTier));
         Assert.False(BillingRules.IsSameSelection(order, otherYears));
-        Assert.False(BillingRules.IsSameSelection(order, otherSlots));
-        Assert.False(BillingRules.IsSameSelection(order, addon));
+        Assert.False(BillingRules.IsSameSelection(order, renewal));
     }
 
-    private static PaymentOrder NewPurchaseOrder(string tierText, int years, int extraSlots)
+    private static PaymentOrder NewPurchaseOrder(string tierText, int years)
     {
-        BillingQuote quote = BillingRules.QuotePurchase(Prices, tierText, years, extraSlots);
+        BillingQuote quote = BillingRules.QuotePurchase(Prices, tierText, years);
         PaymentOrder order = new PaymentOrder();
         order.Kind = quote.Kind;
         order.Tier = quote.Tier;
         order.Years = quote.Years;
-        order.ExtraSlots = quote.ExtraSlots;
         order.StorageQuotaBytes = quote.StorageQuotaBytes;
-        order.IncludedBeneficiarySlots = quote.IncludedBeneficiarySlots;
-        order.Status = PaymentOrderStatus.Pending;
-        return order;
-    }
-
-    private static PaymentOrder NewAddonOrder(VaultEntitlement entitlement, int extraSlots)
-    {
-        BillingQuote quote = BillingRules.QuoteAddon(Prices, entitlement, extraSlots, Now);
-        PaymentOrder order = new PaymentOrder();
-        order.Kind = quote.Kind;
-        order.Tier = quote.Tier;
-        order.ExtraSlots = quote.ExtraSlots;
-        order.BaseServiceExpiresAt = quote.BaseServiceExpiresAt;
         order.Status = PaymentOrderStatus.Pending;
         return order;
     }
@@ -473,11 +329,11 @@ public sealed class BillingRulesTests
     }
 
     [Fact]
-    public void Ac90_Pay08_ApplyPurchase_SetsTierQuotaSlotsAndPeriodFromPaymentTime()
+    public void Ac90_Pay08_ApplyPurchase_SetsTierQuotaAndPeriodFromPaymentTime()
     {
-        // Chuẩn bị: kho Free, đơn XS 3 năm + 1 suất
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Free, EntitlementStatus.Free, null, 0);
-        PaymentOrder order = NewPurchaseOrder("XS", 3, 1);
+        // Chuẩn bị: kho Free, đơn XS 3 năm
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Free, EntitlementStatus.Free, null);
+        PaymentOrder order = NewPurchaseOrder("XS", 3);
 
         // Hành động
         BillingRules.ApplyPurchase(entitlement, order, Now);
@@ -486,18 +342,16 @@ public sealed class BillingRulesTests
         Assert.Equal(ServiceTier.Xs, entitlement.Tier);
         Assert.Equal(EntitlementStatus.PaidActive, entitlement.Status);
         Assert.Equal(200 * 1048576L, entitlement.StorageQuotaBytes);
-        Assert.Equal(2, entitlement.IncludedBeneficiarySlots);
-        Assert.Equal(1, entitlement.ExtraBeneficiarySlots);
         Assert.Equal(Now.AddDays(1095), entitlement.ServiceExpiresAt);
         Assert.Equal(Now, entitlement.UpdatedAt);
     }
 
     [Fact]
-    public void Ac94_ApplyPurchase_XsMaxFiveYears_Is500MiBFiveSlots1825Days()
+    public void Ac94_ApplyPurchase_XsMaxFiveYears_Is500MiB1825Days()
     {
         // Chuẩn bị
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Free, EntitlementStatus.Free, null, 0);
-        PaymentOrder order = NewPurchaseOrder("XS_MAX", 5, 0);
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Free, EntitlementStatus.Free, null);
+        PaymentOrder order = NewPurchaseOrder("XS_MAX", 5);
 
         // Hành động
         BillingRules.ApplyPurchase(entitlement, order, Now);
@@ -505,8 +359,6 @@ public sealed class BillingRulesTests
         // Kiểm tra
         Assert.Equal(ServiceTier.XsMax, entitlement.Tier);
         Assert.Equal(500 * 1048576L, entitlement.StorageQuotaBytes);
-        Assert.Equal(5, entitlement.IncludedBeneficiarySlots);
-        Assert.Equal(0, entitlement.ExtraBeneficiarySlots);
         Assert.Equal(Now.AddDays(1825), entitlement.ServiceExpiresAt);
     }
 
@@ -517,8 +369,8 @@ public sealed class BillingRulesTests
     public void D8_ApplyPurchase_EntitlementNoLongerFree_NotPayable(EntitlementStatus status)
     {
         // Chuẩn bị: quyền dịch vụ đã đổi từ lúc tạo đơn
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, status, Now.AddDays(10), 0);
-        PaymentOrder order = NewPurchaseOrder("XS_MAX", 1, 0);
+        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, status, Now.AddDays(10));
+        PaymentOrder order = NewPurchaseOrder("XS_MAX", 1);
 
         // Hành động
         AppException exception = Assert.Throws<AppException>(() => BillingRules.ApplyPurchase(entitlement, order, Now));
@@ -526,90 +378,6 @@ public sealed class BillingRulesTests
         // Kiểm tra: không ghi gì vào quyền dịch vụ
         AssertNotPayable(exception, "ENTITLEMENT_CHANGED");
         Assert.Equal(ServiceTier.Xs, entitlement.Tier);
-        Assert.Equal(0, entitlement.ExtraBeneficiarySlots);
-    }
-
-    [Fact]
-    public void Ac95_ApplyAddon_AddsSlotsAndKeepsExpiry()
-    {
-        // Chuẩn bị: XS còn 180 ngày, đã có 1 suất thêm, mua thêm 2
-        DateTimeOffset expiry = Now.AddDays(180);
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, expiry, 1);
-        PaymentOrder order = NewAddonOrder(entitlement, 2);
-
-        // Hành động
-        BillingRules.ApplyAddon(entitlement, order, Now.AddMinutes(3));
-
-        // Kiểm tra: hạn không đổi
-        Assert.Equal(3, entitlement.ExtraBeneficiarySlots);
-        Assert.Equal(expiry, entitlement.ServiceExpiresAt);
-        Assert.Equal(ServiceTier.Xs, entitlement.Tier);
-        Assert.Equal(EntitlementStatus.PaidActive, entitlement.Status);
-    }
-
-    [Fact]
-    public void Addon03_ApplyAddon_ExpiryChangedSinceOrder_NotPayable()
-    {
-        // Chuẩn bị: kỳ được gia hạn sau khi tạo đơn
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(180), 0);
-        PaymentOrder order = NewAddonOrder(entitlement, 1);
-        entitlement.ServiceExpiresAt = Now.AddDays(900);
-
-        // Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.ApplyAddon(entitlement, order, Now));
-
-        // Kiểm tra
-        AssertNotPayable(exception, "ENTITLEMENT_CHANGED");
-        Assert.Equal(0, entitlement.ExtraBeneficiarySlots);
-    }
-
-    [Fact]
-    public void Addon03_ApplyAddon_PeriodAlreadyEnded_NotPayable()
-    {
-        // Chuẩn bị: tiền tới sau khi kỳ hết
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddMinutes(5), 0);
-        PaymentOrder order = NewAddonOrder(entitlement, 1);
-
-        // Hành động
-        AppException exception = Assert.Throws<AppException>(
-            () => BillingRules.ApplyAddon(entitlement, order, Now.AddMinutes(6)));
-
-        // Kiểm tra
-        AssertNotPayable(exception, "ENTITLEMENT_CHANGED");
-        Assert.Equal(0, entitlement.ExtraBeneficiarySlots);
-    }
-
-    [Theory]
-    [InlineData(EntitlementStatus.GraceReadOnly)]
-    [InlineData(EntitlementStatus.ExpiredReview)]
-    [InlineData(EntitlementStatus.Free)]
-    public void Addon03_ApplyAddon_EntitlementNoLongerPaidActive_NotPayable(EntitlementStatus status)
-    {
-        // Chuẩn bị
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 0);
-        PaymentOrder order = NewAddonOrder(entitlement, 1);
-        entitlement.Status = status;
-
-        // Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.ApplyAddon(entitlement, order, Now));
-
-        // Kiểm tra
-        AssertNotPayable(exception, "ENTITLEMENT_CHANGED");
-    }
-
-    [Fact]
-    public void Addon03_ApplyAddon_TierChangedSinceOrder_NotPayable()
-    {
-        // Chuẩn bị
-        VaultEntitlement entitlement = NewEntitlement(ServiceTier.Xs, EntitlementStatus.PaidActive, Now.AddDays(100), 0);
-        PaymentOrder order = NewAddonOrder(entitlement, 1);
-        entitlement.Tier = ServiceTier.XsMax;
-
-        // Hành động
-        AppException exception = Assert.Throws<AppException>(() => BillingRules.ApplyAddon(entitlement, order, Now));
-
-        // Kiểm tra
-        AssertNotPayable(exception, "ENTITLEMENT_CHANGED");
     }
 
     [Fact]
@@ -642,7 +410,6 @@ public sealed class BillingRulesTests
     [Theory]
     [InlineData(PlanStatus.HandoverRequested)]
     [InlineData(PlanStatus.HandoverInProgress)]
-    [InlineData(PlanStatus.Blocked)]
     public void Sec83_PlanLocked_RejectsPayment(PlanStatus status)
     {
         // Chuẩn bị

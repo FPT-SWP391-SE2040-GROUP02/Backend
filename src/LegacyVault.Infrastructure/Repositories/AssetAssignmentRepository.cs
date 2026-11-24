@@ -45,15 +45,6 @@ public sealed class AssetAssignmentRepository(AppDbContext context) : IAssetAssi
             .CountAsync(ct);
     }
 
-    public Task<int> CountUsedBeneficiarySlotsAsync(Guid vaultId, CancellationToken ct)
-    {
-        return context.AssetAssignments
-            .Where(a => a.Asset.VaultId == vaultId)
-            .Select(a => a.BeneficiaryId)
-            .Distinct()
-            .CountAsync(ct);
-    }
-
     public Task<bool> IsAssetAssignedAsync(Guid assetId, CancellationToken ct)
     {
         return context.AssetAssignments.AnyAsync(a => a.AssetId == assetId, ct);

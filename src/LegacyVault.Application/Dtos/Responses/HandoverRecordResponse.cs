@@ -31,10 +31,31 @@ public class HandoverRecordResponse
     /// <summary>Lý do luật sư hủy biên bản; null khi Chủ kho hủy hoặc chưa hủy.</summary>
     public string? CancelReason { get; set; }
 
+    /// <summary>Kho đã khóa chưa: khóa khi luật sư chấp nhận giấy tờ đầu tiên; chưa khóa thì chưa chốt được biên bản.</summary>
+    public bool VaultLocked { get; set; }
+
+    /// <summary>
+    /// Chỗ biên bản khác cách chia ban đầu của Chủ kho (luật sư, Người thực thi thấy; người nhận nhận danh sách rỗng).
+    /// Có khác biệt thì luật sư phải tick confirmSplitDeviation khi chốt.
+    /// </summary>
+    public List<HandoverSplitDifferenceResponse> SplitDifferences { get; set; } = new List<HandoverSplitDifferenceResponse>();
+
+    /// <summary>Lúc luật sư xác nhận khác biệt khi chốt; null khi không khác hoặc chưa chốt (mở lại thì về null).</summary>
+    public DateTimeOffset? SplitDeviationConfirmedAt { get; set; }
+
+    /// <summary>Họ tên luật sư đã xác nhận khác biệt; rỗng khi chưa xác nhận.</summary>
+    public string SplitDeviationConfirmedByName { get; set; } = string.Empty;
+
     public string VerifierName { get; set; } = string.Empty;
     public string ExecutorName { get; set; } = string.Empty;
     public DateTimeOffset? VerifierSignedAt { get; set; }
     public DateTimeOffset? ExecutorSignedAt { get; set; }
+
+    /// <summary>Lúc luật sư nhắc Người thực thi ký gần nhất; null khi chưa nhắc.</summary>
+    public DateTimeOffset? ExecutorReminderSentAt { get; set; }
+
+    /// <summary>Lúc luật sư nhắc lại được (lần nhắc trước + 24 giờ); null khi chưa nhắc lần nào.</summary>
+    public DateTimeOffset? ExecutorRemindAvailableAt { get; set; }
 
     public List<HandoverRecordRecipientResponse> Recipients { get; set; } = new List<HandoverRecordRecipientResponse>();
 
@@ -58,6 +79,29 @@ public class HandoverRecordResponse
 
     /// <summary>Hồ sơ báo tin đã chấp nhận gắn với biên bản; chỉ luật sư thấy.</summary>
     public List<HandoverRecordReportResponse> Reports { get; set; } = new List<HandoverRecordReportResponse>();
+}
+
+/// <summary>Một chỗ biên bản khác cách chia ban đầu của Chủ kho; chỉ có họ tên và tên tài sản, không có CCCD.</summary>
+public class HandoverSplitDifferenceResponse
+{
+    /// <summary>RECIPIENT_ADDED, RECIPIENT_REMOVED hoặc ASSET_RECIPIENTS_CHANGED.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    public Guid? BeneficiaryId { get; set; }
+
+    /// <summary>Họ tên người nhận được thêm hoặc bị bỏ; rỗng với khác biệt theo tài sản.</summary>
+    public string RecipientName { get; set; } = string.Empty;
+
+    public Guid? AssetId { get; set; }
+
+    /// <summary>Tên tài sản đổi người nhận; rỗng với khác biệt theo người nhận.</summary>
+    public string AssetName { get; set; } = string.Empty;
+
+    /// <summary>Người nhận tài sản theo Chủ kho (chỉ với ASSET_RECIPIENTS_CHANGED).</summary>
+    public List<string> OwnerRecipientNames { get; set; } = new List<string>();
+
+    /// <summary>Người nhận tài sản theo biên bản (chỉ với ASSET_RECIPIENTS_CHANGED).</summary>
+    public List<string> RecordRecipientNames { get; set; } = new List<string>();
 }
 
 /// <summary>Hồ sơ báo tin gắn với biên bản: người nộp, người nhận họ khai (chưa kiểm) và giấy tờ.</summary>

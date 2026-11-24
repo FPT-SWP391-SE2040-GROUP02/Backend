@@ -16,6 +16,7 @@ public sealed class AssetAssignmentService(
     IBeneficiaryRepository beneficiaryRepository,
     IAssetAssignmentRepository assignmentRepository,
     IAuditLogRepository auditLogRepository,
+    IHandoverRecordRepository handoverRecordRepository,
     TimeProvider timeProvider) : IAssetAssignmentService
 {
     public async Task<List<AssetAssignmentResponse>> GetAssignmentsAsync(Guid vaultId, CancellationToken ct)
@@ -131,7 +132,6 @@ public sealed class AssetAssignmentService(
                 throw new AppException(AppErrorType.Forbidden, ErrorCode.PaidTierRequired,
                     "Hạng miễn phí chưa được gán tài sản cho người nhận. Vui lòng nâng cấp dịch vụ.");
             }
-            EnsureSlotsEnough(vault, vaultAssignments, toRemove, toAdd);
         }
         else
         {
@@ -145,6 +145,13 @@ public sealed class AssetAssignmentService(
         int remaining = vaultAssignments.Count - toRemove.Count + toAdd.Count;
         if (toRemove.Count > 0 && remaining == 0 && PlanRules.IsRunning(vault.Plan.Status))
         {
+            // Có yêu cầu nhận tài sản đang chờ luật sư xét (kho chưa khóa): kế hoạch không được về bản nháp giữa chừng.
+            HandoverRecord? openRecord = await handoverRecordRepository.FindByVaultIdAsync(vault.Id, ct);
+            if (openRecord != null)
+            {
+                throw HandoverAccess.NotAllowed("HANDOVER_REQUEST_PENDING",
+                    "Đang có yêu cầu nhận tài sản chờ luật sư xét nên không gỡ được dòng gán cuối cùng của kế hoạch.");
+            }
             if (!confirmed)
             {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.PlanDeactivationConfirmationRequired,
@@ -185,48 +192,6 @@ public sealed class AssetAssignmentService(
                 "Dữ liệu vừa thay đổi. Vui lòng tải lại.");
         }
         return current.ToResponses();
-    }
-
-    /// <summary>
-    /// Suất người nhận đếm theo số NGƯỜI khác nhau có dòng gán trong kho. Người đã được gán tài sản khác không tốn thêm suất;
-    /// người mới thì phải còn suất. Đã trừ những người mất dòng gán cuối cùng trong cùng thao tác.
-    /// </summary>
-    private static void EnsureSlotsEnough(
-        Vault vault, List<AssetAssignment> vaultAssignments, List<AssetAssignment> toRemove, List<Guid> toAdd)
-    {
-        HashSet<Guid> before = new HashSet<Guid>();
-        foreach (AssetAssignment assignment in vaultAssignments)
-        {
-            before.Add(assignment.BeneficiaryId);
-        }
-
-        HashSet<Guid> removedIds = new HashSet<Guid>();
-        foreach (AssetAssignment assignment in toRemove)
-        {
-            removedIds.Add(assignment.Id);
-        }
-        HashSet<Guid> after = new HashSet<Guid>();
-        foreach (AssetAssignment assignment in vaultAssignments)
-        {
-            if (!removedIds.Contains(assignment.Id))
-            {
-                after.Add(assignment.BeneficiaryId);
-            }
-        }
-        foreach (Guid beneficiaryId in toAdd)
-        {
-            after.Add(beneficiaryId);
-        }
-
-        int maxSlots = EntitlementLimits.EffectiveTotalSlots(vault.Entitlement);
-        if (after.Count > before.Count && after.Count > maxSlots)
-        {
-            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-            extensions["usedSlots"] = before.Count;
-            extensions["maxSlots"] = maxSlots;
-            throw new AppException(AppErrorType.Conflict, ErrorCode.BeneficiarySlotsExceeded,
-                "Kho đã dùng hết suất người nhận. Vui lòng mua thêm suất.", extensions);
-        }
     }
 
     /// <summary>Một dòng nhật ký cho thao tác gán, lưu cùng lần lưu của thao tác. Chỉ ghi id người nhận, không ghi tên hay số CCCD.</summary>

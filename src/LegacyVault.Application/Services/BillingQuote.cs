@@ -10,35 +10,25 @@ public class BillingQuote
 {
     public PaymentOrderKind Kind { get; set; }
 
-    /// <summary>Hạng được mua; với ADDON là hạng hiện tại của kho.</summary>
+    /// <summary>Hạng được mua.</summary>
     public ServiceTier Tier { get; set; }
 
-    /// <summary>Mã gói được mua (XS, XS_MAX hoặc mã gói Admin tạo); với ADDON là gói hiện tại của kho.</summary>
+    /// <summary>Mã gói được mua (XS, XS_MAX hoặc mã gói Admin tạo).</summary>
     public string PlanCode { get; set; } = string.Empty;
 
-    /// <summary>Số năm; null với ADDON.</summary>
+    /// <summary>Số năm; null với nâng hạng.</summary>
     public int? Years { get; set; }
 
-    public int ExtraSlots { get; set; }
-
-    /// <summary>Tiền hạng; 0 với ADDON.</summary>
     public long TierAmount { get; set; }
-
-    public long SlotAmount { get; set; }
 
     public long TotalAmount { get; set; }
 
     public long StorageQuotaBytes { get; set; }
 
-    public int IncludedBeneficiarySlots { get; set; }
-
-    /// <summary>Tổng suất sau khi thanh toán xong: kèm theo hạng + suất thêm hiện có + suất mua lần này.</summary>
-    public int TotalBeneficiarySlots { get; set; }
-
-    /// <summary>Số ngày của kỳ mới (số năm × 365); null với ADDON vì không đổi hạn.</summary>
+    /// <summary>Số ngày của kỳ mới (số năm × 365); null với nâng hạng vì không đổi hạn.</summary>
     public int? ServiceDays { get; set; }
 
-    /// <summary>ADDON: hạn kỳ hiện tại tại lúc báo giá; PURCHASE: null.</summary>
+    /// <summary>Nâng hạng và gia hạn sớm: hạn kỳ hiện tại tại lúc báo giá; PURCHASE: null.</summary>
     public DateTimeOffset? BaseServiceExpiresAt { get; set; }
 
     /// <summary>Phiên bản bảng giá đã dùng để tính; ghi vào đơn lúc tạo (PAY-11).</summary>

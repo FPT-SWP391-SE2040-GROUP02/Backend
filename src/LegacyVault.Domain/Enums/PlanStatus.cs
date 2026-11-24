@@ -20,7 +20,4 @@ public enum PlanStatus
 
     /// <summary>Mọi lượt bàn giao đã xong.</summary>
     Closed = 6,
-
-    /// <summary>Bị chặn; lưu trạng thái trước và các nguyên nhân chặn riêng.</summary>
-    Blocked = 7,
 }

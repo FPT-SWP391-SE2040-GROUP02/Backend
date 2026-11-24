@@ -20,8 +20,7 @@ public sealed class RetentionRepository : IRetentionRepository
     {
         return context.HandoverPlans
             .Where(p => (p.Status == PlanStatus.HandoverInProgress
-                    || p.Status == PlanStatus.Closed
-                    || p.Status == PlanStatus.Blocked)
+                    || p.Status == PlanStatus.Closed)
                 && p.Vault.Status != VaultStatus.Closed
                 && context.Set<HandoverTurn>().Any(t => t.PlanId == p.Id))
             .OrderBy(p => p.UpdatedAt)

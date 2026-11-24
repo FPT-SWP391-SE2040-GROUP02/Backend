@@ -10,14 +10,12 @@ public class BillingPlansResponse
 
     public List<BillingTierResponse> Tiers { get; set; } = new List<BillingTierResponse>();
 
-    public BillingExtraSlotResponse ExtraSlot { get; set; } = new BillingExtraSlotResponse();
-
     public string Notice { get; set; } = string.Empty;
 
     /// <summary>Mô tả tính năng của gói Free do Admin viết; rỗng thì Client dùng mô tả mặc định.</summary>
     public List<string> FreeFeatures { get; set; } = new List<string>();
 
-    /// <summary>Dung lượng và số suất người nhận của gói Free theo cấu hình Admin hiện hành.</summary>
+    /// <summary>Dung lượng của gói Free theo cấu hình Admin hiện hành.</summary>
     public FreePlanResponse Free { get; set; } = new FreePlanResponse();
 }
 
@@ -25,8 +23,6 @@ public class BillingPlansResponse
 public class FreePlanResponse
 {
     public long StorageQuotaBytes { get; set; }
-
-    public int IncludedBeneficiarySlots { get; set; }
 }
 
 /// <summary>Một hạng bán được: "XS" hoặc "XS_MAX".</summary>
@@ -52,7 +48,6 @@ public class BillingTierResponse
     public List<string> Features { get; set; } = new List<string>();
 
     public long StorageQuotaBytes { get; set; }
-    public int IncludedBeneficiarySlots { get; set; }
     public List<BillingPriceResponse> Prices { get; set; } = new List<BillingPriceResponse>();
 }
 
@@ -64,16 +59,4 @@ public class BillingPriceResponse
 
     /// <summary>Số năm × 365 (PAY-08).</summary>
     public int ServiceDays { get; set; }
-}
-
-/// <summary>Suất người nhận mua thêm.</summary>
-public class BillingExtraSlotResponse
-{
-    /// <summary>Giá một suất cho một năm.</summary>
-    public long PricePerYear { get; set; }
-
-    public int MaxPerOrder { get; set; }
-
-    /// <summary>Tổng số người nhận tối đa của một tài khoản (suất kèm gói + suất mua thêm).</summary>
-    public int MaxTotal { get; set; }
 }

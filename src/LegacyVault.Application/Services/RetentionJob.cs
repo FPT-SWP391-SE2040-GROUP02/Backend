@@ -10,8 +10,8 @@ namespace LegacyVault.Application.Services;
 
 /// <summary>Việc nền lưu và xóa dữ liệu sau bàn giao.</summary>
 /// <remarks>
-/// - Đồng hồ theo từng lượt (một chỉ định). Lý do giữ: còn trong 5 ngày phản hồi, claim đang xử lý, grant còn hạn,
-///   Owner báo còn sống (kế hoạch BLOCKED). Tạm dừng lưu phần còn lại, không đặt lại 30 ngày.
+/// - Đồng hồ theo từng lượt (một chỉ định). Lý do giữ: còn trong 5 ngày phản hồi, claim đang xử lý, grant còn hạn.
+///   Tạm dừng lưu phần còn lại, không đặt lại 30 ngày.
 /// - Phiên bản tài sản chỉ bị xóa khi KHÔNG còn lượt nào khác chưa dọn cùng tham chiếu.
 /// - Mọi kiểm tra và thay đổi DB của một kế hoạch lưu trong MỘT lần lưu và ghi plan.UpdatedAt, nên nhận lượt
 ///   hay đồng ý chạy cùng lúc (cũng ghi plan.UpdatedAt) thua RowVersion: không có grant mới trên dữ liệu vừa dọn.

@@ -125,7 +125,7 @@ public static class ApiTestHelpers
 
     /// <summary>
     /// Nâng kho lên hạng XS đang trả phí bằng cách sửa thẳng VaultEntitlements (chưa có module thanh toán):
-    /// 200 MiB, 2 suất người nhận.
+    /// 200 MiB.
     /// </summary>
     public static async Task UpgradeVaultToXsAsync(ApiFactory factory, Guid vaultId)
     {
@@ -135,8 +135,7 @@ public static class ApiTestHelpers
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(e => e.Tier, ServiceTier.Xs)
                     .SetProperty(e => e.Status, EntitlementStatus.PaidActive)
-                    .SetProperty(e => e.StorageQuotaBytes, 200 * 1_048_576L)
-                    .SetProperty(e => e.IncludedBeneficiarySlots, 2));
+                    .SetProperty(e => e.StorageQuotaBytes, 200 * 1_048_576L));
         });
     }
 
@@ -220,17 +219,7 @@ public static class ApiTestHelpers
         });
     }
 
-    /// <summary>Đặt số suất người nhận mua thêm bằng cách sửa thẳng VaultEntitlements (chưa có module thanh toán).</summary>
-    public static async Task SetExtraBeneficiarySlotsAsync(ApiFactory factory, Guid vaultId, int extraSlots)
-    {
-        await WithDbAsync(factory, async db =>
-        {
-            await db.VaultEntitlements.Where(e => e.VaultId == vaultId)
-                .ExecuteUpdateAsync(s => s.SetProperty(e => e.ExtraBeneficiarySlots, extraSlots));
-        });
-    }
-
-    /// <summary>User mới (đã xác minh email) có kho đã nâng lên XS (2 suất người nhận).</summary>
+    /// <summary>User mới (đã xác minh email) có kho đã nâng lên XS.</summary>
     public static async Task<(HttpClient Client, Guid VaultId)> CreateClientWithPaidVaultAsync(ApiFactory factory)
     {
         HttpClient client = await CreateClientForNewUserAsync(factory, emailVerified: true);

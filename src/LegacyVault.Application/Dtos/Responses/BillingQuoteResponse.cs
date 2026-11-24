@@ -3,36 +3,30 @@ namespace LegacyVault.Application.Dtos.Responses;
 /// <summary>Báo giá (POST /api/v1/billing/quote), SRS §8.3. Không ghi DB, chưa tạo đơn.</summary>
 public class BillingQuoteResponse
 {
-    /// <summary>"PURCHASE" hoặc "ADDON".</summary>
+    /// <summary>"PURCHASE", "RENEWAL" hoặc "UPGRADE".</summary>
     public string Kind { get; set; } = string.Empty;
 
-    /// <summary>"XS" hoặc "XS_MAX"; ADDON là hạng hiện tại của kho.</summary>
+    /// <summary>Mã gói được báo giá.</summary>
     public string Tier { get; set; } = string.Empty;
 
-    /// <summary>Null với ADDON.</summary>
+    /// <summary>Null với nâng hạng.</summary>
     public int? Years { get; set; }
 
-    public int ExtraSlots { get; set; }
     public long TierAmount { get; set; }
-    public long SlotAmount { get; set; }
     public long TotalAmount { get; set; }
 
     /// <summary>"VND".</summary>
     public string Currency { get; set; } = string.Empty;
 
     public long StorageQuotaBytes { get; set; }
-    public int IncludedBeneficiarySlots { get; set; }
 
-    /// <summary>Tổng suất sau khi thanh toán: kèm theo hạng + suất thêm hiện có + suất mua lần này.</summary>
-    public int BeneficiarySlots { get; set; }
-
-    /// <summary>Số ngày của kỳ mới; null với ADDON.</summary>
+    /// <summary>Số ngày của kỳ mới; null với nâng hạng.</summary>
     public int? ServiceDays { get; set; }
 
-    /// <summary>"ON_PAYMENT" với mua mới (kỳ bắt đầu lúc thanh toán thành công); null với ADDON.</summary>
+    /// <summary>"ON_PAYMENT" với mua mới (kỳ bắt đầu lúc thanh toán thành công); null với nâng hạng.</summary>
     public string? ServiceStartsAt { get; set; }
 
-    /// <summary>ADDON: hạn kỳ hiện tại (không đổi); mua mới: null.</summary>
+    /// <summary>Nâng hạng và gia hạn sớm: hạn kỳ hiện tại; mua mới: null.</summary>
     public DateTimeOffset? ServiceExpiresAt { get; set; }
 
     public string PolicyVersion { get; set; } = string.Empty;

@@ -17,6 +17,9 @@ public interface IHandoverReportRepository
     /// <summary>Hồ sơ đã gắn vào biên bản, cũ nhất trước, kèm tệp. Chỉ đọc.</summary>
     Task<List<HandoverReport>> ListByRecordAsync(Guid recordId, CancellationToken ct);
 
+    /// <summary>Số hồ sơ báo tin của kho đang chờ xét (chờ xét hoặc chờ bổ sung), bỏ qua hồ sơ exceptReportId nếu có.</summary>
+    Task<int> CountPendingByVaultAsync(Guid vaultId, Guid? exceptReportId, CancellationToken ct);
+
     void Add(HandoverReport report);
 
     void AddFile(HandoverReportFile file);

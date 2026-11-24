@@ -25,9 +25,6 @@ public interface IAssetAssignmentRepository
     /// <summary>Số tài sản khác nhau của kho đã được gán cho ít nhất một người nhận.</summary>
     Task<int> CountAssignedAssetsAsync(Guid vaultId, CancellationToken ct);
 
-    /// <summary>Số người nhận khác nhau có ít nhất một dòng gán trong kho; đây là số suất người nhận đã dùng.</summary>
-    Task<int> CountUsedBeneficiarySlotsAsync(Guid vaultId, CancellationToken ct);
-
     /// <summary>Tài sản có đang được gán cho ai không (chặn xóa tài sản).</summary>
     Task<bool> IsAssetAssignedAsync(Guid assetId, CancellationToken ct);
 

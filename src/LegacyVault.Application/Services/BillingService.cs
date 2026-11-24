@@ -301,8 +301,7 @@ public sealed class BillingService : IBillingService
         BillingRules.EnsureVaultAndPlanAllowPayment(vault);
 
         IBillingPriceSettings prices = await priceProvider.GetCurrentAsync(ct);
-        PaymentOrderKind kind = BillingRules.DetermineKind(
-            prices, vault.Entitlement, request.Tier, request.ExtraSlots, request.Renew, now);
+        PaymentOrderKind kind = BillingRules.DetermineKind(prices, vault.Entitlement, request.Tier, request.Renew, now);
 
         if (kind == PaymentOrderKind.Purchase)
         {
@@ -324,7 +323,7 @@ public sealed class BillingService : IBillingService
         {
             // Giá nâng hạng tính theo kỳ (số năm) của đơn mua đã trả gần nhất.
             eligibility.PaidYears = await paymentOrderRepository.FindLatestPaidPurchaseYearsAsync(vault.Id, ct);
-            eligibility.UpgradeTarget = BillingRules.FindUpgradeTarget(prices, vault.Entitlement, request.Tier, request.ExtraSlots);
+            eligibility.UpgradeTarget = BillingRules.FindUpgradeTarget(prices, vault.Entitlement, request.Tier);
         }
         return eligibility;
     }
@@ -347,11 +346,11 @@ public sealed class BillingService : IBillingService
         BillingQuote quote = BuildQuote(prices, request, eligibility, now);
         if (quote.TotalAmount > BillingPrices.MaxOrderAmount)
         {
-            throw ValidationErrors.For("extraSlots",
-                $"Tổng tiền đơn ({BillingPrices.FormatMoney(quote.TotalAmount)}đ) vượt mức tối đa {BillingPrices.FormatMoney(BillingPrices.MaxOrderAmount)}đ cho một lần chuyển khoản. Hãy giảm số suất hoặc chọn kỳ ngắn hơn.");
+            throw ValidationErrors.For("years",
+                $"Tổng tiền đơn ({BillingPrices.FormatMoney(quote.TotalAmount)}đ) vượt mức tối đa {BillingPrices.FormatMoney(BillingPrices.MaxOrderAmount)}đ cho một lần chuyển khoản. Hãy chọn kỳ ngắn hơn.");
         }
 
-        // Hạng đã bị Admin tạm ngừng bán: chặn mọi đơn mới của hạng đó (mua mới, nâng hạng, gia hạn, mua thêm suất),
+        // Hạng đã bị Admin tạm ngừng bán: chặn mọi đơn mới của hạng đó (mua mới, nâng hạng, gia hạn),
         // kể cả người đang dùng. Dịch vụ đã trả vẫn chạy đến hết kỳ.
         PlanInfo? quotedPlan = prices.FindPlan(quote.PlanCode);
         if (quotedPlan == null || !quotedPlan.CanBuy)
@@ -363,8 +362,7 @@ public sealed class BillingService : IBillingService
         if (quote.Kind == PaymentOrderKind.Renewal)
         {
             long usedBytes = await vaultRepository.SumUsedBytesAsync(eligibility.Vault.Id, ct);
-            int usedSlots = await assignmentRepository.CountUsedBeneficiarySlotsAsync(eligibility.Vault.Id, ct);
-            BillingRules.EnsureUsageFitsRenewal(quote, usedBytes, usedSlots);
+            BillingRules.EnsureUsageFitsRenewal(quote, usedBytes);
         }
         return quote;
     }
@@ -375,19 +373,14 @@ public sealed class BillingService : IBillingService
     {
         if (eligibility.Kind == PaymentOrderKind.Purchase)
         {
-            return BillingRules.QuotePurchase(prices, request.Tier, request.Years, request.ExtraSlots);
+            return BillingRules.QuotePurchase(prices, request.Tier, request.Years);
         }
         if (eligibility.Kind == PaymentOrderKind.Renewal)
         {
-            return BillingRules.QuoteRenewal(
-                prices, eligibility.Vault.Entitlement, request.Tier, request.Years, request.ExtraSlots, now);
+            return BillingRules.QuoteRenewal(prices, eligibility.Vault.Entitlement, request.Tier, request.Years, now);
         }
-        if (eligibility.Kind == PaymentOrderKind.Upgrade)
-        {
-            return BillingRules.QuoteUpgrade(
-                prices, eligibility.Vault.Entitlement, eligibility.UpgradeTarget!, eligibility.PaidYears, request.ExtraSlots, now);
-        }
-        return BillingRules.QuoteAddon(prices, eligibility.Vault.Entitlement, request.ExtraSlots, now);
+        return BillingRules.QuoteUpgrade(
+            prices, eligibility.Vault.Entitlement, eligibility.UpgradeTarget!, eligibility.PaidYears, now);
     }
 
     /// <summary>Dựng đơn Pending từ báo giá: giá, dung lượng, số suất, phiên bản chính sách đều được chốt tại đây.</summary>
@@ -401,17 +394,14 @@ public sealed class BillingService : IBillingService
         order.Tier = quote.Tier;
         order.PlanCode = quote.PlanCode;
         order.Years = quote.Years;
-        order.ExtraSlots = quote.ExtraSlots;
         order.TierAmount = quote.TierAmount;
-        order.SlotAmount = quote.SlotAmount;
         order.TotalAmount = quote.TotalAmount;
         order.StorageQuotaBytes = quote.StorageQuotaBytes;
-        order.IncludedBeneficiarySlots = quote.IncludedBeneficiarySlots;
         order.BaseServiceExpiresAt = quote.BaseServiceExpiresAt;
         order.PolicyVersion = quote.PolicyVersion;
         order.PaymentCode = BillingRules.NewPaymentCode();
         order.Status = PaymentOrderStatus.Pending;
-        // đơn mua thêm hết hạn ở mốc sớm hơn giữa thời gian chờ (Admin cấu hình, mặc định 15 phút) và hết kỳ hiện tại.
+        // đơn nâng hạng hết hạn ở mốc sớm hơn giữa thời gian chờ (Admin cấu hình, mặc định 15 phút) và hết kỳ hiện tại.
         order.ExpiresAt = BillingRules.ComputeOrderExpiresAt(quote.Kind, now, quote.BaseServiceExpiresAt, orderLifetime);
         order.CreatedAt = now;
         order.UpdatedAt = now;

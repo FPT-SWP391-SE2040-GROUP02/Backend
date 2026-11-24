@@ -44,6 +44,12 @@ public interface IHandoverRecordService
     /// <summary>Luật sư ký xác minh ở bước 3.</summary>
     Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct);
 
+    /// <summary>
+    /// Luật sư nhắc Người thực thi ký biên bản đã chốt. Mỗi biên bản nhắc tối đa một lần mỗi 24 giờ; Người thực thi đã ký
+    /// hoặc không có Người thực thi thì từ chối.
+    /// </summary>
+    Task<HandoverRecordResponse> RemindExecutorAsync(Guid recordId, CancellationToken ct);
+
     /// <summary>Xét giấy tờ của một yêu cầu nhận: chấp nhận, yêu cầu bổ sung (kèm lý do) hoặc từ chối (kèm lý do).</summary>
     Task<HandoverRecordResponse> ReviewClaimAsync(
         Guid recordId, Guid claimId, ReviewHandoverClaimRequest request, CancellationToken ct);
@@ -99,9 +105,6 @@ public interface IHandoverRecordService
 
     /// <summary>Yêu cầu nhận tài sản đang mở của kho; null khi không có.</summary>
     Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct);
-
-    /// <summary>Chủ kho hủy yêu cầu trước khi biên bản đủ chữ ký: hủy biên bản và lượt, kho mở khóa.</summary>
-    Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct);
 
     // Người nhận
 

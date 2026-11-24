@@ -142,8 +142,6 @@ public sealed class VaultService(
             Tier = ServiceTier.Free,
             Status = EntitlementStatus.Free,
             StorageQuotaBytes = StorageLimits.FreeQuotaBytes,
-            IncludedBeneficiarySlots = 0,
-            ExtraBeneficiarySlots = 0,
             CreatedAt = now,
         };
         return vault;
@@ -153,7 +151,6 @@ public sealed class VaultService(
     {
         var usedBytes = await vaultRepository.SumUsedBytesAsync(vault.Id, ct);
         var assignedAssets = await assignmentRepository.CountAssignedAssetsAsync(vault.Id, ct);
-        var usedBeneficiarySlots = await assignmentRepository.CountUsedBeneficiarySlotsAsync(vault.Id, ct);
-        return vault.ToResponse(usedBytes, assignedAssets, usedBeneficiarySlots);
+        return vault.ToResponse(usedBytes, assignedAssets);
     }
 }

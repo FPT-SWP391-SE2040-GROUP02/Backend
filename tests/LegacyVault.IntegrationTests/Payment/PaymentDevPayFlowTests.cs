@@ -43,14 +43,16 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
     private static async Task<Guid> CreateXsOrderAsync(HttpClient client)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(
-            "/api/v1/billing/orders", new { tier = "XS", years = 3, extraSlots = 1 });
+            "/api/v1/billing/orders", new { tier = "XS", years = 3 });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await ApiTestHelpers.ReadJsonAsync(response)).GetProperty("id").GetGuid();
     }
 
-    private static async Task<Guid> CreateAddonOrderAsync(HttpClient client, int extraSlots)
+    /// <summary>Đơn gia hạn sớm XS 1 năm cho kho đang còn hạn.</summary>
+    private static async Task<Guid> CreateRenewalOrderAsync(HttpClient client)
     {
-        HttpResponseMessage response = await client.PostAsJsonAsync("/api/v1/billing/orders", new { extraSlots });
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/v1/billing/orders", new { tier = "XS", years = 1, renew = true });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await ApiTestHelpers.ReadJsonAsync(response)).GetProperty("id").GetGuid();
     }
@@ -83,7 +85,7 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Ac90_Setup14_DevPay_Purchase_GrantsXsAndKeepsPlanDraft()
     {
-        // Chuẩn bị: Free + eKYC → đơn XS 3 năm + 1 suất
+        // Chuẩn bị: Free + eKYC → đơn XS 3 năm
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
         Guid orderId = await CreateXsOrderAsync(client);
         int configVersionBefore = await ApiTestHelpers.GetPlanConfigVersionAsync(client);
@@ -105,9 +107,6 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         Assert.Equal("XS", vault.GetProperty("serviceTier").GetString());
         Assert.Equal("PAID_ACTIVE", vault.GetProperty("serviceStatus").GetString());
         Assert.Equal(200 * 1048576L, vault.GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(2, vault.GetProperty("includedBeneficiarySlots").GetInt32());
-        Assert.Equal(1, vault.GetProperty("extraBeneficiarySlots").GetInt32());
-        Assert.Equal(3, vault.GetProperty("beneficiarySlots").GetInt32());
         DateTimeOffset serviceExpiresAt = vault.GetProperty("serviceExpiresAt").GetDateTimeOffset();
         Assert.InRange(serviceExpiresAt, before.AddDays(1095).AddSeconds(-1), after.AddDays(1095).AddSeconds(1));
         Assert.Equal("DRAFT", vault.GetProperty("planStatus").GetString());
@@ -129,29 +128,6 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Ac95_DevPay_Addon_AddsSlotsAndKeepsExpiry()
-    {
-        // Chuẩn bị: XS còn 180 ngày, chưa có suất thêm
-        (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
-        await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(180));
-        VaultEntitlement before = await LoadEntitlementAsync(vaultId);
-        Guid orderId = await CreateAddonOrderAsync(client, 1);
-
-        // Hành động
-        HttpResponseMessage response = await DevPayAsync(client, orderId);
-
-        // Kiểm tra: +1 suất, hạn và hạng giữ nguyên
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("PAID", (await ApiTestHelpers.ReadJsonAsync(response)).GetProperty("status").GetString());
-        VaultEntitlement after = await LoadEntitlementAsync(vaultId);
-        Assert.Equal(before.ExtraBeneficiarySlots + 1, after.ExtraBeneficiarySlots);
-        Assert.Equal(before.ServiceExpiresAt, after.ServiceExpiresAt);
-        Assert.Equal(ServiceTier.Xs, after.Tier);
-        Assert.Equal(EntitlementStatus.PaidActive, after.Status);
-        Assert.Equal(1, await CountPaidLogsAsync(vaultId));
-    }
-
-    [SqlFact]
     public async Task Pay04_DevPay_Repeated_GrantsOnlyOnce()
     {
         // Chuẩn bị
@@ -167,7 +143,6 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         Assert.Equal("PAID", (await ApiTestHelpers.ReadJsonAsync(second)).GetProperty("status").GetString());
         VaultEntitlement afterSecond = await LoadEntitlementAsync(vaultId);
-        Assert.Equal(afterFirst.ExtraBeneficiarySlots, afterSecond.ExtraBeneficiarySlots);
         Assert.Equal(afterFirst.ServiceExpiresAt, afterSecond.ServiceExpiresAt);
         Assert.Equal(1, await CountPaidLogsAsync(vaultId));
     }
@@ -175,10 +150,11 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Pay04_DevPay_Concurrent_GrantsOnlyOnce()
     {
-        // Chuẩn bị: ADDON để cấp trùng sẽ lộ ngay (suất thêm tăng nhiều hơn 1)
+        // Chuẩn bị: đơn gia hạn sớm để cấp trùng sẽ lộ ngay (hạn bị cộng nhiều hơn 365 ngày)
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(180));
-        Guid orderId = await CreateAddonOrderAsync(client, 1);
+        VaultEntitlement before = await LoadEntitlementAsync(vaultId);
+        Guid orderId = await CreateRenewalOrderAsync(client);
 
         // Hành động: sáu request trả tiền cùng lúc
         List<Task<HttpResponseMessage>> pays = new List<Task<HttpResponseMessage>>();
@@ -203,7 +179,7 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         }
         Assert.True(ok >= 1);
         VaultEntitlement entitlement = await LoadEntitlementAsync(vaultId);
-        Assert.Equal(1, entitlement.ExtraBeneficiarySlots);
+        Assert.Equal(before.ServiceExpiresAt!.Value.AddDays(365), entitlement.ServiceExpiresAt);
         Assert.Equal(1, await CountPaidLogsAsync(vaultId));
         Assert.Equal(PaymentOrderStatus.Paid, (await BillingTestData.LoadOrderAsync(factory, orderId)).Status);
     }
@@ -289,13 +265,14 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Addon03_DevPay_Addon_ServiceExpiryChanged_Returns409AndGrantsNothing()
+    public async Task D8_DevPay_EarlyRenewal_ServiceExpiryChanged_Returns409AndGrantsNothing()
     {
         // Chuẩn bị: sau khi tạo đơn, hạn kỳ bị đổi
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(180));
-        Guid orderId = await CreateAddonOrderAsync(client, 1);
+        Guid orderId = await CreateRenewalOrderAsync(client);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(400));
+        VaultEntitlement before = await LoadEntitlementAsync(vaultId);
 
         // Hành động
         HttpResponseMessage response = await DevPayAsync(client, orderId);
@@ -304,18 +281,18 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
             response, HttpStatusCode.Conflict, "PAYMENT_ORDER_NOT_PAYABLE");
         Assert.Equal("ENTITLEMENT_CHANGED", problem.GetProperty("reason").GetString());
-        Assert.Equal(0, (await LoadEntitlementAsync(vaultId)).ExtraBeneficiarySlots);
+        Assert.Equal(before.ServiceExpiresAt, (await LoadEntitlementAsync(vaultId)).ServiceExpiresAt);
         Assert.Equal(PaymentOrderStatus.Pending, (await BillingTestData.LoadOrderAsync(factory, orderId)).Status);
         Assert.Equal(0, await CountPaidLogsAsync(vaultId));
     }
 
     [SqlFact]
-    public async Task Addon03_DevPay_Addon_EntitlementBecameGrace_Returns409()
+    public async Task D8_DevPay_EarlyRenewal_EntitlementBecameGrace_Returns409()
     {
         // Chuẩn bị
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(180));
-        Guid orderId = await CreateAddonOrderAsync(client, 1);
+        Guid orderId = await CreateRenewalOrderAsync(client);
         await ApiTestHelpers.SetEntitlementStatusAsync(factory, vaultId, EntitlementStatus.GraceReadOnly);
 
         // Hành động
@@ -325,7 +302,7 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
             response, HttpStatusCode.Conflict, "PAYMENT_ORDER_NOT_PAYABLE");
         Assert.Equal("ENTITLEMENT_CHANGED", problem.GetProperty("reason").GetString());
-        Assert.Equal(0, (await LoadEntitlementAsync(vaultId)).ExtraBeneficiarySlots);
+        Assert.Equal(EntitlementStatus.GraceReadOnly, (await LoadEntitlementAsync(vaultId)).Status);
     }
 
     [SqlFact]
@@ -343,7 +320,7 @@ public sealed class PaymentDevPayFlowTests : IAsyncLifetime
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
             response, HttpStatusCode.Conflict, "PAYMENT_ORDER_NOT_PAYABLE");
         Assert.Equal("ENTITLEMENT_CHANGED", problem.GetProperty("reason").GetString());
-        Assert.Equal(0, (await LoadEntitlementAsync(vaultId)).ExtraBeneficiarySlots);
+        Assert.Equal(ServiceTier.Xs, (await LoadEntitlementAsync(vaultId)).Tier);
     }
 
     [SqlFact]

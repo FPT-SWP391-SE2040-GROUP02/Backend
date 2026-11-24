@@ -10,8 +10,8 @@ namespace LegacyVault.Application.Services;
 public static class ExecutorAssignRules
 {
     /// <summary>
-    /// Admin chỉ giao được khi kho chưa đóng và kế hoạch còn ở Nháp hoặc đang chạy điểm danh.
-    /// Từ lúc nộp giấy chứng tử trở đi, Người thực thi của hồ sơ không đổi nữa.
+    /// Admin giao được khi kho chưa đóng và kế hoạch ở Nháp, đang chạy, hoặc đang bàn giao (người cũ không làm việc được
+    /// giữa chừng). Kế hoạch đã đóng thì không đổi nữa.
     /// </summary>
     public static bool PlanAllowsAssign(VaultStatus vaultStatus, PlanStatus planStatus)
     {
@@ -19,14 +19,31 @@ public static class ExecutorAssignRules
         {
             return false;
         }
-        return planStatus == PlanStatus.Draft || PlanRules.IsRunning(planStatus);
+        if (planStatus == PlanStatus.Draft || PlanRules.IsRunning(planStatus))
+        {
+            return true;
+        }
+        return IsHandoverUnderway(planStatus);
+    }
+
+    /// <summary>
+    /// Kho đang bàn giao (luật sư đã chấp nhận giấy tờ, chưa đóng): Admin đổi người thì người mới nhận việc ngay, không qua
+    /// lời mời; người cũ thôi vai trò trong cùng giao dịch.
+    /// </summary>
+    public static bool IsHandoverUnderway(PlanStatus planStatus)
+    {
+        if (planStatus == PlanStatus.HandoverRequested || planStatus == PlanStatus.HandoverInProgress)
+        {
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
     /// Kết quả sắp xếp các dòng Executor hiện có trước khi thêm người mới:
     /// lời mời hết hạn → Expired; lời mời đang chờ hoặc tạm dừng → Revoked; Executor đã chấp nhận khi kế hoạch đang chạy
     /// được giữ lại và người mới sẽ thay (ReplacesExecutorId), người cũ chỉ thôi khi người mới chấp nhận.
-    /// Kế hoạch còn Nháp mà đã có Executor đã chấp nhận thì thu hồi luôn. Trả id người sẽ bị thay, hoặc null.
+    /// Kế hoạch còn Nháp hoặc đang bàn giao mà đã có Executor đã chấp nhận thì thu hồi luôn. Trả id người sẽ bị thay, hoặc null.
     /// </summary>
     public static Guid? PrepareForAssign(IEnumerable<Executor> current, PlanStatus planStatus, DateTimeOffset now)
     {

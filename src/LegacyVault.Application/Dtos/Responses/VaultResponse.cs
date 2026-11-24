@@ -36,18 +36,6 @@ public class VaultResponse
     /// <summary>Còn lại = quota − đã dùng (không âm).</summary>
     public long StorageRemainingBytes { get; set; }
 
-    /// <summary>Tổng suất = suất kèm hạng + suất mua thêm.</summary>
-    public int BeneficiarySlots { get; set; }
-
-    /// <summary>Suất kèm hạng (QUOTA-06).</summary>
-    public int IncludedBeneficiarySlots { get; set; }
-
-    /// <summary>Suất mua thêm (QUOTA-06).</summary>
-    public int ExtraBeneficiarySlots { get; set; }
-
-    /// <summary>Số người nhận khác nhau đang được gán tài sản trong kho (QUOTA-03, QUOTA-06).</summary>
-    public int UsedBeneficiarySlots { get; set; }
-
     /// <summary>Số tài sản của kho đã được gán cho ít nhất một người nhận.</summary>
     public int AssignedAssetCount { get; set; }
 

@@ -47,13 +47,13 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
 
     private static Task<HttpResponseMessage> QuoteUpgradeAsync(HttpClient client)
     {
-        return client.PostAsJsonAsync("/api/v1/billing/quote", new { tier = "XS_MAX", extraSlots = 0 });
+        return client.PostAsJsonAsync("/api/v1/billing/quote", new { tier = "XS_MAX" });
     }
 
     private static async Task<Guid> CreateUpgradeOrderAsync(HttpClient client)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(
-            "/api/v1/billing/orders", new { tier = "XS_MAX", extraSlots = 0 });
+            "/api/v1/billing/orders", new { tier = "XS_MAX" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await ApiTestHelpers.ReadJsonAsync(response)).GetProperty("id").GetGuid();
     }
@@ -76,9 +76,7 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
         long total = quote.GetProperty("totalAmount").GetInt64();
         Assert.InRange(total, 98000, 99000);
         Assert.Equal(total, quote.GetProperty("tierAmount").GetInt64());
-        Assert.Equal(0, quote.GetProperty("slotAmount").GetInt64());
         Assert.Equal(500 * 1048576L, quote.GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(5, quote.GetProperty("beneficiarySlots").GetInt32());
         Assert.Equal(0, await BillingTestData.CountOrdersAsync(factory, vaultId, null));
     }
 
@@ -88,7 +86,7 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
         // Chuẩn bị: mua XS 3 năm thật rồi trả bằng dev-pay (kho vừa mua nên còn gần đủ 1.095 ngày)
         (HttpClient client, _, _) = await BillingTestData.CreateFreeVaultAsync(factory, ekycDaysAgo: 1);
         HttpResponseMessage create = await client.PostAsJsonAsync(
-            "/api/v1/billing/orders", new { tier = "XS", years = 3, extraSlots = 0 });
+            "/api/v1/billing/orders", new { tier = "XS", years = 3 });
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         Guid purchaseId = (await ApiTestHelpers.ReadJsonAsync(create)).GetProperty("id").GetGuid();
         HttpResponseMessage paid = await client.PostAsync($"/api/v1/billing/orders/{purchaseId}/dev-pay", null);
@@ -104,16 +102,11 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Upgrade_CreateOrderAndDevPay_GrantsXsMaxKeepsExpiryAndExtraSlots()
+    public async Task Upgrade_CreateOrderAndDevPay_GrantsXsMaxKeepsExpiry()
     {
-        // Chuẩn bị: XS còn 90 ngày, đã có 1 suất mua thêm
+        // Chuẩn bị: XS còn 90 ngày
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(90));
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            await db.VaultEntitlements.Where(e => e.VaultId == vaultId)
-                .ExecuteUpdateAsync(s => s.SetProperty(e => e.ExtraBeneficiarySlots, 1));
-        });
         VaultEntitlement before = await LoadEntitlementAsync(vaultId);
         Guid orderId = await CreateUpgradeOrderAsync(client);
 
@@ -129,31 +122,11 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
         Assert.Equal(ServiceTier.XsMax, after.Tier);
         Assert.Equal(EntitlementStatus.PaidActive, after.Status);
         Assert.Equal(500 * 1048576L, after.StorageQuotaBytes);
-        Assert.Equal(5, after.IncludedBeneficiarySlots);
-        Assert.Equal(1, after.ExtraBeneficiarySlots);
         Assert.Equal(before.ServiceExpiresAt, after.ServiceExpiresAt);
     }
 
     [SqlFact]
-    public async Task Upgrade_XsMaxChoiceWithExtraSlots_StaysAddonAndIgnoresTier()
-    {
-        // Chuẩn bị
-        (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
-        await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(90));
-
-        // Hành động: có mua thêm suất thì không phải nâng hạng (hợp đồng cũ: tier bị bỏ qua)
-        HttpResponseMessage response = await client.PostAsJsonAsync(
-            "/api/v1/billing/quote", new { tier = "XS_MAX", extraSlots = 1 });
-
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        JsonElement quote = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.Equal("ADDON", quote.GetProperty("kind").GetString());
-        Assert.Equal("XS", quote.GetProperty("tier").GetString());
-    }
-
-    [SqlFact]
-    public async Task Upgrade_XsMaxVaultChoosingXsMax_IsAddonNotUpgrade()
+    public async Task Upgrade_XsMaxVaultChoosingXsMax_NothingToBuy()
     {
         // Chuẩn bị: đã ở XS_MAX
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
@@ -166,11 +139,12 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage response = await client.PostAsJsonAsync(
-            "/api/v1/billing/quote", new { tier = "XS_MAX", extraSlots = 1 });
+            "/api/v1/billing/quote", new { tier = "XS_MAX" });
 
-        // Kiểm tra: không có đường nâng hạng nữa, chỉ mua thêm suất
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("ADDON", (await ApiTestHelpers.ReadJsonAsync(response)).GetProperty("kind").GetString());
+        // Kiểm tra: không có đường nâng hạng nữa và không gia hạn nên không có gì để mua
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
+            response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
+        Assert.Equal("NOTHING_TO_BUY", problem.GetProperty("reason").GetString());
     }
 
     [SqlFact]
@@ -222,7 +196,7 @@ public sealed class BillingUpgradeFlowTests : IAsyncLifetime
 
         // Hành động: gửi lại cùng lựa chọn
         HttpResponseMessage again = await client.PostAsJsonAsync(
-            "/api/v1/billing/orders", new { tier = "XS_MAX", extraSlots = 0 });
+            "/api/v1/billing/orders", new { tier = "XS_MAX" });
 
         // Kiểm tra: 200 trả lại đơn cũ, chỉ có một đơn
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);

@@ -215,16 +215,12 @@ public sealed class DevToolsService(
         bool alreadyFree = entitlement.Tier == ServiceTier.Free
             && entitlement.Status == EntitlementStatus.Free
             && entitlement.StorageQuotaBytes == StorageLimits.FreeQuotaBytes
-            && entitlement.IncludedBeneficiarySlots == 0
-            && entitlement.ExtraBeneficiarySlots == 0
             && entitlement.ServiceExpiresAt == null;
         if (!alreadyFree)
         {
             entitlement.Tier = ServiceTier.Free;
             entitlement.Status = EntitlementStatus.Free;
             entitlement.StorageQuotaBytes = StorageLimits.FreeQuotaBytes;
-            entitlement.IncludedBeneficiarySlots = 0;
-            entitlement.ExtraBeneficiarySlots = 0;
             entitlement.ServiceExpiresAt = null;
             entitlement.UpdatedAt = now;
             response.EntitlementReset = true;

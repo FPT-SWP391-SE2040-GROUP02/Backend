@@ -5,7 +5,7 @@
 # Hạng Free thêm người nhận → 403 PAID_TIER_REQUIRED (SETUP-17). Nâng kho lên XS trong SSMS
 # (CHỈ DB local, không chạy trên môi trường thật):
 #    UPDATE VaultEntitlements
-#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200, IncludedBeneficiarySlots = 2
+#    SET Tier = 'Xs', Status = 'PaidActive', StorageQuotaBytes = 209715200
 #    WHERE VaultId = '<vaultId>';
 # Dữ liệu dưới đây là dữ liệu giả, không dùng CCCD thật.
 

@@ -9,6 +9,6 @@ public class DevVaultOptionResponse
 
     public string OwnerName { get; set; } = string.Empty;
 
-    /// <summary>DRAFT | ACTIVE | DEATH_CASE_OPEN | HANDOVER_IN_PROGRESS | CLOSED | BLOCKED.</summary>
+    /// <summary>DRAFT | ACTIVE | DEATH_CASE_OPEN | HANDOVER_IN_PROGRESS | CLOSED.</summary>
     public string PlanStatus { get; set; } = string.Empty;
 }

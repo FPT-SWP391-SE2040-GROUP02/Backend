@@ -35,6 +35,12 @@ public sealed class HandoverInvitation
     /// <summary>Lời nhắn Chủ kho để lại cho người nhận (không bắt buộc). Null thì thư bỏ khung này.</summary>
     public string? OwnerMessage { get; set; }
 
+    /// <summary>
+    /// True khi người nhận do luật sư thêm vào biên bản (Chủ kho không chia tài sản nào cho người này): thư dùng lời
+    /// riêng, không nói rằng Chủ kho đã chọn họ.
+    /// </summary>
+    public bool AddedByVerifier { get; set; }
+
     /// <summary>Điền các thông tin liên hệ của kho vào lời mời; thiếu thông tin thì giữ nguyên giá trị rỗng.</summary>
     public void ApplyContacts(HandoverContactInfo? contacts)
     {

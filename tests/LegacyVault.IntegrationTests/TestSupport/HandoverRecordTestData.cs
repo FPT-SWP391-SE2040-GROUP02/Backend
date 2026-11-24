@@ -15,8 +15,11 @@ namespace LegacyVault.IntegrationTests.TestSupport;
 /// </summary>
 public static class HandoverRecordTestData
 {
-    /// <summary>Body chốt biên bản: luật sư tick xác nhận căn cứ pháp lý.</summary>
-    public static readonly object FinalizeBody = new { confirmLegalBasis = true };
+    /// <summary>
+    /// Body chốt biên bản: luật sư tick xác nhận căn cứ pháp lý và (khi biên bản khác cách chia của Chủ kho) xác nhận khác
+    /// biệt; không khác thì cờ thứ hai bị bỏ qua.
+    /// </summary>
+    public static readonly object FinalizeBody = new { confirmLegalBasis = true, confirmSplitDeviation = true };
 
     public static string ExecutorRecordUrl(Guid vaultId)
     {

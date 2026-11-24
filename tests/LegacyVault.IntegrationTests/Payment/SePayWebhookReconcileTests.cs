@@ -75,17 +75,19 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         return order;
     }
 
-    /// <summary>Đơn mua mới XS 1 năm, 0 suất thêm (199.000đ).</summary>
+    /// <summary>Đơn mua mới XS 1 năm (199.000đ).</summary>
     private static async Task<CreatedOrder> CreatePurchaseOrderAsync(HttpClient client)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(
-            "/api/v1/billing/orders", new { tier = "XS", years = 1, extraSlots = 0 });
+            "/api/v1/billing/orders", new { tier = "XS", years = 1 });
         return await ReadCreatedOrderAsync(response);
     }
 
-    private static async Task<CreatedOrder> CreateAddonOrderAsync(HttpClient client, int extraSlots)
+    /// <summary>Đơn gia hạn sớm XS 1 năm cho kho đang còn hạn.</summary>
+    private static async Task<CreatedOrder> CreateRenewalOrderAsync(HttpClient client)
     {
-        HttpResponseMessage response = await client.PostAsJsonAsync("/api/v1/billing/orders", new { extraSlots });
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/v1/billing/orders", new { tier = "XS", years = 1, renew = true });
         return await ReadCreatedOrderAsync(response);
     }
 
@@ -218,13 +220,13 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Addon02_Webhook_MatchingAddon_AddsSlotsAndKeepsExpiry()
+    public async Task Renewal_Webhook_MatchingEarlyRenewal_ExtendsExpiry()
     {
-        // Chuẩn bị: XS còn 180 ngày, đơn mua thêm 1 suất
+        // Chuẩn bị: XS còn 180 ngày, đơn gia hạn sớm 1 năm
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(180));
         VaultEntitlement before = await LoadEntitlementAsync(vaultId);
-        CreatedOrder order = await CreateAddonOrderAsync(client, 1);
+        CreatedOrder order = await CreateRenewalOrderAsync(client);
 
         // Hành động
         PaymentTransaction transaction = await SendAndLoadAsync(PayloadFor(order, NewTransactionId()));
@@ -232,8 +234,7 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
         // Kiểm tra
         Assert.Equal(PaymentTransactionStatus.Matched, transaction.Status);
         VaultEntitlement after = await LoadEntitlementAsync(vaultId);
-        Assert.Equal(before.ExtraBeneficiarySlots + 1, after.ExtraBeneficiarySlots);
-        Assert.Equal(before.ServiceExpiresAt, after.ServiceExpiresAt);
+        Assert.Equal(before.ServiceExpiresAt!.Value.AddDays(365), after.ServiceExpiresAt);
         Assert.Equal(PaymentOrderStatus.Paid, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
     }
 
@@ -487,20 +488,21 @@ public sealed class SePayWebhookReconcileTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Addon03_Webhook_AddonWhenServiceExpiryChanged_IsEntitlementChanged()
+    public async Task Renewal_Webhook_EarlyRenewalWhenServiceExpiryChanged_IsEntitlementChanged()
     {
-        // Chuẩn bị: sau khi tạo đơn mua thêm, hạn kỳ dịch vụ bị đổi
+        // Chuẩn bị: sau khi tạo đơn gia hạn sớm, hạn kỳ dịch vụ bị đổi
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(180));
-        CreatedOrder order = await CreateAddonOrderAsync(client, 1);
+        CreatedOrder order = await CreateRenewalOrderAsync(client);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(400));
+        VaultEntitlement before = await LoadEntitlementAsync(vaultId);
 
         // Hành động
         PaymentTransaction transaction = await SendAndLoadAsync(PayloadFor(order, NewTransactionId()));
 
-        // Kiểm tra: không tự cấp suất
+        // Kiểm tra: không tự gia hạn
         AssertReconciliationRequired(transaction, "ENTITLEMENT_CHANGED");
-        Assert.Equal(0, (await LoadEntitlementAsync(vaultId)).ExtraBeneficiarySlots);
+        Assert.Equal(before.ServiceExpiresAt, (await LoadEntitlementAsync(vaultId)).ServiceExpiresAt);
         Assert.Equal(PaymentOrderStatus.Pending, (await BillingTestData.LoadOrderAsync(factory, order.OrderId)).Status);
     }
 

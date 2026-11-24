@@ -14,21 +14,6 @@ public sealed class FakeBillingPriceSettings : IBillingPriceSettings
         get { return "2026-10"; }
     }
 
-    public long SlotPricePerYear
-    {
-        get { return 49000; }
-    }
-
-    public int MaxExtraSlotsPerOrder
-    {
-        get { return BillingPrices.MaxExtraSlotsPerOrder; }
-    }
-
-    public int MaxTotalSlotsPerAccount
-    {
-        get { return BillingPrices.DefaultMaxTotalSlots; }
-    }
-
     public TimeSpan OrderLifetime
     {
         get { return BillingPrices.OrderLifetime; }
@@ -67,7 +52,6 @@ public sealed class FakeBillingPriceSettings : IBillingPriceSettings
         plan.Name = name;
         plan.Order = order;
         plan.StorageQuotaBytes = GetStorageQuotaBytes(tier);
-        plan.IncludedSlots = GetIncludedSlots(tier);
         Dictionary<int, long> prices = new Dictionary<int, long>();
         foreach (int years in SaleYears)
         {
@@ -80,11 +64,6 @@ public sealed class FakeBillingPriceSettings : IBillingPriceSettings
     public long GetStorageQuotaBytes(ServiceTier tier)
     {
         return BillingPrices.GetStorageQuotaBytes(tier);
-    }
-
-    public int GetIncludedSlots(ServiceTier tier)
-    {
-        return BillingPrices.GetIncludedSlots(tier);
     }
 
     public IReadOnlyList<int> SaleYears

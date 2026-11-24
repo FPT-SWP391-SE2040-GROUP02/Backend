@@ -174,7 +174,8 @@ public sealed class AdminController : ControllerBase
 
     /// <summary>
     /// Giao hoặc đổi Người thực thi của kho (lý do bắt buộc). Người được giao nhận lời mời và phải chấp nhận; người cũ giữ vai trò
-    /// tới khi người mới chấp nhận. Kế hoạch đang bàn giao hoặc bị chặn, hoặc kho đã đóng → 409 EXECUTOR_NOT_ALLOWED (PLAN_LOCKED).
+    /// tới khi người mới chấp nhận. Kho đang bàn giao thì người mới nhận việc ngay, người cũ thôi vai trò cùng lúc.
+    /// Kế hoạch đã đóng hoặc kho đã đóng → 409 EXECUTOR_NOT_ALLOWED (PLAN_LOCKED).
     /// </summary>
     [HttpPost("vaults/{vaultId:guid}/executor")]
     [ProducesResponseType<ExecutorInvitationResponse>(StatusCodes.Status200OK)]

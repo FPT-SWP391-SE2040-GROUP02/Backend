@@ -11,6 +11,6 @@ public enum PaymentOrderNotPayableReason
     Cancelled,
     /// <summary>Kho đã đóng, không cấp quyền dịch vụ (AC-104).</summary>
     VaultClosed,
-    /// <summary>Quyền dịch vụ của kho đã đổi so với lúc tạo đơn (ADDON-03, D8): không tự cấp.</summary>
+    /// <summary>Quyền dịch vụ của kho đã đổi so với lúc tạo đơn (D8): không tự cấp.</summary>
     EntitlementChanged,
 }

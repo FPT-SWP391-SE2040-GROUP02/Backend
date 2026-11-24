@@ -8,7 +8,7 @@ public class PaymentOrderResponse
 {
     public Guid Id { get; set; }
 
-    /// <summary>"PURCHASE" hoặc "ADDON".</summary>
+    /// <summary>"PURCHASE", "RENEWAL" hoặc "UPGRADE".</summary>
     public string Kind { get; set; } = string.Empty;
 
     /// <summary>"PENDING", "PAID", "EXPIRED", "CANCELLED".</summary>
@@ -17,21 +17,16 @@ public class PaymentOrderResponse
     /// <summary>"XS" hoặc "XS_MAX".</summary>
     public string Tier { get; set; } = string.Empty;
 
-    /// <summary>Null với ADDON.</summary>
+    /// <summary>Null với đơn nâng hạng.</summary>
     public int? Years { get; set; }
 
-    public int ExtraSlots { get; set; }
     public long TierAmount { get; set; }
-    public long SlotAmount { get; set; }
     public long TotalAmount { get; set; }
 
     /// <summary>"VND".</summary>
     public string Currency { get; set; } = string.Empty;
 
     public long StorageQuotaBytes { get; set; }
-
-    /// <summary>Suất người nhận kèm theo hạng, đã chốt lúc tạo đơn (suất mua thêm của đơn nằm ở ExtraSlots).</summary>
-    public int IncludedBeneficiarySlots { get; set; }
 
     public string PaymentCode { get; set; } = string.Empty;
 

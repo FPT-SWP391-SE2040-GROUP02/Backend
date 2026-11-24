@@ -77,7 +77,6 @@ public sealed class VaultAssetFlowTests : IAsyncLifetime
         Assert.Equal(1, vault.GetProperty("planConfigVersion").GetInt32());
         Assert.Equal("FREE", vault.GetProperty("serviceTier").GetString());
         Assert.Equal(20 * 1_048_576L, vault.GetProperty("storageQuotaBytes").GetInt64());
-        Assert.Equal(0, vault.GetProperty("beneficiarySlots").GetInt32());
         Assert.Equal("\"0\"", vault.GetProperty("etag").GetString());
 
         // Bấm lặp và gửi song song vẫn chỉ có một kho (AC-89).

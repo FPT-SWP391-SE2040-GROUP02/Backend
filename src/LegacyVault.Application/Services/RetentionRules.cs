@@ -18,7 +18,6 @@ public static class RetentionRules
     public const string HoldAwaitingResponse = "AWAITING_RESPONSE";
     public const string HoldClaimInProgress = "CLAIM_IN_PROGRESS";
     public const string HoldGrantActive = "GRANT_ACTIVE";
-    public const string HoldObjection = "OBJECTION";
 
     public const int NoticeNone = 0;
     public const int NoticeStarted = 1;
@@ -32,8 +31,7 @@ public static class RetentionRules
     public static bool AppliesToPlan(PlanStatus status)
     {
         return status == PlanStatus.HandoverInProgress
-            || status == PlanStatus.Closed
-            || status == PlanStatus.Blocked;
+            || status == PlanStatus.Closed;
     }
 
     /// <summary>Lượt bị hủy vì Owner còn sống không bao giờ dẫn tới xóa dữ liệu.</summary>
@@ -48,10 +46,6 @@ public static class RetentionRules
     /// </summary>
     public static string? HoldReason(HandoverTurn turn, PlanStatus planStatus, DateTimeOffset now)
     {
-        if (planStatus == PlanStatus.Blocked)
-        {
-            return HoldObjection;
-        }
         if (turn.Status == HandoverTurnStatus.Invited && now < turn.ResponseDeadline)
         {
             // Đồng hồ chỉ chạy sau 5 ngày không phản hồi.

@@ -19,7 +19,7 @@ public interface IExecutorManagementService
 }
 
 /// <remarks>
-/// - SETUP-21: chỉ khi còn quyền quản lý (kho mở, kế hoạch không ở DEATH_CASE_OPEN / HANDOVER_IN_PROGRESS / BLOCKED / CLOSED).
+/// - SETUP-21: chỉ khi còn quyền quản lý (kho mở, kế hoạch không ở DEATH_CASE_OPEN / HANDOVER_IN_PROGRESS / CLOSED).
 /// - Kế hoạch đang chạy không được bỏ trống Executor (ASSIGN-05): thu hồi Executor đã chấp nhận phải đi qua
 ///   "mời người thay" (PlanSetupService.InviteAsync); người cũ tự thôi khi người mới chấp nhận.
 /// - Chạy trong giao dịch Serializable như các thao tác Executor khác của PlanSetupService.

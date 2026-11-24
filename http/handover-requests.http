@@ -95,18 +95,25 @@ Authorization: Bearer {{verifierToken}}
 @recordId = {{records.response.body.$[0].id}}
 
 ### 6) Chốt biên bản: bắt buộc tick xác nhận căn cứ pháp lý (thiếu hoặc false: 400 VALIDATION_ERROR).
+#    Biên bản khác cách chia của Chủ kho (splitDifferences không rỗng) thì phải thêm confirmSplitDeviation: true.
+#    Kho chưa khóa (chưa chấp nhận giấy tờ nào) thì 409 HANDOVER_NOT_ALLOWED (VAULT_NOT_LOCKED).
 #    Chốt xong biên bản ở SIGNING: luật sư và Người thực thi ký được ngay; mỗi người nhận ký khi danh tính của mình xong.
 POST {{baseUrl}}/verifier/handover-records/{{recordId}}/finalize
 Authorization: Bearer {{verifierToken}}
 Content-Type: application/json
 
-{ "confirmLegalBasis": true }
+{ "confirmLegalBasis": true, "confirmSplitDeviation": true }
 
 ### 7) Luật sư ký biên bản. Có chữ ký luật sư + Người thực thi + người nhận X thì X được mở quyền tải ngay.
 POST {{baseUrl}}/verifier/handover-records/{{recordId}}/sign
 Authorization: Bearer {{verifierToken}}
 
-### 8) Mở lại biên bản: xác nhận căn cứ pháp lý về null, chốt lại phải tick lại.
+### 7b) Luật sư nhắc Người thực thi ký (gửi thư). Mỗi biên bản nhắc một lần mỗi 24 giờ.
+#    409 HANDOVER_NOT_ALLOWED: WRONG_STATE, EXECUTOR_ALREADY_SIGNED, NO_EXECUTOR, REMINDED_RECENTLY (kèm remindAvailableAt).
+POST {{baseUrl}}/verifier/handover-records/{{recordId}}/remind-executor
+Authorization: Bearer {{verifierToken}}
+
+### 8) Mở lại biên bản: xác nhận căn cứ pháp lý và xác nhận khác cách chia về null, chốt lại phải tick lại.
 #    Đã có người nhận được mở quyền tải thì 409 HANDOVER_NOT_ALLOWED (PARTIALLY_DELIVERED).
 POST {{baseUrl}}/verifier/handover-records/{{recordId}}/reopen
 Authorization: Bearer {{verifierToken}}

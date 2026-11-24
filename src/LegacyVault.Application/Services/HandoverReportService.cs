@@ -47,7 +47,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
     private readonly IHandoverRecordRepository records;
     private readonly IHandoverReportRepository reports;
     private readonly IHandoverRepository handover;
-    private readonly IRefreshTokenRepository refreshTokens;
     private readonly IBeneficiaryDataProtector beneficiaryProtector;
     private readonly IHandoverReportProtector protector;
     private readonly IAssetContentStore contentStore;
@@ -66,7 +65,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
         IHandoverRecordRepository records,
         IHandoverReportRepository reports,
         IHandoverRepository handover,
-        IRefreshTokenRepository refreshTokens,
         IBeneficiaryDataProtector beneficiaryProtector,
         IHandoverReportProtector protector,
         IAssetContentStore contentStore,
@@ -84,7 +82,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
         this.records = records;
         this.reports = reports;
         this.handover = handover;
-        this.refreshTokens = refreshTokens;
         this.beneficiaryProtector = beneficiaryProtector;
         this.protector = protector;
         this.contentStore = contentStore;
@@ -256,13 +253,14 @@ public sealed partial class HandoverReportService : IHandoverReportService
             if (decision == "REJECT")
             {
                 report.Status = HandoverClaimStatus.Rejected;
+                await CloseRecordIfAllRejectedAsync(report, now, ct);
             }
             else
             {
                 report.Status = HandoverClaimStatus.SupplementRequested;
             }
         }
-        // 3. Chấp nhận: gắn vào biên bản đang mở của kho, chưa có thì tạo mới và khóa kho
+        // 3. Chấp nhận: gắn vào biên bản đang mở của kho (chưa có thì tạo mới) và khóa kho nếu chưa khóa
         else if (decision == "ACCEPT")
         {
             await EnsureWarningsConfirmedAsync(report, request.ConfirmDocuments, reason, ct);
@@ -283,7 +281,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         report.UpdatedAt = now;
         await SaveAsync(ct);
 
-        // 4. Kho vừa khóa: báo Chủ kho (còn sống thì hủy được) và Người thực thi
+        // 4. Kho vừa khóa: báo Chủ kho và Người thực thi
         if (lockedVault != null)
         {
             await NotifyVaultLockedAsync(lockedVault, report, ct);
@@ -300,7 +298,34 @@ public sealed partial class HandoverReportService : IHandoverReportService
 
     // ---------------- Hàm phụ: nghiệp vụ ----------------
 
-    /// <summary>Trả về kho vừa được khóa, hoặc null khi kho đã có biên bản đang mở.</summary>
+    /// <summary>
+    /// Từ chối hồ sơ báo tin: kho có biên bản đang lập chưa khóa (chỉ có yêu cầu của người nhận) mà mọi yêu cầu đều bị từ
+    /// chối và không còn hồ sơ nào khác chờ xét thì đóng biên bản. Chưa lưu.
+    /// </summary>
+    private async Task CloseRecordIfAllRejectedAsync(HandoverReport report, DateTimeOffset now, CancellationToken ct)
+    {
+        if (report.VaultId == null)
+        {
+            return;
+        }
+        Vault? vault = await vaults.FindByIdAsync(report.VaultId.Value, ct);
+        if (vault == null)
+        {
+            return;
+        }
+        HandoverRecord? record = await records.FindByVaultIdAsync(vault.Id, ct);
+        if (record == null)
+        {
+            return;
+        }
+        int pendingReports = await reports.CountPendingByVaultAsync(vault.Id, report.Id, ct);
+        if (HandoverRecordRules.ShouldCloseAfterAllRejected(record, vault.Plan.Status, pendingReports))
+        {
+            HandoverRecordRules.CloseAfterAllRejected(record, now);
+        }
+    }
+
+    /// <summary>Trả về kho vừa được khóa, hoặc null khi kho đã khóa từ trước.</summary>
     private async Task<Vault?> AttachToRecordAsync(HandoverReport report, Guid verifierId, DateTimeOffset now, CancellationToken ct)
     {
         Vault? vault = null;
@@ -330,6 +355,11 @@ public sealed partial class HandoverReportService : IHandoverReportService
                     "Kho này đang do luật sư khác lập biên bản. Hồ sơ đã được chuyển cho luật sư đó.");
             }
             report.RecordId = record.Id;
+            // Biên bản do người nhận gửi yêu cầu tạo ra chưa khóa kho: chấp nhận hồ sơ này là lúc khóa.
+            if (HandoverRecordRules.LockVaultOnAccept(vault.Plan, now))
+            {
+                return vault;
+            }
             return null;
         }
         if (vault.Plan.Status != PlanStatus.Active)
@@ -350,8 +380,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         };
         records.Add(record);
         report.RecordId = record.Id;
-        vault.Plan.Status = PlanStatus.HandoverRequested;
-        vault.Plan.UpdatedAt = now;
+        HandoverRecordRules.LockVaultOnAccept(vault.Plan, now);
         return vault;
     }
 
@@ -360,7 +389,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         HandoverReport report, bool confirmDocuments, string reason, CancellationToken ct)
     {
         VerifierHandoverReportResponse view = await BuildForVerifierAsync(report, ct);
-        bool hasWarning = view.VaultFound && (!view.NameMatches || view.ActiveAfterReport);
+        bool hasWarning = view.VaultFound && !view.NameMatches;
         if (!hasWarning)
         {
             return;
@@ -374,20 +403,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
         {
             throw ValidationErrors.For("reason", "Hồ sơ có cảnh báo. Vui lòng ghi lý do chấp nhận.");
         }
-    }
-
-    /// <summary>Lần hoạt động gần nhất: đăng nhập, hoặc gia hạn phiên đang còn hiệu lực.</summary>
-    private async Task<DateTimeOffset?> FindLastActiveAsync(User owner, CancellationToken ct)
-    {
-        DateTimeOffset? last = owner.LastLoginAt;
-        foreach (RefreshToken token in await refreshTokens.FindActiveByUserAsync(owner.Id, ct))
-        {
-            if (last == null || token.CreatedAt > last.Value)
-            {
-                last = token.CreatedAt;
-            }
-        }
-        return last;
     }
 
     /// <summary>Kho có Chủ kho đã eKYC mang đúng số căn cước này; null khi không có.</summary>
@@ -510,12 +525,12 @@ public sealed partial class HandoverReportService : IHandoverReportService
     {
         string ownerName = await FindUserNameAsync(vault.OwnerId, ct);
         string submitterName = await FindUserNameAsync(report.SubmitterUserId, ct);
-        await NotifyAsync(vault.OwnerId, HandoverRequestNotice.Owner, HandoverRequestNotice.StageRequest, ownerName, submitterName, ct);
+        await NotifyAsync(vault.OwnerId, HandoverRequestNotice.Owner, HandoverRequestNotice.StageLocked, ownerName, submitterName, ct);
         foreach (Executor executor in await executorReader.GetActiveAsync(vault.Id, ct))
         {
             if (executor.UserId != null)
             {
-                await NotifyAsync(executor.UserId.Value, HandoverRequestNotice.Executor, HandoverRequestNotice.StageRequest,
+                await NotifyAsync(executor.UserId.Value, HandoverRequestNotice.Executor, HandoverRequestNotice.StageLocked,
                     ownerName, submitterName, ct);
             }
         }
@@ -778,9 +793,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
                 if (owner != null)
                 {
                     response.OwnerName = owner.FullName;
-                    response.OwnerLastActiveAt = await FindLastActiveAsync(owner, ct);
-                    response.ActiveAfterReport = response.OwnerLastActiveAt != null
-                        && response.OwnerLastActiveAt.Value > report.CreatedAt;
                 }
                 OwnerIdentity? identity = await identities.FindByUserIdAsync(vault.OwnerId, ct);
                 if (identity != null)
@@ -810,7 +822,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
             HandoverRecord? record = await records.FindByIdAsync(report.RecordId.Value, ct);
             if (record != null && record.Status == HandoverRecordStatus.Cancelled)
             {
-                response.CancelledByOwner = record.CancelledByVerifierUserId == null;
                 response.CancelReason = record.CancelReason;
             }
         }

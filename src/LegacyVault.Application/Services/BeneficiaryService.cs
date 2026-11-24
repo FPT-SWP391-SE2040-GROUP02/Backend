@@ -41,6 +41,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly IEmailDomainChecker domainChecker;
     private readonly IEmailBounceStore bounces;
     private readonly IExecutorInvitationRepository invitationRepository;
+    private readonly IHandoverRecordRepository handoverRecordRepository;
 
     public BeneficiaryService(
         ICurrentUser currentUser,
@@ -55,9 +56,11 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         TimeProvider timeProvider,
         IEmailDomainChecker domainChecker,
         IEmailBounceStore bounces,
-        IExecutorInvitationRepository invitationRepository)
+        IExecutorInvitationRepository invitationRepository,
+        IHandoverRecordRepository handoverRecordRepository)
     {
         this.invitationRepository = invitationRepository;
+        this.handoverRecordRepository = handoverRecordRepository;
         this.domainChecker = domainChecker;
         this.bounces = bounces;
         this.currentUser = currentUser;
@@ -138,20 +141,11 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             await EnsureEmailAvailableAsync(data.Email, vault, null, ct, data.CitizenId);
         }
 
-        // Giới hạn số hồ sơ người nhận theo tổng suất của kho (suất kèm hạng + suất mua thêm), tính cả hồ sơ chưa ở gói nào.
-        // Kiểm sau bước tìm trùng CCCD: gửi lại đúng người đã có vẫn trả hồ sơ cũ dù kho đã đủ suất.
-        int profileCount = await beneficiaryRepository.CountByVaultIdAsync(vault.Id, ct);
-        int maxSlots = EntitlementLimits.EffectiveTotalSlots(vault.Entitlement);
-        if (profileCount + 1 > maxSlots)
-        {
-            throw SlotsExceeded(profileCount, maxSlots);
-        }
-
         dataProtector.Protect(beneficiary, data);
         // Hồ sơ mới chưa sửa lần nào: UpdatedAt = null → etag "0".
         beneficiary.CreatedAt = now;
         beneficiaryRepository.Add(beneficiary);
-        // chưa gắn vào gói thì chưa thuộc cấu hình bàn giao, chưa chiếm suất → KHÔNG tăng ConfigVersion.
+        // chưa được gán tài sản thì chưa thuộc cấu hình bàn giao → KHÔNG tăng ConfigVersion.
         // chỉ ghi id hồ sơ; họ tên, số CCCD, liên hệ không vào nhật ký.
         AddAudit(vault, AuditAction.BeneficiaryCreated, beneficiary.Id, null, now);
         try
@@ -398,6 +392,14 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             throw InUse(assetIds);
         }
 
+        // Kho chưa khóa nhưng người này đã gửi yêu cầu hoặc được luật sư ghi vào biên bản đang lập: không xóa được.
+        HandoverRecord? openRecord = await handoverRecordRepository.FindByVaultIdAsync(vault.Id, ct);
+        if (openRecord != null && HandoverRecordRules.HasRecipient(openRecord, beneficiary.Id))
+        {
+            throw HandoverAccess.NotAllowed("RECIPIENT_IN_HANDOVER_REQUEST",
+                "Người nhận này đang có trong yêu cầu nhận tài sản luật sư đang xét nên không xóa được.");
+        }
+
         // TODO: request khác gán tài sản cho hồ sơ này đúng lúc này thì FK Restrict ở DB chặn việc xóa,
         // nhưng lỗi đó hiện ra 500 thay vì 409 BENEFICIARY_IN_USE.
         beneficiaryRepository.Remove(beneficiary);
@@ -626,16 +628,6 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         extensions["assetIds"] = assetIds;
         return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiaryInUse,
             "Người nhận đang được gán tài sản. Vui lòng gỡ gán trước khi xóa.", extensions);
-    }
-
-    /// <summary>Đã đủ số hồ sơ theo suất của kho; kèm số hồ sơ hiện có và số suất tối đa để FE gợi ý mua thêm.</summary>
-    private static AppException SlotsExceeded(int usedSlots, int maxSlots)
-    {
-        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
-        extensions["usedSlots"] = usedSlots;
-        extensions["maxSlots"] = maxSlots;
-        return new AppException(AppErrorType.Conflict, ErrorCode.BeneficiarySlotsExceeded,
-            "Kho đã đủ số người nhận theo suất hiện có. Vui lòng mua thêm suất hoặc xóa hồ sơ chưa dùng.", extensions);
     }
 
     /// <summary>beneficiaryId để FE mở hồ sơ đang có cùng CCCD cho Owner sửa.</summary>

@@ -100,7 +100,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kho không còn dòng gán tài sản nào khi kế hoạch đang chạy; cần Owner xác nhận | |
 | 409 | `BENEFICIARY_IDENTITY_CONFLICT` | Kho đã có hồ sơ cùng số CCCD nhưng khác họ tên hoặc ngày sinh | `beneficiaryId` |
 | 409 | `BENEFICIARY_IN_USE` | Xóa hồ sơ người nhận đang được gán tài sản; gỡ gán trước | `assetIds` |
-| 409 | `BENEFICIARY_SLOTS_EXCEEDED` | Gắn thêm một người nhận mới vượt số suất của kho | `usedSlots`, `maxSlots` |
+| 409 | `HANDOVER_NOT_ALLOWED` | Xóa người nhận đã gửi yêu cầu nhận tài sản, hoặc gỡ dòng gán cuối cùng khi đang có yêu cầu chờ luật sư xét (mục 6.21e) | `reason`: `RECIPIENT_IN_HANDOVER_REQUEST` / `HANDOVER_REQUEST_PENDING` |
 | 409 | `GOOGLE_ACCOUNT_ALREADY_LINKED` | Google này đã gắn tài khoản khác / tài khoản đã có Google | |
 | 409 | `LAST_LOGIN_METHOD` | Gỡ phương thức đăng nhập cuối cùng | |
 | 409 | `LOGIN_METHOD_ALREADY_EXISTS` | Đã có phương thức này | `method` |
@@ -375,10 +375,6 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
   "storageQuotaBytes": 20971520,
   "storageUsedBytes": 0,
   "storageRemainingBytes": 20971520,
-  "beneficiarySlots": 0,
-  "includedBeneficiarySlots": 0,
-  "extraBeneficiarySlots": 0,
-  "usedBeneficiarySlots": 0,
   "assignedAssetCount": 0,
   "createdAt": "2026-10-13T08:30:00+00:00",
   "updatedAt": null,
@@ -389,13 +385,13 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
 | Trường | Giá trị |
 |---|---|
 | `status` | `OPEN`, `CLOSED` |
-| `planStatus` | `DRAFT`, `ACTIVE`, `CHECKIN_OVERDUE`, `AWAITING_CHECK`, `DEATH_CASE_OPEN`, `HANDOVER_IN_PROGRESS`, `CLOSED`, `BLOCKED` |
+| `planStatus` | `DRAFT`, `ACTIVE`, `CHECKIN_OVERDUE`, `AWAITING_CHECK`, `DEATH_CASE_OPEN`, `HANDOVER_IN_PROGRESS`, `CLOSED` |
 | `serviceTier` | `FREE`, `XS`, `XS_MAX` |
 | `serviceStatus` | `FREE`, `PAID_ACTIVE`, `GRACE_READ_ONLY`, `EXPIRED_REVIEW` |
 
 Ba trạng thái **độc lập**: kho đã trả tiền vẫn có thể `planStatus = DRAFT`. Dung lượng tính bằng byte, `1 MiB = 1.048.576 byte`.
 
-Suất người nhận (QUOTA-06): `beneficiarySlots` = tổng = `includedBeneficiarySlots` (kèm hạng) + `extraBeneficiarySlots` (mua thêm). `usedBeneficiarySlots` = số **người** khác nhau đang được gán ít nhất một tài sản; một người nhận nhiều tài sản tính một suất, hồ sơ chưa được gán tài sản nào không tính. `assignedAssetCount` = số tài sản đã gán cho ít nhất một người.
+Số người nhận **không bị giới hạn** theo gói: các gói chỉ khác nhau về dung lượng và giá (kho Free vẫn không tạo được người nhận hay gán tài sản, `403 PAID_TIER_REQUIRED`). `assignedAssetCount` = số tài sản đã gán cho ít nhất một người.
 
 ### 6.6. Gán tài sản cho người nhận
 
@@ -406,7 +402,7 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}`.
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `.../assignments` | Đăng nhập | — | 200 `AssetAssignmentResponse[]` (mọi dòng gán của kho, theo thứ tự gán) | 404 |
-| PUT | `.../assets/{assetId}/assignments` | Đăng nhập + PIN kho | `{ beneficiaryIds: [guid], confirmPlanDeactivation? }` | 200 `AssetAssignmentResponse[]` (các dòng gán của tài sản sau khi đổi) | 400, 403 `PAID_TIER_REQUIRED`, 404 `ASSET_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `BENEFICIARY_SLOTS_EXCEEDED` / `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` / `EDIT_CONFLICT` |
+| PUT | `.../assets/{assetId}/assignments` | Đăng nhập + PIN kho | `{ beneficiaryIds: [guid], confirmPlanDeactivation? }` | 200 `AssetAssignmentResponse[]` (các dòng gán của tài sản sau khi đổi) | 400, 403 `PAID_TIER_REQUIRED`, 404 `ASSET_NOT_FOUND` / `BENEFICIARY_NOT_FOUND`, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` / `VAULT_NOT_EDITABLE` / `EDIT_CONFLICT` |
 | DELETE | `.../assets/{assetId}/assignments/{beneficiaryId}?confirmPlanDeactivation=false` | Đăng nhập + PIN kho | — | 200 `AssetAssignmentResponse[]` (các dòng còn lại của tài sản) | 404 `ASSET_NOT_FOUND`, 409 `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` / `EDIT_CONFLICT` |
 
 ```json
@@ -422,7 +418,6 @@ Endpoint gốc theo kho: `/v1/vaults/{vaultId}`.
 - `PUT` **đặt lại toàn bộ** người nhận của tài sản: danh sách gửi lên là danh sách sau cùng. Người mới được thêm, người không còn trong danh sách bị gỡ; danh sách rỗng là gỡ hết. Id trùng trong danh sách chỉ tính một lần. Gửi đúng danh sách hiện có (bấm lặp) → 200, **không ghi gì**, không tăng `planConfigVersion`, không có dòng nhật ký.
 - Hồ sơ người nhận phải thuộc kho này (tạo trước ở mục 6.8); tài sản phải thuộc kho này. Của kho khác → 404.
 - Hạng Free: **không** gán được (`403 PAID_TIER_REQUIRED`, FE hiện gợi ý nâng cấp); gỡ thì được.
-- **Suất người nhận:** `usedBeneficiarySlots` của kho là số **người** khác nhau có ít nhất một dòng gán. Một người nhận nhiều tài sản chỉ tốn một suất. Thao tác làm tăng số người vượt `beneficiarySlots` → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots`, `maxSlots` (FE gợi ý mua thêm suất). Người rời đi trong cùng thao tác (mất dòng gán cuối cùng) được trừ trước khi so, nên đổi người khi suất đã đầy vẫn được.
 - **Gỡ về không còn dòng gán nào khi kế hoạch đang chạy** → `409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED`: FE hiện cảnh báo "kế hoạch sẽ trở về bản nháp"; Owner đồng ý thì gọi lại với `confirmPlanDeactivation=true` (query với `DELETE`, trường body với `PUT`) → kế hoạch về `DRAFT`.
 - Mọi thay đổi gán tăng `planConfigVersion` đúng một lần cho cả thao tác. Dịch vụ đang ân hạn: thêm bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), gỡ vẫn được.
 - Hai yêu cầu cùng đổi kho một lúc: bên đến sau nhận `409 EDIT_CONFLICT` (tải lại rồi làm lại); không bao giờ có hai dòng cho cùng một cặp.
@@ -477,7 +472,7 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 | Method | URL | Quyền | Body / Query | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `.../beneficiaries` | Đăng nhập | Query phân trang; `sortBy`: chỉ `createdAt` (mặc định); `searchTerm`: 1–4 chữ số | 200 `PaginatedList<BeneficiaryResponse>` | 400, 404 |
-| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `BENEFICIARY_SLOTS_EXCEEDED` / `VAULT_NOT_EDITABLE` |
+| POST | `.../beneficiaries` | Đăng nhập | `{ citizenId, fullName, dateOfBirth, email?, phone? }` | **201** `BeneficiaryResponse` (vừa tạo) / **200** (đã có hồ sơ cùng người) | 400, 403 `PAID_TIER_REQUIRED`, 404, 409 `BENEFICIARY_IDENTITY_CONFLICT` / `VAULT_NOT_EDITABLE` |
 | GET | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | 200 `BeneficiaryResponse` | 404 `VAULT_NOT_FOUND` / `BENEFICIARY_NOT_FOUND` |
 | PUT | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | `{ etag, fullName?, dateOfBirth?, email?, phone? }` | 200 `BeneficiaryResponse` | 400, 404, 409 `EDIT_CONFLICT` / `VAULT_NOT_EDITABLE` |
 | DELETE | `.../beneficiaries/{beneficiaryId}` | Đăng nhập | — | **204** | 404, 409 `BENEFICIARY_IN_USE` / `VAULT_NOT_EDITABLE` |
@@ -519,8 +514,8 @@ Hồ sơ người nhận thuộc **kho** (danh bạ người nhận), dùng lạ
 - **Tuổi:** người nhận phải đủ 18 tuổi tính theo ngày hiện tại (giờ Việt Nam); thiếu tuổi → `400 VALIDATION_ERROR` ở trường `dateOfBirth`: "Người nhận phải đủ 18 tuổi." Khi sửa, chỉ kiểm tuổi nếu `dateOfBirth` được đổi (hồ sơ cũ chưa đủ tuổi vẫn sửa được các trường khác). Không trả nhãn tuổi (đã bỏ `isMinor`) và không còn trường `minorAcknowledgedAt`. Ngày sinh ở tương lai → 400.
 - Hạng Free tạo hồ sơ → `403 PAID_TIER_REQUIRED`. Dịch vụ đang ân hạn: tạo/sửa bị chặn (`VAULT_NOT_EDITABLE`, `SERVICE_READ_ONLY`), xóa vẫn được.
 - `assetIds`: các tài sản đang được gán cho người này, theo thứ tự gán; rỗng khi chưa được gán tài sản nào.
-- **Giới hạn số hồ sơ:** số hồ sơ của kho (tính cả hồ sơ chưa được gán tài sản nào) không vượt tổng suất `beneficiarySlots`. Tạo hồ sơ mới khi đã đủ → `409 BENEFICIARY_SLOTS_EXCEEDED` kèm `usedSlots` (số hồ sơ hiện có) và `maxSlots`; FE gợi ý mua thêm suất hoặc xóa hồ sơ chưa dùng. Gửi lại đúng người đã có (trùng CCCD, cùng họ tên và ngày sinh) vẫn **200** dù đã đủ. FE lấy số hồ sơ từ `totalCount` của danh sách.
-- Tạo hồ sơ **không** tăng `planConfigVersion`. `usedBeneficiarySlots` của kho vẫn chỉ đếm người đang được gán tài sản (mục 6.6).
+- **Không giới hạn số hồ sơ:** một kho trả phí tạo bao nhiêu hồ sơ người nhận cũng được; gửi lại đúng người đã có (trùng CCCD, cùng họ tên và ngày sinh) trả **200** với hồ sơ cũ. FE lấy số hồ sơ từ `totalCount` của danh sách.
+- Tạo hồ sơ **không** tăng `planConfigVersion`.
 - Sửa hồ sơ **đang được gán tài sản** (có thay đổi thật) → `planConfigVersion` tăng 1; hồ sơ chưa được gán tài sản nào thì không tăng.
 - Xóa hồ sơ đang được gán tài sản → `409 BENEFICIARY_IN_USE` kèm `assetIds`; FE hướng dẫn gỡ gán các tài sản đó trước.
 - BE không gửi thông báo, không tạo tài khoản cho người nhận.
@@ -849,7 +844,7 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 
 ### 6.14. Owner báo còn sống (F2C): ĐÃ GỠ
 
-Chức năng "Tôi còn sống" (báo còn sống, selfie, Verifier kết luận, 72 giờ phản đối) đã bỏ theo bản chốt nghiệp vụ 05/11/2026. Đã gỡ các endpoint `POST /v1/vaults/{vaultId}/death-case/objection`, `.../objection/selfie`, `GET /v1/verifier/death-cases/{caseId}/objection`, `.../objection/selfie-image`, `POST .../objection/conclude`, job gửi thông báo cho Owner và mọi điều kiện chờ cửa sổ phản đối khi duyệt. Bảng `DeathCaseNotices` và các cột `DeathCases.ObjectionStartsAt/ObjectionEndsAt/NotifiedVersionNo` đã xóa bằng migration `RemoveUnusedFeatures`; response hồ sơ không còn `ownerNotice` và `objectionEndsAt`. Không còn sinh hold mới; Admin vẫn xem được hold cũ (6.15).
+Chức năng "Tôi còn sống" (báo còn sống, selfie, Verifier kết luận, 72 giờ phản đối) đã bỏ theo bản chốt nghiệp vụ 05/11/2026. Đã gỡ các endpoint `POST /v1/vaults/{vaultId}/death-case/objection`, `.../objection/selfie`, `GET /v1/verifier/death-cases/{caseId}/objection`, `.../objection/selfie-image`, `POST .../objection/conclude`, job gửi thông báo cho Owner và mọi điều kiện chờ cửa sổ phản đối khi duyệt. Bảng `DeathCaseNotices` và các cột `DeathCases.ObjectionStartsAt/ObjectionEndsAt/NotifiedVersionNo` đã xóa bằng migration `RemoveUnusedFeatures`; response hồ sơ không còn `ownerNotice` và `objectionEndsAt`. Không còn sinh hold mới; Admin vẫn xem được hold cũ (6.15). Trạng thái kế hoạch `BLOCKED` và hai hành động nhật ký `OBJECTION_REPORTED`, `OBJECTION_CONCLUDED` đã bỏ khỏi enum; migration `RemoveOwnerAliveLeftovers` đưa kế hoạch `BLOCKED` cũ về `ACTIVE` và xóa các dòng nhật ký hai hành động đó.
 
 ### 6.15. Hold và Admin (hold chỉ còn xem, không còn nơi nào đặt hold mới)
 
@@ -857,10 +852,14 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 
 | Method | URL | Body | Thành công | Lỗi |
 |---|---|---|---|---|
-| GET | `/v1/admin/dashboard` | — | 200 `AdminDashboardResponse` (hold, hồ sơ chưa có Verifier; đã bỏ `openIncidents`, `overdueIncidents`, `unassignedIncidents`; thêm `planStages` [{stage, count}] kế hoạch theo giai đoạn không tính kho đã đóng, `closedPlans`, `verifierLoad` [{userId, fullName, openCases, overdueCases}] của Verifier đang hoạt động, `recentActivity` [{at, actorFullName, action}] năm dòng nhật ký mới nhất) | 404 |
+| GET | `/v1/admin/dashboard` | — | 200 `AdminDashboardResponse` (hold, `casesWithoutVerifier` = biên bản chưa xong và hồ sơ báo tin chờ xét mà luật sư được giao không còn hoạt động; đã bỏ `openIncidents`, `overdueIncidents`, `unassignedIncidents`; thêm `planStages` [{stage, count}] kế hoạch theo giai đoạn không tính kho đã đóng, `closedPlans`, `verifierLoad` [{userId, fullName, openCases, overdueCases}] của Verifier đang hoạt động, `recentActivity` [{at, actorFullName, action}] năm dòng nhật ký mới nhất) | 404 |
 | GET | `/v1/admin/users/counts?search=&status=` | — | 200 `CountsResponse { counts: { USER, VERIFIER, ADMIN, EXECUTOR }, total }`: số tài khoản theo vai trò, bỏ qua vai trò | 400, 404 |
 | GET | `/v1/admin/holds/counts?vaultId=` | — | 200 `CountsResponse { counts: { ACTIVE, RELEASED }, total }` | 404 |
-| GET | `/v1/admin/users/{userId}` | — | 200 `AdminUserDetailResponse` (thông tin tài khoản; `assignedCases` hồ sơ đang xét của Verifier, `recentDecisions` 10 quyết định gần nhất, `recentActivity` 10 thao tác gần nhất, không kèm lý do hay nội dung hồ sơ) | 404 (không phải Admin hoặc không có tài khoản) |
+| GET | `/v1/admin/users/{userId}` | — | 200 `AdminUserDetailResponse` (thông tin tài khoản; `recentActivity` 10 thao tác gần nhất; với luật sư: `assignedCases` [{kind, caseId, caseCode, status, receivedAt}] việc đang giữ và `recentDecisions` [{kind, caseId, caseCode, decision, decidedAt}] 10 lần xét gần nhất; với Người thực thi: `heldVaults` [{vaultId, ownerNameMasked, planStatus, handoverRecordStatus, handoverUnderway, canChangeExecutor}]; không kèm lý do hay nội dung hồ sơ) | 404 (không phải Admin hoặc không có tài khoản) |
+
+- **Việc đang giữ của luật sư** (`assignedCases`): `kind = HANDOVER_RECORD` là biên bản bàn giao chưa hoàn tất, chưa hủy (`status` là bước biên bản, `receivedAt` lúc có yêu cầu); `kind = HANDOVER_REPORT` là hồ sơ báo tin còn chờ xét (`status` `SUBMITTED` / `SUPPLEMENT_REQUESTED`, `receivedAt` lúc nộp). `caseCode` là 8 ký tự cuối của Id, chữ hoa. Hồ sơ chứng tử cũ không còn dùng.
+- **Lần xét gần nhất** (`recentDecisions`): xét yêu cầu nhận tài sản trong biên bản (`kind = HANDOVER_RECORD`, `caseId` là Id biên bản) và xét hồ sơ báo tin (`kind = HANDOVER_REPORT`); `decision` là `ACCEPTED`, `REJECTED` hoặc `SUPPLEMENT_REQUESTED`. Không có lý do.
+- **Kho đang giữ của Người thực thi** (`heldVaults`): kho mà người này là Người thực thi hiện tại (đã nhận việc). `ownerNameMasked` chỉ giữ chữ đầu mỗi từ của họ tên Chủ kho (ví dụ `N. V. A.`); `handoverRecordStatus` là bước biên bản đang mở, `null` khi chưa có; `handoverUnderway` = kho đang bàn giao (đổi người thì người mới nhận việc ngay); `canChangeExecutor = false` khi kho hoặc kế hoạch đã đóng. Không có CCCD, tên tài sản hay email người nhận. Đổi người qua `POST /v1/admin/vaults/{vaultId}/executor`.
 | GET | `/v1/admin/audit-logs?pageIndex=&pageSize=&sortBy=at&isAscending=&action=&from=&to=` | — | 200 `PaginatedList<AdminAuditLogResponse>` (`AuditLogResponse` kèm `vaultId`, `actorFullName`, `actorEmail`; `isAscending=false` = mới nhất trước; `action` UPPER_SNAKE_CASE; `from` tính cả mốc, `to` không tính mốc) | 400 `VALIDATION_ERROR`, 404 |
 | GET | `/v1/admin/users?search=&role=&status=&pageIndex=&pageSize=` | — | 200 `PaginatedList<AdminUserResponse>` (không có mật khẩu) | 400, 404 |
 | POST | `/v1/admin/users` | `{ fullName, email, password, role: VERIFIER/ADMIN, phone? }` | 201 `AdminUserResponse` | 400 (`role` = `EXECUTOR` hoặc `USER` bị từ chối), 404, 409 `EMAIL_ALREADY_EXISTS`, 409 `PHONE_ALREADY_EXISTS` |
@@ -875,18 +874,19 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 - **Hold** (`Holds`): **Admin chỉ xem** (danh sách và chi tiết); không có API Admin đặt, hẹn xem lại hay gỡ hold bằng tay (đã bỏ theo quyết định của nhóm). Loại `ADMIN` (dữ liệu cũ, không còn tạo mới) và `DISPUTE` (chưa dùng) vẫn có trong enum. Loại `OWNER_ALIVE` đã bỏ vì không có mã nào tạo hold loại này (migration `RemoveEkycLeftovers` xóa hàng cũ nếu có). Mỗi hold có phạm vi, loại, lý do, người phụ trách, `reviewAt` (tối đa 7 ngày một lần), thời điểm gỡ. Hold đang hiệu lực chặn: duyệt chứng tử (`DEATH_CASE_NOT_ALLOWED` / `HOLD_ACTIVE`), nhận lượt và đồng ý (`HANDOVER_NOT_ALLOWED` / `HOLD_ACTIVE`), liệt kê và tải tài sản (`GRANT_NOT_ACTIVE` / `HOLD_ACTIVE`), kích hoạt kế hoạch (`missingRequirements` có `HOLD_ACTIVE`) và dọn dữ liệu (đồng hồ lưu tạm dừng). Đặt/gỡ hold ghi `plan.UpdatedAt` nên thao tác nhận chạy cùng lúc thua `RowVersion`.
 - **Sự cố (đã bỏ):** bảng `Incidents`, `IncidentEvents`, 7 endpoint `/v1/admin/incidents*`, job sự cố, quét vận hành và thư nhắc/báo sự cố đã xóa (migration `RemoveUnusedFeatures`). Các tình huống cũ (hồ sơ chưa có Verifier, thư mời bàn giao không gửi được, giao dịch thanh toán lệch, tài khoản bị khóa vì sai mật khẩu) chỉ còn ghi log cảnh báo, không có dữ liệu cá nhân hay nội dung giao dịch.
 - **Báo Executor khi quá hạn điểm danh (DMS-05):** đúng lần job điểm danh chuyển kế hoạch sang `AWAITING_CHECK` (một lần cho mỗi kỳ, sau khi đã lưu trạng thái), mỗi Executor nhận được việc của kho nhận một thư "chủ kho quá hạn điểm danh, cần bạn kiểm tra" (không có tên hay thông tin Owner), link về trang Executor của kho. Không có Executor thì chỉ ghi log cảnh báo. Gửi lỗi chỉ ghi log, không hoàn tác việc đổi trạng thái và không gửi lại.
-- **Nhật ký:** Admin xem toàn bộ nhật ký qua `GET /v1/admin/audit-logs` (chỉ đọc, không sửa/xóa). Hồ sơ chứng tử bị từ chối ghi `DEATH_CASE_REJECTED` (Verifier từ chối: `reason = VERIFIER_REJECTED`; đóng vì Verifier xác nhận Owner còn sống: `reason = ALIVE_CONFIRMED`, kèm dòng `OBJECTION_CONCLUDED`); lý do tự do không vào nhật ký vì Owner xem được (SEC-07). Mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier) và F2C (gồm đặt/gỡ hold báo còn sống) ghi `AuditLogs` trong cùng giao dịch.
+- **Nhật ký:** Admin xem toàn bộ nhật ký qua `GET /v1/admin/audit-logs` (chỉ đọc, không sửa/xóa). Hồ sơ chứng tử bị từ chối ghi `DEATH_CASE_REJECTED` (Verifier từ chối: `reason = VERIFIER_REJECTED`); lý do tự do không vào nhật ký vì Owner xem được (SEC-07). Mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier) ghi `AuditLogs` trong cùng giao dịch.
 - **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; khóa tài khoản hiện thu hồi mọi refresh token (access token đã cấp còn sống tối đa `Jwt:AccessTokenMinutes`).
 
 ### 6.15a. Admin giao / đổi Người thực thi
 
 | Method | Path | Body | Thành công | Lỗi |
 |---|---|---|---|---|
-| POST | `/v1/admin/vaults/{vaultId}/executor` | `{ userId, reason }` | 200 `ExecutorInvitationResponse` (trạng thái `INVITED`) | 400 (thiếu lý do, tài khoản không hợp lệ), 404 (không phải Admin hoặc không có kho), 409 `EXECUTOR_NOT_ALLOWED` (`PLAN_LOCKED`, `OWNER_CANNOT_ACCEPT`, `ROLE_CONFLICT`) |
+| POST | `/v1/admin/vaults/{vaultId}/executor` | `{ userId, reason }` | 200 `ExecutorInvitationResponse` (trạng thái `INVITED`; `ACCEPTED` khi kho đang bàn giao) | 400 (thiếu lý do, tài khoản không hợp lệ), 404 (không phải Admin hoặc không có kho), 409 `EXECUTOR_NOT_ALLOWED` (`PLAN_LOCKED`, `OWNER_CANNOT_ACCEPT`, `ROLE_CONFLICT`, `ALREADY_EXECUTOR`) |
 
 - Dùng khi kho không còn Người thực thi hoạt động (sự cố `NO_EXECUTOR`) hoặc người hiện tại không làm việc. Lý do bắt buộc (≤ 500 ký tự), ghi nhật ký `EXECUTOR_ASSIGNED_BY_ADMIN` (đối tượng là kho).
 - Tài khoản được giao phải đang hoạt động, đã xác minh email, không phải Chủ kho, không phải Admin hay Người xét duyệt. Hệ thống gửi lời mời như lời mời của Chủ kho; người này phải chấp nhận (cùng luật chấp nhận lời mời thường).
-- Kế hoạch đang chạy (`ACTIVE`, `CHECKIN_OVERDUE`, `AWAITING_CHECK`) mà đã có Người thực thi đã chấp nhận: người mới thay (`ReplacesExecutorId`), người cũ giữ vai trò tới khi người mới chấp nhận. Kế hoạch `DRAFT`: mọi lời mời và Người thực thi cũ bị thu hồi. Kho đã đóng hoặc kế hoạch từ lúc nộp giấy chứng tử trở đi → 409 `PLAN_LOCKED`.
+- Kế hoạch đang chạy (`ACTIVE`, `CHECKIN_OVERDUE`, `AWAITING_CHECK`) mà đã có Người thực thi đã chấp nhận: người mới thay (`ReplacesExecutorId`), người cũ giữ vai trò tới khi người mới chấp nhận. Kế hoạch `DRAFT`: mọi lời mời và Người thực thi cũ bị thu hồi. Kho đã đóng hoặc kế hoạch `CLOSED` → 409 `PLAN_LOCKED`.
+- **Đang bàn giao** (`HANDOVER_REQUESTED`, `HANDOVER_IN_PROGRESS`): người mới **nhận việc ngay** (trả `status = ACCEPTED`, không gửi lời mời), người cũ chuyển `REVOKED` trong cùng giao dịch và mất quyền ngay (xem biên bản, đọc mã nhận, ký, gửi mã, ký phiếu giao nhận: 404). Chữ ký Người thực thi người cũ đã ký trên bản hiện tại vẫn giữ hiệu lực; chưa ký thì người mới ký. Mã nhận **không** đổi (có thể đã gửi cho người nhận). Thư "Đổi Người thực thi của kho đang bàn giao" gửi người mới, người cũ và luật sư của biên bản. Giao lại đúng người đang làm → 409 `ALREADY_EXECUTOR`.
 
 ### 6.16. Executor theo dõi tiến độ bàn giao
 
@@ -897,8 +897,6 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 | GET | `/api/v1/executor/death-cases/{caseId}/handover-progress` | Executor đang hiệu lực của kho | — | 200 `HandoverProgressResponse` | 401, 404 `DEATH_CASE_NOT_FOUND` |
 
 **Gửi lại lời mời (INVITE-02, INVITE-04):** chỉ cho lượt chưa ai nhận (`INVITED`, `INITIAL_RESPONSE_EXPIRED`). Mỗi lần gửi lại tạo token mới và link cũ hết dùng (DB chỉ giữ mã băm). Hạn phản hồi không đặt lại, trừ khi lời mời chưa từng được giao thì hạn 5 ngày tính từ lần giao thành công đầu tiên. Cách nhau tối thiểu 15 phút. Người nhận không có email thì `NO_EMAIL` (chưa có kênh khác). Gửi lỗi thì không đổi gì.
-
-**Hold và đồng hồ bàn giao (TIME-04):** kho có hold hoặc kế hoạch `BLOCKED` thì job không chuyển lượt/grant sang hết hạn; hoàn tất xác minh danh tính cũng bị chặn (`HOLD_ACTIVE`). Gỡ hold cuối cùng của kho thì hạn phản hồi, hạn quyết định và hạn grant đang chạy được dời đúng bằng thời gian đã dừng.
 
 ```json
 // HandoverProgressResponse
@@ -956,12 +954,12 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 
 ### 6.18. Thanh toán (Billing)
 
-Mua dịch vụ, mua thêm suất người nhận, giả lập trả tiền và nhận tiền thật qua webhook SePay (SRS §8.1–8.5, §11.5, §11.6, AC-90, AC-94, AC-95). Các endpoint `/billing/*` cần đăng nhập (Bearer), riêng webhook SePay xác thực bằng API key (xem "Webhook SePay" bên dưới). Kho luôn là kho của người đang đăng nhập: **không gửi `vaultId`, số tiền, loại đơn hay trạng thái** (SEC-04, PAY-11). Thử tay bằng `http/billing.http` và `http/billing-webhook.http`.
+Mua, gia hạn và nâng hạng dịch vụ, giả lập trả tiền và nhận tiền thật qua webhook SePay (SRS §8.1–8.5, §11.5, §11.6, AC-90, AC-94, AC-95). Các endpoint `/billing/*` cần đăng nhập (Bearer), riêng webhook SePay xác thực bằng API key (xem "Webhook SePay" bên dưới). Kho luôn là kho của người đang đăng nhập: **không gửi `vaultId`, số tiền, loại đơn hay trạng thái** (SEC-04, PAY-11). Thử tay bằng `http/billing.http` và `http/billing-webhook.http`.
 
 | Method | URL | Body | Thành công | Lỗi |
 |---|---|---|---|---|
 | GET | `/api/v1/billing/plans` | — | 200 `BillingPlansResponse` (công khai, không cần đăng nhập; kèm `free` là hạn mức gói Free) | — |
-| POST | `/api/v1/billing/quote` | `{ tier?, years?, extraSlots }` | 200 `BillingQuoteResponse` (không ghi DB) | 400 `VALIDATION_ERROR`, 404 `VAULT_NOT_FOUND`, 409 `PAYMENT_NOT_ALLOWED` |
+| POST | `/api/v1/billing/quote` | `{ tier?, years?, renew? }` | 200 `BillingQuoteResponse` (không ghi DB) | 400 `VALIDATION_ERROR`, 404 `VAULT_NOT_FOUND`, 409 `PAYMENT_NOT_ALLOWED` |
 | POST | `/api/v1/billing/orders` | như `quote` | **201** đơn mới / **200** trả lại đơn `PENDING` cùng lựa chọn; `PaymentOrderResponse` | 400, 404 `VAULT_NOT_FOUND`, 409 `PAYMENT_NOT_ALLOWED`, 409 `PAYMENT_ORDER_PENDING` |
 | GET | `/api/v1/billing/orders` | Query phân trang (`pageIndex`, `pageSize`, `sortBy` = `createdAt`, `isAscending`) | 200 `PaginatedList<PaymentOrderSummaryResponse>` (đơn của kho mình, lịch sử thanh toán) | 400 `VALIDATION_ERROR`, 404 `VAULT_NOT_FOUND` |
 | GET | `/api/v1/billing/orders/current` | — | 200 `PaymentOrderResponse` / **204** không có đơn chờ | 404 `VAULT_NOT_FOUND` |
@@ -976,17 +974,17 @@ Mua dịch vụ, mua thêm suất người nhận, giả lập trả tiền và 
 | GET | `/api/v1/admin/handover-templates/{version}` | — | 200 `AdminHandoverTemplateResponse` của phiên bản cũ | 401, 404 |
 | POST | `/api/v1/admin/handover-templates` | `SaveHandoverTemplateRequest { accept[], decline[], declineNotice, note? }` | 200 `AdminHandoverTemplateResponse` (phiên bản mới) | 400 `VALIDATION_ERROR`, 401, 404 |
 
-**Body `quote` / `orders`:** `tier` là `"XS"` hoặc `"XS_MAX"`, `years` là `1`, `3` hoặc `5` (bắt buộc khi mua mới); `extraSlots` là số suất người nhận mua thêm; `renew` (bool, mặc định `false`) = true để **gia hạn** khi kho còn hạn. Backend tự xác định loại đơn từ quyền dịch vụ của kho, client không gửi:
+**Body `quote` / `orders`:** `tier` là `"XS"` hoặc `"XS_MAX"`, `years` là `1`, `3` hoặc `5` (bắt buộc khi mua mới và gia hạn); `renew` (bool, mặc định `false`) = true để **gia hạn** khi kho còn hạn. Backend tự xác định loại đơn từ quyền dịch vụ của kho, client không gửi:
 
 | Kho đang ở | Loại đơn | Ghi chú |
 |---|---|---|
-| `serviceStatus = FREE` | `PURCHASE` (mua mới) | Cần eKYC Owner (`OwnerEnrollment`) đạt trong 90 ngày; `extraSlots` 0–20 |
-| `PAID_ACTIVE` và còn hạn | `ADDON` (mua thêm suất) | `tier` và `years` gửi vào bị bỏ qua; `extraSlots` 1–20; không đổi hạn |
-| `PAID_ACTIVE` còn hạn, đang hạng `XS`, gửi `tier = "XS_MAX"` **và** `extraSlots = 0` | `UPGRADE` (nâng hạng giữa kỳ) | `years` bị bỏ qua; không cần eKYC; giá và cách cấp quyền xem bên dưới. Kèm `extraSlots` ≥ 1 vẫn là `ADDON` (tier bị bỏ qua). Kho đã ở `XS_MAX` không có đường nâng hạng |
-| `PAID_ACTIVE` còn hạn, gửi `renew = true` | `RENEWAL` (gia hạn sớm) | Bắt buộc `tier`, `years`; `tier` phải **giữ nguyên hạng hiện tại** (đổi hạng → 400 `VALIDATION_ERROR` theo `tier`: lên hạng dùng `UPGRADE`, hạ hạng chờ hết kỳ); `extraSlots` 0–20 là số suất thêm **của kỳ mới** (không tự giữ suất cũ); không cần eKYC; kỳ mới nối tiếp hạn cũ |
+| `serviceStatus = FREE` | `PURCHASE` (mua mới) | Cần eKYC Owner (`OwnerEnrollment`) đạt trong 90 ngày |
+| `PAID_ACTIVE` còn hạn, gửi `tier` là gói đứng sau gói đang dùng (theo thứ tự gói) | `UPGRADE` (nâng hạng giữa kỳ) | `years` bị bỏ qua; không cần eKYC; giá và cách cấp quyền xem bên dưới. Kho đã ở gói cao nhất không có đường nâng hạng |
+| `PAID_ACTIVE` còn hạn, không gửi `renew` và không chọn gói cao hơn | không có đơn | 409 `PAYMENT_NOT_ALLOWED` với `reason = NOTHING_TO_BUY` |
+| `PAID_ACTIVE` còn hạn, gửi `renew = true` | `RENEWAL` (gia hạn sớm) | Bắt buộc `tier`, `years`; `tier` phải **giữ nguyên hạng hiện tại** (đổi hạng → 400 `VALIDATION_ERROR` theo `tier`: lên hạng dùng `UPGRADE`, hạ hạng chờ hết kỳ); không cần eKYC; kỳ mới nối tiếp hạn cũ |
 | Đã hết hạn: `PAID_ACTIVE` quá hạn, `GRACE_READ_ONLY` (ân hạn 180 ngày), `EXPIRED_REVIEW` (chờ rà soát) | `RENEWAL` (gia hạn muộn) | Như trên nhưng không cần `renew`, và **được chọn hạng tự do** (kỳ mới tính từ lúc trả); không cần eKYC; kỳ mới tính từ lúc thanh toán; không cộng bù ngày ân hạn |
 
-Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạch đang `DEATH_CASE_OPEN` / `HANDOVER_IN_PROGRESS` / `BLOCKED` (`PLAN_LOCKED`). Kiểm tra theo đúng thứ tự: kho (404) → kho đóng → kế hoạch khóa → loại đơn → eKYC → giá trị `tier` / `years` / `extraSlots` (400 `VALIDATION_ERROR`, theo tên trường).
+Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạch đang `DEATH_CASE_OPEN` / `HANDOVER_IN_PROGRESS` (`PLAN_LOCKED`). Kiểm tra theo đúng thứ tự: kho (404) → kho đóng → kế hoạch khóa → loại đơn → eKYC → giá trị `tier` / `years` (400 `VALIDATION_ERROR`, theo tên trường).
 
 ```json
 // BillingPlansResponse
@@ -997,32 +995,26 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
     {
       "tier": "XS",
       "storageQuotaBytes": 209715200,
-      "includedBeneficiarySlots": 2,
       "prices": [
         { "years": 1, "amount": 199000, "serviceDays": 365 },
         { "years": 3, "amount": 499000, "serviceDays": 1095 },
         { "years": 5, "amount": 799000, "serviceDays": 1825 }
       ]
     },
-    { "tier": "XS_MAX", "storageQuotaBytes": 524288000, "includedBeneficiarySlots": 5, "prices": [ "..." ] }
+    { "tier": "XS_MAX", "storageQuotaBytes": 524288000, "prices": [ "..." ] }
   ],
-  "extraSlot": { "pricePerYear": 49000, "maxPerOrder": 20, "maxTotal": 50 },
   "notice": "Thanh toán không tự kích hoạt bàn giao."
 }
 
-// BillingQuoteResponse (POST /billing/quote) — ví dụ XS 3 năm + 1 suất (AC-94)
+// BillingQuoteResponse (POST /billing/quote) — ví dụ XS 3 năm (AC-94)
 {
   "kind": "PURCHASE",
   "tier": "XS",
   "years": 3,
-  "extraSlots": 1,
   "tierAmount": 499000,
-  "slotAmount": 147000,
-  "totalAmount": 646000,
+  "totalAmount": 499000,
   "currency": "VND",
   "storageQuotaBytes": 209715200,
-  "includedBeneficiarySlots": 2,
-  "beneficiarySlots": 3,
   "serviceDays": 1095,
   "serviceStartsAt": "ON_PAYMENT",
   "serviceExpiresAt": null,
@@ -1038,17 +1030,14 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
   "status": "PENDING",
   "tier": "XS",
   "years": 3,
-  "extraSlots": 1,
   "tierAmount": 499000,
-  "slotAmount": 147000,
-  "totalAmount": 646000,
+  "totalAmount": 499000,
   "currency": "VND",
   "storageQuotaBytes": 209715200,
-  "includedBeneficiarySlots": 2,
   "paymentCode": "LV7K2M9QXA",
   "transferContent": "LV7K2M9QXA",
   "bank": { "bankCode": "MBBank", "accountNumber": "0000000000", "accountName": "LEGACYVAULT TEST" },
-  "qrImageUrl": "https://qr.sepay.vn/img?acc=0000000000&bank=MBBank&amount=646000&des=LV7K2M9QXA",
+  "qrImageUrl": "https://qr.sepay.vn/img?acc=0000000000&bank=MBBank&amount=499000&des=LV7K2M9QXA",
   "expiresAt": "2026-10-18T12:15:00+00:00",
   "createdAt": "2026-10-18T12:00:00+00:00",
   "paidAt": null,
@@ -1060,23 +1049,23 @@ Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạc
 
 | Trường | Giá trị |
 |---|---|
-| `kind` | `PURCHASE`, `ADDON`, `UPGRADE`, `RENEWAL` |
+| `kind` | `PURCHASE`, `UPGRADE`, `RENEWAL` |
 | `status` | `PENDING`, `PAID`, `EXPIRED`, `CANCELLED` |
-| `tier` | `XS`, `XS_MAX` (đơn `ADDON` là hạng hiện tại của kho; đơn `UPGRADE` là `XS_MAX`; đơn `RENEWAL` là hạng của kỳ mới: giữ nguyên hạng hiện tại khi còn hạn, tự do khi đã hết hạn) |
+| `tier` | `XS`, `XS_MAX` (đơn `UPGRADE` là gói đích; đơn `RENEWAL` là hạng của kỳ mới: giữ nguyên hạng hiện tại khi còn hạn, tự do khi đã hết hạn) |
 
-- **Giá gia hạn** (`RENEWAL`): giá hạng của kỳ mới + `49.000 × extraSlots × số năm` (như mua mới). Ví dụ XS 3 năm giữ 1 suất = 646.000 đ. Phản hồi quote/order: `serviceStartsAt` = `AFTER_CURRENT_TERM` (còn hạn: nối tiếp, `serviceExpiresAt` là hạn hiện tại) hoặc `ON_PAYMENT` (đã hết hạn: tính từ lúc trả). Gia hạn sang hạng hoặc số suất **nhỏ hơn mức đang dùng** (dung lượng đã dùng, số suất người nhận đã dùng) → 409 `PAYMENT_NOT_ALLOWED` / `USAGE_EXCEEDS_PLAN`; không tự xóa dữ liệu. Hạn đơn là 15 phút (không bị chặn bởi hết kỳ).
-- **Giá nâng hạng** (`UPGRADE`): phần chênh giá theo thời gian còn lại của kỳ hiện tại = `ceil((giá XS_MAX − giá XS của kỳ N năm) × số giây còn lại / (N × 31.536.000))`, N là số năm của đơn `PURCHASE` đã thanh toán gần nhất của kho (không có đơn mua thì N = 1); số giây còn lại không vượt tổng số giây của kỳ. Ví dụ mua XS 3 năm, còn 1,5 năm: (999.000 − 499.000) × 1/2 = 250.000 đ. Phản hồi: `years = null`, `tierAmount` = số tiền nâng hạng, `slotAmount = 0`, `serviceExpiresAt` = hạn hiện tại (giữ nguyên), `beneficiarySlots` = 5 + suất thêm đang có. Hạn đơn như `ADDON` (mốc sớm hơn giữa 15 phút và hết kỳ).
-- **Giá do backend tính:** mua mới = giá hạng + `49.000 × extraSlots × số năm` (ADDON-01); mua thêm giữa kỳ = `ceil(49.000 × extraSlots × số giây còn lại / 31.536.000)` (ADDON-02; ví dụ còn đúng 180 ngày, 1 suất = 24.165 đ). Giá, dung lượng, số suất và `policyVersion` được **chốt trên đơn** lúc tạo (PAY-11).
-- **Lịch sử đơn** (`GET /billing/orders`): chỉ đơn của kho mình, mặc định thứ tự theo `createdAt` (gửi `isAscending=false` để mới nhất trước). Mỗi phần tử `PaymentOrderSummaryResponse`: `id`, `kind`, `status`, `tier`, `years` (null với `ADDON`/`UPGRADE`), `extraSlots`, `totalAmount`, `currency`, `paymentCode` (mã tham chiếu đơn), `createdAt`, `expiresAt`, `paidAt`, `cancelledAt`. **Không có** thông tin ngân hàng, mã QR hay nội dung chuyển khoản (xem một đơn đầy đủ bằng `GET /billing/orders/{orderId}`). Đơn `PENDING` đã quá hạn hiện là `EXPIRED` khi đọc lịch sử, không ghi DB. `sortBy` khác `createdAt` → 400.
+- **Giá gia hạn** (`RENEWAL`): giá hạng của kỳ mới (như mua mới). Ví dụ XS 3 năm = 499.000 đ. Phản hồi quote/order: `serviceStartsAt` = `AFTER_CURRENT_TERM` (còn hạn: nối tiếp, `serviceExpiresAt` là hạn hiện tại) hoặc `ON_PAYMENT` (đã hết hạn: tính từ lúc trả). Gia hạn sang gói **nhỏ hơn mức đang dùng** (dung lượng đã dùng) → 409 `PAYMENT_NOT_ALLOWED` / `USAGE_EXCEEDS_PLAN`; không tự xóa dữ liệu. Hạn đơn là 15 phút (không bị chặn bởi hết kỳ).
+- **Giá nâng hạng** (`UPGRADE`): phần chênh giá theo thời gian còn lại của kỳ hiện tại = `ceil((giá XS_MAX − giá XS của kỳ N năm) × số giây còn lại / (N × 31.536.000))`, N là số năm của đơn `PURCHASE` đã thanh toán gần nhất của kho (không có đơn mua thì N = 1); số giây còn lại không vượt tổng số giây của kỳ. Ví dụ mua XS 3 năm, còn 1,5 năm: (999.000 − 499.000) × 1/2 = 250.000 đ. Phản hồi: `years = null`, `tierAmount` = số tiền nâng hạng, `serviceExpiresAt` = hạn hiện tại (giữ nguyên). Hạn đơn là mốc sớm hơn giữa 15 phút và hết kỳ hiện tại.
+- **Giá do backend tính:** mua mới và gia hạn = giá hạng của kỳ được chọn. Giá, dung lượng và `policyVersion` được **chốt trên đơn** lúc tạo (PAY-11).
+- **Lịch sử đơn** (`GET /billing/orders`): chỉ đơn của kho mình, mặc định thứ tự theo `createdAt` (gửi `isAscending=false` để mới nhất trước). Mỗi phần tử `PaymentOrderSummaryResponse`: `id`, `kind`, `status`, `tier`, `years` (null với `UPGRADE`), `totalAmount`, `currency`, `paymentCode` (mã tham chiếu đơn), `createdAt`, `expiresAt`, `paidAt`, `cancelledAt`. **Không có** thông tin ngân hàng, mã QR hay nội dung chuyển khoản (xem một đơn đầy đủ bằng `GET /billing/orders/{orderId}`). Đơn `PENDING` đã quá hạn hiện là `EXPIRED` khi đọc lịch sử, không ghi DB. `sortBy` khác `createdAt` → 400.
 - **Một đơn chờ mỗi kho** (PAY-04): tạo lại cùng lựa chọn khi đang có đơn `PENDING` còn hạn thì trả lại đơn cũ (200); khác lựa chọn thì 409 `PAYMENT_ORDER_PENDING` kèm `orderId`. Muốn đổi thì hủy đơn cũ trước. Hai request cùng lúc vẫn chỉ ra một đơn.
-- **Hạn đơn:** mua mới = lúc tạo + 15 phút; mua thêm suất = mốc sớm hơn giữa lúc tạo + 15 phút và hết kỳ hiện tại (ADDON-03). FE tính thời gian còn lại theo `serverTime`, không theo đồng hồ máy khách.
+- **Hạn đơn:** mua mới và gia hạn = lúc tạo + thời gian chờ (mặc định 15 phút); nâng hạng = mốc sớm hơn giữa lúc tạo + thời gian chờ và hết kỳ hiện tại. FE tính thời gian còn lại theo `serverTime`, không theo đồng hồ máy khách.
 - **Chưa có job hết hạn đơn:** đơn `PENDING` đã quá hạn được đổi sang `EXPIRED` ngay trong lần đọc, tạo hoặc hủy tiếp theo. `GET /orders/current` trả 204 sau khi đánh dấu. Đơn không còn `PENDING` thì `qrImageUrl = null`.
-- **Mã thanh toán:** `LV` + 8 ký tự ngẫu nhiên (bỏ `0`, `O`, `1`, `I`), duy nhất toàn hệ thống; nội dung chuyển khoản phải đúng bằng mã này. Đơn không trả `ownerId`, `vaultId`, `rowVersion`. `includedBeneficiarySlots` là suất kèm theo hạng đã chốt; tổng suất của kho đọc ở `GET /vaults/me`.
+- **Mã thanh toán:** `LV` + 8 ký tự ngẫu nhiên (bỏ `0`, `O`, `1`, `I`), duy nhất toàn hệ thống; nội dung chuyển khoản phải đúng bằng mã này. Đơn không trả `ownerId`, `vaultId`, `rowVersion`.
 - **Hủy đơn:** hủy lặp vẫn 200 (trả đơn đã hủy). Đơn đã `PAID` → 409 `PAYMENT_ORDER_NOT_PAYABLE` (`reason = PAID`), đã quá hạn → `EXPIRED`.
-- **Cấp quyền** (D8): khi đơn được thanh toán, **chỉ** quyền dịch vụ của kho được ghi. Mua mới: hạng, `PAID_ACTIVE`, dung lượng, suất kèm theo, suất thêm = `extraSlots`, hạn = lúc trả + số năm × 365 ngày (PAY-08). Mua thêm suất: `extraBeneficiarySlots += extraSlots`, giữ nguyên hạn. Gia hạn: hạng, dung lượng, suất kèm theo và suất thêm theo đơn, trạng thái về `PAID_ACTIVE`; hạn mới = (hạn cũ nếu đơn gia hạn sớm và hạn đó chưa qua, ngược lại lúc trả) + số năm × 365 ngày; chỉ cấp khi kỳ chưa đổi so với lúc tạo đơn (gia hạn sớm cần đúng hạn cũ; gia hạn muộn cần kho chưa có kỳ còn hạn), ngược lại `ENTITLEMENT_CHANGED`. Nâng hạng: hạng `XS_MAX`, dung lượng 500 MiB, suất kèm theo 5; giữ nguyên hạn và suất thêm; chỉ cấp khi quyền vẫn là `PAID_ACTIVE` hạng `XS`, đúng hạn lúc tạo đơn và kỳ chưa hết, ngược lại `ENTITLEMENT_CHANGED`. Mỗi đơn chỉ cấp một lần (trả lặp trả lại đơn `PAID`). Không đổi kế hoạch (vẫn `DRAFT` nếu đang `DRAFT`, SETUP-14), không tính là điểm danh, không gỡ chặn (PAY-09). Đơn tạo trước khi kế hoạch bị khóa, tiền tới đúng hạn vẫn được cấp (§8.3). Không cấp và trả 409 `PAYMENT_ORDER_NOT_PAYABLE` khi: đơn đã hủy (`CANCELLED`), tiền tới sau hạn đơn (`EXPIRED`), kho đã đóng (`VAULT_CLOSED`), hoặc quyền dịch vụ đã đổi so với lúc tạo đơn (`ENTITLEMENT_CHANGED`: mua mới nhưng kho không còn Free; mua thêm nhưng hạn đã đổi, đã hết hạn hoặc không còn `PAID_ACTIVE`).
+- **Cấp quyền** (D8): khi đơn được thanh toán, **chỉ** quyền dịch vụ của kho được ghi. Mua mới: hạng, `PAID_ACTIVE`, dung lượng, hạn = lúc trả + số năm × 365 ngày (PAY-08). Gia hạn: hạng và dung lượng của đơn, trạng thái về `PAID_ACTIVE`; hạn mới = (hạn cũ nếu đơn gia hạn sớm và hạn đó chưa qua, ngược lại lúc trả) + số năm × 365 ngày; chỉ cấp khi kỳ chưa đổi so với lúc tạo đơn (gia hạn sớm cần đúng hạn cũ; gia hạn muộn cần kho chưa có kỳ còn hạn), ngược lại `ENTITLEMENT_CHANGED`. Nâng hạng: hạng và dung lượng của gói đích; giữ nguyên hạn; chỉ cấp khi quyền vẫn là `PAID_ACTIVE` ở gói thấp hơn, đúng hạn lúc tạo đơn và kỳ chưa hết, ngược lại `ENTITLEMENT_CHANGED`. Mỗi đơn chỉ cấp một lần (trả lặp trả lại đơn `PAID`). Không đổi kế hoạch (vẫn `DRAFT` nếu đang `DRAFT`, SETUP-14), không tính là điểm danh, không gỡ chặn (PAY-09). Đơn tạo trước khi kế hoạch bị khóa, tiền tới đúng hạn vẫn được cấp (§8.3). Không cấp và trả 409 `PAYMENT_ORDER_NOT_PAYABLE` khi: đơn đã hủy (`CANCELLED`), tiền tới sau hạn đơn (`EXPIRED`), kho đã đóng (`VAULT_CLOSED`), hoặc quyền dịch vụ đã đổi so với lúc tạo đơn (`ENTITLEMENT_CHANGED`: mua mới nhưng kho không còn Free; gia hạn hoặc nâng hạng nhưng hạn đã đổi, đã hết hạn hoặc không còn `PAID_ACTIVE`).
 - **`dev-pay` (chỉ Development):** giả lập trả tiền cho đơn của kho mình, gọi đúng hàm cấp quyền mà webhook SePay sẽ dùng. Không có body. Route chỉ được đăng ký khi môi trường là Development **và** `Billing:DevPaymentEnabled = true`; ngoài ra là 404. Hai thao tác trả tiền chạy cùng lúc có thể nhận 409 `EDIT_CONFLICT`; thử lại sẽ thấy đơn `PAID`.
 - **Cấu hình** (`Billing`): `Bank.BankCode`, `Bank.AccountNumber`, `Bank.AccountName` (thông tin công khai để hiện QR; `appsettings.Development.json` dùng số tài khoản giả, tài khoản thật đặt trong user-secrets hoặc biến môi trường), `DevPaymentEnabled` (mặc định tắt), `SePay:Environment` (`Test` mặc định hoặc `Live`; giá trị khác là lỗi cấu hình) và `SePay:WebhookApiKey` (**secret**, xem dưới). Chưa cấu hình ngân hàng thì tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
-- **Bảng giá** (`Billing:Pricing`, trong `appsettings.json`): `PolicyVersion` (tối đa 16 ký tự), `SlotPricePerYear`, `Xs` và `XsMax` mỗi hạng có `OneYear`, `ThreeYears`, `FiveYears` (đồng). Đây là con số công khai, không phải secret. Dung lượng, số suất kèm theo, các mốc 1/3/5 năm, hạn đơn 15 phút và hạn eKYC 90 ngày vẫn là luật trong code. **Đổi giá:** sửa các giá trị này (hoặc ghi đè bằng biến môi trường, ví dụ `Billing__Pricing__Xs__OneYear`), đổi `PolicyVersion`, rồi khởi động lại API. Đơn đã tạo giữ giá và `policyVersion` đã chốt (PAY-11); báo giá, `GET /billing/plans` và đơn mới dùng giá mới ngay sau khi khởi động. Giá nâng hạng giữa kỳ tính theo bảng giá hiện hành. Cấu hình sai (thiếu giá, giá ≤ 0, `XsMax` rẻ hơn `Xs` cùng kỳ, `PolicyVersion` rỗng hoặc quá dài) là lỗi cấu hình máy chủ: báo giá và tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
+- **Bảng giá** (`Billing:Pricing`, trong `appsettings.json`): `PolicyVersion` (tối đa 16 ký tự), `Xs` và `XsMax` mỗi hạng có `OneYear`, `ThreeYears`, `FiveYears` (đồng). Đây là con số công khai, không phải secret. Dung lượng, các mốc 1/3/5 năm, hạn đơn 15 phút và hạn eKYC 90 ngày vẫn là luật trong code. **Đổi giá:** sửa các giá trị này (hoặc ghi đè bằng biến môi trường, ví dụ `Billing__Pricing__Xs__OneYear`), đổi `PolicyVersion`, rồi khởi động lại API. Đơn đã tạo giữ giá và `policyVersion` đã chốt (PAY-11); báo giá, `GET /billing/plans` và đơn mới dùng giá mới ngay sau khi khởi động. Giá nâng hạng giữa kỳ tính theo bảng giá hiện hành. Cấu hình sai (thiếu giá, giá ≤ 0, `XsMax` rẻ hơn `Xs` cùng kỳ, `PolicyVersion` rỗng hoặc quá dài) là lỗi cấu hình máy chủ: báo giá và tạo đơn trả `500 INTERNAL_ERROR`, không ghi đơn nào.
 - **Hết hạn dịch vụ (OPLAN-01):** job nền (`EntitlementExpiry:Enabled`, `EntitlementExpiry:PollSeconds` mặc định 300) chuyển kho `PAID_ACTIVE` đã tới hạn `serviceExpiresAt` sang `GRACE_READ_ONLY` và ghi nhật ký `SERVICE_GRACE_STARTED`. Kiểm lại điều kiện trong transaction Serializable như cấp quyền thanh toán, nên webhook gia hạn chạy cùng lúc không bị ghi đè. Ở ân hạn: chặn thao tác thêm (`VAULT_NOT_EDITABLE` / `SERVICE_READ_ONLY`), vẫn cho thao tác giảm, điểm danh và gia hạn (`RENEWAL` tính kỳ mới từ lúc trả). `serviceExpiresAt` giữ nguyên làm mốc bắt đầu ân hạn.
 - **Chưa làm:** chuyển `GRACE_READ_ONLY` → `EXPIRED_REVIEW` và tự xóa sau thời hạn lưu (chờ nhóm chốt sửa SRS OPLAN-01, OPLAN-04), kỳ chờ, nhắc hạn, job hết hạn đơn; xác thực HMAC; thao tác Admin đóng giao dịch (`RESOLVED` chưa được dùng); hoàn tiền (làm thủ công ngoài app, PAY-07).
 
@@ -1107,7 +1096,7 @@ dotnet user-secrets set "Billing:SePay:WebhookApiKey" "<key>" --project src/Lega
 | `ORDER_CANCELLED` | Đơn đã bị hủy (PAY-07) |
 | `TIME_UNKNOWN` | Không đọc được giờ tiền vào |
 | `LATE_AFTER_EXPIRY` | Giờ tiền vào từ hạn đơn trở đi (PAY-06, AC-30). Đơn đã `EXPIRED` mà tiền vào trước hạn vẫn được cấp |
-| `VAULT_CLOSED`, `ENTITLEMENT_CHANGED`, `EXPIRED`, `CANCELLED`, `PAID` | Khi bước cấp quyền từ chối, cùng `reason` của `PAYMENT_ORDER_NOT_PAYABLE` (AC-104, ADDON-03) |
+| `VAULT_CLOSED`, `ENTITLEMENT_CHANGED`, `EXPIRED`, `CANCELLED`, `PAID` | Khi bước cấp quyền từ chối, cùng `reason` của `PAYMENT_ORDER_NOT_PAYABLE` (AC-104) |
 
   Giao dịch lệch (trừ `NOT_INCOMING`) gắn `paymentOrderId` khi đã xác định được đơn, và ghi log cảnh báo (mã giao dịch và lý do, không có số tiền hay mã thanh toán; trước đây mở sự cố loại `PAYMENT`) với `targetType = PaymentTransaction`, `targetId` = Id giao dịch; nội dung sự cố chỉ có mã lý do, không có số tiền, mã đơn hay số tài khoản (SEC-07).
 - **Trạng thái giao dịch** (`status`): `RECEIVED` (đã lưu, chưa đối chiếu xong), `MATCHED`, `RECONCILIATION_REQUIRED`, `RESOLVED` (chưa dùng). Một đơn có tối đa một giao dịch `MATCHED`.
@@ -1306,15 +1295,16 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true, "confirmSplitDeviation": true? }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 400 `VALIDATION_ERROR` (`errors.confirmSplitDeviation`) khi biên bản khác cách chia của Chủ kho mà chưa xác nhận; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`, `VAULT_NOT_LOCKED` khi chưa chấp nhận giấy tờ nào nên kho chưa khóa) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `PARTIALLY_DELIVERED` khi đã có người nhận được mở quyền tải) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/sign` | như trên | — | 200 `HandoverRecordResponse` | 404, 409 (`NOT_SIGNING_STEP` khi chưa chốt, `RECORD_COMPLETED`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/remind-executor` | như trên | — | 200 `HandoverRecordResponse` (đã có `executorReminderSentAt`, `executorRemindAvailableAt`); gửi thư nhắc Người thực thi ký | 404 `HANDOVER_NOT_FOUND` (không phải luật sư được giao), 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE` khi chưa chốt hoặc đã hoàn tất, `EXECUTOR_ALREADY_SIGNED` khi bản hiện tại đã có chữ ký Người thực thi, `NO_EXECUTOR` khi kho chưa có Người thực thi có tài khoản, `REMINDED_RECENTLY` kèm trường `remindAvailableAt`) |
 | POST | `/api/v1/executor/vaults/{vaultId}/handover-record/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` | 404, 409 (như trên) |
 | POST | `/api/v1/handover/turns/{turnId}/record/sign` | Người nhận của lượt | — | 200 `HandoverRecordResponse` (chỉ phần của mình) | 404, 409 (như trên; `IDENTITY_NOT_CONFIRMED` khi danh tính của chính mình chưa được xác nhận) |
 
 **Giao riêng từng người nhận** (ba bên vẫn đều ký):
 
-1. Luật sư chốt: biên bản sang `SIGNING`; luật sư và Người thực thi ký được ngay (thư báo Người thực thi ký).
+1. Luật sư chốt: biên bản sang `SIGNING`; luật sư và Người thực thi ký được ngay (thư báo Người thực thi ký). Lúc chốt cũng gửi thư mời cho từng người nhận mới của biên bản (không gửi lúc luật sư thêm người). Người nhận mà Chủ kho không chia tài sản nào (không có dòng gán nào của kho; thường do luật sư thêm) nhận thư mời riêng: luật sư thêm họ vào biên bản của kho theo di chúc hoặc quy định pháp luật, họ cần tạo tài khoản và xác minh đúng email nhận thư. Người Chủ kho đã chia nhận thư mời thường. Cả hai loại thư đều không có tên tài sản hay số căn cước.
 2. Mỗi người nhận đi riêng: nộp ảnh căn cước → luật sư xác nhận danh tính (thư báo riêng người đó ký) → người đó ký. Không chờ người nhận khác.
 3. Có chữ ký luật sư + Người thực thi (bản hiện tại) + chữ ký của người nhận X thì mở quyền tải cho lượt của X ngay (lượt `HANDOVER_COMMITTED`); Người thực thi gửi mã cho X (`send-key` kiểm theo lượt). Luật sư hoặc Người thực thi ký sau cùng thì mở cho mọi người nhận đã ký trước đó.
 4. Mọi người nhận trong biên bản đều đã ký (cùng luật sư, Người thực thi) thì biên bản `COMPLETED`.
@@ -1323,9 +1313,42 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 7. `IDENTITY_CHECK` chỉ còn ở biên bản chốt trước thay đổi này, được xử lý như `SIGNING`.
 8. Màn tiến độ của Người thực thi: `documentApprovedAt` của từng lượt là lúc lượt đó được mở quyền tải.
 
+**Nhắc Người thực thi ký và báo luật sư ký.**
+
+- `remind-executor`: kiểm theo thứ tự luật sư đang hoạt động, biên bản thuộc luật sư (không thì 404), biên bản đã chốt và chưa hoàn tất (`WRONG_STATE`), Người thực thi chưa ký bản hiện tại (`EXECUTOR_ALREADY_SIGNED`), có Người thực thi có tài khoản (`NO_EXECUTOR`), rồi mới tới giới hạn thời gian.
+- Mỗi biên bản nhắc tối đa **một lần mỗi 24 giờ**: lần nhắc trước còn chưa đủ 24 giờ thì 409 `REMINDED_RECENTLY` kèm `remindAvailableAt` (ISO 8601, lúc nhắc lại được). Giờ lấy từ đồng hồ máy chủ; luật nằm ở `HandoverRecordRules.CanRemindExecutor`.
+- Thành công thì lưu `executorReminderSentAt`, ghi nhật ký `HANDOVER_EXECUTOR_REMINDED` (`targetType = VAULT`, `actorRole = VERIFIER`, không ghi nội dung thư), lưu một lần rồi mới gửi thư cho Người thực thi hiện tại ("Luật sư nhắc bạn ký biên bản bàn giao", nút về `/executor`; không có tên tài sản hay số căn cước). Thư lỗi không làm hỏng việc nhắc.
+- `HandoverRecordResponse` có thêm `executorReminderSentAt` (lần nhắc gần nhất, `null` khi chưa nhắc) và `executorRemindAvailableAt` (= `executorReminderSentAt` + 24 giờ, `null` khi chưa nhắc) để FE hiện "Đã nhắc lúc …" và khóa nút. Hai trường này không phụ thuộc bản biên bản (mở lại biên bản không xóa).
+- **Thư báo luật sư:** khi biên bản đã chốt, Người thực thi đã ký, ít nhất một người nhận đã ký mà luật sư chưa ký (`HandoverRecordRules.OnlyVerifierSignatureMissing`, tính theo bản hiện tại), lúc điều kiện này vừa chuyển từ chưa sang có (do Người thực thi hoặc người nhận ký), hệ thống gửi một thư tới luật sư được giao ("Biên bản bàn giao chỉ còn thiếu chữ ký của bạn", nút về `/notary/queue`). Gửi sau khi lưu; thư lỗi không làm hỏng việc ký.
+
 - `confirmLegalBasis = true` nghĩa là luật sư xác nhận: đã kiểm tra di chúc (bản sau cùng, hợp pháp) hoặc xác định không có di chúc, lập biên bản theo đúng quy định và chịu trách nhiệm về nội dung biên bản. Backend chỉ ghi nhận, không kiểm pháp lý.
 - Chốt thành công thì lưu `legalBasisConfirmedAt` (thời điểm) và `legalBasisConfirmedByUserId` (luật sư). Mở lại thì cả hai về `null`; chốt lại phải tick lại.
 - `HandoverRecordResponse` có thêm `legalBasisConfirmedAt`, `legalBasisConfirmedByUserId`, `legalBasisConfirmedByName` (họ tên luật sư, để in dòng "Luật sư … xác nhận căn cứ pháp lý lúc …"; rỗng khi chưa xác nhận).
+- `HandoverRecordResponse.vaultLocked`: kho đã khóa chưa (xem mục 6.21e). Chưa khóa thì chưa chốt được (`VAULT_NOT_LOCKED`).
+
+**Biên bản khác cách chia ban đầu của Chủ kho.** Backend so dòng biên bản với các dòng gán tài sản của Chủ kho (bỏ tài sản đã bị xóa nội dung) và trả `splitDifferences` (luật sư và Người thực thi thấy; màn người nhận nhận `[]`). Mỗi phần tử `{ kind, beneficiaryId?, recipientName, assetId?, assetName, ownerRecipientNames, recordRecipientNames }`, không có số căn cước:
+
+| `kind` | Nghĩa |
+|---|---|
+| `RECIPIENT_ADDED` | Người nhận có trong biên bản nhưng Chủ kho không chia cho (thường do luật sư thêm) |
+| `RECIPIENT_REMOVED` | Người nhận Chủ kho đã chia nhưng không có trong biên bản (kể cả người bị từ chối giấy tờ) |
+| `ASSET_RECIPIENTS_CHANGED` | Tài sản đổi người nhận hoặc thêm, bớt người cùng nhận; `ownerRecipientNames` theo Chủ kho, `recordRecipientNames` theo biên bản (rỗng là không ai) |
+
+- Có khác biệt thì chốt phải kèm `confirmSplitDeviation = true` (luật sư xác nhận việc thay đổi theo di chúc hoặc quy định pháp luật và chịu trách nhiệm); không khác thì cờ này bị bỏ qua.
+- Chốt có khác biệt thì lưu `splitDeviationConfirmedAt` và `splitDeviationConfirmedByUserId`; response trả `splitDeviationConfirmedAt` và `splitDeviationConfirmedByName` (để in dòng xác nhận). Mở lại thì về `null`, chốt lại phải tick lại.
+
+### 6.21e. Thời điểm khóa kho khi có yêu cầu nhận tài sản
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/vaults/{vaultId}/handover-request` | Chủ kho | — | 200 `{ recordId, status, vaultLocked, requestedAt, requesterNames }`; 204 khi không có biên bản đang mở | 404 |
+| POST | `/api/v1/verifier/handover-records/{recordId}/claims/{claimId}/review` | Luật sư được giao biên bản | `{ decision: ACCEPT \| REQUEST_SUPPLEMENT \| REJECT, reason? }` | 200 `HandoverRecordResponse` | 400, 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`) |
+
+- **Người nhận gửi yêu cầu** chỉ tạo biên bản (`DRAFTING`) và giao luật sư; kế hoạch vẫn `ACTIVE`, Chủ kho vẫn sửa được kho.
+- **Kho khóa** (kế hoạch sang `HANDOVER_REQUESTED`) khi luật sư **chấp nhận** yêu cầu hoặc hồ sơ báo tin đầu tiên. Yêu cầu bổ sung hay từ chối không khóa. Lúc khóa, Chủ kho và Người thực thi nhận thư "Kho đã được khóa để bàn giao".
+- **Từ chối hết:** kho chưa khóa mà mọi yêu cầu đều bị từ chối và không còn hồ sơ báo tin nào của kho chờ xét thì biên bản tự đóng (`CANCELLED`, `cancelReason = "Mọi yêu cầu bị từ chối"`); lần gửi sau tạo biên bản mới.
+- **Trong lúc kho chưa khóa mà có biên bản đang lập:** Chủ kho không xóa được người nhận đã gửi yêu cầu hoặc đã có trong biên bản (409 `HANDOVER_NOT_ALLOWED`, `reason = RECIPIENT_IN_HANDOVER_REQUEST`) và không gỡ được dòng gán cuối cùng của kế hoạch (409 `HANDOVER_NOT_ALLOWED`, `reason = HANDOVER_REQUEST_PENDING`).
+- Luật kho đã khóa chưa nằm ở một chỗ: `HandoverRecordRules.IsVaultLocked` (`HANDOVER_REQUESTED`, `HANDOVER_IN_PROGRESS`, `CLOSED`).
 
 ### 6.21d. Người nhận: các kho được để lại cho tôi và gửi yêu cầu trong app
 
@@ -1427,7 +1450,7 @@ Mỗi lượt bàn giao có **một biên bản** đi qua hai người ký theo 
 | 4 | Không dùng `ApiResponse<T>` cho API này (BE không bọc envelope) | `shared/types` |
 | 5 | Bổ sung hằng trạng thái: `LOCKED`, `DISABLED`, `OPEN`, `CLOSED`, `READY`, `REMOVED`, `PAID_ACTIVE`... (hiện `STATUS` chưa có) | `shared/constants` |
 | 6 | Gọi route có tiền tố `/v1` (base URL đã có `/api`) | các `features/*/api` |
-| 7 | Màn thanh toán đang mock contract cũ: đổi sang DTO và endpoint `/billing/*` ở mục 6.18 (hạng `XS` / `XS_MAX`, năm 1/3/5, suất thêm; không còn `RECIPIENT_PLUS`, voucher, monthly/lifetime); không gửi số tiền, chỉ hiển thị `totalAmount` từ response | `features/billing/*` |
+| 7 | Màn thanh toán đang mock contract cũ: đổi sang DTO và endpoint `/billing/*` ở mục 6.18 (hạng `XS` / `XS_MAX`, năm 1/3/5; không còn `RECIPIENT_PLUS`, voucher, monthly/lifetime); không gửi số tiền, chỉ hiển thị `totalAmount` từ response | `features/billing/*` |
 # Executor setup and activation (15/10/2026)
 
 See [PLAN-SETUP-API.md](PLAN-SETUP-API.md) for the implemented canonical `/api/v1` endpoints, acknowledgement fields, business errors, SMTP opt-in and migration/verification limits. OpenAPI runtime is `/openapi/v1.json`.
@@ -1459,10 +1482,10 @@ Di chúc điện tử (nhánh feat/will-signature), chi tiết ở mục cuối 
 
 ## 10. Lưu và xóa dữ liệu sau bàn giao (SRS §7.7)
 
-Job `Retention:Enabled`, `Retention:PollSeconds` (mặc định 300 giây). Chỉ áp dụng cho kế hoạch `HANDOVER_IN_PROGRESS` / `CLOSED` / `BLOCKED`; kế hoạch đã về `ACTIVE` (Owner còn sống) và lượt `CANCELLED` **không bao giờ** bị dọn.
+Job `Retention:Enabled`, `Retention:PollSeconds` (mặc định 300 giây). Chỉ áp dụng cho kế hoạch `HANDOVER_IN_PROGRESS` / `CLOSED`; kế hoạch đã về `ACTIVE` và lượt `CANCELLED` **không bao giờ** bị dọn.
 
 - **Đồng hồ theo từng lượt** (cột mới trên `HandoverTurns`: `RetentionStatus`, `RetentionStartedAt`, `RetentionDeadline`, `RetentionRemainingSeconds`, `RetentionNoticeStage`, `DeletedAt`): `NOT_STARTED` → `RETENTION_ACTIVE` (30 ngày) → tới hạn thì dọn → `DELETED`.
-- **Lý do giữ** (tạm dừng, lưu phần còn lại, không đặt lại 30 ngày — RETENTION-04): còn trong 5 ngày phản hồi; claim đang xử lý (`IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`); grant còn hạn; Owner báo còn sống (kế hoạch `BLOCKED`). Mở link hay đăng nhập không phải lý do giữ (RETENTION-03).
+- **Lý do giữ** (tạm dừng, lưu phần còn lại, không đặt lại 30 ngày — RETENTION-04): còn trong 5 ngày phản hồi; claim đang xử lý (`IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`); grant còn hạn. Mở link hay đăng nhập không phải lý do giữ (RETENTION-03).
 - **Dọn** (RETENTION-06): lượt còn mở thành `LAPSED`, link mời bị vô hiệu; nội dung tài sản chỉ bị xóa khi không còn lượt nào khác chưa dọn cùng tham chiếu (RETENTION-02). Xóa = hủy khóa trước (ghi đè DEK đã bọc bằng 0, `Assets.ContentDeletedAt`) trong giao dịch, xóa tệp sau (`Assets.StorageDeletedAt`, lỗi thì thử lại). Ghi `plan.UpdatedAt` nên nhận lượt/đồng ý chạy cùng lúc thua RowVersion. Tải nội dung đã dọn: `403 GRANT_NOT_ACTIVE` (`CONTENT_DELETED`). Dung lượng đã dùng không tính nội dung đã dọn.
 - **Đóng kho** (SETUP-18): kế hoạch `CLOSED` và mọi lượt đã dọn thì dọn nốt nội dung còn lại của kho (kể cả tài sản ngoài gói) và kho thành `CLOSED`.
 - **Thư mốc** cho người nhận (email trong hồ sơ người nhận): lúc bắt đầu, còn 7 ngày, còn 24 giờ; gửi lỗi thì vòng sau gửi lại.

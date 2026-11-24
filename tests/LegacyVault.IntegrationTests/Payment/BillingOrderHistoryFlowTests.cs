@@ -40,9 +40,9 @@ public sealed class BillingOrderHistoryFlowTests : IAsyncLifetime
         return client.GetAsync("/api/v1/billing/orders" + query);
     }
 
-    private static async Task<Guid> CreateAddonOrderAsync(HttpClient client)
+    private static async Task<Guid> CreateRenewalOrderAsync(HttpClient client)
     {
-        HttpResponseMessage response = await client.PostAsJsonAsync("/api/v1/billing/orders", new { extraSlots = 1 });
+        HttpResponseMessage response = await client.PostAsJsonAsync("/api/v1/billing/orders", new { tier = "XS", years = 1, renew = true });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await ApiTestHelpers.ReadJsonAsync(response)).GetProperty("id").GetGuid();
     }
@@ -50,7 +50,7 @@ public sealed class BillingOrderHistoryFlowTests : IAsyncLifetime
     /// <summary>Tạo một đơn rồi hủy; đơn Pending cũ phải hết thì mới tạo được đơn mới.</summary>
     private static async Task<Guid> CreateAndCancelAsync(HttpClient client)
     {
-        Guid orderId = await CreateAddonOrderAsync(client);
+        Guid orderId = await CreateRenewalOrderAsync(client);
         HttpResponseMessage cancel = await client.PostAsync($"/api/v1/billing/orders/{orderId}/cancel", null);
         Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
         return orderId;
@@ -79,7 +79,7 @@ public sealed class BillingOrderHistoryFlowTests : IAsyncLifetime
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(100));
         Guid cancelledId = await CreateAndCancelAsync(client);
-        Guid paidId = await CreateAddonOrderAsync(client);
+        Guid paidId = await CreateRenewalOrderAsync(client);
         HttpResponseMessage paid = await client.PostAsync($"/api/v1/billing/orders/{paidId}/dev-pay", null);
         Assert.Equal(HttpStatusCode.OK, paid.StatusCode);
 
@@ -98,7 +98,7 @@ public sealed class BillingOrderHistoryFlowTests : IAsyncLifetime
         Assert.Equal(cancelledId, second.GetProperty("id").GetGuid());
         Assert.Equal("CANCELLED", second.GetProperty("status").GetString());
         Assert.NotEqual(JsonValueKind.Null, second.GetProperty("cancelledAt").ValueKind);
-        Assert.Equal("ADDON", first.GetProperty("kind").GetString());
+        Assert.Equal("RENEWAL", first.GetProperty("kind").GetString());
         Assert.StartsWith("LV", first.GetProperty("paymentCode").GetString());
         Assert.Equal("VND", first.GetProperty("currency").GetString());
         Assert.True(first.GetProperty("totalAmount").GetInt64() > 0);
@@ -114,7 +114,7 @@ public sealed class BillingOrderHistoryFlowTests : IAsyncLifetime
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(100));
         await CreateAndCancelAsync(client);
-        await CreateAddonOrderAsync(client);
+        await CreateRenewalOrderAsync(client);
 
         // Hành động
         HttpResponseMessage response = await ListAsync(client, "?pageIndex=2&pageSize=1&isAscending=false");
@@ -134,7 +134,7 @@ public sealed class BillingOrderHistoryFlowTests : IAsyncLifetime
         // Chuẩn bị: đơn chờ đã quá hạn nhưng chưa ai đọc nên DB vẫn Pending (D7: không có job hết hạn)
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(100));
-        Guid orderId = await CreateAddonOrderAsync(client);
+        Guid orderId = await CreateRenewalOrderAsync(client);
         await BillingTestData.MakeOrderOverdueAsync(factory, orderId);
 
         // Hành động
@@ -153,10 +153,10 @@ public sealed class BillingOrderHistoryFlowTests : IAsyncLifetime
         // Chuẩn bị: hai Owner, mỗi người một đơn
         (HttpClient first, Guid firstVault, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, firstVault, TimeSpan.FromDays(100));
-        Guid firstOrder = await CreateAddonOrderAsync(first);
+        Guid firstOrder = await CreateRenewalOrderAsync(first);
         (HttpClient second, Guid secondVault, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, secondVault, TimeSpan.FromDays(100));
-        Guid secondOrder = await CreateAddonOrderAsync(second);
+        Guid secondOrder = await CreateRenewalOrderAsync(second);
 
         // Hành động
         JsonElement firstPage = await ApiTestHelpers.ReadJsonAsync(await ListAsync(first, ""));

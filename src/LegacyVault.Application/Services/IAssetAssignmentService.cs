@@ -24,8 +24,7 @@ public interface IAssetAssignmentService
     /// <summary>
     /// Đặt lại toàn bộ người nhận của một tài sản; trả các dòng gán của tài sản sau khi đổi.
     /// Lỗi: 404 ASSET_NOT_FOUND, 404 BENEFICIARY_NOT_FOUND, 403 PAID_TIER_REQUIRED (hạng Free khi thêm người),
-    /// 409 BENEFICIARY_SLOTS_EXCEEDED (+usedSlots, maxSlots), 409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED,
-    /// 409 EDIT_CONFLICT.
+    /// 409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED, 409 EDIT_CONFLICT.
     /// </summary>
     Task<List<AssetAssignmentResponse>> SetAssetRecipientsAsync(
         Guid vaultId, Guid assetId, SetAssetRecipientsRequest request, CancellationToken ct);

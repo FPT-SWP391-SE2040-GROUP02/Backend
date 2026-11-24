@@ -47,7 +47,7 @@ public sealed class PaymentBankNotConfiguredTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage response = await client.PostAsJsonAsync(
-            "/api/v1/billing/orders", new { tier = "XS", years = 1, extraSlots = 0 });
+            "/api/v1/billing/orders", new { tier = "XS", years = 1 });
 
         // Kiểm tra
         await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.InternalServerError, "INTERNAL_ERROR");

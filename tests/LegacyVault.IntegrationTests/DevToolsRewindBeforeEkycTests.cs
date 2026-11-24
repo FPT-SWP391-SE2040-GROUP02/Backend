@@ -70,8 +70,6 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
             Assert.Equal(ServiceTier.Free, entitlement.Tier);
             Assert.Equal(EntitlementStatus.Free, entitlement.Status);
             Assert.Equal(StorageLimits.FreeQuotaBytes, entitlement.StorageQuotaBytes);
-            Assert.Equal(0, entitlement.IncludedBeneficiarySlots);
-            Assert.Equal(0, entitlement.ExtraBeneficiarySlots);
             Assert.Null(entitlement.ServiceExpiresAt);
 
             PaymentOrder pending = await db.Set<PaymentOrder>().SingleAsync(o => o.Id == pendingOrderId);
@@ -177,7 +175,6 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
             entitlement.Tier = ServiceTier.Xs;
             entitlement.Status = EntitlementStatus.PaidActive;
             entitlement.StorageQuotaBytes = 209715200;
-            entitlement.IncludedBeneficiarySlots = 2;
             entitlement.ServiceExpiresAt = DateTimeOffset.UtcNow.AddDays(30);
             await db.SaveChangesAsync();
         });
@@ -205,7 +202,6 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
             order.TotalAmount = 100000;
             order.TierAmount = 100000;
             order.StorageQuotaBytes = 209715200;
-            order.IncludedBeneficiarySlots = 2;
             order.PolicyVersion = "test";
             order.PaymentCode = "LV" + orderId.ToString("N").Substring(20).ToUpperInvariant();
             order.Status = status;
