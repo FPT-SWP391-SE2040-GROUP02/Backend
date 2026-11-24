@@ -85,12 +85,17 @@ public class MyHandoverClaimResponse
     public List<HandoverRecordFileResponse> Files { get; set; } = new List<HandoverRecordFileResponse>();
 }
 
-/// <summary>Yêu cầu nhận tài sản đang mở của kho, cho Chủ kho xem và hủy (GET /vaults/{id}/handover-request).</summary>
+/// <summary>Yêu cầu nhận tài sản đang mở của kho, cho Chủ kho xem (GET /vaults/{id}/handover-request).</summary>
 public class OwnerHandoverRequestResponse
 {
     public Guid RecordId { get; set; }
 
     public string Status { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Kho đã khóa chưa. false: luật sư đang xét giấy tờ, Chủ kho vẫn sửa được kho; true: luật sư đã chấp nhận giấy tờ.
+    /// </summary>
+    public bool VaultLocked { get; set; }
 
     public DateTimeOffset RequestedAt { get; set; }
 

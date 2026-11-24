@@ -100,6 +100,7 @@ Lỗi ứng dụng và validation DTO trả **ProblemDetails** (RFC 9457) kèm `
 | 409 | `PLAN_DEACTIVATION_CONFIRMATION_REQUIRED` | Thao tác làm kho không còn dòng gán tài sản nào khi kế hoạch đang chạy; cần Owner xác nhận | |
 | 409 | `BENEFICIARY_IDENTITY_CONFLICT` | Kho đã có hồ sơ cùng số CCCD nhưng khác họ tên hoặc ngày sinh | `beneficiaryId` |
 | 409 | `BENEFICIARY_IN_USE` | Xóa hồ sơ người nhận đang được gán tài sản; gỡ gán trước | `assetIds` |
+| 409 | `HANDOVER_NOT_ALLOWED` | Xóa người nhận đã gửi yêu cầu nhận tài sản, hoặc gỡ dòng gán cuối cùng khi đang có yêu cầu chờ luật sư xét (mục 6.21e) | `reason`: `RECIPIENT_IN_HANDOVER_REQUEST` / `HANDOVER_REQUEST_PENDING` |
 | 409 | `GOOGLE_ACCOUNT_ALREADY_LINKED` | Google này đã gắn tài khoản khác / tài khoản đã có Google | |
 | 409 | `LAST_LOGIN_METHOD` | Gỡ phương thức đăng nhập cuối cùng | |
 | 409 | `LOGIN_METHOD_ALREADY_EXISTS` | Đã có phương thức này | `method` |
@@ -1289,7 +1290,7 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`, `VAULT_NOT_LOCKED` khi chưa chấp nhận giấy tờ nào nên kho chưa khóa) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `PARTIALLY_DELIVERED` khi đã có người nhận được mở quyền tải) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/sign` | như trên | — | 200 `HandoverRecordResponse` | 404, 409 (`NOT_SIGNING_STEP` khi chưa chốt, `RECORD_COMPLETED`) |
 | POST | `/api/v1/executor/vaults/{vaultId}/handover-record/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` | 404, 409 (như trên) |
@@ -1309,6 +1310,20 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 - `confirmLegalBasis = true` nghĩa là luật sư xác nhận: đã kiểm tra di chúc (bản sau cùng, hợp pháp) hoặc xác định không có di chúc, lập biên bản theo đúng quy định và chịu trách nhiệm về nội dung biên bản. Backend chỉ ghi nhận, không kiểm pháp lý.
 - Chốt thành công thì lưu `legalBasisConfirmedAt` (thời điểm) và `legalBasisConfirmedByUserId` (luật sư). Mở lại thì cả hai về `null`; chốt lại phải tick lại.
 - `HandoverRecordResponse` có thêm `legalBasisConfirmedAt`, `legalBasisConfirmedByUserId`, `legalBasisConfirmedByName` (họ tên luật sư, để in dòng "Luật sư … xác nhận căn cứ pháp lý lúc …"; rỗng khi chưa xác nhận).
+- `HandoverRecordResponse.vaultLocked`: kho đã khóa chưa (xem mục 6.21e). Chưa khóa thì chưa chốt được (`VAULT_NOT_LOCKED`).
+
+### 6.21e. Thời điểm khóa kho khi có yêu cầu nhận tài sản
+
+| Method | URL | Quyền | Body | Thành công | Lỗi |
+|---|---|---|---|---|---|
+| GET | `/api/v1/vaults/{vaultId}/handover-request` | Chủ kho | — | 200 `{ recordId, status, vaultLocked, requestedAt, requesterNames }`; 204 khi không có biên bản đang mở | 404 |
+| POST | `/api/v1/verifier/handover-records/{recordId}/claims/{claimId}/review` | Luật sư được giao biên bản | `{ decision: ACCEPT \| REQUEST_SUPPLEMENT \| REJECT, reason? }` | 200 `HandoverRecordResponse` | 400, 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`) |
+
+- **Người nhận gửi yêu cầu** chỉ tạo biên bản (`DRAFTING`) và giao luật sư; kế hoạch vẫn `ACTIVE`, Chủ kho vẫn sửa được kho.
+- **Kho khóa** (kế hoạch sang `HANDOVER_REQUESTED`) khi luật sư **chấp nhận** yêu cầu hoặc hồ sơ báo tin đầu tiên. Yêu cầu bổ sung hay từ chối không khóa. Lúc khóa, Chủ kho và Người thực thi nhận thư "Kho đã được khóa để bàn giao".
+- **Từ chối hết:** kho chưa khóa mà mọi yêu cầu đều bị từ chối và không còn hồ sơ báo tin nào của kho chờ xét thì biên bản tự đóng (`CANCELLED`, `cancelReason = "Mọi yêu cầu bị từ chối"`); lần gửi sau tạo biên bản mới.
+- **Trong lúc kho chưa khóa mà có biên bản đang lập:** Chủ kho không xóa được người nhận đã gửi yêu cầu hoặc đã có trong biên bản (409 `HANDOVER_NOT_ALLOWED`, `reason = RECIPIENT_IN_HANDOVER_REQUEST`) và không gỡ được dòng gán cuối cùng của kế hoạch (409 `HANDOVER_NOT_ALLOWED`, `reason = HANDOVER_REQUEST_PENDING`).
+- Luật kho đã khóa chưa nằm ở một chỗ: `HandoverRecordRules.IsVaultLocked` (`HANDOVER_REQUESTED`, `HANDOVER_IN_PROGRESS`, `CLOSED`).
 
 ### 6.21d. Người nhận: các kho được để lại cho tôi và gửi yêu cầu trong app
 

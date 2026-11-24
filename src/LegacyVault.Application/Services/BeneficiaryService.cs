@@ -41,6 +41,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     private readonly IEmailDomainChecker domainChecker;
     private readonly IEmailBounceStore bounces;
     private readonly IExecutorInvitationRepository invitationRepository;
+    private readonly IHandoverRecordRepository handoverRecordRepository;
 
     public BeneficiaryService(
         ICurrentUser currentUser,
@@ -55,9 +56,11 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         TimeProvider timeProvider,
         IEmailDomainChecker domainChecker,
         IEmailBounceStore bounces,
-        IExecutorInvitationRepository invitationRepository)
+        IExecutorInvitationRepository invitationRepository,
+        IHandoverRecordRepository handoverRecordRepository)
     {
         this.invitationRepository = invitationRepository;
+        this.handoverRecordRepository = handoverRecordRepository;
         this.domainChecker = domainChecker;
         this.bounces = bounces;
         this.currentUser = currentUser;
@@ -387,6 +390,14 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         if (assetIds.Count > 0)
         {
             throw InUse(assetIds);
+        }
+
+        // Kho chưa khóa nhưng người này đã gửi yêu cầu hoặc được luật sư ghi vào biên bản đang lập: không xóa được.
+        HandoverRecord? openRecord = await handoverRecordRepository.FindByVaultIdAsync(vault.Id, ct);
+        if (openRecord != null && HandoverRecordRules.HasRecipient(openRecord, beneficiary.Id))
+        {
+            throw HandoverAccess.NotAllowed("RECIPIENT_IN_HANDOVER_REQUEST",
+                "Người nhận này đang có trong yêu cầu nhận tài sản luật sư đang xét nên không xóa được.");
         }
 
         // TODO: request khác gán tài sản cho hồ sơ này đúng lúc này thì FK Restrict ở DB chặn việc xóa,

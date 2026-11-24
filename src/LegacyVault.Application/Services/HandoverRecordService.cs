@@ -356,9 +356,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 UpdatedAt = now
             };
             records.Add(record);
-            // Khóa cấu hình kho trong lúc luật sư xét.
-            vault.Plan.Status = PlanStatus.HandoverRequested;
-            vault.Plan.UpdatedAt = now;
+            // Chưa khóa kho: Chủ kho vẫn sửa được cho tới khi luật sư chấp nhận giấy tờ (ReviewClaimAsync).
             created = true;
         }
         else
@@ -649,6 +647,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             throw HandoverAccess.NotAllowed("CLAIMS_PENDING", claimError);
         }
+        // Chỉ chốt khi kho đã khóa (luật sư đã chấp nhận giấy tờ): cách chia của Chủ kho không còn đổi được nữa.
+        if (!HandoverRecordRules.IsVaultLocked(vault.Plan.Status))
+        {
+            throw HandoverAccess.NotAllowed("VAULT_NOT_LOCKED",
+                "Chưa chấp nhận giấy tờ nào nên kho chưa khóa. Xét giấy tờ trước khi chốt biên bản.");
+        }
 
         // 2. Tạo hoặc cập nhật lượt cho từng người nhận; biên bản sang bước giao (luật sư và Người thực thi ký được ngay,
         //    mỗi người nhận ký khi danh tính của chính mình xong); kho sang giai đoạn bàn giao
@@ -740,7 +744,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
-        // 2. Ghi kết quả: bổ sung và từ chối phải có lý do; từ chối thì bỏ người này khỏi biên bản
+        // 2. Ghi kết quả: bổ sung và từ chối phải có lý do; từ chối thì bỏ người này khỏi biên bản.
+        //    Chấp nhận là lúc khóa kho; yêu cầu bổ sung hay từ chối không khóa.
         string decision = request.Decision.Trim().ToUpperInvariant();
         string reason = string.Empty;
         if (request.Reason != null)
@@ -748,10 +753,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
             reason = request.Reason.Trim();
         }
         DateTimeOffset now = timeProvider.GetUtcNow();
+        bool vaultJustLocked = false;
         if (decision == "ACCEPT")
         {
             claim.Status = HandoverClaimStatus.Accepted;
             claim.ReviewReason = null;
+            vaultJustLocked = HandoverRecordRules.LockVaultOnAccept(vault.Plan, now);
         }
         else if (decision == "REQUEST_SUPPLEMENT" || decision == "REJECT")
         {
@@ -778,10 +785,79 @@ public sealed class HandoverRecordService : IHandoverRecordService
         claim.ReviewedAt = now;
         claim.UpdatedAt = now;
         record.UpdatedAt = now;
+
+        // 3. Kho chưa khóa mà mọi yêu cầu đều bị từ chối, không còn hồ sơ báo tin chờ xét: đóng biên bản
+        if (decision == "REJECT")
+        {
+            int pendingReports = await reports.CountPendingByVaultAsync(vault.Id, null, ct);
+            if (HandoverRecordRules.ShouldCloseAfterAllRejected(record, vault.Plan.Status, pendingReports))
+            {
+                HandoverRecordRules.CloseAfterAllRejected(record, now);
+            }
+        }
         await SaveAsync(ct);
+
+        // 4. Kho vừa khóa: báo Chủ kho và Người thực thi (sau khi lưu)
+        if (vaultJustLocked)
+        {
+            string requesterName = await FindBeneficiaryNameAsync(vault.Id, claim.BeneficiaryId, ct);
+            await NotifyVaultLockedAsync(vault, requesterName, ct);
+        }
 
         HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
         return response;
+    }
+
+    private async Task<string> FindBeneficiaryNameAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
+    {
+        foreach (Beneficiary beneficiary in await records.ListVaultBeneficiariesAsync(vaultId, ct))
+        {
+            if (beneficiary.Id == beneficiaryId)
+            {
+                return ReadFullName(beneficiary);
+            }
+        }
+        return string.Empty;
+    }
+
+    /// <summary>Báo Chủ kho và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa. Thư lỗi thì bỏ qua.</summary>
+    private async Task NotifyVaultLockedAsync(Vault vault, string requesterName, CancellationToken ct)
+    {
+        string ownerName = await FindUserNameAsync(vault.OwnerId, ct);
+        List<(Guid UserId, string Audience)> targets = new List<(Guid UserId, string Audience)>();
+        targets.Add((vault.OwnerId, HandoverRequestNotice.Owner));
+        foreach (Executor executor in await executorReader.GetActiveAsync(vault.Id, ct))
+        {
+            if (executor.UserId != null)
+            {
+                targets.Add((executor.UserId.Value, HandoverRequestNotice.Executor));
+            }
+        }
+        foreach ((Guid targetId, string audience) in targets)
+        {
+            try
+            {
+                User? target = await users.FindByIdAsync(targetId, ct);
+                if (target == null || string.IsNullOrWhiteSpace(target.Email))
+                {
+                    continue;
+                }
+                HandoverRequestNotice notice = new HandoverRequestNotice
+                {
+                    ToEmail = target.Email,
+                    FullName = target.FullName,
+                    Audience = audience,
+                    Stage = HandoverRequestNotice.StageLocked,
+                    OwnerName = ownerName,
+                    RequesterName = requesterName
+                };
+                await noticeSender.SendAsync(notice, ct);
+            }
+            catch (Exception) when (!ct.IsCancellationRequested)
+            {
+                // Không ném lại: kết quả xét đã lưu; một thư lỗi không chặn các thư còn lại.
+            }
+        }
     }
 
     public async Task<HandoverRecordResponse> AddRecipientAsync(
@@ -918,6 +994,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             RecordId = record.Id,
             Status = record.Status.ToApiString(),
+            VaultLocked = HandoverRecordRules.IsVaultLocked(vault.Plan.Status),
             RequestedAt = record.RequestedAt
         };
         List<Beneficiary> beneficiaries = await records.ListVaultBeneficiariesAsync(vault.Id, ct);
@@ -1592,6 +1669,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             CancelReason = record.CancelReason,
             LegalBasisConfirmedAt = record.LegalBasisConfirmedAt,
             LegalBasisConfirmedByUserId = record.LegalBasisConfirmedByUserId,
+            VaultLocked = HandoverRecordRules.IsVaultLocked(vault.Plan.Status),
             VerifierName = await FindUserNameAsync(record.VerifierUserId, ct),
             ExecutorName = await FindExecutorNameAsync(vault.Id, ct)
         };

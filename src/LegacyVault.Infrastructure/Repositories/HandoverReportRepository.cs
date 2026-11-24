@@ -1,5 +1,6 @@
 using LegacyVault.Application.Repositories;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,6 +45,20 @@ public sealed class HandoverReportRepository : IHandoverReportRepository
             .Where(r => r.RecordId == recordId)
             .OrderBy(r => r.CreatedAt)
             .ToListAsync(ct);
+    }
+
+    public Task<int> CountPendingByVaultAsync(Guid vaultId, Guid? exceptReportId, CancellationToken ct)
+    {
+        IQueryable<HandoverReport> query = context.Set<HandoverReport>()
+            .AsNoTracking()
+            .Where(r => r.VaultId == vaultId
+                && (r.Status == HandoverClaimStatus.Submitted || r.Status == HandoverClaimStatus.SupplementRequested));
+        if (exceptReportId != null)
+        {
+            Guid excluded = exceptReportId.Value;
+            query = query.Where(r => r.Id != excluded);
+        }
+        return query.CountAsync(ct);
     }
 
     public void Add(HandoverReport report)

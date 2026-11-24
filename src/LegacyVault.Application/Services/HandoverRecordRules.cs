@@ -166,6 +166,97 @@ public static class HandoverRecordRules
         return null;
     }
 
+    /// <summary>Lý do ghi vào biên bản khi hệ thống tự đóng vì mọi yêu cầu, hồ sơ đều bị luật sư từ chối.</summary>
+    public const string AllRejectedReason = "Mọi yêu cầu bị từ chối";
+
+    /// <summary>
+    /// Kho đã khóa cho bàn giao chưa: khóa từ lúc luật sư chấp nhận giấy tờ đầu tiên (HandoverRequested), qua lúc chốt
+    /// biên bản (HandoverInProgress) tới khi đóng (Closed). Có biên bản đang lập chưa chắc đã khóa: người nhận gửi yêu cầu
+    /// chỉ tạo biên bản, Chủ kho vẫn sửa được kho cho tới khi luật sư chấp nhận.
+    /// </summary>
+    public static bool IsVaultLocked(PlanStatus planStatus)
+    {
+        if (planStatus == PlanStatus.HandoverRequested
+            || planStatus == PlanStatus.HandoverInProgress
+            || planStatus == PlanStatus.Closed)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Luật sư chấp nhận một yêu cầu hoặc hồ sơ báo tin: kế hoạch đang hoạt động thì khóa kho (HandoverRequested).
+    /// Trả true khi lần này vừa khóa (người gọi báo Chủ kho và Người thực thi); kho đã khóa từ trước thì trả false.
+    /// </summary>
+    public static bool LockVaultOnAccept(HandoverPlan plan, DateTimeOffset now)
+    {
+        if (plan.Status != PlanStatus.Active)
+        {
+            return false;
+        }
+        plan.Status = PlanStatus.HandoverRequested;
+        plan.UpdatedAt = now;
+        return true;
+    }
+
+    /// <summary>
+    /// Biên bản đang lập mà kho chưa khóa (chưa chấp nhận giấy tờ nào), mọi yêu cầu đã bị từ chối và không còn hồ sơ báo tin
+    /// nào của kho chờ xét: biên bản không còn ai để giao, phải đóng để lần gửi sau tạo biên bản mới.
+    /// </summary>
+    public static bool ShouldCloseAfterAllRejected(HandoverRecord record, PlanStatus planStatus, int pendingReportCount)
+    {
+        if (record.Status != HandoverRecordStatus.Drafting)
+        {
+            return false;
+        }
+        if (IsVaultLocked(planStatus))
+        {
+            return false;
+        }
+        if (pendingReportCount > 0)
+        {
+            return false;
+        }
+        foreach (HandoverClaim claim in record.Claims)
+        {
+            if (claim.Status != HandoverClaimStatus.Rejected)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Đóng biên bản chưa khóa kho vì mọi yêu cầu bị từ chối (chưa có lượt nào vì chưa chốt). Chưa lưu.</summary>
+    public static void CloseAfterAllRejected(HandoverRecord record, DateTimeOffset now)
+    {
+        record.Status = HandoverRecordStatus.Cancelled;
+        record.CancelledAt = now;
+        record.CancelReason = AllRejectedReason;
+        record.UpdatedAt = now;
+    }
+
+    /// <summary>Người nhận có trong biên bản (đã gửi yêu cầu hoặc được ghi tài sản) không.</summary>
+    public static bool HasRecipient(HandoverRecord record, Guid beneficiaryId)
+    {
+        foreach (HandoverClaim claim in record.Claims)
+        {
+            if (claim.BeneficiaryId == beneficiaryId)
+            {
+                return true;
+            }
+        }
+        foreach (HandoverRecordLine line in record.Lines)
+        {
+            if (line.BeneficiaryId == beneficiaryId)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>Link riêng gửi yêu cầu nhận tài sản: chuỗi ngẫu nhiên 32 byte (base64url) và băm SHA-256 để lưu DB.</summary>
     public static (string Value, string Hash) CreateRequestToken()
     {

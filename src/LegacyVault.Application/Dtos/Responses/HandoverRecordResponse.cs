@@ -31,6 +31,9 @@ public class HandoverRecordResponse
     /// <summary>Lý do luật sư hủy biên bản; null khi Chủ kho hủy hoặc chưa hủy.</summary>
     public string? CancelReason { get; set; }
 
+    /// <summary>Kho đã khóa chưa: khóa khi luật sư chấp nhận giấy tờ đầu tiên; chưa khóa thì chưa chốt được biên bản.</summary>
+    public bool VaultLocked { get; set; }
+
     public string VerifierName { get; set; } = string.Empty;
     public string ExecutorName { get; set; } = string.Empty;
     public DateTimeOffset? VerifierSignedAt { get; set; }

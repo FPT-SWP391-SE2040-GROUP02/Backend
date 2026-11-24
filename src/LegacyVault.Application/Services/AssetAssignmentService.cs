@@ -16,6 +16,7 @@ public sealed class AssetAssignmentService(
     IBeneficiaryRepository beneficiaryRepository,
     IAssetAssignmentRepository assignmentRepository,
     IAuditLogRepository auditLogRepository,
+    IHandoverRecordRepository handoverRecordRepository,
     TimeProvider timeProvider) : IAssetAssignmentService
 {
     public async Task<List<AssetAssignmentResponse>> GetAssignmentsAsync(Guid vaultId, CancellationToken ct)
@@ -144,6 +145,13 @@ public sealed class AssetAssignmentService(
         int remaining = vaultAssignments.Count - toRemove.Count + toAdd.Count;
         if (toRemove.Count > 0 && remaining == 0 && PlanRules.IsRunning(vault.Plan.Status))
         {
+            // Có yêu cầu nhận tài sản đang chờ luật sư xét (kho chưa khóa): kế hoạch không được về bản nháp giữa chừng.
+            HandoverRecord? openRecord = await handoverRecordRepository.FindByVaultIdAsync(vault.Id, ct);
+            if (openRecord != null)
+            {
+                throw HandoverAccess.NotAllowed("HANDOVER_REQUEST_PENDING",
+                    "Đang có yêu cầu nhận tài sản chờ luật sư xét nên không gỡ được dòng gán cuối cùng của kế hoạch.");
+            }
             if (!confirmed)
             {
                 throw new AppException(AppErrorType.Conflict, ErrorCode.PlanDeactivationConfirmationRequired,

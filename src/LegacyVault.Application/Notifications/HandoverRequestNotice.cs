@@ -24,6 +24,9 @@ public sealed class HandoverRequestNotice
     /// <summary>Thư báo luật sư đã hủy biên bản đang lập: kho mở khóa.</summary>
     public const string StageCancelled = "CANCELLED";
 
+    /// <summary>Thư báo Chủ kho và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa.</summary>
+    public const string StageLocked = "LOCKED";
+
     public string ToEmail { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;
@@ -31,7 +34,10 @@ public sealed class HandoverRequestNotice
     /// <summary>OWNER, EXECUTOR, VERIFIER hoặc RECIPIENT: quyết định lời thư và đường dẫn.</summary>
     public string Audience { get; set; } = string.Empty;
 
-    /// <summary>REQUEST (có yêu cầu nhận tài sản), SIGNING (biên bản tới bước ký), REPORT (có hồ sơ báo tin) hoặc CANCELLED (luật sư hủy).</summary>
+    /// <summary>
+    /// REQUEST (có yêu cầu nhận tài sản), SIGNING (biên bản tới bước ký), REPORT (có hồ sơ báo tin), CANCELLED (luật sư hủy)
+    /// hoặc LOCKED (luật sư chấp nhận giấy tờ, kho đã khóa).
+    /// </summary>
     public string Stage { get; set; } = StageRequest;
 
     public string OwnerName { get; set; } = string.Empty;

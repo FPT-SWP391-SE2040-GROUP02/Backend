@@ -253,13 +253,14 @@ public sealed partial class HandoverReportService : IHandoverReportService
             if (decision == "REJECT")
             {
                 report.Status = HandoverClaimStatus.Rejected;
+                await CloseRecordIfAllRejectedAsync(report, now, ct);
             }
             else
             {
                 report.Status = HandoverClaimStatus.SupplementRequested;
             }
         }
-        // 3. Chấp nhận: gắn vào biên bản đang mở của kho, chưa có thì tạo mới và khóa kho
+        // 3. Chấp nhận: gắn vào biên bản đang mở của kho (chưa có thì tạo mới) và khóa kho nếu chưa khóa
         else if (decision == "ACCEPT")
         {
             await EnsureWarningsConfirmedAsync(report, request.ConfirmDocuments, reason, ct);
@@ -297,7 +298,34 @@ public sealed partial class HandoverReportService : IHandoverReportService
 
     // ---------------- Hàm phụ: nghiệp vụ ----------------
 
-    /// <summary>Trả về kho vừa được khóa, hoặc null khi kho đã có biên bản đang mở.</summary>
+    /// <summary>
+    /// Từ chối hồ sơ báo tin: kho có biên bản đang lập chưa khóa (chỉ có yêu cầu của người nhận) mà mọi yêu cầu đều bị từ
+    /// chối và không còn hồ sơ nào khác chờ xét thì đóng biên bản. Chưa lưu.
+    /// </summary>
+    private async Task CloseRecordIfAllRejectedAsync(HandoverReport report, DateTimeOffset now, CancellationToken ct)
+    {
+        if (report.VaultId == null)
+        {
+            return;
+        }
+        Vault? vault = await vaults.FindByIdAsync(report.VaultId.Value, ct);
+        if (vault == null)
+        {
+            return;
+        }
+        HandoverRecord? record = await records.FindByVaultIdAsync(vault.Id, ct);
+        if (record == null)
+        {
+            return;
+        }
+        int pendingReports = await reports.CountPendingByVaultAsync(vault.Id, report.Id, ct);
+        if (HandoverRecordRules.ShouldCloseAfterAllRejected(record, vault.Plan.Status, pendingReports))
+        {
+            HandoverRecordRules.CloseAfterAllRejected(record, now);
+        }
+    }
+
+    /// <summary>Trả về kho vừa được khóa, hoặc null khi kho đã khóa từ trước.</summary>
     private async Task<Vault?> AttachToRecordAsync(HandoverReport report, Guid verifierId, DateTimeOffset now, CancellationToken ct)
     {
         Vault? vault = null;
@@ -327,6 +355,11 @@ public sealed partial class HandoverReportService : IHandoverReportService
                     "Kho này đang do luật sư khác lập biên bản. Hồ sơ đã được chuyển cho luật sư đó.");
             }
             report.RecordId = record.Id;
+            // Biên bản do người nhận gửi yêu cầu tạo ra chưa khóa kho: chấp nhận hồ sơ này là lúc khóa.
+            if (HandoverRecordRules.LockVaultOnAccept(vault.Plan, now))
+            {
+                return vault;
+            }
             return null;
         }
         if (vault.Plan.Status != PlanStatus.Active)
@@ -347,8 +380,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         };
         records.Add(record);
         report.RecordId = record.Id;
-        vault.Plan.Status = PlanStatus.HandoverRequested;
-        vault.Plan.UpdatedAt = now;
+        HandoverRecordRules.LockVaultOnAccept(vault.Plan, now);
         return vault;
     }
 
@@ -493,12 +525,12 @@ public sealed partial class HandoverReportService : IHandoverReportService
     {
         string ownerName = await FindUserNameAsync(vault.OwnerId, ct);
         string submitterName = await FindUserNameAsync(report.SubmitterUserId, ct);
-        await NotifyAsync(vault.OwnerId, HandoverRequestNotice.Owner, HandoverRequestNotice.StageRequest, ownerName, submitterName, ct);
+        await NotifyAsync(vault.OwnerId, HandoverRequestNotice.Owner, HandoverRequestNotice.StageLocked, ownerName, submitterName, ct);
         foreach (Executor executor in await executorReader.GetActiveAsync(vault.Id, ct))
         {
             if (executor.UserId != null)
             {
-                await NotifyAsync(executor.UserId.Value, HandoverRequestNotice.Executor, HandoverRequestNotice.StageRequest,
+                await NotifyAsync(executor.UserId.Value, HandoverRequestNotice.Executor, HandoverRequestNotice.StageLocked,
                     ownerName, submitterName, ct);
             }
         }
