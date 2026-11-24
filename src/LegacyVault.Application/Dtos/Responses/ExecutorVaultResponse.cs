@@ -18,6 +18,12 @@ public class ExecutorVaultResponse
     /// <summary>Lúc tài khoản chấp nhận lời mời làm Người thực thi của kho; null khi dữ liệu cũ không có.</summary>
     public DateTimeOffset? AcceptedAt { get; set; }
 
+    /// <summary>Phiên bản biên bản phân chia Chủ kho ký gần nhất; null khi chưa ký. Không kèm tài sản hay người nhận.</summary>
+    public int? WillVersionNo { get; set; }
+
+    /// <summary>Lúc Chủ kho ký phiên bản đó; null cùng lúc với WillVersionNo.</summary>
+    public DateTimeOffset? WillSignedAt { get; set; }
+
     /// <summary>Biên bản bàn giao của kho; null khi chưa mở bàn giao.</summary>
     public Guid? HandoverRecordId { get; set; }
 
