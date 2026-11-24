@@ -877,11 +877,12 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 
 | Method | Path | Body | Thành công | Lỗi |
 |---|---|---|---|---|
-| POST | `/v1/admin/vaults/{vaultId}/executor` | `{ userId, reason }` | 200 `ExecutorInvitationResponse` (trạng thái `INVITED`) | 400 (thiếu lý do, tài khoản không hợp lệ), 404 (không phải Admin hoặc không có kho), 409 `EXECUTOR_NOT_ALLOWED` (`PLAN_LOCKED`, `OWNER_CANNOT_ACCEPT`, `ROLE_CONFLICT`) |
+| POST | `/v1/admin/vaults/{vaultId}/executor` | `{ userId, reason }` | 200 `ExecutorInvitationResponse` (trạng thái `INVITED`; `ACCEPTED` khi kho đang bàn giao) | 400 (thiếu lý do, tài khoản không hợp lệ), 404 (không phải Admin hoặc không có kho), 409 `EXECUTOR_NOT_ALLOWED` (`PLAN_LOCKED`, `OWNER_CANNOT_ACCEPT`, `ROLE_CONFLICT`, `ALREADY_EXECUTOR`) |
 
 - Dùng khi kho không còn Người thực thi hoạt động (sự cố `NO_EXECUTOR`) hoặc người hiện tại không làm việc. Lý do bắt buộc (≤ 500 ký tự), ghi nhật ký `EXECUTOR_ASSIGNED_BY_ADMIN` (đối tượng là kho).
 - Tài khoản được giao phải đang hoạt động, đã xác minh email, không phải Chủ kho, không phải Admin hay Người xét duyệt. Hệ thống gửi lời mời như lời mời của Chủ kho; người này phải chấp nhận (cùng luật chấp nhận lời mời thường).
-- Kế hoạch đang chạy (`ACTIVE`, `CHECKIN_OVERDUE`, `AWAITING_CHECK`) mà đã có Người thực thi đã chấp nhận: người mới thay (`ReplacesExecutorId`), người cũ giữ vai trò tới khi người mới chấp nhận. Kế hoạch `DRAFT`: mọi lời mời và Người thực thi cũ bị thu hồi. Kho đã đóng hoặc kế hoạch từ lúc nộp giấy chứng tử trở đi → 409 `PLAN_LOCKED`.
+- Kế hoạch đang chạy (`ACTIVE`, `CHECKIN_OVERDUE`, `AWAITING_CHECK`) mà đã có Người thực thi đã chấp nhận: người mới thay (`ReplacesExecutorId`), người cũ giữ vai trò tới khi người mới chấp nhận. Kế hoạch `DRAFT`: mọi lời mời và Người thực thi cũ bị thu hồi. Kho đã đóng hoặc kế hoạch `CLOSED` → 409 `PLAN_LOCKED`.
+- **Đang bàn giao** (`HANDOVER_REQUESTED`, `HANDOVER_IN_PROGRESS`): người mới **nhận việc ngay** (trả `status = ACCEPTED`, không gửi lời mời), người cũ chuyển `REVOKED` trong cùng giao dịch và mất quyền ngay (xem biên bản, đọc mã nhận, ký, gửi mã, ký phiếu giao nhận: 404). Chữ ký Người thực thi người cũ đã ký trên bản hiện tại vẫn giữ hiệu lực; chưa ký thì người mới ký. Mã nhận **không** đổi (có thể đã gửi cho người nhận). Thư "Đổi Người thực thi của kho đang bàn giao" gửi người mới, người cũ và luật sư của biên bản. Giao lại đúng người đang làm → 409 `ALREADY_EXECUTOR`.
 
 ### 6.16. Executor theo dõi tiến độ bàn giao
 

@@ -19,6 +19,8 @@ public static class HandoverRequestNoticeEmail
 
     public const string LockedSubject = "Kho đã được khóa để bàn giao trên LegacyVault";
 
+    public const string ExecutorChangedSubject = "Đổi Người thực thi của kho đang bàn giao trên LegacyVault";
+
     public static EmailContent Build(HandoverRequestNotice notice, string clientUrl)
     {
         string baseUrl = clientUrl.TrimEnd('/');
@@ -37,6 +39,10 @@ public static class HandoverRequestNoticeEmail
         if (notice.Stage == HandoverRequestNotice.StageLocked)
         {
             return BuildLocked(notice, baseUrl);
+        }
+        if (notice.Stage == HandoverRequestNotice.StageExecutorChanged)
+        {
+            return BuildExecutorChanged(notice, baseUrl);
         }
         string title = "Có yêu cầu nhận tài sản";
         string lead;
@@ -114,6 +120,52 @@ public static class HandoverRequestNoticeEmail
             actionButtonText: buttonText,
             securityNotice: note);
         return new EmailContent(LockedSubject, text, html);
+    }
+
+    /// <summary>
+    /// Thư báo Admin đổi Người thực thi khi đang bàn giao: người mới nhận việc ngay, người cũ thôi vai trò, luật sư biết người
+    /// ký và giao từ nay. Không nêu lý do hay tài sản.
+    /// </summary>
+    private static EmailContent BuildExecutorChanged(HandoverRequestNotice notice, string baseUrl)
+    {
+        string title = "Đổi Người thực thi của kho đang bàn giao";
+        string lead;
+        string actionUrl;
+        string buttonText;
+        string note;
+        if (notice.Audience == HandoverRequestNotice.Executor)
+        {
+            lead = $"Quản trị viên LegacyVault đã giao bạn làm Người thực thi của kho {notice.OwnerName} đang bàn giao. "
+                + "Bạn nhận việc ngay, không cần chấp nhận lời mời.";
+            actionUrl = baseUrl + "/executor";
+            buttonText = "Mở không gian Người thực thi";
+            note = "Nếu Người thực thi trước chưa ký biên bản, bạn ký thay. Bạn gửi mã nhận và ký phiếu giao nhận cho từng "
+                + "người nhận theo biên bản luật sư đã lập.";
+        }
+        else if (notice.Audience == HandoverRequestNotice.FormerExecutor)
+        {
+            lead = $"Quản trị viên LegacyVault đã giao việc bàn giao kho {notice.OwnerName} cho Người thực thi khác. "
+                + "Bạn không còn là Người thực thi của kho này.";
+            actionUrl = baseUrl + "/executor";
+            buttonText = "Mở LegacyVault";
+            note = "Chữ ký bạn đã ký trên biên bản vẫn giữ hiệu lực. Từ nay bạn không xem được mã nhận của kho này.";
+        }
+        else
+        {
+            lead = $"Quản trị viên LegacyVault đã đổi Người thực thi của kho {notice.OwnerName} mà bạn đang lập biên bản.";
+            actionUrl = baseUrl + "/notary/queue";
+            buttonText = "Xem biên bản";
+            note = "Người thực thi mới ký biên bản (nếu người trước chưa ký), gửi mã nhận và ký phiếu giao nhận từ nay.";
+        }
+        string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            title: title,
+            recipientName: notice.FullName,
+            leadText: lead,
+            actionUrl: actionUrl,
+            actionButtonText: buttonText,
+            securityNotice: note);
+        return new EmailContent(ExecutorChangedSubject, text, html);
     }
 
     /// <summary>Thư báo Chủ kho và Người thực thi: luật sư đã hủy biên bản đang lập. Không nêu lý do hay giấy tờ.</summary>

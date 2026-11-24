@@ -21,12 +21,40 @@ public sealed class ExecutorAssignRulesTests
     [Theory]
     [InlineData(PlanStatus.Draft, true)]
     [InlineData(PlanStatus.Active, true)]
-    [InlineData(PlanStatus.HandoverRequested, false)]
-    [InlineData(PlanStatus.HandoverInProgress, false)]
+    [InlineData(PlanStatus.HandoverRequested, true)]
+    [InlineData(PlanStatus.HandoverInProgress, true)]
     [InlineData(PlanStatus.Closed, false)]
-    public void PlanAllowsAssign_OnlyDraftOrRunning(PlanStatus plan, bool expected)
+    public void PlanAllowsAssign_DraftRunningOrDuringHandover(PlanStatus plan, bool expected)
     {
         Assert.Equal(expected, ExecutorAssignRules.PlanAllowsAssign(VaultStatus.Open, plan));
+    }
+
+    [Theory]
+    [InlineData(PlanStatus.Draft, false)]
+    [InlineData(PlanStatus.Active, false)]
+    [InlineData(PlanStatus.HandoverRequested, true)]
+    [InlineData(PlanStatus.HandoverInProgress, true)]
+    [InlineData(PlanStatus.Closed, false)]
+    public void IsHandoverUnderway_OnlyBetweenLockAndClose(PlanStatus plan, bool expected)
+    {
+        Assert.Equal(expected, ExecutorAssignRules.IsHandoverUnderway(plan));
+    }
+
+    [Fact]
+    public void Prepare_DuringHandover_RevokesTheAcceptedExecutorAtOnce()
+    {
+        // Chuẩn bị
+        Executor accepted = Item(ExecutorStatus.Accepted);
+        List<Executor> current = new List<Executor>();
+        current.Add(accepted);
+
+        // Hành động
+        Guid? replaces = ExecutorAssignRules.PrepareForAssign(current, PlanStatus.HandoverInProgress, Now);
+
+        // Kiểm tra
+        Assert.Null(replaces);
+        Assert.Equal(ExecutorStatus.Revoked, accepted.Status);
+        Assert.Equal(Now, accepted.EndedAt);
     }
 
     [Fact]

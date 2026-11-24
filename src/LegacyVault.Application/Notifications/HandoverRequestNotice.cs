@@ -27,6 +27,12 @@ public sealed class HandoverRequestNotice
     /// <summary>Thư báo Chủ kho và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa.</summary>
     public const string StageLocked = "LOCKED";
 
+    /// <summary>Người thực thi cũ (chỉ dùng với thư đổi Người thực thi).</summary>
+    public const string FormerExecutor = "FORMER_EXECUTOR";
+
+    /// <summary>Thư báo Admin đổi Người thực thi khi đang bàn giao: người mới nhận việc ngay, người cũ thôi vai trò.</summary>
+    public const string StageExecutorChanged = "EXECUTOR_CHANGED";
+
     public string ToEmail { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;
