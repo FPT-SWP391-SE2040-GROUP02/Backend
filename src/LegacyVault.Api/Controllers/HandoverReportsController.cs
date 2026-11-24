@@ -26,7 +26,7 @@ public sealed class HandoverReportsController : ControllerBase
     }
 
     /// <summary>
-    /// Nộp hồ sơ: họ tên, số căn cước và ngày mất của người mất, cam đoan giấy tờ là thật, giấy chứng tử và di chúc (bắt buộc), giấy tờ khác (nếu có), người nhận
+    /// Nộp hồ sơ: họ tên, số căn cước người mất, cam đoan giấy tờ là thật, giấy chứng tử và di chúc (bắt buộc), giấy tờ khác (nếu có), người nhận
     /// gợi ý (JSON mảng {fullName, email, phone}). Tổng cộng tối đa 10 tệp, mỗi tệp 10 MiB, PDF hoặc ảnh.
     /// </summary>
     [HttpPost]

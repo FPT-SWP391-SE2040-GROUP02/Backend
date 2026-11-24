@@ -7,9 +7,6 @@ public class SubmitHandoverReportRequest
 
     public string DeceasedCitizenId { get; set; } = string.Empty;
 
-    /// <summary>Ngày mất ghi trên giấy chứng tử; bắt buộc, không ở tương lai.</summary>
-    public DateOnly? DateOfDeath { get; set; }
-
     /// <summary>Phải true: người nộp cam đoan giấy tờ là thật.</summary>
     public bool Attested { get; set; }
 

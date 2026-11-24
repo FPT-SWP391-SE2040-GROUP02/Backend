@@ -101,7 +101,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
     {
         // 1. Tài khoản người dùng đã xác minh email; thông tin khai và tệp phải hợp lệ
         User user = await RequireSubmitterAsync(ct);
-        HandoverReportData data = ReadRequest(request, RecipientRules.TodayInVietnam(timeProvider));
+        HandoverReportData data = ReadRequest(request);
         string note = NormalizeNote(request.Note);
         ValidateUploads(uploads);
 
@@ -360,7 +360,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         HandoverReport report, bool confirmDocuments, string reason, CancellationToken ct)
     {
         VerifierHandoverReportResponse view = await BuildForVerifierAsync(report, ct);
-        bool hasWarning = view.VaultFound && (!view.NameMatches || view.ActiveAfterDeath);
+        bool hasWarning = view.VaultFound && (!view.NameMatches || view.ActiveAfterReport);
         if (!hasWarning)
         {
             return;
@@ -551,7 +551,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
 
     // ---------------- Hàm phụ: kiểm dữ liệu ----------------
 
-    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request, DateOnly today)
+    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request)
     {
         HandoverReportData data = new HandoverReportData();
         data.DeceasedFullName = CleanText(request.DeceasedFullName);
@@ -560,15 +560,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
             throw ValidationErrors.For("deceasedFullName", "Vui lòng nhập họ tên người mất (tối đa 200 ký tự).");
         }
         data.DeceasedCitizenId = CitizenIdRules.NormalizeCitizenId(request.DeceasedCitizenId, "deceasedCitizenId");
-        if (request.DateOfDeath == null)
-        {
-            throw ValidationErrors.For("dateOfDeath", "Vui lòng nhập ngày mất.");
-        }
-        if (request.DateOfDeath.Value > today || request.DateOfDeath.Value < EarliestDateOfDeath)
-        {
-            throw ValidationErrors.For("dateOfDeath", "Ngày mất không hợp lệ hoặc ở tương lai.");
-        }
-        data.DateOfDeath = request.DateOfDeath;
         if (!request.Attested)
         {
             throw ValidationErrors.For("attested", "Vui lòng cam đoan giấy tờ là thật.");
@@ -576,8 +567,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
         data.Recipients = ReadRecipients(request.Recipients);
         return data;
     }
-
-    private static readonly DateOnly EarliestDateOfDeath = new DateOnly(1900, 1, 1);
 
     private static List<SuggestedRecipient> ReadRecipients(string? json)
     {
@@ -790,7 +779,8 @@ public sealed partial class HandoverReportService : IHandoverReportService
                 {
                     response.OwnerName = owner.FullName;
                     response.OwnerLastActiveAt = await FindLastActiveAsync(owner, ct);
-                    response.ActiveAfterDeath = IsAfterDeath(response.OwnerLastActiveAt, data.DateOfDeath);
+                    response.ActiveAfterReport = response.OwnerLastActiveAt != null
+                        && response.OwnerLastActiveAt.Value > report.CreatedAt;
                 }
                 OwnerIdentity? identity = await identities.FindByUserIdAsync(vault.OwnerId, ct);
                 if (identity != null)
@@ -805,24 +795,12 @@ public sealed partial class HandoverReportService : IHandoverReportService
         return response;
     }
 
-    /// <summary>So theo ngày ở Việt Nam; hoạt động đúng ngày mất không tính là cảnh báo.</summary>
-    private static bool IsAfterDeath(DateTimeOffset? lastActive, DateOnly? dateOfDeath)
-    {
-        if (lastActive == null || dateOfDeath == null)
-        {
-            return false;
-        }
-        DateOnly activeDay = DateOnly.FromDateTime(lastActive.Value.ToOffset(TimeSpan.FromHours(7)).DateTime);
-        return activeDay > dateOfDeath.Value;
-    }
-
     private async Task FillAsync(
         MyHandoverReportResponse response, HandoverReport report, HandoverReportData data, CancellationToken ct)
     {
         response.Id = report.Id;
         response.DeceasedFullName = data.DeceasedFullName;
         response.Status = report.Status.ToApiString();
-        response.DateOfDeath = data.DateOfDeath;
         response.Note = report.Note;
         response.ReviewReason = report.ReviewReason;
         response.CreatedAt = report.CreatedAt;

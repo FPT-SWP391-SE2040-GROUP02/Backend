@@ -10,9 +10,6 @@ public class MyHandoverReportResponse
     /// <summary>SUBMITTED, SUPPLEMENT_REQUESTED, ACCEPTED hoặc REJECTED.</summary>
     public string Status { get; set; } = string.Empty;
 
-    /// <summary>Ngày mất do người nộp khai; null với hồ sơ cũ.</summary>
-    public DateOnly? DateOfDeath { get; set; }
-
     /// <summary>Chủ kho đã hủy biên bản sau khi hồ sơ được chấp nhận.</summary>
     public bool CancelledByOwner { get; set; }
 
@@ -55,8 +52,8 @@ public class VerifierHandoverReportResponse : MyHandoverReportResponse
     /// <summary>Lần Chủ kho hoạt động gần nhất (đăng nhập hoặc gia hạn phiên); null khi không có kho.</summary>
     public DateTimeOffset? OwnerLastActiveAt { get; set; }
 
-    /// <summary>Chủ kho còn hoạt động sau ngày mất đã khai.</summary>
-    public bool ActiveAfterDeath { get; set; }
+    /// <summary>Chủ kho còn hoạt động sau khi hồ sơ được nộp.</summary>
+    public bool ActiveAfterReport { get; set; }
 
     /// <summary>Lý do luật sư đã ghi khi chấp nhận hồ sơ có cảnh báo.</summary>
     public string? AcceptNote { get; set; }

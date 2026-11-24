@@ -89,7 +89,6 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         MultipartFormDataContent form = new MultipartFormDataContent();
         form.Add(new StringContent("Nguyễn Văn Mất"), "deceasedFullName");
         form.Add(new StringContent(citizenId), "deceasedCitizenId");
-        form.Add(new StringContent("2026-11-01"), "dateOfDeath");
         form.Add(new StringContent("true"), "attested");
         form.Add(new StringContent("Tôi là con của người mất"), "note");
         if (recipients != null)
@@ -331,7 +330,6 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         Dictionary<string, string> fields = new Dictionary<string, string>();
         fields["deceasedFullName"] = "Nguyễn Văn Mất";
         fields["deceasedCitizenId"] = OwnerCitizenId;
-        fields["dateOfDeath"] = "2026-11-01";
         fields["attested"] = "true";
         fields[name] = value;
         foreach (KeyValuePair<string, string> field in fields)
@@ -344,16 +342,12 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Submit_ChecksDateOfDeath_Attestation_AndRecipientContacts()
+    public async Task Submit_ChecksAttestation_AndRecipientContacts()
     {
         await HandoverRecordTestData.CreateVerifierClientAsync(factory);
         HttpClient relative = await NewUserAsync();
-        string tomorrow = DateTimeOffset.UtcNow.AddDays(2).ToString("yyyy-MM-dd");
         MultipartFormDataContent[] bad = new MultipartFormDataContent[]
         {
-            FormWith("dateOfDeath", ""),
-            FormWith("dateOfDeath", tomorrow),
-            FormWith("dateOfDeath", "1800-01-01"),
             FormWith("attested", "false"),
             FormWith("recipients", "[{\"fullName\":\"A\",\"phone\":\"12ab\"}]"),
             FormWith("recipients", "[{\"fullName\":\"A\",\"email\":\"a@x.vn\"},{\"fullName\":\"B\",\"email\":\"A@x.vn\"}]")
@@ -368,7 +362,6 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(ok);
         Assert.Equal("0901234567", body.GetProperty("recipients")[0].GetProperty("phone").GetString());
-        Assert.Equal("2026-11-01", body.GetProperty("dateOfDeath").GetString());
     }
 
     [SqlFact]
@@ -376,17 +369,17 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
     {
         NoRecipientVault vault = await BuildVaultAsync();
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
-        // Chủ kho đăng nhập sau ngày mất đã khai.
+        HttpClient relative = await NewUserAsync();
+        Guid reportId = (await SubmitOkAsync(relative, OwnerCitizenId)).GetProperty("id").GetGuid();
+        // Chủ kho đăng nhập sau khi hồ sơ được nộp.
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Guid ownerId = await db.Set<Vault>().Where(v => v.Id == vault.VaultId).Select(v => v.OwnerId).SingleAsync();
-            DateTimeOffset loginAt = new DateTimeOffset(2026, 11, 5, 0, 0, 0, TimeSpan.Zero);
+            DateTimeOffset loginAt = DateTimeOffset.UtcNow.AddMinutes(5);
             await db.Users.Where(u => u.Id == ownerId).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAt, loginAt));
         });
-        HttpClient relative = await NewUserAsync();
-        Guid reportId = (await SubmitOkAsync(relative, OwnerCitizenId)).GetProperty("id").GetGuid();
         JsonElement seen = (await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(VerifierReportsUrl)))[0];
-        Assert.True(seen.GetProperty("activeAfterDeath").GetBoolean());
+        Assert.True(seen.GetProperty("activeAfterReport").GetBoolean());
 
         await ApiTestHelpers.AssertProblemAsync(
             await ReviewAsync(verifier.Client, reportId, "ACCEPT", "Đã kiểm"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");

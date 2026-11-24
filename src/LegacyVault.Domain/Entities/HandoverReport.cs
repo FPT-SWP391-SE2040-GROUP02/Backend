@@ -37,7 +37,7 @@ public class HandoverReport
 
     public DateTimeOffset? ReviewedAt { get; set; }
 
-    /// <summary>Đã mã hóa: họ tên, số căn cước, ngày mất của người mất và danh sách người nhận người nộp khai.</summary>
+    /// <summary>Đã mã hóa: họ tên, số căn cước người mất và danh sách người nhận người nộp khai.</summary>
     public string DataProtected { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; set; }

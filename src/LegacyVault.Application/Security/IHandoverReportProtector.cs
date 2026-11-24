@@ -8,9 +8,6 @@ public class HandoverReportData
     /// <summary>Đủ 12 chữ số.</summary>
     public string DeceasedCitizenId { get; set; } = string.Empty;
 
-    /// <summary>Ngày mất ghi trên giấy chứng tử; null với hồ sơ nộp trước khi có trường này.</summary>
-    public DateOnly? DateOfDeath { get; set; }
-
     /// <summary>Người nhận do người nộp khai, chỉ để luật sư điền sẵn rồi kiểm lại.</summary>
     public List<SuggestedRecipient> Recipients { get; set; } = new List<SuggestedRecipient>();
 }
