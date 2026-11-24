@@ -6,10 +6,10 @@ Tài liệu này mô tả **đúng những gì code hiện làm**, đọc từ n
 
 | Vai trò | Làm gì |
 |---|---|
-| Chủ kho (Owner) | Lập kho, gói bàn giao, tài sản, người nhận, mời Người thực thi, điểm danh định kỳ, cấp khóa mở gói cho Người thực thi |
+| Chủ kho (Owner) | Lập kho, gói bàn giao, tài sản, người nhận, mời Người thực thi, điểm danh định kỳ, cấp mã nhận cho Người thực thi |
 | Người thực thi (Executor) | Được Chủ kho mời (hoặc Admin giao). Điểm danh thay khi Chủ kho quá hạn, nộp hồ sơ chứng tử, theo dõi tiến độ bàn giao, gửi lại lời mời cho người nhận |
 | Người xét duyệt (Verifier) | Được hệ thống giao hồ sơ chứng tử theo vòng xoay. Chỉ có **Bổ sung** và **Đồng ý** (không còn Từ chối) |
-| Người nhận (Beneficiary) | Nhận lời mời qua email, xác minh danh tính, nhập khóa mở gói nếu có, đồng ý hoặc từ chối, rồi xem và tải tài sản |
+| Người nhận (Beneficiary) | Nhận lời mời qua email, xác minh danh tính, nhập mã nhận nếu có, đồng ý hoặc từ chối, rồi xem và tải tài sản |
 | Quản trị viên (Admin) | Giám sát, xử lý sự cố, giao lại Người thực thi, cấu hình tham số và gói dịch vụ, xem giao dịch, nhật ký. Không đọc nội dung kho |
 
 ## 2. Lập kho và kích hoạt kế hoạch
@@ -78,7 +78,7 @@ Các bước:
 
 1. Lời mời gửi qua email (lưu lượt trước, gửi sau; lỗi thì thử lại tối đa 5 lần rồi mở sự cố `NOTIFICATION_FAILED`). Người thực thi có thể gửi lại lời mời thủ công.
 2. Người nhận xác minh danh tính bằng hồ sơ CCCD và giấy tờ tự nộp; Verifier đối chiếu rồi duyệt thì lượt sang `READY_TO_ACCEPT` (không dùng eKYC khuôn mặt cho người nhận). Ở môi trường Development có công tắc `Handover:RequireIdentityVerification = false` để bỏ qua bước này.
-3. **Khóa mở gói:** nếu kho đã được Chủ kho cấp khóa cho Người thực thi thì người nhận phải nhập đúng khóa đó (`POST turns/{id}/verify-key`) trước khi đồng ý. Sai 5 lần thì khóa lượt, cần Người thực thi hoặc Admin xử lý. Kho chưa cấp khóa thì bỏ qua bước này. Chủ kho cấp lại được khi Người thực thi quên khóa; mảnh khóa cũ hết hiệu lực. DB chỉ lưu băm SHA-256 có muối.
+3. **Mã nhận:** nếu kho đã được Chủ kho cấp khóa cho Người thực thi thì người nhận phải nhập đúng khóa đó (`POST turns/{id}/verify-key`) trước khi đồng ý. Sai 5 lần thì khóa lượt, cần Người thực thi hoặc Admin xử lý. Kho chưa cấp khóa thì bỏ qua bước này. Chủ kho cấp lại được khi Người thực thi quên khóa; mảnh khóa cũ hết hiệu lực. DB chỉ lưu băm SHA-256 có muối.
 4. Người nhận đồng ý hoặc từ chối. Đồng ý thì có quyền xem và tải từng tài sản trong 30 ngày.
 5. Kế hoạch tự chuyển `CLOSED` khi mọi lượt kết thúc; job lưu và xóa dọn nội dung sau thời hạn lưu.
 
@@ -146,13 +146,13 @@ Các bước:
 ## 11. Hai kịch bản chạy thử
 
 **Happy case (một kho từ đầu đến cuối):**
-đăng ký Chủ kho → bật tạm ngừng eKYC (nếu không có giấy tờ thật) → eKYC Chủ kho → tạo gói, tài sản, người nhận → mời và chấp nhận Người thực thi → kích hoạt → tua thời gian tới quá hạn (công cụ thử nghiệm) → báo `AWAITING_CHECK` → Người thực thi mở và gửi hồ sơ chứng tử → Người xét duyệt đồng ý → các lượt bàn giao được mời → người nhận eKYC, nhập khóa mở gói nếu có, đồng ý → xem và tải tài sản → Người thực thi thấy tiến độ "đã đồng ý, đã tải" → kế hoạch `CLOSED` → job dọn dữ liệu.
+đăng ký Chủ kho → bật tạm ngừng eKYC (nếu không có giấy tờ thật) → eKYC Chủ kho → tạo gói, tài sản, người nhận → mời và chấp nhận Người thực thi → kích hoạt → tua thời gian tới quá hạn (công cụ thử nghiệm) → báo `AWAITING_CHECK` → Người thực thi mở và gửi hồ sơ chứng tử → Người xét duyệt đồng ý → các lượt bàn giao được mời → người nhận eKYC, nhập mã nhận nếu có, đồng ý → xem và tải tài sản → Người thực thi thấy tiến độ "đã đồng ý, đã tải" → kế hoạch `CLOSED` → job dọn dữ liệu.
 
 **Worst case thường gặp:**
 - Chủ kho quên điểm danh, Người thực thi điểm danh thay đủ 3 lần liên tiếp rồi bị chặn (`PROXY_LIMIT_REACHED`), Admin nhận sự cố.
 - Hồ sơ bị yêu cầu bổ sung nhiều lần (`SUPPLEMENT_LOOP`) hoặc quá hạn xét (`STALE_CASE`).
 - Không có Người xét duyệt hoặc Người thực thi hoạt động (`NO_VERIFIER`, `NO_EXECUTOR`): Admin giao lại.
-- Người nhận không phản hồi 5 ngày, không quyết định 7 ngày, từ chối, nhập sai khóa mở gói 5 lần.
+- Người nhận không phản hồi 5 ngày, không quyết định 7 ngày, từ chối, nhập sai mã nhận 5 lần.
 - Thanh toán lệch đơn: giao dịch `RECONCILIATION_REQUIRED`, sự cố loại thanh toán.
 - Nhập sai mật khẩu ký của Người xét duyệt 5 lần (khóa 15 phút).
 

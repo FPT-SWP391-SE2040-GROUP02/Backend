@@ -84,7 +84,7 @@ public sealed class ExecutorHandoverController : ControllerBase
     }
 
     /// <summary>
-    /// Người thực thi gửi mã nhận (khóa mở gói) cho người nhận của lượt qua email đã lưu. Chỉ khi biên bản đã đủ chữ ký.
+    /// Người thực thi gửi mã nhận cho người nhận của lượt qua email đã lưu. Chỉ khi biên bản đã đủ chữ ký.
     /// Body là khóa mình đang giữ để Backend kiểm; khóa sai trả 403 HANDOVER_KEY_INVALID. Khóa không được lưu.
     /// </summary>
     [HttpPost("handover-records/{recordId:guid}/handover-turns/{turnId:guid}/send-key")]

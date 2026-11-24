@@ -13,7 +13,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
 
-/// <summary>Người thực hiện gửi khóa mở gói cho người nhận qua email. Dùng fake, không cần SQL.</summary>
+/// <summary>Người thực hiện gửi mã nhận cho người nhận qua email. Dùng fake, không cần SQL.</summary>
 public sealed class HandoverKeyMailServiceTests
 {
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 20, 8, 0, 0, TimeSpan.Zero);

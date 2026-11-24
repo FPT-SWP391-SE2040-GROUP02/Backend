@@ -1,6 +1,6 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
-/// <summary>Một lượt bàn giao nhìn từ phía người nhận: trạng thái, các hạn, điều kiện khóa mở gói, tiêu đề lượt và tài sản (khi đủ điều kiện), quyền tải.</summary>
+/// <summary>Một lượt bàn giao nhìn từ phía người nhận: trạng thái, các hạn, điều kiện mã nhận, tiêu đề lượt và tài sản (khi đủ điều kiện), quyền tải.</summary>
 public class HandoverTurnResponse
 {
     public Guid Id { get; set; }
@@ -26,7 +26,7 @@ public class HandoverTurnResponse
     /// <summary>true: một Executor đã xác nhận đúng người bằng tay thay cho eKYC.</summary>
     public bool IdentityConfirmedByExecutor { get; set; }
 
-    /// <summary>true: kho đã cấp khóa mở gói, người nhận phải nhập khóa do Người thực thi đưa trước khi đồng ý.</summary>
+    /// <summary>true: kho đã cấp mã nhận, người nhận phải nhập khóa do Người thực thi đưa trước khi đồng ý.</summary>
     public bool KeyRequired { get; set; }
 
     /// <summary>true: người nhận đã nhập đúng khóa (hoặc không cần khóa).</summary>

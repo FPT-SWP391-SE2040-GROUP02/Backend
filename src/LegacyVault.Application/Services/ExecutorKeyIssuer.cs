@@ -6,7 +6,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Tạo hoặc đổi mã mở gói bàn giao do server sinh. Lớp này chỉ đánh dấu thay đổi (shard và audit),
+/// Tạo hoặc đổi mã nhận bàn giao do server sinh. Lớp này chỉ đánh dấu thay đổi (shard và audit),
 /// KHÔNG gọi SaveChanges: nơi gọi lưu chung trong giao dịch của mình.
 /// </summary>
 /// <remarks>

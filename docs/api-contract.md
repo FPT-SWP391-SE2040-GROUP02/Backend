@@ -936,7 +936,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 - **Đã tải:** tài sản có ít nhất một lần tải thành công. Lần tải bị từ chối hoặc lỗi toàn vẹn không tính. `firstDownloadedAt` là lần tải thành công đầu tiên.
 - **Dữ liệu nhạy cảm:** tài sản chỉ có tên và loại; không có nội dung tài sản hay số CCCD đầy đủ. Người nhận được phân biệt bằng 4 số cuối CCCD.
 - **Liên hệ người nhận:** `beneficiaryFullName`, `beneficiaryPhone` và `beneficiaryEmail` để Executor liên hệ, chỉ có ở lượt `INVITED`, `INITIAL_RESPONSE_EXPIRED`, `IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`, `HANDOVER_COMMITTED`. Lượt `DECLINED`, `DECISION_EXPIRED`, `CANCELLED`, `LAPSED` trả `null`. Không giải mã được hoặc người nhận không có số/email thì trường tương ứng cũng `null` (không lỗi cả màn). Không có ngày sinh.
-- **Giờ từng bước của lượt** (để FE vẽ 5 bước Đã mời, Đồng ý nhận, Người xét duyệt duyệt biên bản, Nhập mã mở gói, Tải xong): `invitationSentAt` (lúc máy chủ email nhận thư mời, `null` = lời mời chưa gửi được), `recipientSignedAt` (lúc người nhận ký biên bản đồng ý hoặc văn bản từ chối, `null` khi chưa có biên bản hoặc chưa ký), `decidedAt` (lúc lượt có quyết định cuối: Người xét duyệt gửi biên bản), `documentApprovedAt` (lúc Người xét duyệt ký biên bản của lượt, `null` khi chưa có biên bản hoặc chưa ký), `keyVerifiedAt` (lúc người nhận nhập đúng mã mở gói, `null` khi chưa nhập hoặc kho không dùng mã), `receivedAllAt` (lúc người nhận bấm đã nhận đủ). Chỉ là mốc thời gian, không có hạn chót.
+- **Giờ từng bước của lượt** (để FE vẽ 5 bước Đã mời, Đồng ý nhận, Người xét duyệt duyệt biên bản, Nhập mã nhận, Tải xong): `invitationSentAt` (lúc máy chủ email nhận thư mời, `null` = lời mời chưa gửi được), `recipientSignedAt` (lúc người nhận ký biên bản đồng ý hoặc văn bản từ chối, `null` khi chưa có biên bản hoặc chưa ký), `decidedAt` (lúc lượt có quyết định cuối: Người xét duyệt gửi biên bản), `documentApprovedAt` (lúc Người xét duyệt ký biên bản của lượt, `null` khi chưa có biên bản hoặc chưa ký), `keyVerifiedAt` (lúc người nhận nhập đúng mã nhận, `null` khi chưa nhập hoặc kho không dùng mã), `receivedAllAt` (lúc người nhận bấm đã nhận đủ). Chỉ là mốc thời gian, không có hạn chót.
 - **Thứ tự:** lượt xếp theo tên gói rồi theo lúc mời; tài sản xếp theo thứ tự đã ghim.
 - FE đếm thời gian còn lại theo `serverTime`.
 
@@ -1180,7 +1180,7 @@ Mã PIN 6 chữ số chặn người dùng tài khoản Owner (không phải Own
 - `POST`, `PUT`, `DELETE /vaults/{vaultId}/beneficiaries...` (tạo, sửa, xóa hồ sơ người nhận).
 - `PUT /vaults/{vaultId}/assets/{assetId}/assignments` (đặt lại người nhận của tài sản) và `DELETE .../assets/{assetId}/assignments/{beneficiaryId}` (gỡ gán).
 - `POST /vaults/{vaultId}/executors` (mời Executor) và `POST /vaults/{vaultId}/executors/{executorId}/revoke` (thu hồi).
-- `POST /vaults/{vaultId}/activate` (kích hoạt kế hoạch = Chủ kho ký di chúc bằng PIN), `POST /vaults/{vaultId}/will/sign` (ký lại di chúc) và `POST /vaults/{vaultId}/executor-key/reissue` (đổi mã mở gói).
+- `POST /vaults/{vaultId}/activate` (kích hoạt kế hoạch = Chủ kho ký di chúc bằng PIN), `POST /vaults/{vaultId}/will/sign` (ký lại di chúc) và `POST /vaults/{vaultId}/executor-key/reissue` (đổi mã nhận).
 
 Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem "Ép đặt PIN"), liệt kê, xem thông tin, xem danh sách gán (`GET .../assignments`).
 
@@ -1294,9 +1294,9 @@ Theo prototype: người nhận chọn **Chấp nhận** hoặc **Từ chối**,
 - **Mã hồ sơ** trong thư là `DeathCaseRules.CaseCode` (8 ký tự cuối id hồ sơ chứng tử, in hoa), cùng mã Người xét duyệt đang thấy.
 - **Không lưu họ tên, ngày sinh hay số căn cước đầy đủ.** Backend đối chiếu bản khai với thông tin Chủ kho đã khai cho người nhận lúc nộp, chỉ giữ ba cờ khớp/không khớp và 4 số cuối. Họ tên so không phân biệt dấu và hoa thường. Ảnh lưu mã hóa (cùng cơ chế ảnh căn cước Chủ kho), mỗi lần xem có log; bản bị thay thế thì xóa ảnh.
 - **Ai duyệt được:** chỉ Người xét duyệt đã duyệt hồ sơ chứng tử của kho đó. Người khác nhận 404.
-- **Duyệt** chỉ khi cả ba trường khớp; lệch thì chỉ yêu cầu bổ sung được. Duyệt đặt `identityConfirmedByUserId`, mở hạn quyết định như khi Executor xác nhận danh tính; sau đó người nhận vẫn nhập khóa mở gói (nếu có) và bấm Đồng ý hoặc Từ chối ở bước quyết định.
+- **Duyệt** chỉ khi cả ba trường khớp; lệch thì chỉ yêu cầu bổ sung được. Duyệt đặt `identityConfirmedByUserId`, mở hạn quyết định như khi Executor xác nhận danh tính; sau đó người nhận vẫn nhập mã nhận (nếu có) và bấm Đồng ý hoặc Từ chối ở bước quyết định.
 - **Biên bản** (cả văn bản từ chối lẫn văn bản khai nhận di sản thừa kế) được dựng **ngay lúc người nhận nộp hồ sơ** theo mẫu pháp lý Việt Nam (Điều 620 BLDS 2015 cho từ chối; Điều 613, 614, 615, 621 cho khai nhận), lưu mã hóa làm bằng chứng và **không bị xóa** khi lượt bị dọn (chỉ có họ tên và 4 số cuối căn cước). Ngày lập là ngày nộp. Nộp lại sau khi được yêu cầu bổ sung thì dựng bản mới; ảnh văn bản của bản bị thay thế vẫn được giữ (khác với ảnh căn cước bị xóa). Dựng lỗi lúc nộp không chặn việc nộp: lúc Người xét duyệt duyệt, Backend dựng bù nếu hồ sơ chưa có ảnh, còn đã có thì giữ nguyên, không dựng lại.
-- **Khóa mở gói** chỉ cần khi **tải** tài sản (sau khi đồng ý nhận), không chặn việc đồng ý. `verify-key` dùng được ở `READY_TO_ACCEPT` và `HANDOVER_COMMITTED`; tải khi chưa nhập khóa trả 403 `GRANT_NOT_ACTIVE` với `reason = KEY_REQUIRED`.
+- **Mã nhận** chỉ cần khi **tải** tài sản (sau khi đồng ý nhận), không chặn việc đồng ý. `verify-key` dùng được ở `READY_TO_ACCEPT` và `HANDOVER_COMMITTED`; tải khi chưa nhập khóa trả 403 `GRANT_NOT_ACTIVE` với `reason = KEY_REQUIRED`.
 - Nhật ký: `HANDOVER_SUBMISSION_APPROVED`, `HANDOVER_SUBMISSION_SUPPLEMENT_REQUESTED` (đối tượng `HANDOVER_TURN`).
 - Chưa làm: dọn ảnh khi lượt bị xóa theo thời hạn lưu (ảnh của hồ sơ đã duyệt còn tới khi có job dọn).
 
@@ -1435,7 +1435,7 @@ Màn kích hoạt (SETUP-10): xem [PLAN-SETUP-API.md](PLAN-SETUP-API.md) để b
 
 Di chúc điện tử (nhánh feat/will-signature), chi tiết ở mục cuối [PLAN-SETUP-API.md](PLAN-SETUP-API.md):
 - `GET .../plan-setup` thêm `ownerFullName`, `ownerEmail`, `activatedAt`, `recipients[]` (`beneficiaryId`, `fullName`, `hasMessage`, `assets[]` gồm `id`, `name`, `kind`, `sharedWithCount`; không trả nội dung lời nhắn) và `executors[].fullName`.
-- `POST .../activate` cần header `X-Vault-Pin`; thành công thì server tự tạo mã mở gói (không trả mã) và ghi nhật ký `PlanActivated`. Người thực thi chấp nhận lời mời ghi `ExecutorAccepted`.
+- `POST .../activate` cần header `X-Vault-Pin`; thành công thì server tự tạo mã nhận (không trả mã) và ghi nhật ký `PlanActivated`. Người thực thi chấp nhận lời mời ghi `ExecutorAccepted`.
 - `POST .../executor-key` (Chủ kho cấp mã lần đầu) đã **xóa**. `POST .../executor-key/reissue` cần PIN và trả `{ hasKey, version, issuedAt, reissuedAt, canIssue }`, không có `shard`.
 - `GET /executor/vaults/{vaultId}/handover-key`: chỉ đọc được khi kế hoạch `HANDOVER_IN_PROGRESS`; trước đó 409 `HANDOVER_NOT_ALLOWED` (`reason = HANDOVER_NOT_STARTED`).
 - Phiên bản di chúc đã ký (bảng `WillVersions`): kích hoạt tạo phiên bản đầu; `POST /vaults/{vaultId}/will/sign` (cần `X-Vault-Pin`, body `{ configVersion }`) ký lại khi kế hoạch đang chạy và có thay đổi chưa ký (không có thay đổi: 200 trả nguyên trạng; kế hoạch chưa chạy: 409 `WILL_SIGN_NOT_ALLOWED`; `configVersion` cũ: 409 `EDIT_CONFLICT`; ghi nhật ký `WillResigned`). `plan-setup` thêm `willVersion`, `willSignedAt`, `hasUnsignedChanges`, `unsignedChanges` (chỉ số đếm). **Bàn giao chỉ theo bản ký gần nhất**: phần thêm/đổi chưa ký lại bị bỏ qua, phần đã xóa không bàn giao; kế hoạch cũ chưa có phiên bản nào giữ cách cũ.

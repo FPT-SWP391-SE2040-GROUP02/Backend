@@ -23,10 +23,10 @@ public sealed class LogHandoverKeySender : IHandoverKeySender
     {
         if (!environment.IsDevelopment())
         {
-            logger.LogWarning("[KHÓA MỞ GÓI] Lượt {TurnId}; chưa cấu hình email nên không gửi thư.", mail.TurnId);
+            logger.LogWarning("[MÃ NHẬN] Lượt {TurnId}; chưa cấu hình email nên không gửi thư.", mail.TurnId);
             throw new InvalidOperationException("Chưa cấu hình Email:Smtp nên không gửi được khóa.");
         }
-        logger.LogInformation("[KHÓA MỞ GÓI] Lượt {TurnId}; khóa gửi người nhận: {Key}", mail.TurnId, mail.Key);
+        logger.LogInformation("[MÃ NHẬN] Lượt {TurnId}; khóa gửi người nhận: {Key}", mail.TurnId, mail.Key);
         return Task.CompletedTask;
     }
 }

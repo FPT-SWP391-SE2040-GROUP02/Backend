@@ -15,10 +15,10 @@ Hình dung một người (gọi là **Owner**, chủ kho) muốn để lại ch
 1. **Tạo kho** và **tải tài sản lên**. Hệ thống **mã hóa** nội dung trước khi lưu.
 2. Chia tài sản thành các **gói bàn giao** và chỉ định **người nhận** cho từng gói.
 3. Chọn một **Người thực thi** (Executor) trong danh sách nhân sự LegacyVault. Đây là tài khoản role `EXECUTOR` do **Admin tạo** (đã xác minh pháp lý), không phải người thân; Owner mời, người đó phải tự chấp nhận.
-4. **Ký Di chúc điện tử và kích hoạt**: trang bàn giao của Owner là một bản "Di chúc" (người thực thi, người nhận theo từng người, các gói). Owner ký bằng **mã PIN của kho** lúc kích hoạt; Người thực thi ký khi chấp nhận lời mời. Lúc kích hoạt, server tự tạo **mã mở gói** (Owner không phải tự cấp).
+4. **Ký Di chúc điện tử và kích hoạt**: trang bàn giao của Owner là một bản "Di chúc" (người thực thi, người nhận theo từng người, các gói). Owner ký bằng **mã PIN của kho** lúc kích hoạt; Người thực thi ký khi chấp nhận lời mời. Lúc kích hoạt, server tự tạo **mã nhận** (Owner không phải tự cấp).
 5. **Điểm danh định kỳ** (mặc định 30 ngày một lần) để hệ thống biết họ vẫn ổn. Đây là tính năng *deadman switch* ("công tắc người chết"). Nếu Owner **ngừng điểm danh**, hệ thống không tự mở kho. Nó chỉ **giao việc cho Executor liên hệ kiểm tra**.
-6. Khi Owner mất thật, Executor nộp **giấy chứng tử**. Nhân viên duyệt (**Verifier**) sau 72 giờ cho Owner kịp phản đối ("Tôi còn sống"). Khi được duyệt, bàn giao bắt đầu: từ lúc này Người thực thi mới đọc được **mã mở gói** và gửi cho người nhận.
-7. Sau khi bàn giao bắt đầu, **từng người nhận** nhận email mời, đăng nhập đúng email được chỉ định, bấm đồng ý nhận (**không eKYC, không gọi video**), nhập mã mở gói rồi **xem và tải trong 30 ngày**. Tài khoản nhân sự (EXECUTOR, VERIFIER, ADMIN) không được làm người nhận.
+6. Khi Owner mất thật, Executor nộp **giấy chứng tử**. Nhân viên duyệt (**Verifier**) sau 72 giờ cho Owner kịp phản đối ("Tôi còn sống"). Khi được duyệt, bàn giao bắt đầu: từ lúc này Người thực thi mới đọc được **mã nhận** và gửi cho người nhận.
+7. Sau khi bàn giao bắt đầu, **từng người nhận** nhận email mời, đăng nhập đúng email được chỉ định, bấm đồng ý nhận (**không eKYC, không gọi video**), nhập mã nhận rồi **xem và tải trong 30 ngày**. Tài khoản nhân sự (EXECUTOR, VERIFIER, ADMIN) không được làm người nhận.
 8. Dữ liệu hết hạn lưu thì bị **xóa theo quy tắc**.
 
 Ba nguyên tắc xuyên suốt của SRS: **không ai tự mở kho** (kể cả Admin), **mọi quyết định có người chịu trách nhiệm và có nhật ký**, **mọi hạn thời gian do server quyết định**.
@@ -30,7 +30,7 @@ Ba nguyên tắc xuyên suốt của SRS: **không ai tự mở kho** (kể cả
 | F1 | Tài khoản và thiết lập kho | Đăng ký, tạo kho, tải tài sản, chia gói, chỉ định người nhận, chọn Người thực thi, ký Di chúc bằng PIN và kích hoạt kế hoạch |
 | F2A | Điểm danh | Owner điểm danh; quá hạn thì giao việc cho Executor |
 | F2B | Nộp và duyệt chứng tử | Executor nộp, Verifier duyệt sau 72 giờ; Owner còn sống có thể phản đối trong thời gian này |
-| F3 | Bàn giao cho người nhận | Email mời, đăng nhập đúng email, đồng ý nhận, nhập mã mở gói, tải 30 ngày, xóa dữ liệu (không eKYC, không gọi video) |
+| F3 | Bàn giao cho người nhận | Email mời, đăng nhập đúng email, đồng ý nhận, nhập mã nhận, tải 30 ngày, xóa dữ liệu (không eKYC, không gọi video) |
 | F4 | Xử lý sự cố | Admin xử lý lỗi, giữ dữ liệu |
 | P | Thanh toán | Mua dịch vụ qua SePay; Free chỉ có 20 MiB |
 
@@ -78,11 +78,11 @@ Ký hiệu: Xong = đã chạy và có test; Một phần = có nền nhưng thi
 | Hồ sơ người nhận (mã hóa) | QUOTA-03/04 | Một phần: chưa có chỉ định theo gói | `BeneficiariesController` | `BeneficiaryService` | `Beneficiary` |
 | **Điểm danh (deadman switch)** | F2A, DMS-01..06 | Xong phần lõi | `CheckInsController` | `CheckInService`, `CheckInJob`, `CheckInScheduler`, `CheckInTimeline` | `CheckInSchedule`, `CheckInPeriod`, `CheckInReminder` |
 | Gửi email thật (Gmail) | OPS-04 | Xong, cần cấu hình | không có | `SmtpMailSender` (Infrastructure) | không có |
-| Kích hoạt kế hoạch (Di chúc điện tử, ký bằng PIN, tự tạo mã mở gói) | SETUP-01 | Xong (cập nhật 16/11/2026) | `PlanSetupController` | `PlanSetupService`, `ExecutorKeyIssuer` | `HandoverPlan`, `ExecutorKeyShard` |
+| Kích hoạt kế hoạch (Di chúc điện tử, ký bằng PIN, tự tạo mã nhận) | SETUP-01 | Xong (cập nhật 16/11/2026) | `PlanSetupController` | `PlanSetupService`, `ExecutorKeyIssuer` | `HandoverPlan`, `ExecutorKeyShard` |
 | Mời và chấp nhận Executor (nhân sự role EXECUTOR do Admin tạo) | SETUP-20 | Xong (cập nhật 16/11/2026) | `PlanSetupController`, `ExecutorInvitationsController` | `PlanSetupService` | `Executor` |
 | Chứng tử, duyệt 72 giờ, báo còn sống | F2B | Xong (cập nhật 16/11/2026) | `DeathCase*Controller` | `DeathCaseService`, `DeathCaseReviewService` | `DeathCase` |
 | eKYC của Owner khi đăng ký (người nhận không eKYC, không gọi video) | EKYC | Xong phần Owner (cập nhật 16/11/2026) | `EkycController` | `EkycService` | `EkycVerification` |
-| Đồng ý nhận, nhập mã mở gói, tải 30 ngày, xóa dữ liệu | F3 | Xong (cập nhật 16/11/2026) | `Handover*Controller` | `HandoverService`, `HandoverDownloadService` | `HandoverTurn`, `HandoverGrant` |
+| Đồng ý nhận, nhập mã nhận, tải 30 ngày, xóa dữ liệu | F3 | Xong (cập nhật 16/11/2026) | `Handover*Controller` | `HandoverService`, `HandoverDownloadService` | `HandoverTurn`, `HandoverGrant` |
 | Thanh toán SePay | P | Xong (cập nhật 16/11/2026) | `BillingController` | `BillingService` | `Payment*` |
 | Admin, sự cố, nhật ký | F4 | Xong (cập nhật 16/11/2026) | `Admin*Controller` | `AdminService` | `AuditLog` |
 
@@ -192,13 +192,13 @@ flowchart TD
     B --> C["Chỉ định người nhận vào gói<br/>(gói thành READY)"]:::done
     C --> D["Chọn Người thực thi (nhân sự EXECUTOR),<br/>người đó chấp nhận"]:::done
     D --> E["eKYC Owner, thanh toán"]:::done
-    E --> F["Owner ký Di chúc bằng PIN,<br/>kích hoạt, server tạo mã mở gói"]:::done
+    E --> F["Owner ký Di chúc bằng PIN,<br/>kích hoạt, server tạo mã nhận"]:::done
     F --> G["Điểm danh định kỳ,<br/>job nhắc và chuyển trạng thái"]:::done
     G --> H["Quá hạn: giao việc cho Executor"]:::done
     H --> I["Executor nộp chứng tử,<br/>ghim snapshot"]:::done
     I --> J["72 giờ phản đối,<br/>Verifier duyệt, bàn giao bắt đầu"]:::done
-    J --> K["Người thực thi đọc mã mở gói,<br/>gửi cho người nhận"]:::done
-    K --> L["Người nhận đăng nhập đúng email,<br/>đồng ý nhận, nhập mã mở gói"]:::done
+    J --> K["Người thực thi đọc mã nhận,<br/>gửi cho người nhận"]:::done
+    K --> L["Người nhận đăng nhập đúng email,<br/>đồng ý nhận, nhập mã nhận"]:::done
     L --> M["Xem và tải 30 ngày<br/>(giải mã nội dung)"]:::done
     M --> N["Hết hạn: lưu 30 ngày rồi xóa"]:::done
     classDef done fill:#d4edda,stroke:#2e7d32,color:#000
@@ -208,7 +208,7 @@ flowchart TD
 
 Xanh = đã có. Vàng = có một phần. Đỏ = chưa có. (Sơ đồ cập nhật 16/11/2026: toàn bộ quy trình đã có API.)
 
-**Điều cần nhớ:** (1) **Người thực thi** là tài khoản nhân sự LegacyVault (role `EXECUTOR`) do Admin tạo, Owner chọn một người; họ không phải người nhận. (2) Trang bàn giao của Owner là **Di chúc** điện tử: Owner ký bằng PIN kho lúc kích hoạt, Người thực thi ký khi chấp nhận. (3) **Mã mở gói** do server tạo lúc kích hoạt, chỉ Người thực thi đọc được và chỉ khi bàn giao đã bắt đầu (`HANDOVER_IN_PROGRESS`), rồi gửi qua email cho người nhận; mã là cổng mở khóa việc tải, không dùng mã hóa nội dung. (4) Người nhận không eKYC, không gọi video; đăng nhập đúng email được chỉ định và đồng ý nhận. (5) Tài khoản nhân sự không được làm người nhận (chặn ở bước tạo/sửa người nhận, bước nhận gói và bước Admin cấp role).
+**Điều cần nhớ:** (1) **Người thực thi** là tài khoản nhân sự LegacyVault (role `EXECUTOR`) do Admin tạo, Owner chọn một người; họ không phải người nhận. (2) Trang bàn giao của Owner là **Di chúc** điện tử: Owner ký bằng PIN kho lúc kích hoạt, Người thực thi ký khi chấp nhận. (3) **Mã nhận** do server tạo lúc kích hoạt, chỉ Người thực thi đọc được và chỉ khi bàn giao đã bắt đầu (`HANDOVER_IN_PROGRESS`), rồi gửi qua email cho người nhận; mã là cổng mở khóa việc tải, không dùng mã hóa nội dung. (4) Người nhận không eKYC, không gọi video; đăng nhập đúng email được chỉ định và đồng ý nhận. (5) Tài khoản nhân sự không được làm người nhận (chặn ở bước tạo/sửa người nhận, bước nhận gói và bước Admin cấp role).
 
 ---
 

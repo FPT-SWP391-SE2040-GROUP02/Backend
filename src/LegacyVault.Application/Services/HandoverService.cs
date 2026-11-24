@@ -12,7 +12,7 @@ namespace LegacyVault.Application.Services;
 //   1. Mở link trong thư mời ............ GetInvitationAsync
 //   2. Bấm "Nhận lời mời" ............... ClaimAsync (qua link), ClaimByTurnAsync (trong app)
 //   3. Xem lời mời và lượt của mình ..... GetMyInvitationsAsync, GetMyTurnsAsync, GetTurnAsync
-//   4. Nhập khóa mở gói ................. VerifyKeyAsync
+//   4. Nhập mã nhận ................. VerifyKeyAsync
 //   5. Xem danh sách tài sản ............ ListAssetsAsync
 //   6. Báo đã nhận đủ ................... ConfirmReceivedAllAsync
 // Luồng cũ, chỉ cho lượt không có biên bản: AcceptAsync (đồng ý nhận), DeclineAsync (từ chối nhận).
@@ -21,7 +21,7 @@ namespace LegacyVault.Application.Services;
 /// <summary>Luồng của người nhận: xem lời mời, nhận lượt, nhập khóa, xem tài sản, xác nhận đã nhận đủ, cùng luồng đồng ý hoặc từ chối cũ.</summary>
 public sealed class HandoverService : IHandoverService
 {
-    /// <summary>Số lần nhập sai khóa mở gói tối đa trước khi khóa lượt.</summary>
+    /// <summary>Số lần nhập sai mã nhận tối đa trước khi khóa lượt.</summary>
     public const int MaxKeyFailures = 5;
 
     private readonly ICurrentUser currentUser;
@@ -504,7 +504,7 @@ public sealed class HandoverService : IHandoverService
     }
 
     /// <summary>
-    /// Dựng dữ liệu một lượt để trả về màn hình: trạng thái, các hạn, có cần khóa mở gói không, Người xét duyệt,
+    /// Dựng dữ liệu một lượt để trả về màn hình: trạng thái, các hạn, có cần mã nhận không, Người xét duyệt,
     /// danh sách tài sản (chỉ khi lượt đã sẵn sàng hoặc đã bàn giao) và quyền tải.
     /// </summary>
     private async Task<HandoverTurnResponse> BuildTurnResponseAsync(HandoverTurn turn, CancellationToken ct)
@@ -580,7 +580,7 @@ public sealed class HandoverService : IHandoverService
         return await progressReader.FindFirstDownloadTimesAsync(new List<Guid> { turn.Grant.Id }, ct);
     }
 
-    /// <summary>Kho đã cấp khóa mở gói thì người nhận phải nhập khóa; chưa cấp thì bỏ qua.</summary>
+    /// <summary>Kho đã cấp mã nhận thì người nhận phải nhập khóa; chưa cấp thì bỏ qua.</summary>
     private async Task<bool> IsKeyRequiredAsync(HandoverTurn turn, CancellationToken ct)
     {
         return await keyShards.FindByVaultIdAsync(turn.VaultId, ct) != null;
@@ -649,7 +649,7 @@ public sealed class HandoverService : IHandoverService
         return await BuildTurnResponseAsync(turn, ct);
     }
 
-    /// <summary>Bước 4: người nhận nhập khóa mở gói lấy từ Người thực thi.</summary>
+    /// <summary>Bước 4: người nhận nhập mã nhận lấy từ Người thực thi.</summary>
     public async Task<HandoverTurnResponse> VerifyKeyAsync(Guid turnId, string? key, CancellationToken ct)
     {
         // 1. Lượt phải thuộc người đang đăng nhập
@@ -695,7 +695,7 @@ public sealed class HandoverService : IHandoverService
         await unitOfWork.SaveChangesAsync(ct);
         Dictionary<string, object?> extensions = new Dictionary<string, object?>();
         extensions["attemptsRemaining"] = Math.Max(0, MaxKeyFailures - turn.KeyFailedCount);
-        throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverKeyInvalid, "Khóa mở gói chưa đúng.", extensions);
+        throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverKeyInvalid, "Mã nhận chưa đúng.", extensions);
     }
 
     /// <summary>Lỗi 404: link mời không hợp lệ.</summary>

@@ -1,7 +1,7 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
 /// <summary>
-/// Mã mở gói bàn giao được cấp và gửi trực tiếp cho Người thực thi trên hệ thống.
+/// Mã nhận bàn giao được cấp và gửi trực tiếp cho Người thực thi trên hệ thống.
 /// </summary>
 public sealed class ExecutorHandoverKeyResponse
 {

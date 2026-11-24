@@ -35,7 +35,7 @@ public sealed class HandoverInvitationEmailTests
         Assert.DoesNotContain("chứng tử", content.TextBody);
         Assert.Contains("0901 234 567", content.TextBody);
         Assert.Contains("c.le@example.com", content.TextBody);
-        Assert.Contains("Nhắn Lê Văn C xin khóa mở gói", content.TextBody.Replace("3. ", string.Empty));
+        Assert.Contains("Nhắn Lê Văn C xin mã nhận", content.TextBody.Replace("3. ", string.Empty));
         Assert.Contains("16:00 ngày 12/11/2026", content.TextBody);
         Assert.Contains("[Cần xử lý trước 12/11]", content.Subject);
         Assert.Contains("Trân trọng, Đội ngũ LegacyVault", content.TextBody);
@@ -47,7 +47,7 @@ public sealed class HandoverInvitationEmailTests
         EmailContent content = HandoverInvitationEmail.Build(Full(), Link, null);
 
         Assert.Contains("1. Bấm nút", content.TextBody);
-        Assert.Contains("4. Nhập khóa", content.TextBody);
+        Assert.Contains("4. Nhập mã nhận", content.TextBody);
         Assert.DoesNotContain(" chị ", content.TextBody);
         Assert.DoesNotContain(" ông ", content.TextBody);
     }

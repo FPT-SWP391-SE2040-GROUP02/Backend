@@ -1,7 +1,7 @@
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Mã mở gói bàn giao của kho (bảng ExecutorKeyShards). Mỗi kho có tối đa một bản ghi, khóa chính là VaultId.
+/// Mã nhận bàn giao của kho (bảng ExecutorKeyShards). Mỗi kho có tối đa một bản ghi, khóa chính là VaultId.
 /// </summary>
 /// <remarks>
 /// - Mã do server tạo, gồm 16 ký tự Crockford base32 (80 bit), hiển thị dạng "XXXX-XXXX-XXXX-XXXX".

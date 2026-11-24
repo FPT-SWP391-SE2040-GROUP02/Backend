@@ -135,7 +135,7 @@ public static class HandoverRequestNoticeEmail
                 + $"{notice.OwnerName} ngay, không cần chờ người nhận khác.";
             actionUrl = baseUrl + "/claim/beneficiary";
             buttonText = "Đọc và ký biên bản";
-            note = "Bạn ký xong và luật sư, Người thực thi cũng đã ký thì phần của bạn được mở; Người thực thi gửi mã mở gói "
+            note = "Bạn ký xong và luật sư, Người thực thi cũng đã ký thì phần của bạn được mở; Người thực thi gửi mã nhận "
                 + "để bạn tải tài sản. Hãy đăng nhập bằng đúng email nhận thư này.";
         }
         else
@@ -144,7 +144,7 @@ public static class HandoverRequestNoticeEmail
                 + "Bạn có thể ký biên bản ngay.";
             actionUrl = baseUrl + "/executor";
             buttonText = "Mở không gian Người thực thi";
-            note = "Mỗi người nhận được giao riêng: người nào đã ký (cùng chữ ký của bạn và luật sư) thì bạn gửi mã mở gói "
+            note = "Mỗi người nhận được giao riêng: người nào đã ký (cùng chữ ký của bạn và luật sư) thì bạn gửi mã nhận "
                 + "cho người đó, không cần chờ người nhận khác.";
         }
         string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";

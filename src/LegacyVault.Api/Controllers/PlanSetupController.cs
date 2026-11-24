@@ -42,7 +42,7 @@ public sealed class PlanSetupController(IPlanSetupService service) : ControllerB
         service.ResendAsync(vaultId, executorId, request, ct);
 
     /// <summary>
-    /// Kiểm lại mọi điều kiện rồi kích hoạt kế hoạch trong một giao dịch: đặt trạng thái Đã kích hoạt, tạo mã mở gói và
+    /// Kiểm lại mọi điều kiện rồi kích hoạt kế hoạch trong một giao dịch: đặt trạng thái Đã kích hoạt, tạo mã nhận và
     /// biên bản phân chia phiên bản 1. Gửi lặp lại chỉ trả nguyên trạng, không kích hoạt lại.
     /// Cần header X-Vault-Pin: nhập PIN là bước Chủ kho ký biên bản phân chia.
     /// </summary>
