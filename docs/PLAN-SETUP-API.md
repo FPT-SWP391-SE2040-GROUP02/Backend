@@ -11,7 +11,7 @@ Implemented 15/10/2026. Canonical prefix is `/api/v1` only. Swagger UI: `/swagge
 | POST `/executor-invitations/respond` | Verified active account: token, accept, acknowledgeScope, scopeVersion, `password?` (≤128) | Explicit accept/decline. **Chấp nhận = Người thực thi ký nhận vai bằng mật khẩu tài khoản**: `accept=true` mà thiếu/để trống `password` → 400 `VALIDATION_ERROR` (trường `password`: "Nhập mật khẩu tài khoản để ký nhận vai Người thực thi."); sai → 403 `SIGNING_PASSWORD_INVALID` kèm `attemptsRemaining`; sai 5 lần liên tiếp → 423 `SIGNING_LOCKED` kèm `lockedUntil` (15 phút → 1 giờ → 24 giờ, đang khóa thì mật khẩu đúng cũng bị từ chối); tài khoản chưa có mật khẩu → 403 `SIGNING_PASSWORD_INVALID` (không kèm `attemptsRemaining`). Mật khẩu chỉ được kiểm khi lời mời còn hợp lệ cho đúng tài khoản này (link sai/hết hạn/khác email không tốn lượt thử). Từ chối (`accept=false`) không cần và bỏ qua `password`. Mật khẩu không được log hay ghi nhật ký; Owner, second claimant and an account whose verified email differs from the invited email (409 `EXECUTOR_NOT_ALLOWED`, reason `INVITEE_EMAIL_MISMATCH`) are rejected |
 | GET `/executor-invitations/mine` | Signed-in account | `{ scopeVersion, scopeText, pending[], ended[] }`. Mỗi lời mời: `id, ownerName, inviteeEmail, status (INVITED/DECLINED/EXPIRED/REVOKED), invitedAt, expiresAt, endedAt`. Chỉ lời mời gửi tới email **đã xác minh** của tài khoản; email chưa xác minh hoặc tài khoản không Active thì hai danh sách rỗng. Không có token, không có nội dung kho. `pending` sắp hết hạn trước, `ended` mới nhất trước (tối đa 50 lời mời) |
 | POST `/executor-invitations/{invitationId}/respond` | Verified active account: accept, acknowledgeScope, scopeVersion, `password?` (≤128) | Giống respond bằng token (cùng luật và mã lỗi, gồm `password` khi chấp nhận: 400 / 403 `SIGNING_PASSWORD_INVALID` / 423 `SIGNING_LOCKED`). Lời mời không gửi tới email của người gọi → 404 `EXECUTOR_INVITATION_INVALID` (không lộ lời mời của người khác) |
-| POST `/vaults/{vaultId}/activate` | Owner + **`X-Vault-Pin`** (bắt buộc): configVersion, policyVersion, acknowledgePolicy=true | Recheck requirements, atomically activate and open first period; ký di chúc bằng PIN; server tự tạo mã mở gói (không trả mã) |
+| POST `/vaults/{vaultId}/activate` | Owner + **`X-Vault-Pin`** (bắt buộc): configVersion, policyVersion, acknowledgePolicy=true | Recheck requirements, atomically activate and open first period; ký di chúc bằng PIN; server tự tạo mã nhận (không trả mã) |
 
 Paths in the table follow `/api/v1`. Request/response schemas are generated from DTOs in OpenAPI. FE validates wire responses with Zod.
 
@@ -84,7 +84,7 @@ Ví dụ GET rút gọn, giả định các điều kiện kích hoạt khác đ
 
 Lỗi `409 PLAN_ACTIVATION_REQUIREMENTS_NOT_MET` giữ nguyên ProblemDetails với `missingRequirements`; các field mới thuộc phản hồi thành công. Thử tay bằng `http/plan-setup.http`; dữ liệu giả lập cho DB local nằm trong `http/plan-dev.sql`.
 
-## Di chúc điện tử, mã mở gói do server tạo, người nhận (bổ sung 16/11/2026, nhánh feat/will-signature)
+## Di chúc điện tử, mã nhận do server tạo, người nhận (bổ sung 16/11/2026, nhánh feat/will-signature)
 
 Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự LegacyVault** (role `EXECUTOR`) do Admin tạo, Chủ kho chọn một người. Người nhận không eKYC, không gọi video. Trang bàn giao của Chủ kho là "Di chúc" điện tử: Chủ kho ký bằng PIN kho lúc kích hoạt, Người thực thi ký khi chấp nhận lời mời. Mọi trường mới trong response đều tùy chọn để client cũ không vỡ.
 
@@ -97,9 +97,9 @@ Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự 
 | `recipients[]` | mảng | Người nhận theo từng người, lấy từ các dòng gán tài sản của kho, sắp theo `fullName`; người chưa được gán tài sản nào thì không xuất hiện. Mỗi phần tử: `beneficiaryId`, `fullName` (giải mã từ dữ liệu cá nhân, không log), `hasMessage` (đã có lời nhắn; **không trả nội dung lời nhắn**), `assets[]` (`id`, `name`, `kind`, `sharedWithCount` là số người cùng nhận tài sản đó, tính cả người này; lớn hơn 1 là nhận chung). |
 | `executors[].fullName` | string hoặc null | Họ tên tài khoản Người thực thi nếu đã liên kết (sau khi chấp nhận), ngược lại null. |
 
-**Kích hoạt (`POST .../activate`).** Bắt buộc header `X-Vault-Pin` (thiếu/sai/khóa PIN trả cùng mã lỗi `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN` / `VAULT_PIN_LOCKED` như các thao tác PIN khác). Cùng một giao dịch: đặt kế hoạch `ACTIVE`, mở kỳ điểm danh đầu, **tự tạo mã mở gói** nếu kho chưa có (hoặc chỉ có bản cũ chỉ-hash thì tạo mới, version + 1; không trả mã trong response) và ghi nhật ký `PlanActivated` (actor Owner, đích Vault). Gọi lặp khi đã `ACTIVE` không ghi thêm.
+**Kích hoạt (`POST .../activate`).** Bắt buộc header `X-Vault-Pin` (thiếu/sai/khóa PIN trả cùng mã lỗi `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN` / `VAULT_PIN_LOCKED` như các thao tác PIN khác). Cùng một giao dịch: đặt kế hoạch `ACTIVE`, mở kỳ điểm danh đầu, **tự tạo mã nhận** nếu kho chưa có (hoặc chỉ có bản cũ chỉ-hash thì tạo mới, version + 1; không trả mã trong response) và ghi nhật ký `PlanActivated` (actor Owner, đích Vault). Gọi lặp khi đã `ACTIVE` không ghi thêm.
 
-**Mã mở gói (executor key).**
+**Mã nhận (executor key).**
 
 | Method / path | Ai | Kết quả |
 |---|---|---|

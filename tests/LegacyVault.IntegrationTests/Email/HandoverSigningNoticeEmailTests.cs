@@ -40,7 +40,7 @@ public sealed class HandoverSigningNoticeEmailTests
 
         Assert.Equal(HandoverRequestNoticeEmail.SigningSubject, content.Subject);
         Assert.Contains("https://app.legacyvault.test/executor", content.TextBody);
-        Assert.Contains("mã mở gói", content.TextBody);
+        Assert.Contains("mã nhận", content.TextBody);
     }
 
     [Fact]

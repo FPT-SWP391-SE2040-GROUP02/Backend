@@ -117,8 +117,8 @@ public static class HandoverInvitationEmail
         lines.Add($"1. Bấm nút “Nhận tài sản” bên dưới. Bạn cần bấm trước {deadline}.");
         lines.Add("2. Đăng nhập bằng đúng email này, chọn Chấp nhận hoặc Từ chối rồi nộp hồ sơ kèm ảnh căn cước hai mặt. "
             + "Người xét duyệt sẽ đối chiếu để biết đúng là bạn.");
-        lines.Add($"3. Nhắn {executorLabel} xin khóa mở gói. Họ sẽ gửi bạn một thư riêng chỉ có khóa.");
-        lines.Add("4. Nhập khóa, bấm “Đồng ý nhận” rồi tải tài sản về máy.");
+        lines.Add($"3. Nhắn {executorLabel} xin mã nhận. Họ sẽ gửi bạn một thư riêng chỉ có mã nhận.");
+        lines.Add("4. Nhập mã nhận, bấm “Đồng ý nhận” rồi tải tài sản về máy.");
 
         string support = "hãy báo lại cho bên mình";
         if (!string.IsNullOrWhiteSpace(supportContact))

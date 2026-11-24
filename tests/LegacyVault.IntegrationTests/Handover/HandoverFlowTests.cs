@@ -188,7 +188,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Bắt đầu bàn giao luôn tạo mã mở gói, nên người nhận phải nhập mã trước khi tải. Lấy mã gốc bằng bộ giải mã của server
+    /// Bắt đầu bàn giao luôn tạo mã nhận, nên người nhận phải nhập mã trước khi tải. Lấy mã gốc bằng bộ giải mã của server
     /// (Người thực thi đọc mã này trên hệ thống rồi gửi cho người nhận) và nhập qua API verify-key.
     /// </summary>
     private async Task VerifyKeyAsync(HttpClient client, Guid turnId)
@@ -230,7 +230,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
 
         Assert.Equal(2, items.GetArrayLength());
 
-        // Chưa nhập mã mở gói thì chưa tải được.
+        // Chưa nhập mã nhận thì chưa tải được.
         Guid fileItemId = FindItemId(items, "FILE");
         HttpResponseMessage locked = await receiver.GetAsync($"/api/v1/handover/grants/{grantId}/assets/{fileItemId}/content");
         Assert.Equal(HttpStatusCode.Forbidden, locked.StatusCode);

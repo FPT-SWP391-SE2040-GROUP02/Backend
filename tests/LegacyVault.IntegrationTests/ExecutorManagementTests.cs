@@ -200,7 +200,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
             Assert.Equal(ExecutorStatus.Revoked, old.Status);
             Assert.Equal(ExecutorStatus.Accepted, fresh.Status);
             Assert.Equal(first.Id, fresh.ReplacesExecutorId);
-            // Đổi Người thực thi: mã mở gói tự đổi (version 1 → 2), nhật ký ghi System, không ghi mã.
+            // Đổi Người thực thi: mã nhận tự đổi (version 1 → 2), nhật ký ghi System, không ghi mã.
             ExecutorKeyShard key = await db.Set<ExecutorKeyShard>().SingleAsync(k => k.VaultId == vaultId);
             Assert.Equal(2, key.Version);
             Assert.NotNull(key.ReissuedAt);

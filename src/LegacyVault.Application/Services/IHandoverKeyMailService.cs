@@ -2,7 +2,7 @@ using LegacyVault.Application.Dtos.Responses;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Người thực thi gửi khóa mở gói cho người nhận của một lượt qua email đã lưu của người nhận.</summary>
+/// <summary>Người thực thi gửi mã nhận cho người nhận của một lượt qua email đã lưu của người nhận.</summary>
 public interface IHandoverKeyMailService
 {
     /// <summary>

@@ -72,7 +72,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
             throw HandoverAccess.NotFound();
         }
 
-        // 4. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kho đang bị giữ, hoặc chưa nhập khóa mở gói.
+        // 4. Quyền còn hiệu lực không: hết hạn, bị thu hồi, kho đang bị giữ, hoặc chưa nhập mã nhận.
         //    Bị chặn thì ghi nhật ký rồi báo lý do.
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverAccessLog log = new HandoverAccessLog
@@ -88,7 +88,7 @@ public sealed class HandoverDownloadService : IHandoverDownloadService
             ExecutorKeyShard? shard = await keyShards.FindByVaultIdAsync(turn.VaultId, ct);
             if (shard != null)
             {
-                // Kho có khóa mở gói thì người nhận phải nhập khóa do Người thực thi đưa trước khi tải.
+                // Kho có mã nhận thì người nhận phải nhập khóa do Người thực thi đưa trước khi tải.
                 deniedReason = "KEY_REQUIRED";
             }
         }

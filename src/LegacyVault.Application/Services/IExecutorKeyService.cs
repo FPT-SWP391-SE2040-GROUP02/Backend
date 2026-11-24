@@ -3,7 +3,7 @@ using LegacyVault.Application.Dtos.Responses;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Mã mở gói bàn giao do server tạo (lúc kích hoạt kế hoạch). Hàm của Owner chỉ chạy cho Owner của kho; kho người khác trả 404.
+/// Mã nhận bàn giao do server tạo (lúc kích hoạt kế hoạch). Hàm của Owner chỉ chạy cho Owner của kho; kho người khác trả 404.
 /// Đổi mã chỉ được khi kế hoạch chưa khóa (409 VAULT_NOT_EDITABLE nếu đã có báo tin).
 /// </summary>
 public interface IExecutorKeyService
@@ -16,7 +16,7 @@ public interface IExecutorKeyService
     Task<ExecutorKeyStatusResponse> ReissueAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>
-    /// Người thực thi đã chấp nhận đọc mã mở gói, chỉ khi kế hoạch đã HandoverInProgress
+    /// Người thực thi đã chấp nhận đọc mã nhận, chỉ khi kế hoạch đã HandoverInProgress
     /// (chưa tới lúc → 409 HANDOVER_NOT_ALLOWED, reason HANDOVER_NOT_STARTED).
     /// </summary>
     Task<ExecutorHandoverKeyResponse> GetKeyForExecutorAsync(Guid vaultId, CancellationToken ct);

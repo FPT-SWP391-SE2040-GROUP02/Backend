@@ -493,7 +493,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             vault.Plan.ActivationPolicyVersion = PolicyVersion;
             vault.Plan.ActivationPolicyAcknowledgedAt = now;
             vault.Plan.UpdatedAt = now;
-            // Mã mở gói do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
+            // Mã nhận do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
             await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
             // Ký bằng PIN cũng là lúc chụp lại cấu hình: bàn giao chỉ theo bản ký này cho tới khi Chủ kho ký lại.
             List<AssetAssignment> signedAssignments = await assignments.FindByVaultIdAsync(vault.Id, ct);

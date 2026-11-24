@@ -112,7 +112,7 @@ public sealed class DevToolsRepository(AppDbContext context) : IDevToolsReposito
         // Nội dung kho: dòng gán tài sản cho người nhận, Executor (trỏ vào người nhận) → tài sản, người nhận.
         await context.Set<AssetAssignment>().Where(a => a.Asset.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Executor>().Where(e => e.VaultId == vaultId).ExecuteDeleteAsync(ct);
-        // Mã mở gói do server tạo khi kích hoạt kế hoạch: phải xóa trước kho vì khóa ngoại tới Vaults.
+        // Mã nhận do server tạo khi kích hoạt kế hoạch: phải xóa trước kho vì khóa ngoại tới Vaults.
         await context.Set<ExecutorKeyShard>().Where(s => s.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Asset>().Where(a => a.VaultId == vaultId).ExecuteDeleteAsync(ct);
         await context.Set<Beneficiary>().Where(b => b.VaultId == vaultId).ExecuteDeleteAsync(ct);

@@ -97,7 +97,7 @@ public enum ErrorCode
     ExecutorKeyAlreadyIssued,
     /// <summary>409: kho chưa cấp mảnh khóa Người thực thi nên chưa có gì để cấp lại.</summary>
     ExecutorKeyNotIssued,
-    /// <summary>403: người nhận nhập sai khóa mở gói, kèm attemptsRemaining.</summary>
+    /// <summary>403: người nhận nhập sai mã nhận, kèm attemptsRemaining.</summary>
     HandoverKeyInvalid,
     /// <summary>423: người nhận nhập sai khóa quá nhiều lần, lượt bị khóa.</summary>
     HandoverKeyLocked,

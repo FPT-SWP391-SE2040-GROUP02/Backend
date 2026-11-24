@@ -11,7 +11,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
 
-/// <summary>Khóa mở gói: kho đã cấp khóa thì người nhận phải nhập đúng khóa do Người thực hiện đưa trước khi đồng ý nhận.</summary>
+/// <summary>Mã nhận: kho đã cấp khóa thì người nhận phải nhập đúng khóa do Người thực hiện đưa trước khi đồng ý nhận.</summary>
 public sealed class HandoverKeyTests
 {
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 14, 8, 0, 0, TimeSpan.Zero);

@@ -673,7 +673,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             }
         }
 
-        // 4. Người thực thi giữ khóa mở gói: đảm bảo kho có khóa đọc được, lưu một lần
+        // 4. Người thực thi giữ mã nhận: đảm bảo kho có khóa đọc được, lưu một lần
         await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.System, null, now, ct);
         await SaveAsync(ct);
 
