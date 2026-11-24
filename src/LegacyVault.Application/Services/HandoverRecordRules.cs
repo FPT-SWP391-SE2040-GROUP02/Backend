@@ -166,6 +166,125 @@ public static class HandoverRecordRules
         return null;
     }
 
+    /// <summary>
+    /// So dòng biên bản với cách chia ban đầu của Chủ kho (mỗi cặp người nhận - tài sản). Trả các khác biệt theo thứ tự:
+    /// người nhận được thêm, người nhận bị bỏ, rồi tài sản đổi người nhận (thêm/bớt người cùng nhận). Rỗng khi giống hệt.
+    /// Người gọi bỏ trước các dòng gán trỏ tới tài sản đã bị xóa nội dung (biên bản không ghi được tài sản đó).
+    /// </summary>
+    public static List<HandoverSplitDifference> FindSplitDifferences(
+        List<(Guid BeneficiaryId, Guid AssetId)> recordLines, List<(Guid BeneficiaryId, Guid AssetId)> ownerLines)
+    {
+        Dictionary<Guid, List<Guid>> recordByAsset = GroupRecipientsByAsset(recordLines);
+        Dictionary<Guid, List<Guid>> ownerByAsset = GroupRecipientsByAsset(ownerLines);
+        List<Guid> recordRecipients = DistinctRecipients(recordLines);
+        List<Guid> ownerRecipients = DistinctRecipients(ownerLines);
+        List<HandoverSplitDifference> result = new List<HandoverSplitDifference>();
+
+        // 1. Người nhận có trong biên bản mà Chủ kho không chia cho
+        foreach (Guid beneficiaryId in recordRecipients)
+        {
+            if (!ownerRecipients.Contains(beneficiaryId))
+            {
+                HandoverSplitDifference added = new HandoverSplitDifference();
+                added.Kind = HandoverSplitDifference.RecipientAdded;
+                added.BeneficiaryId = beneficiaryId;
+                result.Add(added);
+            }
+        }
+
+        // 2. Người nhận Chủ kho đã chia mà biên bản bỏ ra
+        foreach (Guid beneficiaryId in ownerRecipients)
+        {
+            if (!recordRecipients.Contains(beneficiaryId))
+            {
+                HandoverSplitDifference removed = new HandoverSplitDifference();
+                removed.Kind = HandoverSplitDifference.RecipientRemoved;
+                removed.BeneficiaryId = beneficiaryId;
+                result.Add(removed);
+            }
+        }
+
+        // 3. Tài sản có nhóm người nhận khác nhau (theo thứ tự tài sản của Chủ kho rồi tới tài sản chỉ có trong biên bản)
+        List<Guid> assetIds = new List<Guid>(ownerByAsset.Keys);
+        foreach (Guid assetId in recordByAsset.Keys)
+        {
+            if (!assetIds.Contains(assetId))
+            {
+                assetIds.Add(assetId);
+            }
+        }
+        foreach (Guid assetId in assetIds)
+        {
+            List<Guid> ownerSet = new List<Guid>();
+            if (ownerByAsset.ContainsKey(assetId))
+            {
+                ownerSet = ownerByAsset[assetId];
+            }
+            List<Guid> recordSet = new List<Guid>();
+            if (recordByAsset.ContainsKey(assetId))
+            {
+                recordSet = recordByAsset[assetId];
+            }
+            if (SameMembers(ownerSet, recordSet))
+            {
+                continue;
+            }
+            HandoverSplitDifference changed = new HandoverSplitDifference();
+            changed.Kind = HandoverSplitDifference.AssetRecipientsChanged;
+            changed.AssetId = assetId;
+            changed.OwnerBeneficiaryIds = new List<Guid>(ownerSet);
+            changed.RecordBeneficiaryIds = new List<Guid>(recordSet);
+            result.Add(changed);
+        }
+        return result;
+    }
+
+    private static Dictionary<Guid, List<Guid>> GroupRecipientsByAsset(List<(Guid BeneficiaryId, Guid AssetId)> lines)
+    {
+        Dictionary<Guid, List<Guid>> result = new Dictionary<Guid, List<Guid>>();
+        foreach ((Guid beneficiaryId, Guid assetId) in lines)
+        {
+            if (!result.ContainsKey(assetId))
+            {
+                result[assetId] = new List<Guid>();
+            }
+            if (!result[assetId].Contains(beneficiaryId))
+            {
+                result[assetId].Add(beneficiaryId);
+            }
+        }
+        return result;
+    }
+
+    private static List<Guid> DistinctRecipients(List<(Guid BeneficiaryId, Guid AssetId)> lines)
+    {
+        List<Guid> result = new List<Guid>();
+        foreach ((Guid beneficiaryId, Guid _) in lines)
+        {
+            if (!result.Contains(beneficiaryId))
+            {
+                result.Add(beneficiaryId);
+            }
+        }
+        return result;
+    }
+
+    private static bool SameMembers(List<Guid> first, List<Guid> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+        foreach (Guid item in first)
+        {
+            if (!second.Contains(item))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /// <summary>Lý do ghi vào biên bản khi hệ thống tự đóng vì mọi yêu cầu, hồ sơ đều bị luật sư từ chối.</summary>
     public const string AllRejectedReason = "Mọi yêu cầu bị từ chối";
 

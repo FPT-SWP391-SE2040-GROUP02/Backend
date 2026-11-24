@@ -43,6 +43,18 @@ public class HandoverRecord
     /// <summary>Luật sư đã tick xác nhận căn cứ pháp lý; null cùng lúc với LegalBasisConfirmedAt.</summary>
     public Guid? LegalBasisConfirmedByUserId { get; set; }
 
+    /// <summary>
+    /// Lúc luật sư tick xác nhận biên bản khác cách chia ban đầu của Chủ kho (thêm người nhận, bỏ người nhận, đổi người
+    /// nhận của tài sản) là theo di chúc hoặc quy định pháp luật. Null khi không khác hoặc đang lập; mở lại thì xóa.
+    /// </summary>
+    public DateTimeOffset? SplitDeviationConfirmedAt { get; set; }
+
+    /// <summary>Luật sư đã xác nhận khác biệt; null cùng lúc với SplitDeviationConfirmedAt.</summary>
+    public Guid? SplitDeviationConfirmedByUserId { get; set; }
+
+    /// <summary>Lần gần nhất luật sư nhắc Người thực thi ký biên bản; null khi chưa nhắc. Nhắc lại sau 24 giờ.</summary>
+    public DateTimeOffset? ExecutorReminderSentAt { get; set; }
+
     /// <summary>Lúc đủ chữ ký ba bên; null khi chưa xong.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
 

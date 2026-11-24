@@ -1290,7 +1290,7 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
-| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`, `VAULT_NOT_LOCKED` khi chưa chấp nhận giấy tờ nào nên kho chưa khóa) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true, "confirmSplitDeviation": true? }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 400 `VALIDATION_ERROR` (`errors.confirmSplitDeviation`) khi biên bản khác cách chia của Chủ kho mà chưa xác nhận; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`, `VAULT_NOT_LOCKED` khi chưa chấp nhận giấy tờ nào nên kho chưa khóa) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `PARTIALLY_DELIVERED` khi đã có người nhận được mở quyền tải) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/sign` | như trên | — | 200 `HandoverRecordResponse` | 404, 409 (`NOT_SIGNING_STEP` khi chưa chốt, `RECORD_COMPLETED`) |
 | POST | `/api/v1/executor/vaults/{vaultId}/handover-record/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` | 404, 409 (như trên) |
@@ -1311,6 +1311,17 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 - Chốt thành công thì lưu `legalBasisConfirmedAt` (thời điểm) và `legalBasisConfirmedByUserId` (luật sư). Mở lại thì cả hai về `null`; chốt lại phải tick lại.
 - `HandoverRecordResponse` có thêm `legalBasisConfirmedAt`, `legalBasisConfirmedByUserId`, `legalBasisConfirmedByName` (họ tên luật sư, để in dòng "Luật sư … xác nhận căn cứ pháp lý lúc …"; rỗng khi chưa xác nhận).
 - `HandoverRecordResponse.vaultLocked`: kho đã khóa chưa (xem mục 6.21e). Chưa khóa thì chưa chốt được (`VAULT_NOT_LOCKED`).
+
+**Biên bản khác cách chia ban đầu của Chủ kho.** Backend so dòng biên bản với các dòng gán tài sản của Chủ kho (bỏ tài sản đã bị xóa nội dung) và trả `splitDifferences` (luật sư và Người thực thi thấy; màn người nhận nhận `[]`). Mỗi phần tử `{ kind, beneficiaryId?, recipientName, assetId?, assetName, ownerRecipientNames, recordRecipientNames }`, không có số căn cước:
+
+| `kind` | Nghĩa |
+|---|---|
+| `RECIPIENT_ADDED` | Người nhận có trong biên bản nhưng Chủ kho không chia cho (thường do luật sư thêm) |
+| `RECIPIENT_REMOVED` | Người nhận Chủ kho đã chia nhưng không có trong biên bản (kể cả người bị từ chối giấy tờ) |
+| `ASSET_RECIPIENTS_CHANGED` | Tài sản đổi người nhận hoặc thêm, bớt người cùng nhận; `ownerRecipientNames` theo Chủ kho, `recordRecipientNames` theo biên bản (rỗng là không ai) |
+
+- Có khác biệt thì chốt phải kèm `confirmSplitDeviation = true` (luật sư xác nhận việc thay đổi theo di chúc hoặc quy định pháp luật và chịu trách nhiệm); không khác thì cờ này bị bỏ qua.
+- Chốt có khác biệt thì lưu `splitDeviationConfirmedAt` và `splitDeviationConfirmedByUserId`; response trả `splitDeviationConfirmedAt` và `splitDeviationConfirmedByName` (để in dòng xác nhận). Mở lại thì về `null`, chốt lại phải tick lại.
 
 ### 6.21e. Thời điểm khóa kho khi có yêu cầu nhận tài sản
 

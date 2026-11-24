@@ -834,6 +834,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("ExecutorReminderSentAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset?>("FinalizedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -854,6 +857,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<int>("RevisionNo")
                         .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("SplitDeviationConfirmedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("SplitDeviationConfirmedByUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Status")
                         .IsRequired()

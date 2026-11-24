@@ -653,6 +653,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
             throw HandoverAccess.NotAllowed("VAULT_NOT_LOCKED",
                 "Chưa chấp nhận giấy tờ nào nên kho chưa khóa. Xét giấy tờ trước khi chốt biên bản.");
         }
+        // Biên bản khác cách chia ban đầu của Chủ kho thì luật sư phải tick xác nhận căn cứ của việc thay đổi.
+        List<HandoverSplitDifference> differences = await FindSplitDifferencesAsync(record, vault.Id, ct);
+        bool deviationConfirmed = request.ConfirmSplitDeviation == true;
+        if (differences.Count > 0 && !deviationConfirmed)
+        {
+            throw ValidationErrors.For("confirmSplitDeviation",
+                "Biên bản khác cách chia ban đầu của Chủ kho. Vui lòng xác nhận căn cứ của việc thay đổi trước khi chốt.");
+        }
 
         // 2. Tạo hoặc cập nhật lượt cho từng người nhận; biên bản sang bước giao (luật sư và Người thực thi ký được ngay,
         //    mỗi người nhận ký khi danh tính của chính mình xong); kho sang giai đoạn bàn giao
@@ -662,6 +670,16 @@ public sealed class HandoverRecordService : IHandoverRecordService
         record.FinalizedAt = now;
         record.LegalBasisConfirmedAt = now;
         record.LegalBasisConfirmedByUserId = userId;
+        if (differences.Count > 0)
+        {
+            record.SplitDeviationConfirmedAt = now;
+            record.SplitDeviationConfirmedByUserId = userId;
+        }
+        else
+        {
+            record.SplitDeviationConfirmedAt = null;
+            record.SplitDeviationConfirmedByUserId = null;
+        }
         record.UpdatedAt = now;
         vault.Plan.Status = PlanStatus.HandoverInProgress;
         vault.Plan.UpdatedAt = now;
@@ -723,6 +741,9 @@ public sealed class HandoverRecordService : IHandoverRecordService
         record.FinalizedAt = null;
         record.LegalBasisConfirmedAt = null;
         record.LegalBasisConfirmedByUserId = null;
+        // Sửa lại biên bản thì phải xác nhận lại khác biệt so với cách chia của Chủ kho khi chốt.
+        record.SplitDeviationConfirmedAt = null;
+        record.SplitDeviationConfirmedByUserId = null;
         record.UpdatedAt = now;
         await SaveAsync(ct);
 
@@ -1677,6 +1698,11 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             response.LegalBasisConfirmedByName = await FindUserNameAsync(record.LegalBasisConfirmedByUserId.Value, ct);
         }
+        response.SplitDeviationConfirmedAt = record.SplitDeviationConfirmedAt;
+        if (record.SplitDeviationConfirmedByUserId != null)
+        {
+            response.SplitDeviationConfirmedByName = await FindUserNameAsync(record.SplitDeviationConfirmedByUserId.Value, ct);
+        }
         HandoverRecordSignature? verifierSignature = HandoverRecordRules.FindSignature(record, HandoverSignerRole.Verifier, null);
         if (verifierSignature != null)
         {
@@ -1773,7 +1799,72 @@ public sealed class HandoverRecordService : IHandoverRecordService
             }
             response.Recipients.Add(recipient);
         }
+
+        // Khác biệt so với cách chia của Chủ kho: người nhận chỉ xem phần của mình nên không nhận danh sách này.
+        if (onlyBeneficiaryId == null)
+        {
+            List<HandoverSplitDifference> differences = await FindSplitDifferencesAsync(record, vault.Id, ct);
+            foreach (HandoverSplitDifference difference in differences)
+            {
+                response.SplitDifferences.Add(ToDifferenceResponse(difference, beneficiariesById, assetsById));
+            }
+        }
         return response;
+    }
+
+    /// <summary>So dòng biên bản hiện tại với cách chia của Chủ kho (bỏ tài sản đã bị xóa nội dung).</summary>
+    private async Task<List<HandoverSplitDifference>> FindSplitDifferencesAsync(
+        HandoverRecord record, Guid vaultId, CancellationToken ct)
+    {
+        List<(Guid BeneficiaryId, Guid AssetId)> recordLines = new List<(Guid BeneficiaryId, Guid AssetId)>();
+        foreach (HandoverRecordLine line in record.Lines)
+        {
+            recordLines.Add((line.BeneficiaryId, line.AssetId));
+        }
+        List<(Guid BeneficiaryId, Guid AssetId)> ownerLines = new List<(Guid BeneficiaryId, Guid AssetId)>();
+        foreach (AssetAssignment assignment in await assignments.FindDetailedByVaultIdAsync(vaultId, ct))
+        {
+            if (assignment.Asset.ContentDeletedAt != null)
+            {
+                continue;
+            }
+            ownerLines.Add((assignment.BeneficiaryId, assignment.AssetId));
+        }
+        return HandoverRecordRules.FindSplitDifferences(recordLines, ownerLines);
+    }
+
+    private HandoverSplitDifferenceResponse ToDifferenceResponse(
+        HandoverSplitDifference difference, Dictionary<Guid, Beneficiary> beneficiariesById, Dictionary<Guid, Asset> assetsById)
+    {
+        HandoverSplitDifferenceResponse item = new HandoverSplitDifferenceResponse
+        {
+            Kind = difference.Kind,
+            BeneficiaryId = difference.BeneficiaryId,
+            AssetId = difference.AssetId
+        };
+        if (difference.BeneficiaryId != null && beneficiariesById.ContainsKey(difference.BeneficiaryId.Value))
+        {
+            item.RecipientName = ReadFullName(beneficiariesById[difference.BeneficiaryId.Value]);
+        }
+        if (difference.AssetId != null && assetsById.ContainsKey(difference.AssetId.Value))
+        {
+            item.AssetName = assetsById[difference.AssetId.Value].Name;
+        }
+        foreach (Guid beneficiaryId in difference.OwnerBeneficiaryIds)
+        {
+            if (beneficiariesById.ContainsKey(beneficiaryId))
+            {
+                item.OwnerRecipientNames.Add(ReadFullName(beneficiariesById[beneficiaryId]));
+            }
+        }
+        foreach (Guid beneficiaryId in difference.RecordBeneficiaryIds)
+        {
+            if (beneficiariesById.ContainsKey(beneficiaryId))
+            {
+                item.RecordRecipientNames.Add(ReadFullName(beneficiariesById[beneficiaryId]));
+            }
+        }
+        return item;
     }
 
     private string ReadFullName(Beneficiary beneficiary)
