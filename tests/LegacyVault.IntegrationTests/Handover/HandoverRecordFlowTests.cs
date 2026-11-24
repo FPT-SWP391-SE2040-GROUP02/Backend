@@ -292,7 +292,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Owner_CanCancelUntilSigned_ThenVaultUnlocksAndRecipientCanRequestAgain()
+    public async Task Owner_ViewsRequest_VerifierCancelUnlocksVaultAndRecipientCanRequestAgain()
     {
         Vault2 vault = await BuildVaultAsync();
         await HandoverRecordTestData.CreateVerifierClientAsync(factory);
@@ -301,15 +301,17 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         string ownerUrl = $"/api/v1/vaults/{vault.VaultId}/handover-request";
 
         JsonElement request = await ApiTestHelpers.ReadJsonAsync(await vault.Owner.GetAsync(ownerUrl));
-        Assert.True(request.GetProperty("canCancel").GetBoolean());
         Assert.Equal(ApiTestHelpers.BeneficiaryName(0), request.GetProperty("requesterNames")[0].GetString());
 
-        // Người khác không xem, không hủy được.
-        HttpResponseMessage byRecipient = await recipient.PostAsync(ownerUrl + "/cancel", null);
-        Assert.Equal(HttpStatusCode.NotFound, byRecipient.StatusCode);
+        // Người nhận không xem được yêu cầu của kho.
+        Assert.Equal(HttpStatusCode.NotFound, (await recipient.GetAsync(ownerUrl)).StatusCode);
 
-        HttpResponseMessage cancelled = await vault.Owner.PostAsync(ownerUrl + "/cancel", null);
-        Assert.Equal(HttpStatusCode.NoContent, cancelled.StatusCode);
+        // Luật sư hủy biên bản đang lập thì kho mở khóa.
+        Guid recordId = request.GetProperty("recordId").GetGuid();
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        HttpResponseMessage cancelled = await verifier.Client.PostAsJsonAsync(
+            HandoverRecordTestData.VerifierRecordUrl(recordId) + "/cancel", new { reason = "Mở nhầm hồ sơ" });
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await vault.Owner.GetAsync(ownerUrl)).StatusCode);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {

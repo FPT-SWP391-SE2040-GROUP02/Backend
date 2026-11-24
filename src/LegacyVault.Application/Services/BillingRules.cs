@@ -82,8 +82,7 @@ public static class BillingRules
         }
         PlanStatus planStatus = vault.Plan.Status;
         if (planStatus == PlanStatus.HandoverRequested
-            || planStatus == PlanStatus.HandoverInProgress
-            || planStatus == PlanStatus.Blocked)
+            || planStatus == PlanStatus.HandoverInProgress)
         {
             throw NotAllowed(PaymentNotAllowedReason.PlanLocked,
                 "Kho đang trong quy trình bàn giao nên chưa thể tạo đơn mới.");

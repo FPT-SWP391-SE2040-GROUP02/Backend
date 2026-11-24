@@ -10,9 +10,6 @@ public class MyHandoverReportResponse
     /// <summary>SUBMITTED, SUPPLEMENT_REQUESTED, ACCEPTED hoặc REJECTED.</summary>
     public string Status { get; set; } = string.Empty;
 
-    /// <summary>Chủ kho đã hủy biên bản sau khi hồ sơ được chấp nhận.</summary>
-    public bool CancelledByOwner { get; set; }
-
     /// <summary>Lý do luật sư hủy biên bản sau khi hồ sơ được chấp nhận; null khi không hủy.</summary>
     public string? CancelReason { get; set; }
 
@@ -48,12 +45,6 @@ public class VerifierHandoverReportResponse : MyHandoverReportResponse
 
     /// <summary>Họ tên người nộp khai khớp họ tên eKYC của Chủ kho.</summary>
     public bool NameMatches { get; set; }
-
-    /// <summary>Lần Chủ kho hoạt động gần nhất (đăng nhập hoặc gia hạn phiên); null khi không có kho.</summary>
-    public DateTimeOffset? OwnerLastActiveAt { get; set; }
-
-    /// <summary>Chủ kho còn hoạt động sau khi hồ sơ được nộp.</summary>
-    public bool ActiveAfterReport { get; set; }
 
     /// <summary>Lý do luật sư đã ghi khi chấp nhận hồ sơ có cảnh báo.</summary>
     public string? AcceptNote { get; set; }

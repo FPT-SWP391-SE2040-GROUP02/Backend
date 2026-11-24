@@ -292,7 +292,7 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Supplement_ThenOwnerCancels_RelativeSeesCancelled()
+    public async Task Supplement_ThenAccept_LocksVault()
     {
         NoRecipientVault vault = await BuildVaultAsync();
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
@@ -314,13 +314,7 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         Assert.Equal(3, body.GetProperty("files").GetArrayLength());
 
         Assert.Equal(HttpStatusCode.OK, (await ReviewAsync(verifier.Client, reportId, "ACCEPT")).StatusCode);
-        HttpResponseMessage cancelled = await vault.Owner.PostAsync($"/api/v1/vaults/{vault.VaultId}/handover-request/cancel", null);
-        Assert.True(cancelled.IsSuccessStatusCode);
-        Assert.Equal(PlanStatus.Active, await ReadPlanStatusAsync(vault.VaultId));
-        JsonElement mine = await ApiTestHelpers.ReadJsonAsync(await relative.GetAsync(ReportsUrl + "/mine"));
-        Assert.True(mine[0].GetProperty("cancelledByOwner").GetBoolean());
-        // Hủy rồi thì nộp lại được
-        await SubmitOkAsync(relative, OwnerCitizenId);
+        Assert.Equal(PlanStatus.HandoverRequested, await ReadPlanStatusAsync(vault.VaultId));
     }
 
     /// <summary>Form hợp lệ nhưng thay một trường chữ bằng giá trị khác.</summary>
@@ -370,16 +364,12 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         NoRecipientVault vault = await BuildVaultAsync();
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
         HttpClient relative = await NewUserAsync();
-        Guid reportId = (await SubmitOkAsync(relative, OwnerCitizenId)).GetProperty("id").GetGuid();
-        // Chủ kho đăng nhập sau khi hồ sơ được nộp.
-        await ApiTestHelpers.WithDbAsync(factory, async db =>
-        {
-            Guid ownerId = await db.Set<Vault>().Where(v => v.Id == vault.VaultId).Select(v => v.OwnerId).SingleAsync();
-            DateTimeOffset loginAt = DateTimeOffset.UtcNow.AddMinutes(5);
-            await db.Users.Where(u => u.Id == ownerId).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAt, loginAt));
-        });
+        // Họ tên khai không khớp họ tên eKYC của Chủ kho thì hồ sơ có cảnh báo.
+        HttpResponseMessage submitted = await relative.PostAsync(ReportsUrl, FormWith("deceasedFullName", "Trần Văn Khác"));
+        Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
+        Guid reportId = (await ApiTestHelpers.ReadJsonAsync(submitted)).GetProperty("id").GetGuid();
         JsonElement seen = (await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(VerifierReportsUrl)))[0];
-        Assert.True(seen.GetProperty("activeAfterReport").GetBoolean());
+        Assert.False(seen.GetProperty("nameMatches").GetBoolean());
 
         await ApiTestHelpers.AssertProblemAsync(
             await ReviewAsync(verifier.Client, reportId, "ACCEPT", "Đã kiểm"), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
@@ -392,7 +382,6 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         // Ghi chú nội bộ không lộ cho người nộp.
         JsonElement mine = (await ApiTestHelpers.ReadJsonAsync(await relative.GetAsync(ReportsUrl + "/mine")))[0];
         Assert.False(mine.TryGetProperty("acceptNote", out _));
-        Assert.False(mine.TryGetProperty("ownerLastActiveAt", out _));
     }
 
     [SqlFact]
@@ -417,7 +406,6 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         Assert.Equal(PlanStatus.Active, await ReadPlanStatusAsync(vault.VaultId));
         Assert.Equal(HttpStatusCode.Conflict, (await verifier.Client.PostAsJsonAsync(cancelUrl, new { reason = "lại" })).StatusCode);
         JsonElement mine = (await ApiTestHelpers.ReadJsonAsync(await relative.GetAsync(ReportsUrl + "/mine")))[0];
-        Assert.False(mine.GetProperty("cancelledByOwner").GetBoolean());
         Assert.Equal("Mở nhầm hồ sơ", mine.GetProperty("cancelReason").GetString());
 
         // Nộp lại được, nhưng tối đa ba hồ sơ cho cùng một người trong 30 ngày.

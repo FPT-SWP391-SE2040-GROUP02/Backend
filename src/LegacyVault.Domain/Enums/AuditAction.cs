@@ -54,10 +54,6 @@ public enum AuditAction
     UserStatusChanged = 21,
     /// <summary>Admin giao lại Verifier cho hồ sơ chứng tử.</summary>
     VerifierReassigned = 22,
-    /// <summary>Owner báo còn sống.</summary>
-    ObjectionReported = 23,
-    /// <summary>Verifier kết luận báo còn sống.</summary>
-    ObjectionConcluded = 24,
     /// <summary>Executor mở hồ sơ chứng tử.</summary>
     DeathCaseOpened = 25,
     /// <summary>Executor gửi một bản hồ sơ chứng tử, kể cả bản bổ sung.</summary>

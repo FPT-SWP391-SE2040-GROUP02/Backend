@@ -97,6 +97,4 @@ public class OwnerHandoverRequestResponse
     /// <summary>Họ tên những người nhận đã gửi yêu cầu.</summary>
     public List<string> RequesterNames { get; set; } = new List<string>();
 
-    /// <summary>Hủy được tới khi biên bản đủ chữ ký.</summary>
-    public bool CanCancel { get; set; }
 }

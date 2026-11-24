@@ -24,7 +24,6 @@ public sealed class ExecutorAssignRulesTests
     [InlineData(PlanStatus.HandoverRequested, false)]
     [InlineData(PlanStatus.HandoverInProgress, false)]
     [InlineData(PlanStatus.Closed, false)]
-    [InlineData(PlanStatus.Blocked, false)]
     public void PlanAllowsAssign_OnlyDraftOrRunning(PlanStatus plan, bool expected)
     {
         Assert.Equal(expected, ExecutorAssignRules.PlanAllowsAssign(VaultStatus.Open, plan));

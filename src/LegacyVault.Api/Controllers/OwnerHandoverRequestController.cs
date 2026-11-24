@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Chủ kho xem yêu cầu nhận tài sản đang mở của kho mình và hủy được tới khi biên bản đủ chữ ký.
+/// Chủ kho xem yêu cầu nhận tài sản đang mở của kho mình (chỉ đọc).
 /// </summary>
 /// <remarks>Kho không phải của mình luôn là 404.</remarks>
 [ApiController]
@@ -35,16 +35,5 @@ public sealed class OwnerHandoverRequestController : ControllerBase
             return NoContent();
         }
         return request;
-    }
-
-    /// <summary>Hủy yêu cầu: hủy biên bản và các lượt, kho mở khóa, kế hoạch về Đang hoạt động.</summary>
-    [HttpPost("cancel")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Cancel(Guid vaultId, CancellationToken ct)
-    {
-        await recordService.CancelByOwnerAsync(vaultId, ct);
-        return NoContent();
     }
 }

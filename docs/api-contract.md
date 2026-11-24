@@ -387,7 +387,7 @@ Tự nguyện bật cho tài khoản Admin. Chưa bật thì đăng nhập như 
 | Trường | Giá trị |
 |---|---|
 | `status` | `OPEN`, `CLOSED` |
-| `planStatus` | `DRAFT`, `ACTIVE`, `CHECKIN_OVERDUE`, `AWAITING_CHECK`, `DEATH_CASE_OPEN`, `HANDOVER_IN_PROGRESS`, `CLOSED`, `BLOCKED` |
+| `planStatus` | `DRAFT`, `ACTIVE`, `CHECKIN_OVERDUE`, `AWAITING_CHECK`, `DEATH_CASE_OPEN`, `HANDOVER_IN_PROGRESS`, `CLOSED` |
 | `serviceTier` | `FREE`, `XS`, `XS_MAX` |
 | `serviceStatus` | `FREE`, `PAID_ACTIVE`, `GRACE_READ_ONLY`, `EXPIRED_REVIEW` |
 
@@ -847,7 +847,7 @@ Owner xem nhật ký các thao tác trên kho của mình (SRS SEC-13, SEC-07). 
 
 ### 6.14. Owner báo còn sống (F2C): ĐÃ GỠ
 
-Chức năng "Tôi còn sống" (báo còn sống, selfie, Verifier kết luận, 72 giờ phản đối) đã bỏ theo bản chốt nghiệp vụ 05/11/2026. Đã gỡ các endpoint `POST /v1/vaults/{vaultId}/death-case/objection`, `.../objection/selfie`, `GET /v1/verifier/death-cases/{caseId}/objection`, `.../objection/selfie-image`, `POST .../objection/conclude`, job gửi thông báo cho Owner và mọi điều kiện chờ cửa sổ phản đối khi duyệt. Bảng `DeathCaseNotices` và các cột `DeathCases.ObjectionStartsAt/ObjectionEndsAt/NotifiedVersionNo` đã xóa bằng migration `RemoveUnusedFeatures`; response hồ sơ không còn `ownerNotice` và `objectionEndsAt`. Không còn sinh hold mới; Admin vẫn xem được hold cũ (6.15).
+Chức năng "Tôi còn sống" (báo còn sống, selfie, Verifier kết luận, 72 giờ phản đối) đã bỏ theo bản chốt nghiệp vụ 05/11/2026. Đã gỡ các endpoint `POST /v1/vaults/{vaultId}/death-case/objection`, `.../objection/selfie`, `GET /v1/verifier/death-cases/{caseId}/objection`, `.../objection/selfie-image`, `POST .../objection/conclude`, job gửi thông báo cho Owner và mọi điều kiện chờ cửa sổ phản đối khi duyệt. Bảng `DeathCaseNotices` và các cột `DeathCases.ObjectionStartsAt/ObjectionEndsAt/NotifiedVersionNo` đã xóa bằng migration `RemoveUnusedFeatures`; response hồ sơ không còn `ownerNotice` và `objectionEndsAt`. Không còn sinh hold mới; Admin vẫn xem được hold cũ (6.15). Trạng thái kế hoạch `BLOCKED` và hai hành động nhật ký `OBJECTION_REPORTED`, `OBJECTION_CONCLUDED` đã bỏ khỏi enum; migration `RemoveOwnerAliveLeftovers` đưa kế hoạch `BLOCKED` cũ về `ACTIVE` và xóa các dòng nhật ký hai hành động đó.
 
 ### 6.15. Hold và Admin (hold chỉ còn xem, không còn nơi nào đặt hold mới)
 
@@ -873,7 +873,7 @@ Khu vực quản trị (SRS §6.4, §9, ASSIGN-01/04/05, AC-40). Tất cả cầ
 - **Hold** (`Holds`): **Admin chỉ xem** (danh sách và chi tiết); không có API Admin đặt, hẹn xem lại hay gỡ hold bằng tay (đã bỏ theo quyết định của nhóm). Loại `ADMIN` (dữ liệu cũ, không còn tạo mới) và `DISPUTE` (chưa dùng) vẫn có trong enum. Loại `OWNER_ALIVE` đã bỏ vì không có mã nào tạo hold loại này (migration `RemoveEkycLeftovers` xóa hàng cũ nếu có). Mỗi hold có phạm vi, loại, lý do, người phụ trách, `reviewAt` (tối đa 7 ngày một lần), thời điểm gỡ. Hold đang hiệu lực chặn: duyệt chứng tử (`DEATH_CASE_NOT_ALLOWED` / `HOLD_ACTIVE`), nhận lượt và đồng ý (`HANDOVER_NOT_ALLOWED` / `HOLD_ACTIVE`), liệt kê và tải tài sản (`GRANT_NOT_ACTIVE` / `HOLD_ACTIVE`), kích hoạt kế hoạch (`missingRequirements` có `HOLD_ACTIVE`) và dọn dữ liệu (đồng hồ lưu tạm dừng). Đặt/gỡ hold ghi `plan.UpdatedAt` nên thao tác nhận chạy cùng lúc thua `RowVersion`.
 - **Sự cố (đã bỏ):** bảng `Incidents`, `IncidentEvents`, 7 endpoint `/v1/admin/incidents*`, job sự cố, quét vận hành và thư nhắc/báo sự cố đã xóa (migration `RemoveUnusedFeatures`). Các tình huống cũ (hồ sơ chưa có Verifier, thư mời bàn giao không gửi được, giao dịch thanh toán lệch, tài khoản bị khóa vì sai mật khẩu) chỉ còn ghi log cảnh báo, không có dữ liệu cá nhân hay nội dung giao dịch.
 - **Báo Executor khi quá hạn điểm danh (DMS-05):** đúng lần job điểm danh chuyển kế hoạch sang `AWAITING_CHECK` (một lần cho mỗi kỳ, sau khi đã lưu trạng thái), mỗi Executor nhận được việc của kho nhận một thư "chủ kho quá hạn điểm danh, cần bạn kiểm tra" (không có tên hay thông tin Owner), link về trang Executor của kho. Không có Executor thì chỉ ghi log cảnh báo. Gửi lỗi chỉ ghi log, không hoàn tác việc đổi trạng thái và không gửi lại.
-- **Nhật ký:** Admin xem toàn bộ nhật ký qua `GET /v1/admin/audit-logs` (chỉ đọc, không sửa/xóa). Hồ sơ chứng tử bị từ chối ghi `DEATH_CASE_REJECTED` (Verifier từ chối: `reason = VERIFIER_REJECTED`; đóng vì Verifier xác nhận Owner còn sống: `reason = ALIVE_CONFIRMED`, kèm dòng `OBJECTION_CONCLUDED`); lý do tự do không vào nhật ký vì Owner xem được (SEC-07). Mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier) và F2C (gồm đặt/gỡ hold báo còn sống) ghi `AuditLogs` trong cùng giao dịch.
+- **Nhật ký:** Admin xem toàn bộ nhật ký qua `GET /v1/admin/audit-logs` (chỉ đọc, không sửa/xóa). Hồ sơ chứng tử bị từ chối ghi `DEATH_CASE_REJECTED` (Verifier từ chối: `reason = VERIFIER_REJECTED`); lý do tự do không vào nhật ký vì Owner xem được (SEC-07). Mọi thao tác Admin (đổi vai trò/trạng thái, giao lại Verifier) ghi `AuditLogs` trong cùng giao dịch.
 - **Chưa làm:** hold phạm vi `DESIGNATION`/`CLAIM`/`GRANT` và `DISPUTE` (chờ LV-09); `DeathCaseAssignmentJob` chưa giao lại hồ sơ `SUSPENDED`; khóa tài khoản hiện thu hồi mọi refresh token (access token đã cấp còn sống tối đa `Jwt:AccessTokenMinutes`).
 
 ### 6.15a. Admin giao / đổi Người thực thi
@@ -895,8 +895,6 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
 | GET | `/api/v1/executor/death-cases/{caseId}/handover-progress` | Executor đang hiệu lực của kho | — | 200 `HandoverProgressResponse` | 401, 404 `DEATH_CASE_NOT_FOUND` |
 
 **Gửi lại lời mời (INVITE-02, INVITE-04):** chỉ cho lượt chưa ai nhận (`INVITED`, `INITIAL_RESPONSE_EXPIRED`). Mỗi lần gửi lại tạo token mới và link cũ hết dùng (DB chỉ giữ mã băm). Hạn phản hồi không đặt lại, trừ khi lời mời chưa từng được giao thì hạn 5 ngày tính từ lần giao thành công đầu tiên. Cách nhau tối thiểu 15 phút. Người nhận không có email thì `NO_EMAIL` (chưa có kênh khác). Gửi lỗi thì không đổi gì.
-
-**Hold và đồng hồ bàn giao (TIME-04):** kho có hold hoặc kế hoạch `BLOCKED` thì job không chuyển lượt/grant sang hết hạn; hoàn tất xác minh danh tính cũng bị chặn (`HOLD_ACTIVE`). Gỡ hold cuối cùng của kho thì hạn phản hồi, hạn quyết định và hạn grant đang chạy được dời đúng bằng thời gian đã dừng.
 
 ```json
 // HandoverProgressResponse
@@ -984,7 +982,7 @@ Mua, gia hạn và nâng hạng dịch vụ, giả lập trả tiền và nhận
 | `PAID_ACTIVE` còn hạn, gửi `renew = true` | `RENEWAL` (gia hạn sớm) | Bắt buộc `tier`, `years`; `tier` phải **giữ nguyên hạng hiện tại** (đổi hạng → 400 `VALIDATION_ERROR` theo `tier`: lên hạng dùng `UPGRADE`, hạ hạng chờ hết kỳ); không cần eKYC; kỳ mới nối tiếp hạn cũ |
 | Đã hết hạn: `PAID_ACTIVE` quá hạn, `GRACE_READ_ONLY` (ân hạn 180 ngày), `EXPIRED_REVIEW` (chờ rà soát) | `RENEWAL` (gia hạn muộn) | Như trên nhưng không cần `renew`, và **được chọn hạng tự do** (kỳ mới tính từ lúc trả); không cần eKYC; kỳ mới tính từ lúc thanh toán; không cộng bù ngày ân hạn |
 
-Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạch đang `DEATH_CASE_OPEN` / `HANDOVER_IN_PROGRESS` / `BLOCKED` (`PLAN_LOCKED`). Kiểm tra theo đúng thứ tự: kho (404) → kho đóng → kế hoạch khóa → loại đơn → eKYC → giá trị `tier` / `years` (400 `VALIDATION_ERROR`, theo tên trường).
+Không tạo được đơn khi kho `CLOSED` (`VAULT_CLOSED`) hoặc kế hoạch đang `DEATH_CASE_OPEN` / `HANDOVER_IN_PROGRESS` (`PLAN_LOCKED`). Kiểm tra theo đúng thứ tự: kho (404) → kho đóng → kế hoạch khóa → loại đơn → eKYC → giá trị `tier` / `years` (400 `VALIDATION_ERROR`, theo tên trường).
 
 ```json
 // BillingPlansResponse
@@ -1452,10 +1450,10 @@ Di chúc điện tử (nhánh feat/will-signature), chi tiết ở mục cuối 
 
 ## 10. Lưu và xóa dữ liệu sau bàn giao (SRS §7.7)
 
-Job `Retention:Enabled`, `Retention:PollSeconds` (mặc định 300 giây). Chỉ áp dụng cho kế hoạch `HANDOVER_IN_PROGRESS` / `CLOSED` / `BLOCKED`; kế hoạch đã về `ACTIVE` (Owner còn sống) và lượt `CANCELLED` **không bao giờ** bị dọn.
+Job `Retention:Enabled`, `Retention:PollSeconds` (mặc định 300 giây). Chỉ áp dụng cho kế hoạch `HANDOVER_IN_PROGRESS` / `CLOSED`; kế hoạch đã về `ACTIVE` và lượt `CANCELLED` **không bao giờ** bị dọn.
 
 - **Đồng hồ theo từng lượt** (cột mới trên `HandoverTurns`: `RetentionStatus`, `RetentionStartedAt`, `RetentionDeadline`, `RetentionRemainingSeconds`, `RetentionNoticeStage`, `DeletedAt`): `NOT_STARTED` → `RETENTION_ACTIVE` (30 ngày) → tới hạn thì dọn → `DELETED`.
-- **Lý do giữ** (tạm dừng, lưu phần còn lại, không đặt lại 30 ngày — RETENTION-04): còn trong 5 ngày phản hồi; claim đang xử lý (`IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`); grant còn hạn; Owner báo còn sống (kế hoạch `BLOCKED`). Mở link hay đăng nhập không phải lý do giữ (RETENTION-03).
+- **Lý do giữ** (tạm dừng, lưu phần còn lại, không đặt lại 30 ngày — RETENTION-04): còn trong 5 ngày phản hồi; claim đang xử lý (`IDENTITY_IN_PROGRESS`, `READY_TO_ACCEPT`); grant còn hạn. Mở link hay đăng nhập không phải lý do giữ (RETENTION-03).
 - **Dọn** (RETENTION-06): lượt còn mở thành `LAPSED`, link mời bị vô hiệu; nội dung tài sản chỉ bị xóa khi không còn lượt nào khác chưa dọn cùng tham chiếu (RETENTION-02). Xóa = hủy khóa trước (ghi đè DEK đã bọc bằng 0, `Assets.ContentDeletedAt`) trong giao dịch, xóa tệp sau (`Assets.StorageDeletedAt`, lỗi thì thử lại). Ghi `plan.UpdatedAt` nên nhận lượt/đồng ý chạy cùng lúc thua RowVersion. Tải nội dung đã dọn: `403 GRANT_NOT_ACTIVE` (`CONTENT_DELETED`). Dung lượng đã dùng không tính nội dung đã dọn.
 - **Đóng kho** (SETUP-18): kế hoạch `CLOSED` và mọi lượt đã dọn thì dọn nốt nội dung còn lại của kho (kể cả tài sản ngoài gói) và kho thành `CLOSED`.
 - **Thư mốc** cho người nhận (email trong hồ sơ người nhận): lúc bắt đầu, còn 7 ngày, còn 24 giờ; gửi lỗi thì vòng sau gửi lại.

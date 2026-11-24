@@ -54,7 +54,6 @@ public static class VaultRules
         }
         else if (vault.Plan.Status == PlanStatus.HandoverRequested
             || vault.Plan.Status == PlanStatus.HandoverInProgress
-            || vault.Plan.Status == PlanStatus.Blocked
             || vault.Plan.Status == PlanStatus.Closed)
         {
             reason = VaultNotEditableReason.PlanLocked;
@@ -75,7 +74,7 @@ public static class VaultRules
         {
             return VaultNotEditableReason.VaultClosed;
         }
-        if (vault.Plan.Status is PlanStatus.HandoverRequested or PlanStatus.HandoverInProgress or PlanStatus.Blocked or PlanStatus.Closed)
+        if (vault.Plan.Status is PlanStatus.HandoverRequested or PlanStatus.HandoverInProgress or PlanStatus.Closed)
         {
             return VaultNotEditableReason.PlanLocked;
         }

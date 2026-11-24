@@ -516,5 +516,4 @@ public sealed class CountingRecordService : IHandoverRecordService
     public Task<MyHandoverClaimResponse> SupplementClaimAsync(Guid claimId, string? note, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
     public Task<PreparedDownload> PrepareMyClaimFileAsync(Guid claimId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
     public Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
-    public Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct) => throw new NotSupportedException();
 }

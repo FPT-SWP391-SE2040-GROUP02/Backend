@@ -513,7 +513,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     {
         PlanStatus[] lockedStatuses = new PlanStatus[]
         {
-            PlanStatus.HandoverRequested, PlanStatus.HandoverInProgress, PlanStatus.Blocked,
+            PlanStatus.HandoverRequested, PlanStatus.HandoverInProgress,
         };
         foreach (PlanStatus status in lockedStatuses)
         {

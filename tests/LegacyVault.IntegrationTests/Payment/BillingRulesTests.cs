@@ -416,7 +416,6 @@ public sealed class BillingRulesTests
     [Theory]
     [InlineData(PlanStatus.HandoverRequested)]
     [InlineData(PlanStatus.HandoverInProgress)]
-    [InlineData(PlanStatus.Blocked)]
     public void Sec83_PlanLocked_RejectsPayment(PlanStatus status)
     {
         // Chuẩn bị

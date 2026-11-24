@@ -100,9 +100,6 @@ public interface IHandoverRecordService
     /// <summary>Yêu cầu nhận tài sản đang mở của kho; null khi không có.</summary>
     Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct);
 
-    /// <summary>Chủ kho hủy yêu cầu trước khi biên bản đủ chữ ký: hủy biên bản và lượt, kho mở khóa.</summary>
-    Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct);
-
     // Người nhận
 
     /// <summary>Biên bản nhìn từ một lượt của người nhận (chỉ thấy phần của mình).</summary>

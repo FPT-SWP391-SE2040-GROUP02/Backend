@@ -47,7 +47,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
     private readonly IHandoverRecordRepository records;
     private readonly IHandoverReportRepository reports;
     private readonly IHandoverRepository handover;
-    private readonly IRefreshTokenRepository refreshTokens;
     private readonly IBeneficiaryDataProtector beneficiaryProtector;
     private readonly IHandoverReportProtector protector;
     private readonly IAssetContentStore contentStore;
@@ -66,7 +65,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
         IHandoverRecordRepository records,
         IHandoverReportRepository reports,
         IHandoverRepository handover,
-        IRefreshTokenRepository refreshTokens,
         IBeneficiaryDataProtector beneficiaryProtector,
         IHandoverReportProtector protector,
         IAssetContentStore contentStore,
@@ -84,7 +82,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
         this.records = records;
         this.reports = reports;
         this.handover = handover;
-        this.refreshTokens = refreshTokens;
         this.beneficiaryProtector = beneficiaryProtector;
         this.protector = protector;
         this.contentStore = contentStore;
@@ -283,7 +280,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         report.UpdatedAt = now;
         await SaveAsync(ct);
 
-        // 4. Kho vừa khóa: báo Chủ kho (còn sống thì hủy được) và Người thực thi
+        // 4. Kho vừa khóa: báo Chủ kho và Người thực thi
         if (lockedVault != null)
         {
             await NotifyVaultLockedAsync(lockedVault, report, ct);
@@ -360,7 +357,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         HandoverReport report, bool confirmDocuments, string reason, CancellationToken ct)
     {
         VerifierHandoverReportResponse view = await BuildForVerifierAsync(report, ct);
-        bool hasWarning = view.VaultFound && (!view.NameMatches || view.ActiveAfterReport);
+        bool hasWarning = view.VaultFound && !view.NameMatches;
         if (!hasWarning)
         {
             return;
@@ -374,20 +371,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
         {
             throw ValidationErrors.For("reason", "Hồ sơ có cảnh báo. Vui lòng ghi lý do chấp nhận.");
         }
-    }
-
-    /// <summary>Lần hoạt động gần nhất: đăng nhập, hoặc gia hạn phiên đang còn hiệu lực.</summary>
-    private async Task<DateTimeOffset?> FindLastActiveAsync(User owner, CancellationToken ct)
-    {
-        DateTimeOffset? last = owner.LastLoginAt;
-        foreach (RefreshToken token in await refreshTokens.FindActiveByUserAsync(owner.Id, ct))
-        {
-            if (last == null || token.CreatedAt > last.Value)
-            {
-                last = token.CreatedAt;
-            }
-        }
-        return last;
     }
 
     /// <summary>Kho có Chủ kho đã eKYC mang đúng số căn cước này; null khi không có.</summary>
@@ -778,9 +761,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
                 if (owner != null)
                 {
                     response.OwnerName = owner.FullName;
-                    response.OwnerLastActiveAt = await FindLastActiveAsync(owner, ct);
-                    response.ActiveAfterReport = response.OwnerLastActiveAt != null
-                        && response.OwnerLastActiveAt.Value > report.CreatedAt;
                 }
                 OwnerIdentity? identity = await identities.FindByUserIdAsync(vault.OwnerId, ct);
                 if (identity != null)
@@ -810,7 +790,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
             HandoverRecord? record = await records.FindByIdAsync(report.RecordId.Value, ct);
             if (record != null && record.Status == HandoverRecordStatus.Cancelled)
             {
-                response.CancelledByOwner = record.CancelledByVerifierUserId == null;
                 response.CancelReason = record.CancelReason;
             }
         }

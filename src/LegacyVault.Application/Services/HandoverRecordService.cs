@@ -918,8 +918,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             RecordId = record.Id,
             Status = record.Status.ToApiString(),
-            RequestedAt = record.RequestedAt,
-            CanCancel = record.Status != HandoverRecordStatus.Completed
+            RequestedAt = record.RequestedAt
         };
         List<Beneficiary> beneficiaries = await records.ListVaultBeneficiariesAsync(vault.Id, ct);
         foreach (HandoverClaim claim in record.Claims.OrderBy(c => c.CreatedAt))
@@ -941,25 +940,6 @@ public sealed class HandoverRecordService : IHandoverRecordService
             }
         }
         return response;
-    }
-
-    public async Task CancelByOwnerAsync(Guid vaultId, CancellationToken ct)
-    {
-        // 1. Chủ kho của kho; phải đang có yêu cầu và biên bản chưa đủ chữ ký
-        Vault vault = await RequireOwnerVaultAsync(vaultId, ct);
-        HandoverRecord? record = await records.FindByVaultIdAsync(vault.Id, ct);
-        if (record == null)
-        {
-            throw HandoverAccess.NotAllowed("NO_REQUEST", "Kho không có yêu cầu nhận tài sản nào đang mở.");
-        }
-        if (record.Status == HandoverRecordStatus.Completed)
-        {
-            throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Biên bản đã đủ chữ ký nên không hủy được nữa.");
-        }
-
-        // 2. Hủy biên bản và mọi lượt đang chạy; kho mở khóa, kế hoạch về Đang hoạt động
-        await CancelRecordAsync(record, vault, timeProvider.GetUtcNow(), ct);
-        await SaveAsync(ct);
     }
 
     public async Task<HandoverRecordResponse> CancelByVerifierAsync(

@@ -175,21 +175,4 @@ public sealed class HandoverJobTests
         Assert.Equal(ready.Id, Assert.Single(decisionIds));
         Assert.Equal(grant.Id, Assert.Single(grantIds));
     }
-
-    // H1, TIME-04, TIME-09: hold hoặc kế hoạch Blocked thì đồng hồ tạm dừng, job không cho hết hạn.
-
-    [Fact]
-    public async Task DecisionExpiry_BlockedPlanWithoutHoldRecord_DoesNothing()
-    {
-        HandoverTurn turn = AddTurn(HandoverTurnStatus.ReadyToAccept, "t1");
-        turn.DecisionDeadline = Now.AddDays(7);
-        data.Plan.Status = PlanStatus.Blocked;
-        time.Now = Now.AddDays(9);
-
-        await job.ProcessDecisionExpiryAsync(turn.Id, CancellationToken.None);
-
-        Assert.Equal(HandoverTurnStatus.ReadyToAccept, turn.Status);
-        Assert.Equal(PlanStatus.Blocked, data.Plan.Status);
-    }
-
 }
