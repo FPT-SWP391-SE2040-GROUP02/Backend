@@ -30,9 +30,6 @@ public class VaultEntitlement
     /// <summary>Suất người nhận kèm theo hạng.</summary>
     public int IncludedBeneficiarySlots { get; set; }
 
-    /// <summary>Suất mua thêm (add-on).</summary>
-    public int ExtraBeneficiarySlots { get; set; }
-
     /// <summary>Hết kỳ dịch vụ trả phí; null với Free.</summary>
     public DateTimeOffset? ServiceExpiresAt { get; set; }
 

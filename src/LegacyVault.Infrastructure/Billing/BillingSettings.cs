@@ -12,7 +12,7 @@ public class BillingSettings
 
     public BillingSePaySection SePay { get; set; } = new BillingSePaySection();
 
-    /// <summary>Bảng giá bán (SRS §8.1, ADDON-01). Không phải secret nên đặt trong appsettings.json.</summary>
+    /// <summary>Bảng giá bán (SRS §8.1). Không phải secret nên đặt trong appsettings.json.</summary>
     public BillingPricingSection Pricing { get; set; } = new BillingPricingSection();
 
     /// <summary>
@@ -46,13 +46,7 @@ public class BillingPricingSection
     /// <summary>Phiên bản chính sách giá, ghi vào đơn lúc tạo (PAY-11). Đổi giá thì đổi giá trị này.</summary>
     public string PolicyVersion { get; set; } = string.Empty;
 
-    /// <summary>Giá một suất người nhận thêm cho một năm, đơn vị đồng (ADDON-01).</summary>
-    public long SlotPricePerYear { get; set; }
-
-    /// <summary>Số suất thêm tối đa mỗi đơn do Admin đặt; null = mức gốc trong BillingPrices.</summary>
-    public int? MaxExtraSlotsPerOrder { get; set; }
-
-    /// <summary>Tổng suất người nhận tối đa của một kho do Admin đặt; null = mức gốc trong BillingPrices.</summary>
+    /// <summary>Số suất người nhận kèm tối đa của một gói do Admin đặt; null = mức gốc trong BillingPrices.</summary>
     public int? MaxTotalSlots { get; set; }
 
     /// <summary>Số phút đơn chờ thanh toán do Admin đặt; null = mức gốc trong BillingPrices.</summary>

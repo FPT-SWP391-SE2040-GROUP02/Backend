@@ -82,12 +82,10 @@ public sealed class SystemSettingService : ISystemSettingService
                     throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
                         $"Giá của '{key}' phải là số nguyên dương.");
                 }
-                bool isSlotPrice = key == "Plans.Addon.SlotPricePerYear";
-                long maxPrice = isSlotPrice ? BillingPrices.MaxSlotPricePerYear : BillingPrices.MaxTierPrice;
-                if (price > maxPrice)
+                if (price > BillingPrices.MaxTierPrice)
                 {
                     throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
-                        $"Giá của '{key}' tối đa {BillingPrices.FormatMoney(maxPrice)}đ " + (isSlotPrice ? "mỗi năm." : "mỗi kỳ."));
+                        $"Giá của '{key}' tối đa {BillingPrices.FormatMoney(BillingPrices.MaxTierPrice)}đ mỗi kỳ.");
                 }
                 int? priceYears = PlanPriceRules.PriceKeyYears(key);
                 if (priceYears != null && (priceYears.Value < 1 || priceYears.Value > BillingPriceSettings.MaxSaleYears))
@@ -106,18 +104,21 @@ public sealed class SystemSettingService : ISystemSettingService
             }
             else if (PlanPriceRules.IsOrderRuleKey(key))
             {
-                bool isSlots = key == PlanPriceRules.MaxSlotsPerOrderKey;
                 bool isTotal = key == PlanPriceRules.MaxTotalSlotsKey;
-                int maxValue = isTotal ? BillingPrices.MaxTotalSlotsLimit : (isSlots ? 100 : 1440);
+                int maxValue = 1440;
+                if (isTotal)
+                {
+                    maxValue = BillingPrices.MaxTotalSlotsLimit;
+                }
                 int count;
                 if (!int.TryParse(text, out count) || count < 1 || count > maxValue)
                 {
-                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError,
-                        isTotal
-                            ? $"Tổng số người nhận tối đa mỗi tài khoản phải là số nguyên từ 1 đến {BillingPrices.MaxTotalSlotsLimit}."
-                            : isSlots
-                                ? "Số suất thêm tối đa mỗi đơn phải là số nguyên từ 1 đến 100."
-                                : "Hạn đơn chờ thanh toán phải là số phút nguyên từ 1 đến 1440.");
+                    string orderRuleMessage = "Hạn đơn chờ thanh toán phải là số phút nguyên từ 1 đến 1440.";
+                    if (isTotal)
+                    {
+                        orderRuleMessage = $"Số người nhận kèm tối đa mỗi gói phải là số nguyên từ 1 đến {BillingPrices.MaxTotalSlotsLimit}.";
+                    }
+                    throw new AppException(AppErrorType.Validation, ErrorCode.ValidationError, orderRuleMessage);
                 }
             }
             else if (PlanPriceRules.IsLimitKey(key))
@@ -523,10 +524,8 @@ public sealed class SystemSettingService : ISystemSettingService
             new() { Key = "Plans.XsMax.QuotaMb", Value = "500", DataType = "NUMBER", Category = "Plans", Description = "Dung lượng lưu trữ gói XS Max (MiB)" },
             new() { Key = "Plans.XsMax.Slots", Value = "5", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm theo gói XS Max" },
 
-            new() { Key = "Plans.Addon.SlotPricePerYear", Value = "49000", DataType = "NUMBER", Category = "Plans", Description = "Giá một suất người nhận thêm / năm (VNĐ)" },
-            new() { Key = "Plans.Addon.MaxSlotsPerOrder", Value = "20", DataType = "NUMBER", Category = "Plans", Description = "Số suất người nhận thêm tối đa mỗi đơn hàng" },
-            new() { Key = "Plans.Addon.MaxTotalSlots", Value = "50", DataType = "NUMBER", Category = "Plans", Description = "Tổng số người nhận tối đa của một tài khoản (suất kèm gói + suất mua thêm)" },
-            new() { Key = "Plans.Addon.OrderTimeoutMinutes", Value = "15", DataType = "NUMBER", Category = "Plans", Description = "Thời hạn đơn hàng chờ thanh toán SePay (phút)" },
+            new() { Key = "Plans.MaxTotalSlots", Value = "50", DataType = "NUMBER", Category = "Plans", Description = "Số người nhận kèm tối đa của một gói" },
+            new() { Key = "Plans.OrderTimeoutMinutes", Value = "15", DataType = "NUMBER", Category = "Plans", Description = "Thời hạn đơn hàng chờ thanh toán SePay (phút)" },
 
             // Thông tin công ty hiện trong mọi thư gửi người nhận (cảnh báo lừa đảo kèm số liên lạc để họ tự xác minh)
             new() { Key = "Company.Name", Value = "LegacyVault", DataType = "STRING", Category = "Company", Description = "Tên công ty hiện trong thư gửi người nhận" },

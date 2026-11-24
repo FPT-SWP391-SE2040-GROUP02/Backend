@@ -220,13 +220,13 @@ public static class ApiTestHelpers
         });
     }
 
-    /// <summary>Đặt số suất người nhận mua thêm bằng cách sửa thẳng VaultEntitlements (chưa có module thanh toán).</summary>
-    public static async Task SetExtraBeneficiarySlotsAsync(ApiFactory factory, Guid vaultId, int extraSlots)
+    /// <summary>Đặt số suất người nhận kèm theo gói bằng cách sửa thẳng VaultEntitlements.</summary>
+    public static async Task SetIncludedBeneficiarySlotsAsync(ApiFactory factory, Guid vaultId, int includedSlots)
     {
         await WithDbAsync(factory, async db =>
         {
             await db.VaultEntitlements.Where(e => e.VaultId == vaultId)
-                .ExecuteUpdateAsync(s => s.SetProperty(e => e.ExtraBeneficiarySlots, extraSlots));
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.IncludedBeneficiarySlots, includedSlots));
         });
     }
 

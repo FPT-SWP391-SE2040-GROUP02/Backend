@@ -12,7 +12,6 @@ public sealed class BillingPlanRankingTests
     {
         BillingSettings settings = new BillingSettings();
         settings.Pricing.PolicyVersion = "TEST";
-        settings.Pricing.SlotPricePerYear = 49000;
         settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 199000, ThreeYears = 499000, FiveYears = 799000 };
         settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 399000, ThreeYears = 999000, FiveYears = 1599000 };
         BillingPlanSection gold = new BillingPlanSection
@@ -61,7 +60,6 @@ public sealed class BillingPlanRankingTests
         // 3 năm và 5 năm của gói Gold tính theo bội số nên chỉ thử kỳ 1 năm ở mức trần với giá bội nhỏ hơn
         BillingSettings settings = new BillingSettings();
         settings.Pricing.PolicyVersion = "TEST";
-        settings.Pricing.SlotPricePerYear = BillingPrices.MaxSlotPricePerYear;
         settings.Pricing.Xs = new BillingTierPricesSection
         {
             OneYear = BillingPrices.MaxTierPrice,
@@ -76,23 +74,10 @@ public sealed class BillingPlanRankingTests
     }
 
     [Fact]
-    public void SlotPriceAboveCap_IsRejected()
-    {
-        BillingSettings settings = new BillingSettings();
-        settings.Pricing.PolicyVersion = "TEST";
-        settings.Pricing.SlotPricePerYear = BillingPrices.MaxSlotPricePerYear + 1;
-        settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
-        settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
-
-        Assert.Throws<InvalidOperationException>(() => new BillingPriceSettings(Options.Create(settings)));
-    }
-
-    [Fact]
     public void IncludedSlotsAboveTotalCap_IsReportedForSaving_ButDoesNotBreakPricing()
     {
         BillingSettings settings = new BillingSettings();
         settings.Pricing.PolicyVersion = "TEST";
-        settings.Pricing.SlotPricePerYear = 49000;
         settings.Pricing.MaxTotalSlots = 3;
         settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 1, ThreeYears = 1, FiveYears = 1 };
         settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 2, ThreeYears = 2, FiveYears = 2 };
@@ -117,7 +102,6 @@ public sealed class BillingPlanRankingTests
     {
         BillingSettings settings = new BillingSettings();
         settings.Pricing.PolicyVersion = "TEST";
-        settings.Pricing.SlotPricePerYear = 49000;
         settings.Pricing.Xs = new BillingTierPricesSection { OneYear = 10000, ThreeYears = 499000, FiveYears = 799000, Hidden = true };
         settings.Pricing.XsMax = new BillingTierPricesSection { OneYear = 50000, ThreeYears = 999000, FiveYears = 1599000 };
 

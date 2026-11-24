@@ -66,13 +66,9 @@ public sealed class PaymentGranter
         {
             BillingRules.ApplyRenewal(vault.Entitlement, order, paidAt);
         }
-        else if (order.Kind == PaymentOrderKind.Upgrade)
-        {
-            BillingRules.ApplyUpgrade(vault.Entitlement, order, paidAt);
-        }
         else
         {
-            BillingRules.ApplyAddon(vault.Entitlement, order, paidAt);
+            BillingRules.ApplyUpgrade(vault.Entitlement, order, paidAt);
         }
 
         order.Status = PaymentOrderStatus.Paid;

@@ -23,33 +23,27 @@ public class PaymentOrder
 
     public PaymentOrderKind Kind { get; set; }
 
-    /// <summary>Hạng được mua; với ADDON là hạng hiện tại của kho.</summary>
+    /// <summary>Hạng được mua.</summary>
     public ServiceTier Tier { get; set; }
 
     /// <summary>Mã gói được mua; null với đơn cũ (suy ra từ <see cref="Tier"/> qua <see cref="PlanCodes.Resolve"/>).</summary>
     public string? PlanCode { get; set; }
 
-    /// <summary>Số năm của kỳ bán do Admin cấu hình (1 đến 10); null với ADDON.</summary>
+    /// <summary>Số năm của kỳ bán do Admin cấu hình (1 đến 10); null với đơn nâng hạng.</summary>
     public int? Years { get; set; }
 
-    /// <summary>Số suất người nhận mua thêm (q).</summary>
-    public int ExtraSlots { get; set; }
-
-    /// <summary>Tiền hạng dịch vụ; 0 với ADDON.</summary>
+    /// <summary>Tiền hạng dịch vụ của đơn.</summary>
     public long TierAmount { get; set; }
-
-    /// <summary>Tiền suất mua thêm.</summary>
-    public long SlotAmount { get; set; }
 
     public long TotalAmount { get; set; }
 
-    /// <summary>Dung lượng chốt theo bảng giá (ADDON: dung lượng hiện tại).</summary>
+    /// <summary>Dung lượng chốt theo bảng giá.</summary>
     public long StorageQuotaBytes { get; set; }
 
     /// <summary>Suất kèm theo hạng, chốt theo bảng giá.</summary>
     public int IncludedBeneficiarySlots { get; set; }
 
-    /// <summary>ADDON: hạn kỳ dịch vụ lúc tạo đơn, để lúc trả phát hiện kỳ đã đổi; PURCHASE: null.</summary>
+    /// <summary>Nâng hạng và gia hạn sớm: hạn kỳ dịch vụ lúc tạo đơn, để lúc trả phát hiện kỳ đã đổi; PURCHASE: null.</summary>
     public DateTimeOffset? BaseServiceExpiresAt { get; set; }
 
     /// <summary>Phiên bản bảng giá đã dùng, ví dụ "2026-10".</summary>

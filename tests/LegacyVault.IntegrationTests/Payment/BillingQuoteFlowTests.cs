@@ -110,8 +110,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         Assert.Equal("XS_MAX", tiers[1].GetProperty("tier").GetString());
         Assert.Equal(1599000, tiers[1].GetProperty("prices")[2].GetProperty("amount").GetInt64());
         Assert.Equal(1825, tiers[1].GetProperty("prices")[2].GetProperty("serviceDays").GetInt32());
-        Assert.Equal(49000, plans.GetProperty("extraSlot").GetProperty("pricePerYear").GetInt64());
-        Assert.Equal(20, plans.GetProperty("extraSlot").GetProperty("maxPerOrder").GetInt32());
+        Assert.Equal(50, plans.GetProperty("maxTotalSlots").GetInt32());
     }
 
     [SqlFact]
@@ -122,7 +121,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage plans = await anonymous.GetAsync("/api/v1/billing/plans");
-        HttpResponseMessage quote = await QuoteAsync(anonymous, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage quote = await QuoteAsync(anonymous, new { tier = "XS", years = 1 });
 
         // Kiểm tra: bảng giá là thông tin công khai cho trang giới thiệu; báo giá và đơn vẫn cần đăng nhập
         Assert.Equal(HttpStatusCode.OK, plans.StatusCode);
@@ -130,14 +129,14 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Ac94_Quote_PurchaseXsThreeYearsOneSlot_Is646000_AndWritesNothing()
+    public async Task Ac94_Quote_PurchaseXsThreeYears_Is499000_AndWritesNothing()
     {
         // Chuẩn bị
         (HttpClient client, Guid vaultId, Guid ownerId) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
 
         // Hành động: body cố ý kèm số tiền và loại đơn giả, backend phải bỏ qua (PAY-11)
         HttpResponseMessage response = await QuoteAsync(client,
-            new { tier = "XS", years = 3, extraSlots = 1, totalAmount = 1, kind = "ADDON", status = "PAID" });
+            new { tier = "XS", years = 3, totalAmount = 1, kind = "UPGRADE", status = "PAID" });
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -146,10 +145,9 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         Assert.Equal("XS", quote.GetProperty("tier").GetString());
         Assert.Equal(3, quote.GetProperty("years").GetInt32());
         Assert.Equal(499000, quote.GetProperty("tierAmount").GetInt64());
-        Assert.Equal(147000, quote.GetProperty("slotAmount").GetInt64());
-        Assert.Equal(646000, quote.GetProperty("totalAmount").GetInt64());
+        Assert.Equal(499000, quote.GetProperty("totalAmount").GetInt64());
         Assert.Equal("VND", quote.GetProperty("currency").GetString());
-        Assert.Equal(3, quote.GetProperty("beneficiarySlots").GetInt32());
+        Assert.Equal(2, quote.GetProperty("includedBeneficiarySlots").GetInt32());
         Assert.Equal(1095, quote.GetProperty("serviceDays").GetInt32());
         Assert.Equal(200 * 1048576L, quote.GetProperty("storageQuotaBytes").GetInt64());
         Assert.Equal("ON_PAYMENT", quote.GetProperty("serviceStartsAt").GetString());
@@ -165,13 +163,13 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS_MAX", years = 5, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS_MAX", years = 5 });
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         JsonElement quote = await ApiTestHelpers.ReadJsonAsync(response);
         Assert.Equal(1599000, quote.GetProperty("totalAmount").GetInt64());
-        Assert.Equal(5, quote.GetProperty("beneficiarySlots").GetInt32());
+        Assert.Equal(5, quote.GetProperty("includedBeneficiarySlots").GetInt32());
         Assert.Equal(1825, quote.GetProperty("serviceDays").GetInt32());
     }
 
@@ -221,8 +219,8 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
-        HttpResponseMessage sevenYears = await QuoteAsync(client, new { tier = "XS", years = 7, extraSlots = 0 });
-        HttpResponseMessage fiveYears = await QuoteAsync(client, new { tier = "XS", years = 5, extraSlots = 0 });
+        HttpResponseMessage sevenYears = await QuoteAsync(client, new { tier = "XS", years = 7 });
+        HttpResponseMessage fiveYears = await QuoteAsync(client, new { tier = "XS", years = 5 });
 
         // Kiểm tra: bảng giá chỉ có 1, 3, 7 năm; báo giá 7 năm đúng tiền; kỳ 5 năm bị từ chối
         JsonElement prices = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers")[0].GetProperty("prices");
@@ -247,7 +245,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
-        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0 });
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS_MAX", years = 1 });
 
         // Kiểm tra: bảng giá và báo giá lấy hạn mức mới; hạng XS không bị ảnh hưởng
         JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers");
@@ -307,7 +305,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
 
         // Hành động 1: bảng giá và báo giá mua mới gói GOLD (kho còn Free)
         HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
-        HttpResponseMessage purchase = await QuoteAsync(client, new { tier = "GOLD", years = 3, extraSlots = 0 });
+        HttpResponseMessage purchase = await QuoteAsync(client, new { tier = "GOLD", years = 3 });
 
         // Kiểm tra 1: GOLD đứng cuối bảng giá với tên và giá do Admin đặt; báo giá đúng tiền, dung lượng, suất
         JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers");
@@ -324,7 +322,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
 
         // Hành động 2: kho thành XS còn hạn rồi báo giá nâng lên GOLD
         await MakePaidActiveAsync(vaultId, daysLeft: 180);
-        HttpResponseMessage upgrade = await QuoteAsync(client, new { tier = "GOLD", extraSlots = 0 });
+        HttpResponseMessage upgrade = await QuoteAsync(client, new { tier = "GOLD" });
 
         // Kiểm tra 2: là nâng hạng lên GOLD, hạn mức theo GOLD, giá là phần chênh (nhỏ hơn chênh cả kỳ)
         JsonElement upgraded = await ApiTestHelpers.ReadJsonAsync(upgrade);
@@ -343,7 +341,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
 
         // Hành động
-        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "GOLD", years = 1, extraSlots = 0 });
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "GOLD", years = 1 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(quote, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -357,7 +355,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
 
         // Hành động
-        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "PLATINUM", years = 1, extraSlots = 0 });
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "PLATINUM", years = 1 });
 
         // Kiểm tra: mã gói không tồn tại là lỗi dữ liệu, không phải 500
         Assert.Equal(HttpStatusCode.BadRequest, quote.StatusCode);
@@ -393,7 +391,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage plans = await client.GetAsync("/api/v1/billing/plans");
-        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS", years = 1 });
 
         // Kiểm tra: hạng đã xóa vẫn có trong danh sách nhưng kèm hidden và không mua được
         JsonElement tiers = (await ApiTestHelpers.ReadJsonAsync(plans)).GetProperty("tiers");
@@ -428,9 +426,9 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
 
         // Hành động
-        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
-        HttpResponseMessage order = await client.PostAsJsonAsync("/api/v1/billing/orders", new { tier = "XS", years = 1, extraSlots = 0 });
-        HttpResponseMessage otherTier = await QuoteAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0 });
+        HttpResponseMessage quote = await QuoteAsync(client, new { tier = "XS", years = 1 });
+        HttpResponseMessage order = await client.PostAsJsonAsync("/api/v1/billing/orders", new { tier = "XS", years = 1 });
+        HttpResponseMessage otherTier = await QuoteAsync(client, new { tier = "XS_MAX", years = 1 });
 
         // Kiểm tra: hạng bị tắt bị chặn ở cả báo giá lẫn tạo đơn, không tạo đơn; hạng còn bán vẫn báo giá được
         JsonElement quoteProblem = await ApiTestHelpers.AssertProblemAsync(quote, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -442,7 +440,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Sec83_Quote_PaidVaultTierTurnedOff_AddonAndRenewalBlocked()
+    public async Task Sec83_Quote_PaidVaultTierTurnedOff_RenewalBlocked()
     {
         // Chuẩn bị: kho đang dùng XS còn hạn, rồi Admin tắt mở bán XS
         (HttpClient client, Guid vaultId, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
@@ -450,12 +448,9 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         await SetTierOnSaleOffAsync("Plans.Xs.On");
 
         // Hành động
-        HttpResponseMessage addon = await QuoteAsync(client, new { extraSlots = 1 });
-        HttpResponseMessage renewal = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0, renew = true });
+        HttpResponseMessage renewal = await QuoteAsync(client, new { tier = "XS", years = 1, renew = true });
 
-        // Kiểm tra: cả mua thêm suất lẫn gia hạn đều bị chặn, kể cả người đang dùng
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(addon, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
-        Assert.Equal("TIER_NOT_ON_SALE", problem.GetProperty("reason").GetString());
+        // Kiểm tra: gia hạn bị chặn, kể cả người đang dùng
         JsonElement renewalProblem = await ApiTestHelpers.AssertProblemAsync(renewal, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
         Assert.Equal("TIER_NOT_ON_SALE", renewalProblem.GetProperty("reason").GetString());
     }
@@ -467,7 +462,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: null);
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -481,7 +476,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 91);
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -506,7 +501,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         });
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -527,7 +522,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
             await ApiTestHelpers.SetPlanStatusAsync(factory, vaultId, status);
 
             // Hành động
-            HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+            HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1 });
 
             // Kiểm tra
             JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -547,7 +542,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         });
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -563,7 +558,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         await ApiTestHelpers.SetEntitlementStatusAsync(factory, vaultId, EntitlementStatus.GraceReadOnly);
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1 });
 
         // Kiểm tra: ân hạn thì gia hạn, kỳ mới tính từ lúc thanh toán
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -581,48 +576,26 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         await MakePaidActiveAsync(vaultId, daysLeft: -1);
 
         // Hành động: hết hạn nên chỉ còn gia hạn; không gửi hạng và số năm
-        HttpResponseMessage response = await QuoteAsync(client, new { extraSlots = 1 });
+        HttpResponseMessage response = await QuoteAsync(client, new { });
 
         // Kiểm tra: thiếu hạng là lỗi dữ liệu, không còn bị từ chối vì "chưa hỗ trợ gia hạn"
         await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
     }
 
     [SqlFact]
-    public async Task Ac95_Quote_AddonWith180DaysLeft_Is24165_IgnoresTierAndYears()
+    public async Task Quote_PaidVaultInTermWithoutRenewOrUpgrade_NothingToBuy()
     {
-        // Chuẩn bị: XS còn 180 ngày; không cần eKYC cho ADDON
+        // Chuẩn bị: XS còn 180 ngày; không cần eKYC
         (HttpClient client, Guid vaultId, _) = await CreateFreeVaultAsync(ekycDaysAgo: null);
         await MakePaidActiveAsync(vaultId, daysLeft: 180);
 
-        // Hành động: tier và years gửi vào bị bỏ qua
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS_MAX", years = 5, extraSlots = 1 });
+        // Hành động: chọn lại đúng gói đang dùng, không gia hạn, không nâng hạng
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 5 });
 
-        // Kiểm tra
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        JsonElement quote = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.Equal("ADDON", quote.GetProperty("kind").GetString());
-        Assert.Equal("XS", quote.GetProperty("tier").GetString());
-        Assert.Equal(JsonValueKind.Null, quote.GetProperty("years").ValueKind);
-        Assert.Equal(0, quote.GetProperty("tierAmount").GetInt64());
-        Assert.Equal(24165, quote.GetProperty("totalAmount").GetInt64());
-        Assert.Equal(3, quote.GetProperty("beneficiarySlots").GetInt32());
-        Assert.Equal(JsonValueKind.Null, quote.GetProperty("serviceStartsAt").ValueKind);
-        Assert.NotEqual(JsonValueKind.Null, quote.GetProperty("serviceExpiresAt").ValueKind);
+        // Kiểm tra: không có gì để mua, không ghi đơn
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
+        Assert.Equal("NOTHING_TO_BUY", problem.GetProperty("reason").GetString());
         Assert.Equal(0, await CountPaymentOrdersAsync());
-    }
-
-    [SqlFact]
-    public async Task Addon01_Quote_PurchaseExtraSlotsTwentyOne_Returns400()
-    {
-        // Chuẩn bị
-        (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
-
-        // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 21 });
-
-        // Kiểm tra
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        Assert.True(problem.GetProperty("errors").TryGetProperty("extraSlots", out _));
     }
 
     [SqlFact]
@@ -632,7 +605,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 2, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 2 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
@@ -646,26 +619,11 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         (HttpClient client, _, _) = await CreateFreeVaultAsync(ekycDaysAgo: 1);
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "FREE", years = 1, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "FREE", years = 1 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
         Assert.True(problem.GetProperty("errors").TryGetProperty("tier", out _));
-    }
-
-    [SqlFact]
-    public async Task Addon01_Quote_AddonWithZeroSlots_Returns400()
-    {
-        // Chuẩn bị
-        (HttpClient client, Guid vaultId, _) = await CreateFreeVaultAsync(ekycDaysAgo: null);
-        await MakePaidActiveAsync(vaultId, daysLeft: 100);
-
-        // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { extraSlots = 0 });
-
-        // Kiểm tra
-        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        Assert.True(problem.GetProperty("errors").TryGetProperty("extraSlots", out _));
     }
 
     [SqlFact]
@@ -675,7 +633,7 @@ public sealed class BillingQuoteFlowTests : IAsyncLifetime
         HttpClient client = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
 
         // Hành động
-        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1, extraSlots = 0 });
+        HttpResponseMessage response = await QuoteAsync(client, new { tier = "XS", years = 1 });
 
         // Kiểm tra
         await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.NotFound, "VAULT_NOT_FOUND");

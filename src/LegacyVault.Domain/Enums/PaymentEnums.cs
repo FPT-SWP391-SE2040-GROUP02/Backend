@@ -3,10 +3,8 @@ namespace LegacyVault.Domain.Enums;
 /// <summary>Loại đơn thanh toán (SRS §8.2).</summary>
 public enum PaymentOrderKind
 {
-    /// <summary>Mua mới một hạng dịch vụ cho kho Free (kèm số suất thêm tùy chọn).</summary>
+    /// <summary>Mua mới một hạng dịch vụ cho kho Free.</summary>
     Purchase = 0,
-    /// <summary>Mua thêm suất người nhận giữa kỳ (ADDON-01..03).</summary>
-    Addon = 1,
 
     /// <summary>Nâng hạng giữa kỳ (XS lên XS Max): trả phần chênh theo thời gian còn lại, giữ nguyên hạn.</summary>
     Upgrade = 2,

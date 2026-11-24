@@ -41,15 +41,15 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         return client.PostAsJsonAsync("/api/v1/billing/orders", body);
     }
 
-    private static object XsThreeYearsOneSlot()
+    private static object XsThreeYears()
     {
-        return new { tier = "XS", years = 3, extraSlots = 1 };
+        return new { tier = "XS", years = 3 };
     }
 
-    /// <summary>Tạo đơn PURCHASE XS 3 năm + 1 suất (201) và trả JSON đơn.</summary>
+    /// <summary>Tạo đơn PURCHASE XS 3 năm (201) và trả JSON đơn.</summary>
     private static async Task<JsonElement> CreateXsOrderAsync(HttpClient client)
     {
-        HttpResponseMessage response = await CreateOrderAsync(client, XsThreeYearsOneSlot());
+        HttpResponseMessage response = await CreateOrderAsync(client, XsThreeYears());
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return await ApiTestHelpers.ReadJsonAsync(response);
     }
@@ -63,7 +63,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
 
         // Hành động: body cố ý kèm số tiền, loại đơn và trạng thái giả (AC-94)
         HttpResponseMessage response = await CreateOrderAsync(client,
-            new { tier = "XS", years = 3, extraSlots = 1, totalAmount = 1, kind = "ADDON", status = "PAID" });
+            new { tier = "XS", years = 3, totalAmount = 1, kind = "UPGRADE", status = "PAID" });
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -72,10 +72,8 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         Assert.Equal("PENDING", order.GetProperty("status").GetString());
         Assert.Equal("XS", order.GetProperty("tier").GetString());
         Assert.Equal(3, order.GetProperty("years").GetInt32());
-        Assert.Equal(1, order.GetProperty("extraSlots").GetInt32());
         Assert.Equal(499000, order.GetProperty("tierAmount").GetInt64());
-        Assert.Equal(147000, order.GetProperty("slotAmount").GetInt64());
-        Assert.Equal(646000, order.GetProperty("totalAmount").GetInt64());
+        Assert.Equal(499000, order.GetProperty("totalAmount").GetInt64());
         Assert.Equal("VND", order.GetProperty("currency").GetString());
         Assert.Equal(200 * 1048576L, order.GetProperty("storageQuotaBytes").GetInt64());
         Assert.Equal(2, order.GetProperty("includedBeneficiarySlots").GetInt32());
@@ -86,7 +84,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         Assert.Equal("0000000000", order.GetProperty("bank").GetProperty("accountNumber").GetString());
         string qr = order.GetProperty("qrImageUrl").GetString()!;
         Assert.StartsWith("https://qr.sepay.vn/img?", qr);
-        Assert.Contains("amount=646000", qr);
+        Assert.Contains("amount=499000", qr);
         Assert.Contains("des=" + paymentCode, qr);
 
         DateTimeOffset expiresAt = order.GetProperty("expiresAt").GetDateTimeOffset();
@@ -106,7 +104,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         Assert.Equal(ownerId, stored.OwnerId);
         Assert.Equal("2026-10", stored.PolicyVersion);
         Assert.Equal(PaymentOrderStatus.Pending, stored.Status);
-        Assert.Equal(646000, stored.TotalAmount);
+        Assert.Equal(499000, stored.TotalAmount);
         Assert.Null(stored.BaseServiceExpiresAt);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
@@ -127,7 +125,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         JsonElement first = await CreateXsOrderAsync(client);
 
         // Hành động
-        HttpResponseMessage second = await CreateOrderAsync(client, XsThreeYearsOneSlot());
+        HttpResponseMessage second = await CreateOrderAsync(client, XsThreeYears());
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
@@ -145,7 +143,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         JsonElement first = await CreateXsOrderAsync(client);
 
         // Hành động
-        HttpResponseMessage second = await CreateOrderAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0 });
+        HttpResponseMessage second = await CreateOrderAsync(client, new { tier = "XS_MAX", years = 1 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(second, HttpStatusCode.Conflict, "PAYMENT_ORDER_PENDING");
@@ -163,7 +161,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         await BillingTestData.MakeOrderOverdueAsync(factory, oldId);
 
         // Hành động: cùng lựa chọn nhưng đơn cũ đã hết hạn nên phải tạo đơn mới
-        HttpResponseMessage response = await CreateOrderAsync(client, XsThreeYearsOneSlot());
+        HttpResponseMessage response = await CreateOrderAsync(client, XsThreeYears());
 
         // Kiểm tra: đơn cũ EXPIRED, đúng một đơn PENDING mới, không vướng unique có lọc
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -185,7 +183,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         await BillingTestData.MakeOrderOverdueAsync(factory, oldOrder.GetProperty("id").GetGuid());
 
         // Hành động: đơn cũ đã hết hạn thì không còn chặn lựa chọn khác
-        HttpResponseMessage response = await CreateOrderAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0 });
+        HttpResponseMessage response = await CreateOrderAsync(client, new { tier = "XS_MAX", years = 1 });
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -204,7 +202,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         List<Task<HttpResponseMessage>> posts = new List<Task<HttpResponseMessage>>();
         for (int i = 0; i < 6; i++)
         {
-            posts.Add(CreateOrderAsync(client, XsThreeYearsOneSlot()));
+            posts.Add(CreateOrderAsync(client, XsThreeYears()));
         }
         HttpResponseMessage[] responses = await Task.WhenAll(posts);
 
@@ -236,8 +234,8 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         List<Task<HttpResponseMessage>> posts = new List<Task<HttpResponseMessage>>();
         for (int i = 0; i < 3; i++)
         {
-            posts.Add(CreateOrderAsync(client, new { tier = "XS", years = 1, extraSlots = 0 }));
-            posts.Add(CreateOrderAsync(client, new { tier = "XS_MAX", years = 1, extraSlots = 0 }));
+            posts.Add(CreateOrderAsync(client, new { tier = "XS", years = 1 }));
+            posts.Add(CreateOrderAsync(client, new { tier = "XS_MAX", years = 1 }));
         }
         HttpResponseMessage[] responses = await Task.WhenAll(posts);
 
@@ -270,7 +268,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
 
         // Hành động
-        HttpResponseMessage response = await CreateOrderAsync(client, XsThreeYearsOneSlot());
+        HttpResponseMessage response = await CreateOrderAsync(client, XsThreeYears());
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -287,8 +285,8 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, 1);
 
         // Hành động
-        HttpResponseMessage locked = await CreateOrderAsync(lockedClient, XsThreeYearsOneSlot());
-        HttpResponseMessage invalid = await CreateOrderAsync(client, new { tier = "XS", years = 2, extraSlots = 0 });
+        HttpResponseMessage locked = await CreateOrderAsync(lockedClient, XsThreeYears());
+        HttpResponseMessage invalid = await CreateOrderAsync(client, new { tier = "XS", years = 2 });
 
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(locked, HttpStatusCode.Conflict, "PAYMENT_NOT_ALLOWED");
@@ -299,40 +297,39 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Addon02_Addon03_CreateOrder_AddonWith180DaysLeft_Is24165AndExpiresInFifteenMinutes()
+    public async Task Upgrade_CreateOrder_With180DaysLeft_ExpiresInFifteenMinutes()
     {
         // Chuẩn bị: XS còn 180 ngày
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(180));
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
-        // Hành động
-        HttpResponseMessage response = await CreateOrderAsync(client, new { extraSlots = 1 });
+        // Hành động: chọn gói đứng sau gói đang dùng
+        HttpResponseMessage response = await CreateOrderAsync(client, new { tier = "XS_MAX" });
 
         // Kiểm tra
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         JsonElement order = await ApiTestHelpers.ReadJsonAsync(response);
-        Assert.Equal("ADDON", order.GetProperty("kind").GetString());
-        Assert.Equal("XS", order.GetProperty("tier").GetString());
+        Assert.Equal("UPGRADE", order.GetProperty("kind").GetString());
+        Assert.Equal("XS_MAX", order.GetProperty("tier").GetString());
         Assert.Equal(JsonValueKind.Null, order.GetProperty("years").ValueKind);
-        Assert.Equal(0, order.GetProperty("tierAmount").GetInt64());
-        Assert.Equal(24165, order.GetProperty("totalAmount").GetInt64());
+        Assert.True(order.GetProperty("totalAmount").GetInt64() > 0);
         Assert.InRange(order.GetProperty("expiresAt").GetDateTimeOffset(),
             before.AddMinutes(15).AddSeconds(-2), DateTimeOffset.UtcNow.AddMinutes(15).AddSeconds(2));
         PaymentOrder stored = await BillingTestData.LoadOrderAsync(factory, order.GetProperty("id").GetGuid());
         Assert.NotNull(stored.BaseServiceExpiresAt);
-        Assert.Equal(PaymentOrderKind.Addon, stored.Kind);
+        Assert.Equal(PaymentOrderKind.Upgrade, stored.Kind);
     }
 
     [SqlFact]
-    public async Task Addon03_CreateOrder_AddonServiceEndsInFiveMinutes_OrderExpiresAtServiceEnd()
+    public async Task Upgrade_CreateOrder_ServiceEndsInFiveMinutes_OrderExpiresAtServiceEnd()
     {
         // Chuẩn bị: kỳ hết sau 5 phút, sớm hơn mốc 15 phút
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromMinutes(5));
 
         // Hành động
-        HttpResponseMessage response = await CreateOrderAsync(client, new { extraSlots = 2 });
+        HttpResponseMessage response = await CreateOrderAsync(client, new { tier = "XS_MAX" });
 
         // Kiểm tra: hạn đơn bằng đúng hạn của kỳ
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -492,7 +489,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         });
 
         // Sau khi hủy thì tạo được đơn mới (cùng lựa chọn vẫn ra đơn khác)
-        HttpResponseMessage next = await CreateOrderAsync(client, XsThreeYearsOneSlot());
+        HttpResponseMessage next = await CreateOrderAsync(client, XsThreeYears());
         Assert.Equal(HttpStatusCode.Created, next.StatusCode);
         Assert.NotEqual(orderId, (await ApiTestHelpers.ReadJsonAsync(next)).GetProperty("id").GetGuid());
     }
@@ -581,7 +578,7 @@ public sealed class PaymentOrderFlowTests : IAsyncLifetime
         HttpClient anonymous = factory.CreateClient();
 
         // Hành động
-        HttpResponseMessage create = await CreateOrderAsync(anonymous, XsThreeYearsOneSlot());
+        HttpResponseMessage create = await CreateOrderAsync(anonymous, XsThreeYears());
         HttpResponseMessage current = await anonymous.GetAsync("/api/v1/billing/orders/current");
         HttpResponseMessage get = await anonymous.GetAsync($"/api/v1/billing/orders/{Guid.NewGuid()}");
         HttpResponseMessage cancel = await anonymous.PostAsync($"/api/v1/billing/orders/{Guid.NewGuid()}/cancel", null);

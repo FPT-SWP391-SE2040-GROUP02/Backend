@@ -17,13 +17,14 @@ public sealed class BillingUpgradeRulesTests
 
     private const long SecondsPerDay = 86400;
 
-    private static VaultEntitlement NewXsEntitlement(DateTimeOffset? expiresAt, int extraSlots)
+    private static readonly PlanInfo XsMaxPlan = Prices.FindPlan("XS_MAX")!;
+
+    private static VaultEntitlement NewXsEntitlement(DateTimeOffset? expiresAt)
     {
         VaultEntitlement entitlement = new VaultEntitlement();
         entitlement.Tier = ServiceTier.Xs;
         entitlement.Status = EntitlementStatus.PaidActive;
         entitlement.ServiceExpiresAt = expiresAt;
-        entitlement.ExtraBeneficiarySlots = extraSlots;
         entitlement.StorageQuotaBytes = 200 * 1048576L;
         entitlement.IncludedBeneficiarySlots = 2;
         return entitlement;
@@ -44,25 +45,24 @@ public sealed class BillingUpgradeRulesTests
         int paidYears, long remainingSeconds, long expectedPrice)
     {
         // Chuẩn bị
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddSeconds(remainingSeconds), 0);
+        VaultEntitlement entitlement = NewXsEntitlement(Now.AddSeconds(remainingSeconds));
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, paidYears, 0, Now);
+        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, XsMaxPlan, paidYears, Now);
 
         // Kiểm tra
         Assert.Equal(expectedPrice, quote.TotalAmount);
         Assert.Equal(expectedPrice, quote.TierAmount);
-        Assert.Equal(0, quote.SlotAmount);
     }
 
     [Fact]
     public void Upgrade_NoPaidPurchaseOrder_FallsBackToOneYearPrices()
     {
         // Chuẩn bị: kho tạo bằng SQL dev, không có đơn mua; còn đúng 365 ngày
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(365), 0);
+        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(365));
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, null, 0, Now);
+        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, XsMaxPlan, null, Now);
 
         // Kiểm tra: chênh giá 1 năm = 399.000 − 199.000
         Assert.Equal(200000, quote.TotalAmount);
@@ -72,95 +72,82 @@ public sealed class BillingUpgradeRulesTests
     public void Upgrade_RemainingLongerThanPaidTerm_IsCappedAtFullPriceDifference()
     {
         // Chuẩn bị: kỳ mua 1 năm nhưng hạn còn 2 năm (ví dụ Admin kéo dài); không tính quá chênh giá cả kỳ
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(730), 0);
+        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(730));
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, 1, 0, Now);
+        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, XsMaxPlan, 1, Now);
 
         // Kiểm tra
         Assert.Equal(200000, quote.TotalAmount);
     }
 
     [Fact]
-    public void Upgrade_QuoteDescribesXsMaxAndKeepsExpiryAndExtraSlots()
+    public void Upgrade_QuoteDescribesXsMaxAndKeepsExpiry()
     {
-        // Chuẩn bị: XS còn 100 ngày, đã mua thêm 1 suất
+        // Chuẩn bị: XS còn 100 ngày
         DateTimeOffset expiresAt = Now.AddDays(100);
-        VaultEntitlement entitlement = NewXsEntitlement(expiresAt, 1);
+        VaultEntitlement entitlement = NewXsEntitlement(expiresAt);
 
         // Hành động
-        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, 1, 0, Now);
+        BillingQuote quote = BillingRules.QuoteUpgrade(Prices, entitlement, XsMaxPlan, 1, Now);
 
-        // Kiểm tra: XS_MAX 500 MiB, 5 suất kèm + 1 suất thêm, hạn giữ nguyên, không có số năm hay số ngày kỳ mới
+        // Kiểm tra: XS_MAX 500 MiB, 5 suất kèm, hạn giữ nguyên, không có số năm hay số ngày kỳ mới
         Assert.Equal(PaymentOrderKind.Upgrade, quote.Kind);
         Assert.Equal(ServiceTier.XsMax, quote.Tier);
         Assert.Null(quote.Years);
         Assert.Null(quote.ServiceDays);
-        Assert.Equal(0, quote.ExtraSlots);
         Assert.Equal(500 * 1048576L, quote.StorageQuotaBytes);
         Assert.Equal(5, quote.IncludedBeneficiarySlots);
-        Assert.Equal(6, quote.TotalBeneficiarySlots);
         Assert.Equal(expiresAt, quote.BaseServiceExpiresAt);
-    }
-
-    [Fact]
-    public void Upgrade_WithExtraSlots_IsRejected()
-    {
-        // Chuẩn bị
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(100), 0);
-
-        // Hành động + kiểm tra: nâng hạng không kèm mua thêm suất
-        Assert.Throws<AppException>(() => BillingRules.QuoteUpgrade(Prices, entitlement, 1, 1, Now));
     }
 
     [Fact]
     public void Upgrade_ExpiredPeriod_IsNotSupported()
     {
         // Chuẩn bị: hạn đã qua
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddSeconds(-1), 0);
+        VaultEntitlement entitlement = NewXsEntitlement(Now.AddSeconds(-1));
 
         // Hành động + kiểm tra
-        Assert.Throws<AppException>(() => BillingRules.QuoteUpgrade(Prices, entitlement, 1, 0, Now));
+        Assert.Throws<AppException>(() => BillingRules.QuoteUpgrade(Prices, entitlement, XsMaxPlan, 1, Now));
     }
 
     [Theory]
-    [InlineData("XS_MAX", 0, true)]
-    [InlineData("xs_max", 0, true)]
-    [InlineData(" XS_MAX ", 0, true)]
-    // Kèm mua thêm suất: là ADDON, tier bị bỏ qua như hợp đồng cũ
-    [InlineData("XS_MAX", 1, false)]
-    [InlineData("XS", 0, false)]
-    [InlineData("", 0, false)]
-    [InlineData(null, 0, false)]
-    public void DetermineKind_PaidXsActive_OnlyXsMaxWithoutExtraSlotsIsUpgrade(
-        string? tier, int extraSlots, bool expectUpgrade)
+    [InlineData("XS_MAX", true)]
+    [InlineData("xs_max", true)]
+    [InlineData(" XS_MAX ", true)]
+    [InlineData("XS", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void DetermineKind_PaidXsActive_OnlyHigherPlanIsUpgrade(string? tier, bool expectUpgrade)
     {
         // Chuẩn bị
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(100), 0);
+        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(100));
 
-        // Hành động
-        PaymentOrderKind kind = BillingRules.DetermineKind(entitlement, tier, extraSlots, Now);
-
-        // Kiểm tra: các lựa chọn khác giữ nguyên hành vi cũ là mua thêm suất
+        // Hành động / Kiểm tra: chọn gói cao hơn là nâng hạng; các lựa chọn khác không có gì để mua
         if (expectUpgrade)
         {
-            Assert.Equal(PaymentOrderKind.Upgrade, kind);
+            Assert.Equal(PaymentOrderKind.Upgrade, BillingRules.DetermineKind(Prices, entitlement, tier, false, Now));
         }
         else
         {
-            Assert.Equal(PaymentOrderKind.Addon, kind);
+            AppException exception = Assert.Throws<AppException>(
+                () => BillingRules.DetermineKind(Prices, entitlement, tier, false, Now));
+            Assert.Equal(ErrorCode.PaymentNotAllowed, exception.Code);
+            Assert.Equal("NOTHING_TO_BUY", exception.Extensions["reason"]);
         }
     }
 
     [Fact]
-    public void DetermineKind_XsMaxVaultChoosingXsMax_StaysAddon()
+    public void DetermineKind_XsMaxVaultChoosingXsMax_NothingToBuy()
     {
         // Chuẩn bị: đã ở hạng cao nhất, không có gì để nâng
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(100), 0);
+        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(100));
         entitlement.Tier = ServiceTier.XsMax;
 
         // Hành động + kiểm tra
-        Assert.Equal(PaymentOrderKind.Addon, BillingRules.DetermineKind(entitlement, "XS_MAX", 0, Now));
+        AppException exception = Assert.Throws<AppException>(
+            () => BillingRules.DetermineKind(Prices, entitlement, "XS_MAX", false, Now));
+        Assert.Equal("NOTHING_TO_BUY", exception.Extensions["reason"]);
     }
 
     [Fact]
@@ -172,17 +159,17 @@ public sealed class BillingUpgradeRulesTests
         entitlement.Status = EntitlementStatus.Free;
 
         // Hành động + kiểm tra
-        Assert.Equal(PaymentOrderKind.Purchase, BillingRules.DetermineKind(entitlement, "XS_MAX", 0, Now));
+        Assert.Equal(PaymentOrderKind.Purchase, BillingRules.DetermineKind(Prices, entitlement, "XS_MAX", false, Now));
     }
 
     [Fact]
     public void DetermineKind_ExpiredPaidVault_IsRenewalNotUpgrade()
     {
         // Chuẩn bị
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(-1), 0);
+        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(-1));
 
         // Hành động + kiểm tra: hết hạn thì không nâng hạng giữa kỳ được, chỉ gia hạn
-        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(entitlement, "XS_MAX", 0, Now));
+        Assert.Equal(PaymentOrderKind.Renewal, BillingRules.DetermineKind(Prices, entitlement, "XS_MAX", false, Now));
     }
 
     private static PaymentOrder NewUpgradeOrder(DateTimeOffset baseExpiresAt)
@@ -197,11 +184,11 @@ public sealed class BillingUpgradeRulesTests
     }
 
     [Fact]
-    public void ApplyUpgrade_ChangesTierQuotaAndIncludedSlots_KeepsExpiryAndExtraSlots()
+    public void ApplyUpgrade_ChangesTierQuotaAndIncludedSlots_KeepsExpiry()
     {
         // Chuẩn bị
         DateTimeOffset expiresAt = Now.AddDays(100);
-        VaultEntitlement entitlement = NewXsEntitlement(expiresAt, 2);
+        VaultEntitlement entitlement = NewXsEntitlement(expiresAt);
         PaymentOrder order = NewUpgradeOrder(expiresAt);
 
         // Hành động
@@ -211,7 +198,6 @@ public sealed class BillingUpgradeRulesTests
         Assert.Equal(ServiceTier.XsMax, entitlement.Tier);
         Assert.Equal(500 * 1048576L, entitlement.StorageQuotaBytes);
         Assert.Equal(5, entitlement.IncludedBeneficiarySlots);
-        Assert.Equal(2, entitlement.ExtraBeneficiarySlots);
         Assert.Equal(expiresAt, entitlement.ServiceExpiresAt);
         Assert.Equal(EntitlementStatus.PaidActive, entitlement.Status);
     }
@@ -220,7 +206,7 @@ public sealed class BillingUpgradeRulesTests
     public void ApplyUpgrade_ExpiryChangedSinceOrder_IsRejected()
     {
         // Chuẩn bị: hạn của kho khác hạn lúc tạo đơn
-        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(200), 0);
+        VaultEntitlement entitlement = NewXsEntitlement(Now.AddDays(200));
         PaymentOrder order = NewUpgradeOrder(Now.AddDays(100));
 
         // Hành động + kiểm tra
@@ -233,7 +219,7 @@ public sealed class BillingUpgradeRulesTests
     {
         // Chuẩn bị: kho đã lên XS_MAX bằng đơn khác
         DateTimeOffset expiresAt = Now.AddDays(100);
-        VaultEntitlement entitlement = NewXsEntitlement(expiresAt, 0);
+        VaultEntitlement entitlement = NewXsEntitlement(expiresAt);
         entitlement.Tier = ServiceTier.XsMax;
         PaymentOrder order = NewUpgradeOrder(expiresAt);
 
@@ -246,7 +232,7 @@ public sealed class BillingUpgradeRulesTests
     {
         // Chuẩn bị: tiền tới sau khi kỳ đã hết
         DateTimeOffset expiresAt = Now.AddDays(1);
-        VaultEntitlement entitlement = NewXsEntitlement(expiresAt, 0);
+        VaultEntitlement entitlement = NewXsEntitlement(expiresAt);
         PaymentOrder order = NewUpgradeOrder(expiresAt);
 
         // Hành động + kiểm tra
@@ -260,7 +246,7 @@ public sealed class BillingUpgradeRulesTests
         DateTimeOffset normal = BillingRules.ComputeOrderExpiresAt(PaymentOrderKind.Upgrade, Now, Now.AddDays(10));
         DateTimeOffset nearEnd = BillingRules.ComputeOrderExpiresAt(PaymentOrderKind.Upgrade, Now, Now.AddMinutes(5));
 
-        // Kiểm tra: giống đơn mua thêm suất
+        // Kiểm tra: mốc sớm hơn giữa 15 phút và hết kỳ
         Assert.Equal(Now.AddMinutes(15), normal);
         Assert.Equal(Now.AddMinutes(5), nearEnd);
     }

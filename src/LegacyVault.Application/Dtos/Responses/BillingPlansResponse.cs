@@ -10,7 +10,8 @@ public class BillingPlansResponse
 
     public List<BillingTierResponse> Tiers { get; set; } = new List<BillingTierResponse>();
 
-    public BillingExtraSlotResponse ExtraSlot { get; set; } = new BillingExtraSlotResponse();
+    /// <summary>Số người nhận tối đa mà một gói được kèm (Admin đặt); gói kèm nhiều hơn mức này không được lưu.</summary>
+    public int MaxTotalSlots { get; set; }
 
     public string Notice { get; set; } = string.Empty;
 
@@ -64,16 +65,4 @@ public class BillingPriceResponse
 
     /// <summary>Số năm × 365 (PAY-08).</summary>
     public int ServiceDays { get; set; }
-}
-
-/// <summary>Suất người nhận mua thêm.</summary>
-public class BillingExtraSlotResponse
-{
-    /// <summary>Giá một suất cho một năm.</summary>
-    public long PricePerYear { get; set; }
-
-    public int MaxPerOrder { get; set; }
-
-    /// <summary>Tổng số người nhận tối đa của một tài khoản (suất kèm gói + suất mua thêm).</summary>
-    public int MaxTotal { get; set; }
 }

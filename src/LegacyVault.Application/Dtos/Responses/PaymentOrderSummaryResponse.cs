@@ -8,19 +8,17 @@ public class PaymentOrderSummaryResponse
 {
     public Guid Id { get; set; }
 
-    /// <summary>PURCHASE, ADDON, UPGRADE hoặc RENEWAL.</summary>
+    /// <summary>PURCHASE, UPGRADE hoặc RENEWAL.</summary>
     public string Kind { get; set; } = string.Empty;
 
     /// <summary>PENDING, PAID, EXPIRED hoặc CANCELLED.</summary>
     public string Status { get; set; } = string.Empty;
 
-    /// <summary>Hạng của đơn (đơn ADDON là hạng hiện tại của kho).</summary>
+    /// <summary>Hạng của đơn.</summary>
     public string Tier { get; set; } = string.Empty;
 
-    /// <summary>Số năm; null với đơn ADDON và UPGRADE.</summary>
+    /// <summary>Số năm; null với đơn UPGRADE.</summary>
     public int? Years { get; set; }
-
-    public int ExtraSlots { get; set; }
 
     public long TotalAmount { get; set; }
 

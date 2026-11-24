@@ -14,13 +14,7 @@ public interface IBillingPriceSettings
     /// <summary>Phiên bản chính sách giá, ghi vào đơn lúc tạo (PAY-11). Mỗi lần đổi giá phải đổi giá trị này.</summary>
     string PolicyVersion { get; }
 
-    /// <summary>Giá một suất người nhận thêm cho một năm (ADDON-01).</summary>
-    long SlotPricePerYear { get; }
-
-    /// <summary>Số suất thêm tối đa trong một đơn theo cấu hình hiện hành (Admin chỉnh được).</summary>
-    int MaxExtraSlotsPerOrder { get; }
-
-    /// <summary>Tổng suất người nhận tối đa của một kho (suất kèm gói + mọi suất mua thêm) theo cấu hình hiện hành.</summary>
+    /// <summary>Số suất người nhận tối đa một gói được kèm theo cấu hình hiện hành (Admin chỉnh được).</summary>
     int MaxTotalSlotsPerAccount { get; }
 
     /// <summary>Thời gian đơn chờ thanh toán kể từ lúc tạo theo cấu hình hiện hành (Admin chỉnh được).</summary>

@@ -16,14 +16,11 @@ public static class BillingMappings
         response.Kind = quote.Kind.ToApiString();
         response.Tier = PlanCodes.Resolve(quote.Tier, quote.PlanCode);
         response.Years = quote.Years;
-        response.ExtraSlots = quote.ExtraSlots;
         response.TierAmount = quote.TierAmount;
-        response.SlotAmount = quote.SlotAmount;
         response.TotalAmount = quote.TotalAmount;
         response.Currency = BillingPrices.Currency;
         response.StorageQuotaBytes = quote.StorageQuotaBytes;
         response.IncludedBeneficiarySlots = quote.IncludedBeneficiarySlots;
-        response.BeneficiarySlots = quote.TotalBeneficiarySlots;
         response.ServiceDays = quote.ServiceDays;
         if (quote.Kind == PaymentOrderKind.Purchase)
         {
@@ -71,7 +68,6 @@ public static class BillingMappings
         }
         response.Tier = PlanCodes.Resolve(order.Tier, order.PlanCode);
         response.Years = order.Years;
-        response.ExtraSlots = order.ExtraSlots;
         response.TotalAmount = order.TotalAmount;
         response.Currency = BillingPrices.Currency;
         response.PaymentCode = order.PaymentCode;
@@ -94,9 +90,7 @@ public static class BillingMappings
         response.Status = order.Status.ToApiString();
         response.Tier = PlanCodes.Resolve(order.Tier, order.PlanCode);
         response.Years = order.Years;
-        response.ExtraSlots = order.ExtraSlots;
         response.TierAmount = order.TierAmount;
-        response.SlotAmount = order.SlotAmount;
         response.TotalAmount = order.TotalAmount;
         response.Currency = BillingPrices.Currency;
         response.StorageQuotaBytes = order.StorageQuotaBytes;
@@ -141,9 +135,7 @@ public static class BillingMappings
         response.FreeFeatures = prices.FreeFeatures.ToList();
         response.Free.StorageQuotaBytes = StorageLimits.FreeQuotaBytes;
         response.Free.IncludedBeneficiarySlots = RuntimeSettings.NonNegativeInt("Plans.Free.Slots", 0);
-        response.ExtraSlot.PricePerYear = prices.SlotPricePerYear;
-        response.ExtraSlot.MaxPerOrder = prices.MaxExtraSlotsPerOrder;
-        response.ExtraSlot.MaxTotal = prices.MaxTotalSlotsPerAccount;
+        response.MaxTotalSlots = prices.MaxTotalSlotsPerAccount;
 
         foreach (PlanInfo plan in prices.Plans)
         {

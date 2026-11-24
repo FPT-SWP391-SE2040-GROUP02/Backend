@@ -132,11 +132,11 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
         // Chuẩn bị: XS có 2 suất; hồ sơ C tạo khi kho tạm có 3 suất rồi giảm về 2, vì tạo hồ sơ cũng bị giới hạn theo suất.
         // Tài sản đang gán cho A và B (dùng hết 2 suất).
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 1);
+        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 3);
         Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
         Guid c = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");
-        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 0);
+        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 2);
         Guid assetId = await ApiTestHelpers.CreateTextAssetAsync(client, vaultId, "Ghi chú");
         await ApiTestHelpers.AssignAssetOkAsync(client, vaultId, assetId, a, b);
 
@@ -250,11 +250,11 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
         // Chuẩn bị: XS có 2 suất; A nhận 3 tài sản, B nhận 1 tài sản; tài sản thứ 4 còn trống.
         // Hồ sơ C tạo khi kho tạm có 3 suất rồi giảm về 2, vì tạo hồ sơ cũng bị giới hạn theo suất.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 1);
+        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 3);
         Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
         Guid c = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");
-        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 0);
+        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 2);
         List<Guid> assets = new List<Guid>();
         for (int i = 1; i <= 4; i++)
         {
@@ -281,11 +281,11 @@ public sealed class AssetAssignmentFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Quota05_ExtraSlotAllowsThirdBeneficiary()
+    public async Task Quota05_ThreeSlotsAllowThirdBeneficiary()
     {
-        // Chuẩn bị: XS (2 suất) cộng 1 suất mua thêm; A và B đã được gán
+        // Chuẩn bị: kho có 3 suất; A và B đã được gán
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
-        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 1);
+        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 3);
         Guid a = await CreateBeneficiaryIdAsync(client, vaultId, CitizenA, "Người A");
         Guid b = await CreateBeneficiaryIdAsync(client, vaultId, CitizenB, "Người B");
         Guid c = await CreateBeneficiaryIdAsync(client, vaultId, CitizenC, "Người C");

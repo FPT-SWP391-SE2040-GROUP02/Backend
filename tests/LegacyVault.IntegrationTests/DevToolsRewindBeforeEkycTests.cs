@@ -71,7 +71,6 @@ public sealed class DevToolsRewindBeforeEkycTests : IAsyncLifetime
             Assert.Equal(EntitlementStatus.Free, entitlement.Status);
             Assert.Equal(StorageLimits.FreeQuotaBytes, entitlement.StorageQuotaBytes);
             Assert.Equal(0, entitlement.IncludedBeneficiarySlots);
-            Assert.Equal(0, entitlement.ExtraBeneficiarySlots);
             Assert.Null(entitlement.ServiceExpiresAt);
 
             PaymentOrder pending = await db.Set<PaymentOrder>().SingleAsync(o => o.Id == pendingOrderId);

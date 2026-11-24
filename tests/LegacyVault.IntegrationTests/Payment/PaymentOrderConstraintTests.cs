@@ -58,9 +58,7 @@ public sealed class PaymentOrderConstraintTests : IAsyncLifetime
         order.Kind = PaymentOrderKind.Purchase;
         order.Tier = ServiceTier.Xs;
         order.Years = 1;
-        order.ExtraSlots = 0;
         order.TierAmount = 199000;
-        order.SlotAmount = 0;
         order.TotalAmount = 199000;
         order.StorageQuotaBytes = 200 * 1_048_576L;
         order.IncludedBeneficiarySlots = 2;

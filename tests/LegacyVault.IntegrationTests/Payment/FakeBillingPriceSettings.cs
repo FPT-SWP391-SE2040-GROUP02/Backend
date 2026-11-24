@@ -14,16 +14,6 @@ public sealed class FakeBillingPriceSettings : IBillingPriceSettings
         get { return "2026-10"; }
     }
 
-    public long SlotPricePerYear
-    {
-        get { return 49000; }
-    }
-
-    public int MaxExtraSlotsPerOrder
-    {
-        get { return BillingPrices.MaxExtraSlotsPerOrder; }
-    }
-
     public int MaxTotalSlotsPerAccount
     {
         get { return BillingPrices.DefaultMaxTotalSlots; }

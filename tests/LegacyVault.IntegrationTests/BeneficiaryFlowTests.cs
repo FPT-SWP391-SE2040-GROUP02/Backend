@@ -614,7 +614,7 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task ProfileLimit_CreatingBeyondSlotsIsRejected_ExtraSlotAllowsIt()
+    public async Task ProfileLimit_CreatingBeyondSlotsIsRejected_MoreSlotsAllowIt()
     {
         // Chuẩn bị: XS có 2 suất, kho đã có 2 hồ sơ chưa ở gói nào.
         (HttpClient client, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -630,12 +630,12 @@ public sealed class BeneficiaryFlowTests : IAsyncLifetime
         Assert.Equal(2, problem.GetProperty("maxSlots").GetInt32());
         Assert.Equal(2, await CountBeneficiariesAsync(vaultId));
 
-        // Hành động: mua thêm 1 suất rồi tạo lại.
-        await ApiTestHelpers.SetExtraBeneficiarySlotsAsync(factory, vaultId, 1);
-        HttpResponseMessage withExtraSlot = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(ThirdCitizenId, FullName));
+        // Hành động: kho có 3 suất rồi tạo lại.
+        await ApiTestHelpers.SetIncludedBeneficiarySlotsAsync(factory, vaultId, 3);
+        HttpResponseMessage withMoreSlots = await client.PostAsJsonAsync(BeneficiariesUrl(vaultId), AdultBody(ThirdCitizenId, FullName));
 
         // Kiểm tra
-        Assert.Equal(HttpStatusCode.Created, withExtraSlot.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, withMoreSlots.StatusCode);
         Assert.Equal(3, await CountBeneficiariesAsync(vaultId));
     }
 

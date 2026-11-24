@@ -218,14 +218,14 @@ public sealed class AssetAssignmentService(
             after.Add(beneficiaryId);
         }
 
-        int maxSlots = EntitlementLimits.EffectiveTotalSlots(vault.Entitlement);
+        int maxSlots = EntitlementLimits.EffectiveIncludedSlots(vault.Entitlement);
         if (after.Count > before.Count && after.Count > maxSlots)
         {
             Dictionary<string, object?> extensions = new Dictionary<string, object?>();
             extensions["usedSlots"] = before.Count;
             extensions["maxSlots"] = maxSlots;
             throw new AppException(AppErrorType.Conflict, ErrorCode.BeneficiarySlotsExceeded,
-                "Kho đã dùng hết suất người nhận. Vui lòng mua thêm suất.", extensions);
+                "Kho đã dùng hết suất người nhận. Vui lòng nâng lên gói nhiều suất hơn.", extensions);
         }
     }
 

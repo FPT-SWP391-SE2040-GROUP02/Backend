@@ -1593,9 +1593,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<int>("ExtraSlots")
-                        .HasColumnType("int");
-
                     b.Property<int>("IncludedBeneficiarySlots")
                         .HasColumnType("int");
 
@@ -1629,9 +1626,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
-
-                    b.Property<long>("SlotAmount")
-                        .HasColumnType("bigint");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2254,9 +2248,6 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("ExtraBeneficiarySlots")
-                        .HasColumnType("int");
 
                     b.Property<int>("IncludedBeneficiarySlots")
                         .HasColumnType("int");

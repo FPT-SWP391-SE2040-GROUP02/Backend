@@ -54,16 +54,6 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
         get { return pricing.PolicyVersion; }
     }
 
-    public long SlotPricePerYear
-    {
-        get { return pricing.SlotPricePerYear; }
-    }
-
-    public int MaxExtraSlotsPerOrder
-    {
-        get { return pricing.MaxExtraSlotsPerOrder ?? BillingPrices.MaxExtraSlotsPerOrder; }
-    }
-
     public int MaxTotalSlotsPerAccount
     {
         get { return pricing.MaxTotalSlots ?? BillingPrices.DefaultMaxTotalSlots; }
@@ -271,23 +261,10 @@ public sealed class BillingPriceSettings : IBillingPriceSettings
             throw new InvalidOperationException(
                 "Billing:Pricing:PolicyVersion là bắt buộc và tối đa " + MaxPolicyVersionLength + " ký tự.");
         }
-        if (pricing.SlotPricePerYear <= 0)
-        {
-            throw new InvalidOperationException("Billing:Pricing:SlotPricePerYear phải lớn hơn 0.");
-        }
-        if (MaxExtraSlotsPerOrder < 1)
-        {
-            throw new InvalidOperationException("Số suất thêm tối đa mỗi đơn phải lớn hơn 0.");
-        }
         if (MaxTotalSlotsPerAccount < 1 || MaxTotalSlotsPerAccount > BillingPrices.MaxTotalSlotsLimit)
         {
             throw new InvalidOperationException(
                 "Tổng suất người nhận tối đa mỗi tài khoản phải từ 1 đến " + BillingPrices.MaxTotalSlotsLimit + ".");
-        }
-        if (pricing.SlotPricePerYear > BillingPrices.MaxSlotPricePerYear)
-        {
-            throw new InvalidOperationException(
-                "Giá một suất thêm tối đa " + BillingPrices.FormatMoney(BillingPrices.MaxSlotPricePerYear) + "đ mỗi năm.");
         }
         if (OrderLifetime <= TimeSpan.Zero)
         {

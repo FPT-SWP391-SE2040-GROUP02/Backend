@@ -26,9 +26,4 @@ public static class EntitlementLimits
         }
         return entitlement.IncludedBeneficiarySlots;
     }
-
-    public static int EffectiveTotalSlots(VaultEntitlement entitlement)
-    {
-        return EffectiveIncludedSlots(entitlement) + entitlement.ExtraBeneficiarySlots;
-    }
 }

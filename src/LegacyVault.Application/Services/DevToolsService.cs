@@ -216,7 +216,6 @@ public sealed class DevToolsService(
             && entitlement.Status == EntitlementStatus.Free
             && entitlement.StorageQuotaBytes == StorageLimits.FreeQuotaBytes
             && entitlement.IncludedBeneficiarySlots == 0
-            && entitlement.ExtraBeneficiarySlots == 0
             && entitlement.ServiceExpiresAt == null;
         if (!alreadyFree)
         {
@@ -224,7 +223,6 @@ public sealed class DevToolsService(
             entitlement.Status = EntitlementStatus.Free;
             entitlement.StorageQuotaBytes = StorageLimits.FreeQuotaBytes;
             entitlement.IncludedBeneficiarySlots = 0;
-            entitlement.ExtraBeneficiarySlots = 0;
             entitlement.ServiceExpiresAt = null;
             entitlement.UpdatedAt = now;
             response.EntitlementReset = true;

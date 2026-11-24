@@ -143,7 +143,6 @@ public sealed class VaultService(
             Status = EntitlementStatus.Free,
             StorageQuotaBytes = StorageLimits.FreeQuotaBytes,
             IncludedBeneficiarySlots = 0,
-            ExtraBeneficiarySlots = 0,
             CreatedAt = now,
         };
         return vault;
