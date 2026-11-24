@@ -158,4 +158,6 @@ public enum AuditAction
     AssetAssigned = 75,
     /// <summary>Owner gỡ gán một tài sản khỏi một người nhận (đích là tài sản; lý do ghi id người nhận).</summary>
     AssetUnassigned = 76,
+    /// <summary>Luật sư nhắc Người thực thi ký biên bản bàn giao đã chốt (đích là kho; không ghi nội dung thư).</summary>
+    HandoverExecutorReminded = 77,
 }

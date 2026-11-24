@@ -33,6 +33,12 @@ public sealed class HandoverRequestNotice
     /// <summary>Thư báo Admin đổi Người thực thi khi đang bàn giao: người mới nhận việc ngay, người cũ thôi vai trò.</summary>
     public const string StageExecutorChanged = "EXECUTOR_CHANGED";
 
+    /// <summary>Thư luật sư nhắc Người thực thi ký biên bản đã chốt.</summary>
+    public const string StageExecutorReminder = "EXECUTOR_REMINDER";
+
+    /// <summary>Thư báo luật sư: biên bản đã chốt, chỉ còn thiếu chữ ký của luật sư để mở quyền tải cho người nhận.</summary>
+    public const string StageVerifierSignNeeded = "VERIFIER_SIGN_NEEDED";
+
     public string ToEmail { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;

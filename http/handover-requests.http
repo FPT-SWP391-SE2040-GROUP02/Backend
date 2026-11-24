@@ -108,6 +108,11 @@ Content-Type: application/json
 POST {{baseUrl}}/verifier/handover-records/{{recordId}}/sign
 Authorization: Bearer {{verifierToken}}
 
+### 7b) Luật sư nhắc Người thực thi ký (gửi thư). Mỗi biên bản nhắc một lần mỗi 24 giờ.
+#    409 HANDOVER_NOT_ALLOWED: WRONG_STATE, EXECUTOR_ALREADY_SIGNED, NO_EXECUTOR, REMINDED_RECENTLY (kèm remindAvailableAt).
+POST {{baseUrl}}/verifier/handover-records/{{recordId}}/remind-executor
+Authorization: Bearer {{verifierToken}}
+
 ### 8) Mở lại biên bản: xác nhận căn cứ pháp lý và xác nhận khác cách chia về null, chốt lại phải tick lại.
 #    Đã có người nhận được mở quyền tải thì 409 HANDOVER_NOT_ALLOWED (PARTIALLY_DELIVERED).
 POST {{baseUrl}}/verifier/handover-records/{{recordId}}/reopen

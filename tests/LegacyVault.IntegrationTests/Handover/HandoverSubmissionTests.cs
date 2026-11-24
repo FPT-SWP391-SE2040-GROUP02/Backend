@@ -500,6 +500,7 @@ public sealed class CountingRecordService : IHandoverRecordService
     public Task<HandoverRecordResponse> FinalizeAsync(Guid recordId, FinalizeHandoverRecordRequest request, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> ReopenAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> RemindExecutorAsync(Guid recordId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> GetForRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> ReviewClaimAsync(Guid recordId, Guid claimId, ReviewHandoverClaimRequest request, CancellationToken ct) => throw new NotSupportedException();

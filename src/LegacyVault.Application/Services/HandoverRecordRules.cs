@@ -88,6 +88,64 @@ public static class HandoverRecordRules
         return record.Status == HandoverRecordStatus.Signing || record.Status == HandoverRecordStatus.IdentityCheck;
     }
 
+    /// <summary>Khoảng cách tối thiểu giữa hai lần luật sư nhắc Người thực thi ký (giờ).</summary>
+    public const int ExecutorReminderIntervalHours = 24;
+
+    /// <summary>
+    /// Lúc luật sư được nhắc Người thực thi lại: lần nhắc trước + 24 giờ. Null khi chưa nhắc lần nào (nhắc được ngay).
+    /// </summary>
+    public static DateTimeOffset? ExecutorRemindAvailableAt(HandoverRecord record)
+    {
+        if (record.ExecutorReminderSentAt == null)
+        {
+            return null;
+        }
+        return record.ExecutorReminderSentAt.Value.AddHours(ExecutorReminderIntervalHours);
+    }
+
+    /// <summary>
+    /// Luật sư nhắc được Người thực thi lúc now chưa: chưa nhắc lần nào, hoặc lần nhắc trước đã quá 24 giờ.
+    /// Hàm này chỉ xét thời gian; trạng thái biên bản và chữ ký do người gọi kiểm trước.
+    /// </summary>
+    public static bool CanRemindExecutor(HandoverRecord record, DateTimeOffset now)
+    {
+        DateTimeOffset? availableAt = ExecutorRemindAvailableAt(record);
+        if (availableAt == null)
+        {
+            return true;
+        }
+        return now >= availableAt.Value;
+    }
+
+    /// <summary>
+    /// Biên bản đã chốt, chưa hoàn tất và chỉ còn thiếu chữ ký luật sư để mở quyền tải: Người thực thi đã ký, ít nhất một
+    /// người nhận trong biên bản đã ký, luật sư chưa ký (đều tính theo bản hiện tại).
+    /// </summary>
+    public static bool OnlyVerifierSignatureMissing(HandoverRecord record)
+    {
+        if (!IsOpenForSigning(record))
+        {
+            return false;
+        }
+        if (FindSignature(record, HandoverSignerRole.Verifier, null) != null)
+        {
+            return false;
+        }
+        if (FindSignature(record, HandoverSignerRole.Executor, null) == null)
+        {
+            return false;
+        }
+        Dictionary<Guid, List<Guid>> recipients = GroupAssetsByRecipient(record.Lines);
+        foreach (Guid beneficiaryId in recipients.Keys)
+        {
+            if (FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId) != null)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>Đủ chữ ký ba bên của bản hiện tại: luật sư, Người thực thi và từng người nhận trong biên bản.</summary>
     public static bool AllSigned(HandoverRecord record)
     {

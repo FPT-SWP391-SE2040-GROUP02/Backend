@@ -43,6 +43,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private readonly IAssetAssignmentRepository assignments;
     private readonly IHandoverReportRepository reports;
     private readonly IHandoverReportProtector reportProtector;
+    private readonly IAuditLogRepository auditLogs;
     private readonly ILogger<HandoverRecordService> logger;
 
     // Thư báo ký ghi nhớ trong lượt này; chỉ gửi sau khi đã lưu (SendPendingSigningNoticeAsync).
@@ -69,8 +70,10 @@ public sealed class HandoverRecordService : IHandoverRecordService
         IAssetAssignmentRepository assignments,
         IHandoverReportRepository reports,
         IHandoverReportProtector reportProtector,
+        IAuditLogRepository auditLogs,
         ILogger<HandoverRecordService> logger)
     {
+        this.auditLogs = auditLogs;
         this.reports = reports;
         this.reportProtector = reportProtector;
         this.logger = logger;
@@ -493,9 +496,17 @@ public sealed class HandoverRecordService : IHandoverRecordService
 
         // 2. Ký (bấm lặp thì giữ chữ ký cũ), đủ chữ ký thì hoàn tất, lưu
         DateTimeOffset now = timeProvider.GetUtcNow();
+        bool onlyVerifierMissingBefore = HandoverRecordRules.OnlyVerifierSignatureMissing(record);
         AddSignature(record, HandoverSignerRole.Executor, userId, null, now);
         await OpenGrantsAndCompleteAsync(record, vault, now, ct);
+        bool onlyVerifierMissingAfter = HandoverRecordRules.OnlyVerifierSignatureMissing(record);
         await SaveAsync(ct);
+
+        // 3. Chỉ còn thiếu chữ ký luật sư (vừa đổi từ chưa sang có): báo luật sư sau khi đã lưu
+        if (!onlyVerifierMissingBefore && onlyVerifierMissingAfter)
+        {
+            await NotifyVerifierSignNeededAsync(record, vault, ct);
+        }
 
         HandoverRecordResponse response = await BuildResponseAsync(record, vault, null, ct);
         return response;
@@ -1140,6 +1151,130 @@ public sealed class HandoverRecordService : IHandoverRecordService
         return response;
     }
 
+    public async Task<HandoverRecordResponse> RemindExecutorAsync(Guid recordId, CancellationToken ct)
+    {
+        // 1. Biên bản của luật sư này, đã chốt và chưa hoàn tất
+        Guid userId = await RequireActiveVerifierAsync(ct);
+        HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
+        if (!HandoverRecordRules.IsOpenForSigning(record))
+        {
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Chỉ nhắc được khi biên bản đã chốt và chưa hoàn tất.");
+        }
+        Vault vault = await RequireVaultAsync(record.VaultId, ct);
+
+        // 2. Người thực thi chưa ký (bản hiện tại) và đang có Người thực thi có tài khoản
+        if (HandoverRecordRules.FindSignature(record, HandoverSignerRole.Executor, null) != null)
+        {
+            throw HandoverAccess.NotAllowed("EXECUTOR_ALREADY_SIGNED", "Người thực thi đã ký biên bản này.");
+        }
+        Executor? executor = await FindActiveExecutorWithAccountAsync(vault.Id, ct);
+        if (executor == null)
+        {
+            throw HandoverAccess.NotAllowed("NO_EXECUTOR", "Kho chưa có Người thực thi để nhắc.");
+        }
+
+        // 3. Mỗi 24 giờ nhắc một lần
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        if (!HandoverRecordRules.CanRemindExecutor(record, now))
+        {
+            DateTimeOffset? availableAt = HandoverRecordRules.ExecutorRemindAvailableAt(record);
+            Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+            extensions["reason"] = "REMINDED_RECENTLY";
+            extensions["remindAvailableAt"] = availableAt;
+            throw new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed,
+                "Bạn vừa nhắc Người thực thi. Chỉ nhắc lại được sau 24 giờ.", extensions);
+        }
+
+        // 4. Ghi lần nhắc và nhật ký, lưu một lần
+        record.ExecutorReminderSentAt = now;
+        record.UpdatedAt = now;
+        auditLogs.Add(AuditRules.Create(
+            vault.Id, userId, AuditActorRole.Verifier, AuditAction.HandoverExecutorReminded,
+            AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
+        await SaveAsync(ct);
+
+        // 5. Gửi thư sau khi lưu; thư lỗi không làm hỏng việc nhắc
+        await NotifyExecutorReminderAsync(record, vault, executor, ct);
+
+        HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
+        return response;
+    }
+
+    /// <summary>Người thực thi đang hiệu lực đầu tiên có tài khoản; null khi không có.</summary>
+    private async Task<Executor?> FindActiveExecutorWithAccountAsync(Guid vaultId, CancellationToken ct)
+    {
+        List<Executor> executors = await executorReader.GetActiveAsync(vaultId, ct);
+        foreach (Executor executor in executors)
+        {
+            if (executor.UserId != null)
+            {
+                return executor;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Gửi thư nhắc Người thực thi ký. Lỗi chỉ ghi id và loại lỗi, không ghi email hay tên.</summary>
+    private async Task NotifyExecutorReminderAsync(HandoverRecord record, Vault vault, Executor executor, CancellationToken ct)
+    {
+        try
+        {
+            if (executor.UserId == null)
+            {
+                return;
+            }
+            User? account = await users.FindByIdAsync(executor.UserId.Value, ct);
+            if (account == null || string.IsNullOrWhiteSpace(account.Email))
+            {
+                return;
+            }
+            HandoverRequestNotice notice = new HandoverRequestNotice
+            {
+                ToEmail = account.Email,
+                FullName = account.FullName,
+                Audience = HandoverRequestNotice.Executor,
+                Stage = HandoverRequestNotice.StageExecutorReminder,
+                OwnerName = await FindUserNameAsync(vault.OwnerId, ct)
+            };
+            await noticeSender.SendAsync(notice, ct);
+        }
+        catch (Exception exception) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("Gửi thư nhắc Người thực thi ký lỗi (biên bản {RecordId}): {ErrorType}",
+                record.Id, exception.GetType().Name);
+        }
+    }
+
+    /// <summary>
+    /// Báo luật sư của biên bản: Người thực thi và người nhận đã ký, chỉ còn thiếu chữ ký của luật sư.
+    /// Gửi lỗi thì bỏ qua (chữ ký đã lưu), chỉ ghi id và loại lỗi.
+    /// </summary>
+    private async Task NotifyVerifierSignNeededAsync(HandoverRecord record, Vault vault, CancellationToken ct)
+    {
+        try
+        {
+            User? verifier = await users.FindByIdAsync(record.VerifierUserId, ct);
+            if (verifier == null || string.IsNullOrWhiteSpace(verifier.Email))
+            {
+                return;
+            }
+            HandoverRequestNotice notice = new HandoverRequestNotice
+            {
+                ToEmail = verifier.Email,
+                FullName = verifier.FullName,
+                Audience = HandoverRequestNotice.Verifier,
+                Stage = HandoverRequestNotice.StageVerifierSignNeeded,
+                OwnerName = await FindUserNameAsync(vault.OwnerId, ct)
+            };
+            await noticeSender.SendAsync(notice, ct);
+        }
+        catch (Exception exception) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("Gửi thư báo luật sư cần ký lỗi (biên bản {RecordId}): {ErrorType}",
+                record.Id, exception.GetType().Name);
+        }
+    }
+
     // ---------------- Người nhận ----------------
 
     public async Task<HandoverRecordResponse> GetForRecipientAsync(Guid turnId, CancellationToken ct)
@@ -1179,9 +1314,17 @@ public sealed class HandoverRecordService : IHandoverRecordService
 
         // 3. Ký; luật sư và Người thực thi đã ký thì mở quyền tải cho tôi ngay, đủ mọi người thì hoàn tất, lưu
         DateTimeOffset now = timeProvider.GetUtcNow();
+        bool onlyVerifierMissingBefore = HandoverRecordRules.OnlyVerifierSignatureMissing(record);
         AddSignature(record, HandoverSignerRole.Recipient, userId, turn.BeneficiaryId, now);
         await OpenGrantsAndCompleteAsync(record, vault, now, ct);
+        bool onlyVerifierMissingAfter = HandoverRecordRules.OnlyVerifierSignatureMissing(record);
         await SaveAsync(ct);
+
+        // 4. Chỉ còn thiếu chữ ký luật sư (vừa đổi từ chưa sang có): báo luật sư sau khi đã lưu
+        if (!onlyVerifierMissingBefore && onlyVerifierMissingAfter)
+        {
+            await NotifyVerifierSignNeededAsync(record, vault, ct);
+        }
 
         HandoverRecordResponse response = await BuildResponseAsync(record, vault, turn.BeneficiaryId, ct);
         return response;
@@ -1713,6 +1856,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             response.ExecutorSignedAt = executorSignature.SignedAt;
         }
+        response.ExecutorReminderSentAt = record.ExecutorReminderSentAt;
+        response.ExecutorRemindAvailableAt = HandoverRecordRules.ExecutorRemindAvailableAt(record);
 
         // Tên tài sản lấy theo kho hiện tại; tài sản đã bị xóa nội dung vẫn hiện tên rỗng thay vì làm hỏng màn hình.
         Dictionary<Guid, Asset> assetsById = new Dictionary<Guid, Asset>();

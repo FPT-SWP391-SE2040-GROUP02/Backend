@@ -51,6 +51,12 @@ public class HandoverRecordResponse
     public DateTimeOffset? VerifierSignedAt { get; set; }
     public DateTimeOffset? ExecutorSignedAt { get; set; }
 
+    /// <summary>Lúc luật sư nhắc Người thực thi ký gần nhất; null khi chưa nhắc.</summary>
+    public DateTimeOffset? ExecutorReminderSentAt { get; set; }
+
+    /// <summary>Lúc luật sư nhắc lại được (lần nhắc trước + 24 giờ); null khi chưa nhắc lần nào.</summary>
+    public DateTimeOffset? ExecutorRemindAvailableAt { get; set; }
+
     public List<HandoverRecordRecipientResponse> Recipients { get; set; } = new List<HandoverRecordRecipientResponse>();
 
     /// <summary>Người đang xem ký được lúc này không (đúng bước, chưa ký bản hiện tại).</summary>
