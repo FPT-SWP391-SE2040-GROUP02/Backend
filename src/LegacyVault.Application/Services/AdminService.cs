@@ -180,15 +180,11 @@ public sealed class AdminService : IAdminService
 
         if (user.Role == UserRole.Verifier)
         {
-            foreach ((Guid caseId, HandoverRecordStatus status, DateTimeOffset dueAt) in await adminUsers.ListOpenAssignmentsAsync(userId, ct))
-            {
-                AdminUserCaseResponse item = new AdminUserCaseResponse();
-                item.CaseId = caseId;
-                item.Status = status.ToApiString();
-                item.DueAt = dueAt;
-                item.Overdue = false;
-                response.AssignedCases.Add(item);
-            }
+            await AddVerifierWorkAsync(response, userId, ct);
+        }
+        if (user.Role == UserRole.Executor)
+        {
+            await AddHeldVaultsAsync(response, userId, ct);
         }
         foreach (AuditLog log in await adminUsers.ListRecentAuditByActorAsync(userId, 10, ct))
         {
@@ -199,6 +195,118 @@ public sealed class AdminService : IAdminService
             response.RecentActivity.Add(item);
         }
         return response;
+    }
+
+    /// <summary>Số lần xét gần nhất của luật sư hiện ở chi tiết tài khoản.</summary>
+    private const int RecentDecisionCount = 10;
+
+    /// <summary>
+    /// Việc đang giữ của luật sư (biên bản bàn giao chưa xong, hồ sơ báo tin chờ xét) và các lần xét gần nhất. Chỉ trả mã,
+    /// trạng thái và thời điểm; không trả lý do hay nội dung hồ sơ.
+    /// </summary>
+    private async Task AddVerifierWorkAsync(AdminUserDetailResponse response, Guid verifierUserId, CancellationToken ct)
+    {
+        foreach ((Guid recordId, HandoverRecordStatus status, DateTimeOffset requestedAt) in
+            await adminUsers.ListOpenRecordsAsync(verifierUserId, ct))
+        {
+            AdminUserCaseResponse item = new AdminUserCaseResponse();
+            item.Kind = AdminUserCaseResponse.KindHandoverRecord;
+            item.CaseId = recordId;
+            item.CaseCode = HandoverRecordRules.CaseCode(recordId);
+            item.Status = status.ToApiString();
+            item.ReceivedAt = requestedAt;
+            response.AssignedCases.Add(item);
+        }
+        foreach ((Guid reportId, HandoverClaimStatus status, DateTimeOffset createdAt) in
+            await adminUsers.ListPendingReportsAsync(verifierUserId, ct))
+        {
+            AdminUserCaseResponse item = new AdminUserCaseResponse();
+            item.Kind = AdminUserCaseResponse.KindHandoverReport;
+            item.CaseId = reportId;
+            item.CaseCode = HandoverRecordRules.CaseCode(reportId);
+            item.Status = status.ToApiString();
+            item.ReceivedAt = createdAt;
+            response.AssignedCases.Add(item);
+        }
+
+        // Ghép hai danh sách đã xếp mới nhất trước (xét yêu cầu và xét hồ sơ báo tin), lấy 10 dòng đầu.
+        List<(Guid RecordId, HandoverClaimStatus Status, DateTimeOffset ReviewedAt)> claims =
+            await adminUsers.ListRecentClaimReviewsAsync(verifierUserId, RecentDecisionCount, ct);
+        List<(Guid ReportId, HandoverClaimStatus Status, DateTimeOffset ReviewedAt)> reports =
+            await adminUsers.ListRecentReportReviewsAsync(verifierUserId, RecentDecisionCount, ct);
+        int claimIndex = 0;
+        int reportIndex = 0;
+        while (response.RecentDecisions.Count < RecentDecisionCount
+            && (claimIndex < claims.Count || reportIndex < reports.Count))
+        {
+            bool takeClaim;
+            if (reportIndex >= reports.Count)
+            {
+                takeClaim = true;
+            }
+            else if (claimIndex >= claims.Count)
+            {
+                takeClaim = false;
+            }
+            else
+            {
+                takeClaim = claims[claimIndex].ReviewedAt >= reports[reportIndex].ReviewedAt;
+            }
+            AdminUserDecisionResponse decision = new AdminUserDecisionResponse();
+            if (takeClaim)
+            {
+                decision.Kind = AdminUserCaseResponse.KindHandoverRecord;
+                decision.CaseId = claims[claimIndex].RecordId;
+                decision.Decision = claims[claimIndex].Status.ToApiString();
+                decision.DecidedAt = claims[claimIndex].ReviewedAt;
+                claimIndex = claimIndex + 1;
+            }
+            else
+            {
+                decision.Kind = AdminUserCaseResponse.KindHandoverReport;
+                decision.CaseId = reports[reportIndex].ReportId;
+                decision.Decision = reports[reportIndex].Status.ToApiString();
+                decision.DecidedAt = reports[reportIndex].ReviewedAt;
+                reportIndex = reportIndex + 1;
+            }
+            decision.CaseCode = HandoverRecordRules.CaseCode(decision.CaseId);
+            response.RecentDecisions.Add(decision);
+        }
+    }
+
+    /// <summary>
+    /// Kho mà Người thực thi đang giữ: tên Chủ kho đã che, trạng thái kế hoạch, bước biên bản và Admin đổi người được không.
+    /// Không trả CCCD, tên tài sản hay email người nhận.
+    /// </summary>
+    private async Task AddHeldVaultsAsync(AdminUserDetailResponse response, Guid executorUserId, CancellationToken ct)
+    {
+        foreach ((Guid vaultId, string ownerFullName, VaultStatus vaultStatus, PlanStatus planStatus,
+            HandoverRecordStatus? recordStatus) in await adminUsers.ListHeldVaultsAsync(executorUserId, ct))
+        {
+            AdminUserHeldVaultResponse item = new AdminUserHeldVaultResponse();
+            item.VaultId = vaultId;
+            item.OwnerNameMasked = MaskFullName(ownerFullName);
+            item.PlanStatus = planStatus.ToApiString();
+            if (recordStatus != null)
+            {
+                item.HandoverRecordStatus = recordStatus.Value.ToApiString();
+            }
+            item.HandoverUnderway = ExecutorAssignRules.IsHandoverUnderway(planStatus);
+            item.CanChangeExecutor = ExecutorAssignRules.PlanAllowsAssign(vaultStatus, planStatus);
+            response.HeldVaults.Add(item);
+        }
+    }
+
+    /// <summary>Che họ tên: chỉ giữ chữ đầu mỗi từ kèm dấu chấm, ví dụ "Nguyễn Văn An" thành "N. V. A.".</summary>
+    public static string MaskFullName(string fullName)
+    {
+        string[] words = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        List<string> initials = new List<string>();
+        foreach (string word in words)
+        {
+            initials.Add(word.Substring(0, 1).ToUpperInvariant() + ".");
+        }
+        return string.Join(" ", initials);
     }
 
     public async Task<PaginatedList<AdminAuditLogResponse>> ListAuditLogsAsync(

@@ -15,12 +15,37 @@ public interface IAdminUserRepository
     /// <summary>Số Admin đang hoạt động (luôn phải còn ít nhất một).</summary>
     Task<int> CountActiveAdminsAsync(CancellationToken ct);
 
-    /// <summary>Biên bản bàn giao chưa hoàn tất mà luật sư được giao không còn hoạt động (cần Admin giao lại).</summary>
+    /// <summary>
+    /// Việc chưa có luật sư làm: biên bản chưa hoàn tất, chưa hủy và hồ sơ báo tin còn chờ xét mà luật sư được giao không
+    /// còn hoạt động (cần Admin giao lại).
+    /// </summary>
     Task<int> CountCasesWithoutVerifierAsync(CancellationToken ct);
 
-    /// <summary>Biên bản bàn giao chưa hoàn tất của một luật sư, mở sớm nhất trước.</summary>
-    Task<List<(Guid CaseId, HandoverRecordStatus Status, DateTimeOffset DueAt)>> ListOpenAssignmentsAsync(
+    /// <summary>Biên bản bàn giao chưa hoàn tất, chưa hủy của một luật sư, nhận sớm nhất trước.</summary>
+    Task<List<(Guid RecordId, HandoverRecordStatus Status, DateTimeOffset RequestedAt)>> ListOpenRecordsAsync(
         Guid verifierUserId, CancellationToken ct);
+
+    /// <summary>Hồ sơ báo tin còn chờ xét (chờ xét hoặc chờ bổ sung) được giao cho một luật sư, nộp sớm nhất trước.</summary>
+    Task<List<(Guid ReportId, HandoverClaimStatus Status, DateTimeOffset CreatedAt)>> ListPendingReportsAsync(
+        Guid verifierUserId, CancellationToken ct);
+
+    /// <summary>
+    /// Lần xét yêu cầu nhận tài sản gần nhất của luật sư (đã chấp nhận, từ chối hoặc yêu cầu bổ sung), mới nhất trước.
+    /// Trả Id biên bản, không trả lý do.
+    /// </summary>
+    Task<List<(Guid RecordId, HandoverClaimStatus Status, DateTimeOffset ReviewedAt)>> ListRecentClaimReviewsAsync(
+        Guid verifierUserId, int take, CancellationToken ct);
+
+    /// <summary>Lần xét hồ sơ báo tin gần nhất của luật sư, mới nhất trước. Không trả lý do.</summary>
+    Task<List<(Guid ReportId, HandoverClaimStatus Status, DateTimeOffset ReviewedAt)>> ListRecentReportReviewsAsync(
+        Guid verifierUserId, int take, CancellationToken ct);
+
+    /// <summary>
+    /// Các kho mà tài khoản đang là Người thực thi hiện tại (Executor Accepted), kèm họ tên Chủ kho, trạng thái kho, kế
+    /// hoạch và bước biên bản đang mở (null khi chưa có). Người nhận việc gần nhất trước.
+    /// </summary>
+    Task<List<(Guid VaultId, string OwnerFullName, VaultStatus VaultStatus, PlanStatus PlanStatus, HandoverRecordStatus? RecordStatus)>>
+        ListHeldVaultsAsync(Guid executorUserId, CancellationToken ct);
 
     /// <summary>Các dòng nhật ký gần nhất do tài khoản thực hiện, mới nhất trước.</summary>
     Task<List<AuditLog>> ListRecentAuditByActorAsync(Guid userId, int take, CancellationToken ct);

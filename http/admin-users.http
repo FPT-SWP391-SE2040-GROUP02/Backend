@@ -1,0 +1,26 @@
+@baseUrl = http://localhost:5000
+@adminToken = <accessToken của tài khoản ADMIN>
+@executorUserId = <id tài khoản Người thực thi>
+@verifierUserId = <id tài khoản luật sư>
+@vaultId = <id kho lấy từ heldVaults>
+@newExecutorUserId = <id Người thực thi mới>
+
+### Chi tiết Người thực thi: heldVaults là các kho người này đang giữ
+#   (ownerNameMasked chỉ giữ chữ đầu mỗi từ; không có CCCD, tên tài sản, email người nhận).
+GET {{baseUrl}}/api/v1/admin/users/{{executorUserId}}
+Authorization: Bearer {{adminToken}}
+
+### Chi tiết luật sư: assignedCases (biên bản chưa xong, hồ sơ báo tin chờ xét) và recentDecisions (10 lần xét gần nhất)
+GET {{baseUrl}}/api/v1/admin/users/{{verifierUserId}}
+Authorization: Bearer {{adminToken}}
+
+### Đổi Người thực thi của một kho trong heldVaults (lý do bắt buộc).
+#   Kho đang bàn giao: trả status ACCEPTED, người mới nhận việc ngay. Kho hoặc kế hoạch đã đóng: 409 PLAN_LOCKED.
+POST {{baseUrl}}/api/v1/admin/vaults/{{vaultId}}/executor
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "userId": "{{newExecutorUserId}}",
+  "reason": "Người thực thi cũ nghỉ việc."
+}
