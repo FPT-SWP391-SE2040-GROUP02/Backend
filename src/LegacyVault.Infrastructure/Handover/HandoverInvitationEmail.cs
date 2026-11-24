@@ -60,6 +60,10 @@ public static class HandoverInvitationEmail
     /// </summary>
     private static EmailParts DefaultParts(HandoverInvitation invitation, string? supportContact)
     {
+        if (invitation.AddedByVerifier)
+        {
+            return AddedByVerifierParts(invitation, supportContact);
+        }
         string deadline = LongDeadline(invitation);
         string shortDeadline = ShortDeadline(invitation);
         string ownerLabel = OwnerLabel(invitation);
@@ -126,6 +130,57 @@ public static class HandoverInvitationEmail
             support = "hãy báo ngay cho bên mình qua " + supportContact!.Trim();
         }
         string note = "Nếu để quá hạn, lời mời hết hiệu lực và bạn sẽ không nhận được phần này. "
+            + "Nếu bạn không muốn nhận, cứ đăng nhập rồi bấm “Từ chối”. "
+            + "Thư này không có nội dung tài sản. "
+            + $"Nếu bạn không quen {ownerLabel} hoặc thấy thư có gì lạ, đừng bấm nút mà {support}. "
+            + "Trân trọng, Đội ngũ LegacyVault. " + ScamWarning();
+
+        string leadText = string.Join("\n", lines);
+        return new EmailParts(subject, title, leadText, "Nhận tài sản", note);
+    }
+
+    /// <summary>
+    /// Thư mời người nhận do luật sư thêm vào biên bản (Chủ kho không chia tài sản cho họ): nói rõ luật sư thêm theo di chúc
+    /// hoặc quy định pháp luật, và dặn tạo tài khoản bằng đúng email này. Không có tên tài sản hay số căn cước.
+    /// </summary>
+    private static EmailParts AddedByVerifierParts(HandoverInvitation invitation, string? supportContact)
+    {
+        string deadline = LongDeadline(invitation);
+        string shortDeadline = ShortDeadline(invitation);
+        string ownerLabel = OwnerLabel(invitation);
+
+        string subject = $"[Cần xử lý trước {shortDeadline}] Bạn được luật sư thêm vào biên bản bàn giao kho của {ownerLabel}";
+        string title = $"Bạn được thêm vào biên bản bàn giao kho của {ownerLabel}";
+
+        List<string> lines = new List<string>();
+        lines.Add($"Luật sư đã thêm bạn vào biên bản bàn giao kho của {ownerLabel} theo di chúc hoặc quy định của pháp luật. "
+            + "Người này đã qua đời nên không thể tự gửi lời nhắn này.");
+        if (invitation.VerifierFullName.Trim().Length > 0)
+        {
+            string card = string.Empty;
+            if (!string.IsNullOrWhiteSpace(invitation.VerifierLawyerCardNumber))
+            {
+                card = $" (thẻ luật sư {invitation.VerifierLawyerCardNumber.Trim()})";
+            }
+            lines.Add($"Biên bản do luật sư {invitation.VerifierFullName.Trim()}{card} lập và kiểm.");
+        }
+        if (invitation.CaseCode.Trim().Length > 0)
+        {
+            lines.Add($"Mã hồ sơ: {invitation.CaseCode.Trim()}.");
+        }
+        lines.Add("Để nhận, bạn cần tạo tài khoản LegacyVault và xác minh đúng địa chỉ email nhận thư này.");
+        lines.Add("Bạn chỉ cần làm theo các bước sau:");
+        lines.Add($"1. Bấm nút “Nhận tài sản” bên dưới. Bạn cần bấm trước {deadline}.");
+        lines.Add("2. Tạo tài khoản (hoặc đăng nhập) bằng đúng email này rồi xác minh email.");
+        lines.Add("3. Chọn Chấp nhận hoặc Từ chối, nộp ảnh căn cước hai mặt để luật sư đối chiếu danh tính.");
+        lines.Add("4. Khi luật sư và Người thực thi đã ký biên bản, Người thực thi sẽ gửi mã nhận; nhập mã để tải tài sản.");
+
+        string support = "hãy báo lại cho bên mình";
+        if (!string.IsNullOrWhiteSpace(supportContact))
+        {
+            support = "hãy báo ngay cho bên mình qua " + supportContact!.Trim();
+        }
+        string note = "Nếu để quá hạn, lời mời hết hiệu lực. "
             + "Nếu bạn không muốn nhận, cứ đăng nhập rồi bấm “Từ chối”. "
             + "Thư này không có nội dung tài sản. "
             + $"Nếu bạn không quen {ownerLabel} hoặc thấy thư có gì lạ, đừng bấm nút mà {support}. "

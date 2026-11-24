@@ -19,6 +19,7 @@ public sealed class HandoverRecordTurnSync
     private readonly IHandoverRepository handover;
     private readonly IHandoverRecordRepository records;
     private readonly IBeneficiaryRepository beneficiaries;
+    private readonly IAssetAssignmentRepository assignments;
     private readonly IBeneficiaryDataProtector protector;
     private readonly ITokenService tokens;
     private readonly IHandoverInvitationSender sender;
@@ -29,6 +30,7 @@ public sealed class HandoverRecordTurnSync
         IHandoverRepository handover,
         IHandoverRecordRepository records,
         IBeneficiaryRepository beneficiaries,
+        IAssetAssignmentRepository assignments,
         IBeneficiaryDataProtector protector,
         ITokenService tokens,
         IHandoverInvitationSender sender,
@@ -38,6 +40,7 @@ public sealed class HandoverRecordTurnSync
         this.handover = handover;
         this.records = records;
         this.beneficiaries = beneficiaries;
+        this.assignments = assignments;
         this.protector = protector;
         this.tokens = tokens;
         this.sender = sender;
@@ -68,6 +71,7 @@ public sealed class HandoverRecordTurnSync
 
         // 4. Người còn trong biên bản: ghim lại tài sản; người mới: tạo lượt và soạn thư mời
         HandoverContactInfo contacts = await contactReader.FindAsync(record.VaultId, ct);
+        HashSet<Guid> ownerRecipientIds = await FindOwnerRecipientIdsAsync(record.VaultId, ct);
         List<HandoverInvitation> invitations = new List<HandoverInvitation>();
         foreach (KeyValuePair<Guid, List<Guid>> pair in assetsByRecipient)
         {
@@ -124,10 +128,27 @@ public sealed class HandoverRecordTurnSync
                 };
                 invitation.ApplyContacts(contacts);
                 invitation.OwnerMessage = data.Message;
+                // Người không có trong cách chia ban đầu của Chủ kho là người luật sư thêm: thư mời dùng lời riêng.
+                if (!ownerRecipientIds.Contains(pair.Key))
+                {
+                    invitation.AddedByVerifier = true;
+                }
                 invitations.Add(invitation);
             }
         }
         return invitations;
+    }
+
+    /// <summary>Người nhận mà Chủ kho đã chia ít nhất một tài sản (cách chia ban đầu của kho).</summary>
+    private async Task<HashSet<Guid>> FindOwnerRecipientIdsAsync(Guid vaultId, CancellationToken ct)
+    {
+        HashSet<Guid> result = new HashSet<Guid>();
+        List<AssetAssignment> ownerAssignments = await assignments.FindByVaultIdAsync(vaultId, ct);
+        foreach (AssetAssignment assignment in ownerAssignments)
+        {
+            result.Add(assignment.BeneficiaryId);
+        }
+        return result;
     }
 
     /// <summary>Lượt còn hiệu lực (chưa hủy) của biên bản, theo người nhận.</summary>

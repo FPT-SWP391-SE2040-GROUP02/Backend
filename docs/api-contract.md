@@ -1300,7 +1300,7 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 
 **Giao riêng từng người nhận** (ba bên vẫn đều ký):
 
-1. Luật sư chốt: biên bản sang `SIGNING`; luật sư và Người thực thi ký được ngay (thư báo Người thực thi ký).
+1. Luật sư chốt: biên bản sang `SIGNING`; luật sư và Người thực thi ký được ngay (thư báo Người thực thi ký). Lúc chốt cũng gửi thư mời cho từng người nhận mới của biên bản (không gửi lúc luật sư thêm người). Người nhận mà Chủ kho không chia tài sản nào (không có dòng gán nào của kho; thường do luật sư thêm) nhận thư mời riêng: luật sư thêm họ vào biên bản của kho theo di chúc hoặc quy định pháp luật, họ cần tạo tài khoản và xác minh đúng email nhận thư. Người Chủ kho đã chia nhận thư mời thường. Cả hai loại thư đều không có tên tài sản hay số căn cước.
 2. Mỗi người nhận đi riêng: nộp ảnh căn cước → luật sư xác nhận danh tính (thư báo riêng người đó ký) → người đó ký. Không chờ người nhận khác.
 3. Có chữ ký luật sư + Người thực thi (bản hiện tại) + chữ ký của người nhận X thì mở quyền tải cho lượt của X ngay (lượt `HANDOVER_COMMITTED`); Người thực thi gửi mã cho X (`send-key` kiểm theo lượt). Luật sư hoặc Người thực thi ký sau cùng thì mở cho mọi người nhận đã ký trước đó.
 4. Mọi người nhận trong biên bản đều đã ký (cùng luật sư, Người thực thi) thì biên bản `COMPLETED`.
