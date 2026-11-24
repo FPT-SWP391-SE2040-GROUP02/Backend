@@ -30,6 +30,9 @@ public class HandoverRecordFileResponse
 {
     public Guid Id { get; set; }
 
+    /// <summary>CLAIM_DOCUMENT, WILL hoặc EVIDENCE.</summary>
+    public string Kind { get; set; } = string.Empty;
+
     public string FileName { get; set; } = string.Empty;
 
     public string ContentType { get; set; } = string.Empty;
@@ -67,6 +70,9 @@ public class MyHandoverClaimResponse
 
     /// <summary>Bước của biên bản: DRAFTING, IDENTITY_CHECK, SIGNING, COMPLETED hoặc CANCELLED.</summary>
     public string RecordStatus { get; set; } = string.Empty;
+
+    /// <summary>Lý do luật sư hủy biên bản; null khi Chủ kho hủy hoặc chưa hủy.</summary>
+    public string? CancelReason { get; set; }
 
     public string Note { get; set; } = string.Empty;
 

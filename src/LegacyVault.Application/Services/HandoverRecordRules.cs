@@ -143,11 +143,11 @@ public static class HandoverRecordRules
 
     /// <summary>
     /// Trước khi chốt: mọi yêu cầu nhận phải đã xét (không còn chờ xét hay chờ bổ sung) và có ít nhất một yêu cầu được
-    /// chấp nhận. Trả câu lỗi, hoặc null khi hợp lệ.
+    /// chấp nhận, hoặc biên bản được mở từ hồ sơ báo tin đã chấp nhận. Trả câu lỗi, hoặc null khi hợp lệ.
     /// </summary>
-    public static string? ValidateClaimsForFinalize(List<HandoverClaim> claims)
+    public static string? ValidateClaimsForFinalize(List<HandoverClaim> claims, bool hasAcceptedReport = false)
     {
-        bool anyAccepted = false;
+        bool anyAccepted = hasAcceptedReport;
         foreach (HandoverClaim claim in claims)
         {
             if (claim.Status == HandoverClaimStatus.Submitted || claim.Status == HandoverClaimStatus.SupplementRequested)

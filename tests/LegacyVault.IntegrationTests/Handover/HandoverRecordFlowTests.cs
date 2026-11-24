@@ -363,6 +363,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal("SUPPLEMENT_REQUESTED", asked.GetProperty("status").GetString());
         Assert.Equal("Thiếu giấy chứng tử", asked.GetProperty("reviewReason").GetString());
         MultipartFormDataContent more = HandoverRecordTestData.RequestForm("bo-qua", "Đã bổ sung");
+        more.Add(new ByteArrayContent(HandoverRecordTestData.SamplePdf()), "files", "bo-sung.pdf");
         HttpResponseMessage supplemented = await recipient.PostAsync(RequestsUrl + "/" + claimId + "/supplement", more);
         Assert.Equal(HttpStatusCode.OK, supplemented.StatusCode);
         JsonElement after = await ApiTestHelpers.ReadJsonAsync(supplemented);

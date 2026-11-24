@@ -28,6 +28,9 @@ public class HandoverRecordResponse
     /// <summary>Họ tên luật sư đã xác nhận căn cứ pháp lý (để in biên bản); rỗng khi chưa xác nhận.</summary>
     public string LegalBasisConfirmedByName { get; set; } = string.Empty;
 
+    /// <summary>Lý do luật sư hủy biên bản; null khi Chủ kho hủy hoặc chưa hủy.</summary>
+    public string? CancelReason { get; set; }
+
     public string VerifierName { get; set; } = string.Empty;
     public string ExecutorName { get; set; } = string.Empty;
     public DateTimeOffset? VerifierSignedAt { get; set; }
@@ -52,6 +55,20 @@ public class HandoverRecordResponse
 
     /// <summary>Tệp căn cứ luật sư đính kèm biên bản; chỉ luật sư thấy.</summary>
     public List<HandoverRecordFileResponse> EvidenceFiles { get; set; } = new List<HandoverRecordFileResponse>();
+
+    /// <summary>Hồ sơ báo tin đã chấp nhận gắn với biên bản; chỉ luật sư thấy.</summary>
+    public List<HandoverRecordReportResponse> Reports { get; set; } = new List<HandoverRecordReportResponse>();
+}
+
+/// <summary>Hồ sơ báo tin gắn với biên bản: người nộp, người nhận họ khai (chưa kiểm) và giấy tờ.</summary>
+public class HandoverRecordReportResponse
+{
+    public Guid Id { get; set; }
+    public string SubmitterName { get; set; } = string.Empty;
+    public string Note { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; }
+    public List<SuggestedRecipientResponse> Recipients { get; set; } = new List<SuggestedRecipientResponse>();
+    public List<HandoverReportFileResponse> Files { get; set; } = new List<HandoverReportFileResponse>();
 }
 
 /// <summary>Một người nhận trong biên bản, kèm tài sản được nhận và tình trạng danh tính, chữ ký.</summary>

@@ -41,6 +41,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private readonly IHandoverRequestNoticeSender noticeSender;
     private readonly IExecutorInvitationRepository invitations;
     private readonly IAssetAssignmentRepository assignments;
+    private readonly IHandoverReportRepository reports;
+    private readonly IHandoverReportProtector reportProtector;
     private readonly ILogger<HandoverRecordService> logger;
 
     // Thư báo ký ghi nhớ trong lượt này; chỉ gửi sau khi đã lưu (SendPendingSigningNoticeAsync).
@@ -65,8 +67,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
         IHandoverRequestNoticeSender noticeSender,
         IExecutorInvitationRepository invitations,
         IAssetAssignmentRepository assignments,
+        IHandoverReportRepository reports,
+        IHandoverReportProtector reportProtector,
         ILogger<HandoverRecordService> logger)
     {
+        this.reports = reports;
+        this.reportProtector = reportProtector;
         this.logger = logger;
         this.invitations = invitations;
         this.assignments = assignments;
@@ -173,7 +179,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     }
 
     public async Task<MyHandoverClaimResponse> SubmitClaimAsync(
-        string token, string? note, List<UploadedFile> files, CancellationToken ct)
+        string token, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct)
     {
         // 1. Người gửi phải đăng nhập đúng email Chủ kho đã khai cho người nhận của link này
         User user = await RequireVerifiedUserAsync(ct);
@@ -182,12 +188,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
         EnsureEmailMatches(user, beneficiary);
 
         // 2. Các bước còn lại dùng chung với gửi trong app (không cần link)
-        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, files, ct);
+        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, wills, files, ct);
         return response;
     }
 
     public async Task<MyHandoverClaimResponse> SubmitClaimByAccountAsync(
-        Guid vaultId, string? note, List<UploadedFile> files, CancellationToken ct)
+        Guid vaultId, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct)
     {
         // 1. Tài khoản đã xác minh email; kho phải có người nhận mang đúng email đó, không có thì 404 như kho lạ
         User user = await RequireVerifiedUserAsync(ct);
@@ -203,7 +209,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
 
         // 2. Các bước còn lại dùng chung với gửi bằng link riêng
-        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, files, ct);
+        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, wills, files, ct);
         return response;
     }
 
@@ -303,7 +309,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
     /// khoản đã xác minh email và email trùng người nhận.
     /// </summary>
     private async Task<MyHandoverClaimResponse> SubmitClaimForBeneficiaryAsync(
-        User user, Beneficiary beneficiary, Vault vault, string? note, List<UploadedFile> files, CancellationToken ct)
+        User user, Beneficiary beneficiary, Vault vault, string? note, List<UploadedFile> wills, List<UploadedFile> files,
+        CancellationToken ct)
     {
         // 1. Chủ kho không tự gửi; lời nhắn và tệp phải hợp lệ
         if (vault.OwnerId == user.Id)
@@ -311,7 +318,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
             throw HandoverAccess.NotAllowed("OWNER_CANNOT_CLAIM", "Chủ kho không tự gửi yêu cầu nhận tài sản của kho mình.");
         }
         string cleanNote = NormalizeNote(note);
-        HandoverRecordFileStorage.Validate(files, true);
+        if (wills.Count == 0)
+        {
+            throw ValidationErrors.For("wills", "Vui lòng đính kèm di chúc.");
+        }
+        List<UploadedFile> allFiles = new List<UploadedFile>();
+        allFiles.AddRange(wills);
+        allFiles.AddRange(files);
+        HandoverRecordFileStorage.Validate(allFiles, true);
 
         // 2. Chưa có biên bản thì tạo và phân công luật sư (kho phải đang hoạt động); có rồi thì gắn vào
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -379,7 +393,18 @@ public sealed class HandoverRecordService : IHandoverRecordService
             record.Claims.Add(claim);
         }
         List<HandoverRecordFile> saved = await HandoverRecordFileStorage.SaveAllAsync(
-            contentStore, files, record.Id, claim.Id, HandoverRecordFileKind.ClaimDocument, user.Id, now, ct);
+            contentStore, wills, record.Id, claim.Id, HandoverRecordFileKind.Will, user.Id, now, ct);
+        try
+        {
+            saved.AddRange(await HandoverRecordFileStorage.SaveAllAsync(
+                contentStore, files, record.Id, claim.Id, HandoverRecordFileKind.ClaimDocument, user.Id,
+                now.AddTicks(wills.Count), ct));
+        }
+        catch (Exception)
+        {
+            await HandoverRecordFileStorage.DeleteAllAsync(contentStore, saved);
+            throw;
+        }
         AttachFiles(record, saved);
         await SaveOrDeleteFilesAsync(saved, ct);
 
@@ -604,7 +629,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (!legalBasisConfirmed)
         {
             throw ValidationErrors.For("confirmLegalBasis",
-                "Vui lòng xác nhận đã kiểm tra căn cứ pháp lý (di chúc hoặc không có di chúc) trước khi chốt biên bản.");
+                "Vui lòng xác nhận đã kiểm tra di chúc trước khi chốt biên bản.");
         }
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
         List<(Guid BeneficiaryId, Guid AssetId)> lines = new List<(Guid BeneficiaryId, Guid AssetId)>();
@@ -617,7 +642,9 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             throw HandoverAccess.NotAllowed("RECORD_INVALID", error);
         }
-        string? claimError = HandoverRecordRules.ValidateClaimsForFinalize(record.Claims);
+        // Hồ sơ báo tin chỉ gắn vào biên bản khi luật sư đã chấp nhận.
+        List<HandoverReport> acceptedReports = await reports.ListByRecordAsync(record.Id, ct);
+        string? claimError = HandoverRecordRules.ValidateClaimsForFinalize(record.Claims, acceptedReports.Count > 0);
         if (claimError != null)
         {
             throw HandoverAccess.NotAllowed("CLAIMS_PENDING", claimError);
@@ -905,6 +932,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 }
             }
         }
+        foreach (HandoverReport report in await reports.ListByRecordAsync(record.Id, ct))
+        {
+            string submitterName = await FindUserNameAsync(report.SubmitterUserId, ct);
+            if (submitterName.Length > 0 && !response.RequesterNames.Contains(submitterName))
+            {
+                response.RequesterNames.Add(submitterName);
+            }
+        }
         return response;
     }
 
@@ -923,7 +958,76 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
 
         // 2. Hủy biên bản và mọi lượt đang chạy; kho mở khóa, kế hoạch về Đang hoạt động
-        DateTimeOffset now = timeProvider.GetUtcNow();
+        await CancelRecordAsync(record, vault, timeProvider.GetUtcNow(), ct);
+        await SaveAsync(ct);
+    }
+
+    public async Task<HandoverRecordResponse> CancelByVerifierAsync(
+        Guid recordId, CancelHandoverRecordRequest request, CancellationToken ct)
+    {
+        // 1. Biên bản của luật sư này, đang lập (chưa chốt, chưa giao cho ai); phải có lý do
+        Guid userId = await RequireActiveVerifierAsync(ct);
+        HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ hủy được biên bản đang lập. Mở lại biên bản rồi hủy.");
+        string reason = request.Reason.Trim();
+        if (reason.Length == 0)
+        {
+            throw ValidationErrors.For("reason", "Vui lòng ghi lý do hủy.");
+        }
+        Vault vault = await RequireVaultAsync(record.VaultId, ct);
+
+        // 2. Hủy, ghi ai hủy và vì sao, lưu một lần
+        record.CancelledByVerifierUserId = userId;
+        record.CancelReason = reason;
+        await CancelRecordAsync(record, vault, timeProvider.GetUtcNow(), ct);
+        await SaveAsync(ct);
+
+        // 3. Kho đã mở khóa: báo Chủ kho và Người thực thi
+        await NotifyCancelledAsync(vault, ct);
+        return await BuildVerifierResponseAsync(record, vault, ct);
+    }
+
+    private async Task NotifyCancelledAsync(Vault vault, CancellationToken ct)
+    {
+        string ownerName = await FindUserNameAsync(vault.OwnerId, ct);
+        List<(Guid UserId, string Audience)> targets = new List<(Guid UserId, string Audience)>();
+        targets.Add((vault.OwnerId, HandoverRequestNotice.Owner));
+        foreach (Executor executor in await executorReader.GetActiveAsync(vault.Id, ct))
+        {
+            if (executor.UserId != null)
+            {
+                targets.Add((executor.UserId.Value, HandoverRequestNotice.Executor));
+            }
+        }
+        foreach ((Guid targetId, string audience) in targets)
+        {
+            try
+            {
+                User? target = await users.FindByIdAsync(targetId, ct);
+                if (target == null || string.IsNullOrWhiteSpace(target.Email))
+                {
+                    continue;
+                }
+                HandoverRequestNotice notice = new HandoverRequestNotice
+                {
+                    ToEmail = target.Email,
+                    FullName = target.FullName,
+                    Audience = audience,
+                    Stage = HandoverRequestNotice.StageCancelled,
+                    OwnerName = ownerName
+                };
+                await noticeSender.SendAsync(notice, ct);
+            }
+            catch (Exception) when (!ct.IsCancellationRequested)
+            {
+                // Không ném lại: biên bản đã hủy; một thư lỗi không chặn các thư còn lại.
+            }
+        }
+    }
+
+    /// <summary>Đặt biên bản và mọi lượt đang chạy về đã hủy, kế hoạch về Đang hoạt động. Chưa lưu.</summary>
+    private async Task CancelRecordAsync(HandoverRecord record, Vault vault, DateTimeOffset now, CancellationToken ct)
+    {
         record.Status = HandoverRecordStatus.Cancelled;
         record.CancelledAt = now;
         record.UpdatedAt = now;
@@ -939,7 +1043,6 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
         vault.Plan.Status = PlanStatus.Active;
         vault.Plan.UpdatedAt = now;
-        await SaveAsync(ct);
     }
 
     public async Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct)
@@ -1437,7 +1540,56 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 response.EvidenceFiles.Add(ToFileResponse(file));
             }
         }
+
+        // Hồ sơ báo tin đã chấp nhận: người nhận người nộp khai, để luật sư điền sẵn rồi kiểm lại.
+        foreach (HandoverReport report in await reports.ListByRecordAsync(record.Id, ct))
+        {
+            HandoverRecordReportResponse item = new HandoverRecordReportResponse
+            {
+                Id = report.Id,
+                SubmitterName = await FindUserNameAsync(report.SubmitterUserId, ct),
+                Note = report.Note,
+                CreatedAt = report.CreatedAt
+            };
+            foreach (SuggestedRecipient suggested in ReadSuggestedRecipients(report))
+            {
+                SuggestedRecipientResponse recipient = new SuggestedRecipientResponse
+                {
+                    FullName = suggested.FullName,
+                    Email = suggested.Email,
+                    Phone = suggested.Phone
+                };
+                item.Recipients.Add(recipient);
+            }
+            foreach (HandoverReportFile file in report.Files.OrderBy(f => f.Kind).ThenBy(f => f.CreatedAt))
+            {
+                HandoverReportFileResponse fileResponse = new HandoverReportFileResponse
+                {
+                    Id = file.Id,
+                    Kind = file.Kind.ToApiString(),
+                    FileName = file.FileName,
+                    ContentType = file.ContentType,
+                    SizeBytes = file.SizeBytes,
+                    CreatedAt = file.CreatedAt
+                };
+                item.Files.Add(fileResponse);
+            }
+            response.Reports.Add(item);
+        }
         return response;
+    }
+
+    private List<SuggestedRecipient> ReadSuggestedRecipients(HandoverReport report)
+    {
+        try
+        {
+            return reportProtector.Unprotect(report.DataProtected).Recipients;
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            // Hồ sơ không giải mã được: biên bản vẫn mở được, chỉ không có gợi ý.
+            return new List<SuggestedRecipient>();
+        }
     }
 
     /// <summary>
@@ -1457,6 +1609,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             RequestedAt = record.RequestedAt,
             FinalizedAt = record.FinalizedAt,
             CompletedAt = record.CompletedAt,
+            CancelReason = record.CancelReason,
             LegalBasisConfirmedAt = record.LegalBasisConfirmedAt,
             LegalBasisConfirmedByUserId = record.LegalBasisConfirmedByUserId,
             VerifierName = await FindUserNameAsync(record.VerifierUserId, ct),
@@ -1845,6 +1998,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             OwnerName = await FindUserNameAsync(vault.OwnerId, ct),
             Status = claim.Status.ToApiString(),
             RecordStatus = record.Status.ToApiString(),
+            CancelReason = record.CancelReason,
             Note = claim.Note,
             ReviewReason = claim.ReviewReason,
             CreatedAt = claim.CreatedAt,
@@ -1995,6 +2149,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         HandoverRecordFileResponse response = new HandoverRecordFileResponse
         {
             Id = file.Id,
+            Kind = file.Kind.ToApiString(),
             FileName = file.FileName,
             ContentType = file.ContentType,
             SizeBytes = file.SizeBytes,

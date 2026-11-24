@@ -13,7 +13,7 @@ public class SetHandoverRecordLinesRequest
 public class FinalizeHandoverRecordRequest
 {
     /// <summary>
-    /// Luật sư xác nhận đã kiểm tra di chúc (bản sau cùng, hợp pháp) hoặc xác định không có di chúc, lập biên bản đúng quy định
+    /// Luật sư xác nhận đã kiểm tra di chúc (bản sau cùng, hợp pháp), lập biên bản đúng quy định
     /// và chịu trách nhiệm về nội dung. Phải là true; false hoặc thiếu thì 400 VALIDATION_ERROR.
     /// </summary>
     public bool? ConfirmLegalBasis { get; set; }

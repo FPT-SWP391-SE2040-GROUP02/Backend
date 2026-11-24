@@ -22,6 +22,23 @@ public class ReviewHandoverClaimRequest
     public string? Reason { get; set; }
 }
 
+/// <summary>Body của POST /verifier/handover-reports/{id}/review.</summary>
+public class ReviewHandoverReportRequest : ReviewHandoverClaimRequest
+{
+    /// <summary>
+    /// Bắt buộc true (kèm lý do) khi chấp nhận hồ sơ có cảnh báo: họ tên không khớp, hoặc Chủ kho còn hoạt động sau khi hồ sơ được nộp.
+    /// </summary>
+    public bool ConfirmDocuments { get; set; }
+}
+
+/// <summary>Body của POST /verifier/handover-records/{id}/cancel.</summary>
+public class CancelHandoverRecordRequest
+{
+    [Required(ErrorMessage = "Vui lòng ghi lý do hủy.")]
+    [MaxLength(1000, ErrorMessage = "Lý do tối đa 1000 ký tự.")]
+    public string Reason { get; set; } = string.Empty;
+}
+
 /// <summary>Body của POST /verifier/handover-records/{id}/recipients: luật sư thêm người nhận mới vào kho.</summary>
 public class AddHandoverRecipientRequest
 {

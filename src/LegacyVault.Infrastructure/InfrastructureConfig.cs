@@ -206,6 +206,7 @@ public static class InfrastructureConfig
         // Mã hóa dữ liệu cá nhân của người nhận, dùng chung DataKeyProtector (DATA-02).
         services.AddSingleton<IBeneficiaryDataProtector, BeneficiaryDataProtector>();
         services.AddSingleton<IRecipientDeclaredDataProtector, RecipientDeclaredDataProtector>();
+        services.AddSingleton<IHandoverReportProtector, HandoverReportProtector>();
     }
 
     /// <summary>Mã băm, token, email, job nền, bàn giao và hồ sơ chứng tử.</summary>

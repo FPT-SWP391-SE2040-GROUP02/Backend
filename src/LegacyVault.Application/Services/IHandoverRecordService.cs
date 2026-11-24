@@ -68,7 +68,8 @@ public interface IHandoverRecordService
     /// Gửi yêu cầu nhận tài sản kèm giấy tờ. Yêu cầu đầu tiên tạo biên bản, phân công luật sư, khóa kho và báo Chủ kho,
     /// Người thực thi, luật sư. Lỗi: 404 link sai, 403 sai email, 409 HANDOVER_NOT_ALLOWED.
     /// </summary>
-    Task<MyHandoverClaimResponse> SubmitClaimAsync(string token, string? note, List<UploadedFile> files, CancellationToken ct);
+    Task<MyHandoverClaimResponse> SubmitClaimAsync(
+        string token, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct);
 
     /// <summary>
     /// Gửi yêu cầu nhận tài sản trong app, không cần link: server tự tìm người nhận của kho mang đúng email đã xác minh của
@@ -76,7 +77,10 @@ public interface IHandoverRecordService
     /// 409 HANDOVER_NOT_ALLOWED.
     /// </summary>
     Task<MyHandoverClaimResponse> SubmitClaimByAccountAsync(
-        Guid vaultId, string? note, List<UploadedFile> files, CancellationToken ct);
+        Guid vaultId, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct);
+
+    /// <summary>Luật sư hủy biên bản đang lập (mở nhầm, giấy tờ sai), kho mở khóa và báo Chủ kho, Người thực thi.</summary>
+    Task<HandoverRecordResponse> CancelByVerifierAsync(Guid recordId, CancelHandoverRecordRequest request, CancellationToken ct);
 
     /// <summary>
     /// Các kho mà tài khoản đang đăng nhập là người nhận (email đã xác minh trùng email người nhận, kế hoạch đã kích hoạt

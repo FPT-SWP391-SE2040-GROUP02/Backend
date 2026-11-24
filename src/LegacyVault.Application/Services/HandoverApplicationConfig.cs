@@ -10,6 +10,7 @@ public static class HandoverApplicationConfig
     {
         services.AddScoped<HandoverRecordTurnSync>();
         services.AddScoped<IHandoverRecordService, HandoverRecordService>();
+        services.AddScoped<IHandoverReportService, HandoverReportService>();
         services.AddScoped<IHandoverService, HandoverService>();
         services.AddScoped<IInvitationMailCheckService, InvitationMailCheckService>();
         services.AddScoped<IHandoverSubmissionService, HandoverSubmissionService>();

@@ -11,6 +11,10 @@ public static class HandoverRequestNoticeEmail
 {
     public const string Subject = "Có yêu cầu nhận tài sản trên LegacyVault";
 
+    public const string ReportSubject = "Có hồ sơ báo tin cần xét trên LegacyVault";
+
+    public const string CancelledSubject = "Yêu cầu nhận tài sản đã được hủy trên LegacyVault";
+
     public const string SigningSubject = "Biên bản bàn giao chờ bạn ký trên LegacyVault";
 
     public static EmailContent Build(HandoverRequestNotice notice, string clientUrl)
@@ -19,6 +23,14 @@ public static class HandoverRequestNoticeEmail
         if (notice.Stage == HandoverRequestNotice.StageSigning)
         {
             return BuildSigning(notice, baseUrl);
+        }
+        if (notice.Stage == HandoverRequestNotice.StageReport)
+        {
+            return BuildReport(notice, baseUrl);
+        }
+        if (notice.Stage == HandoverRequestNotice.StageCancelled)
+        {
+            return BuildCancelled(notice, baseUrl);
         }
         string title = "Có yêu cầu nhận tài sản";
         string lead;
@@ -60,6 +72,50 @@ public static class HandoverRequestNoticeEmail
             actionButtonText: buttonText,
             securityNotice: note);
         return new EmailContent(Subject, text, html);
+    }
+
+    /// <summary>Thư báo Chủ kho và Người thực thi: luật sư đã hủy biên bản đang lập. Không nêu lý do hay giấy tờ.</summary>
+    private static EmailContent BuildCancelled(HandoverRequestNotice notice, string baseUrl)
+    {
+        string title = "Yêu cầu nhận tài sản đã được hủy";
+        string lead = $"Luật sư đã hủy biên bản bàn giao đang lập của kho {notice.OwnerName}. Kho đã được mở khóa.";
+        string actionUrl = baseUrl + "/dashboard";
+        if (notice.Audience == HandoverRequestNotice.Executor)
+        {
+            actionUrl = baseUrl + "/executor";
+        }
+        string buttonText = "Mở LegacyVault";
+        string note = "Bạn không cần làm gì thêm.";
+        string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            title: title,
+            recipientName: notice.FullName,
+            leadText: lead,
+            actionUrl: actionUrl,
+            actionButtonText: buttonText,
+            securityNotice: note);
+        return new EmailContent(CancelledSubject, text, html);
+    }
+
+    /// <summary>Thư báo luật sư có hồ sơ báo tin chờ xét. Kho chưa bị khóa ở bước này.</summary>
+    private static EmailContent BuildReport(HandoverRequestNotice notice, string baseUrl)
+    {
+        string title = "Có hồ sơ báo tin cần xét";
+        string lead = $"{notice.RequesterName} vừa nộp giấy tờ báo tin {notice.OwnerName} đã mất. "
+            + "Hồ sơ được giao cho bạn kiểm giấy tờ.";
+        string actionUrl = baseUrl + "/notary/queue";
+        string buttonText = "Xem hồ sơ";
+        string note = "Kho chỉ bị khóa và biên bản chỉ được mở khi bạn chấp nhận hồ sơ. "
+            + "Việc xác minh giấy tờ làm ở ngoài hệ thống.";
+        string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
+        string html = LegacyVaultEmailTheme.BuildHtml(
+            title: title,
+            recipientName: notice.FullName,
+            leadText: lead,
+            actionUrl: actionUrl,
+            actionButtonText: buttonText,
+            securityNotice: note);
+        return new EmailContent(ReportSubject, text, html);
     }
 
     /// <summary>

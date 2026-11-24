@@ -288,7 +288,12 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
             await db.AssetAssignments.Where(a => a.Asset.VaultId == vaultId).ExecuteDeleteAsync();
         });
         response = await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup");
-        Assert.Contains("ASSIGNMENT_REQUIRED", response!.MissingRequirements);
+        // Chưa gán người nhận nào vẫn kích hoạt được; kho không còn tài sản thì không.
+        Assert.DoesNotContain("ASSET_REQUIRED", response!.MissingRequirements);
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+            await db.Assets.Where(a => a.VaultId == vaultId).ExecuteDeleteAsync());
+        response = await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup");
+        Assert.Contains("ASSET_REQUIRED", response!.MissingRequirements);
         Assert.False(response.CanActivate);
     }
 
