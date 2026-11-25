@@ -11,4 +11,10 @@ public interface IExecutorAssetService
     /// Lỗi: 404 VAULT_NOT_FOUND.
     /// </summary>
     Task<List<ExecutorVaultRecipientResponse>> ListRecipientsAsync(Guid vaultId, CancellationToken ct);
+
+    /// <summary>
+    /// Tên và loại các tài sản còn nội dung của kho, theo ngày tạo, kể cả tài sản chưa gán cho ai.
+    /// Chỉ Người thực thi đang hiệu lực được gọi, không phụ thuộc đã bàn giao hay chưa. Lỗi: 404 VAULT_NOT_FOUND.
+    /// </summary>
+    Task<List<ExecutorAssetNameResponse>> ListAssetNamesAsync(Guid vaultId, CancellationToken ct);
 }

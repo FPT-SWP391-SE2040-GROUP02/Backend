@@ -1238,7 +1238,20 @@ Không cần gửi PIN: tạo tài sản (nhưng kho phải đã đặt PIN, xem
 
 | Method | URL | Quyền | Thành công | Lỗi |
 |---|---|---|---|---|
-| GET | `/v1/executor/vaults/{vaultId}/assets` | Executor đang hiệu lực của kho (không phải chủ kho) | 200 `ExecutorVaultRecipientResponse[]` | 401, 404 `VAULT_NOT_FOUND`, 403 `HANDOVER_NOT_STARTED` |
+| GET | `/v1/executor/vaults/{vaultId}/assets` | Executor đang hiệu lực của kho (không phải chủ kho) | 200 `ExecutorVaultRecipientResponse[]` | 401, 404 `VAULT_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`reason = HANDOVER_NOT_STARTED`) |
+| GET | `/v1/executor/vaults/{vaultId}/asset-names` | Executor đang hiệu lực của kho (không phải chủ kho) | 200 `ExecutorAssetNameResponse[]` | 401, 404 `VAULT_NOT_FOUND` |
+
+- `/assets` (người nhận kèm tài sản được gán) chỉ xem được từ lúc luật sư chốt biên bản bàn giao (kế hoạch `HANDOVER_IN_PROGRESS` hoặc `CLOSED`).
+- `/asset-names` xem được cả trước đó, để Executor biết mình giữ hộ những gì. Mỗi phần tử chỉ có `name` và `kind` (`FILE` hoặc `TEXT`), theo ngày tạo, gồm cả tài sản chưa gán cho ai, bỏ tài sản đã xóa nội dung. Không có mã tài sản, dung lượng, người nhận hay nội dung.
+
+```json
+[
+  { "name": "Email gia đình", "kind": "TEXT" },
+  { "name": "Sổ tiết kiệm", "kind": "FILE" }
+]
+```
+
+Phản hồi của `/assets`:
 
 ```json
 [

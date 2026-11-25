@@ -28,4 +28,14 @@ public sealed class ExecutorAssetsController : ControllerBase
     {
         return executorAssetService.ListRecipientsAsync(vaultId, ct);
     }
+
+    /// <summary>Tên và loại các tài sản của kho, xem được cả trước khi bàn giao. Không trả người nhận hay nội dung.</summary>
+    [HttpGet("vaults/{vaultId:guid}/asset-names")]
+    [ProducesResponseType<List<ExecutorAssetNameResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public Task<List<ExecutorAssetNameResponse>> ListAssetNames(Guid vaultId, CancellationToken ct)
+    {
+        return executorAssetService.ListAssetNamesAsync(vaultId, ct);
+    }
 }

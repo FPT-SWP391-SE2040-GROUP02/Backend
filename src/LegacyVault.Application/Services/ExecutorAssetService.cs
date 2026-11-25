@@ -8,7 +8,10 @@ using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Màn Tài sản của Người thực thi: các người nhận của kho kèm tài sản được gán, chỉ có tên, không có nội dung tài sản.</summary>
+/// <summary>
+/// Màn Tài sản của Người thực thi, chỉ có danh sách, không có nội dung tài sản: trước khi bàn giao chỉ tên và loại,
+/// từ lúc luật sư chốt biên bản thêm người nhận kèm tài sản được gán.
+/// </summary>
 public sealed class ExecutorAssetService : IExecutorAssetService
 {
     private readonly ICurrentUser currentUser;
@@ -16,34 +19,32 @@ public sealed class ExecutorAssetService : IExecutorAssetService
     private readonly IExecutorReader executorReader;
     private readonly IAssetAssignmentRepository assignmentRepository;
     private readonly IBeneficiaryDataProtector beneficiaryProtector;
+    private readonly IHandoverRecordRepository recordRepository;
 
     public ExecutorAssetService(
         ICurrentUser currentUser,
         IVaultRepository vaultRepository,
         IExecutorReader executorReader,
         IAssetAssignmentRepository assignmentRepository,
-        IBeneficiaryDataProtector beneficiaryProtector)
+        IBeneficiaryDataProtector beneficiaryProtector,
+        IHandoverRecordRepository recordRepository)
     {
         this.currentUser = currentUser;
         this.vaultRepository = vaultRepository;
         this.executorReader = executorReader;
         this.assignmentRepository = assignmentRepository;
         this.beneficiaryProtector = beneficiaryProtector;
+        this.recordRepository = recordRepository;
     }
 
     // Màn Tài sản của Người thực thi: các người nhận của kho, mỗi người kèm tên tài sản được gán (không có nội dung).
     public async Task<List<ExecutorVaultRecipientResponse>> ListRecipientsAsync(Guid vaultId, CancellationToken ct)
     {
         // 1. Người gọi phải là Người thực thi đang phụ trách kho; không thì báo không tìm thấy kho
-        Guid userId = currentUser.RequireUserId();
-        Vault? vault = await vaultRepository.FindByIdAsync(vaultId, ct);
-        if (vault == null || !await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct))
-        {
-            throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
-        }
+        Vault vault = await FindMyExecutorVaultAsync(vaultId, ct);
 
-        // Trước khi luật sư chốt biên bản bàn giao, Người thực thi chưa có quyền gì: không xem được tài sản,
-        // tránh lạm quyền khi Chủ kho còn sống.
+        // Trước khi luật sư chốt biên bản bàn giao, Người thực thi chưa được xem người nhận (họ tên, CCCD) và ai nhận
+        // tài sản nào, tránh lạm quyền khi Chủ kho còn sống. Lúc đó chỉ xem được tên và loại qua ListAssetNamesAsync.
         if (vault.Plan.Status != PlanStatus.HandoverInProgress && vault.Plan.Status != PlanStatus.Closed)
         {
             throw HandoverAccess.NotAllowed("HANDOVER_NOT_STARTED",
@@ -96,6 +97,38 @@ public sealed class ExecutorAssetService : IExecutorAssetService
             byBeneficiary[assignment.BeneficiaryId].Assets.Add(item);
         }
         return responses;
+    }
+
+    // Tên và loại tài sản: Người thực thi đang phụ trách kho xem được cả trước khi bàn giao để biết mình giữ hộ những gì.
+    public async Task<List<ExecutorAssetNameResponse>> ListAssetNamesAsync(Guid vaultId, CancellationToken ct)
+    {
+        Vault vault = await FindMyExecutorVaultAsync(vaultId, ct);
+
+        // Gồm cả tài sản chưa gán cho ai; tài sản đã xóa nội dung đã được lọc ở câu truy vấn
+        List<Asset> assets = await recordRepository.ListVaultAssetsAsync(vault.Id, ct);
+        List<ExecutorAssetNameResponse> responses = new List<ExecutorAssetNameResponse>();
+        foreach (Asset asset in assets)
+        {
+            ExecutorAssetNameResponse item = new ExecutorAssetNameResponse
+            {
+                Name = asset.Name,
+                Kind = ToKind(asset.Kind)
+            };
+            responses.Add(item);
+        }
+        return responses;
+    }
+
+    /// <summary>Kho mà người đang đăng nhập là Người thực thi đang hiệu lực; kho lạ và người ngoài cùng nhận một lỗi.</summary>
+    private async Task<Vault> FindMyExecutorVaultAsync(Guid vaultId, CancellationToken ct)
+    {
+        Guid userId = currentUser.RequireUserId();
+        Vault? vault = await vaultRepository.FindByIdAsync(vaultId, ct);
+        if (vault == null || !await HandoverAccess.IsActiveExecutorAsync(executorReader, vault, userId, ct))
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");
+        }
+        return vault;
     }
 
     /// <summary>Loại tài sản dạng chữ trả ra API: TEXT cho ghi chú văn bản, FILE cho tệp.</summary>
