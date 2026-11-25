@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using LegacyVault.Application.Security;
+using LegacyVault.Application.Services;
 using LegacyVault.Domain.Entities;
 using LegacyVault.Domain.Enums;
 using LegacyVault.Infrastructure.Data;
@@ -114,6 +115,53 @@ public static class ApiTestHelpers
     }
 
     /// <summary>Tạo tài sản dạng chữ qua API (POST .../assets/text), trả id tài sản.</summary>
+    /// <summary>
+    /// Ghi thẳng eKYC đạt, và một tài sản nếu kho trống, để kho mời được Người thực thi (bước mời là bước cuối).
+    /// </summary>
+    public static Task CompleteSetupBeforeInviteAsync(ApiFactory factory, Guid vaultId)
+    {
+        return WithDbAsync(factory, async db =>
+        {
+            Vault vault = await db.Vaults.SingleAsync(v => v.Id == vaultId);
+            if (!await db.EkycVerifications.AnyAsync(e => e.UserId == vault.OwnerId && e.Status == EkycStatus.Passed))
+            {
+                EkycVerification verification = new EkycVerification();
+                verification.UserId = vault.OwnerId;
+                verification.Status = EkycStatus.Passed;
+                verification.CreatedAt = DateTimeOffset.UtcNow;
+                verification.CompletedAt = DateTimeOffset.UtcNow;
+                verification.SpoofCheckPassed = true;
+                db.EkycVerifications.Add(verification);
+            }
+            await db.SaveChangesAsync();
+        });
+    }
+
+    /// <summary>
+    /// Chủ kho ký biên bản phân chia (ghi thẳng DB, như bước nhập PIN) cho lời mời đang chờ của kế hoạch nháp.
+    /// </summary>
+    public static Task SignWillForInviteeAsync(ApiFactory factory, Guid vaultId)
+    {
+        return WithDbAsync(factory, async db =>
+        {
+            HandoverPlan plan = await db.HandoverPlans.SingleAsync(p => p.VaultId == vaultId);
+            if (plan.Status != PlanStatus.Draft)
+            {
+                return;
+            }
+            Executor invitee = await db.Set<Executor>().SingleAsync(e => e.VaultId == vaultId && e.Status == ExecutorStatus.Invited);
+            List<AssetAssignment> current = await db.AssetAssignments.Where(a => a.Asset.VaultId == vaultId).ToListAsync();
+            int nextNo = await db.WillVersions.CountAsync(w => w.VaultId == vaultId) + 1;
+            WillVersion version = WillVersionRules.CreateVersion(
+                vaultId, nextNo, plan.ConfigVersion, WillVersionRules.BuildSnapshot(current), DateTimeOffset.UtcNow);
+            version.ExecutorId = invitee.Id;
+            db.WillVersions.Add(version);
+            plan.ActivationPolicyVersion = PlanSetupService.PolicyVersion;
+            plan.ActivationPolicyAcknowledgedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        });
+    }
+
     public static async Task<Guid> CreateTextAssetAsync(HttpClient client, Guid vaultId, string name)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(

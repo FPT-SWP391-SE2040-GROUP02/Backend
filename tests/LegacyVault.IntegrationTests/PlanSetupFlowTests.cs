@@ -65,9 +65,10 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain(mail.Token, raw);
+        await ApiTestHelpers.SignWillForInviteeAsync(factory, vaultId);
         return JsonSerializer.Deserialize<ExecutorInvitationResponse>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
     }
-    private Task<HttpResponseMessage> RespondAsync(HttpClient client, string token, bool acknowledge = true) => client.PostAsJsonAsync("/api/v1/executor-invitations/respond", new { token, accept = true, acknowledgeScope = acknowledge, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
+    private Task<HttpResponseMessage> RespondAsync(HttpClient client, string token, bool acknowledge = true) => client.PostAsJsonAsync("/api/v1/executor-invitations/respond", new { token, accept = true, acknowledgeScope = acknowledge, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword, willVersionNo = 1 });
     private async Task<ActivatePlanRequest> ActivationAsync(HttpClient owner, Guid vaultId)
     {
         var setup = await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup");
@@ -145,14 +146,17 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task MissingEkycOrScopeAcknowledgementNeverActivatesOrBinds()
     {
+        // Chưa eKYC thì chưa mời được Người thực thi (mời là bước cuối).
         var (owner, recipient, vaultId) = await PrepareAsync(false);
-        await InviteAsync(owner, vaultId);
-        await ApiTestHelpers.AssertProblemAsync(await RespondAsync(recipient, mail.Token, false), HttpStatusCode.BadRequest, "POLICY_ACKNOWLEDGEMENT_REQUIRED");
-        Assert.Equal(HttpStatusCode.OK, (await RespondAsync(recipient, mail.Token)).StatusCode);
-        var request = await ActivationAsync(owner, vaultId);
-        var denied = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/activate", request);
-        var body = await ApiTestHelpers.AssertProblemAsync(denied, HttpStatusCode.Conflict, "PLAN_ACTIVATION_REQUIREMENTS_NOT_MET");
+        await ApiTestHelpers.EnsureSystemExecutorAsync(factory, "executor@example.test");
+        var denied = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email = "executor@example.test" });
+        var body = await ApiTestHelpers.AssertProblemAsync(denied, HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
+        Assert.Equal("SETUP_NOT_COMPLETE", body.GetProperty("reason").GetString());
         Assert.Contains("OWNER_EKYC_REQUIRED", body.GetProperty("missingRequirements").EnumerateArray().Select(e => e.GetString()));
+        await ApiTestHelpers.CompleteSetupBeforeInviteAsync(factory, vaultId);
+        var sent = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email = "executor@example.test" });
+        Assert.Equal(HttpStatusCode.Created, sent.StatusCode);
+        await ApiTestHelpers.AssertProblemAsync(await RespondAsync(recipient, mail.Token, false), HttpStatusCode.BadRequest, "POLICY_ACKNOWLEDGEMENT_REQUIRED");
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Assert.Equal(0, await db.WillVersions.CountAsync());
@@ -302,7 +306,7 @@ public sealed class PlanSetupFlowTests : IAsyncLifetime
     private static Task<HttpResponseMessage> RespondByIdAsync(HttpClient client, Guid invitationId, bool accept)
     {
         return client.PostAsJsonAsync($"/api/v1/executor-invitations/{invitationId}/respond",
-            new { accept, acknowledgeScope = accept, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
+            new { accept, acknowledgeScope = accept, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword, willVersionNo = 1 });
     }
 
     [SqlFact]

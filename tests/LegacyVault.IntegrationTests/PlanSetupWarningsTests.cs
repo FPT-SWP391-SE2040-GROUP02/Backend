@@ -161,7 +161,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
 
         // Kiểm tra
         AssertNoWarnings(setup);
-        Assert.True(setup.GetProperty("canActivate").GetBoolean());
+        Assert.Equal("ACTIVE", setup.GetProperty("planStatus").GetString());
         Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
         JsonElement activated = await ApiTestHelpers.ReadJsonAsync(activation);
         Assert.Equal("ACTIVE", activated.GetProperty("planStatus").GetString());
@@ -234,8 +234,10 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
     private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email)
     {
         await ApiTestHelpers.EnsureSystemExecutorAsync(factory, email);
+        await ApiTestHelpers.CompleteSetupBeforeInviteAsync(factory, vaultId);
         HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await ApiTestHelpers.SignWillForInviteeAsync(factory, vaultId);
         ExecutorInvitationResponse? invitation = await response.Content.ReadFromJsonAsync<ExecutorInvitationResponse>();
         Assert.NotNull(invitation);
         return invitation;
@@ -249,7 +251,7 @@ public sealed class PlanSetupWarningsTests : IAsyncLifetime
             accept = true,
             acknowledgeScope = true,
             scopeVersion = PlanSetupService.ScopeVersion,
-            password = ApiTestHelpers.ExecutorPassword,
+            password = ApiTestHelpers.ExecutorPassword, willVersionNo = 1,
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }

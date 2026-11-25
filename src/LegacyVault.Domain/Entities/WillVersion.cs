@@ -23,6 +23,9 @@ public class WillVersion
 
     public DateTimeOffset SignedAt { get; set; }
 
+    /// <summary>Dòng Executor ghi trên tờ lúc Chủ kho ký; null với phiên bản cũ. Đổi người khi còn nháp thì Chủ kho phải ký lại.</summary>
+    public Guid? ExecutorId { get; set; }
+
     /// <summary>JSON chỉ gồm id: {"assignments":[{assetId,beneficiaryId}]}.</summary>
     public string SnapshotJson { get; set; } = string.Empty;
 }
