@@ -434,6 +434,71 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Verifier_AddsRecipientsInOneBatch_AllOrNothing()
+    {
+        // Chuẩn bị: biên bản đang lập; kho đã có người nhận do Chủ kho khai
+        Vault2 vault = await BuildVaultAsync();
+        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        Guid recordId = await HandoverRecordTestData.RequestAsync(factory, vault.VaultId);
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        string url = HandoverRecordTestData.VerifierRecordUrl(recordId);
+        int before = (await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(url)))
+            .GetProperty("availableRecipients").GetArrayLength();
+        object first = new
+        {
+            fullName = "Lê Văn Một",
+            citizenId = "001090000097",
+            dateOfBirth = "1990-01-01",
+            email = "mot@example.com"
+        };
+        object sameEmail = new
+        {
+            fullName = "Lê Văn Hai",
+            citizenId = "001090000098",
+            dateOfBirth = "1990-01-01",
+            email = "MOT@example.com"
+        };
+        object second = new
+        {
+            fullName = "Lê Văn Hai",
+            citizenId = "001090000098",
+            dateOfBirth = "1990-01-01",
+            email = "hai@example.com"
+        };
+
+        // Hành động: người thứ hai trùng email người thứ nhất
+        HttpResponseMessage rejected = await verifier.Client.PostAsJsonAsync(
+            url + "/recipients/batch", new { recipients = new[] { first, sameEmail } });
+
+        // Kiểm tra: báo đúng người, đúng trường; không ai được thêm
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(rejected, HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        Assert.True(problem.GetProperty("errors").TryGetProperty("recipients[1].email", out JsonElement messages));
+        Assert.StartsWith("Người nhận mới 2:", messages[0].GetString());
+        JsonElement unchanged = await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(url));
+        Assert.Equal(before, unchanged.GetProperty("availableRecipients").GetArrayLength());
+
+        // Hành động: gửi lại danh sách hợp lệ
+        HttpResponseMessage added = await verifier.Client.PostAsJsonAsync(
+            url + "/recipients/batch", new { recipients = new[] { first, second } });
+
+        // Kiểm tra: đủ hai người, có email để FE nhận ra
+        Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+        JsonElement people = (await ApiTestHelpers.ReadJsonAsync(added)).GetProperty("availableRecipients");
+        Assert.Equal(before + 2, people.GetArrayLength());
+        List<string?> emails = new List<string?>();
+        foreach (JsonElement person in people.EnumerateArray())
+        {
+            emails.Add(person.GetProperty("email").GetString());
+        }
+        Assert.Contains("mot@example.com", emails);
+        Assert.Contains("hai@example.com", emails);
+        // Danh sách trống bị chặn ngay ở bước kiểm dữ liệu gửi lên.
+        HttpResponseMessage empty = await verifier.Client.PostAsJsonAsync(
+            url + "/recipients/batch", new { recipients = Array.Empty<object>() });
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+    }
+
+    [SqlFact]
     public async Task Executor_SeesLatestWillSignature_WithoutAssetsOrRecipients()
     {
         Vault2 vault = await BuildVaultAsync();

@@ -921,7 +921,70 @@ public sealed class HandoverRecordService : IHandoverRecordService
         RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ thêm người nhận khi biên bản đang lập.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
-        // 2. Kiểm thông tin: đủ CCCD, họ tên, ngày sinh, email; không trùng Chủ kho hay người nhận đã có
+        // 2. Kiểm thông tin người mới so với người đã có trong kho
+        List<Beneficiary> vaultBeneficiaries = await records.ListVaultBeneficiariesAsync(vault.Id, ct);
+        Beneficiary beneficiary = await BuildNewRecipientAsync(vault, request, vaultBeneficiaries, ct);
+
+        // 3. Lưu hồ sơ người nhận mới; luật sư ghi tài sản cho người này ở biên bản
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        beneficiary.CreatedAt = now;
+        records.AddBeneficiary(beneficiary);
+        record.UpdatedAt = now;
+        await SaveAsync(ct);
+
+        HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
+        return response;
+    }
+
+    public async Task<HandoverRecordResponse> AddRecipientsAsync(
+        Guid recordId, AddHandoverRecipientsRequest request, CancellationToken ct)
+    {
+        // 1. Biên bản của luật sư này và đang lập
+        Guid userId = await RequireActiveVerifierAsync(ct);
+        HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ thêm người nhận khi biên bản đang lập.");
+        Vault vault = await RequireVaultAsync(record.VaultId, ct);
+
+        // 2. Kiểm hết mọi người trước khi ghi: so với người đã có trong kho và với những người đứng trước trong danh sách
+        List<Beneficiary> vaultBeneficiaries = await records.ListVaultBeneficiariesAsync(vault.Id, ct);
+        List<Beneficiary> added = new List<Beneficiary>();
+        for (int index = 0; index < request.Recipients.Count; index++)
+        {
+            try
+            {
+                Beneficiary beneficiary = await BuildNewRecipientAsync(
+                    vault, request.Recipients[index], vaultBeneficiaries, ct);
+                vaultBeneficiaries.Add(beneficiary);
+                added.Add(beneficiary);
+            }
+            catch (AppException error) when (error.Code == ErrorCode.ValidationError)
+            {
+                throw PointToRecipient(error, index);
+            }
+        }
+
+        // 3. Lưu một lần: hoặc thêm đủ, hoặc không thêm ai
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        for (int index = 0; index < added.Count; index++)
+        {
+            // Cộng dần từng tích tắc để giữ đúng thứ tự luật sư nhập.
+            added[index].CreatedAt = now.AddTicks(index);
+            records.AddBeneficiary(added[index]);
+        }
+        record.UpdatedAt = now;
+        await SaveAsync(ct);
+
+        HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
+        return response;
+    }
+
+    /// <summary>
+    /// Kiểm một người nhận mới (đủ CCCD, họ tên, ngày sinh, email; không trùng Chủ kho, nhân sự hay người nhận khác) và
+    /// dựng hồ sơ đã mã hóa. Chưa ghi gì vào kho.
+    /// </summary>
+    private async Task<Beneficiary> BuildNewRecipientAsync(
+        Vault vault, AddHandoverRecipientRequest request, List<Beneficiary> vaultBeneficiaries, CancellationToken ct)
+    {
         BeneficiaryPersonalData data = new BeneficiaryPersonalData();
         data.CitizenId = CitizenIdRules.NormalizeCitizenId(request.CitizenId, "citizenId");
         data.FullName = request.FullName.Trim();
@@ -947,7 +1010,6 @@ public sealed class HandoverRecordService : IHandoverRecordService
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.VaultId = vault.Id;
         protector.Protect(beneficiary, data);
-        List<Beneficiary> vaultBeneficiaries = await records.ListVaultBeneficiariesAsync(vault.Id, ct);
         foreach (Beneficiary existing in vaultBeneficiaries)
         {
             if (existing.CitizenIdHash != null && beneficiary.CitizenIdHash != null
@@ -959,16 +1021,35 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // Email không trùng Chủ kho, nhân sự (Người xét duyệt, Người thực thi), Người thực thi của kho hay người nhận khác.
         await RecipientRules.EnsureEmailAvailableAsync(
             data.Email, vault, null, users, invitations, protector, vaultBeneficiaries, ct);
+        return beneficiary;
+    }
 
-        // 3. Lưu hồ sơ người nhận mới; luật sư ghi tài sản cho người này ở biên bản
-        DateTimeOffset now = timeProvider.GetUtcNow();
-        beneficiary.CreatedAt = now;
-        records.AddBeneficiary(beneficiary);
-        record.UpdatedAt = now;
-        await SaveAsync(ct);
-
-        HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
-        return response;
+    /// <summary>
+    /// Đổi khóa lỗi của một người thành recipients[chỉ số].trường và ghi số thứ tự vào câu lỗi để FE chỉ đúng ô nhập.
+    /// </summary>
+    private static AppException PointToRecipient(AppException error, int index)
+    {
+        Dictionary<string, string[]> errors = new Dictionary<string, string[]>();
+        object? raw;
+        if (error.Extensions.TryGetValue("errors", out raw))
+        {
+            Dictionary<string, string[]>? fields = raw as Dictionary<string, string[]>;
+            if (fields != null)
+            {
+                foreach (KeyValuePair<string, string[]> field in fields)
+                {
+                    List<string> messages = new List<string>();
+                    foreach (string message in field.Value)
+                    {
+                        messages.Add($"Người nhận mới {index + 1}: {message}");
+                    }
+                    errors[$"recipients[{index}].{field.Key}"] = messages.ToArray();
+                }
+            }
+        }
+        Dictionary<string, object?> extensions = new Dictionary<string, object?>();
+        extensions["errors"] = errors;
+        return new AppException(error.Type, error.Code, error.Message, extensions);
     }
 
     public async Task<HandoverRecordResponse> AddEvidenceAsync(
@@ -1716,7 +1797,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
             {
                 BeneficiaryId = beneficiary.Id,
                 FullName = ReadFullName(beneficiary),
-                CitizenId = ReadCitizenId(beneficiary)
+                CitizenId = ReadCitizenId(beneficiary),
+                Email = ReadEmail(beneficiary)
             };
             response.AvailableRecipients.Add(person);
         }
@@ -2050,6 +2132,24 @@ public sealed class HandoverRecordService : IHandoverRecordService
         try
         {
             return protector.Unprotect(beneficiary).CitizenId;
+        }
+        catch (Exception)
+        {
+            // Không giải mã được thì để trống, giống họ tên.
+            return string.Empty;
+        }
+    }
+
+    private string ReadEmail(Beneficiary beneficiary)
+    {
+        try
+        {
+            string? email = protector.Unprotect(beneficiary).Email;
+            if (email == null)
+            {
+                return string.Empty;
+            }
+            return email;
         }
         catch (Exception)
         {

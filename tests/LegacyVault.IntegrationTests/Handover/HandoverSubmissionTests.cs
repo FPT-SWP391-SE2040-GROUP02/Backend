@@ -505,6 +505,7 @@ public sealed class CountingRecordService : IHandoverRecordService
     public Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> ReviewClaimAsync(Guid recordId, Guid claimId, ReviewHandoverClaimRequest request, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> AddRecipientAsync(Guid recordId, AddHandoverRecipientRequest request, CancellationToken ct) => throw new NotSupportedException();
+    public Task<HandoverRecordResponse> AddRecipientsAsync(Guid recordId, AddHandoverRecipientsRequest request, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> AddEvidenceAsync(Guid recordId, List<UploadedFile> files, CancellationToken ct) => throw new NotSupportedException();
     public Task<HandoverRecordResponse> RemoveEvidenceAsync(Guid recordId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();
     public Task<PreparedDownload> PrepareVerifierFileAsync(Guid recordId, Guid fileId, CancellationToken ct) => throw new NotSupportedException();

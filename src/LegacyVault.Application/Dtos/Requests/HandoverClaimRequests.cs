@@ -39,6 +39,18 @@ public class CancelHandoverRecordRequest
     public string Reason { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Body của POST /verifier/handover-records/{id}/recipients/batch: thêm nhiều người nhận trong một lần lưu; một người
+/// không hợp lệ thì không ai được thêm.
+/// </summary>
+public class AddHandoverRecipientsRequest
+{
+    [Required(ErrorMessage = "Thiếu danh sách người nhận.")]
+    [MinLength(1, ErrorMessage = "Danh sách người nhận đang trống.")]
+    [MaxLength(20, ErrorMessage = "Mỗi lần thêm tối đa 20 người nhận.")]
+    public List<AddHandoverRecipientRequest> Recipients { get; set; } = new List<AddHandoverRecipientRequest>();
+}
+
 /// <summary>Body của POST /verifier/handover-records/{id}/recipients: luật sư thêm người nhận mới vào kho.</summary>
 public class AddHandoverRecipientRequest
 {

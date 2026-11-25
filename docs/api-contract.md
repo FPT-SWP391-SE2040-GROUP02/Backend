@@ -1299,6 +1299,7 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 | POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `PARTIALLY_DELIVERED` khi đã có người nhận được mở quyền tải) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/sign` | như trên | — | 200 `HandoverRecordResponse` | 404, 409 (`NOT_SIGNING_STEP` khi chưa chốt, `RECORD_COMPLETED`) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/remind-executor` | như trên | — | 200 `HandoverRecordResponse` (đã có `executorReminderSentAt`, `executorRemindAvailableAt`); gửi thư nhắc Người thực thi ký | 404 `HANDOVER_NOT_FOUND` (không phải luật sư được giao), 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE` khi chưa chốt hoặc đã hoàn tất, `EXECUTOR_ALREADY_SIGNED` khi bản hiện tại đã có chữ ký Người thực thi, `NO_EXECUTOR` khi kho chưa có Người thực thi có tài khoản, `REMINDED_RECENTLY` kèm trường `remindAvailableAt`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/recipients/batch` | Luật sư được giao biên bản | `{ "recipients": [{ "fullName", "citizenId", "dateOfBirth", "email", "phone"? }] }` (1 đến 20 người) | 200 `HandoverRecordResponse`; lưu một lần, một người không hợp lệ thì không ai được thêm | 400 `VALIDATION_ERROR` (khóa `recipients[chỉ số].trường`, chỉ số từ 0; câu lỗi ghi "Người nhận mới N:"), 404 `HANDOVER_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE` khi biên bản không còn đang lập), 409 `EDIT_CONFLICT` |
 | POST | `/api/v1/executor/vaults/{vaultId}/handover-record/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` | 404, 409 (như trên) |
 | POST | `/api/v1/handover/turns/{turnId}/record/sign` | Người nhận của lượt | — | 200 `HandoverRecordResponse` (chỉ phần của mình) | 404, 409 (như trên; `IDENTITY_NOT_CONFIRMED` khi danh tính của chính mình chưa được xác nhận) |
 
@@ -1352,7 +1353,7 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 
 ### 6.21d. Người nhận: các kho được để lại cho tôi và gửi yêu cầu trong app
 
-Lối vào trong app, không cần link trong thư. Người nhận do luật sư thêm (`POST /verifier/handover-records/{id}/recipients`) cũng tính.
+Lối vào trong app, không cần link trong thư. Người nhận do luật sư thêm (`POST /verifier/handover-records/{id}/recipients` hoặc `.../recipients/batch`) cũng tính.
 
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|

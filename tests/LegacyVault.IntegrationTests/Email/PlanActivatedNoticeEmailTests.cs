@@ -58,6 +58,36 @@ public sealed class PlanActivatedNoticeEmailTests
     }
 
     [Fact]
+    public void Build_WithRequestToken_TellsRecipientToSendRequestAfterOwnerDies()
+    {
+        // Chuẩn bị
+        PlanActivatedNotice notice = Notice();
+        notice.RequestToken = "link-rieng";
+        string requestUrl = LandingUrl + "request?token=link-rieng";
+
+        // Hành động
+        EmailContent email = PlanActivatedNoticeEmail.Build(notice, requestUrl);
+
+        // Kiểm tra
+        Assert.Contains("Khi Chủ kho qua đời, bạn cần chủ động gửi yêu cầu nhận tài sản", email.TextBody);
+        Assert.Contains(PlanActivatedNoticeEmail.RequestButtonText + ": " + requestUrl, email.TextBody);
+        Assert.Contains(WebUtility.HtmlEncode(PlanActivatedNoticeEmail.RequestButtonText), email.HtmlBody);
+        Assert.DoesNotContain("bạn sẽ nhận một email khác", email.TextBody);
+    }
+
+    [Fact]
+    public void Build_WithoutRequestToken_PointsToReceiveAssetsSection()
+    {
+        // Chuẩn bị, Hành động
+        EmailContent email = PlanActivatedNoticeEmail.Build(Notice(), LandingUrl);
+
+        // Kiểm tra
+        Assert.Contains("mở mục Nhận tài sản và gửi yêu cầu kèm di chúc", email.TextBody);
+        Assert.Contains(PlanActivatedNoticeEmail.OpenButtonText + ": " + LandingUrl, email.TextBody);
+        Assert.DoesNotContain(PlanActivatedNoticeEmail.RequestButtonText + ":", email.TextBody);
+    }
+
+    [Fact]
     public void Build_MissingPhone_SaysNotProvided()
     {
         PlanActivatedNotice notice = Notice();
