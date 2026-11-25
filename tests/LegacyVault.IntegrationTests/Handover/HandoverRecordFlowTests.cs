@@ -550,6 +550,65 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Executor_SeesOnlyAssetNamesAndKindsBeforeTheRecordIsFinalized()
+    {
+        // Chuẩn bị: kho đã kích hoạt có hai tài sản; một người lạ đã đăng nhập
+        Vault2 vault = await BuildVaultAsync();
+        VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true);
+        string namesUrl = $"/api/v1/executor/vaults/{vault.VaultId}/asset-names";
+
+        // Hành động: Người thực thi xem khi chưa có yêu cầu nhận tài sản
+        HttpResponseMessage response = await executor.Client.GetAsync(namesUrl);
+        string text = await response.Content.ReadAsStringAsync();
+
+        // Kết quả: đúng hai tài sản, mỗi phần tử chỉ có tên và loại; không lộ mã tài sản hay người nhận
+        Assert.True(response.StatusCode == HttpStatusCode.OK, "asset-names -> " + response.StatusCode + ": " + text);
+        JsonElement items = await ApiTestHelpers.ReadJsonAsync(response);
+        Assert.Equal(2, items.GetArrayLength());
+        List<string> names = new List<string>();
+        foreach (JsonElement item in items.EnumerateArray())
+        {
+            List<string> fields = new List<string>();
+            foreach (JsonProperty field in item.EnumerateObject())
+            {
+                fields.Add(field.Name);
+            }
+            fields.Sort();
+            Assert.Equal(new List<string> { "kind", "name" }, fields);
+            Assert.Equal("TEXT", item.GetProperty("kind").GetString());
+            names.Add(item.GetProperty("name").GetString()!);
+        }
+        Assert.Contains("Nhà", names);
+        Assert.Contains("Xe", names);
+        Assert.DoesNotContain(vault.AssetA.ToString(), text);
+        Assert.DoesNotContain(vault.FirstRecipient.ToString(), text);
+        Assert.DoesNotContain("001090000011", text);
+        Assert.DoesNotContain(RecipientEmail(0), text);
+
+        // Người lạ và chính Chủ kho đều nhận không tìm thấy
+        HttpResponseMessage fromStranger = await stranger.GetAsync(namesUrl);
+        Assert.Equal(HttpStatusCode.NotFound, fromStranger.StatusCode);
+        HttpResponseMessage fromOwner = await vault.Owner.GetAsync(namesUrl);
+        Assert.Equal(HttpStatusCode.NotFound, fromOwner.StatusCode);
+
+        // Danh sách theo người nhận vẫn khóa cho tới khi chốt biên bản
+        HttpResponseMessage recipients = await executor.Client.GetAsync($"/api/v1/executor/vaults/{vault.VaultId}/assets");
+        Assert.Equal(HttpStatusCode.Conflict, recipients.StatusCode);
+
+        // Tài sản đã xóa nội dung thì không còn trong danh sách
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Asset removed = await db.Set<Asset>().SingleAsync(asset => asset.Id == vault.AssetB);
+            removed.ContentDeletedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        });
+        JsonElement after = await ApiTestHelpers.ReadJsonAsync(await executor.Client.GetAsync(namesUrl));
+        Assert.Equal(1, after.GetArrayLength());
+        Assert.Equal("Nhà", after[0].GetProperty("name").GetString());
+    }
+
+    [SqlFact]
     public async Task Verifier_StepsAreLockedInOrder()
     {
         Vault2 vault = await BuildVaultAsync();
