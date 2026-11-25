@@ -1,3 +1,4 @@
+using LegacyVault.Application.Dtos;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Services;
@@ -24,13 +25,16 @@ public sealed class ExecutorHandoverController : ControllerBase
     private readonly IHandoverProgressService handoverProgressService;
     private readonly IHandoverKeyMailService handoverKeyMailService;
     private readonly IHandoverReceiptService receiptService;
+    private readonly IExecutorWillService willService;
 
     public ExecutorHandoverController(
         IHandoverRecordService recordService,
         IHandoverProgressService handoverProgressService,
         IHandoverKeyMailService handoverKeyMailService,
-        IHandoverReceiptService receiptService)
+        IHandoverReceiptService receiptService,
+        IExecutorWillService willService)
     {
+        this.willService = willService;
         this.recordService = recordService;
         this.receiptService = receiptService;
         this.handoverKeyMailService = handoverKeyMailService;
@@ -43,6 +47,20 @@ public sealed class ExecutorHandoverController : ControllerBase
     public Task<List<ExecutorVaultResponse>> GetMyVaults(CancellationToken ct)
     {
         return recordService.ListMyVaultsAsync(ct);
+    }
+
+    /// <summary>
+    /// Đồng ý (ký bằng mật khẩu) hoặc không đồng ý phiên bản biên bản phân chia Chủ kho vừa ký lại.
+    /// </summary>
+    [HttpPost("vaults/{vaultId:guid}/will/respond")]
+    [EnableRateLimiting("executor-invitations")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RespondWill(Guid vaultId, RespondWillVersionRequest request, CancellationToken ct)
+    {
+        await willService.RespondAsync(vaultId, request, ct);
+        return NoContent();
     }
 
     /// <summary>Biên bản bàn giao của kho. Chưa mở bàn giao thì 204 (không có nội dung).</summary>

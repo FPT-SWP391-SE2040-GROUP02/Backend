@@ -159,6 +159,7 @@ public static class InfrastructureConfig
         services.AddScoped<IExecutorInvitationRepository, ExecutorInvitationRepository>();
         services.AddScoped<IExecutorInvitationSender, ExecutorInvitationSender>();
         services.AddScoped<IExecutorReminderSender, ExecutorReminderSender>();
+        services.AddScoped<IExecutorWillNoticeSender, ExecutorWillNoticeSender>();
         services.AddHostedService<ExecutorInvitationMonitor>();
         services.AddScoped<IHandoverProgressReader, HandoverProgressReader>();
     }

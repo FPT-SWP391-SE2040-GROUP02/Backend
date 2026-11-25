@@ -59,7 +59,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     ExecutorKeyIssuer keyIssuer, IBeneficiaryDataProtector beneficiaryProtector,
     ISigningPasswordChecker signingPasswordChecker, IEmailBounceStore bounces,
     IWillVersionRepository willVersions, IHandoverRecordRepository handoverRecords,
-    IHandoverRequestNoticeSender handoverNotices) : IPlanSetupService
+    IHandoverRequestNoticeSender handoverNotices, IExecutorWillNoticeSender willNotices) : IPlanSetupService
 {
     public const string PolicyVersion = "setup-2026-11-20";
     public const string ScopeVersion = "executor-2026-11-23";
@@ -136,6 +136,15 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                     throw Conflict();
                 }
                 replaces = occupying[0].Id;
+            }
+            // Mời sau cùng: kế hoạch nháp phải xong mọi bước khác để người được mời có tờ đầy đủ mà xem trước khi ký.
+            if (vault.Plan.Status == PlanStatus.Draft)
+            {
+                PlanSetupResponse setup = await BuildAsync(vault, ct);
+                if (!setup.CanInviteExecutor)
+                {
+                    throw SetupNotComplete(setup);
+                }
             }
             // Người thực thi là nhân sự LegacyVault, không phải người nhận.
             Executor item = new Executor
@@ -347,6 +356,9 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             item.InvitationSentAt = null;
             item.AcceptedAt = null;
             item.AcceptedScopeVersion = null;
+            item.ConfirmedWillVersionNo = null;
+            item.WillConfirmedAt = null;
+            item.DeclinedWillVersionNo = null;
             item.EndedAt = null;
             item.UpdatedAt = now;
             PlanRules.BumpConfigVersion(vault.Plan, now);
@@ -369,14 +381,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     public Task<ExecutorInvitationResponse> RespondAsync(RespondExecutorInvitationRequest request, CancellationToken ct)
     {
         return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion, request.Password,
-            responder => FindTokenAsync(request.Token, ct), ct);
+            request.WillVersionNo, responder => FindTokenAsync(request.Token, ct), ct);
     }
 
     public Task<ExecutorInvitationResponse> RespondByIdAsync(
         Guid invitationId, RespondMyExecutorInvitationRequest request, CancellationToken ct)
     {
         return RespondCoreAsync(request.Accept, request.AcknowledgeScope, request.ScopeVersion, request.Password,
-            responder => FindMyInvitationAsync(invitationId, responder, ct), ct);
+            request.WillVersionNo, responder => FindMyInvitationAsync(invitationId, responder, ct), ct);
     }
 
     public async Task<MyExecutorInvitationsResponse> ListMyInvitationsAsync(CancellationToken ct)
@@ -407,7 +419,9 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             bool expired = item.Status == ExecutorStatus.Invited && item.ExpiresAt <= now;
             if (item.Status == ExecutorStatus.Invited && !expired)
             {
-                response.Pending.Add(ToMyInvitation(item, "INVITED", null));
+                MyExecutorInvitationResponse pending = ToMyInvitation(item, "INVITED", null);
+                await FillWillAsync(pending, item, ct);
+                response.Pending.Add(pending);
             }
             else if (expired)
             {
@@ -433,7 +447,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     /// để link sai/hết hạn không làm tốn lượt thử; các luật còn lại vẫn được kiểm lại đầy đủ trong giao dịch.
     /// </summary>
     private async Task<ExecutorInvitationResponse> RespondCoreAsync(bool accept, bool acknowledgeScope, string scopeVersion,
-        string? password, Func<User, Task<Executor>> findInvitation, CancellationToken ct)
+        string? password, int? willVersionNo, Func<User, Task<Executor>> findInvitation, CancellationToken ct)
     {
         if (accept)
         {
@@ -458,11 +472,19 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 await signingPasswordChecker.CheckAsync(signer, password, checkTime, ct);
             }
         }
-        return await RespondInTransactionAsync(accept, acknowledgeScope, scopeVersion, findInvitation, ct);
+        Guid? activatedVaultId = null;
+        ExecutorInvitationResponse response = await RespondInTransactionAsync(accept, acknowledgeScope, scopeVersion, willVersionNo,
+            vaultId => activatedVaultId = vaultId, findInvitation, ct);
+        if (activatedVaultId != null)
+        {
+            // Báo người nhận sau khi đã lưu kích hoạt, ngoài giao dịch để lần thử lại không gửi trùng thư.
+            await activatedNotifier.NotifyAsync(activatedVaultId.Value, ct);
+        }
+        return response;
     }
 
     private Task<ExecutorInvitationResponse> RespondInTransactionAsync(bool accept, bool acknowledgeScope, string scopeVersion,
-        Func<User, Task<Executor>> findInvitation, CancellationToken ct) =>
+        int? willVersionNo, Action<Guid> markActivated, Func<User, Task<Executor>> findInvitation, CancellationToken ct) =>
         unitOfWork.ExecuteSerializableAsync(async () =>
         {
             Guid userId = currentUser.RequireUserId();
@@ -505,6 +527,31 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 throw NotAllowed("INDEPENDENT_EXECUTOR_REQUIRED");
             }
             DateTimeOffset now = time.GetUtcNow();
+            if (accept)
+            {
+                // Người thực thi ký sau cùng: phải có tờ Chủ kho đã ký và đúng phiên bản người này vừa xem.
+                WillVersion? latest = await willVersions.FindLatestByVaultIdAsync(vault.Id, ct);
+                List<AssetAssignment> current = await assignments.FindByVaultIdAsync(vault.Id, ct);
+                if (latest == null || !WillVersionRules.IsReadyForInvitee(vault.Plan, item, latest, current))
+                {
+                    throw NotAllowed("WILL_NOT_SIGNED");
+                }
+                if (willVersionNo != latest.VersionNo)
+                {
+                    throw NotAllowed("WILL_VERSION_CHANGED");
+                }
+                if (vault.Plan.Status == PlanStatus.Draft)
+                {
+                    PlanSetupResponse setup = await BuildAsync(vault, ct);
+                    if (!setup.CanInviteExecutor)
+                    {
+                        throw SetupNotComplete(setup);
+                    }
+                }
+                item.ConfirmedWillVersionNo = latest.VersionNo;
+                item.WillConfirmedAt = now;
+                item.DeclinedWillVersionNo = null;
+            }
             item.UserId = userId;
             item.Status = accept ? ExecutorStatus.Accepted : ExecutorStatus.Declined;
             item.AcceptedAt = accept ? now : null;
@@ -530,7 +577,16 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 audit.Add(AuditRules.Create(vault.Id, userId, AuditActorRole.Executor, AuditAction.ExecutorAccepted,
                     AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
             }
-            PlanRules.BumpConfigVersion(vault.Plan, now);
+            if (accept && vault.Plan.Status == PlanStatus.Draft)
+            {
+                // Chữ ký cuối cùng: kế hoạch có hiệu lực từ lúc này.
+                await ActivatePlanAsync(vault, userId, AuditActorRole.Executor, now, ct);
+                markActivated(vault.Id);
+            }
+            else
+            {
+                PlanRules.BumpConfigVersion(vault.Plan, now);
+            }
             await unitOfWork.SaveChangesAsync(ct);
             return Map(item);
         }, ct);
@@ -575,25 +631,111 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 throw new AppException(AppErrorType.Conflict, ErrorCode.PlanActivationRequirementsNotMet,
                     "Kế hoạch chưa đủ điều kiện kích hoạt.", new Dictionary<string, object?> { ["missingRequirements"] = setup.MissingRequirements });
             }
+            if (setup.WillAwaitingExecutor)
+            {
+                // Bấm lặp: đã ký đúng bản này, chỉ còn chờ Người thực thi.
+                return setup;
+            }
             DateTimeOffset now = time.GetUtcNow();
-            vault.Plan.Status = PlanStatus.Active;
-            vault.Plan.ActivatedAt = now;
             vault.Plan.ActivationPolicyVersion = PolicyVersion;
             vault.Plan.ActivationPolicyAcknowledgedAt = now;
             vault.Plan.UpdatedAt = now;
-            // Mã nhận do server tạo cùng lúc kích hoạt (không trả mã gốc trong response); Chủ kho là người ký bằng PIN.
-            await keyIssuer.EnsureReadableAsync(vault, AuditActorRole.Owner, vault.OwnerId, now, ct);
             // Ký bằng PIN cũng là lúc chụp lại cấu hình: bàn giao chỉ theo bản ký này cho tới khi Chủ kho ký lại.
             List<AssetAssignment> signedAssignments = await assignments.FindByVaultIdAsync(vault.Id, ct);
-            await AddWillVersionAsync(vault, signedAssignments, now, ct);
-            audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.PlanActivated,
-                AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
+            WillVersion version = await AddWillVersionAsync(vault, signedAssignments, now, ct);
+            Executor? invitee = FindPendingInvitee(vault, now);
+            bool activated = invitee == null;
+            if (invitee != null)
+            {
+                // Chủ kho ký trước; kế hoạch chỉ có hiệu lực khi Người thực thi xem và ký.
+                version.ExecutorId = invitee.Id;
+                audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.WillSigned,
+                    AuditTargetType.Vault, vault.Id, version.VersionNo, AuditOutcome.Succeeded, null, now));
+            }
+            else
+            {
+                // Dữ liệu cũ: Người thực thi đã nhận vai từ khi kế hoạch còn nháp, sẽ được mời đồng ý tờ này sau.
+                await ActivatePlanAsync(vault, vault.OwnerId, AuditActorRole.Owner, now, ct);
+            }
             await unitOfWork.SaveChangesAsync(ct);
-            markActivated();
+            if (activated)
+            {
+                markActivated();
+            }
             return await BuildAsync(vault, ct);
         }, ct);
 
-    public Task<PlanSetupResponse> SignWillAsync(Guid vaultId, SignWillRequest request, CancellationToken ct)
+    /// <summary>Đặt kế hoạch đang chạy và tạo mã nhận (không trả mã gốc). Người gọi lưu cùng thao tác chính.</summary>
+    private async Task ActivatePlanAsync(Vault vault, Guid actorId, AuditActorRole actorRole, DateTimeOffset now, CancellationToken ct)
+    {
+        vault.Plan.Status = PlanStatus.Active;
+        vault.Plan.ActivatedAt = now;
+        vault.Plan.UpdatedAt = now;
+        await keyIssuer.EnsureReadableAsync(vault, actorRole, actorId, now, ct);
+        audit.Add(AuditRules.Create(vault.Id, actorId, actorRole, AuditAction.PlanActivated,
+            AuditTargetType.Vault, vault.Id, null, AuditOutcome.Succeeded, null, now));
+    }
+
+    /// <summary>Lời mời còn hạn, chưa trả lời; không có thì null.</summary>
+    private static Executor? FindPendingInvitee(Vault vault, DateTimeOffset now)
+    {
+        foreach (Executor item in vault.Executors)
+        {
+            if (item.Status == ExecutorStatus.Invited && item.ExpiresAt > now)
+            {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private static AppException SetupNotComplete(PlanSetupResponse setup)
+    {
+        return new AppException(AppErrorType.Conflict, ErrorCode.ExecutorNotAllowed,
+            "Chủ kho cần hoàn tất các bước khác trước khi mời Người thực thi.",
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "SETUP_NOT_COMPLETE",
+                ["missingRequirements"] = setup.MissingRequirements,
+            });
+    }
+
+    public async Task<PlanSetupResponse> SignWillAsync(Guid vaultId, SignWillRequest request, CancellationToken ct)
+    {
+        int? createdVersionNo = null;
+        PlanSetupResponse response = await SignWillCoreAsync(vaultId, request, versionNo => createdVersionNo = versionNo, ct);
+        if (createdVersionNo != null)
+        {
+            await NotifyNewWillVersionAsync(vaultId, createdVersionNo.Value, ct);
+        }
+        return response;
+    }
+
+    /// <summary>Báo Người thực thi có phiên bản mới cần xem; thư lỗi thì bỏ qua vì chữ ký đã lưu.</summary>
+    private async Task NotifyNewWillVersionAsync(Guid vaultId, int versionNo, CancellationToken ct)
+    {
+        Vault? vault = await vaults.FindByIdAsync(vaultId, ct);
+        if (vault == null)
+        {
+            return;
+        }
+        User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
+        foreach (Executor item in vault.Executors)
+        {
+            if (item.Status != ExecutorStatus.Accepted || item.UserId == null)
+            {
+                continue;
+            }
+            User? target = await users.FindByIdAsync(item.UserId.Value, ct);
+            if (target != null && owner != null)
+            {
+                await willNotices.SendNewVersionAsync(target.Email, owner.FullName, versionNo, ct);
+            }
+        }
+    }
+
+    private Task<PlanSetupResponse> SignWillCoreAsync(
+        Guid vaultId, SignWillRequest request, Action<int> markCreated, CancellationToken ct)
     {
         return unitOfWork.ExecuteSerializableAsync(async () =>
         {
@@ -629,6 +771,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.WillResigned,
                 AuditTargetType.Vault, vault.Id, created.VersionNo, AuditOutcome.Succeeded, null, now));
             await unitOfWork.SaveChangesAsync(ct);
+            markCreated(created.VersionNo);
             return await BuildAsync(vault, ct);
         }, ct);
     }
@@ -745,7 +888,15 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             }
         }
         // Mỗi kho đúng một Executor đã chấp nhận (không còn Executor dự phòng).
-        if (accepted.Count != 1)
+        // Mời Người thực thi là bước sau cùng: chỉ mở khi mọi bước khác đã xong.
+        bool canInviteExecutor = missing.Count == 0;
+        Executor? pendingInvitee = null;
+        if (vault.Plan.Status == PlanStatus.Draft)
+        {
+            pendingInvitee = FindPendingInvitee(vault, time.GetUtcNow());
+        }
+        // Chủ kho ký được khi đã mời một người (chưa trả lời) hoặc có người đã nhận vai (dữ liệu cũ).
+        if (accepted.Count != 1 && pendingInvitee == null)
         {
             missing.Add("PRIMARY_EXECUTOR_REQUIRED");
         }
@@ -802,13 +953,15 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
                 hasUnsignedChanges = WillVersionRules.HasChanges(unsignedChanges);
             }
         }
+        bool willAwaitingExecutor = pendingInvitee != null
+            && WillVersionRules.IsReadyForInvitee(vault.Plan, pendingInvitee, latestWill, vaultAssignments);
         // Cảnh báo duy nhất trước đây là NO_BACKUP_EXECUTOR; đã bỏ Executor dự phòng nên giữ mảng rỗng cho đúng hợp đồng API.
         return new(vault.Plan.Status.ToApiString(), vault.Plan.ConfigVersion, missing.Count == 0,
             missing.ToArray(), PolicyVersion, PolicyText, ScopeVersion, ScopeText,
             executorItems,
             CountDistinctAssets(vaultAssignments), PlanSetupMappings.ToAssetItems(unassignedAssets), Array.Empty<string>(),
             ownerFullName, ownerEmail, vault.Plan.ActivatedAt, recipients,
-            willVersionNo, willSignedAt, hasUnsignedChanges, unsignedChanges);
+            willVersionNo, willSignedAt, hasUnsignedChanges, unsignedChanges, willAwaitingExecutor, canInviteExecutor);
     }
 
     /// <summary>
@@ -922,6 +1075,28 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         return response;
     }
 
+    /// <summary>Tờ để người được mời xem trước: chỉ có số phiên bản, lúc ký và số đếm, không có tên tài sản hay người nhận.</summary>
+    private async Task FillWillAsync(MyExecutorInvitationResponse response, Executor item, CancellationToken ct)
+    {
+        Vault? vault = await vaults.FindByIdAsync(item.VaultId, ct);
+        if (vault == null)
+        {
+            return;
+        }
+        WillVersion? latest = await willVersions.FindLatestByVaultIdAsync(vault.Id, ct);
+        List<AssetAssignment> current = await assignments.FindByVaultIdAsync(vault.Id, ct);
+        if (latest == null || !WillVersionRules.IsReadyForInvitee(vault.Plan, item, latest, current))
+        {
+            return;
+        }
+        List<Asset> unassigned = await assets.FindUnassignedByVaultIdAsync(vault.Id, ct);
+        response.WillReady = true;
+        response.WillVersionNo = latest.VersionNo;
+        response.WillSignedAt = latest.SignedAt;
+        response.AssetCount = WillVersionRules.CountAssets(current, unassigned.Count);
+        response.RecipientCount = WillVersionRules.CountRecipients(WillVersionRules.FromJson(latest.SnapshotJson));
+    }
+
     private static int CompareByExpiresAt(MyExecutorInvitationResponse left, MyExecutorInvitationResponse right)
     {
         return left.ExpiresAt.CompareTo(right.ExpiresAt);
@@ -967,7 +1142,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     private ExecutorInvitationResponse Map(Executor item, bool accountExists, string? fullName) => new(item.Id,
         item.Status == ExecutorStatus.Invited && item.ExpiresAt <= time.GetUtcNow() ? "EXPIRED" : item.Status.ToApiString(), item.InviteeEmail,
         item.ExpiresAt, item.AcceptedAt, item.InvitationSentAt, item.AcceptedScopeVersion, Etag.From(item.UpdatedAt), accountExists,
-        fullName);
+        fullName, false, item.ConfirmedWillVersionNo, item.DeclinedWillVersionNo);
     private static AppException InvalidInvitation() => new(AppErrorType.NotFound, ErrorCode.ExecutorInvitationInvalid, "Lời mời Executor không hợp lệ hoặc đã hết hạn.");
     private static AppException Conflict() => new(AppErrorType.Conflict, ErrorCode.ExecutorInvitationConflict, "Lời mời hoặc phân công Executor đã tồn tại/thay đổi. Tải lại để kiểm tra.");
     private static AppException NotAllowed(string reason) => new(AppErrorType.Conflict, ErrorCode.ExecutorNotAllowed, "Không thể thực hiện thao tác Executor lúc này.", new Dictionary<string, object?> { ["reason"] = reason });

@@ -45,6 +45,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private readonly IHandoverReportProtector reportProtector;
     private readonly IAuditLogRepository auditLogs;
     private readonly IWillVersionRepository willVersions;
+    private readonly IAssetRepository assets;
     private readonly ILogger<HandoverRecordService> logger;
 
     // Thư báo ký ghi nhớ trong lượt này; chỉ gửi sau khi đã lưu (SendPendingSigningNoticeAsync).
@@ -73,12 +74,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
         IHandoverReportProtector reportProtector,
         IAuditLogRepository auditLogs,
         IWillVersionRepository willVersions,
+        IAssetRepository assets,
         ILogger<HandoverRecordService> logger)
     {
         this.auditLogs = auditLogs;
         this.reports = reports;
         this.reportProtector = reportProtector;
         this.willVersions = willVersions;
+        this.assets = assets;
         this.logger = logger;
         this.invitations = invitations;
         this.assignments = assignments;
@@ -135,6 +138,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
             {
                 item.WillVersionNo = will.VersionNo;
                 item.WillSignedAt = will.SignedAt;
+                item.ConfirmedWillVersionNo = executor.ConfirmedWillVersionNo;
+                item.WillConfirmedAt = executor.WillConfirmedAt;
+                item.DeclinedWillVersionNo = executor.DeclinedWillVersionNo;
+                item.WillConsentRequired = WillVersionRules.IsConsentRequired(vault.Plan, executor, will);
+                List<AssetAssignment> current = await assignments.FindByVaultIdAsync(vault.Id, ct);
+                List<Asset> unassigned = await assets.FindUnassignedByVaultIdAsync(vault.Id, ct);
+                item.AssetCount = WillVersionRules.CountAssets(current, unassigned.Count);
+                item.RecipientCount = WillVersionRules.CountRecipients(WillVersionRules.FromJson(will.SnapshotJson));
             }
             result.Add(item);
         }

@@ -104,9 +104,7 @@ public sealed class PlanActivationPinTests : IAsyncLifetime
         await ApiTestHelpers.EnsureSystemExecutorAsync(factory, ExecutorEmail);
         HttpResponseMessage invite = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email = ExecutorEmail });
         Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
-        HttpResponseMessage accept = await executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token = mail.Token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
-        Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
+        executorClient = executor;
 
         PlanSetupResponse setup = (await owner.GetFromJsonAsync<PlanSetupResponse>($"/api/v1/vaults/{vaultId}/plan-setup"))!;
         owner.DefaultRequestHeaders.Remove("X-Vault-Pin");
@@ -115,6 +113,15 @@ public sealed class PlanActivationPinTests : IAsyncLifetime
             ConfigVersion = setup.ConfigVersion, PolicyVersion = setup.PolicyVersion, AcknowledgePolicy = true,
         };
         return (owner, vaultId, request);
+    }
+
+    private HttpClient executorClient = null!;
+
+    private async Task AcceptAsync()
+    {
+        HttpResponseMessage accept = await executorClient.PostAsJsonAsync("/api/v1/executor-invitations/respond",
+            new { token = mail.Token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword, willVersionNo = 1 });
+        Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
     }
 
     private async Task AssertStillDraftWithoutKeyAsync(Guid vaultId)
@@ -160,8 +167,10 @@ public sealed class PlanActivationPinTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.DoesNotContain("shard", raw, StringComparison.OrdinalIgnoreCase);
         JsonElement body = JsonDocument.Parse(raw).RootElement;
-        Assert.Equal("ACTIVE", body.GetProperty("planStatus").GetString());
-        Assert.NotEqual(JsonValueKind.Null, body.GetProperty("activatedAt").ValueKind);
+        Assert.Equal("DRAFT", body.GetProperty("planStatus").GetString());
+        Assert.True(body.GetProperty("willAwaitingExecutor").GetBoolean());
+        await AssertStillDraftWithoutKeyAsync(vaultId);
+        await AcceptAsync();
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Assert.Equal(1, await db.Set<AuditLog>().CountAsync(l => l.VaultId == vaultId && l.Action == AuditAction.PlanActivated));
@@ -177,6 +186,7 @@ public sealed class PlanActivationPinTests : IAsyncLifetime
         (HttpClient owner, Guid vaultId, ActivatePlanRequest request) = await PrepareReadyPlanAsync();
         HttpResponseMessage activated = await PostWithPinAsync(owner, $"/api/v1/vaults/{vaultId}/activate", request, GoodPin);
         Assert.Equal(HttpStatusCode.OK, activated.StatusCode);
+        await AcceptAsync();
 
         HttpResponseMessage missing = await owner.PostAsync($"/api/v1/vaults/{vaultId}/executor-key/reissue", null);
         HttpResponseMessage ok = await PostWithPinAsync(owner, $"/api/v1/vaults/{vaultId}/executor-key/reissue", new { }, GoodPin);

@@ -452,6 +452,12 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<int?>("ConfirmedWillVersionNo")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DeclinedWillVersionNo")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset?>("EndedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -495,6 +501,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<Guid>("VaultId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("WillConfirmedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.HasKey("Id");
 
@@ -2361,6 +2370,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
 
                     b.Property<int>("ConfigVersion")
                         .HasColumnType("int");
+
+                    b.Property<Guid?>("ExecutorId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("SignedAt")
                         .HasColumnType("datetimeoffset");

@@ -24,6 +24,24 @@ public class ExecutorVaultResponse
     /// <summary>Lúc Chủ kho ký phiên bản đó; null cùng lúc với WillVersionNo.</summary>
     public DateTimeOffset? WillSignedAt { get; set; }
 
+    /// <summary>Phiên bản tôi đã xem và ký gần nhất; null khi chưa ký phiên bản nào.</summary>
+    public int? ConfirmedWillVersionNo { get; set; }
+
+    /// <summary>Lúc tôi ký phiên bản đó.</summary>
+    public DateTimeOffset? WillConfirmedAt { get; set; }
+
+    /// <summary>Phiên bản tôi đã không đồng ý; null khi không có.</summary>
+    public int? DeclinedWillVersionNo { get; set; }
+
+    /// <summary>Kế hoạch đang chạy và Chủ kho đã ký phiên bản mới mà tôi chưa trả lời.</summary>
+    public bool WillConsentRequired { get; set; }
+
+    /// <summary>Số tài sản trong kho; chỉ là số đếm.</summary>
+    public int AssetCount { get; set; }
+
+    /// <summary>Số người nhận trên tờ đã ký gần nhất.</summary>
+    public int RecipientCount { get; set; }
+
     /// <summary>Biên bản bàn giao của kho; null khi chưa mở bàn giao.</summary>
     public Guid? HandoverRecordId { get; set; }
 

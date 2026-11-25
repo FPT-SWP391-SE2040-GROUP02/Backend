@@ -41,6 +41,7 @@ public static class ApplicationConfig
         services.AddScoped<ITwoFactorService, TwoFactorService>();
         services.AddScoped<IAccountPhoneService, AccountPhoneService>();
         services.AddScoped<IPlanActivatedNotifier, PlanActivatedNotifier>();
+        services.AddScoped<IExecutorWillService, ExecutorWillService>();
 
         // Đăng nhập Google
         services.AddScoped<IGoogleAuthService, GoogleAuthService>();
