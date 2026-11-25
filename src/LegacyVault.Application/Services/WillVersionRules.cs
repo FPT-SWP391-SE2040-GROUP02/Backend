@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LegacyVault.Application.Dtos;
 using LegacyVault.Domain.Entities;
+using LegacyVault.Domain.Enums;
 
 namespace LegacyVault.Application.Services;
 
@@ -35,6 +36,73 @@ public static class WillVersionRules
         options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.PropertyNameCaseInsensitive = true;
         return options;
+    }
+
+    /// <summary>
+    /// Tờ đã sẵn sàng cho người được mời ký: Chủ kho đã ký và cách chia chưa đổi từ lúc ký. Kế hoạch nháp thì tờ phải ghi
+    /// đúng người được mời này và ký sau lần kích hoạt trước (nếu kế hoạch từng chạy rồi về nháp).
+    /// </summary>
+    public static bool IsReadyForInvitee(
+        HandoverPlan plan, Executor invitee, WillVersion? latest, List<AssetAssignment> currentAssignments)
+    {
+        if (latest == null)
+        {
+            return false;
+        }
+        UnsignedWillChangesResponse changes = Compare(FromJson(latest.SnapshotJson), BuildSnapshot(currentAssignments));
+        if (HasChanges(changes))
+        {
+            return false;
+        }
+        if (PlanRules.IsRunning(plan.Status))
+        {
+            return true;
+        }
+        if (latest.ExecutorId != invitee.Id)
+        {
+            return false;
+        }
+        if (plan.ActivatedAt != null && latest.SignedAt <= plan.ActivatedAt)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Chủ kho ký phiên bản mới mà Người thực thi chưa trả lời. Chỉ khi kế hoạch đang chạy.</summary>
+    public static bool IsConsentRequired(HandoverPlan plan, Executor executor, WillVersion? latest)
+    {
+        if (latest == null || !PlanRules.IsRunning(plan.Status) || executor.Status != ExecutorStatus.Accepted)
+        {
+            return false;
+        }
+        if (executor.ConfirmedWillVersionNo == latest.VersionNo || executor.DeclinedWillVersionNo == latest.VersionNo)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Số người nhận khác nhau trên tờ.</summary>
+    public static int CountRecipients(WillSnapshot snapshot)
+    {
+        HashSet<Guid> ids = new HashSet<Guid>();
+        foreach (WillAssignmentPair pair in snapshot.Assignments)
+        {
+            ids.Add(pair.BeneficiaryId);
+        }
+        return ids.Count;
+    }
+
+    /// <summary>Số tài sản trong kho: đã gán cho người nhận (đếm một lần) cộng chưa gán.</summary>
+    public static int CountAssets(List<AssetAssignment> assignments, int unassignedCount)
+    {
+        HashSet<Guid> ids = new HashSet<Guid>();
+        foreach (AssetAssignment assignment in assignments)
+        {
+            ids.Add(assignment.AssetId);
+        }
+        return ids.Count + unassignedCount;
     }
 
     /// <summary>Dựng bản chụp từ các dòng gán hiện tại của kho.</summary>

@@ -69,6 +69,7 @@ public sealed class WillSignatureTests : IAsyncLifetime
     private sealed class PreparedPlan
     {
         public HttpClient Owner { get; set; } = null!;
+        public HttpClient Executor { get; set; } = null!;
         public Guid VaultId { get; set; }
         public Guid FirstAssetId { get; set; }
         public Guid SecondAssetId { get; set; }
@@ -142,9 +143,7 @@ public sealed class WillSignatureTests : IAsyncLifetime
         await ApiTestHelpers.EnsureSystemExecutorAsync(factory, ExecutorEmail);
         HttpResponseMessage invite = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email = ExecutorEmail });
         Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
-        HttpResponseMessage accept = await executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token = mail.Token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
-        Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
+        plan.Executor = executor;
         DropPinForEdits(owner);
         return plan;
     }
@@ -167,6 +166,9 @@ public sealed class WillSignatureTests : IAsyncLifetime
         };
         HttpResponseMessage response = await PostWithPinAsync(plan.Owner, $"/api/v1/vaults/{plan.VaultId}/activate", request, GoodPin);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        HttpResponseMessage accept = await plan.Executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
+            new { token = mail.Token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword, willVersionNo = 1 });
+        Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
     }
 
     private static async Task<HttpResponseMessage> SignAsync(PreparedPlan plan, int configVersion, string? pin)
@@ -449,5 +451,139 @@ public sealed class WillSignatureTests : IAsyncLifetime
         JsonElement setup = await GetSetupAsync(plan);
         // Một cặp mất, một cặp thêm, cùng liên quan người nhận 2.
         AssertCounts(setup.GetProperty("unsignedChanges"), 1, 1, 1);
+    }
+
+    private static Task<HttpResponseMessage> RespondWillAsync(PreparedPlan plan, bool accept, int willVersionNo, string? password)
+    {
+        return plan.Executor.PostAsJsonAsync($"/api/v1/executor/vaults/{plan.VaultId}/will/respond",
+            new { accept, willVersionNo, password });
+    }
+
+    private static async Task<JsonElement> GetExecutorVaultAsync(PreparedPlan plan)
+    {
+        JsonElement vaults = await plan.Executor.GetFromJsonAsync<JsonElement>("/api/v1/executor/vaults");
+        return vaults[0];
+    }
+
+    private Task<HttpResponseMessage> AcceptInvitationAsync(PreparedPlan plan, int? willVersionNo)
+    {
+        return plan.Executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
+            new { token = mail.Token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion,
+                password = ApiTestHelpers.ExecutorPassword, willVersionNo });
+    }
+
+    private async Task<HttpResponseMessage> OwnerSignAsync(PreparedPlan plan)
+    {
+        JsonElement setup = await GetSetupAsync(plan);
+        ActivatePlanRequest request = new ActivatePlanRequest();
+        request.ConfigVersion = setup.GetProperty("configVersion").GetInt32();
+        request.PolicyVersion = setup.GetProperty("policyVersion").GetString()!;
+        request.AcknowledgePolicy = true;
+        return await PostWithPinAsync(plan.Owner, $"/api/v1/vaults/{plan.VaultId}/activate", request, GoodPin);
+    }
+
+    [SqlFact]
+    public async Task ExecutorCannotAcceptBeforeOwnerSigns_AndSeesPaperOnlyAfter()
+    {
+        PreparedPlan plan = await PrepareReadyPlanAsync(false);
+
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
+            await AcceptInvitationAsync(plan, 1), HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
+        Assert.Equal("WILL_NOT_SIGNED", problem.GetProperty("reason").GetString());
+        JsonElement before = await plan.Executor.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
+        Assert.False(before.GetProperty("pending")[0].GetProperty("willReady").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.OK, (await OwnerSignAsync(plan)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await OwnerSignAsync(plan)).StatusCode);
+
+        Assert.Single(await ReadVersionsAsync(plan.VaultId));
+        JsonElement mine = await plan.Executor.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
+        JsonElement pending = mine.GetProperty("pending")[0];
+        Assert.True(pending.GetProperty("willReady").GetBoolean());
+        Assert.Equal(1, pending.GetProperty("willVersionNo").GetInt32());
+        Assert.Equal(1, pending.GetProperty("assetCount").GetInt32());
+        Assert.Equal(1, pending.GetProperty("recipientCount").GetInt32());
+        Assert.DoesNotContain("Ghi chú", mine.GetRawText());
+        JsonElement noVersion = await ApiTestHelpers.AssertProblemAsync(
+            await AcceptInvitationAsync(plan, null), HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
+        Assert.Equal("WILL_VERSION_CHANGED", noVersion.GetProperty("reason").GetString());
+
+        Assert.Equal(HttpStatusCode.OK, (await AcceptInvitationAsync(plan, 1)).StatusCode);
+        Assert.Equal("ACTIVE", (await GetSetupAsync(plan)).GetProperty("planStatus").GetString());
+        JsonElement vault = await GetExecutorVaultAsync(plan);
+        Assert.Equal(1, vault.GetProperty("confirmedWillVersionNo").GetInt32());
+        Assert.False(vault.GetProperty("willConsentRequired").GetBoolean());
+    }
+
+    [SqlFact]
+    public async Task OwnerChangesAfterSigningDraft_MustSignAgainBeforeExecutorAccepts()
+    {
+        PreparedPlan plan = await PrepareReadyPlanAsync(false);
+        Assert.Equal(HttpStatusCode.OK, (await OwnerSignAsync(plan)).StatusCode);
+        await AddUnsignedChangesAsync(plan);
+
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(
+            await AcceptInvitationAsync(plan, 1), HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
+        Assert.Equal("WILL_NOT_SIGNED", problem.GetProperty("reason").GetString());
+        Assert.False((await GetSetupAsync(plan)).GetProperty("willAwaitingExecutor").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.OK, (await OwnerSignAsync(plan)).StatusCode);
+        JsonElement stale = await ApiTestHelpers.AssertProblemAsync(
+            await AcceptInvitationAsync(plan, 1), HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
+        Assert.Equal("WILL_VERSION_CHANGED", stale.GetProperty("reason").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await AcceptInvitationAsync(plan, 2)).StatusCode);
+    }
+
+    [SqlFact]
+    public async Task ResignedWill_ExecutorConfirmsWithPassword()
+    {
+        PreparedPlan plan = await PrepareReadyPlanAsync(false);
+        await ActivateAsync(plan);
+        await AddUnsignedChangesAsync(plan);
+        int configVersion = (await GetSetupAsync(plan)).GetProperty("configVersion").GetInt32();
+        Assert.Equal(HttpStatusCode.OK, (await SignAsync(plan, configVersion, GoodPin)).StatusCode);
+
+        JsonElement waiting = await GetExecutorVaultAsync(plan);
+        Assert.True(waiting.GetProperty("willConsentRequired").GetBoolean());
+        Assert.Equal(1, waiting.GetProperty("confirmedWillVersionNo").GetInt32());
+        await ApiTestHelpers.AssertProblemAsync(
+            await RespondWillAsync(plan, true, 2, null), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        await ApiTestHelpers.AssertProblemAsync(
+            await RespondWillAsync(plan, true, 2, "sai-mat-khau"), HttpStatusCode.Forbidden, "SIGNING_PASSWORD_INVALID");
+        await ApiTestHelpers.AssertProblemAsync(
+            await RespondWillAsync(plan, true, 1, ApiTestHelpers.ExecutorPassword), HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await RespondWillAsync(plan, true, 2, ApiTestHelpers.ExecutorPassword)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await RespondWillAsync(plan, true, 2, ApiTestHelpers.ExecutorPassword)).StatusCode);
+
+        JsonElement done = await GetExecutorVaultAsync(plan);
+        Assert.False(done.GetProperty("willConsentRequired").GetBoolean());
+        Assert.Equal(2, done.GetProperty("confirmedWillVersionNo").GetInt32());
+        Assert.Equal(1, await CountAuditAsync(plan.VaultId, AuditAction.ExecutorWillConfirmed));
+    }
+
+    [SqlFact]
+    public async Task ResignedWill_ExecutorDeclines_KeepsRoleAndOwnerSeesIt()
+    {
+        PreparedPlan plan = await PrepareReadyPlanAsync(false);
+        await ActivateAsync(plan);
+        await AddUnsignedChangesAsync(plan);
+        int configVersion = (await GetSetupAsync(plan)).GetProperty("configVersion").GetInt32();
+        Assert.Equal(HttpStatusCode.OK, (await SignAsync(plan, configVersion, GoodPin)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await RespondWillAsync(plan, false, 2, null)).StatusCode);
+
+        JsonElement vault = await GetExecutorVaultAsync(plan);
+        Assert.Equal(2, vault.GetProperty("declinedWillVersionNo").GetInt32());
+        Assert.Equal(1, vault.GetProperty("confirmedWillVersionNo").GetInt32());
+        JsonElement executor = (await GetSetupAsync(plan)).GetProperty("executors")[0];
+        Assert.Equal("ACCEPTED", executor.GetProperty("status").GetString());
+        Assert.Equal(2, executor.GetProperty("declinedWillVersionNo").GetInt32());
+        Assert.Equal(1, await CountAuditAsync(plan.VaultId, AuditAction.ExecutorWillDeclined));
+        // Người lạ không trả lời thay được.
+        HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        HttpResponseMessage outsider = await stranger.PostAsJsonAsync(
+            $"/api/v1/executor/vaults/{plan.VaultId}/will/respond", new { accept = false, willVersionNo = 2 });
+        Assert.Equal(HttpStatusCode.NotFound, outsider.StatusCode);
     }
 }

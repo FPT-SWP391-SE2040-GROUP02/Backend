@@ -104,15 +104,17 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
     private async Task<ExecutorInvitationResponse> InviteAsync(HttpClient owner, Guid vaultId, string email)
     {
         await ApiTestHelpers.EnsureSystemExecutorAsync(factory, email);
+        await ApiTestHelpers.CompleteSetupBeforeInviteAsync(factory, vaultId);
         HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await ApiTestHelpers.SignWillForInviteeAsync(factory, vaultId);
         return (await response.Content.ReadFromJsonAsync<ExecutorInvitationResponse>())!;
     }
 
     private static async Task AcceptAsync(HttpClient client, string token)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
+            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword, willVersionNo = 1 });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -146,7 +148,7 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await RevokeAsync(owner, vaultId, invited.Id, invited.Etag)).StatusCode);
 
         HttpResponseMessage accept = await executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
+            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword, willVersionNo = 1 });
         Assert.False(accept.IsSuccessStatusCode);
 
         // Chỗ trống: mời người khác được ngay
@@ -234,12 +236,13 @@ public sealed class ExecutorManagementTests : IAsyncLifetime
             Assert.Equal(1, key.Version);
             Assert.False(string.IsNullOrEmpty(key.EncryptedShard));
             Assert.Equal(1, await db.Set<AuditLog>().CountAsync(
-                l => l.VaultId == vaultId && l.Action == AuditAction.ExecutorKeyIssued && l.ActorRole == AuditActorRole.Owner));
+                l => l.VaultId == vaultId && l.Action == AuditAction.ExecutorKeyIssued && l.ActorRole == AuditActorRole.Executor));
 
             AuditLog activated = await db.Set<AuditLog>().SingleAsync(
                 l => l.VaultId == vaultId && l.Action == AuditAction.PlanActivated);
-            Assert.Equal(AuditActorRole.Owner, activated.ActorRole);
-            Assert.Equal(vault.OwnerId, activated.ActorUserId);
+            // Người thực thi ký sau cùng nên kế hoạch có hiệu lực do chữ ký của họ.
+            Assert.Equal(AuditActorRole.Executor, activated.ActorRole);
+            Assert.NotEqual(vault.OwnerId, activated.ActorUserId);
             Assert.Equal(AuditTargetType.Vault, activated.TargetType);
             Assert.Equal(vaultId, activated.TargetId);
 

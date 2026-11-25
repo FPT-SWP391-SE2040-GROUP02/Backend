@@ -434,6 +434,36 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Executor_SeesLatestWillSignature_WithoutAssetsOrRecipients()
+    {
+        Vault2 vault = await BuildVaultAsync();
+        VaultTestData.ExecutorClient executor = await VaultTestData.CreateExecutorClientAsync(factory, vault.VaultId);
+        JsonElement before = (await ApiTestHelpers.ReadJsonAsync(await executor.Client.GetAsync("/api/v1/executor/vaults")))[0];
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("willVersionNo").ValueKind);
+
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            for (int version = 1; version <= 2; version++)
+            {
+                WillVersion will = new WillVersion();
+                will.VaultId = vault.VaultId;
+                will.VersionNo = version;
+                will.SignedAt = DateTimeOffset.UtcNow;
+                will.SnapshotJson = "{\"assignments\":[]}";
+                db.Add(will);
+            }
+            await db.SaveChangesAsync();
+        });
+        HttpResponseMessage response = await executor.Client.GetAsync("/api/v1/executor/vaults");
+        string text = await response.Content.ReadAsStringAsync();
+        JsonElement after = (await ApiTestHelpers.ReadJsonAsync(response))[0];
+        Assert.Equal(2, after.GetProperty("willVersionNo").GetInt32());
+        Assert.Equal(JsonValueKind.String, after.GetProperty("willSignedAt").ValueKind);
+        Assert.DoesNotContain(vault.AssetA.ToString(), text);
+        Assert.DoesNotContain(vault.FirstRecipient.ToString(), text);
+    }
+
+    [SqlFact]
     public async Task Executor_CannotSeeAssetsBeforeTheRecordIsFinalized()
     {
         Vault2 vault = await BuildVaultAsync();

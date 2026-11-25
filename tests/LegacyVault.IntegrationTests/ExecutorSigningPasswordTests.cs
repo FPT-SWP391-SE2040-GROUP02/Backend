@@ -75,10 +75,13 @@ public sealed class ExecutorSigningPasswordTests : IAsyncLifetime
         });
         HttpClient executor = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true, ExecutorEmail);
         await ApiTestHelpers.EnsureSystemExecutorAsync(factory, ExecutorEmail);
+        await ApiTestHelpers.CompleteSetupBeforeInviteAsync(factory, vaultId);
+        await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Ghi chú");
         HttpResponseMessage invite = await owner.PostAsJsonAsync($"/api/v1/vaults/{vaultId}/executors", new { email = ExecutorEmail });
         Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
         ExecutorInvitationResponse? invitation = await invite.Content.ReadFromJsonAsync<ExecutorInvitationResponse>();
         Assert.NotNull(invitation);
+        await ApiTestHelpers.SignWillForInviteeAsync(factory, vaultId);
 
         Guid executorUserId = Guid.Empty;
         await ApiTestHelpers.WithDbAsync(factory, async db =>
@@ -92,7 +95,7 @@ public sealed class ExecutorSigningPasswordTests : IAsyncLifetime
     private static Task<HttpResponseMessage> RespondByIdAsync(Setup setup, bool accept, string? password)
     {
         return setup.Executor.PostAsJsonAsync($"/api/v1/executor-invitations/{setup.InvitationId}/respond",
-            new { accept, acknowledgeScope = accept, scopeVersion = PlanSetupService.ScopeVersion, password });
+            new { accept, acknowledgeScope = accept, scopeVersion = PlanSetupService.ScopeVersion, password, willVersionNo = 1 });
     }
 
     private async Task<ExecutorStatus> LoadStatusAsync(Guid invitationId)
@@ -180,9 +183,9 @@ public sealed class ExecutorSigningPasswordTests : IAsyncLifetime
         string token = mail.Token;
 
         HttpResponseMessage wrong = await setup.Executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = WrongPassword });
+            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = WrongPassword, willVersionNo = 1 });
         HttpResponseMessage correct = await setup.Executor.PostAsJsonAsync("/api/v1/executor-invitations/respond",
-            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword });
+            new { token, accept = true, acknowledgeScope = true, scopeVersion = PlanSetupService.ScopeVersion, password = ApiTestHelpers.ExecutorPassword, willVersionNo = 1 });
 
         await ApiTestHelpers.AssertProblemAsync(wrong, HttpStatusCode.Forbidden, "SIGNING_PASSWORD_INVALID");
         Assert.Equal(HttpStatusCode.OK, correct.StatusCode);

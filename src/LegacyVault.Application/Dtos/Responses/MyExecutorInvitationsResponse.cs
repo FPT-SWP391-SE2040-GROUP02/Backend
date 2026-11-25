@@ -37,4 +37,17 @@ public sealed class MyExecutorInvitationResponse
     /// <summary>Lúc từ chối, hết hạn hoặc bị thu hồi; null khi còn chờ.</summary>
     public DateTimeOffset? EndedAt { get; set; }
 
+    /// <summary>True khi Chủ kho đã ký biên bản phân chia và lời mời ký được; false thì phải chờ Chủ kho ký.</summary>
+    public bool WillReady { get; set; }
+
+    /// <summary>Phiên bản Chủ kho ký gần nhất; gửi lại khi chấp nhận. Null khi WillReady = false.</summary>
+    public int? WillVersionNo { get; set; }
+
+    public DateTimeOffset? WillSignedAt { get; set; }
+
+    /// <summary>Số tài sản trong kho; chỉ là số đếm, không có tên hay nội dung. 0 khi WillReady = false.</summary>
+    public int AssetCount { get; set; }
+
+    /// <summary>Số người nhận trên tờ; 0 khi Chủ kho không khai người nhận.</summary>
+    public int RecipientCount { get; set; }
 }

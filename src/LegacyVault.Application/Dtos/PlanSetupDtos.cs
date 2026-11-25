@@ -7,7 +7,8 @@ namespace LegacyVault.Application.Dtos;
 public sealed record ExecutorInvitationResponse(Guid Id, string Status, string InviteeEmail,
     DateTimeOffset ExpiresAt, DateTimeOffset? AcceptedAt,
     DateTimeOffset? InvitationSentAt, string? AcceptedScopeVersion, string Etag, bool AccountExists = false,
-    string? FullName = null, bool EmailUndeliverable = false);
+    string? FullName = null, bool EmailUndeliverable = false,
+    int? ConfirmedWillVersionNo = null, int? DeclinedWillVersionNo = null);
 public sealed record CheckInviteeEmailResponse(string Email, bool Exists);
 /// <summary>Tài khoản có sẵn mà Chủ kho có thể chọn làm Người thực thi.</summary>
 public sealed record ExecutorCandidateResponse(Guid UserId, string FullName, string Email);
@@ -18,7 +19,7 @@ public sealed record PlanSetupResponse(string PlanStatus, int ConfigVersion, boo
     string OwnerFullName = "", string OwnerEmail = "",
     DateTimeOffset? ActivatedAt = null, List<PlanSetupRecipientResponse>? Recipients = null,
     int? WillVersion = null, DateTimeOffset? WillSignedAt = null, bool HasUnsignedChanges = false,
-    UnsignedWillChangesResponse? UnsignedChanges = null);
+    UnsignedWillChangesResponse? UnsignedChanges = null, bool WillAwaitingExecutor = false, bool CanInviteExecutor = false);
 
 /// <summary>
 /// Một tài sản được gán cho người nhận trên màn kích hoạt (chỉ tên và loại, không có nội dung).
@@ -52,6 +53,9 @@ public sealed class RespondExecutorInvitationRequest : InspectExecutorInvitation
 
     /// <summary>Mật khẩu tài khoản để ký nhận vai khi chấp nhận; từ chối thì bỏ qua.</summary>
     [MaxLength(128)] public string? Password { get; set; }
+
+    /// <summary>Phiên bản biên bản phân chia đã xem; bắt buộc khi chấp nhận.</summary>
+    public int? WillVersionNo { get; set; }
 }
 
 /// <summary>Trả lời lời mời theo id (lấy từ GET /executor-invitations/mine), không cần token trong link email.</summary>
@@ -65,6 +69,22 @@ public sealed class RespondMyExecutorInvitationRequest
     public string ScopeVersion { get; set; } = "";
 
     /// <summary>Mật khẩu tài khoản để ký nhận vai khi chấp nhận; từ chối thì bỏ qua.</summary>
+    [MaxLength(128)]
+    public string? Password { get; set; }
+
+    /// <summary>Phiên bản biên bản phân chia đã xem; bắt buộc khi chấp nhận.</summary>
+    public int? WillVersionNo { get; set; }
+}
+
+/// <summary>Người thực thi trả lời phiên bản biên bản phân chia Chủ kho ký lại.</summary>
+public sealed class RespondWillVersionRequest
+{
+    public bool Accept { get; set; }
+
+    [Range(1, int.MaxValue)]
+    public int WillVersionNo { get; set; }
+
+    /// <summary>Mật khẩu tài khoản để ký khi đồng ý; không đồng ý thì bỏ qua.</summary>
     [MaxLength(128)]
     public string? Password { get; set; }
 }

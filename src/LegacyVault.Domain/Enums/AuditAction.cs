@@ -160,4 +160,10 @@ public enum AuditAction
     AssetUnassigned = 76,
     /// <summary>Luật sư nhắc Người thực thi ký biên bản bàn giao đã chốt (đích là kho; không ghi nội dung thư).</summary>
     HandoverExecutorReminded = 77,
+    /// <summary>Chủ kho ký biên bản phân chia trước, chờ Người thực thi xem và ký (kế hoạch chưa có hiệu lực).</summary>
+    WillSigned = 78,
+    /// <summary>Người thực thi xem và đồng ý phiên bản biên bản phân chia Chủ kho ký lại.</summary>
+    ExecutorWillConfirmed = 79,
+    /// <summary>Người thực thi không đồng ý phiên bản biên bản phân chia Chủ kho ký lại.</summary>
+    ExecutorWillDeclined = 80,
 }

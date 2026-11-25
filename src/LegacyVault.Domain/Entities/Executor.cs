@@ -51,6 +51,15 @@ public class Executor
     public DateTimeOffset? InvitationSentAt { get; set; }
     public string? AcceptedScopeVersion { get; set; }
 
+    /// <summary>Phiên bản biên bản phân chia mà Người thực thi đã xem và ký gần nhất; null khi chưa ký phiên bản nào.</summary>
+    public int? ConfirmedWillVersionNo { get; set; }
+
+    /// <summary>Lúc ký phiên bản ở ConfirmedWillVersionNo.</summary>
+    public DateTimeOffset? WillConfirmedAt { get; set; }
+
+    /// <summary>Phiên bản Chủ kho ký lại mà Người thực thi không đồng ý; ký phiên bản mới hơn thì xóa.</summary>
+    public int? DeclinedWillVersionNo { get; set; }
+
     /// <summary>Lúc từ chối, hết hạn, bị thu hồi hoặc bị tạm dừng gần nhất.</summary>
     public DateTimeOffset? EndedAt { get; set; }
 
