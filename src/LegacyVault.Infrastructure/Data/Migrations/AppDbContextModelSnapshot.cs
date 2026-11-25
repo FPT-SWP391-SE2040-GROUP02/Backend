@@ -1221,6 +1221,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateOnly?>("DateOfBirth")
+                        .HasColumnType("date");
+
                     b.Property<bool>("DateOfBirthMatches")
                         .HasColumnType("bit");
 
@@ -1245,6 +1248,13 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                     b.Property<byte[]>("FrontImageWrappedDataKey")
                         .IsRequired()
                         .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasDefaultValue("");
 
                     b.Property<string>("Kind")
                         .IsRequired()

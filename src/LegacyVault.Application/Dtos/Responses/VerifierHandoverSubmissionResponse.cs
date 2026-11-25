@@ -14,6 +14,21 @@ public class VerifierHandoverSubmissionResponse : VerifierHandoverSubmissionSumm
 
     public string CitizenId { get; set; } = string.Empty;
 
+    /// <summary>Họ tên người nhận đã gõ; rỗng với hồ sơ cũ.</summary>
+    public string ClaimedFullName { get; set; } = string.Empty;
+
+    /// <summary>Ngày sinh người nhận đã gõ; null với hồ sơ cũ.</summary>
+    public DateOnly? ClaimedDateOfBirth { get; set; }
+
+    /// <summary>Họ tên Chủ kho đã khai cho người nhận này; rỗng khi không đọc được.</summary>
+    public string DeclaredFullName { get; set; } = string.Empty;
+
+    /// <summary>Số căn cước Chủ kho đã khai cho người nhận này; rỗng khi không đọc được.</summary>
+    public string DeclaredCitizenId { get; set; } = string.Empty;
+
+    /// <summary>Ngày sinh Chủ kho đã khai cho người nhận này; null khi không đọc được.</summary>
+    public DateOnly? DeclaredDateOfBirth { get; set; }
+
     public bool Acknowledged { get; set; }
 
     public bool VoluntaryDecline { get; set; }

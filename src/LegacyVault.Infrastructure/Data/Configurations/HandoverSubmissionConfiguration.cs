@@ -16,6 +16,9 @@ public sealed class HandoverSubmissionConfiguration : IEntityTypeConfiguration<H
         builder.Property(s => s.Kind).IsRequired().HasConversion<string>().HasMaxLength(16);
         builder.Property(s => s.Status).IsRequired().HasConversion<string>().HasMaxLength(32);
         builder.Property(s => s.CitizenId).IsRequired().HasMaxLength(12).IsUnicode(false);
+        // Hồ sơ nộp trước khi có hai cột này mang giá trị rỗng/null.
+        builder.Property(s => s.FullName).IsRequired().HasMaxLength(200).HasDefaultValue(string.Empty);
+        builder.Property(s => s.DateOfBirth);
         builder.Property(s => s.SupplementReason).HasMaxLength(1000);
 
         builder.Property(s => s.FrontImageStorageKey).IsRequired().HasMaxLength(256);
