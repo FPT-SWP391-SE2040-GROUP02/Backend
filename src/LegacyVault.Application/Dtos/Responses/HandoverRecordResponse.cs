@@ -167,6 +167,9 @@ public class HandoverRecordPersonResponse
     public Guid BeneficiaryId { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string CitizenId { get; set; } = string.Empty;
+
+    /// <summary>Email đã khai; luật sư dùng để biết người trong hồ sơ báo tin đã có trong kho chưa.</summary>
+    public string Email { get; set; } = string.Empty;
 }
 
 /// <summary>Một người nhận trong biên bản phân chia của Chủ kho và các tài sản Chủ kho đã gán cho người đó.</summary>

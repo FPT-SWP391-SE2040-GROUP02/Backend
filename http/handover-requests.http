@@ -94,6 +94,19 @@ Authorization: Bearer {{verifierToken}}
 ###
 @recordId = {{records.response.body.$[0].id}}
 
+### 5b) Thêm nhiều người nhận trong một lần lưu (biên bản đang lập). Sai một người thì không ai được thêm;
+#    lỗi ghi theo khóa recipients[chỉ số].trường. Dữ liệu dưới đây là dữ liệu giả.
+POST {{baseUrl}}/verifier/handover-records/{{recordId}}/recipients/batch
+Authorization: Bearer {{verifierToken}}
+Content-Type: application/json
+
+{
+  "recipients": [
+    { "fullName": "Nguyễn Văn Thử", "citizenId": "001090000001", "dateOfBirth": "1990-01-01", "email": "nguoinhan1@example.com" },
+    { "fullName": "Trần Thị Thử", "citizenId": "001090000002", "dateOfBirth": "1992-02-02", "email": "nguoinhan2@example.com" }
+  ]
+}
+
 ### 6) Chốt biên bản: bắt buộc tick xác nhận căn cứ pháp lý (thiếu hoặc false: 400 VALIDATION_ERROR).
 #    Biên bản khác cách chia của Chủ kho (splitDifferences không rỗng) thì phải thêm confirmSplitDeviation: true.
 #    Kho chưa khóa (chưa chấp nhận giấy tờ nào) thì 409 HANDOVER_NOT_ALLOWED (VAULT_NOT_LOCKED).

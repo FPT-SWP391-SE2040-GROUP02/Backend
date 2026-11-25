@@ -57,6 +57,10 @@ public interface IHandoverRecordService
     /// <summary>Luật sư thêm người nhận mới vào kho khi lập biên bản.</summary>
     Task<HandoverRecordResponse> AddRecipientAsync(Guid recordId, AddHandoverRecipientRequest request, CancellationToken ct);
 
+    /// <summary>Thêm nhiều người nhận trong một lần lưu; một người không hợp lệ thì không ai được thêm.</summary>
+    Task<HandoverRecordResponse> AddRecipientsAsync(
+        Guid recordId, AddHandoverRecipientsRequest request, CancellationToken ct);
+
     /// <summary>Luật sư đính kèm tệp căn cứ (di chúc, văn bản...) vào biên bản.</summary>
     Task<HandoverRecordResponse> AddEvidenceAsync(Guid recordId, List<UploadedFile> files, CancellationToken ct);
 

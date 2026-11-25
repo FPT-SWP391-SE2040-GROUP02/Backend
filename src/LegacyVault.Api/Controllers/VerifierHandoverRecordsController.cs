@@ -164,6 +164,21 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.AddRecipientAsync(recordId, request, ct);
     }
 
+    /// <summary>
+    /// Thêm nhiều người nhận mới trong một lần lưu; một người không hợp lệ thì không ai được thêm. Lỗi ghi theo khóa
+    /// recipients[chỉ số].trường.
+    /// </summary>
+    [HttpPost("{recordId:guid}/recipients/batch")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverRecordResponse> AddRecipients(
+        Guid recordId, AddHandoverRecipientsRequest request, CancellationToken ct)
+    {
+        return recordService.AddRecipientsAsync(recordId, request, ct);
+    }
+
     /// <summary>Đính kèm tệp căn cứ (PDF hoặc ảnh, tối đa 10 tệp, mỗi tệp 10 MiB); chỉ khi biên bản đang lập.</summary>
     [HttpPost("{recordId:guid}/evidence")]
     [Consumes("multipart/form-data")]
