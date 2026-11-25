@@ -221,6 +221,9 @@ public sealed class HandoverSubmissionTests
         Assert.Equal("SUBMITTED", response.Status);
         Assert.True(saved.NameMatches && saved.CitizenIdMatches && saved.DateOfBirthMatches);
         Assert.Equal("012345671234", saved.CitizenId);
+        // Họ tên và ngày sinh người nhận gõ được giữ để luật sư xem cạnh thông tin Chủ kho khai.
+        Assert.Equal("Trần Minh Anh", saved.FullName);
+        Assert.Equal(new DateOnly(1990, 1, 1), saved.DateOfBirth);
         Assert.Equal(2, store.Contents.Count);
         Assert.Equal("image/png", saved.FrontImageContentType);
         Assert.Equal("image/jpeg", saved.BackImageContentType);

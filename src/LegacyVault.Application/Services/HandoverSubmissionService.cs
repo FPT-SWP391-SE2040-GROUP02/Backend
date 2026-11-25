@@ -105,6 +105,8 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
         submission.CitizenIdMatches = string.Equals(request.CitizenId, expected.CitizenId, StringComparison.Ordinal);
         submission.DateOfBirthMatches = request.DateOfBirth == expected.DateOfBirth;
         submission.CitizenId = request.CitizenId;
+        submission.FullName = request.FullName.Trim();
+        submission.DateOfBirth = request.DateOfBirth;
         submission.Acknowledged = true;
         submission.VoluntaryDecline = false;
         submission.CreatedAt = now;

@@ -34,6 +34,12 @@ public class HandoverSubmission
     /// <summary>Số căn cước đầy đủ người nhận khai, để Người xét duyệt đối chiếu với ảnh.</summary>
     public string CitizenId { get; set; } = string.Empty;
 
+    /// <summary>Họ tên người nhận đã gõ lúc nộp, để luật sư xem cạnh thông tin Chủ kho khai. Rỗng với hồ sơ nộp trước khi có cột này.</summary>
+    public string FullName { get; set; } = string.Empty;
+
+    /// <summary>Ngày sinh người nhận đã gõ lúc nộp; null với hồ sơ nộp trước khi có cột này.</summary>
+    public DateOnly? DateOfBirth { get; set; }
+
     /// <summary>Người nhận đã tick đọc điều khoản của lựa chọn.</summary>
     public bool Acknowledged { get; set; }
 

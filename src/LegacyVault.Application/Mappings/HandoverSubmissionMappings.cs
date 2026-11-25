@@ -39,6 +39,8 @@ public static class HandoverSubmissionMappings
         response.CitizenIdMatches = submission.CitizenIdMatches;
         response.DateOfBirthMatches = submission.DateOfBirthMatches;
         response.CitizenId = submission.CitizenId;
+        response.ClaimedFullName = submission.FullName;
+        response.ClaimedDateOfBirth = submission.DateOfBirth;
         response.Acknowledged = submission.Acknowledged;
         response.VoluntaryDecline = submission.VoluntaryDecline;
         response.SupplementReason = submission.SupplementReason;

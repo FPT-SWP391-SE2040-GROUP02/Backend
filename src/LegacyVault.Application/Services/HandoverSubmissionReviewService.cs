@@ -30,6 +30,8 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     private readonly TimeProvider timeProvider;
     private readonly IHandoverRecordRepository records;
     private readonly IHandoverRecordService recordService;
+    private readonly IBeneficiaryRepository? beneficiaries;
+    private readonly IBeneficiaryDataProtector? protector;
 
     public HandoverSubmissionReviewService(
         ICurrentUser currentUser,
@@ -41,8 +43,12 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         IUnitOfWork unitOfWork,
         TimeProvider timeProvider,
         IHandoverRecordRepository records,
-        IHandoverRecordService recordService)
+        IHandoverRecordService recordService,
+        IBeneficiaryRepository? beneficiaries = null,
+        IBeneficiaryDataProtector? protector = null)
     {
+        this.beneficiaries = beneficiaries;
+        this.protector = protector;
         this.currentUser = currentUser;
         this.users = users;
         this.vaults = vaults;
@@ -75,7 +81,38 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     {
         // 1. Tìm hồ sơ; không thuộc luật sư này thì báo không tìm thấy
         HandoverSubmission submission = await LoadForVerifierAsync(submissionId, ct);
-        return submission.ToVerifierDetail();
+        VerifierHandoverSubmissionResponse response = submission.ToVerifierDetail();
+        await FillDeclaredAsync(response, submission, ct);
+        return response;
+    }
+
+    /// <summary>
+    /// Thêm thông tin Chủ kho đã khai cho người nhận này (giải mã từ hồ sơ người nhận), để luật sư đặt cạnh thông tin người nhận
+    /// gõ. Không đọc được (thiếu dịch vụ giải mã, hồ sơ đã bị xóa, thiếu KEK) thì để trống, không làm hỏng màn hình.
+    /// </summary>
+    private async Task FillDeclaredAsync(
+        VerifierHandoverSubmissionResponse response, HandoverSubmission submission, CancellationToken ct)
+    {
+        if (beneficiaries == null || protector == null)
+        {
+            return;
+        }
+        try
+        {
+            Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(submission.Turn.VaultId, submission.Turn.BeneficiaryId, ct);
+            if (beneficiary == null)
+            {
+                return;
+            }
+            BeneficiaryPersonalData personal = protector.Unprotect(beneficiary);
+            response.DeclaredFullName = personal.FullName;
+            response.DeclaredCitizenId = personal.CitizenId;
+            response.DeclaredDateOfBirth = personal.DateOfBirth == default ? null : personal.DateOfBirth;
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            // Để trống phần Chủ kho khai.
+        }
     }
 
     // Bước 3: xem ảnh căn cước một mặt (front hoặc back).
