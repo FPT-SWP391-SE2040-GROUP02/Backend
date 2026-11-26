@@ -434,6 +434,54 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task Verifier_AddsRecipient_PhoneMustBeVietnameseMobile_AndIsSavedWithoutSeparators()
+    {
+        Vault2 vault = await BuildVaultAsync();
+        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        Guid recordId = await HandoverRecordTestData.RequestAsync(factory, vault.VaultId);
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        string url = HandoverRecordTestData.VerifierRecordUrl(recordId);
+
+        // Số có nhập mà sai định dạng thì bị chặn, ở cả thêm lẫn sửa.
+        string[] wrong = new string[] { "3232", "12345", "0212345678", "091234567" };
+        int index = 0;
+        foreach (string phone in wrong)
+        {
+            index = index + 1;
+            await ApiTestHelpers.AssertProblemAsync(await verifier.Client.PostAsJsonAsync(url + "/recipients", new
+            {
+                fullName = "Lê Văn Mới",
+                citizenId = "001090000099",
+                dateOfBirth = "1990-01-01",
+                email = $"moi{index}@example.com",
+                phone
+            }), HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        }
+
+        // Số đúng (có dấu phân cách) được nhận và lưu dạng gọn; không nhập số vẫn được.
+        HttpResponseMessage added = await verifier.Client.PostAsJsonAsync(url + "/recipients", new
+        {
+            fullName = "Lê Văn Mới",
+            citizenId = "001090000099",
+            dateOfBirth = "1990-01-01",
+            email = "moi@example.com",
+            phone = "090 123-45.67"
+        });
+        Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+        JsonElement person = (await ApiTestHelpers.ReadJsonAsync(added)).GetProperty("availableRecipients").EnumerateArray()
+            .Single(p => p.GetProperty("fullName").GetString() == "Lê Văn Mới");
+        Assert.Equal("0901234567", person.GetProperty("phone").GetString());
+        HttpResponseMessage withoutPhone = await verifier.Client.PostAsJsonAsync(url + "/recipients", new
+        {
+            fullName = "Phạm Không Số",
+            citizenId = "001090000098",
+            dateOfBirth = "1991-01-01",
+            email = "khongso@example.com"
+        });
+        Assert.Equal(HttpStatusCode.OK, withoutPhone.StatusCode);
+    }
+
+    [SqlFact]
     public async Task Verifier_AddsRecipientsInOneBatch_AllOrNothing()
     {
         // Chuẩn bị: biên bản đang lập; kho đã có người nhận do Chủ tài sản khai
