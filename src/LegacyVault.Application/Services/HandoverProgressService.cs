@@ -98,9 +98,7 @@ public sealed class HandoverProgressService : IHandoverProgressService
             {
                 citizenId = citizenIds[turn.BeneficiaryId];
             }
-            // Người thực thi chỉ thấy 4 số cuối căn cước người nhận.
-            HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(
-                HandoverRecordRules.MaskCitizenId(citizenId), firstDownloads);
+            HandoverProgressTurnResponse turnResponse = turn.ToProgressResponse(citizenId, firstDownloads);
             turnResponse.ClaimedByYou = turn.ClaimantUserId == userId;
             HandoverRecordSignature? signature = HandoverRecordRules.FindSignature(
                 record, HandoverSignerRole.Recipient, turn.BeneficiaryId);

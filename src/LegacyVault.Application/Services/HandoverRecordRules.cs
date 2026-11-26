@@ -223,22 +223,6 @@ public static class HandoverRecordRules
         return null;
     }
 
-    /// <summary>
-    /// Che số căn cước cho Người thực thi: chỉ giữ 4 số cuối ("•••• 1793"). Rỗng thì trả rỗng; ngắn hơn 4 ký tự thì che hết.
-    /// </summary>
-    public static string MaskCitizenId(string citizenId)
-    {
-        if (string.IsNullOrEmpty(citizenId))
-        {
-            return string.Empty;
-        }
-        if (citizenId.Length < 4)
-        {
-            return "••••";
-        }
-        return "•••• " + citizenId.Substring(citizenId.Length - 4);
-    }
-
     /// <summary>Câu báo lỗi (409 HANDOVER_NOT_ALLOWED) cho một mã lý do chưa ký được.</summary>
     public static string SignBlockMessage(string reason)
     {

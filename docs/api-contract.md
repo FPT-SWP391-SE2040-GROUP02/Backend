@@ -910,7 +910,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
       "turnId": "0199...",
       "containerName": "Biên bản bàn giao",
       "beneficiaryId": "0199...",
-      "beneficiaryCitizenId": "•••• 8901",
+      "beneficiaryCitizenIdLast4": "8901",
       "beneficiaryFullName": "Nguyễn Văn An",
       "beneficiaryPhone": "0901234567",
       "beneficiaryEmail": "an@example.com",
@@ -1258,7 +1258,7 @@ Phản hồi của `/assets`:
   {
     "beneficiaryId": "0199e7a4-...",
     "fullName": "Trần Minh Anh",
-    "citizenId": "•••• 6789",
+    "citizenId": "079123456789",
     "assets": [
       { "id": "0199e7a5-...", "name": "Email gia đình", "kind": "TEXT", "sizeBytes": 640, "sharedWithCount": 1 },
       { "id": "0199e7a6-...", "name": "Sổ tiết kiệm", "kind": "FILE", "sizeBytes": 2457600, "sharedWithCount": 2 }
@@ -1267,7 +1267,6 @@ Phản hồi của `/assets`:
 ]
 ```
 
-- `citizenId` (và `beneficiaryCitizenId` ở màn tiến độ) chỉ có 4 số cuối: Người thực thi không nhận số căn cước đầy đủ của người nhận qua các API này.
 - Mỗi phần tử là một người nhận có ít nhất một tài sản được gán, theo thứ tự gán. Tài sản đã bị xóa nội dung không hiện. `sharedWithCount` là số người nhận tài sản đó, tính cả người này; lớn hơn 1 nghĩa là nhận chung.
 - **Chỉ danh sách:** không có nội dung tài sản, mô tả hay tên tệp gốc. Nội dung chỉ người nhận mở được.
 - `fullName` là null khi không giải mã được; FE hiện số CCCD thay thế.
@@ -1316,7 +1315,7 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 | POST | `/api/v1/verifier/handover-records/{recordId}/recipients/batch` | Luật sư được giao biên bản | `{ "recipients": [{ "fullName", "citizenId", "dateOfBirth", "email", "phone"? }] }` (1 đến 20 người) | 200 `HandoverRecordResponse`; lưu một lần, một người không hợp lệ thì không ai được thêm | 400 `VALIDATION_ERROR` (khóa `recipients[chỉ số].trường`, chỉ số từ 0; câu lỗi ghi "Người nhận mới N:"), 404 `HANDOVER_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE` khi biên bản không còn đang lập), 409 `EDIT_CONFLICT` |
 | PUT | `/api/v1/verifier/handover-records/{recordId}/recipients/{beneficiaryId}` | Luật sư được giao biên bản | `{ "fullName", "citizenId", "dateOfBirth", "email", "phone"? }` (`citizenId` phải giữ nguyên) | 200 `HandoverRecordResponse` | 400 `VALIDATION_ERROR` (khóa theo trường; `citizenId` khi đổi số căn cước), 404 `HANDOVER_NOT_FOUND`, `BENEFICIARY_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `RECIPIENT_NOT_EDITABLE` khi người đó không do luật sư thêm ở biên bản này, đã gửi yêu cầu, được Chủ tài sản gán tài sản hoặc đã được gửi thư mời), 409 `EDIT_CONFLICT` |
 | DELETE | `/api/v1/verifier/handover-records/{recordId}/recipients/{beneficiaryId}` | như trên | — | 200 `HandoverRecordResponse`; xóa hồ sơ và các dòng biên bản của người đó | 404, 409 (như PUT) |
-| POST | `/api/v1/executor/vaults/{vaultId}/handover-record/recipients/{beneficiaryId}/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` (căn cước người nhận chỉ 4 số cuối); thư báo người nhận đó ký | 404, 409 `HANDOVER_NOT_ALLOWED` (như trên; `VERIFIER_NOT_SIGNED` "Luật sư chưa ký phần của người nhận này.") |
+| POST | `/api/v1/executor/vaults/{vaultId}/handover-record/recipients/{beneficiaryId}/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse`; thư báo người nhận đó ký | 404, 409 `HANDOVER_NOT_ALLOWED` (như trên; `VERIFIER_NOT_SIGNED` "Luật sư chưa ký phần của người nhận này.") |
 | POST | `/api/v1/handover/turns/{turnId}/record/sign` | Người nhận của lượt | — | 200 `HandoverRecordResponse` (chỉ phần của mình) | 404, 409 `HANDOVER_NOT_ALLOWED` (`NOT_SIGNING_STEP`, `RECORD_COMPLETED`; `IDENTITY_NOT_CONFIRMED` khi danh tính của chính mình chưa được xác nhận; `EXECUTOR_NOT_SIGNED` "Người thực thi chưa ký phần của bạn.") |
 
 `availableRecipients[]` của luật sư có thêm `canEdit` (sửa, xóa được lúc này không); `dateOfBirth`, `phone` chỉ có giá trị khi `canEdit = true`.
@@ -1333,7 +1332,6 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 - Bấm lặp khi đã ký phần đó: 200, giữ chữ ký cũ.
 - Chữ ký cũ không ghi người nhận (biên bản ký trước khi ký riêng) của luật sư, Người thực thi vẫn tính cho mọi người nhận. Biên bản đang dở đã có chữ ký sai thứ tự từ trước được giữ nguyên (không xóa); luật thứ tự chỉ áp cho lần ký sau.
 - `HandoverRecordResponse.recipients[]` (mọi vai) có `verifierSignedAt`, `executorSignedAt`, `signedAt` (ba bên của phần đó), `fullySigned` (đủ ba chữ ký), `canSign` và `signBlockedReason` (lý do người đang xem chưa ký được phần đó, rỗng khi ký được; thêm `ALREADY_SIGNED` khi đã ký). Màn người nhận chỉ có dòng của mình; `canSign` ở gốc là "ký được ít nhất một phần". `hasPartWaitingForExecutor`: có phần luật sư đã ký mà Người thực thi chưa ký (điều kiện để luật sư nhắc).
-- Người thực thi chỉ nhận số căn cước đã che (`"•••• 1793"`) trong biên bản; luật sư nhận số đầy đủ.
 
 **Thư báo ký** (gửi sau khi lưu, thư lỗi không làm hỏng việc ký, `Stage = SIGNING`):
 

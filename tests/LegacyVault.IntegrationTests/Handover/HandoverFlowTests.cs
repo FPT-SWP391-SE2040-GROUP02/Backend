@@ -548,15 +548,13 @@ public sealed class HandoverFlowTests : IAsyncLifetime
             HandoverRecordTestData.SignUrl(executorUrl, beneficiaryId), null);
         JsonElement view = await ApiTestHelpers.ReadJsonAsync(await current.Record.Executor.Client.GetAsync(executorUrl));
 
-        // Kiểm tra: 409 đúng lý do, không có chữ ký nào; màn Người thực thi khóa nút với cùng lý do, CCCD chỉ 4 số cuối
+        // Kiểm tra: 409 đúng lý do, không có chữ ký nào; màn Người thực thi khóa nút với cùng lý do
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("VERIFIER_NOT_SIGNED", problem.GetProperty("reason").GetString());
         Assert.Equal("Luật sư chưa ký phần của người nhận này.", problem.GetProperty("title").GetString());
         JsonElement row = view.GetProperty("recipients")[0];
         Assert.False(row.GetProperty("canSign").GetBoolean());
         Assert.Equal("VERIFIER_NOT_SIGNED", row.GetProperty("signBlockedReason").GetString());
-        Assert.StartsWith("•••• ", row.GetProperty("citizenId").GetString());
-        Assert.Equal(9, row.GetProperty("citizenId").GetString()!.Length);
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
             Assert.Equal(0, await db.Set<HandoverRecordSignature>().CountAsync(s => s.RecordId == current.Record.RecordId));
@@ -638,7 +636,6 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Assert.Equal("ALREADY_SIGNED", rowA.GetProperty("signBlockedReason").GetString());
         Assert.False(rowB.GetProperty("fullySigned").GetBoolean());
         Assert.True(rowB.GetProperty("canSign").GetBoolean());
-        Assert.Equal("001090000099".Length, rowB.GetProperty("citizenId").GetString()!.Length);
         JsonElement forExecutor = await ApiTestHelpers.ReadJsonAsync(await current.Record.Executor.Client.GetAsync(executorUrl));
         Assert.Equal("VERIFIER_NOT_SIGNED", RowOf(forExecutor, b).GetProperty("signBlockedReason").GetString());
         JsonElement forB = await ApiTestHelpers.ReadJsonAsync(await receiverB.GetAsync($"/api/v1/handover/turns/{turnB}/record"));

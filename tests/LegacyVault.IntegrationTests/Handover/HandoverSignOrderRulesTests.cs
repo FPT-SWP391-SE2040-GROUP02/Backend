@@ -6,8 +6,8 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
-/// Luật thứ tự ký phần của mỗi người nhận (luật sư → Người thực thi → người nhận), luật nhắc Người thực thi và che căn
-/// cước. Hàm thuần, không cần SQL.
+/// Luật thứ tự ký phần của mỗi người nhận (luật sư → Người thực thi → người nhận) và luật nhắc Người thực thi.
+/// Hàm thuần, không cần SQL.
 /// </summary>
 public sealed class HandoverSignOrderRulesTests
 {
@@ -159,20 +159,5 @@ public sealed class HandoverSignOrderRulesTests
         Assert.False(beforeVerifier);
         Assert.True(afterVerifier);
         Assert.False(afterExecutor);
-    }
-
-    [Fact]
-    public void MaskCitizenId_KeepsOnlyTheLastFourDigits()
-    {
-        // Chuẩn bị
-        string full = "001090001793";
-
-        // Hành động
-        string masked = HandoverRecordRules.MaskCitizenId(full);
-        string empty = HandoverRecordRules.MaskCitizenId(string.Empty);
-
-        // Kiểm tra
-        Assert.Equal("•••• 1793", masked);
-        Assert.Equal(string.Empty, empty);
     }
 }

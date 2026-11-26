@@ -136,7 +136,7 @@ POST {{baseUrl}}/verifier/handover-records/{{recordId}}/recipients/{{beneficiary
 Authorization: Bearer {{verifierToken}}
 
 ### 7a) Người thực thi ký phần đó (sau luật sư). Ký trước luật sư: 409 HANDOVER_NOT_ALLOWED reason VERIFIER_NOT_SIGNED.
-#    Ký xong thì thư báo người nhận ký. Căn cước người nhận trong biên bản của Người thực thi chỉ có 4 số cuối.
+#    Ký xong thì thư báo người nhận ký.
 #    Người nhận ký trước Người thực thi: 409 reason EXECUTOR_NOT_SIGNED (POST /handover/turns/{turnId}/record/sign).
 POST {{baseUrl}}/executor/vaults/{{vaultId}}/handover-record/recipients/{{beneficiaryId}}/sign
 Authorization: Bearer {{executorToken}}

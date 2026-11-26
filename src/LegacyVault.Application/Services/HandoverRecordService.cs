@@ -167,10 +167,9 @@ public sealed class HandoverRecordService : IHandoverRecordService
             return null;
         }
 
-        // 3. Dựng biên bản; ký riêng cho từng người nhận (sau luật sư). Người thực thi chỉ thấy 4 số cuối căn cước.
+        // 3. Dựng biên bản; ký riêng cho từng người nhận (sau luật sư)
         HandoverRecordResponse response = await BuildResponseAsync(record, vault, null, ct);
         MarkSignable(record, response, HandoverSignerRole.Executor);
-        MaskCitizenIdsForExecutor(response);
         return response;
     }
 
@@ -543,7 +542,6 @@ public sealed class HandoverRecordService : IHandoverRecordService
 
         HandoverRecordResponse response = await BuildResponseAsync(record, vault, null, ct);
         MarkSignable(record, response, HandoverSignerRole.Executor);
-        MaskCitizenIdsForExecutor(response);
         return response;
     }
 
@@ -1859,15 +1857,6 @@ public sealed class HandoverRecordService : IHandoverRecordService
             }
         }
         response.CanSign = anySignable;
-    }
-
-    /// <summary>Người thực thi chỉ thấy 4 số cuối căn cước của người nhận ("•••• 1793"); luật sư thấy số đầy đủ.</summary>
-    private static void MaskCitizenIdsForExecutor(HandoverRecordResponse response)
-    {
-        foreach (HandoverRecordRecipientResponse recipient in response.Recipients)
-        {
-            recipient.CitizenId = HandoverRecordRules.MaskCitizenId(recipient.CitizenId);
-        }
     }
 
     /// <summary>Thêm chữ ký của bản hiện tại; người gọi đã kiểm luật thứ tự. Ký lặp thì giữ chữ ký cũ.</summary>
