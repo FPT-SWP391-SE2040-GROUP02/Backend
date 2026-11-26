@@ -108,14 +108,16 @@ public sealed class ExecutorHandoverController : ControllerBase
         return Ok(record);
     }
 
-    /// <summary>Người thực thi ký biên bản (bước 3). Ký là bấm xác nhận, lưu người ký và thời điểm.</summary>
-    [HttpPost("vaults/{vaultId:guid}/handover-record/sign")]
+    /// <summary>
+    /// Người thực thi ký phần của một người nhận đã được xác nhận danh tính. Ký là bấm xác nhận, lưu người ký và thời điểm.
+    /// </summary>
+    [HttpPost("vaults/{vaultId:guid}/handover-record/recipients/{beneficiaryId:guid}/sign")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<HandoverRecordResponse> SignRecord(Guid vaultId, CancellationToken ct)
+    public Task<HandoverRecordResponse> SignRecord(Guid vaultId, Guid beneficiaryId, CancellationToken ct)
     {
-        return recordService.SignAsExecutorAsync(vaultId, ct);
+        return recordService.SignAsExecutorAsync(vaultId, beneficiaryId, ct);
     }
 
     /// <summary>

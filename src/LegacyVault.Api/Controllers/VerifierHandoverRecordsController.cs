@@ -130,14 +130,14 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.CancelByVerifierAsync(recordId, request, ct);
     }
 
-    /// <summary>Luật sư ký xác minh biên bản (bước 3).</summary>
-    [HttpPost("{recordId:guid}/sign")]
+    /// <summary>Luật sư ký xác minh phần của một người nhận đã được xác nhận danh tính.</summary>
+    [HttpPost("{recordId:guid}/recipients/{beneficiaryId:guid}/sign")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public Task<HandoverRecordResponse> Sign(Guid recordId, CancellationToken ct)
+    public Task<HandoverRecordResponse> Sign(Guid recordId, Guid beneficiaryId, CancellationToken ct)
     {
-        return recordService.SignAsVerifierAsync(recordId, ct);
+        return recordService.SignAsVerifierAsync(recordId, beneficiaryId, ct);
     }
 
     /// <summary>Xét giấy tờ một yêu cầu nhận: ACCEPT, REQUEST_SUPPLEMENT hoặc REJECT (hai cái sau bắt buộc lý do).</summary>

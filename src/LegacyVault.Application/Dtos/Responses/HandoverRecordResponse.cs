@@ -141,6 +141,13 @@ public class HandoverRecordRecipientResponse
     public DateTimeOffset? IdentityConfirmedAt { get; set; }
     public DateTimeOffset? SignedAt { get; set; }
 
+    /// <summary>Luật sư và Người thực thi ký riêng cho phần của người nhận này.</summary>
+    public DateTimeOffset? VerifierSignedAt { get; set; }
+    public DateTimeOffset? ExecutorSignedAt { get; set; }
+
+    /// <summary>Người đang xem (luật sư hoặc Người thực thi) ký được cho người nhận này ngay lúc này.</summary>
+    public bool CanSign { get; set; }
+
     /// <summary>Phiếu giao nhận: lúc bên nhận xác nhận đã nhận đủ; null khi chưa.</summary>
     public DateTimeOffset? ReceivedAllAt { get; set; }
 

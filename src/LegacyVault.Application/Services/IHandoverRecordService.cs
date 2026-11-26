@@ -19,7 +19,7 @@ public interface IHandoverRecordService
     Task<HandoverRecordResponse?> GetForExecutorAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>Người thực thi ký biên bản ở bước 3.</summary>
-    Task<HandoverRecordResponse> SignAsExecutorAsync(Guid vaultId, CancellationToken ct);
+    Task<HandoverRecordResponse> SignAsExecutorAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct);
 
     // Luật sư
 
@@ -42,7 +42,7 @@ public interface IHandoverRecordService
     Task<HandoverRecordResponse> ReopenAsync(Guid recordId, CancellationToken ct);
 
     /// <summary>Luật sư ký xác minh ở bước 3.</summary>
-    Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, CancellationToken ct);
+    Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, Guid beneficiaryId, CancellationToken ct);
 
     /// <summary>
     /// Luật sư nhắc Người thực thi ký biên bản đã chốt. Mỗi biên bản nhắc tối đa một lần mỗi 24 giờ; Người thực thi đã ký
