@@ -25,6 +25,22 @@ public static class LegacyVaultEmailTheme
     /// <summary>Tên tài nguyên nhúng của ảnh logo (Notifications/Assets/email-logo.png, 336x96, nền #1A4B3B).</summary>
     public const string LogoResourceName = "LegacyVault.Infrastructure.Notifications.email-logo.png";
 
+    /// <summary>
+    /// Mã dạng "VPZW-SSS1-55PA-BGPA": mỗi nhóm là một khối không bị cắt đôi, màn hình hẹp thì xuống dòng giữa các nhóm.
+    /// </summary>
+    private static string SplitCodeGroups(string code)
+    {
+        string[] groups = code.Split('-');
+        StringBuilder html = new StringBuilder();
+        for (int i = 0; i < groups.Length; i++)
+        {
+            string text = WebUtility.HtmlEncode(groups[i]) + (i < groups.Length - 1 ? "-" : string.Empty);
+            // Không chèn khoảng trắng giữa các khối: chép mã ra vẫn đúng "VPZW-SSS1-55PA-BGPA".
+            html.Append("<span style=\"display:inline-block;white-space:nowrap;\">").Append(text).Append("</span>");
+        }
+        return html.ToString();
+    }
+
     /// <param name="kicker">Nhãn nhỏ phía trên tiêu đề, ví dụ "Nhắc điểm danh". Null hoặc rỗng thì bỏ qua.</param>
     /// <param name="securityCallout">true thì ghi chú nằm trong khung vàng "Lưu ý bảo mật" (dùng cho đặt lại mật khẩu);
     /// false thì là dòng ghi chú thường dưới đường kẻ.</param>
@@ -45,7 +61,9 @@ public static class LegacyVaultEmailTheme
         string? contactHours = null,
         IReadOnlyList<MailListSection>? sections = null,
         string? greeting = null,
-        IReadOnlyList<MailParagraph>? closing = null)
+        IReadOnlyList<MailParagraph>? closing = null,
+        string? highlightCode = null,
+        string? highlightLabel = null)
     {
         string encodedTitle = WebUtility.HtmlEncode(title);
         string greetingText = greeting ?? ("Chào " + recipientName + ",");
@@ -67,6 +85,22 @@ public static class LegacyVaultEmailTheme
         {
             kickerHtml = "<p style=\"margin:0 0 6px 0;font-size:13px;line-height:1.5;color:#4D4D4B;\">"
                 + WebUtility.HtmlEncode(kicker) + "</p>";
+        }
+
+        // Mã to giữa thư (tùy chọn), ví dụ mã nhận: khung xanh nhạt viền vàng, chữ đậm giãn cách, dễ đọc và dễ chép.
+        string codeHtml = string.Empty;
+        if (!string.IsNullOrWhiteSpace(highlightCode))
+        {
+            string label = string.IsNullOrWhiteSpace(highlightLabel) ? string.Empty
+                : "<p style=\"margin:0 0 10px 0;font-size:13px;line-height:1.4;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#4D4D4B;\">"
+                    + WebUtility.HtmlEncode(highlightLabel) + "</p>";
+            codeHtml = "<table role=\"presentation\" width=\"100%\" border=\"0\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin:8px 0 22px 0;\">"
+                + "<tr><td align=\"center\" bgcolor=\"#F4F1E6\" style=\"background-color:#F4F1E6;border:2px solid #E0C486;border-radius:14px;padding:26px 12px;font-family:"
+                + FontStack + ";\">" + label
+                + "<p style=\"margin:0;font-family:'SFMono-Regular',Consolas,'Courier New',monospace;font-size:34px;line-height:1.25;"
+                + "font-weight:700;letter-spacing:3px;color:#0A281E;\">"
+                + SplitCodeGroups(highlightCode.Trim()) + "</p>"
+                + "</td></tr></table>";
         }
 
         // Các danh sách gạch đầu dòng có tiêu đề (tùy chọn), ví dụ "Bạn được làm" và "Bạn không được làm".
@@ -197,6 +231,7 @@ public static class LegacyVaultEmailTheme
 <h1 style=""margin:0 0 18px 0;font-size:28px;line-height:1.2;font-weight:600;color:#0A281E;"">{encodedTitle}</h1>
 <p style=""margin:0 0 14px 0;font-size:16px;line-height:1.7;color:#2B332F;"">{encodedGreeting}</p>
 {lead}
+{codeHtml}
 {sectionsHtml}
 {closingHtml}
 {actionHtml}
