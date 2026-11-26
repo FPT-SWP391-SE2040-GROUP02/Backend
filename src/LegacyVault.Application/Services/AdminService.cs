@@ -48,6 +48,12 @@ public interface IAdminService
     /// <summary>Admin tạo tài khoản hệ thống mới (Verifier, Executor, Admin). Kích hoạt ngay.</summary>
     Task<AdminUserResponse> CreateUserAsync(CreateAdminUserRequest request, CancellationToken ct);
 
+    /// <summary>
+    /// Admin sửa họ tên, số điện thoại, số chứng chỉ hành nghề và số thẻ luật sư của tài khoản nhân sự. Lỗi: 400, 404, 409
+    /// ADMIN_ACTION_NOT_ALLOWED reason NOT_STAFF_ACCOUNT (tài khoản người dùng thường), 409 PHONE_ALREADY_EXISTS.
+    /// </summary>
+    Task<AdminUserResponse> UpdateUserProfileAsync(Guid userId, UpdateAdminUserProfileRequest request, CancellationToken ct);
+
 }
 
 /// <remarks>
@@ -177,6 +183,12 @@ public sealed class AdminService : IAdminService
         response.CreatedAt = basic.CreatedAt;
         response.LastLoginAt = basic.LastLoginAt;
         response.Etag = basic.Etag;
+        if (user.Role != UserRole.User)
+        {
+            response.Phone = user.Phone;
+            response.PracticeCertificateNumber = user.PracticeCertificateNumber;
+            response.LawyerCardNumber = user.LawyerCardNumber;
+        }
 
         if (user.Role == UserRole.Verifier)
         {
@@ -668,6 +680,58 @@ public sealed class AdminService : IAdminService
         }
 
         return OperationsMapper.ToAdminUser(newUser);
+    }
+
+    public async Task<AdminUserResponse> UpdateUserProfileAsync(
+        Guid userId, UpdateAdminUserProfileRequest request, CancellationToken ct)
+    {
+        // 1. Chỉ Admin; chỉ tài khoản nhân sự (Chủ tài sản và người dùng thường không thuộc phạm vi này)
+        Guid adminId = await RequireAdminAsync(ct);
+        User user = await LoadUserAsync(userId, ct);
+        if (user.Role == UserRole.User)
+        {
+            throw NotAllowed("NOT_STAFF_ACCOUNT");
+        }
+
+        // 2. Kiểm dữ liệu mới: họ tên bắt buộc; số điện thoại có nhập thì đúng số di động và không trùng tài khoản khác
+        string fullName = (request.FullName ?? string.Empty).Trim();
+        if (fullName.Length == 0)
+        {
+            throw ValidationErrors.For("fullName", "Vui lòng nhập họ và tên.");
+        }
+        if (fullName.Length > 200)
+        {
+            throw ValidationErrors.For("fullName", "Họ và tên tối đa 200 ký tự.");
+        }
+        string? phone = null;
+        if (!string.IsNullOrWhiteSpace(request.Phone))
+        {
+            phone = PhoneRules.NormalizeVietnamesePhone(request.Phone, "phone");
+            if (phone != user.Phone && await users.PhoneExistsAsync(phone, user.Id, ct))
+            {
+                throw PhoneRules.AlreadyUsed("phone");
+            }
+        }
+
+        // 3. Ghi và lưu nhật ký cùng giao dịch; nhật ký không ghi giá trị cũ hay mới (có dữ liệu cá nhân)
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        user.FullName = fullName;
+        user.Phone = phone;
+        user.PracticeCertificateNumber = TrimOrNull(request.PracticeCertificateNumber, user.Role);
+        user.LawyerCardNumber = TrimOrNull(request.LawyerCardNumber, user.Role);
+        user.UpdatedAt = now;
+        audit.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.AdminUpdatedUserProfile,
+            AuditTargetType.User, user.Id, null, AuditOutcome.Succeeded, "Sửa thông tin tài khoản nhân sự", now));
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (users.IsUniqueViolation(ex))
+        {
+            // Request khác vừa lấy đúng số này giữa lúc kiểm tra và lúc lưu.
+            throw PhoneRules.AlreadyUsed("phone");
+        }
+        return OperationsMapper.ToAdminUser(user);
     }
 
     /// <summary>Số chứng chỉ và thẻ luật sư chỉ có ý nghĩa với Người xét duyệt; vai trò khác bỏ qua. Trống = không có.</summary>

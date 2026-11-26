@@ -135,6 +135,17 @@ public sealed class AdminController : ControllerBase
         return adminService.ChangeRoleAsync(userId, request, ct);
     }
 
+    /// <summary>Admin sửa họ tên, số điện thoại, số chứng chỉ hành nghề và số thẻ luật sư của tài khoản nhân sự.</summary>
+    [HttpPut("users/{userId:guid}/profile")]
+    [ProducesResponseType<AdminUserResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<AdminUserResponse> UpdateUserProfile(Guid userId, UpdateAdminUserProfileRequest request, CancellationToken ct)
+    {
+        return adminService.UpdateUserProfileAsync(userId, request, ct);
+    }
+
     [HttpPut("users/{userId:guid}/status")]
     [ProducesResponseType<AdminUserResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]

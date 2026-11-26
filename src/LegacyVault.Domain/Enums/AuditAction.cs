@@ -168,4 +168,6 @@ public enum AuditAction
     ExecutorWillDeclined = 80,
     /// <summary>Người thực thi hoặc người được mời mở biên bản phân chia đầy đủ. Nhật ký không ghi danh tính hay tên tài sản.</summary>
     ExecutorWillViewed = 81,
+    /// <summary>Admin sửa họ tên, số điện thoại, số chứng chỉ hoặc số thẻ luật sư của một tài khoản nhân sự (đích là tài khoản; không ghi giá trị).</summary>
+    AdminUpdatedUserProfile = 82,
 }
