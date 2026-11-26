@@ -13,4 +13,10 @@ public interface IAppUrlProvider
 
     /// <summary>Link tới trang phản hồi lời mời Executor của web, kèm token gốc.</summary>
     string GetExecutorInvitationUrl(string token);
+
+    /// <summary>Link tới trang Lời mời của Người thực thi (đã đăng nhập), nơi xem biên bản và ký nhận vai.</summary>
+    string GetExecutorInboxUrl();
+
+    /// <summary>Link tới trang Bàn giao của Chủ tài sản (đã đăng nhập).</summary>
+    string GetOwnerHandoverUrl();
 }
