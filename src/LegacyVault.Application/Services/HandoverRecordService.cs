@@ -594,7 +594,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ lấy biên bản phân chia khi biên bản đang lập.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ lấy biên bản phân chia khi đang lập phương án chia.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
         // 2. Đọc biên bản phân chia: mỗi dòng gán của Chủ tài sản thành một dòng biên bản (tài sản gán cho nhiều người là đồng thừa kế)
@@ -617,7 +617,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (lines.Count == 0)
         {
             throw HandoverAccess.NotAllowed("NO_OWNER_SPLIT",
-                "Chủ tài sản chưa lập biên bản phân chia. Vui lòng tự lập biên bản.");
+                "Chủ tài sản chưa lập biên bản phân chia. Vui lòng tự lập phương án chia.");
         }
 
         // 3. Thay toàn bộ dòng, lưu
@@ -635,7 +635,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Biên bản đã chốt. Mở lại biên bản để sửa.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Phương án chia đã chốt. Mở lại phương án chia để sửa.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
         // 2. Kiểm dòng: không trùng cặp người nhận - tài sản, người nhận và tài sản phải thuộc kho
@@ -665,13 +665,13 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này, đang lập; luật sư phải tick xác nhận căn cứ pháp lý; dòng phải hợp lệ
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Biên bản đã chốt.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Phương án chia đã chốt.");
         // Hệ thống không kiểm pháp lý: luật sư xác thực di chúc và giấy tờ ở ngoài, ô tick này ghi nhận luật sư chịu trách nhiệm.
         bool legalBasisConfirmed = request.ConfirmLegalBasis == true;
         if (!legalBasisConfirmed)
         {
             throw ValidationErrors.For("confirmLegalBasis",
-                "Vui lòng xác nhận đã kiểm tra di chúc trước khi chốt biên bản.");
+                "Vui lòng xác nhận đã kiểm tra di chúc trước khi chốt phương án chia.");
         }
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
         List<(Guid BeneficiaryId, Guid AssetId)> lines = new List<(Guid BeneficiaryId, Guid AssetId)>();
@@ -695,7 +695,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (!HandoverRecordRules.IsVaultLocked(vault.Plan.Status))
         {
             throw HandoverAccess.NotAllowed("VAULT_NOT_LOCKED",
-                "Chưa chấp nhận giấy tờ nào nên kho chưa khóa. Xét giấy tờ trước khi chốt biên bản.");
+                "Chưa chấp nhận giấy tờ nào nên kho chưa khóa. Xét giấy tờ trước khi chốt phương án chia.");
         }
         // Biên bản khác cách chia ban đầu của Chủ tài sản thì luật sư phải tick xác nhận căn cứ của việc thay đổi.
         List<HandoverSplitDifference> differences = await FindSplitDifferencesAsync(record, vault.Id, ct);
@@ -703,7 +703,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (differences.Count > 0 && !deviationConfirmed)
         {
             throw ValidationErrors.For("confirmSplitDeviation",
-                "Biên bản khác cách chia ban đầu của Chủ tài sản. Vui lòng xác nhận căn cứ của việc thay đổi trước khi chốt.");
+                "Phương án chia khác cách chia ban đầu của Chủ tài sản. Vui lòng xác nhận căn cứ của việc thay đổi trước khi chốt.");
         }
 
         // 2. Tạo hoặc cập nhật lượt cho từng người nhận; biên bản sang bước giao (phần của mỗi người nhận ký theo thứ tự
@@ -763,7 +763,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
         if (!HandoverRecordRules.IsOpenForSigning(record))
         {
-            throw HandoverAccess.NotAllowed("WRONG_STATE", "Chỉ mở lại được biên bản đã chốt và chưa hoàn tất.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Chỉ mở lại được phương án chia đã chốt khi biên bản chưa hoàn tất.");
         }
         // Mỗi người nhận được giao riêng: đã có người được mở quyền tải thì không sửa biên bản nữa (không thu hồi quyền tải).
         Dictionary<Guid, HandoverTurn> turns = await turnSync.FindActiveTurnsAsync(record, ct);
@@ -772,7 +772,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             if (turn.Grant != null)
             {
                 throw HandoverAccess.NotAllowed("PARTIALLY_DELIVERED",
-                    "Đã giao tài sản cho ít nhất một người nhận nên không mở lại được biên bản. "
+                    "Đã giao tài sản cho ít nhất một người nhận nên không mở lại được phương án chia. "
                     + "Sai sót sau khi giao xử lý ngoài hệ thống.");
             }
         }
@@ -801,7 +801,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập; yêu cầu phải thuộc biên bản
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ xét giấy tờ khi biên bản đang lập. Mở lại biên bản để xét.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ xét giấy tờ khi đang lập phương án chia. Mở lại phương án chia để xét.");
         HandoverClaim? claim = FindClaimById(record, claimId);
         if (claim == null)
         {
@@ -931,7 +931,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ thêm người nhận khi biên bản đang lập.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ thêm người nhận khi đang lập phương án chia.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
         // 2. Kiểm thông tin người mới so với người đã có trong kho
@@ -956,7 +956,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ thêm người nhận khi biên bản đang lập.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ thêm người nhận khi đang lập phương án chia.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
         // 2. Kiểm hết mọi người trước khi ghi: so với người đã có trong kho và với những người đứng trước trong danh sách
@@ -1052,7 +1052,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập; chỉ sửa người do chính biên bản này thêm
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ sửa người nhận khi biên bản đang lập.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ sửa người nhận khi đang lập phương án chia.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
         Beneficiary beneficiary = await RequireEditableRecipientAsync(record, vault, beneficiaryId, ct);
 
@@ -1085,7 +1085,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập; chỉ xóa người do chính biên bản này thêm
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ xóa người nhận khi biên bản đang lập.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ xóa người nhận khi đang lập phương án chia.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
         Beneficiary beneficiary = await RequireEditableRecipientAsync(record, vault, beneficiaryId, ct);
 
@@ -1115,7 +1115,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (!CanEditRecipient(record, beneficiary, ownerAssignments, turns))
         {
             throw HandoverAccess.NotAllowed("RECIPIENT_NOT_EDITABLE",
-                "Chỉ sửa, xóa được người nhận do bạn thêm ở biên bản này, chưa gửi yêu cầu và chưa được gửi thư mời.");
+                "Chỉ sửa, xóa được người nhận do bạn thêm ở phương án chia này, chưa gửi yêu cầu và chưa được gửi thư mời.");
         }
         return beneficiary;
     }
@@ -1188,7 +1188,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này và đang lập
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ đính kèm tệp căn cứ khi biên bản đang lập.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ đính kèm tệp căn cứ khi đang lập phương án chia.");
         HandoverRecordFileStorage.Validate(files, true);
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
@@ -1209,7 +1209,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này, đang lập; chỉ xóa được tệp căn cứ của luật sư
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ gỡ tệp căn cứ khi biên bản đang lập.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ gỡ tệp căn cứ khi đang lập phương án chia.");
         HandoverRecordFile? file = FindFile(record, fileId);
         if (file == null || file.Kind != HandoverRecordFileKind.Evidence)
         {
@@ -1288,7 +1288,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 1. Biên bản của luật sư này, đang lập (chưa chốt, chưa giao cho ai); phải có lý do
         Guid userId = await RequireActiveVerifierAsync(ct);
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
-        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ hủy được biên bản đang lập. Mở lại biên bản rồi hủy.");
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ hủy được khi đang lập phương án chia. Mở lại phương án chia rồi hủy.");
         string reason = request.Reason.Trim();
         if (reason.Length == 0)
         {
@@ -1402,7 +1402,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
         if (!HandoverRecordRules.IsOpenForSigning(record))
         {
-            throw HandoverAccess.NotAllowed("WRONG_STATE", "Chỉ nhắc được khi biên bản đã chốt và chưa hoàn tất.");
+            throw HandoverAccess.NotAllowed("WRONG_STATE", "Chỉ nhắc được khi phương án chia đã chốt và biên bản chưa hoàn tất.");
         }
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
@@ -1869,7 +1869,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             {
                 throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Biên bản đã đủ chữ ký.");
             }
-            throw HandoverAccess.NotAllowed("NOT_SIGNING_STEP", "Chưa tới bước ký: biên bản phải được chốt.");
+            throw HandoverAccess.NotAllowed("NOT_SIGNING_STEP", "Chưa tới bước ký: phương án chia phải được chốt.");
         }
         if (HandoverRecordRules.FindSignature(record, role, beneficiaryId) != null)
         {

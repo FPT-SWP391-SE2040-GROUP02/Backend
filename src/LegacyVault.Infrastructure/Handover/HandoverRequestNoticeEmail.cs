@@ -73,18 +73,18 @@ public static class HandoverRequestNoticeEmail
         else if (notice.Audience == HandoverRequestNotice.Executor)
         {
             lead = $"{notice.RequesterName} vừa gửi yêu cầu nhận tài sản trong kho của {notice.OwnerName}. "
-                + "Luật sư đang xét giấy tờ và sẽ lập biên bản bàn giao.";
+                + "Luật sư đang xét giấy tờ và sẽ lập phương án chia tài sản.";
             actionUrl = baseUrl + "/executor";
             buttonText = "Mở không gian Người thực thi";
-            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt biên bản và ký phần của từng người nhận, bạn ký phần đó "
+            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt phương án chia và ký phần của từng người nhận, bạn ký phần đó "
                 + "rồi gửi mã nhận khi người nhận ký xong.";
         }
         else
         {
             lead = $"{notice.RequesterName} vừa gửi yêu cầu nhận tài sản trong kho của {notice.OwnerName}. "
-                + "Hồ sơ được giao cho bạn xét giấy tờ và lập biên bản bàn giao.";
+                + "Hồ sơ được giao cho bạn xét giấy tờ và lập phương án chia tài sản.";
             actionUrl = baseUrl + "/notary/queue";
-            buttonText = "Xem biên bản";
+            buttonText = "Xem hồ sơ";
             note = "Giấy tờ chỉ xem trên hệ thống. Việc xác minh pháp lý làm ở ngoài hệ thống.";
         }
         string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
@@ -108,7 +108,7 @@ public static class HandoverRequestNoticeEmail
         string note;
         if (notice.Audience == HandoverRequestNotice.Owner)
         {
-            lead = $"Luật sư đã chấp nhận giấy tờ của {notice.RequesterName} và bắt đầu lập biên bản bàn giao. "
+            lead = $"Luật sư đã chấp nhận giấy tờ của {notice.RequesterName} và bắt đầu lập phương án chia tài sản. "
                 + "Kho của bạn đã được khóa: tài sản, người nhận và cách chia không sửa được nữa.";
             actionUrl = baseUrl + "/dashboard/wills";
             buttonText = "Xem yêu cầu";
@@ -116,11 +116,11 @@ public static class HandoverRequestNoticeEmail
         }
         else
         {
-            lead = $"Luật sư đã chấp nhận giấy tờ của {notice.RequesterName} và bắt đầu lập biên bản bàn giao kho của "
+            lead = $"Luật sư đã chấp nhận giấy tờ của {notice.RequesterName} và bắt đầu lập phương án chia tài sản trong kho của "
                 + $"{notice.OwnerName}.";
             actionUrl = baseUrl + "/executor";
             buttonText = "Mở không gian Người thực thi";
-            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt biên bản và ký phần của từng người nhận, bạn ký phần đó "
+            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt phương án chia và ký phần của từng người nhận, bạn ký phần đó "
                 + "rồi gửi mã nhận khi người nhận ký xong.";
         }
         string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
@@ -164,7 +164,7 @@ public static class HandoverRequestNoticeEmail
         }
         else
         {
-            lead = $"Quản trị viên LegacyVault đã đổi Người thực thi của kho {notice.OwnerName} mà bạn đang lập biên bản.";
+            lead = $"Quản trị viên LegacyVault đã đổi Người thực thi của kho {notice.OwnerName} mà bạn đang phụ trách.";
             actionUrl = baseUrl + "/notary/queue";
             buttonText = "Xem biên bản";
             note = "Người thực thi mới ký biên bản (nếu người trước chưa ký), gửi mã nhận và ký phiếu giao nhận từ nay.";
@@ -227,7 +227,7 @@ public static class HandoverRequestNoticeEmail
     private static EmailContent BuildCancelled(HandoverRequestNotice notice, string baseUrl)
     {
         string title = "Yêu cầu nhận tài sản đã được hủy";
-        string lead = $"Luật sư đã hủy biên bản bàn giao đang lập của kho {notice.OwnerName}. Kho đã được mở khóa.";
+        string lead = $"Luật sư đã hủy phương án chia đang lập của kho {notice.OwnerName}. Kho đã được mở khóa.";
         string actionUrl = baseUrl + "/dashboard";
         if (notice.Audience == HandoverRequestNotice.Executor)
         {
@@ -254,7 +254,7 @@ public static class HandoverRequestNoticeEmail
             + "Hồ sơ được giao cho bạn kiểm giấy tờ.";
         string actionUrl = baseUrl + "/notary/queue";
         string buttonText = "Xem hồ sơ";
-        string note = "Kho chỉ bị khóa và biên bản chỉ được mở khi bạn chấp nhận hồ sơ. "
+        string note = "Kho chỉ bị khóa và phương án chia chỉ được mở khi bạn chấp nhận hồ sơ. "
             + "Việc xác minh giấy tờ làm ở ngoài hệ thống.";
         string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(

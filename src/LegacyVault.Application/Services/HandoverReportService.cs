@@ -351,7 +351,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
                 report.UpdatedAt = now;
                 await SaveAsync(ct);
                 throw HandoverAccess.NotAllowed("REPORT_TRANSFERRED",
-                    "Kho này đang do luật sư khác lập biên bản. Hồ sơ đã được chuyển cho luật sư đó.");
+                    "Kho này đang do luật sư khác phụ trách. Hồ sơ đã được chuyển cho luật sư đó.");
             }
             report.RecordId = record.Id;
             // Biên bản do người nhận gửi yêu cầu tạo ra chưa khóa kho: chấp nhận hồ sơ này là lúc khóa.
@@ -364,7 +364,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         if (vault.Plan.Status != PlanStatus.Active)
         {
             throw HandoverAccess.NotAllowed("PLAN_NOT_ACTIVE",
-                "Kho này chưa kích hoạt kế hoạch bàn giao nên chưa mở biên bản được.");
+                "Kho này chưa kích hoạt kế hoạch bàn giao nên chưa mở phương án chia được.");
         }
         record = new HandoverRecord
         {

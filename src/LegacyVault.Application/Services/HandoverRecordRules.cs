@@ -232,7 +232,7 @@ public static class HandoverRecordRules
         }
         if (reason == SignNotSigningStep)
         {
-            return "Chưa tới bước ký: biên bản phải được chốt.";
+            return "Chưa tới bước ký: phương án chia phải được chốt.";
         }
         if (reason == SignAlreadySigned)
         {
@@ -333,7 +333,7 @@ public static class HandoverRecordRules
     {
         if (lines.Count == 0)
         {
-            return "Biên bản phải có ít nhất một người nhận một tài sản.";
+            return "Phương án chia phải có ít nhất một người nhận một tài sản.";
         }
         HashSet<(Guid, Guid)> seenPairs = new HashSet<(Guid, Guid)>();
         foreach ((Guid beneficiaryId, Guid assetId) in lines)

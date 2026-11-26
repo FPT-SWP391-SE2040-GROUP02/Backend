@@ -1302,7 +1302,9 @@ Theo prototype: người nhận chọn **Chấp nhận** hoặc **Từ chối**,
 - Nhật ký: `HANDOVER_SUBMISSION_APPROVED`, `HANDOVER_SUBMISSION_SUPPLEMENT_REQUESTED` (đối tượng `HANDOVER_TURN`).
 - Chưa làm: dọn ảnh khi lượt bị xóa theo thời hạn lưu (ảnh của hồ sơ đã duyệt còn tới khi có job dọn).
 
-### 6.21c. Biên bản bàn giao: luật sư chốt biên bản
+### 6.21c. Biên bản bàn giao: luật sư chốt phương án chia
+
+Cách gọi trên giao diện, thư và câu báo lỗi: trước khi chốt (`DRAFTING`) là **phương án chia tài sản**; từ lúc chốt, bản các bên ký là **biên bản bàn giao**. Vẫn là một bản ghi `HandoverRecord`; tên trường, endpoint và mã lỗi không đổi.
 
 Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp lý. Luật sư (Người xét duyệt) xác thực di chúc và giấy tờ ở ngoài hệ thống, lập biên bản trong hệ thống và chịu trách nhiệm về nội dung.
 

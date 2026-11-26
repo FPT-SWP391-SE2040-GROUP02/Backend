@@ -48,7 +48,7 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         if (vault.Plan.Status != PlanStatus.HandoverInProgress && vault.Plan.Status != PlanStatus.Closed)
         {
             throw HandoverAccess.NotAllowed("HANDOVER_NOT_STARTED",
-                "Chỉ xem được tài sản sau khi luật sư chốt biên bản bàn giao.");
+                "Chỉ xem được tài sản sau khi luật sư chốt phương án chia.");
         }
 
         // 2. Lấy các dòng gán của kho rồi gom theo người nhận (theo thứ tự gán), bỏ tài sản đã bị xóa nội dung
