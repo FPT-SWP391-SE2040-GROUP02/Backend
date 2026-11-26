@@ -87,3 +87,24 @@ public class CreateAdminUserRequest
     public string? LegalOrganization { get; set; }
 }
 
+/// <summary>
+/// Admin sửa thông tin của một tài khoản nhân sự (Người xét duyệt, Người thực thi hệ thống, Quản trị viên). Thay trọn bốn
+/// trường: trường tùy chọn để trống thì xóa giá trị cũ.
+/// </summary>
+public class UpdateAdminUserProfileRequest
+{
+    [Required(ErrorMessage = "Vui lòng nhập họ và tên.")]
+    [MaxLength(200)]
+    public string FullName { get; set; } = string.Empty;
+
+    [MaxLength(32)]
+    public string? Phone { get; set; }
+
+    /// <summary>Số chứng chỉ hành nghề luật sư (VERIFIER hoặc EXECUTOR); vai trò khác bỏ qua.</summary>
+    [MaxLength(64)]
+    public string? PracticeCertificateNumber { get; set; }
+
+    /// <summary>Số thẻ luật sư (VERIFIER hoặc EXECUTOR); vai trò khác bỏ qua.</summary>
+    [MaxLength(64)]
+    public string? LawyerCardNumber { get; set; }
+}
