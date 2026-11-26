@@ -298,8 +298,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
     // ---------------- Hàm phụ: nghiệp vụ ----------------
 
     /// <summary>
-    /// Từ chối hồ sơ báo tin: kho có biên bản đang lập chưa khóa (chỉ có yêu cầu của người nhận) mà mọi yêu cầu đều bị từ
-    /// chối và không còn hồ sơ nào khác chờ xét thì đóng biên bản. Chưa lưu.
+    /// Từ chối hồ sơ báo tin: kho có biên bản đang mở thì xét điều kiện đóng chung với xét yêu cầu. Chưa lưu.
     /// </summary>
     private async Task CloseRecordIfAllRejectedAsync(HandoverReport report, DateTimeOffset now, CancellationToken ct)
     {
@@ -317,11 +316,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         {
             return;
         }
-        int pendingReports = await reports.CountPendingByVaultAsync(vault.Id, report.Id, ct);
-        if (HandoverRecordRules.ShouldCloseAfterAllRejected(record, vault.Plan.Status, pendingReports))
-        {
-            HandoverRecordRules.CloseAfterAllRejected(record, now);
-        }
+        await HandoverRecordClosing.CloseIfNothingLeftAsync(reports, record, vault.Plan.Status, report.Id, now, ct);
     }
 
     /// <summary>Trả về kho vừa được khóa, hoặc null khi kho đã khóa từ trước.</summary>

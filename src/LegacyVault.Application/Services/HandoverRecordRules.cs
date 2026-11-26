@@ -570,6 +570,19 @@ public static class HandoverRecordRules
         record.UpdatedAt = now;
     }
 
+    /// <summary>
+    /// Tệp thuộc lần gửi hiện tại của yêu cầu. Gửi lại sau khi bị từ chối đặt lại mốc gửi (CreatedAt) của yêu cầu: tệp của
+    /// lần trước vẫn được lưu nhưng không còn liệt kê trong yêu cầu.
+    /// </summary>
+    public static bool IsCurrentClaimFile(HandoverClaim claim, HandoverRecordFile file)
+    {
+        if (file.ClaimId != claim.Id)
+        {
+            return false;
+        }
+        return file.CreatedAt >= claim.CreatedAt;
+    }
+
     /// <summary>Người nhận có trong biên bản (đã gửi yêu cầu hoặc được ghi tài sản) không.</summary>
     public static bool HasRecipient(HandoverRecord record, Guid beneficiaryId)
     {

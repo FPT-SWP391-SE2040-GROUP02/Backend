@@ -170,4 +170,6 @@ public enum AuditAction
     ExecutorWillViewed = 81,
     /// <summary>Admin sửa họ tên, số điện thoại, số chứng chỉ hoặc số thẻ luật sư của một tài khoản nhân sự (đích là tài khoản; không ghi giá trị).</summary>
     AdminUpdatedUserProfile = 82,
+    /// <summary>Người nhận gửi lại yêu cầu nhận tài sản đã bị luật sư từ chối (đích là kho; không ghi lý do hay giấy tờ).</summary>
+    HandoverClaimResubmitted = 83,
 }

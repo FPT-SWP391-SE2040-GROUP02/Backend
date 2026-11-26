@@ -1382,11 +1382,12 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `/api/v1/vaults/{vaultId}/handover-request` | Chủ tài sản | — | 200 `{ recordId, status, vaultLocked, requestedAt, requesterNames }`; 204 khi không có biên bản đang mở | 404 |
-| POST | `/api/v1/verifier/handover-records/{recordId}/claims/{claimId}/review` | Luật sư được giao biên bản | `{ decision: ACCEPT \| REQUEST_SUPPLEMENT \| REJECT, reason? }` | 200 `HandoverRecordResponse` | 400, 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/claims/{claimId}/review` | Luật sư được giao biên bản | `{ decision: ACCEPT \| REQUEST_SUPPLEMENT \| REJECT, reason? }` | 200 `HandoverRecordResponse` | 400, 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `ALREADY_REVIEWED` khi yêu cầu đã bị từ chối) |
 
 - **Người nhận gửi yêu cầu** chỉ tạo biên bản (`DRAFTING`) và giao luật sư; kế hoạch vẫn `ACTIVE`, Chủ tài sản vẫn sửa được kho.
 - **Kho khóa** (kế hoạch sang `HANDOVER_REQUESTED`) khi luật sư **chấp nhận** yêu cầu hoặc hồ sơ báo tin đầu tiên. Yêu cầu bổ sung hay từ chối không khóa. Lúc khóa, Chủ tài sản và Người thực thi nhận thư "Kho đã được khóa để bàn giao".
-- **Từ chối hết:** kho chưa khóa mà mọi yêu cầu đều bị từ chối và không còn hồ sơ báo tin nào của kho chờ xét thì biên bản tự đóng (`CANCELLED`, `cancelReason = "Mọi yêu cầu bị từ chối"`); lần gửi sau tạo biên bản mới.
+- **Từ chối là đóng:** `REJECT` kết thúc đúng yêu cầu hoặc hồ sơ báo tin đó, không xét lại được. Đường này không chặn đường kia: kho có yêu cầu bị từ chối vẫn nhận hồ sơ báo tin, và ngược lại. Hồ sơ báo tin bị từ chối thì nộp hồ sơ mới (vẫn theo giới hạn 3 hồ sơ cho một người mất trong 30 ngày).
+- **Từ chối hết:** kho chưa khóa, không còn yêu cầu nào `SUBMITTED` / `SUPPLEMENT_REQUESTED` / `ACCEPTED` và không còn hồ sơ báo tin nào của kho `SUBMITTED` / `SUPPLEMENT_REQUESTED` thì biên bản tự đóng (`CANCELLED`, `cancelReason = "Mọi yêu cầu bị từ chối"`); xét chung khi từ chối ở cả hai đường (`HandoverRecordClosing`); lần gửi sau tạo biên bản mới.
 - **Trong lúc kho chưa khóa mà có biên bản đang lập:** Chủ tài sản không xóa được người nhận đã gửi yêu cầu hoặc đã có trong biên bản (409 `HANDOVER_NOT_ALLOWED`, `reason = RECIPIENT_IN_HANDOVER_REQUEST`) và không gỡ được dòng gán cuối cùng của kế hoạch (409 `HANDOVER_NOT_ALLOWED`, `reason = HANDOVER_REQUEST_PENDING`).
 - **Người nhận do người nộp hồ sơ báo tin khai** (`POST /handover/reports`, trường `recipients` là chuỗi JSON; trả lại ở `recipients[]` của hồ sơ và của biên bản): `fullName`, `email`, `phone`, thêm `citizenId` (12 chữ số) và `dateOfBirth` (`yyyy-MM-dd`). Hai trường mới không bắt buộc (hồ sơ cũ và người không khai trả chuỗi rỗng) nhưng đã khai thì phải đúng: căn cước đủ 12 chữ số và không trùng giữa hai người, ngày sinh hợp lệ, không ở tương lai và đủ 18 tuổi; `phone` có khai thì phải là số di động Việt Nam như trên. Sai thì 400 `VALIDATION_ERROR` ở trường `recipients`. Dữ liệu nằm trong phần dữ liệu cá nhân đã mã hóa của hồ sơ nên không cần migration; luật sư thấy các trường này khi mở biên bản và dùng để điền sẵn khi thêm người nhận.
 - **Số điện thoại người nhận do luật sư thêm hoặc sửa** (`POST .../recipients`, `.../recipients/batch`, `PUT .../recipients/{beneficiaryId}`): `phone` không bắt buộc, có nhập thì phải là số di động Việt Nam (`0` hoặc `+84` + đầu số 3/5/7/8/9 + 8 chữ số, sau khi bỏ khoảng trắng, dấu chấm, gạch nối) và được lưu dạng gọn; sai thì 400 `VALIDATION_ERROR` ở trường `phone`.
@@ -1405,8 +1406,9 @@ Lối vào trong app, không cần link trong thư. Người nhận do luật s�
 - **Chỉ tính** kho có kế hoạch `ACTIVE`, `HANDOVER_REQUESTED`, `HANDOVER_IN_PROGRESS`, `CLOSED` và người nhận có email (Chủ tài sản hoặc luật sư khai) trùng email **đã xác minh** của tài khoản (bỏ khoảng trắng hai đầu, không phân biệt hoa thường). Kho của chính mình không tính.
 - **Không trả** tên gói, tên tài sản, số căn cước.
 - `by-account` dùng chung luật với `POST /api/v1/handover/requests` (gửi bằng link): server tự tìm người nhận của kho mang đúng email tài khoản.
-- `canRequest`: chỉ `true` khi `status = NOT_REQUESTED` và gửi được lúc này (kho chưa có biên bản thì kế hoạch phải `ACTIVE`; có biên bản thì biên bản chưa hoàn tất).
+- `canRequest`: chỉ `true` khi `status = NOT_REQUESTED` hoặc `REJECTED` và gửi được lúc này (kho chưa có biên bản thì kế hoạch phải `ACTIVE`; có biên bản thì biên bản chưa hoàn tất).
 - **Giấy tờ của yêu cầu** (cả `by-account` và gửi bằng link) cùng luật với hồ sơ báo tin: thiếu giấy chứng tử hoặc di chúc thì 400 `VALIDATION_ERROR` ở trường `deathCertificates` / `wills`; sai số tệp, dung lượng, loại tệp thì trường `files`. `files[].kind` trả `DEATH_CERTIFICATE`, `WILL`, `OTHER`, hoặc `CLAIM_DOCUMENT` (tệp nộp bổ sung và yêu cầu lưu trước khi chia loại). Nộp bổ sung không bắt đủ loại.
+- **Gửi lại sau khi bị từ chối:** biên bản đã đóng thì lần gửi tạo biên bản và yêu cầu mới. Biên bản còn mở thì chính yêu cầu đó quay về `SUBMITTED` (cùng `id`), `createdAt` là lúc gửi lại, `files` chỉ gồm giấy tờ lần gửi mới (tệp cũ vẫn lưu), `reviewReason` giữ lý do lần trước; ghi nhật ký `HANDOVER_CLAIM_RESUBMITTED` (`targetType = VAULT`, `actorRole = BENEFICIARY`, không chép lý do). Không đổi schema.
 - `reviewReason`: lý do luật sư yêu cầu bổ sung hoặc từ chối (chỉ khi `SUPPLEMENT_REQUESTED` hoặc `REJECTED`). `claimId` để nộp bổ sung; `turnId` để vào cổng người nhận (`/claim/beneficiary`) ở các bước sau khi biên bản chốt.
 - `NEED_IDENTITY` (thêm sau cùng trong danh sách `status`): người nhận vào cổng người nhận để nộp ảnh căn cước (`POST /api/v1/handover/turns/{turnId}/submission`).
 
@@ -1414,7 +1416,8 @@ Bảng `status` (xét từ trên xuống, gặp dòng đúng đầu tiên thì d
 
 | Điều kiện | `status` | `needsAction` |
 |---|---|---|
-| Kho chưa có biên bản đang mở | `NOT_REQUESTED` | `false` |
+| Kho chưa có biên bản đang mở, yêu cầu gần nhất của tôi không bị từ chối | `NOT_REQUESTED` | `false` |
+| Kho chưa có biên bản đang mở, yêu cầu gần nhất của tôi bị từ chối | `REJECTED` | `false` |
 | Yêu cầu của tôi đang chờ xét (`Submitted`) | `REQUEST_PENDING` | `false` |
 | Luật sư yêu cầu bổ sung | `SUPPLEMENT_REQUESTED` | `true` |
 | Luật sư từ chối | `REJECTED` | `false` |

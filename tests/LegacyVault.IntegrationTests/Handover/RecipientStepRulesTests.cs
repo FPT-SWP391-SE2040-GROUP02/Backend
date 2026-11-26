@@ -96,17 +96,18 @@ public sealed class RecipientStepRulesTests
         // Hành động
         string status = RecipientStepRules.ResolveStatus(record, Me, null, null);
 
-        // Kiểm tra
+        // Kiểm tra: biên bản đã hoàn tất thì không gửi lại được
         Assert.Equal(RecipientStepRules.Rejected, status);
         Assert.False(RecipientStepRules.NeedsAction(status, record));
+        Assert.False(RecipientStepRules.CanRequest(status, PlanStatus.HandoverInProgress, record));
     }
 
     [Theory]
-    [InlineData(HandoverClaimStatus.Submitted, RecipientStepRules.RequestPending, false)]
-    [InlineData(HandoverClaimStatus.SupplementRequested, RecipientStepRules.SupplementRequested, true)]
-    [InlineData(HandoverClaimStatus.Rejected, RecipientStepRules.Rejected, false)]
-    [InlineData(HandoverClaimStatus.Accepted, RecipientStepRules.InReview, false)]
-    public void MyClaimStatus_MapsToStep(HandoverClaimStatus claimStatus, string expected, bool needsAction)
+    [InlineData(HandoverClaimStatus.Submitted, RecipientStepRules.RequestPending, false, false)]
+    [InlineData(HandoverClaimStatus.SupplementRequested, RecipientStepRules.SupplementRequested, true, false)]
+    [InlineData(HandoverClaimStatus.Rejected, RecipientStepRules.Rejected, false, true)]
+    [InlineData(HandoverClaimStatus.Accepted, RecipientStepRules.InReview, false, false)]
+    public void MyClaimStatus_MapsToStep(HandoverClaimStatus claimStatus, string expected, bool needsAction, bool canRequest)
     {
         // Chuẩn bị
         HandoverRecord record = Record(HandoverRecordStatus.Drafting);
@@ -118,7 +119,7 @@ public sealed class RecipientStepRulesTests
         // Kiểm tra
         Assert.Equal(expected, status);
         Assert.Equal(needsAction, RecipientStepRules.NeedsAction(status, record));
-        Assert.False(RecipientStepRules.CanRequest(status, PlanStatus.HandoverRequested, record));
+        Assert.Equal(canRequest, RecipientStepRules.CanRequest(status, PlanStatus.HandoverRequested, record));
     }
 
     [Fact]

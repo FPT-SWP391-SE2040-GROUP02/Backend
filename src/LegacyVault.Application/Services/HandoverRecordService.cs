@@ -264,6 +264,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
 
         // 2. Người nhận mang đúng email của tôi ở các kho đã kích hoạt (bỏ kho của chính mình)
         string accountEmail = NormalizeEmail(user.Email);
+        List<HandoverClaim> myClaims = await records.ListClaimsByUserAsync(userId, ct);
         List<Beneficiary> candidates = await records.ListBeneficiariesOfActivatedPlansAsync(ct);
         foreach (Beneficiary beneficiary in candidates)
         {
@@ -292,6 +293,16 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 claim = FindClaim(record, beneficiary.Id);
             }
             string status = RecipientStepRules.ResolveStatus(record, beneficiary.Id, turn, latestSubmission);
+            if (record == null)
+            {
+                // Biên bản đã đóng (mọi yêu cầu bị từ chối): vẫn báo bị từ chối kèm lý do để người nhận gửi lại.
+                HandoverClaim? latest = FindLatestClaim(myClaims, beneficiary.Id);
+                if (latest != null && latest.Status == HandoverClaimStatus.Rejected)
+                {
+                    claim = latest;
+                    status = RecipientStepRules.Rejected;
+                }
+            }
             AvailableHandoverVaultResponse item = new AvailableHandoverVaultResponse
             {
                 VaultId = beneficiary.VaultId,
@@ -347,6 +358,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverRecord? record = await records.FindByVaultIdAsync(vault.Id, ct);
         bool created = false;
+        HandoverClaim? rejected = null;
         if (record == null)
         {
             if (vault.Plan.Status != PlanStatus.Active)
@@ -381,30 +393,30 @@ public sealed class HandoverRecordService : IHandoverRecordService
             {
                 throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Biên bản bàn giao của kho này đã đủ chữ ký.");
             }
-            if (FindClaim(record, beneficiary.Id) != null)
+            HandoverClaim? existing = FindClaim(record, beneficiary.Id);
+            if (existing != null)
             {
-                throw HandoverAccess.NotAllowed("ALREADY_REQUESTED",
-                    "Bạn đã gửi yêu cầu cho kho này. Xem kết quả ở mục Yêu cầu của tôi.");
+                // Mỗi người nhận một yêu cầu trong một biên bản: chỉ yêu cầu đã bị từ chối mới gửi lại được.
+                if (existing.Status != HandoverClaimStatus.Rejected)
+                {
+                    throw HandoverAccess.NotAllowed("ALREADY_REQUESTED",
+                        "Bạn đã gửi yêu cầu cho kho này. Xem kết quả ở mục Yêu cầu của tôi.");
+                }
+                rejected = existing;
             }
             record.UpdatedAt = now;
         }
 
-        // 3. Ghi yêu cầu và giấy tờ (mã hóa), lưu một lần; lưu lỗi thì xóa tệp đã ghi
-        HandoverClaim claim = new HandoverClaim
+        // 3. Ghi yêu cầu mới, hoặc mở lại yêu cầu bị từ chối; giấy tờ mã hóa; lưu một lần, lưu lỗi thì xóa tệp đã ghi
+        HandoverClaim claim;
+        if (rejected == null)
         {
-            RecordId = record.Id,
-            BeneficiaryId = beneficiary.Id,
-            UserId = user.Id,
-            Status = HandoverClaimStatus.Submitted,
-            Note = cleanNote,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-        records.AddClaim(claim);
-        // EF tự gắn yêu cầu vào biên bản đang theo dõi; chỉ gắn tay khi chưa có (biên bản mới tạo).
-        if (!record.Claims.Contains(claim))
+            claim = AddClaim(record, beneficiary.Id, user.Id, cleanNote, now);
+        }
+        else
         {
-            record.Claims.Add(claim);
+            ReopenRejectedClaim(vault.Id, rejected, user.Id, cleanNote, now);
+            claim = rejected;
         }
         List<HandoverRecordFile> saved = await SaveClaimDocumentsAsync(uploads, record.Id, claim.Id, user.Id, now, ct);
         AttachFiles(record, saved);
@@ -416,6 +428,44 @@ public sealed class HandoverRecordService : IHandoverRecordService
 
         MyHandoverClaimResponse response = await BuildMyClaimResponseAsync(claim, record, vault, ct);
         return response;
+    }
+
+    private HandoverClaim AddClaim(HandoverRecord record, Guid beneficiaryId, Guid userId, string note, DateTimeOffset now)
+    {
+        HandoverClaim claim = new HandoverClaim
+        {
+            RecordId = record.Id,
+            BeneficiaryId = beneficiaryId,
+            UserId = userId,
+            Status = HandoverClaimStatus.Submitted,
+            Note = note,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        records.AddClaim(claim);
+        // EF tự gắn yêu cầu vào biên bản đang theo dõi; chỉ gắn tay khi chưa có (biên bản mới tạo).
+        if (!record.Claims.Contains(claim))
+        {
+            record.Claims.Add(claim);
+        }
+        return claim;
+    }
+
+    /// <summary>
+    /// Gửi lại yêu cầu đã bị từ chối khi biên bản vẫn mở: chính yêu cầu đó quay về chờ xét với giấy tờ mới. Lý do và mốc
+    /// xét lần trước giữ lại để luật sư xem; nhật ký ghi lần gửi lại (không chép lý do vì có thể chứa dữ liệu cá nhân).
+    /// </summary>
+    private void ReopenRejectedClaim(Guid vaultId, HandoverClaim claim, Guid userId, string note, DateTimeOffset now)
+    {
+        claim.Status = HandoverClaimStatus.Submitted;
+        claim.UserId = userId;
+        claim.Note = note;
+        // Mốc gửi mới: tệp của lần trước (cũ hơn mốc này) không còn liệt kê, xem IsCurrentClaimFile.
+        claim.CreatedAt = now;
+        claim.UpdatedAt = now;
+        auditLogs.Add(AuditRules.Create(
+            vaultId, userId, AuditActorRole.Beneficiary, AuditAction.HandoverClaimResubmitted,
+            AuditTargetType.Vault, vaultId, null, AuditOutcome.Succeeded, null, now));
     }
 
     /// <summary>Lưu giấy tờ lần gửi theo loại, giữ thứ tự chọn; lỗi giữa chừng thì xóa mọi tệp đã ghi.</summary>
@@ -813,6 +863,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             throw HandoverAccess.NotFound();
         }
+        // Từ chối là đóng yêu cầu: chỉ xét lại khi người nhận gửi lại (yêu cầu quay về chờ xét).
+        if (claim.Status == HandoverClaimStatus.Rejected)
+        {
+            throw HandoverAccess.NotAllowed("ALREADY_REVIEWED",
+                "Yêu cầu này đã bị từ chối. Người nhận có thể gửi lại yêu cầu mới.");
+        }
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
         // 2. Ghi kết quả: bổ sung và từ chối phải có lý do; từ chối thì bỏ người này khỏi biên bản.
@@ -860,11 +916,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 3. Kho chưa khóa mà mọi yêu cầu đều bị từ chối, không còn hồ sơ báo tin chờ xét: đóng biên bản
         if (decision == "REJECT")
         {
-            int pendingReports = await reports.CountPendingByVaultAsync(vault.Id, null, ct);
-            if (HandoverRecordRules.ShouldCloseAfterAllRejected(record, vault.Plan.Status, pendingReports))
-            {
-                HandoverRecordRules.CloseAfterAllRejected(record, now);
-            }
+            await HandoverRecordClosing.CloseIfNothingLeftAsync(reports, record, vault.Plan.Status, null, now, ct);
         }
         await SaveAsync(ct);
 
@@ -2111,7 +2163,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             }
             foreach (HandoverRecordFile file in record.Files.OrderBy(f => f.CreatedAt))
             {
-                if (file.ClaimId == claim.Id)
+                if (HandoverRecordRules.IsCurrentClaimFile(claim, file))
                 {
                     item.Files.Add(ToFileResponse(file));
                 }
@@ -2713,7 +2765,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         };
         foreach (HandoverRecordFile file in record.Files.OrderBy(f => f.CreatedAt))
         {
-            if (file.ClaimId == claim.Id)
+            if (HandoverRecordRules.IsCurrentClaimFile(claim, file))
             {
                 response.Files.Add(ToFileResponse(file));
             }
@@ -2818,6 +2870,19 @@ public sealed class HandoverRecordService : IHandoverRecordService
     private static HandoverClaim? FindClaim(HandoverRecord record, Guid beneficiaryId)
     {
         foreach (HandoverClaim claim in record.Claims)
+        {
+            if (claim.BeneficiaryId == beneficiaryId)
+            {
+                return claim;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Yêu cầu mới nhất của người nhận; danh sách đã xếp mới nhất trước. null khi chưa gửi lần nào.</summary>
+    private static HandoverClaim? FindLatestClaim(List<HandoverClaim> claims, Guid beneficiaryId)
+    {
+        foreach (HandoverClaim claim in claims)
         {
             if (claim.BeneficiaryId == beneficiaryId)
             {
