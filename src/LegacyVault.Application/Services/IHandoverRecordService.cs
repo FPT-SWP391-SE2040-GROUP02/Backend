@@ -61,6 +61,13 @@ public interface IHandoverRecordService
     Task<HandoverRecordResponse> AddRecipientsAsync(
         Guid recordId, AddHandoverRecipientsRequest request, CancellationToken ct);
 
+    /// <summary>Sửa người nhận do luật sư thêm ở biên bản đang lập. Không đổi được số căn cước.</summary>
+    Task<HandoverRecordResponse> UpdateRecipientAsync(
+        Guid recordId, Guid beneficiaryId, AddHandoverRecipientRequest request, CancellationToken ct);
+
+    /// <summary>Xóa người nhận do luật sư thêm ở biên bản đang lập, kèm các dòng biên bản của người đó.</summary>
+    Task<HandoverRecordResponse> RemoveRecipientAsync(Guid recordId, Guid beneficiaryId, CancellationToken ct);
+
     /// <summary>Luật sư đính kèm tệp căn cứ (di chúc, văn bản...) vào biên bản.</summary>
     Task<HandoverRecordResponse> AddEvidenceAsync(Guid recordId, List<UploadedFile> files, CancellationToken ct);
 

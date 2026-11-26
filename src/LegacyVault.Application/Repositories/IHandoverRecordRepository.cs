@@ -62,6 +62,9 @@ public interface IHandoverRecordRepository
     /// <summary>Luật sư thêm người nhận mới vào kho khi lập biên bản.</summary>
     void AddBeneficiary(Beneficiary beneficiary);
 
+    /// <summary>Xóa hồ sơ người nhận luật sư đã thêm; hồ sơ phải được đọc bằng FindBeneficiaryForUpdateAsync.</summary>
+    void RemoveBeneficiary(Beneficiary beneficiary);
+
     /// <summary>Người nhận của kho, có theo dõi thay đổi (để cấp link riêng); null khi không có.</summary>
     Task<Beneficiary?> FindBeneficiaryForUpdateAsync(Guid beneficiaryId, CancellationToken ct);
 }

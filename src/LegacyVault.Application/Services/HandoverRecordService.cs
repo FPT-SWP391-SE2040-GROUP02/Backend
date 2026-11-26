@@ -931,6 +931,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         // 3. Lưu hồ sơ người nhận mới; luật sư ghi tài sản cho người này ở biên bản
         DateTimeOffset now = timeProvider.GetUtcNow();
         beneficiary.CreatedAt = now;
+        beneficiary.AddedByHandoverRecordId = record.Id;
         records.AddBeneficiary(beneficiary);
         record.UpdatedAt = now;
         await SaveAsync(ct);
@@ -972,6 +973,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             // Cộng dần từng tích tắc để giữ đúng thứ tự luật sư nhập.
             added[index].CreatedAt = now.AddTicks(index);
+            added[index].AddedByHandoverRecordId = record.Id;
             records.AddBeneficiary(added[index]);
         }
         record.UpdatedAt = now;
@@ -987,6 +989,27 @@ public sealed class HandoverRecordService : IHandoverRecordService
     /// </summary>
     private async Task<Beneficiary> BuildNewRecipientAsync(
         Vault vault, AddHandoverRecipientRequest request, List<Beneficiary> vaultBeneficiaries, CancellationToken ct)
+    {
+        BeneficiaryPersonalData data = ReadRecipientData(request);
+        Beneficiary beneficiary = new Beneficiary();
+        beneficiary.VaultId = vault.Id;
+        protector.Protect(beneficiary, data);
+        foreach (Beneficiary existing in vaultBeneficiaries)
+        {
+            if (existing.CitizenIdHash != null && beneficiary.CitizenIdHash != null
+                && existing.CitizenIdHash.SequenceEqual(beneficiary.CitizenIdHash))
+            {
+                throw ValidationErrors.For("citizenId", "Người này đã có trong kho.");
+            }
+        }
+        // Email không trùng Chủ tài sản, nhân sự (Người xét duyệt, Người thực thi), Người thực thi của kho hay người nhận khác.
+        await RecipientRules.EnsureEmailAvailableAsync(
+            NormalizeEmail(request.Email), vault, null, users, invitations, protector, vaultBeneficiaries, ct);
+        return beneficiary;
+    }
+
+    /// <summary>Kiểm và chuẩn hóa thông tin luật sư nhập: đủ CCCD, họ tên, ngày sinh (đủ tuổi), email.</summary>
+    private BeneficiaryPersonalData ReadRecipientData(AddHandoverRecipientRequest request)
     {
         BeneficiaryPersonalData data = new BeneficiaryPersonalData();
         data.CitizenId = CitizenIdRules.NormalizeCitizenId(request.CitizenId, "citizenId");
@@ -1010,21 +1033,115 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             data.Phone = request.Phone.Trim();
         }
-        Beneficiary beneficiary = new Beneficiary();
-        beneficiary.VaultId = vault.Id;
-        protector.Protect(beneficiary, data);
-        foreach (Beneficiary existing in vaultBeneficiaries)
+        return data;
+    }
+
+    public async Task<HandoverRecordResponse> UpdateRecipientAsync(
+        Guid recordId, Guid beneficiaryId, AddHandoverRecipientRequest request, CancellationToken ct)
+    {
+        // 1. Biên bản của luật sư này và đang lập; chỉ sửa người do chính biên bản này thêm
+        Guid userId = await RequireActiveVerifierAsync(ct);
+        HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ sửa người nhận khi biên bản đang lập.");
+        Vault vault = await RequireVaultAsync(record.VaultId, ct);
+        Beneficiary beneficiary = await RequireEditableRecipientAsync(record, vault, beneficiaryId, ct);
+
+        // 2. Kiểm thông tin mới; số căn cước không đổi được sau khi tạo hồ sơ
+        BeneficiaryPersonalData current = protector.Unprotect(beneficiary);
+        BeneficiaryPersonalData updated = ReadRecipientData(request);
+        if (!string.Equals(updated.CitizenId, current.CitizenId, StringComparison.Ordinal))
         {
-            if (existing.CitizenIdHash != null && beneficiary.CitizenIdHash != null
-                && existing.CitizenIdHash.SequenceEqual(beneficiary.CitizenIdHash))
+            throw ValidationErrors.For("citizenId", "Số căn cước không đổi được. Xóa người này rồi thêm lại.");
+        }
+        updated.Message = current.Message;
+        List<Beneficiary> vaultBeneficiaries = await records.ListVaultBeneficiariesAsync(vault.Id, ct);
+        await RecipientRules.EnsureEmailAvailableAsync(
+            NormalizeEmail(request.Email), vault, beneficiary.Id, users, invitations, protector, vaultBeneficiaries, ct);
+
+        // 3. Mã hóa lại và lưu
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        protector.Protect(beneficiary, updated);
+        beneficiary.UpdatedAt = now;
+        record.UpdatedAt = now;
+        await SaveAsync(ct);
+
+        HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
+        return response;
+    }
+
+    public async Task<HandoverRecordResponse> RemoveRecipientAsync(
+        Guid recordId, Guid beneficiaryId, CancellationToken ct)
+    {
+        // 1. Biên bản của luật sư này và đang lập; chỉ xóa người do chính biên bản này thêm
+        Guid userId = await RequireActiveVerifierAsync(ct);
+        HandoverRecord record = await RequireVerifierRecordAsync(recordId, userId, ct);
+        RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ xóa người nhận khi biên bản đang lập.");
+        Vault vault = await RequireVaultAsync(record.VaultId, ct);
+        Beneficiary beneficiary = await RequireEditableRecipientAsync(record, vault, beneficiaryId, ct);
+
+        // 2. Gỡ các dòng biên bản của người này rồi xóa hồ sơ, lưu một lần
+        RemoveLinesOf(record, beneficiary.Id);
+        records.RemoveBeneficiary(beneficiary);
+        record.UpdatedAt = timeProvider.GetUtcNow();
+        await SaveAsync(ct);
+
+        HandoverRecordResponse response = await BuildVerifierResponseAsync(record, vault, ct);
+        return response;
+    }
+
+    /// <summary>
+    /// Hồ sơ người nhận luật sư được sửa, xóa. Không thuộc kho → 404; thuộc kho nhưng không được đụng tới → 409.
+    /// </summary>
+    private async Task<Beneficiary> RequireEditableRecipientAsync(
+        HandoverRecord record, Vault vault, Guid beneficiaryId, CancellationToken ct)
+    {
+        Beneficiary? beneficiary = await records.FindBeneficiaryForUpdateAsync(beneficiaryId, ct);
+        if (beneficiary == null || beneficiary.VaultId != vault.Id)
+        {
+            throw new AppException(AppErrorType.NotFound, ErrorCode.BeneficiaryNotFound, "Không tìm thấy người nhận.");
+        }
+        List<AssetAssignment> ownerAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
+        List<HandoverTurn> turns = await records.FindTurnsWithItemsAsync(record.Id, ct);
+        if (!CanEditRecipient(record, beneficiary, ownerAssignments, turns))
+        {
+            throw HandoverAccess.NotAllowed("RECIPIENT_NOT_EDITABLE",
+                "Chỉ sửa, xóa được người nhận do bạn thêm ở biên bản này, chưa gửi yêu cầu và chưa được gửi thư mời.");
+        }
+        return beneficiary;
+    }
+
+    private static bool CanEditRecipient(
+        HandoverRecord record, Beneficiary beneficiary, List<AssetAssignment> ownerAssignments, List<HandoverTurn> turns)
+    {
+        if (record.Status != HandoverRecordStatus.Drafting)
+        {
+            return false;
+        }
+        // Người Chủ tài sản khai (cột trống) hoặc do biên bản khác thêm thì không đụng tới.
+        if (beneficiary.AddedByHandoverRecordId != record.Id)
+        {
+            return false;
+        }
+        if (FindClaim(record, beneficiary.Id) != null)
+        {
+            return false;
+        }
+        foreach (AssetAssignment assignment in ownerAssignments)
+        {
+            if (assignment.BeneficiaryId == beneficiary.Id)
             {
-                throw ValidationErrors.For("citizenId", "Người này đã có trong kho.");
+                return false;
             }
         }
-        // Email không trùng Chủ tài sản, nhân sự (Người xét duyệt, Người thực thi), Người thực thi của kho hay người nhận khác.
-        await RecipientRules.EnsureEmailAvailableAsync(
-            data.Email, vault, null, users, invitations, protector, vaultBeneficiaries, ct);
-        return beneficiary;
+        // Đã có lượt (kể cả lượt đã hủy) nghĩa là từng phát hành và gửi thư mời cho người này.
+        foreach (HandoverTurn turn in turns)
+        {
+            if (turn.BeneficiaryId == beneficiary.Id)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// <summary>
@@ -1826,6 +1943,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
             };
             response.AvailableAssets.Add(item);
         }
+        List<AssetAssignment> ownerAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
+        List<HandoverTurn> recordTurns = await records.FindTurnsWithItemsAsync(record.Id, ct);
         foreach (Beneficiary beneficiary in await records.ListVaultBeneficiariesAsync(vault.Id, ct))
         {
             HandoverRecordPersonResponse person = new HandoverRecordPersonResponse
@@ -1835,11 +1954,14 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 CitizenId = ReadCitizenId(beneficiary),
                 Email = ReadEmail(beneficiary)
             };
+            if (CanEditRecipient(record, beneficiary, ownerAssignments, recordTurns))
+            {
+                FillEditableFields(person, beneficiary);
+            }
             response.AvailableRecipients.Add(person);
         }
 
         // Biên bản phân chia của Chủ tài sản: gom các dòng gán theo từng người nhận.
-        List<AssetAssignment> ownerAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
         Dictionary<Guid, OwnerSplitRecipientResponse> ownerSplitByBeneficiary = new Dictionary<Guid, OwnerSplitRecipientResponse>();
         foreach (AssetAssignment assignment in ownerAssignments)
         {
@@ -2155,6 +2277,25 @@ public sealed class HandoverRecordService : IHandoverRecordService
             }
         }
         return item;
+    }
+
+    private void FillEditableFields(HandoverRecordPersonResponse person, Beneficiary beneficiary)
+    {
+        try
+        {
+            BeneficiaryPersonalData data = protector.Unprotect(beneficiary);
+            person.DateOfBirth = data.DateOfBirth;
+            if (data.Phone != null)
+            {
+                person.Phone = data.Phone;
+            }
+            person.CanEdit = true;
+        }
+        catch (Exception)
+        {
+            // Không giải mã được thì không cho sửa, giống các ô họ tên để trống.
+            person.CanEdit = false;
+        }
     }
 
     private string ReadFullName(Beneficiary beneficiary)

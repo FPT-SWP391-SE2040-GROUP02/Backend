@@ -179,6 +179,34 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.AddRecipientsAsync(recordId, request, ct);
     }
 
+    /// <summary>
+    /// Sửa người nhận do luật sư thêm ở biên bản đang lập (không đổi số căn cước). 409 RECIPIENT_NOT_EDITABLE khi người
+    /// đó do Chủ tài sản khai, đã gửi yêu cầu hoặc đã được gửi thư mời.
+    /// </summary>
+    [HttpPut("{recordId:guid}/recipients/{beneficiaryId:guid}")]
+    [Consumes("application/json")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverRecordResponse> UpdateRecipient(
+        Guid recordId, Guid beneficiaryId, AddHandoverRecipientRequest request, CancellationToken ct)
+    {
+        return recordService.UpdateRecipientAsync(recordId, beneficiaryId, request, ct);
+    }
+
+    /// <summary>
+    /// Xóa người nhận do luật sư thêm ở biên bản đang lập, kèm tài sản đã ghi cho người đó. Điều kiện giống khi sửa.
+    /// </summary>
+    [HttpDelete("{recordId:guid}/recipients/{beneficiaryId:guid}")]
+    [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<HandoverRecordResponse> RemoveRecipient(Guid recordId, Guid beneficiaryId, CancellationToken ct)
+    {
+        return recordService.RemoveRecipientAsync(recordId, beneficiaryId, ct);
+    }
+
     /// <summary>Đính kèm tệp căn cứ (PDF hoặc ảnh, tối đa 10 tệp, mỗi tệp 10 MiB); chỉ khi biên bản đang lập.</summary>
     [HttpPost("{recordId:guid}/evidence")]
     [Consumes("multipart/form-data")]

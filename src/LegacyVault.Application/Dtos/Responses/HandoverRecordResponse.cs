@@ -177,6 +177,16 @@ public class HandoverRecordPersonResponse
 
     /// <summary>Email đã khai; luật sư dùng để biết người trong hồ sơ báo tin đã có trong kho chưa.</summary>
     public string Email { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Luật sư sửa, xóa được người này lúc này không: do chính luật sư thêm ở biên bản đang lập, chưa gửi yêu cầu,
+    /// chưa được Chủ tài sản gán tài sản và chưa từng được gửi thư mời.
+    /// </summary>
+    public bool CanEdit { get; set; }
+
+    /// <summary>Ngày sinh và số điện thoại chỉ trả khi CanEdit, để điền sẵn ô sửa.</summary>
+    public DateOnly? DateOfBirth { get; set; }
+    public string Phone { get; set; } = string.Empty;
 }
 
 /// <summary>Một người nhận trong biên bản phân chia của Chủ tài sản và các tài sản Chủ tài sản đã gán cho người đó.</summary>

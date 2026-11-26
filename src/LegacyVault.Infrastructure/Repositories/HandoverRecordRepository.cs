@@ -182,6 +182,11 @@ public sealed class HandoverRecordRepository : IHandoverRecordRepository
         context.Set<Beneficiary>().Add(beneficiary);
     }
 
+    public void RemoveBeneficiary(Beneficiary beneficiary)
+    {
+        context.Set<Beneficiary>().Remove(beneficiary);
+    }
+
     public Task<Beneficiary?> FindBeneficiaryForUpdateAsync(Guid beneficiaryId, CancellationToken ct)
     {
         return context.Set<Beneficiary>().FirstOrDefaultAsync(b => b.Id == beneficiaryId, ct);

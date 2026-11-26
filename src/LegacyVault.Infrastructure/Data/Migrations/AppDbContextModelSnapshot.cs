@@ -183,6 +183,9 @@ namespace LegacyVault.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("AddedByHandoverRecordId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<byte[]>("CitizenIdHash")
                         .HasMaxLength(32)
                         .HasColumnType("binary(32)")
