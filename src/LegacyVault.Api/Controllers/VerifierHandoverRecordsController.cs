@@ -130,7 +130,10 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.CancelByVerifierAsync(recordId, request, ct);
     }
 
-    /// <summary>Luật sư ký xác minh phần của một người nhận đã được xác nhận danh tính.</summary>
+    /// <summary>
+    /// Luật sư ký xác minh phần của một người nhận đã được xác nhận danh tính. Luật sư ký đầu tiên trong thứ tự
+    /// luật sư → Người thực thi → người nhận; ký xong thì Người thực thi được báo ký phần đó.
+    /// </summary>
     [HttpPost("{recordId:guid}/recipients/{beneficiaryId:guid}/sign")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

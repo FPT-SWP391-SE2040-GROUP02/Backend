@@ -90,11 +90,35 @@ public sealed class HandoverRecordReminderFlowTests : IAsyncLifetime
         return HandoverRecordTestData.VerifierRecordUrl(recordId) + "/remind-executor";
     }
 
+    /// <summary>Danh tính người nhận xong và luật sư đã ký phần của họ: có phần chờ Người thực thi ký.</summary>
+    private async Task VerifierSignsEveryPartAsync(HandoverRecordTestData.FinalizedRecord record)
+    {
+        await HandoverRecordTestData.ConfirmIdentitiesAsync(factory, record.RecordId);
+        await HandoverRecordTestData.SignAsVerifierAsync(factory, record);
+    }
+
+    [SqlFact]
+    public async Task RemindBeforeVerifierSignedAnyPart_Returns409_VerifierNotSigned()
+    {
+        // Chuẩn bị: biên bản đã chốt, danh tính xong, luật sư chưa ký phần nào
+        (Guid _, HandoverRecordTestData.FinalizedRecord record) = await BuildFinalizedAsync();
+        await HandoverRecordTestData.ConfirmIdentitiesAsync(factory, record.RecordId);
+
+        // Hành động
+        HttpResponseMessage response = await record.Verifier.Client.PostAsync(RemindUrl(record.RecordId), null);
+
+        // Kiểm tra: chưa có phần nào để Người thực thi ký nên không nhắc, không gửi thư
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("VERIFIER_NOT_SIGNED", problem.GetProperty("reason").GetString());
+        Assert.Empty(notices.OfStage(HandoverRequestNotice.StageExecutorReminder));
+    }
+
     [SqlFact]
     public async Task Remind_Works_SetsReminderTime_SendsMailToExecutor_AndWritesAudit()
     {
-        // Chuẩn bị
+        // Chuẩn bị: luật sư đã ký phần của người nhận, Người thực thi chưa ký
         (Guid vaultId, HandoverRecordTestData.FinalizedRecord record) = await BuildFinalizedAsync();
+        await VerifierSignsEveryPartAsync(record);
 
         // Hành động
         HttpResponseMessage response = await record.Verifier.Client.PostAsync(RemindUrl(record.RecordId), null);
@@ -120,6 +144,7 @@ public sealed class HandoverRecordReminderFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         (Guid _, HandoverRecordTestData.FinalizedRecord record) = await BuildFinalizedAsync();
+        await VerifierSignsEveryPartAsync(record);
         Assert.Equal(HttpStatusCode.OK, (await record.Verifier.Client.PostAsync(RemindUrl(record.RecordId), null)).StatusCode);
 
         // Hành động
@@ -140,7 +165,7 @@ public sealed class HandoverRecordReminderFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         (Guid vaultId, HandoverRecordTestData.FinalizedRecord record) = await BuildFinalizedAsync();
-        await HandoverRecordTestData.ConfirmIdentitiesAsync(factory, record.RecordId);
+        await VerifierSignsEveryPartAsync(record);
         foreach (Guid id in await HandoverRecordTestData.RecipientIdsAsync(factory, record.RecordId))
         {
             Assert.Equal(HttpStatusCode.OK, (await record.Executor.Client.PostAsync(
@@ -197,25 +222,30 @@ public sealed class HandoverRecordReminderFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task VerifierIsNotifiedOnce_WhenOnlyTheirSignatureIsMissing()
+    public async Task VerifierIsNotifiedOnce_WhenOnlyTheirSignatureIsMissing_OnAnOldOutOfOrderRecord()
     {
-        // Chuẩn bị: biên bản đã chốt, người nhận đã đăng nhập và nhận lượt
-        (Guid vaultId, HandoverRecordTestData.FinalizedRecord record) = await BuildFinalizedAsync();
+        // Chuẩn bị: biên bản đã chốt, người nhận đã đăng nhập và nhận lượt; biên bản cũ đang dở có chữ ký Người thực thi
+        // từ trước khi có luật thứ tự (luật sư chưa ký) — chữ ký này được giữ nguyên
+        (Guid _, HandoverRecordTestData.FinalizedRecord record) = await BuildFinalizedAsync();
         HttpClient recipient = await ApiTestHelpers.CreateClientForNewUserAsync(factory, emailVerified: true, RecipientEmail);
         JsonElement invitations = await ApiTestHelpers.ReadJsonAsync(await recipient.GetAsync("/api/v1/handover/invitations/mine"));
         Guid turnId = invitations[0].GetProperty("turnId").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null)).StatusCode);
-
-        // Hành động: Người thực thi ký (chưa có người nhận nào ký) rồi người nhận ký, cuối cùng luật sư ký
         Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, record.RecordId))[0];
-        await record.Executor.Client.PostAsync(HandoverRecordTestData.SignUrl(HandoverRecordTestData.ExecutorRecordUrl(vaultId), beneficiaryId), null);
+        await HandoverRecordTestData.InsertSignatureAsync(
+            factory, record.RecordId, HandoverSignerRole.Executor, record.Executor.User.Id, beneficiaryId);
         int afterExecutor = notices.OfStage(HandoverRequestNotice.StageVerifierSignNeeded).Count;
+
+        // Hành động: người nhận ký (Người thực thi đã ký phần của mình nên ký được), cuối cùng luật sư ký
         await HandoverRecordTestData.SignAsRecipientAsync(recipient, turnId);
         List<HandoverRequestNotice> afterRecipient = notices.OfStage(HandoverRequestNotice.StageVerifierSignNeeded);
-        await record.Verifier.Client.PostAsync(HandoverRecordTestData.SignUrl(HandoverRecordTestData.VerifierRecordUrl(record.RecordId), beneficiaryId), null);
+        HttpResponseMessage verifierSigned = await record.Verifier.Client.PostAsync(
+            HandoverRecordTestData.SignUrl(HandoverRecordTestData.VerifierRecordUrl(record.RecordId), beneficiaryId), null);
 
-        // Kiểm tra: chỉ một thư, tới luật sư, gửi lúc người nhận ký xong; luật sư ký không gửi thêm
+        // Kiểm tra: chỉ một thư, tới luật sư, gửi lúc người nhận ký xong; luật sư ký xong thì biên bản hoàn tất
         Assert.Equal(0, afterExecutor);
+        Assert.Equal(HttpStatusCode.OK, verifierSigned.StatusCode);
+        Assert.Equal("COMPLETED", (await ApiTestHelpers.ReadJsonAsync(verifierSigned)).GetProperty("status").GetString());
         Assert.Single(afterRecipient);
         Assert.Equal(HandoverRequestNotice.Verifier, afterRecipient[0].Audience);
         Assert.Equal(record.Verifier.User.Email, afterRecipient[0].ToEmail);

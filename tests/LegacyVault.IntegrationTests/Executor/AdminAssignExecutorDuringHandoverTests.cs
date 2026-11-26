@@ -134,6 +134,8 @@ public sealed class AdminAssignExecutorDuringHandoverTests : IAsyncLifetime
         await HandoverRecordTestData.ConfirmIdentitiesAsync(factory, handover.Record.RecordId);
         Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, handover.Record.RecordId))[0];
         string signUrl = HandoverRecordTestData.SignUrl(executorRecordUrl, beneficiaryId);
+        // Luật sư ký phần này trước (thứ tự ký: luật sư → Người thực thi → người nhận)
+        await HandoverRecordTestData.SignAsVerifierAsync(factory, handover.Record);
         Assert.Equal(HttpStatusCode.OK, (await handover.Record.Executor.Client.PostAsync(signUrl, null)).StatusCode);
 
         // Hành động
@@ -180,6 +182,7 @@ public sealed class AdminAssignExecutorDuringHandoverTests : IAsyncLifetime
         await HandoverRecordTestData.ConfirmIdentitiesAsync(factory, handover.Record.RecordId);
         Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, handover.Record.RecordId))[0];
         string signUrl = HandoverRecordTestData.SignUrl(executorRecordUrl, beneficiaryId);
+        await HandoverRecordTestData.SignAsVerifierAsync(factory, handover.Record);
         HttpResponseMessage oldSign = await handover.Record.Executor.Client.PostAsync(signUrl, null);
         HttpResponseMessage newSign = await handover.NewExecutorClient.PostAsync(signUrl, null);
 

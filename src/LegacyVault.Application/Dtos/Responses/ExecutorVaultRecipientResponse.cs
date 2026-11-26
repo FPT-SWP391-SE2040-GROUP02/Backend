@@ -11,7 +11,7 @@ public class ExecutorVaultRecipientResponse
     /// <summary>Họ tên người nhận; null khi không giải mã được (thiếu KEK, dữ liệu hỏng).</summary>
     public string? FullName { get; set; }
 
-    /// <summary>Số CCCD đầy đủ để phân biệt người nhận trùng tên.</summary>
+    /// <summary>4 số cuối căn cước ("•••• 1793") để phân biệt người nhận trùng tên; Người thực thi không nhận số đầy đủ.</summary>
     public string CitizenId { get; set; } = string.Empty;
 
     /// <summary>Các tài sản được gán cho người này, theo thứ tự gán; bỏ tài sản đã xóa nội dung.</summary>

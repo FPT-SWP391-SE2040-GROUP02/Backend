@@ -68,7 +68,7 @@ public sealed class HandoverProgressApiTests : IAsyncLifetime
         Assert.Equal(1, body.Summary.Accepted);
         HandoverProgressTurnResponse turn = Assert.Single(body.Turns);
         Assert.Equal("Biên bản bàn giao", turn.ContainerName);
-        Assert.Equal("001099004321", turn.BeneficiaryCitizenId);
+        Assert.Equal("•••• 4321", turn.BeneficiaryCitizenId);
         Assert.Equal("HANDOVER_COMMITTED", turn.Status);
         Assert.Equal("ACTIVE", turn.GrantStatus);
         Assert.Equal(2, turn.TotalItems);

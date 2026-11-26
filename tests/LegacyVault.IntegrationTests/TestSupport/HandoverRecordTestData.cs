@@ -226,19 +226,55 @@ public static class HandoverRecordTestData
     }
 
     /// <summary>
-    /// Người thực thi rồi luật sư ký phần của từng người nhận đã được xác nhận danh tính (bấm lại không ghi trùng).
+    /// Luật sư rồi Người thực thi ký phần của từng người nhận đã được xác nhận danh tính (đúng thứ tự ký; bấm lại không
+    /// ghi trùng).
     /// </summary>
     public static async Task SignAsVerifierAndExecutorAsync(ApiFactory factory, FinalizedRecord record, Guid vaultId)
     {
         foreach (Guid beneficiaryId in await RecipientIdsAsync(factory, record.RecordId, confirmedOnly: true))
         {
+            HttpResponseMessage verifier = await record.Verifier.Client.PostAsync(
+                SignUrl(VerifierRecordUrl(record.RecordId), beneficiaryId), null);
+            Assert.Equal(HttpStatusCode.OK, verifier.StatusCode);
             HttpResponseMessage executor = await record.Executor.Client.PostAsync(
                 SignUrl(ExecutorRecordUrl(vaultId), beneficiaryId), null);
             Assert.Equal(HttpStatusCode.OK, executor.StatusCode);
+        }
+    }
+
+    /// <summary>Luật sư ký phần của từng người nhận đã được xác nhận danh tính (bước đầu của thứ tự ký).</summary>
+    public static async Task SignAsVerifierAsync(ApiFactory factory, FinalizedRecord record)
+    {
+        foreach (Guid beneficiaryId in await RecipientIdsAsync(factory, record.RecordId, confirmedOnly: true))
+        {
             HttpResponseMessage verifier = await record.Verifier.Client.PostAsync(
                 SignUrl(VerifierRecordUrl(record.RecordId), beneficiaryId), null);
             Assert.Equal(HttpStatusCode.OK, verifier.StatusCode);
         }
+    }
+
+    /// <summary>
+    /// Ghi thẳng vào DB một chữ ký của bản hiện tại, mô phỏng biên bản đang dở đã ký sai thứ tự từ trước khi có luật thứ tự
+    /// (API không còn cho ký như vậy).
+    /// </summary>
+    public static async Task InsertSignatureAsync(
+        ApiFactory factory, Guid recordId, HandoverSignerRole role, Guid signerUserId, Guid? beneficiaryId)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            HandoverRecord record = await db.Set<HandoverRecord>().SingleAsync(r => r.Id == recordId);
+            HandoverRecordSignature signature = new HandoverRecordSignature
+            {
+                RecordId = recordId,
+                RevisionNo = record.RevisionNo,
+                Role = role,
+                SignerUserId = signerUserId,
+                BeneficiaryId = beneficiaryId,
+                SignedAt = DateTimeOffset.UtcNow
+            };
+            db.Set<HandoverRecordSignature>().Add(signature);
+            await db.SaveChangesAsync();
+        });
     }
 
     /// <summary>Người nhận ký biên bản từ lượt của mình; trả biên bản sau khi ký.</summary>

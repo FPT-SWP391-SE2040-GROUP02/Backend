@@ -151,7 +151,9 @@ public sealed class HandoverController : ControllerBase
     }
 
     /// <summary>
-    /// Người nhận ký biên bản (bước 3). Đủ chữ ký ba bên thì mở quyền xem và tải; Người thực thi gửi mã nhận.
+    /// Người nhận ký biên bản (bước 3), ký cuối cho phần của mình: danh tính đã xác nhận và Người thực thi đã ký phần
+    /// của mình (chưa thì 409 HANDOVER_NOT_ALLOWED reason EXECUTOR_NOT_SIGNED). Đủ chữ ký ba bên thì mở quyền xem và tải;
+    /// Người thực thi gửi mã nhận.
     /// </summary>
     [HttpPost("turns/{turnId:guid}/record/sign")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]

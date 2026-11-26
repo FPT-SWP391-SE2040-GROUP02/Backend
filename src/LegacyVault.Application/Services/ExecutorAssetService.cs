@@ -80,7 +80,8 @@ public sealed class ExecutorAssetService : IExecutorAssetService
                 ExecutorVaultRecipientResponse recipient = new ExecutorVaultRecipientResponse
                 {
                     BeneficiaryId = assignment.BeneficiaryId,
-                    CitizenId = ReadCitizenId(assignment.Beneficiary),
+                    // Người thực thi chỉ thấy 4 số cuối căn cước người nhận.
+                    CitizenId = HandoverRecordRules.MaskCitizenId(ReadCitizenId(assignment.Beneficiary)),
                     FullName = ReadFullName(assignment.Beneficiary)
                 };
                 byBeneficiary[assignment.BeneficiaryId] = recipient;
@@ -141,8 +142,7 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         return "FILE";
     }
 
-    /// <summary>Họ tên người nhận; không giải mã được thì null để màn hình hiện số CCCD thay vì lỗi cả danh sách.</summary>
-    /// <summary>Số CCCD đầy đủ của người nhận; không giải mã được thì chuỗi rỗng.</summary>
+    /// <summary>Số CCCD đầy đủ của người nhận (chỉ dùng để che trước khi trả); không giải mã được thì chuỗi rỗng.</summary>
     private string ReadCitizenId(Beneficiary beneficiary)
     {
         try

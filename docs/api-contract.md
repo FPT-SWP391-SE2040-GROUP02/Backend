@@ -910,7 +910,7 @@ Executor đang hiệu lực xem tiến độ bàn giao của hồ sơ chứng t�
       "turnId": "0199...",
       "containerName": "Biên bản bàn giao",
       "beneficiaryId": "0199...",
-      "beneficiaryCitizenIdLast4": "8901",
+      "beneficiaryCitizenId": "•••• 8901",
       "beneficiaryFullName": "Nguyễn Văn An",
       "beneficiaryPhone": "0901234567",
       "beneficiaryEmail": "an@example.com",
@@ -1258,7 +1258,7 @@ Phản hồi của `/assets`:
   {
     "beneficiaryId": "0199e7a4-...",
     "fullName": "Trần Minh Anh",
-    "citizenId": "079123456789",
+    "citizenId": "•••• 6789",
     "assets": [
       { "id": "0199e7a5-...", "name": "Email gia đình", "kind": "TEXT", "sizeBytes": 640, "sharedWithCount": 1 },
       { "id": "0199e7a6-...", "name": "Sổ tiết kiệm", "kind": "FILE", "sizeBytes": 2457600, "sharedWithCount": 2 }
@@ -1267,6 +1267,7 @@ Phản hồi của `/assets`:
 ]
 ```
 
+- `citizenId` (và `beneficiaryCitizenId` ở màn tiến độ) chỉ có 4 số cuối: Người thực thi không nhận số căn cước đầy đủ của người nhận qua các API này.
 - Mỗi phần tử là một người nhận có ít nhất một tài sản được gán, theo thứ tự gán. Tài sản đã bị xóa nội dung không hiện. `sharedWithCount` là số người nhận tài sản đó, tính cả người này; lớn hơn 1 nghĩa là nhận chung.
 - **Chỉ danh sách:** không có nội dung tài sản, mô tả hay tên tệp gốc. Nội dung chỉ người nhận mở được.
 - `fullName` là null khi không giải mã được; FE hiện số CCCD thay thế.
@@ -1310,21 +1311,41 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 |---|---|---|---|---|---|
 | POST | `/api/v1/verifier/handover-records/{recordId}/finalize` | Luật sư được giao biên bản | `{ "confirmLegalBasis": true, "confirmSplitDeviation": true? }` | 200 `HandoverRecordResponse` (`status = SIGNING`: đã chốt, đang giao) | 400 `VALIDATION_ERROR` (`errors.confirmLegalBasis`) khi thiếu body, thiếu trường hoặc `false`; 400 `VALIDATION_ERROR` (`errors.confirmSplitDeviation`) khi biên bản khác cách chia của Chủ tài sản mà chưa xác nhận; 404 `HANDOVER_NOT_FOUND`; 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`, `RECORD_INVALID`, `CLAIMS_PENDING`, `VAULT_NOT_LOCKED` khi chưa chấp nhận giấy tờ nào nên kho chưa khóa) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/reopen` | như trên | — | 200; biên bản về `DRAFTING`, `revisionNo` tăng, chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực | 404, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `PARTIALLY_DELIVERED` khi đã có người nhận được mở quyền tải) |
-| POST | `/api/v1/verifier/handover-records/{recordId}/sign` | như trên | — | 200 `HandoverRecordResponse` | 404, 409 (`NOT_SIGNING_STEP` khi chưa chốt, `RECORD_COMPLETED`) |
-| POST | `/api/v1/verifier/handover-records/{recordId}/remind-executor` | như trên | — | 200 `HandoverRecordResponse` (đã có `executorReminderSentAt`, `executorRemindAvailableAt`); gửi thư nhắc Người thực thi ký | 404 `HANDOVER_NOT_FOUND` (không phải luật sư được giao), 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE` khi chưa chốt hoặc đã hoàn tất, `EXECUTOR_ALREADY_SIGNED` khi bản hiện tại đã có chữ ký Người thực thi, `NO_EXECUTOR` khi kho chưa có Người thực thi có tài khoản, `REMINDED_RECENTLY` kèm trường `remindAvailableAt`) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/recipients/{beneficiaryId}/sign` | như trên | — | 200 `HandoverRecordResponse`; ký phần của người nhận đó (luật sư ký đầu tiên), thư báo Người thực thi ký phần đó | 404, 409 `HANDOVER_NOT_ALLOWED` (`NOT_SIGNING_STEP` khi chưa chốt, `RECORD_COMPLETED`, `RECIPIENT_NOT_CONFIRMED` khi danh tính người nhận chưa xác nhận) |
+| POST | `/api/v1/verifier/handover-records/{recordId}/remind-executor` | như trên | — | 200 `HandoverRecordResponse` (đã có `executorReminderSentAt`, `executorRemindAvailableAt`); gửi thư nhắc Người thực thi ký | 404 `HANDOVER_NOT_FOUND` (không phải luật sư được giao), 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE` khi chưa chốt hoặc đã hoàn tất, `EXECUTOR_ALREADY_SIGNED` khi Người thực thi đã ký mọi phần của bản hiện tại, `VERIFIER_NOT_SIGNED` khi chưa có phần nào luật sư đã ký mà Người thực thi chưa ký, `NO_EXECUTOR` khi kho chưa có Người thực thi có tài khoản, `REMINDED_RECENTLY` kèm trường `remindAvailableAt`) |
 | POST | `/api/v1/verifier/handover-records/{recordId}/recipients/batch` | Luật sư được giao biên bản | `{ "recipients": [{ "fullName", "citizenId", "dateOfBirth", "email", "phone"? }] }` (1 đến 20 người) | 200 `HandoverRecordResponse`; lưu một lần, một người không hợp lệ thì không ai được thêm | 400 `VALIDATION_ERROR` (khóa `recipients[chỉ số].trường`, chỉ số từ 0; câu lỗi ghi "Người nhận mới N:"), 404 `HANDOVER_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE` khi biên bản không còn đang lập), 409 `EDIT_CONFLICT` |
 | PUT | `/api/v1/verifier/handover-records/{recordId}/recipients/{beneficiaryId}` | Luật sư được giao biên bản | `{ "fullName", "citizenId", "dateOfBirth", "email", "phone"? }` (`citizenId` phải giữ nguyên) | 200 `HandoverRecordResponse` | 400 `VALIDATION_ERROR` (khóa theo trường; `citizenId` khi đổi số căn cước), 404 `HANDOVER_NOT_FOUND`, `BENEFICIARY_NOT_FOUND`, 409 `HANDOVER_NOT_ALLOWED` (`WRONG_STATE`; `RECIPIENT_NOT_EDITABLE` khi người đó không do luật sư thêm ở biên bản này, đã gửi yêu cầu, được Chủ tài sản gán tài sản hoặc đã được gửi thư mời), 409 `EDIT_CONFLICT` |
 | DELETE | `/api/v1/verifier/handover-records/{recordId}/recipients/{beneficiaryId}` | như trên | — | 200 `HandoverRecordResponse`; xóa hồ sơ và các dòng biên bản của người đó | 404, 409 (như PUT) |
-| POST | `/api/v1/executor/vaults/{vaultId}/handover-record/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` | 404, 409 (như trên) |
-| POST | `/api/v1/handover/turns/{turnId}/record/sign` | Người nhận của lượt | — | 200 `HandoverRecordResponse` (chỉ phần của mình) | 404, 409 (như trên; `IDENTITY_NOT_CONFIRMED` khi danh tính của chính mình chưa được xác nhận) |
+| POST | `/api/v1/executor/vaults/{vaultId}/handover-record/recipients/{beneficiaryId}/sign` | Người thực thi của kho | — | 200 `HandoverRecordResponse` (căn cước người nhận chỉ 4 số cuối); thư báo người nhận đó ký | 404, 409 `HANDOVER_NOT_ALLOWED` (như trên; `VERIFIER_NOT_SIGNED` "Luật sư chưa ký phần của người nhận này.") |
+| POST | `/api/v1/handover/turns/{turnId}/record/sign` | Người nhận của lượt | — | 200 `HandoverRecordResponse` (chỉ phần của mình) | 404, 409 `HANDOVER_NOT_ALLOWED` (`NOT_SIGNING_STEP`, `RECORD_COMPLETED`; `IDENTITY_NOT_CONFIRMED` khi danh tính của chính mình chưa được xác nhận; `EXECUTOR_NOT_SIGNED` "Người thực thi chưa ký phần của bạn.") |
 
 `availableRecipients[]` của luật sư có thêm `canEdit` (sửa, xóa được lúc này không); `dateOfBirth`, `phone` chỉ có giá trị khi `canEdit = true`.
 
+**Thứ tự ký cho phần của MỖI người nhận X: luật sư → Người thực thi → người nhận X.** Luật nằm ở một hàm
+`HandoverRecordRules.FindSignBlockReason` (dùng chung cho lúc ký và cho cờ `canSign`); lý do xét lần lượt:
+
+| Ai ký phần X | Ký được khi | Chưa được thì 409 `HANDOVER_NOT_ALLOWED`, `reason` |
+|---|---|---|
+| Luật sư | Biên bản đã chốt (`SIGNING`), danh tính X đã xác nhận, luật sư chưa ký phần X | `NOT_SIGNING_STEP`, `RECORD_COMPLETED`, `RECIPIENT_NOT_CONFIRMED` |
+| Người thực thi | Như trên và luật sư đã ký phần X | như trên, `VERIFIER_NOT_SIGNED` ("Luật sư chưa ký phần của người nhận này.") |
+| Người nhận X | Biên bản đã chốt, danh tính của X đã xác nhận và Người thực thi đã ký phần X | `NOT_SIGNING_STEP`, `RECORD_COMPLETED`, `IDENTITY_NOT_CONFIRMED`, `EXECUTOR_NOT_SIGNED` ("Người thực thi chưa ký phần của bạn.") |
+
+- Bấm lặp khi đã ký phần đó: 200, giữ chữ ký cũ.
+- Chữ ký cũ không ghi người nhận (biên bản ký trước khi ký riêng) của luật sư, Người thực thi vẫn tính cho mọi người nhận. Biên bản đang dở đã có chữ ký sai thứ tự từ trước được giữ nguyên (không xóa); luật thứ tự chỉ áp cho lần ký sau.
+- `HandoverRecordResponse.recipients[]` (mọi vai) có `verifierSignedAt`, `executorSignedAt`, `signedAt` (ba bên của phần đó), `fullySigned` (đủ ba chữ ký), `canSign` và `signBlockedReason` (lý do người đang xem chưa ký được phần đó, rỗng khi ký được; thêm `ALREADY_SIGNED` khi đã ký). Màn người nhận chỉ có dòng của mình; `canSign` ở gốc là "ký được ít nhất một phần". `hasPartWaitingForExecutor`: có phần luật sư đã ký mà Người thực thi chưa ký (điều kiện để luật sư nhắc).
+- Người thực thi chỉ nhận số căn cước đã che (`"•••• 1793"`) trong biên bản; luật sư nhận số đầy đủ.
+
+**Thư báo ký** (gửi sau khi lưu, thư lỗi không làm hỏng việc ký, `Stage = SIGNING`):
+
+- Chốt biên bản, xác nhận danh tính: không báo ai ký (luật sư ký trước). Biên bản cũ mà người nhận đã ký được ngay theo luật (Người thực thi đã ký phần của họ) thì báo người nhận đó.
+- Luật sư ký phần X (lần đầu) mà Người thực thi chưa ký phần X: báo Người thực thi, thư nêu họ tên X.
+- Người thực thi ký phần X (lần đầu) mà X ký được ngay (danh tính đã xong, chưa ký): báo X.
+
 **Giao riêng từng người nhận** (ba bên vẫn đều ký):
 
-1. Luật sư chốt: biên bản sang `SIGNING`; luật sư và Người thực thi ký được ngay (thư báo Người thực thi ký). Lúc chốt cũng gửi thư mời cho từng người nhận mới của biên bản (không gửi lúc luật sư thêm người). Người nhận mà Chủ tài sản không chia tài sản nào (không có dòng gán nào của kho; thường do luật sư thêm) nhận thư mời riêng: luật sư thêm họ vào biên bản của kho theo di chúc hoặc quy định pháp luật, họ cần tạo tài khoản và xác minh đúng email nhận thư. Người Chủ tài sản đã chia nhận thư mời thường. Cả hai loại thư đều không có tên tài sản hay số căn cước.
-2. Mỗi người nhận đi riêng: nộp ảnh căn cước → luật sư xác nhận danh tính (thư báo riêng người đó ký) → người đó ký. Không chờ người nhận khác.
-3. Có chữ ký luật sư + Người thực thi (bản hiện tại) + chữ ký của người nhận X thì mở quyền tải cho lượt của X ngay (lượt `HANDOVER_COMMITTED`); Người thực thi gửi mã cho X (`send-key` kiểm theo lượt). Luật sư hoặc Người thực thi ký sau cùng thì mở cho mọi người nhận đã ký trước đó.
+1. Luật sư chốt: biên bản sang `SIGNING`; luật sư ký phần của từng người nhận đã xác nhận danh tính, rồi Người thực thi, rồi người nhận. Lúc chốt cũng gửi thư mời cho từng người nhận mới của biên bản (không gửi lúc luật sư thêm người). Người nhận mà Chủ tài sản không chia tài sản nào (không có dòng gán nào của kho; thường do luật sư thêm) nhận thư mời riêng: luật sư thêm họ vào biên bản của kho theo di chúc hoặc quy định pháp luật, họ cần tạo tài khoản và xác minh đúng email nhận thư. Người Chủ tài sản đã chia nhận thư mời thường. Cả hai loại thư đều không có tên tài sản hay số căn cước.
+2. Mỗi người nhận đi riêng: nộp ảnh căn cước → luật sư xác nhận danh tính → luật sư ký phần đó → Người thực thi ký phần đó (thư báo riêng người đó ký) → người đó ký. Không chờ người nhận khác.
+3. Có chữ ký luật sư + Người thực thi (bản hiện tại) + chữ ký của người nhận X thì mở quyền tải cho lượt của X ngay (lượt `HANDOVER_COMMITTED`); Người thực thi gửi mã cho X (`send-key` kiểm theo lượt). Theo thứ tự mới người nhận luôn ký sau cùng; biên bản cũ có chữ ký sai thứ tự thì ai ký sau cùng cũng mở cho người nhận đã đủ chữ ký.
 4. Mọi người nhận trong biên bản đều đã ký (cùng luật sư, Người thực thi) thì biên bản `COMPLETED`.
 5. Mở lại chỉ khi chưa ai được mở quyền tải; đã giao cho ít nhất một người thì 409 `PARTIALLY_DELIVERED` ("Đã giao tài sản cho ít nhất một người nhận nên không mở lại được biên bản. Sai sót sau khi giao xử lý ngoài hệ thống."), không thu hồi quyền tải đã mở. Màn luật sư ẩn nút Mở lại và hiện câu này.
 6. Ký đồng thời không tạo trùng quyền tải: mỗi lần ký đổi `updatedAt` của biên bản (chống ghi đè, bên lưu sau nhận 409 `EDIT_CONFLICT`), DB chỉ cho một quyền tải mỗi lượt.
@@ -1333,11 +1354,11 @@ Hệ thống chỉ quản lý và bàn giao tài sản số, không kiểm pháp
 
 **Nhắc Người thực thi ký và báo luật sư ký.**
 
-- `remind-executor`: kiểm theo thứ tự luật sư đang hoạt động, biên bản thuộc luật sư (không thì 404), biên bản đã chốt và chưa hoàn tất (`WRONG_STATE`), Người thực thi chưa ký bản hiện tại (`EXECUTOR_ALREADY_SIGNED`), có Người thực thi có tài khoản (`NO_EXECUTOR`), rồi mới tới giới hạn thời gian.
+- `remind-executor`: kiểm theo thứ tự luật sư đang hoạt động, biên bản thuộc luật sư (không thì 404), biên bản đã chốt và chưa hoàn tất (`WRONG_STATE`), có ít nhất một phần luật sư đã ký mà Người thực thi chưa ký (không có: `EXECUTOR_ALREADY_SIGNED` khi Người thực thi đã ký mọi phần, ngược lại `VERIFIER_NOT_SIGNED`), có Người thực thi có tài khoản (`NO_EXECUTOR`), rồi mới tới giới hạn thời gian.
 - Mỗi biên bản nhắc tối đa **một lần mỗi 24 giờ**: lần nhắc trước còn chưa đủ 24 giờ thì 409 `REMINDED_RECENTLY` kèm `remindAvailableAt` (ISO 8601, lúc nhắc lại được). Giờ lấy từ đồng hồ máy chủ; luật nằm ở `HandoverRecordRules.CanRemindExecutor`.
 - Thành công thì lưu `executorReminderSentAt`, ghi nhật ký `HANDOVER_EXECUTOR_REMINDED` (`targetType = VAULT`, `actorRole = VERIFIER`, không ghi nội dung thư), lưu một lần rồi mới gửi thư cho Người thực thi hiện tại ("Luật sư nhắc bạn ký biên bản bàn giao", nút về `/executor`; không có tên tài sản hay số căn cước). Thư lỗi không làm hỏng việc nhắc.
 - `HandoverRecordResponse` có thêm `executorReminderSentAt` (lần nhắc gần nhất, `null` khi chưa nhắc) và `executorRemindAvailableAt` (= `executorReminderSentAt` + 24 giờ, `null` khi chưa nhắc) để FE hiện "Đã nhắc lúc …" và khóa nút. Hai trường này không phụ thuộc bản biên bản (mở lại biên bản không xóa).
-- **Thư báo luật sư:** khi biên bản đã chốt, Người thực thi đã ký, ít nhất một người nhận đã ký mà luật sư chưa ký (`HandoverRecordRules.OnlyVerifierSignatureMissing`, tính theo bản hiện tại), lúc điều kiện này vừa chuyển từ chưa sang có (do Người thực thi hoặc người nhận ký), hệ thống gửi một thư tới luật sư được giao ("Biên bản bàn giao chỉ còn thiếu chữ ký của bạn", nút về `/notary/queue`). Gửi sau khi lưu; thư lỗi không làm hỏng việc ký.
+- **Thư báo luật sư** (theo thứ tự mới luật sư ký trước nên chỉ còn gặp ở biên bản đang dở có chữ ký sai thứ tự từ trước): khi biên bản đã chốt, Người thực thi đã ký, ít nhất một người nhận đã ký mà luật sư chưa ký (`HandoverRecordRules.OnlyVerifierSignatureMissing`, tính theo bản hiện tại), lúc điều kiện này vừa chuyển từ chưa sang có (do Người thực thi hoặc người nhận ký), hệ thống gửi một thư tới luật sư được giao ("Biên bản bàn giao chỉ còn thiếu chữ ký của bạn", nút về `/notary/queue`). Gửi sau khi lưu; thư lỗi không làm hỏng việc ký.
 
 - `confirmLegalBasis = true` nghĩa là luật sư xác nhận: đã kiểm tra di chúc (bản sau cùng, hợp pháp) hoặc xác định không có di chúc, lập biên bản theo đúng quy định và chịu trách nhiệm về nội dung biên bản. Backend chỉ ghi nhận, không kiểm pháp lý.
 - Chốt thành công thì lưu `legalBasisConfirmedAt` (thời điểm) và `legalBasisConfirmedByUserId` (luật sư). Mở lại thì cả hai về `null`; chốt lại phải tick lại.

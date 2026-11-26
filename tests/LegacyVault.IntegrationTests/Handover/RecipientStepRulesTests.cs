@@ -39,10 +39,16 @@ public sealed class RecipientStepRulesTests
 
     private static void AddMySignature(HandoverRecord record)
     {
+        AddSignatureFor(record, HandoverSignerRole.Recipient);
+    }
+
+    /// <summary>Chữ ký của bản hiện tại cho phần của tôi (luật sư, Người thực thi hoặc chính tôi).</summary>
+    private static void AddSignatureFor(HandoverRecord record, HandoverSignerRole role)
+    {
         HandoverRecordSignature signature = new HandoverRecordSignature();
         signature.RecordId = record.Id;
         signature.RevisionNo = record.RevisionNo;
-        signature.Role = HandoverSignerRole.Recipient;
+        signature.Role = role;
         signature.BeneficiaryId = Me;
         record.Signatures.Add(signature);
     }
@@ -168,14 +174,20 @@ public sealed class RecipientStepRulesTests
         turn.IdentityConfirmedAt = DateTimeOffset.UtcNow;
         string confirmed = RecipientStepRules.ResolveStatus(
             record, Me, turn, Submission(HandoverSubmissionStatus.Approved));
+        AddSignatureFor(record, HandoverSignerRole.Verifier);
+        AddSignatureFor(record, HandoverSignerRole.Executor);
+        string signable = RecipientStepRules.ResolveStatus(
+            record, Me, turn, Submission(HandoverSubmissionStatus.Approved));
 
         // Kiểm tra: đã nộp chờ duyệt thì luật sư đang xử lý; bị yêu cầu bổ sung thì phải nộp lại;
-        // danh tính của tôi xong thì ký được ngay
+        // danh tính của tôi xong thì chờ luật sư, Người thực thi ký phần của tôi, rồi mới tới lượt tôi ký
         Assert.Equal(RecipientStepRules.InReview, waiting);
         Assert.False(RecipientStepRules.NeedsAction(waiting, record));
         Assert.Equal(RecipientStepRules.NeedIdentity, supplement);
         Assert.True(RecipientStepRules.NeedsAction(supplement, record));
-        Assert.Equal(RecipientStepRules.NeedMySignature, confirmed);
+        Assert.Equal(RecipientStepRules.WaitingOthers, confirmed);
+        Assert.False(RecipientStepRules.NeedsAction(confirmed, record));
+        Assert.Equal(RecipientStepRules.NeedMySignature, signable);
     }
 
     [Fact]
@@ -198,7 +210,7 @@ public sealed class RecipientStepRulesTests
     }
 
     [Fact]
-    public void Signing_BeforeAndAfterMySignature()
+    public void Signing_FollowsTheOrder_VerifierThenExecutorThenMe()
     {
         // Chuẩn bị: danh tính của tôi đã xong (lượt sẵn sàng)
         HandoverRecord record = Record(HandoverRecordStatus.Signing);
@@ -208,11 +220,18 @@ public sealed class RecipientStepRulesTests
         turn.Status = HandoverTurnStatus.ReadyToAccept;
 
         // Hành động
+        string nobodySigned = RecipientStepRules.ResolveStatus(record, Me, turn, null);
+        AddSignatureFor(record, HandoverSignerRole.Verifier);
+        string verifierSigned = RecipientStepRules.ResolveStatus(record, Me, turn, null);
+        AddSignatureFor(record, HandoverSignerRole.Executor);
         string beforeSign = RecipientStepRules.ResolveStatus(record, Me, turn, null);
         AddMySignature(record);
         string afterSign = RecipientStepRules.ResolveStatus(record, Me, turn, null);
 
-        // Kiểm tra: ký xong mà luật sư hoặc Người thực thi chưa ký thì chờ các bên
+        // Kiểm tra: chờ luật sư rồi Người thực thi (không cần làm gì); tới lượt tôi thì cần ký; ký xong thì chờ mở quyền tải
+        Assert.Equal(RecipientStepRules.WaitingOthers, nobodySigned);
+        Assert.False(RecipientStepRules.NeedsAction(nobodySigned, record));
+        Assert.Equal(RecipientStepRules.WaitingOthers, verifierSigned);
         Assert.Equal(RecipientStepRules.NeedMySignature, beforeSign);
         Assert.True(RecipientStepRules.NeedsAction(beforeSign, record));
         Assert.Equal(RecipientStepRules.WaitingOthers, afterSign);

@@ -15,7 +15,10 @@ public sealed class HandoverRequestNotice
     /// <summary>Thư báo có yêu cầu nhận tài sản (mặc định).</summary>
     public const string StageRequest = "REQUEST";
 
-    /// <summary>Thư báo biên bản đã tới bước ký: luật sư xác nhận danh tính xong, người nhận và Người thực thi cần ký.</summary>
+    /// <summary>
+    /// Thư báo tới lượt ký phần của một người nhận: luật sư ký phần X thì báo Người thực thi; Người thực thi ký phần X
+    /// (danh tính X đã xong) thì báo người nhận X.
+    /// </summary>
     public const string StageSigning = "SIGNING";
 
     /// <summary>Thư báo luật sư có hồ sơ báo tin Chủ tài sản đã mất cần xét; OwnerName là tên người mất do người nộp khai.</summary>
@@ -54,7 +57,7 @@ public sealed class HandoverRequestNotice
 
     public string OwnerName { get; set; } = string.Empty;
 
-    /// <summary>Họ tên người nhận đã gửi yêu cầu.</summary>
+    /// <summary>Họ tên người nhận đã gửi yêu cầu; với thư SIGNING gửi Người thực thi là họ tên người nhận có phần cần ký.</summary>
     public string RequesterName { get; set; } = string.Empty;
 }
 

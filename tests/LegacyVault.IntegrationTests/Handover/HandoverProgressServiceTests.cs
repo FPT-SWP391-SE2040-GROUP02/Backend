@@ -84,7 +84,7 @@ public sealed class HandoverProgressServiceTests
 
         HandoverProgressTurnResponse acceptedTurn = result.Turns[0];
         Assert.Equal("HANDOVER_COMMITTED", acceptedTurn.Status);
-        Assert.Equal("001099001111", acceptedTurn.BeneficiaryCitizenId);
+        Assert.Equal("•••• 1111", acceptedTurn.BeneficiaryCitizenId);
         Assert.Equal(first.Id, acceptedTurn.BeneficiaryId);
         Assert.Equal(second.Id, result.Turns[1].BeneficiaryId);
         Assert.Equal("ACTIVE", acceptedTurn.GrantStatus);

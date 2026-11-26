@@ -18,7 +18,7 @@ public interface IHandoverRecordService
     /// <summary>Biên bản của kho; null khi chưa mở bàn giao. Lỗi: 404 VAULT_NOT_FOUND khi không phải Người thực thi.</summary>
     Task<HandoverRecordResponse?> GetForExecutorAsync(Guid vaultId, CancellationToken ct);
 
-    /// <summary>Người thực thi ký biên bản ở bước 3.</summary>
+    /// <summary>Người thực thi ký phần của một người nhận ở bước 3, sau luật sư (409 VERIFIER_NOT_SIGNED nếu luật sư chưa ký).</summary>
     Task<HandoverRecordResponse> SignAsExecutorAsync(Guid vaultId, Guid beneficiaryId, CancellationToken ct);
 
     // Luật sư
@@ -41,11 +41,12 @@ public interface IHandoverRecordService
     /// <summary>Mở lại biên bản đã chốt để sửa: mọi chữ ký cũ và xác nhận căn cứ pháp lý mất hiệu lực.</summary>
     Task<HandoverRecordResponse> ReopenAsync(Guid recordId, CancellationToken ct);
 
-    /// <summary>Luật sư ký xác minh ở bước 3.</summary>
+    /// <summary>Luật sư ký xác minh phần của một người nhận ở bước 3; ký đầu tiên trong thứ tự ba bên.</summary>
     Task<HandoverRecordResponse> SignAsVerifierAsync(Guid recordId, Guid beneficiaryId, CancellationToken ct);
 
     /// <summary>
-    /// Luật sư nhắc Người thực thi ký biên bản đã chốt. Mỗi biên bản nhắc tối đa một lần mỗi 24 giờ; Người thực thi đã ký
+    /// Luật sư nhắc Người thực thi ký biên bản đã chốt. Chỉ nhắc khi có ít nhất một phần luật sư đã ký mà Người thực thi
+    /// chưa ký (chưa có thì 409 VERIFIER_NOT_SIGNED). Mỗi biên bản nhắc tối đa một lần mỗi 24 giờ; Người thực thi đã ký
     /// hoặc không có Người thực thi thì từ chối.
     /// </summary>
     Task<HandoverRecordResponse> RemindExecutorAsync(Guid recordId, CancellationToken ct);
@@ -122,7 +123,7 @@ public interface IHandoverRecordService
     /// <summary>Biên bản nhìn từ một lượt của người nhận (chỉ thấy phần của mình).</summary>
     Task<HandoverRecordResponse> GetForRecipientAsync(Guid turnId, CancellationToken ct);
 
-    /// <summary>Người nhận ký biên bản ở bước 3.</summary>
+    /// <summary>Người nhận ký phần của mình ở bước 3, sau Người thực thi (409 EXECUTOR_NOT_SIGNED nếu Người thực thi chưa ký).</summary>
     Task<HandoverRecordResponse> SignAsRecipientAsync(Guid turnId, CancellationToken ct);
 
     // Dùng nội bộ

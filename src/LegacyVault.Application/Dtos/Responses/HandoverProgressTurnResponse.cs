@@ -13,7 +13,7 @@ public class HandoverProgressTurnResponse
     /// </summary>
     public Guid BeneficiaryId { get; set; }
 
-    /// <summary>Số CCCD đầy đủ của người nhận; họ tên và số điện thoại trả riêng cho lượt còn hiệu lực hoặc đã bàn giao (xem BeneficiaryFullName).</summary>
+    /// <summary>4 số cuối căn cước người nhận ("•••• 1793"); họ tên và số điện thoại trả riêng cho lượt còn hiệu lực hoặc đã bàn giao (xem BeneficiaryFullName).</summary>
     public string BeneficiaryCitizenId { get; set; } = string.Empty;
 
     /// <summary>
