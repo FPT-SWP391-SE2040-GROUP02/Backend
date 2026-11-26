@@ -203,7 +203,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     }
 
     public async Task<MyHandoverClaimResponse> SubmitClaimAsync(
-        string token, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct)
+        string token, string? note, HandoverDocumentUploads uploads, CancellationToken ct)
     {
         // 1. Người gửi phải đăng nhập đúng email Chủ tài sản đã khai cho người nhận của link này
         User user = await RequireVerifiedUserAsync(ct);
@@ -212,12 +212,12 @@ public sealed class HandoverRecordService : IHandoverRecordService
         EnsureEmailMatches(user, beneficiary);
 
         // 2. Các bước còn lại dùng chung với gửi trong app (không cần link)
-        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, wills, files, ct);
+        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, uploads, ct);
         return response;
     }
 
     public async Task<MyHandoverClaimResponse> SubmitClaimByAccountAsync(
-        Guid vaultId, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct)
+        Guid vaultId, string? note, HandoverDocumentUploads uploads, CancellationToken ct)
     {
         // 1. Tài khoản đã xác minh email; kho phải có người nhận mang đúng email đó, không có thì 404 như kho lạ
         User user = await RequireVerifiedUserAsync(ct);
@@ -233,7 +233,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
 
         // 2. Các bước còn lại dùng chung với gửi bằng link riêng
-        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, wills, files, ct);
+        MyHandoverClaimResponse response = await SubmitClaimForBeneficiaryAsync(user, beneficiary, vault, note, uploads, ct);
         return response;
     }
 
@@ -333,23 +333,15 @@ public sealed class HandoverRecordService : IHandoverRecordService
     /// khoản đã xác minh email và email trùng người nhận.
     /// </summary>
     private async Task<MyHandoverClaimResponse> SubmitClaimForBeneficiaryAsync(
-        User user, Beneficiary beneficiary, Vault vault, string? note, List<UploadedFile> wills, List<UploadedFile> files,
-        CancellationToken ct)
+        User user, Beneficiary beneficiary, Vault vault, string? note, HandoverDocumentUploads uploads, CancellationToken ct)
     {
-        // 1. Chủ tài sản không tự gửi; lời nhắn và tệp phải hợp lệ
+        // 1. Chủ tài sản không tự gửi; lời nhắn và giấy tờ phải hợp lệ (cùng luật giấy tờ với hồ sơ báo tin)
         if (vault.OwnerId == user.Id)
         {
             throw HandoverAccess.NotAllowed("OWNER_CANNOT_CLAIM", "Chủ tài sản không tự gửi yêu cầu nhận tài sản của kho mình.");
         }
         string cleanNote = NormalizeNote(note);
-        if (wills.Count == 0)
-        {
-            throw ValidationErrors.For("wills", "Vui lòng đính kèm di chúc.");
-        }
-        List<UploadedFile> allFiles = new List<UploadedFile>();
-        allFiles.AddRange(wills);
-        allFiles.AddRange(files);
-        HandoverRecordFileStorage.Validate(allFiles, true);
+        HandoverDocumentRules.ValidateFirstSubmission(uploads);
 
         // 2. Chưa có biên bản thì tạo và phân công luật sư (kho phải đang hoạt động); có rồi thì gắn vào
         DateTimeOffset now = timeProvider.GetUtcNow();
@@ -414,19 +406,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             record.Claims.Add(claim);
         }
-        List<HandoverRecordFile> saved = await HandoverRecordFileStorage.SaveAllAsync(
-            contentStore, wills, record.Id, claim.Id, HandoverRecordFileKind.Will, user.Id, now, ct);
-        try
-        {
-            saved.AddRange(await HandoverRecordFileStorage.SaveAllAsync(
-                contentStore, files, record.Id, claim.Id, HandoverRecordFileKind.ClaimDocument, user.Id,
-                now.AddTicks(wills.Count), ct));
-        }
-        catch (Exception)
-        {
-            await HandoverRecordFileStorage.DeleteAllAsync(contentStore, saved);
-            throw;
-        }
+        List<HandoverRecordFile> saved = await SaveClaimDocumentsAsync(uploads, record.Id, claim.Id, user.Id, now, ct);
         AttachFiles(record, saved);
         await SaveOrDeleteFilesAsync(saved, ct);
 
@@ -436,6 +416,32 @@ public sealed class HandoverRecordService : IHandoverRecordService
 
         MyHandoverClaimResponse response = await BuildMyClaimResponseAsync(claim, record, vault, ct);
         return response;
+    }
+
+    /// <summary>Lưu giấy tờ lần gửi theo loại, giữ thứ tự chọn; lỗi giữa chừng thì xóa mọi tệp đã ghi.</summary>
+    private async Task<List<HandoverRecordFile>> SaveClaimDocumentsAsync(
+        HandoverDocumentUploads uploads, Guid recordId, Guid claimId, Guid userId, DateTimeOffset now, CancellationToken ct)
+    {
+        List<(List<UploadedFile> Files, HandoverRecordFileKind Kind)> groups =
+            new List<(List<UploadedFile> Files, HandoverRecordFileKind Kind)>();
+        groups.Add((uploads.DeathCertificates, HandoverRecordFileKind.DeathCertificate));
+        groups.Add((uploads.Wills, HandoverRecordFileKind.Will));
+        groups.Add((uploads.Others, HandoverRecordFileKind.Other));
+        List<HandoverRecordFile> saved = new List<HandoverRecordFile>();
+        try
+        {
+            foreach ((List<UploadedFile> files, HandoverRecordFileKind kind) in groups)
+            {
+                saved.AddRange(await HandoverRecordFileStorage.SaveAllAsync(
+                    contentStore, files, recordId, claimId, kind, userId, now.AddTicks(saved.Count), ct));
+            }
+        }
+        catch (Exception)
+        {
+            await HandoverRecordFileStorage.DeleteAllAsync(contentStore, saved);
+            throw;
+        }
+        return saved;
     }
 
     public async Task<List<MyHandoverClaimResponse>> ListMyClaimsAsync(CancellationToken ct)

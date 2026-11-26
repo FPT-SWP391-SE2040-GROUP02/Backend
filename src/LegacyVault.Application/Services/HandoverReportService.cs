@@ -93,13 +93,13 @@ public sealed partial class HandoverReportService : IHandoverReportService
     // ---------------- Người thân ----------------
 
     public async Task<MyHandoverReportResponse> SubmitAsync(
-        SubmitHandoverReportRequest request, HandoverReportUploads uploads, CancellationToken ct)
+        SubmitHandoverReportRequest request, HandoverDocumentUploads uploads, CancellationToken ct)
     {
         // 1. Tài khoản người dùng đã xác minh email; thông tin khai và tệp phải hợp lệ
         User user = await RequireSubmitterAsync(ct);
         HandoverReportData data = ReadRequest(request, RecipientRules.TodayInVietnam(timeProvider));
         string note = NormalizeNote(request.Note);
-        ValidateUploads(uploads);
+        HandoverDocumentRules.ValidateFirstSubmission(uploads);
 
         // 2. Chống nộp trùng và nộp hàng loạt (chỉ xét hồ sơ của chính người này)
         await EnsureNotDuplicateAsync(user.Id, data.DeceasedCitizenId, ct);
@@ -739,23 +739,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
             throw ValidationErrors.For("note", "Lời nhắn tối đa 1000 ký tự.");
         }
         return text;
-    }
-
-    private static void ValidateUploads(HandoverReportUploads uploads)
-    {
-        if (uploads.DeathCertificates.Count == 0)
-        {
-            throw ValidationErrors.For("deathCertificates", "Vui lòng đính kèm giấy chứng tử.");
-        }
-        if (uploads.Wills.Count == 0)
-        {
-            throw ValidationErrors.For("wills", "Vui lòng đính kèm di chúc.");
-        }
-        List<UploadedFile> all = new List<UploadedFile>();
-        all.AddRange(uploads.DeathCertificates);
-        all.AddRange(uploads.Wills);
-        all.AddRange(uploads.Others);
-        HandoverRecordFileStorage.Validate(all, true);
     }
 
     // ---------------- Hàm phụ: tệp ----------------

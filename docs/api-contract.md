@@ -1399,13 +1399,14 @@ Lối vào trong app, không cần link trong thư. Người nhận do luật s�
 | Method | URL | Quyền | Body | Thành công | Lỗi |
 |---|---|---|---|---|---|
 | GET | `/api/v1/handover/requests/available` | Đăng nhập | — | 200 `[{ vaultId, beneficiaryId, ownerName, status, needsAction, canRequest, reviewReason?, claimId?, turnId? }]`, dòng `needsAction` xếp trước; email chưa xác minh thì `[]` | 401 |
-| POST | `/api/v1/handover/requests/by-account` | Đăng nhập, đã xác minh email | multipart: `vaultId`, `note` (tối đa 1000 ký tự), `files` (PDF hoặc ảnh, 1 tới 10 tệp, mỗi tệp 10 MiB) | 200 `MyHandoverClaimResponse` (giống gửi bằng link) | 400, 403 `EMAIL_NOT_VERIFIED`, 404 `HANDOVER_NOT_FOUND` (kho lạ hoặc tài khoản không phải người nhận của kho), 409 `HANDOVER_NOT_ALLOWED` (`PLAN_NOT_ACTIVE`, `ALREADY_REQUESTED`, `RECORD_COMPLETED`, `NO_VERIFIER`, `OWNER_CANNOT_CLAIM`), 413 |
+| POST | `/api/v1/handover/requests/by-account` | Đăng nhập, đã xác minh email | multipart: `vaultId`, `note` (tối đa 1000 ký tự), `deathCertificates` (bắt buộc), `wills` (bắt buộc), `files` (giấy tờ khác, không bắt buộc); tổng 1 tới 10 tệp PDF hoặc ảnh, mỗi tệp 10 MiB | 200 `MyHandoverClaimResponse` (giống gửi bằng link) | 400, 403 `EMAIL_NOT_VERIFIED`, 404 `HANDOVER_NOT_FOUND` (kho lạ hoặc tài khoản không phải người nhận của kho), 409 `HANDOVER_NOT_ALLOWED` (`PLAN_NOT_ACTIVE`, `ALREADY_REQUESTED`, `RECORD_COMPLETED`, `NO_VERIFIER`, `OWNER_CANNOT_CLAIM`), 413 |
 | POST | `/api/v1/handover/requests/{claimId}/supplement` | Người gửi yêu cầu | multipart: `note`, `files` | 200 (API có sẵn, dùng cho cả hai cách gửi) | như cũ |
 
 - **Chỉ tính** kho có kế hoạch `ACTIVE`, `HANDOVER_REQUESTED`, `HANDOVER_IN_PROGRESS`, `CLOSED` và người nhận có email (Chủ tài sản hoặc luật sư khai) trùng email **đã xác minh** của tài khoản (bỏ khoảng trắng hai đầu, không phân biệt hoa thường). Kho của chính mình không tính.
 - **Không trả** tên gói, tên tài sản, số căn cước.
 - `by-account` dùng chung luật với `POST /api/v1/handover/requests` (gửi bằng link): server tự tìm người nhận của kho mang đúng email tài khoản.
 - `canRequest`: chỉ `true` khi `status = NOT_REQUESTED` và gửi được lúc này (kho chưa có biên bản thì kế hoạch phải `ACTIVE`; có biên bản thì biên bản chưa hoàn tất).
+- **Giấy tờ của yêu cầu** (cả `by-account` và gửi bằng link) cùng luật với hồ sơ báo tin: thiếu giấy chứng tử hoặc di chúc thì 400 `VALIDATION_ERROR` ở trường `deathCertificates` / `wills`; sai số tệp, dung lượng, loại tệp thì trường `files`. `files[].kind` trả `DEATH_CERTIFICATE`, `WILL`, `OTHER`, hoặc `CLAIM_DOCUMENT` (tệp nộp bổ sung và yêu cầu lưu trước khi chia loại). Nộp bổ sung không bắt đủ loại.
 - `reviewReason`: lý do luật sư yêu cầu bổ sung hoặc từ chối (chỉ khi `SUPPLEMENT_REQUESTED` hoặc `REJECTED`). `claimId` để nộp bổ sung; `turnId` để vào cổng người nhận (`/claim/beneficiary`) ở các bước sau khi biên bản chốt.
 - `NEED_IDENTITY` (thêm sau cùng trong danh sách `status`): người nhận vào cổng người nhận để nộp ảnh căn cước (`POST /api/v1/handover/turns/{turnId}/submission`).
 

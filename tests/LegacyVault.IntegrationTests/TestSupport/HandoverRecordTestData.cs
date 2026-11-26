@@ -69,27 +69,34 @@ public static class HandoverRecordTestData
         return System.Text.Encoding.ASCII.GetBytes("%PDF-1.4\n% giay to thu\n%%EOF\n");
     }
 
-    /// <summary>Multipart gửi yêu cầu nhận: token, lời nhắn và một tệp PDF.</summary>
+    /// <summary>Hai loại giấy tờ bắt buộc khi gửi yêu cầu nhận: một giấy chứng tử và một di chúc (PDF nhỏ).</summary>
+    private static void AddRequiredDocuments(MultipartFormDataContent form)
+    {
+        ByteArrayContent certificate = new ByteArrayContent(SamplePdf());
+        certificate.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(certificate, "deathCertificates", "chung-tu.pdf");
+        ByteArrayContent will = new ByteArrayContent(SamplePdf());
+        will.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(will, "wills", "giay-to.pdf");
+    }
+
+    /// <summary>Multipart gửi yêu cầu nhận: token, lời nhắn, giấy chứng tử và di chúc.</summary>
     public static MultipartFormDataContent RequestForm(string token, string note)
     {
         MultipartFormDataContent form = new MultipartFormDataContent();
         form.Add(new StringContent(token), "token");
         form.Add(new StringContent(note), "note");
-        ByteArrayContent file = new ByteArrayContent(SamplePdf());
-        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
-        form.Add(file, "wills", "giay-to.pdf");
+        AddRequiredDocuments(form);
         return form;
     }
 
-    /// <summary>Multipart gửi yêu cầu nhận trong app (không cần link): id kho, lời nhắn và một tệp PDF.</summary>
+    /// <summary>Multipart gửi yêu cầu nhận trong app (không cần link): id kho, lời nhắn, giấy chứng tử và di chúc.</summary>
     public static MultipartFormDataContent ByAccountForm(Guid vaultId, string note)
     {
         MultipartFormDataContent form = new MultipartFormDataContent();
         form.Add(new StringContent(vaultId.ToString()), "vaultId");
         form.Add(new StringContent(note), "note");
-        ByteArrayContent file = new ByteArrayContent(SamplePdf());
-        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
-        form.Add(file, "wills", "giay-to.pdf");
+        AddRequiredDocuments(form);
         return form;
     }
 

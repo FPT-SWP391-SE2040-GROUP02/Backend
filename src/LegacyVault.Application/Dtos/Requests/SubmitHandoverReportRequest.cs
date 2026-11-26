@@ -15,15 +15,3 @@ public class SubmitHandoverReportRequest
     /// <summary>JSON mảng {fullName, email, phone}; rỗng khi không khai.</summary>
     public string? Recipients { get; set; }
 }
-
-/// <summary>Các tệp của hồ sơ báo tin, chia theo loại giấy tờ.</summary>
-public class HandoverReportUploads
-{
-    /// <summary>Bắt buộc ít nhất một tệp.</summary>
-    public List<UploadedFile> DeathCertificates { get; set; } = new List<UploadedFile>();
-
-    /// <summary>Bắt buộc ít nhất một tệp.</summary>
-    public List<UploadedFile> Wills { get; set; } = new List<UploadedFile>();
-
-    public List<UploadedFile> Others { get; set; } = new List<UploadedFile>();
-}

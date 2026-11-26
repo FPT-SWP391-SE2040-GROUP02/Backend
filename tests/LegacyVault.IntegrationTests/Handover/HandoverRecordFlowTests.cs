@@ -238,7 +238,8 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
         JsonElement claim = await ApiTestHelpers.ReadJsonAsync(sent);
         Assert.Equal("SUBMITTED", claim.GetProperty("status").GetString());
-        Assert.Single(claim.GetProperty("files").EnumerateArray());
+        // Giấy chứng tử và di chúc.
+        Assert.Equal(2, claim.GetProperty("files").GetArrayLength());
 
         // Gửi lại lần nữa: đã có yêu cầu.
         HttpResponseMessage again = await recipient.PostAsync(RequestsUrl, HandoverRecordTestData.RequestForm(token, "lần 2"));
@@ -372,7 +373,8 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, supplemented.StatusCode);
         JsonElement after = await ApiTestHelpers.ReadJsonAsync(supplemented);
         Assert.Equal("SUBMITTED", after.GetProperty("status").GetString());
-        Assert.Equal(2, after.GetProperty("files").GetArrayLength());
+        // Giấy chứng tử và di chúc của lần gửi đầu, thêm một tệp bổ sung.
+        Assert.Equal(3, after.GetProperty("files").GetArrayLength());
 
         // Từ chối yêu cầu duy nhất khi kho chưa khóa: người này ra khỏi biên bản và biên bản tự đóng.
         // (Trường hợp kho đã khóa, người bị từ chối không ghi tài sản được nữa: xem HandoverVaultLockFlowTests.)
