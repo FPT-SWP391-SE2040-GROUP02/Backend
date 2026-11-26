@@ -2134,6 +2134,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 SuggestedRecipientResponse recipient = new SuggestedRecipientResponse
                 {
                     FullName = suggested.FullName,
+                    CitizenId = suggested.CitizenId,
+                    DateOfBirth = suggested.DateOfBirth,
                     Email = suggested.Email,
                     Phone = suggested.Phone
                 };

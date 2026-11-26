@@ -37,4 +37,46 @@ public sealed class PhoneRulesTests
             () => PhoneRules.NormalizeContactPhone(new string('1', PhoneRules.MaxLength + 1), "phone"));
         Assert.Equal(AppErrorType.Validation, error.Type);
     }
+
+    [Theory]
+    [InlineData("0912345678", "0912345678")]
+    [InlineData("091 234 5678", "0912345678")]
+    [InlineData("(091) 234-5678", "0912345678")]
+    [InlineData("+84912345678", "+84912345678")]
+    [InlineData("0398765432", "0398765432")]
+    [InlineData("0587654321", "0587654321")]
+    [InlineData("0701234567", "0701234567")]
+    [InlineData("0851234567", "0851234567")]
+    public void NormalizeVietnamesePhone_MobileNumber_IsAccepted(string input, string expected)
+    {
+        Assert.Equal(expected, PhoneRules.NormalizeVietnamesePhone(input, "phone"));
+    }
+
+    [Theory]
+    [InlineData("3232")]
+    [InlineData("12345")]
+    [InlineData("091234567")]
+    [InlineData("09123456789")]
+    [InlineData("0212345678")]
+    [InlineData("0112345678")]
+    [InlineData("1912345678")]
+    [InlineData("84912345678")]
+    [InlineData("+8401234567")]
+    [InlineData("abc0912345678")]
+    [InlineData("0912345678x")]
+    public void NormalizeVietnamesePhone_WrongFormat_ThrowsValidation(string input)
+    {
+        AppException error = Assert.Throws<AppException>(() => PhoneRules.NormalizeVietnamesePhone(input, "phone"));
+        Assert.Equal(AppErrorType.Validation, error.Type);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void NormalizeVietnamesePhone_Empty_ThrowsRequired(string? input)
+    {
+        AppException error = Assert.Throws<AppException>(() => PhoneRules.NormalizeVietnamesePhone(input, "phone"));
+        Assert.Equal(AppErrorType.Validation, error.Type);
+    }
 }

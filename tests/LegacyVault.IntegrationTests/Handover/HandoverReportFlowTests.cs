@@ -345,6 +345,8 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         {
             FormWith("attested", "false"),
             FormWith("recipients", "[{\"fullName\":\"A\",\"phone\":\"12ab\"}]"),
+            FormWith("recipients", "[{\"fullName\":\"A\",\"phone\":\"3232\"}]"),
+            FormWith("recipients", "[{\"fullName\":\"A\",\"phone\":\"0212345678\"}]"),
             FormWith("recipients", "[{\"fullName\":\"A\",\"email\":\"a@x.vn\"},{\"fullName\":\"B\",\"email\":\"A@x.vn\"}]")
         };
         foreach (MultipartFormDataContent form in bad)
@@ -357,6 +359,46 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(ok);
         Assert.Equal("0901234567", body.GetProperty("recipients")[0].GetProperty("phone").GetString());
+    }
+
+    [SqlFact]
+    public async Task Submit_RecipientCitizenIdAndBirthDate_AreCheckedAndPassedToVerifier()
+    {
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
+        HttpClient relative = await NewUserAsync();
+        // Đã khai thì phải đúng: căn cước 12 số, ngày sinh hợp lệ, đủ 18 tuổi, không trùng căn cước giữa hai người.
+        string[] bad = new string[]
+        {
+            "[{\"fullName\":\"A\",\"email\":\"a@x.vn\",\"citizenId\":\"123\"}]",
+            "[{\"fullName\":\"A\",\"email\":\"a@x.vn\",\"citizenId\":\"00109900123x\"}]",
+            "[{\"fullName\":\"A\",\"email\":\"a@x.vn\",\"dateOfBirth\":\"khong-phai-ngay\"}]",
+            "[{\"fullName\":\"A\",\"email\":\"a@x.vn\",\"dateOfBirth\":\"2999-01-01\"}]",
+            "[{\"fullName\":\"A\",\"email\":\"a@x.vn\",\"dateOfBirth\":\"2015-05-05\"}]",
+            "[{\"fullName\":\"A\",\"email\":\"a@x.vn\",\"citizenId\":\"001099000111\"},"
+                + "{\"fullName\":\"B\",\"email\":\"b@x.vn\",\"citizenId\":\"001099000111\"}]"
+        };
+        foreach (string recipients in bad)
+        {
+            await ApiTestHelpers.AssertProblemAsync(
+                await relative.PostAsync(ReportsUrl, FormWith("recipients", recipients)),
+                HttpStatusCode.BadRequest, "VALIDATION_ERROR");
+        }
+
+        // Không khai căn cước và ngày sinh vẫn nhận; khai đủ thì giữ nguyên và luật sư thấy được.
+        HttpResponseMessage ok = await relative.PostAsync(ReportsUrl, FormWith("recipients",
+            "[{\"fullName\":\"Trần Thị Con\",\"email\":\"con@x.vn\",\"phone\":\"0901234567\","
+            + "\"citizenId\":\"001 099 000 222\",\"dateOfBirth\":\"1990-02-28\"},"
+            + "{\"fullName\":\"Trần Văn Cháu\",\"email\":\"chau@x.vn\"}]"));
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        JsonElement mine = (await ApiTestHelpers.ReadJsonAsync(ok)).GetProperty("recipients");
+        Assert.Equal("001099000222", mine[0].GetProperty("citizenId").GetString());
+        Assert.Equal("1990-02-28", mine[0].GetProperty("dateOfBirth").GetString());
+        Assert.Equal(string.Empty, mine[1].GetProperty("citizenId").GetString());
+        Assert.Equal(string.Empty, mine[1].GetProperty("dateOfBirth").GetString());
+
+        JsonElement seen = (await ApiTestHelpers.ReadJsonAsync(await verifier.Client.GetAsync(VerifierReportsUrl)))[0];
+        Assert.Equal("001099000222", seen.GetProperty("recipients")[0].GetProperty("citizenId").GetString());
+        Assert.Equal("1990-02-28", seen.GetProperty("recipients")[0].GetProperty("dateOfBirth").GetString());
     }
 
     [SqlFact]
