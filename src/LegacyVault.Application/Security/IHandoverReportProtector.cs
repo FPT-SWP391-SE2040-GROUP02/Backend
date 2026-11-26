@@ -20,12 +20,6 @@ public class SuggestedRecipient
     public string Email { get; set; } = string.Empty;
 
     public string Phone { get; set; } = string.Empty;
-
-    /// <summary>Đủ 12 chữ số, hoặc rỗng khi người nộp không khai (hồ sơ cũ cũng không có trường này).</summary>
-    public string CitizenId { get; set; } = string.Empty;
-
-    /// <summary>Dạng yyyy-MM-dd, hoặc rỗng khi người nộp không khai.</summary>
-    public string DateOfBirth { get; set; } = string.Empty;
 }
 
 /// <summary>Mã hóa/giải mã dữ liệu cá nhân của hồ sơ báo tin. Cài đặt ở Infrastructure.</summary>

@@ -59,12 +59,6 @@ public class SuggestedRecipientResponse
     public string Email { get; set; } = string.Empty;
 
     public string Phone { get; set; } = string.Empty;
-
-    /// <summary>Số căn cước người nộp khai; rỗng khi không khai.</summary>
-    public string CitizenId { get; set; } = string.Empty;
-
-    /// <summary>Ngày sinh dạng yyyy-MM-dd; rỗng khi không khai.</summary>
-    public string DateOfBirth { get; set; } = string.Empty;
 }
 
 /// <summary>Một tệp giấy tờ của hồ sơ báo tin (Kind là DEATH_CERTIFICATE, WILL hoặc OTHER): chỉ tên và kích thước, nội dung tải qua API riêng có kiểm quyền.</summary>

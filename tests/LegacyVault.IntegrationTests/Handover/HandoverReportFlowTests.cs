@@ -357,8 +357,6 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(ok);
         Assert.Equal("0901234567", body.GetProperty("recipients")[0].GetProperty("phone").GetString());
-        Assert.Equal(string.Empty, body.GetProperty("recipients")[0].GetProperty("citizenId").GetString());
-        Assert.Equal(string.Empty, body.GetProperty("recipients")[0].GetProperty("dateOfBirth").GetString());
     }
 
     [SqlFact]
@@ -432,39 +430,5 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         await ApiTestHelpers.AssertProblemAsync(
             await ReviewAsync(verifier.Client, reportId, "ACCEPT"), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal(PlanStatus.Draft, await ReadPlanStatusAsync(vault.VaultId));
-    }
-
-    [SqlFact]
-    public async Task Submit_ChecksRecipientCitizenIdAndBirthDate()
-    {
-        await HandoverRecordTestData.CreateVerifierClientAsync(factory);
-        string tooYoung = DateTime.UtcNow.AddYears(-10).ToString("yyyy-MM-dd");
-        string[] bad = new string[]
-        {
-            "[{\"fullName\":\"A\",\"phone\":\"0901234567\",\"citizenId\":\"12345\"}]",
-            "[{\"fullName\":\"A\",\"phone\":\"0901234567\",\"citizenId\":\"12345678901a\"}]",
-            "[{\"fullName\":\"A\",\"phone\":\"0901234567\",\"citizenId\":\"079201234567\"},{\"fullName\":\"B\",\"phone\":\"0907654321\",\"citizenId\":\"079 201 234 567\"}]",
-            "[{\"fullName\":\"A\",\"phone\":\"0901234567\",\"dateOfBirth\":\"01/01/1990\"}]",
-            "[{\"fullName\":\"A\",\"phone\":\"0901234567\",\"dateOfBirth\":\"2999-01-01\"}]",
-            "[{\"fullName\":\"A\",\"phone\":\"0901234567\",\"dateOfBirth\":\"1850-01-01\"}]",
-            "[{\"fullName\":\"A\",\"phone\":\"0901234567\",\"dateOfBirth\":\"" + tooYoung + "\"}]"
-        };
-        foreach (string recipients in bad)
-        {
-            // Mỗi lần thử một người nộp riêng để không chạm giới hạn số lần nộp.
-            HttpClient relative = await NewUserAsync();
-            await ApiTestHelpers.AssertProblemAsync(
-                await relative.PostAsync(ReportsUrl, FormWith("recipients", recipients)),
-                HttpStatusCode.BadRequest, "VALIDATION_ERROR");
-        }
-        // Có khai căn cước (bỏ khoảng trắng) và ngày sinh thì lưu và trả lại đúng.
-        HttpClient another = await NewUserAsync();
-        HttpResponseMessage withIdentity = await another.PostAsync(
-            ReportsUrl,
-            FormWith("recipients", "[{\"fullName\":\"A\",\"phone\":\"0901234567\",\"citizenId\":\"079 201 234 567\",\"dateOfBirth\":\"1990-01-31\"}]"));
-        Assert.Equal(HttpStatusCode.OK, withIdentity.StatusCode);
-        JsonElement person = (await ApiTestHelpers.ReadJsonAsync(withIdentity)).GetProperty("recipients")[0];
-        Assert.Equal("079201234567", person.GetProperty("citizenId").GetString());
-        Assert.Equal("1990-01-31", person.GetProperty("dateOfBirth").GetString());
     }
 }

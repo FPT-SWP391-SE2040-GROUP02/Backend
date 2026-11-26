@@ -28,9 +28,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
 
     public const int MaxRecipients = 20;
 
-    /// <summary>Cùng luật tuổi tối thiểu với người nhận của Chủ tài sản.</summary>
-    private const int MinimumRecipientAge = 18;
-
     /// <summary>Số hồ sơ tối đa một tài khoản nộp cho cùng một người mất trong ReportLimitDays ngày.</summary>
     public const int MaxReportsPerPerson = 3;
 
@@ -101,8 +98,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
     {
         // 1. Tài khoản người dùng đã xác minh email; thông tin khai và tệp phải hợp lệ
         User user = await RequireSubmitterAsync(ct);
-        DateOnly todayInVietnam = DateOnly.FromDateTime(timeProvider.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
-        HandoverReportData data = ReadRequest(request, todayInVietnam);
+        HandoverReportData data = ReadRequest(request);
         string note = NormalizeNote(request.Note);
         ValidateUploads(uploads);
 
@@ -570,7 +566,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
 
     // ---------------- Hàm phụ: kiểm dữ liệu ----------------
 
-    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request, DateOnly today)
+    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request)
     {
         HandoverReportData data = new HandoverReportData();
         data.DeceasedFullName = CleanText(request.DeceasedFullName);
@@ -583,11 +579,11 @@ public sealed partial class HandoverReportService : IHandoverReportService
         {
             throw ValidationErrors.For("attested", "Vui lòng cam đoan giấy tờ là thật.");
         }
-        data.Recipients = ReadRecipients(request.Recipients, today);
+        data.Recipients = ReadRecipients(request.Recipients);
         return data;
     }
 
-    private static List<SuggestedRecipient> ReadRecipients(string? json, DateOnly today)
+    private static List<SuggestedRecipient> ReadRecipients(string? json)
     {
         List<SuggestedRecipient> result = new List<SuggestedRecipient>();
         if (string.IsNullOrWhiteSpace(json))
@@ -612,7 +608,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
             throw ValidationErrors.For("recipients", "Khai tối đa 20 người nhận.");
         }
         HashSet<string> emails = new HashSet<string>();
-        HashSet<string> citizenIds = new HashSet<string>();
         foreach (SuggestedRecipient? item in items)
         {
             if (item == null)
@@ -643,56 +638,9 @@ public sealed partial class HandoverReportService : IHandoverReportService
             {
                 throw ValidationErrors.For("recipients", "Số điện thoại của người nhận không hợp lệ (9 đến 15 chữ số).");
             }
-            clean.CitizenId = RemoveWhitespace(item.CitizenId);
-            if (clean.CitizenId.Length > 0)
-            {
-                if (!CitizenIdRules.IsDigits(clean.CitizenId, CitizenIdRules.CitizenIdLength, CitizenIdRules.CitizenIdLength))
-                {
-                    throw ValidationErrors.For("recipients", "Số căn cước của người nhận phải gồm đúng 12 chữ số.");
-                }
-                if (!citizenIds.Add(clean.CitizenId))
-                {
-                    throw ValidationErrors.For("recipients", "Số căn cước của người nhận bị trùng.");
-                }
-            }
-            string birthText = CleanText(item.DateOfBirth);
-            if (birthText.Length > 0)
-            {
-                if (!DateOnly.TryParseExact(birthText, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.None, out DateOnly birth))
-                {
-                    throw ValidationErrors.For("recipients", "Ngày sinh của người nhận không đúng định dạng.");
-                }
-                if (birth > today)
-                {
-                    throw ValidationErrors.For("recipients", "Ngày sinh của người nhận không được ở tương lai.");
-                }
-                if (birth.Year < 1900)
-                {
-                    throw ValidationErrors.For("recipients", "Ngày sinh của người nhận không hợp lệ.");
-                }
-                if (birth > today.AddYears(-MinimumRecipientAge))
-                {
-                    throw ValidationErrors.For("recipients", "Người nhận phải đủ 18 tuổi.");
-                }
-                clean.DateOfBirth = birth.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-            }
             result.Add(clean);
         }
         return result;
-    }
-
-    private static string RemoveWhitespace(string? text)
-    {
-        StringBuilder builder = new StringBuilder();
-        foreach (char c in text ?? string.Empty)
-        {
-            if (!char.IsWhiteSpace(c))
-            {
-                builder.Append(c);
-            }
-        }
-        return builder.ToString();
     }
 
     /// <summary>Bỏ khoảng trắng, dấu chấm, dấu gạch (cùng luật với người nhận của Chủ tài sản).</summary>
@@ -883,9 +831,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
             {
                 FullName = item.FullName,
                 Email = item.Email,
-                Phone = item.Phone,
-                CitizenId = item.CitizenId,
-                DateOfBirth = item.DateOfBirth
+                Phone = item.Phone
             };
             response.Recipients.Add(recipient);
         }
