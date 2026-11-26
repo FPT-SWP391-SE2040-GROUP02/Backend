@@ -11,10 +11,10 @@ namespace LegacyVault.Application.Services;
 /// </summary>
 /// <remarks>
 /// - Người nhận lấy từ các gói đã sẵn sàng; một người có trong nhiều gói chỉ nhận một thư.
-/// - Thư có email và số điện thoại của Chủ kho và Người thực thi; hai người này được báo trước ở màn kích hoạt
+/// - Thư có email và số điện thoại của Chủ tài sản và Người thực thi; hai người này được báo trước ở màn kích hoạt
 ///   và màn nhận lời mời rằng thông tin liên hệ của họ sẽ được chia sẻ cho người nhận.
 /// - Thư không có tên tài sản. Gửi sau khi đã lưu kích hoạt, nên gửi lỗi không làm hỏng việc kích hoạt.
-/// - Mỗi người nhận có link riêng để gửi yêu cầu nhận tài sản khi Chủ kho qua đời; kích hoạt lại thì cấp link mới.
+/// - Mỗi người nhận có link riêng để gửi yêu cầu nhận tài sản khi Chủ tài sản qua đời; kích hoạt lại thì cấp link mới.
 /// </remarks>
 public sealed class PlanActivatedNotifier(
     IVaultRepository vaults,

@@ -274,7 +274,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         JsonElement body = await ApiTestHelpers.ReadJsonAsync(ok);
         Assert.True(body.GetProperty("valid").GetBoolean());
         Assert.False(body.GetProperty("responseExpired").GetBoolean());
-        // 6 trường: hai cờ cũ, email che bớt, email đầy đủ (để đăng ký điền sẵn), cờ "đã có tài khoản" và tên Chủ kho.
+        // 6 trường: hai cờ cũ, email che bớt, email đầy đủ (để đăng ký điền sẵn), cờ "đã có tài khoản" và tên Chủ tài sản.
         Assert.Equal(6, body.EnumerateObject().Count());
         Assert.Equal(ReceiverEmail(0), body.GetProperty("invitedEmail").GetString());
         Assert.False(string.IsNullOrEmpty(body.GetProperty("ownerFullName").GetString()));
@@ -316,7 +316,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         JsonElement strangerList = await ApiTestHelpers.ReadJsonAsync(await stranger.GetAsync("/api/v1/handover/invitations/mine"));
         Assert.Equal(0, strangerList.GetArrayLength());
 
-        // Chủ kho không thấy lời mời của kho mình, kể cả khi anonymous bị chặn.
+        // Chủ tài sản không thấy lời mời của kho mình, kể cả khi anonymous bị chặn.
         JsonElement ownerList = await ApiTestHelpers.ReadJsonAsync(await scenario.Owner.GetAsync("/api/v1/handover/invitations/mine"));
         Assert.Equal(0, ownerList.GetArrayLength());
         HttpResponseMessage anonymous = await factory.CreateClient().GetAsync("/api/v1/handover/invitations/mine");

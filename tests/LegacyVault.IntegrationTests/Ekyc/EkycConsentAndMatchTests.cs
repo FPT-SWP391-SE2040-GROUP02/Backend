@@ -14,7 +14,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Ekyc;
 
 /// <summary>
-/// eKYC của Chủ kho: đồng ý trước khi chụp (EKYC-03), mặt sau (EKYC-04) và đối chiếu giấy tờ với danh tính đã gắn,
+/// eKYC của Chủ tài sản: đồng ý trước khi chụp (EKYC-03), mặt sau (EKYC-04) và đối chiếu giấy tờ với danh tính đã gắn,
 /// bằng repository và dịch vụ eKYC giả, không cần DB.
 /// </summary>
 public sealed class EkycConsentAndMatchTests

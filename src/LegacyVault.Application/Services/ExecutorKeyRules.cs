@@ -12,7 +12,7 @@ public static class ExecutorKeyRules
     /// <summary>Bảng chữ Crockford base32: bỏ I, L, O, U cho khỏi nhầm khi đọc hoặc chép tay.</summary>
     private const string Alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
     // 10 byte = 80 bit = đúng 16 ký tự base32, không dư bit. Mảnh chỉ để đối chiếu với mã băm đã lưu (không dùng để mã hóa
-    // nội dung) và mỗi lượt chỉ được nhập sai tối đa MaxKeyFailures lần, nên 80 bit là đủ; ngắn hơn để Chủ kho dễ đưa và chép tay.
+    // nội dung) và mỗi lượt chỉ được nhập sai tối đa MaxKeyFailures lần, nên 80 bit là đủ; ngắn hơn để Chủ tài sản dễ đưa và chép tay.
     // Mảnh đã cấp trước đây dài 52 ký tự vẫn dùng được vì Normalize và Hash không phụ thuộc độ dài.
     private const int ShardBytes = 10;
     private const int GroupSize = 4;

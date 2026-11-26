@@ -275,7 +275,7 @@ public sealed class AdminService : IAdminService
     }
 
     /// <summary>
-    /// Kho mà Người thực thi đang giữ: tên Chủ kho đã che, trạng thái kế hoạch, bước biên bản và Admin đổi người được không.
+    /// Kho mà Người thực thi đang giữ: tên Chủ tài sản đã che, trạng thái kế hoạch, bước biên bản và Admin đổi người được không.
     /// Không trả CCCD, tên tài sản hay email người nhận.
     /// </summary>
     private async Task AddHeldVaultsAsync(AdminUserDetailResponse response, Guid executorUserId, CancellationToken ct)
@@ -480,7 +480,7 @@ public sealed class AdminService : IAdminService
         }
         if (conflict)
         {
-            throw ValidationErrors.For("verifierUserId", "Luật sư không được là Chủ kho hoặc Người thực thi của kho.");
+            throw ValidationErrors.For("verifierUserId", "Luật sư không được là Chủ tài sản hoặc Người thực thi của kho.");
         }
         if (record.VerifierUserId == verifierId)
         {

@@ -5,7 +5,7 @@ namespace LegacyVault.Application.Ekyc;
 
 /// <summary>
 /// Dịch vụ eKYC giả dùng khi Admin bật "tạm ngừng eKYC" bằng công cụ thử nghiệm (chỉ có ở Development/Staging).
-/// Mọi bước đều thành công: giấy tờ đọc ra một danh tính cố định theo tài khoản (chủ kho), liveness và so khớp khuôn mặt đều đạt.
+/// Mọi bước đều thành công: giấy tờ đọc ra một danh tính cố định theo tài khoản (chủ tài sản), liveness và so khớp khuôn mặt đều đạt.
 /// Phần lưu trạng thái phía sau vẫn chạy như thật.
 /// </summary>
 /// <remarks>Không có ảnh nào được phân tích. Không bao giờ dùng ở môi trường thật; việc bật tắt chỉ có ở công cụ thử nghiệm.</remarks>
@@ -23,7 +23,7 @@ public sealed class SimulatedEkycClient : IEkycClient
     public Task<EkycDocumentReading> ReadFrontAsync(byte[] image, string fileName, string contentType, CancellationToken ct)
     {
         EkycDocumentReading reading = new EkycDocumentReading();
-        // Chủ kho đăng ký: số CCCD 12 số lấy từ mã tài khoản nên mỗi tài khoản một số khác nhau.
+        // Chủ tài sản đăng ký: số CCCD 12 số lấy từ mã tài khoản nên mỗi tài khoản một số khác nhau.
         reading.IdNumber = BuildCitizenId(userId);
         reading.FullName = "NGUYEN VAN THU NGHIEM";
         reading.DateOfBirth = "1990-01-01";

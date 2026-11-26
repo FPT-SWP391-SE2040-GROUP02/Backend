@@ -188,7 +188,7 @@ public sealed class DevToolsService(
         User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
         if (owner == null)
         {
-            throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Không tìm thấy chủ kho.");
+            throw new AppException(AppErrorType.NotFound, ErrorCode.UserNotFound, "Không tìm thấy chủ tài sản.");
         }
         if (vault.Plan.Status != PlanStatus.Draft)
         {

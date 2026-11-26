@@ -14,7 +14,7 @@ namespace LegacyVault.Application.Services;
 //   1. Nộp hồ sơ (Chấp nhận hoặc Từ chối, thông tin khai, ảnh căn cước hai mặt) ... SubmitAsync
 //   2. Xem lại hồ sơ mới nhất đã nộp ................................................. GetLatestAsync
 // Hồ sơ này là bước 2 của biên bản bàn giao: luật sư đối chiếu rồi xác nhận danh tính người nhận.
-/// <summary>Người nhận nộp hồ sơ: đối chiếu với dữ liệu Chủ kho đã khai, lưu ảnh mã hóa, ghi chữ ký vào biên bản và báo Người xét duyệt.</summary>
+/// <summary>Người nhận nộp hồ sơ: đối chiếu với dữ liệu Chủ tài sản đã khai, lưu ảnh mã hóa, ghi chữ ký vào biên bản và báo Người xét duyệt.</summary>
 public sealed class HandoverSubmissionService : IHandoverSubmissionService
 {
     private readonly ICurrentUser currentUser;
@@ -78,7 +78,7 @@ public sealed class HandoverSubmissionService : IHandoverSubmissionService
             throw ValidationErrors.For("images", "Cần ảnh căn cước hai mặt dạng JPEG, PNG hoặc WEBP.");
         }
 
-        // 5. Đọc thông tin Chủ kho đã khai cho người nhận để đối chiếu; hồ sơ đã được duyệt thì không nộp lại
+        // 5. Đọc thông tin Chủ tài sản đã khai cho người nhận để đối chiếu; hồ sơ đã được duyệt thì không nộp lại
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
         if (beneficiary == null)
         {

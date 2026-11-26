@@ -36,7 +36,7 @@ public sealed class VerifierHandoverSubmissionsController : ControllerBase
         return reviewService.ListPendingAsync(ct);
     }
 
-    /// <summary>Người xét duyệt xem chi tiết một hồ sơ chờ kiểm tra: kết quả so khớp với dữ liệu Chủ kho đã khai.</summary>
+    /// <summary>Người xét duyệt xem chi tiết một hồ sơ chờ kiểm tra: kết quả so khớp với dữ liệu Chủ tài sản đã khai.</summary>
     [HttpGet("{submissionId:guid}")]
     [ProducesResponseType<VerifierHandoverSubmissionResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

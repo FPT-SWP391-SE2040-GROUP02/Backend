@@ -128,13 +128,13 @@ public enum AuditAction
     HandoverSubmissionApproved = 60,
     /// <summary>Người xét duyệt yêu cầu người nhận bổ sung hồ sơ.</summary>
     HandoverSubmissionSupplementRequested = 61,
-    /// <summary>Chủ kho ký di chúc điện tử bằng mã PIN của kho và kích hoạt kế hoạch bàn giao.</summary>
+    /// <summary>Chủ tài sản ký di chúc điện tử bằng mã PIN của kho và kích hoạt kế hoạch bàn giao.</summary>
     PlanActivated = 62,
     /// <summary>Người thực thi tự chấp nhận lời mời làm Người thực thi của kho (ký xác nhận di chúc).</summary>
     ExecutorAccepted = 63,
-    /// <summary>Chủ kho ký lại di chúc điện tử bằng mã PIN sau khi đổi cấu hình; tạo phiên bản di chúc mới.</summary>
+    /// <summary>Chủ tài sản ký lại di chúc điện tử bằng mã PIN sau khi đổi cấu hình; tạo phiên bản di chúc mới.</summary>
     WillResigned = 64,
-    /// <summary>Chủ kho xem danh tính đầy đủ (Chủ kho và người nhận) để lập di chúc. Nhật ký không ghi giá trị đã giải mã.</summary>
+    /// <summary>Chủ tài sản xem danh tính đầy đủ (Chủ tài sản và người nhận) để lập di chúc. Nhật ký không ghi giá trị đã giải mã.</summary>
     WillIdentityViewed = 65,
     /// <summary>Đăng nhập thành công (mật khẩu, Google hoặc mã hai bước). Lý do chỉ ghi phương thức, không ghi dữ liệu nhạy cảm.</summary>
     LoginSucceeded = 66,
@@ -160,10 +160,12 @@ public enum AuditAction
     AssetUnassigned = 76,
     /// <summary>Luật sư nhắc Người thực thi ký biên bản bàn giao đã chốt (đích là kho; không ghi nội dung thư).</summary>
     HandoverExecutorReminded = 77,
-    /// <summary>Chủ kho ký biên bản phân chia trước, chờ Người thực thi xem và ký (kế hoạch chưa có hiệu lực).</summary>
+    /// <summary>Chủ tài sản ký biên bản phân chia trước, chờ Người thực thi xem và ký (kế hoạch chưa có hiệu lực).</summary>
     WillSigned = 78,
-    /// <summary>Người thực thi xem và đồng ý phiên bản biên bản phân chia Chủ kho ký lại.</summary>
+    /// <summary>Người thực thi xem và đồng ý phiên bản biên bản phân chia Chủ tài sản ký lại.</summary>
     ExecutorWillConfirmed = 79,
-    /// <summary>Người thực thi không đồng ý phiên bản biên bản phân chia Chủ kho ký lại.</summary>
+    /// <summary>Người thực thi không đồng ý phiên bản biên bản phân chia Chủ tài sản ký lại.</summary>
     ExecutorWillDeclined = 80,
+    /// <summary>Người thực thi hoặc người được mời mở biên bản phân chia đầy đủ. Nhật ký không ghi danh tính hay tên tài sản.</summary>
+    ExecutorWillViewed = 81,
 }

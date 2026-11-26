@@ -11,7 +11,7 @@ public interface IExecutorKeyService
     Task<ExecutorKeyStatusResponse> GetStatusAsync(Guid vaultId, CancellationToken ct);
 
     /// <summary>
-    /// Chủ kho đổi mã: mã mới thay mã cũ ngay, không trả mã gốc (mã do server giữ). Kho chưa có mã → 409 EXECUTOR_KEY_NOT_ISSUED.
+    /// Chủ tài sản đổi mã: mã mới thay mã cũ ngay, không trả mã gốc (mã do server giữ). Kho chưa có mã → 409 EXECUTOR_KEY_NOT_ISSUED.
     /// </summary>
     Task<ExecutorKeyStatusResponse> ReissueAsync(Guid vaultId, CancellationToken ct);
 

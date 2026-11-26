@@ -22,7 +22,7 @@ public class ExecutorRecipientAssetResponse
 {
     public Guid Id { get; set; }
 
-    /// <summary>Tên do Chủ kho đặt.</summary>
+    /// <summary>Tên do Chủ tài sản đặt.</summary>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>FILE hoặc TEXT.</summary>

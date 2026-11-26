@@ -44,7 +44,7 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
         await factory.DisposeAsync();
     }
 
-    /// <summary>Ghi lại đã gọi lối gửi nào để kiểm tra lời mời do Admin giao không đi lối "Chủ kho mời".</summary>
+    /// <summary>Ghi lại đã gọi lối gửi nào để kiểm tra lời mời do Admin giao không đi lối "Chủ tài sản mời".</summary>
     private sealed class Mail : IExecutorInvitationSender
     {
         public int Normal { get; private set; }
@@ -89,7 +89,7 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
             "/api/v1/admin/vaults/" + vault.VaultId + "/executor",
             new { userId = target.Id, reason = "Người cũ không còn liên lạc được." });
 
-        // Kiểm tra: lời mời đã tạo, đi lối thư của Admin (không phải thư "Chủ kho mời"), có nhật ký
+        // Kiểm tra: lời mời đã tạo, đi lối thư của Admin (không phải thư "Chủ tài sản mời"), có nhật ký
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(target.Email, body.GetProperty("inviteeEmail").GetString());
@@ -118,7 +118,7 @@ public sealed class AdminAssignExecutorFlowTests : IAsyncLifetime
         HttpResponseMessage noReason = await admin.PostAsJsonAsync(url, new { userId = target.Id, reason = "" });
         HttpResponseMessage nonAdmin = await member.PostAsJsonAsync(url, new { userId = target.Id, reason = "thử" });
 
-        // Kiểm tra: không giao cho chủ kho (409), bắt buộc lý do, người thường không thấy khu Admin; không gửi thư nào
+        // Kiểm tra: không giao cho chủ tài sản (409), bắt buộc lý do, người thường không thấy khu Admin; không gửi thư nào
         Assert.Equal(HttpStatusCode.Conflict, toOwner.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, noReason.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, nonAdmin.StatusCode);

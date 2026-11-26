@@ -3,7 +3,7 @@
 # Chuẩn bị:
 #   1. Chạy migration và API (profile http). Tạo kho có tài sản đã gán cho người nhận (xem http/assignments.http, http/beneficiaries.http).
 #   2. Mở bàn giao bằng SQL: chạy http/handover-dev.sql (thay <vaultId>). Script tạo các token cố định dev-token-1, dev-token-2, ...
-#   3. Đăng nhập bằng một tài khoản KHÁC chủ kho và đã xác minh email (http/auth.http), lấy access token.
+#   3. Đăng nhập bằng một tài khoản KHÁC chủ tài sản và đã xác minh email (http/auth.http), lấy access token.
 #
 # Ở Development, Handover:RequireIdentityVerification=false nên "claim" đi thẳng tới READY_TO_ACCEPT.
 

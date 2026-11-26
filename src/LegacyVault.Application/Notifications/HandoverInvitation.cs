@@ -14,7 +14,7 @@ public sealed class HandoverInvitation
 
     public DateTimeOffset ResponseDeadline { get; set; }
 
-    /// <summary>Họ tên Chủ kho (đã mất) để thư nhắc lại ai đã chọn người nhận. Rỗng thì thư dùng cách nói chung.</summary>
+    /// <summary>Họ tên Chủ tài sản (đã mất) để thư nhắc lại ai đã chọn người nhận. Rỗng thì thư dùng cách nói chung.</summary>
     public string OwnerFullName { get; set; } = string.Empty;
 
     /// <summary>Người thực thi hiện tại của kho, để người nhận gọi hỏi được. Rỗng thì thư bỏ phần liên hệ này.</summary>
@@ -32,12 +32,12 @@ public sealed class HandoverInvitation
 
     public string? VerifierLawyerCardNumber { get; set; }
 
-    /// <summary>Lời nhắn Chủ kho để lại cho người nhận (không bắt buộc). Null thì thư bỏ khung này.</summary>
+    /// <summary>Lời nhắn Chủ tài sản để lại cho người nhận (không bắt buộc). Null thì thư bỏ khung này.</summary>
     public string? OwnerMessage { get; set; }
 
     /// <summary>
-    /// True khi người nhận do luật sư thêm vào biên bản (Chủ kho không chia tài sản nào cho người này): thư dùng lời
-    /// riêng, không nói rằng Chủ kho đã chọn họ.
+    /// True khi người nhận do luật sư thêm vào biên bản (Chủ tài sản không chia tài sản nào cho người này): thư dùng lời
+    /// riêng, không nói rằng Chủ tài sản đã chọn họ.
     /// </summary>
     public bool AddedByVerifier { get; set; }
 

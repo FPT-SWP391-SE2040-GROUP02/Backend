@@ -20,7 +20,7 @@ public sealed class SimulatedEkycClientTests
         EkycDocumentReading a2 = await new SimulatedEkycClient(first).ReadFrontAsync(Image, "f.jpg", "image/jpeg", default);
         EkycDocumentReading b = await new SimulatedEkycClient(second).ReadFrontAsync(Image, "f.jpg", "image/jpeg", default);
 
-        // Kiểm tra: đủ điều kiện gắn danh tính chủ kho; cùng tài khoản cùng số, khác tài khoản khác số
+        // Kiểm tra: đủ điều kiện gắn danh tính chủ tài sản; cùng tài khoản cùng số, khác tài khoản khác số
         Assert.NotNull(EkycRules.TryReadOwnerIdentity(a1));
         Assert.Equal(12, a1.IdNumber.Length);
         Assert.Equal(a1.IdNumber, a2.IdNumber);

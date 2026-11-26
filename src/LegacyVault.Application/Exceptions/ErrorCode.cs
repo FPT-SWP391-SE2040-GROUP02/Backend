@@ -120,7 +120,7 @@ public enum ErrorCode
     MaintenanceMode,
     /// <summary>404: mã tỉnh/thành phố không có trong danh mục đơn vị hành chính.</summary>
     AdministrativeUnitNotFound,
-    /// <summary>403: tài khoản đang đăng nhập không đúng email mà Chủ kho đã mời nhận gói; kèm invitedEmailMasked (email đã che bớt).</summary>
+    /// <summary>403: tài khoản đang đăng nhập không đúng email mà Chủ tài sản đã mời nhận gói; kèm invitedEmailMasked (email đã che bớt).</summary>
     HandoverEmailMismatch,
     /// <summary>400: chỉ được chỉ định Người thực thi hệ thống đã được xác minh.</summary>
     OnlySystemExecutorsAllowed,

@@ -10,7 +10,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Will;
 
-/// <summary>GET /vaults/{id}/will/identity: danh tính đầy đủ chỉ cho Chủ kho, có nhật ký, không cache (SQL Server thật).</summary>
+/// <summary>GET /vaults/{id}/will/identity: danh tính đầy đủ chỉ cho Chủ tài sản, có nhật ký, không cache (SQL Server thật).</summary>
 public sealed class WillIdentityTests : IAsyncLifetime
 {
     private const string OwnerCitizenId = "012345678901";

@@ -10,7 +10,7 @@ namespace LegacyVault.Application.Services;
 /// Luật chung:
 /// - Người dùng lấy từ token (SEC-04), không nhận userId từ FE. Ngưỡng so khớp do server cố định.
 /// - Chỉ lưu kết quả, không lưu ảnh (xem EkycVerification). Ảnh chỉ nhận JPEG/PNG, tối đa 8 MiB.
-/// - Chỉ phục vụ xác minh danh tính của Chủ kho (mục đích OWNER_ENROLLMENT).
+/// - Chỉ phục vụ xác minh danh tính của Chủ tài sản (mục đích OWNER_ENROLLMENT).
 /// Lỗi chung: 401 SESSION_EXPIRED, 400 EKYC_IMAGE_REJECTED, 413 FILE_TOO_LARGE, 503 EKYC_SERVICE_UNAVAILABLE.
 /// </remarks>
 public interface IEkycService

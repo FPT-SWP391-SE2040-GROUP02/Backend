@@ -9,7 +9,7 @@ public interface IHandoverRecordRepository
     Task<HandoverRecord?> FindByIdAsync(Guid recordId, CancellationToken ct);
 
     /// <summary>
-    /// Biên bản đang mở của kho (bỏ biên bản Chủ kho đã hủy), có theo dõi thay đổi; null khi chưa ai gửi yêu cầu nhận.
+    /// Biên bản đang mở của kho (bỏ biên bản Chủ tài sản đã hủy), có theo dõi thay đổi; null khi chưa ai gửi yêu cầu nhận.
     /// </summary>
     Task<HandoverRecord?> FindByVaultIdAsync(Guid vaultId, CancellationToken ct);
 
@@ -30,11 +30,11 @@ public interface IHandoverRecordRepository
 
     /// <summary>
     /// Mọi hồ sơ người nhận thuộc kho có kế hoạch đã kích hoạt trở đi (Active, HandoverRequested, HandoverInProgress, Closed),
-    /// kèm kho, Chủ kho và kế hoạch, theo ngày tạo. Chỉ đọc.
+    /// kèm kho, Chủ tài sản và kế hoạch, theo ngày tạo. Chỉ đọc.
     /// </summary>
     Task<List<Beneficiary>> ListBeneficiariesOfActivatedPlansAsync(CancellationToken ct);
 
-    /// <summary>Các lời mời Người thực thi đã chấp nhận của tài khoản, kèm kho, Chủ kho và kế hoạch. Chỉ đọc.</summary>
+    /// <summary>Các lời mời Người thực thi đã chấp nhận của tài khoản, kèm kho, Chủ tài sản và kế hoạch. Chỉ đọc.</summary>
     Task<List<Executor>> ListAcceptedExecutorsAsync(Guid userId, CancellationToken ct);
 
     void Add(HandoverRecord record);

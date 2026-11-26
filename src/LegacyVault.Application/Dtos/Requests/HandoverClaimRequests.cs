@@ -26,7 +26,7 @@ public class ReviewHandoverClaimRequest
 public class ReviewHandoverReportRequest : ReviewHandoverClaimRequest
 {
     /// <summary>
-    /// Bắt buộc true (kèm lý do) khi chấp nhận hồ sơ có cảnh báo: họ tên không khớp, hoặc Chủ kho còn hoạt động sau khi hồ sơ được nộp.
+    /// Bắt buộc true (kèm lý do) khi chấp nhận hồ sơ có cảnh báo: họ tên không khớp, hoặc Chủ tài sản còn hoạt động sau khi hồ sơ được nộp.
     /// </summary>
     public bool ConfirmDocuments { get; set; }
 }

@@ -39,7 +39,7 @@ public sealed class VaultPinServiceTests
 
     public VaultPinServiceTests()
     {
-        owner = new User { Id = ownerId, Email = "owner@test.local", FullName = "Chủ kho", PasswordHash = passwordHasher.Hash(Password) };
+        owner = new User { Id = ownerId, Email = "owner@test.local", FullName = "Chủ tài sản", PasswordHash = passwordHasher.Hash(Password) };
         users.Users.Add(owner);
         vault = new Vault { OwnerId = ownerId };
         vaults.Vaults.Add(vault);

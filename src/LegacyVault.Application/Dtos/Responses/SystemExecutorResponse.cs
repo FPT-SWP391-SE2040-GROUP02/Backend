@@ -1,7 +1,7 @@
 namespace LegacyVault.Application.Dtos.Responses;
 
 /// <summary>
-/// DTO đại diện cho Người thực thi hệ thống trong danh bạ để Chủ kho lựa chọn.
+/// DTO đại diện cho Người thực thi hệ thống trong danh bạ để Chủ tài sản lựa chọn.
 /// </summary>
 public sealed class SystemExecutorResponse
 {

@@ -41,7 +41,7 @@ public interface IAdminUserRepository
         Guid verifierUserId, int take, CancellationToken ct);
 
     /// <summary>
-    /// Các kho mà tài khoản đang là Người thực thi hiện tại (Executor Accepted), kèm họ tên Chủ kho, trạng thái kho, kế
+    /// Các kho mà tài khoản đang là Người thực thi hiện tại (Executor Accepted), kèm họ tên Chủ tài sản, trạng thái kho, kế
     /// hoạch và bước biên bản đang mở (null khi chưa có). Người nhận việc gần nhất trước.
     /// </summary>
     Task<List<(Guid VaultId, string OwnerFullName, VaultStatus VaultStatus, PlanStatus PlanStatus, HandoverRecordStatus? RecordStatus)>>

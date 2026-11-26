@@ -5,7 +5,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
 
-/// <summary>Đọc họ tên Chủ kho và liên hệ Người thực thi trên SQL Server thật (cho thư mời nhận tài sản).</summary>
+/// <summary>Đọc họ tên Chủ tài sản và liên hệ Người thực thi trên SQL Server thật (cho thư mời nhận tài sản).</summary>
 public sealed class HandoverContactReaderTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;

@@ -2,7 +2,7 @@ namespace LegacyVault.Application.Dtos.Responses;
 
 /// <summary>
 /// Biên bản bàn giao của một kho, dùng chung cho luật sư, Người thực thi và người nhận.
-/// Người nhận chỉ thấy dòng của chính mình; luật sư thấy thêm danh sách tài sản, người nhận và biên bản phân chia của Chủ kho.
+/// Người nhận chỉ thấy dòng của chính mình; luật sư thấy thêm danh sách tài sản, người nhận và biên bản phân chia của Chủ tài sản.
 /// </summary>
 public class HandoverRecordResponse
 {
@@ -28,14 +28,14 @@ public class HandoverRecordResponse
     /// <summary>Họ tên luật sư đã xác nhận căn cứ pháp lý (để in biên bản); rỗng khi chưa xác nhận.</summary>
     public string LegalBasisConfirmedByName { get; set; } = string.Empty;
 
-    /// <summary>Lý do luật sư hủy biên bản; null khi Chủ kho hủy hoặc chưa hủy.</summary>
+    /// <summary>Lý do luật sư hủy biên bản; null khi Chủ tài sản hủy hoặc chưa hủy.</summary>
     public string? CancelReason { get; set; }
 
     /// <summary>Kho đã khóa chưa: khóa khi luật sư chấp nhận giấy tờ đầu tiên; chưa khóa thì chưa chốt được biên bản.</summary>
     public bool VaultLocked { get; set; }
 
     /// <summary>
-    /// Chỗ biên bản khác cách chia ban đầu của Chủ kho (luật sư, Người thực thi thấy; người nhận nhận danh sách rỗng).
+    /// Chỗ biên bản khác cách chia ban đầu của Chủ tài sản (luật sư, Người thực thi thấy; người nhận nhận danh sách rỗng).
     /// Có khác biệt thì luật sư phải tick confirmSplitDeviation khi chốt.
     /// </summary>
     public List<HandoverSplitDifferenceResponse> SplitDifferences { get; set; } = new List<HandoverSplitDifferenceResponse>();
@@ -65,10 +65,10 @@ public class HandoverRecordResponse
     /// <summary>Chỉ cho luật sư: tài sản của kho để chọn.</summary>
     public List<HandoverRecordAssetResponse> AvailableAssets { get; set; } = new List<HandoverRecordAssetResponse>();
 
-    /// <summary>Chỉ cho luật sư: người nhận Chủ kho đã khai.</summary>
+    /// <summary>Chỉ cho luật sư: người nhận Chủ tài sản đã khai.</summary>
     public List<HandoverRecordPersonResponse> AvailableRecipients { get; set; } = new List<HandoverRecordPersonResponse>();
 
-    /// <summary>Chỉ cho luật sư: biên bản phân chia của Chủ kho, gom theo người nhận. Rỗng khi Chủ kho chưa gán tài sản nào.</summary>
+    /// <summary>Chỉ cho luật sư: biên bản phân chia của Chủ tài sản, gom theo người nhận. Rỗng khi Chủ tài sản chưa gán tài sản nào.</summary>
     public List<OwnerSplitRecipientResponse> OwnerSplit { get; set; } = new List<OwnerSplitRecipientResponse>();
 
     /// <summary>Yêu cầu nhận tài sản kèm giấy tờ; chỉ luật sư của biên bản thấy, các vai khác nhận danh sách rỗng.</summary>
@@ -81,7 +81,7 @@ public class HandoverRecordResponse
     public List<HandoverRecordReportResponse> Reports { get; set; } = new List<HandoverRecordReportResponse>();
 }
 
-/// <summary>Một chỗ biên bản khác cách chia ban đầu của Chủ kho; chỉ có họ tên và tên tài sản, không có CCCD.</summary>
+/// <summary>Một chỗ biên bản khác cách chia ban đầu của Chủ tài sản; chỉ có họ tên và tên tài sản, không có CCCD.</summary>
 public class HandoverSplitDifferenceResponse
 {
     /// <summary>RECIPIENT_ADDED, RECIPIENT_REMOVED hoặc ASSET_RECIPIENTS_CHANGED.</summary>
@@ -97,7 +97,7 @@ public class HandoverSplitDifferenceResponse
     /// <summary>Tên tài sản đổi người nhận; rỗng với khác biệt theo người nhận.</summary>
     public string AssetName { get; set; } = string.Empty;
 
-    /// <summary>Người nhận tài sản theo Chủ kho (chỉ với ASSET_RECIPIENTS_CHANGED).</summary>
+    /// <summary>Người nhận tài sản theo Chủ tài sản (chỉ với ASSET_RECIPIENTS_CHANGED).</summary>
     public List<string> OwnerRecipientNames { get; set; } = new List<string>();
 
     /// <summary>Người nhận tài sản theo biên bản (chỉ với ASSET_RECIPIENTS_CHANGED).</summary>
@@ -172,7 +172,7 @@ public class HandoverRecordPersonResponse
     public string Email { get; set; } = string.Empty;
 }
 
-/// <summary>Một người nhận trong biên bản phân chia của Chủ kho và các tài sản Chủ kho đã gán cho người đó.</summary>
+/// <summary>Một người nhận trong biên bản phân chia của Chủ tài sản và các tài sản Chủ tài sản đã gán cho người đó.</summary>
 public class OwnerSplitRecipientResponse
 {
     public Guid BeneficiaryId { get; set; }

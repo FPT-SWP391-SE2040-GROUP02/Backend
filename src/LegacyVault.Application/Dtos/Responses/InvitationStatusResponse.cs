@@ -20,7 +20,7 @@ public class InvitationStatusResponse
     public bool AccountExists { get; set; }
 
     /// <summary>
-    /// Tên Chủ kho để trang cửa vào ghi "{Chủ kho} đã để lại cho bạn một gói". Thư mời gửi tới người nhận đã nêu tên này nên
+    /// Tên Chủ tài sản để trang cửa vào ghi "{Chủ tài sản} đã để lại cho bạn một gói". Thư mời gửi tới người nhận đã nêu tên này nên
     /// người giữ link không biết thêm điều gì mới. Null khi không đọc được.
     /// </summary>
     public string? OwnerFullName { get; set; }

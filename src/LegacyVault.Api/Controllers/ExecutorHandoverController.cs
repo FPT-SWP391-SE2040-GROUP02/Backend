@@ -12,7 +12,7 @@ namespace LegacyVault.Api.Controllers;
 /// Người thực thi: mở bàn giao, xem và ký biên bản bàn giao, theo dõi tiến độ, gửi mã nhận cho người nhận.
 /// </summary>
 /// <remarks>
-/// Người gọi phải là Người thực thi đang hiệu lực của kho và không phải Chủ kho; không đủ điều kiện thì 404.
+/// Người gọi phải là Người thực thi đang hiệu lực của kho và không phải Chủ tài sản; không đủ điều kiện thì 404.
 /// Người thực thi chỉ giữ và giao tài sản theo biên bản, không sửa được biên bản.
 /// </remarks>
 [ApiController]
@@ -50,7 +50,7 @@ public sealed class ExecutorHandoverController : ControllerBase
     }
 
     /// <summary>
-    /// Đồng ý (ký bằng mật khẩu) hoặc không đồng ý phiên bản biên bản phân chia Chủ kho vừa ký lại.
+    /// Đồng ý (ký bằng mật khẩu) hoặc không đồng ý phiên bản biên bản phân chia Chủ tài sản vừa ký lại.
     /// </summary>
     [HttpPost("vaults/{vaultId:guid}/will/respond")]
     [EnableRateLimiting("executor-invitations")]
@@ -61,6 +61,36 @@ public sealed class ExecutorHandoverController : ControllerBase
     {
         await willService.RespondAsync(vaultId, request, ct);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Biên bản phân chia đầy đủ (bản Chủ tài sản ký gần nhất) cho Người thực thi: danh tính, tên tài sản và người nhận.
+    /// Không có nội dung tài sản. Mỗi lần xem ghi nhật ký; response không được cache.
+    /// </summary>
+    [HttpGet("vaults/{vaultId:guid}/will")]
+    [EnableRateLimiting("executor-invitations")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType<ExecutorWillResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ExecutorWillResponse> GetWill(Guid vaultId, CancellationToken ct)
+    {
+        return willService.GetForVaultAsync(vaultId, ct);
+    }
+
+    /// <summary>
+    /// Biên bản phân chia đầy đủ cho người đang được mời đọc trước khi ký nhận vai. Chỉ tài khoản có email đã xác minh
+    /// trùng email được mời; response không được cache.
+    /// </summary>
+    [HttpGet("invitations/{invitationId:guid}/will")]
+    [EnableRateLimiting("executor-invitations")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType<ExecutorWillResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ExecutorWillResponse> GetInvitationWill(Guid invitationId, CancellationToken ct)
+    {
+        return willService.GetForInvitationAsync(invitationId, ct);
     }
 
     /// <summary>Biên bản bàn giao của kho. Chưa mở bàn giao thì 204 (không có nội dung).</summary>

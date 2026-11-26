@@ -8,7 +8,7 @@
 -- Lưu ý: nếu chạy bằng sqlcmd phải thêm cờ -I (QUOTED_IDENTIFIER ON), vì bảng có index lọc; SSMS đã bật sẵn.
 -- Cách dùng: thay <vaultId> bằng id kho (GET /api/v1/vaults/me) rồi chạy cả file. Chạy lại được: dữ liệu bàn giao cũ của kho sẽ bị xóa.
 --
--- Sau khi chạy: đăng nhập bằng một tài khoản KHÁC chủ kho (đã xác minh email) rồi mở
+-- Sau khi chạy: đăng nhập bằng một tài khoản KHÁC chủ tài sản (đã xác minh email) rồi mở
 --   http://localhost:5173/receive?token=dev-token-1   (người nhận thứ hai: dev-token-2, ...)
 -- Cần API chạy ở môi trường Development (Handover:RequireIdentityVerification=false trong appsettings.Development.json).
 

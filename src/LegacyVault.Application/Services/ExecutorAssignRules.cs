@@ -4,7 +4,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Luật thuần cho việc Admin giao hoặc đổi Người thực thi của một kho (khi chủ kho không chọn được người,
+/// Luật thuần cho việc Admin giao hoặc đổi Người thực thi của một kho (khi chủ tài sản không chọn được người,
 /// hoặc người hiện tại không làm việc). Không đọc DB, không gửi thư.
 /// </summary>
 public static class ExecutorAssignRules

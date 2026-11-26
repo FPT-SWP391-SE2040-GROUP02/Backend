@@ -8,8 +8,8 @@ namespace LegacyVault.Domain.Entities;
 /// <remarks>
 /// - Hệ thống chỉ quản lý tài sản, không làm pháp lý: luật sư lập biên bản theo kết quả đã xử lý ở ngoài.
 /// - Người nhận gửi yêu cầu nhận tài sản kèm giấy tờ thì tạo biên bản và phân công một luật sư; mỗi kho chỉ có một
-///   biên bản đang mở (biên bản Chủ kho đã hủy không tính).
-/// - Luật sư có thể lấy biên bản phân chia của Chủ kho (các gói và người nhận đã khai) làm bản đầu.
+///   biên bản đang mở (biên bản Chủ tài sản đã hủy không tính).
+/// - Luật sư có thể lấy biên bản phân chia của Chủ tài sản (các gói và người nhận đã khai) làm bản đầu.
 /// - RevisionNo tăng mỗi lần luật sư mở lại biên bản; chữ ký của bản cũ không còn hiệu lực (ký lại từ đầu).
 /// - UpdatedAt là concurrency token chống hai thao tác cùng sửa.
 /// </remarks>
@@ -44,7 +44,7 @@ public class HandoverRecord
     public Guid? LegalBasisConfirmedByUserId { get; set; }
 
     /// <summary>
-    /// Lúc luật sư tick xác nhận biên bản khác cách chia ban đầu của Chủ kho (thêm người nhận, bỏ người nhận, đổi người
+    /// Lúc luật sư tick xác nhận biên bản khác cách chia ban đầu của Chủ tài sản (thêm người nhận, bỏ người nhận, đổi người
     /// nhận của tài sản) là theo di chúc hoặc quy định pháp luật. Null khi không khác hoặc đang lập; mở lại thì xóa.
     /// </summary>
     public DateTimeOffset? SplitDeviationConfirmedAt { get; set; }
@@ -58,10 +58,10 @@ public class HandoverRecord
     /// <summary>Lúc đủ chữ ký ba bên; null khi chưa xong.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
 
-    /// <summary>Lúc Chủ kho hoặc luật sư hủy yêu cầu nhận tài sản; null khi không hủy.</summary>
+    /// <summary>Lúc Chủ tài sản hoặc luật sư hủy yêu cầu nhận tài sản; null khi không hủy.</summary>
     public DateTimeOffset? CancelledAt { get; set; }
 
-    /// <summary>Luật sư hủy biên bản; null khi Chủ kho tự hủy hoặc chưa hủy.</summary>
+    /// <summary>Luật sư hủy biên bản; null khi Chủ tài sản tự hủy hoặc chưa hủy.</summary>
     public Guid? CancelledByVerifierUserId { get; set; }
 
     /// <summary>Lý do luật sư hủy; null cùng lúc với CancelledByVerifierUserId.</summary>

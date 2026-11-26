@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace LegacyVault.Api.Controllers;
 
-/// <summary>Mã nhận bàn giao: server tự tạo lúc kích hoạt; Chủ kho xem trạng thái và đổi mã.</summary>
+/// <summary>Mã nhận bàn giao: server tự tạo lúc kích hoạt; Chủ tài sản xem trạng thái và đổi mã.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/vaults/{vaultId:guid}/executor-key")]
@@ -35,7 +35,7 @@ public sealed class ExecutorKeyController(IExecutorKeyService service) : Control
     }
 }
 
-/// <summary>Cổng Người thực thi: đọc mã nhận bàn giao do Chủ kho gửi trực tiếp trên hệ thống.</summary>
+/// <summary>Cổng Người thực thi: đọc mã nhận bàn giao do Chủ tài sản gửi trực tiếp trên hệ thống.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/executor/vaults/{vaultId:guid}/handover-key")]

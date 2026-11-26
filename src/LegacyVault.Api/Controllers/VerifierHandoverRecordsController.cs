@@ -38,7 +38,7 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.ListForVerifierAsync(ct);
     }
 
-    /// <summary>Một biên bản kèm tài sản, người nhận và biên bản phân chia của Chủ kho để lập.</summary>
+    /// <summary>Một biên bản kèm tài sản, người nhận và biên bản phân chia của Chủ tài sản để lập.</summary>
     [HttpGet("{recordId:guid}")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -47,7 +47,7 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.GetForVerifierAsync(recordId, ct);
     }
 
-    /// <summary>Lấy biên bản phân chia của Chủ kho làm bản đầu (thay toàn bộ dòng đang có).</summary>
+    /// <summary>Lấy biên bản phân chia của Chủ tài sản làm bản đầu (thay toàn bộ dòng đang có).</summary>
     [HttpPost("{recordId:guid}/use-owner-split")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -119,7 +119,7 @@ public sealed class VerifierHandoverRecordsController : ControllerBase
         return recordService.ReopenAsync(recordId, ct);
     }
 
-    /// <summary>Hủy biên bản đang lập kèm lý do (mở nhầm, giấy tờ sai); kho mở khóa, Chủ kho và Người thực thi được báo.</summary>
+    /// <summary>Hủy biên bản đang lập kèm lý do (mở nhầm, giấy tờ sai); kho mở khóa, Chủ tài sản và Người thực thi được báo.</summary>
     [HttpPost("{recordId:guid}/cancel")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]

@@ -25,7 +25,7 @@ public sealed class ExecutorWillNoticeSender : IExecutorWillNoticeSender
 
     public Task<bool> SendNewVersionAsync(string executorEmail, string ownerName, int versionNo, CancellationToken ct)
     {
-        string text = $"Chủ kho {ownerName} vừa ký biên bản phân chia phiên bản {versionNo}. "
+        string text = $"Chủ tài sản {ownerName} vừa ký biên bản phân chia phiên bản {versionNo}. "
             + "Hãy đăng nhập LegacyVault, mở biên bản để xem rồi chọn đồng ý hoặc không đồng ý.";
         return SendAsync(executorEmail, "Biên bản phân chia có phiên bản mới cần bạn xem", text, ct);
     }

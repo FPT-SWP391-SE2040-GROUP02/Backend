@@ -6,7 +6,7 @@ namespace LegacyVault.Domain.Entities;
 /// Yêu cầu nhận tài sản của một người nhận (bảng HandoverClaims), kèm giấy tờ nộp cho luật sư xét.
 /// </summary>
 /// <remarks>
-/// - Người nhận mở link riêng trong thư báo kích hoạt, đăng nhập đúng email Chủ kho đã khai rồi gửi yêu cầu.
+/// - Người nhận mở link riêng trong thư báo kích hoạt, đăng nhập đúng email Chủ tài sản đã khai rồi gửi yêu cầu.
 /// - Yêu cầu đầu tiên của kho tạo biên bản bàn giao và phân công luật sư; các yêu cầu sau gắn vào biên bản đang mở.
 /// - Mỗi người nhận chỉ có một yêu cầu trong một biên bản (unique RecordId + BeneficiaryId).
 /// - Hệ thống chỉ lưu tệp, không kiểm từng ô giấy tờ; luật sư xác minh ở ngoài hệ thống.

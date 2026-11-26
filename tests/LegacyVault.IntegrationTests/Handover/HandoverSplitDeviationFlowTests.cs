@@ -8,7 +8,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
-/// Biên bản khác cách chia ban đầu của Chủ kho (SQL Server thật): response liệt kê khác biệt, luật sư phải tick xác nhận khi
+/// Biên bản khác cách chia ban đầu của Chủ tài sản (SQL Server thật): response liệt kê khác biệt, luật sư phải tick xác nhận khi
 /// chốt; không khác thì chốt như cũ; mở lại thì phải tick lại.
 /// </summary>
 public sealed class HandoverSplitDeviationFlowTests : IAsyncLifetime
@@ -50,7 +50,7 @@ public sealed class HandoverSplitDeviationFlowTests : IAsyncLifetime
 
     /// <summary>
     /// Kho đã kích hoạt: hai tài sản gán cho người nhận đầu, người nhận thứ hai chưa được gán. Người nhận đầu gửi yêu cầu,
-    /// luật sư chấp nhận (kho khóa) và lấy cách chia của Chủ kho làm biên bản.
+    /// luật sư chấp nhận (kho khóa) và lấy cách chia của Chủ tài sản làm biên bản.
     /// </summary>
     private async Task<SplitVault> BuildDraftFromOwnerSplitAsync()
     {

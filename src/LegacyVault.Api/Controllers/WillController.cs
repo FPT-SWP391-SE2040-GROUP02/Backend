@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace LegacyVault.Api.Controllers;
 
-/// <summary>Di chúc số của Chủ kho: xem danh tính đầy đủ để lập di chúc. Response không được cache.</summary>
+/// <summary>Di chúc số của Chủ tài sản: xem danh tính đầy đủ để lập di chúc. Response không được cache.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/vaults/{vaultId:guid}/will")]
@@ -25,8 +25,8 @@ public sealed class WillController : ControllerBase
     }
 
     /// <summary>
-    /// Họ tên, ngày sinh, CCCD đủ 12 số của Chủ kho (kèm nơi thường trú) và của từng người nhận trong kho.
-    /// Cần PIN (header X-Vault-Pin) và bị giới hạn tần suất. Chỉ Chủ kho của kho; người khác kể cả Admin → 404. Mỗi lần gọi thành công ghi nhật ký WILL_IDENTITY_VIEWED.
+    /// Họ tên, ngày sinh, CCCD đủ 12 số của Chủ tài sản (kèm nơi thường trú) và của từng người nhận trong kho.
+    /// Cần PIN (header X-Vault-Pin) và bị giới hạn tần suất. Chỉ Chủ tài sản của kho; người khác kể cả Admin → 404. Mỗi lần gọi thành công ghi nhật ký WILL_IDENTITY_VIEWED.
     /// </summary>
     [RequireVaultPin]
     [EnableRateLimiting("plan-setup")]

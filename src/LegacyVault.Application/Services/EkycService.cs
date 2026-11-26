@@ -502,9 +502,9 @@ public sealed class EkycService : IEkycService
         OwnerIdentity? bound = await identityRepository.FindByUserIdAsync(userId, ct);
         if (bound == null)
         {
-            // Lần gắn danh tính đầu tiên: CCCD của Chủ kho không được trùng người nhận đã thêm trước đó.
+            // Lần gắn danh tính đầu tiên: CCCD của Chủ tài sản không được trùng người nhận đã thêm trước đó.
             await EnsureNotAmongBeneficiariesAsync(userId, readIdentity.CitizenId, reading.DocumentToken!, ct);
-            // CCCD của Chủ kho là duy nhất trên toàn hệ thống, không được trùng với tài khoản khác đã gắn danh tính.
+            // CCCD của Chủ tài sản là duy nhất trên toàn hệ thống, không được trùng với tài khoản khác đã gắn danh tính.
             await EnsureCitizenIdNotUsedByAnotherUserAsync(userId, readIdentity.CitizenId, reading.DocumentToken!, ct);
         }
         if (bound != null)
@@ -529,7 +529,7 @@ public sealed class EkycService : IEkycService
     }
 
     /// <summary>
-    /// Số CCCD của Chủ kho phải là duy nhất trên toàn hệ thống (mỗi công dân chỉ gắn với một tài khoản).
+    /// Số CCCD của Chủ tài sản phải là duy nhất trên toàn hệ thống (mỗi công dân chỉ gắn với một tài khoản).
     /// </summary>
     private async Task EnsureCitizenIdNotUsedByAnotherUserAsync(
         Guid userId, string citizenId, string? documentToken, CancellationToken ct)
@@ -565,7 +565,7 @@ public sealed class EkycService : IEkycService
     }
 
     /// <summary>
-    /// Chủ kho chưa gắn danh tính nên lúc thêm người nhận chưa so được CCCD. Đối chiếu ngược khi gắn: nếu CCCD trên giấy tờ
+    /// Chủ tài sản chưa gắn danh tính nên lúc thêm người nhận chưa so được CCCD. Đối chiếu ngược khi gắn: nếu CCCD trên giấy tờ
     /// trùng một người nhận trong kho của chính Owner thì từ chối và hủy khuôn mặt vừa giữ.
     /// </summary>
     private async Task EnsureNotAmongBeneficiariesAsync(
@@ -580,7 +580,7 @@ public sealed class EkycService : IEkycService
             {
                 await TryDeleteDocumentAsync(documentToken, ct);
                 throw new AppException(AppErrorType.Conflict, ErrorCode.EkycIdentityMismatch,
-                    "Số CCCD trên giấy tờ trùng với một người nhận bạn đã thêm. Người nhận không được trùng với Chủ kho; hãy xóa hoặc sửa hồ sơ người nhận đó trước.",
+                    "Số CCCD trên giấy tờ trùng với một người nhận bạn đã thêm. Người nhận không được trùng với Chủ tài sản; hãy xóa hoặc sửa hồ sơ người nhận đó trước.",
                     new Dictionary<string, object?> { ["reason"] = "BENEFICIARY_CONFLICT" });
             }
         }

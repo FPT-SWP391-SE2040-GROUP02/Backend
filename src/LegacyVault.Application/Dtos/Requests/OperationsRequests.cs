@@ -62,7 +62,7 @@ public class CreateAdminUserRequest
     [MaxLength(128)]
     public string Password { get; set; } = string.Empty;
 
-    /// <summary>VERIFIER | EXECUTOR | ADMIN. EXECUTOR là Người thực thi hệ thống để Chủ kho chọn trong danh bạ.</summary>
+    /// <summary>VERIFIER | EXECUTOR | ADMIN. EXECUTOR là Người thực thi hệ thống để Chủ tài sản chọn trong danh bạ.</summary>
     [Required(ErrorMessage = "Vui lòng chọn vai trò.")]
     [MaxLength(16)]
     public string Role { get; set; } = string.Empty;

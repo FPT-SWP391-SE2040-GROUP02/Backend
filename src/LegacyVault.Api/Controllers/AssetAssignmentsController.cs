@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace LegacyVault.Api.Controllers;
 
-/// <summary>Chủ kho gán tài sản cho người nhận (docs/api-contract.md mục 6.6). Thêm hoặc gỡ gán cần mã PIN của kho.</summary>
+/// <summary>Chủ tài sản gán tài sản cho người nhận (docs/api-contract.md mục 6.6). Thêm hoặc gỡ gán cần mã PIN của kho.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/vaults/{vaultId:guid}")]
@@ -38,7 +38,7 @@ public sealed class AssetAssignmentsController(IAssetAssignmentService assignmen
         return assignmentService.SetAssetRecipientsAsync(vaultId, assetId, request, ct);
     }
 
-    /// <summary>Gỡ một người nhận khỏi một tài sản. confirmPlanDeactivation=true (query) khi Chủ kho đã xác nhận kế hoạch về bản nháp.</summary>
+    /// <summary>Gỡ một người nhận khỏi một tài sản. confirmPlanDeactivation=true (query) khi Chủ tài sản đã xác nhận kế hoạch về bản nháp.</summary>
     [RequireVaultPin]
     [HttpDelete("assets/{assetId:guid}/assignments/{beneficiaryId:guid}")]
     [ProducesResponseType<List<AssetAssignmentResponse>>(StatusCodes.Status200OK)]

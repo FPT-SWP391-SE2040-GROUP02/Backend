@@ -57,7 +57,7 @@ public class Executor
     /// <summary>Lúc ký phiên bản ở ConfirmedWillVersionNo.</summary>
     public DateTimeOffset? WillConfirmedAt { get; set; }
 
-    /// <summary>Phiên bản Chủ kho ký lại mà Người thực thi không đồng ý; ký phiên bản mới hơn thì xóa.</summary>
+    /// <summary>Phiên bản Chủ tài sản ký lại mà Người thực thi không đồng ý; ký phiên bản mới hơn thì xóa.</summary>
     public int? DeclinedWillVersionNo { get; set; }
 
     /// <summary>Lúc từ chối, hết hạn, bị thu hồi hoặc bị tạm dừng gần nhất.</summary>

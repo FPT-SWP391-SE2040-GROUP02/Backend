@@ -14,7 +14,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
-/// Thư mời riêng cho người nhận do luật sư thêm vào biên bản (Chủ kho không chia tài sản cho họ): hàm dựng thư chọn đúng
+/// Thư mời riêng cho người nhận do luật sư thêm vào biên bản (Chủ tài sản không chia tài sản cho họ): hàm dựng thư chọn đúng
 /// mẫu, và lúc chốt biên bản mỗi người nhận được đúng loại thư.
 /// </summary>
 [Collection("RuntimeSettings")]
@@ -95,7 +95,7 @@ public sealed class HandoverInvitationAddedByVerifierTests : IAsyncLifetime
         // Hành động
         EmailContent content = HandoverInvitationEmail.Build(invitation, Link, null);
 
-        // Kiểm tra: nói luật sư thêm theo di chúc hoặc pháp luật, dặn xác minh đúng email; không nói Chủ kho đã chọn
+        // Kiểm tra: nói luật sư thêm theo di chúc hoặc pháp luật, dặn xác minh đúng email; không nói Chủ tài sản đã chọn
         Assert.Contains("Luật sư đã thêm bạn vào biên bản bàn giao kho của Nguyễn Văn A", content.TextBody);
         Assert.Contains("di chúc hoặc quy định của pháp luật", content.TextBody);
         Assert.Contains("xác minh đúng địa chỉ email", content.TextBody);
@@ -120,7 +120,7 @@ public sealed class HandoverInvitationAddedByVerifierTests : IAsyncLifetime
     [SqlFact]
     public async Task Finalize_SendsLawyerAddedInvitationToTheAddedRecipient_AndNormalOneToTheOwnersRecipient()
     {
-        // Chuẩn bị: Chủ kho chỉ chia cho người đầu; luật sư cho người thứ hai cùng nhận một tài sản
+        // Chuẩn bị: Chủ tài sản chỉ chia cho người đầu; luật sư cho người thứ hai cùng nhận một tài sản
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
         Guid asset = await ApiTestHelpers.CreateTextAssetAsync(owner, vaultId, "Nhà");
         string suffix = vaultId.ToString("N").Substring(0, 8);
@@ -149,7 +149,7 @@ public sealed class HandoverInvitationAddedByVerifierTests : IAsyncLifetime
         // Hành động
         HttpResponseMessage finalized = await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody);
 
-        // Kiểm tra: người Chủ kho chia nhận thư thường, người luật sư thêm nhận thư riêng
+        // Kiểm tra: người Chủ tài sản chia nhận thư thường, người luật sư thêm nhận thư riêng
         Assert.Equal(HttpStatusCode.OK, finalized.StatusCode);
         HandoverInvitation? toFirst = invitations.FindByEmail(firstEmail);
         HandoverInvitation? toSecond = invitations.FindByEmail(secondEmail);

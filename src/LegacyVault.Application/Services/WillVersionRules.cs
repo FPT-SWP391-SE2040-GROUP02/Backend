@@ -14,7 +14,7 @@ public sealed class WillAssignmentPair
 }
 
 /// <summary>
-/// Bản chụp cấu hình bàn giao tại lúc Chủ kho ký. Chỉ chứa id, không có tên tài sản hay người nhận.
+/// Bản chụp cấu hình bàn giao tại lúc Chủ tài sản ký. Chỉ chứa id, không có tên tài sản hay người nhận.
 /// Tài sản gán cho nhiều người thì có nhiều cặp, mỗi người một cặp.
 /// </summary>
 public sealed class WillSnapshot
@@ -39,7 +39,7 @@ public static class WillVersionRules
     }
 
     /// <summary>
-    /// Tờ đã sẵn sàng cho người được mời ký: Chủ kho đã ký và cách chia chưa đổi từ lúc ký. Kế hoạch nháp thì tờ phải ghi
+    /// Tờ đã sẵn sàng cho người được mời ký: Chủ tài sản đã ký và cách chia chưa đổi từ lúc ký. Kế hoạch nháp thì tờ phải ghi
     /// đúng người được mời này và ký sau lần kích hoạt trước (nếu kế hoạch từng chạy rồi về nháp).
     /// </summary>
     public static bool IsReadyForInvitee(
@@ -69,7 +69,7 @@ public static class WillVersionRules
         return true;
     }
 
-    /// <summary>Chủ kho ký phiên bản mới mà Người thực thi chưa trả lời. Chỉ khi kế hoạch đang chạy.</summary>
+    /// <summary>Chủ tài sản ký phiên bản mới mà Người thực thi chưa trả lời. Chỉ khi kế hoạch đang chạy.</summary>
     public static bool IsConsentRequired(HandoverPlan plan, Executor executor, WillVersion? latest)
     {
         if (latest == null || !PlanRules.IsRunning(plan.Status) || executor.Status != ExecutorStatus.Accepted)

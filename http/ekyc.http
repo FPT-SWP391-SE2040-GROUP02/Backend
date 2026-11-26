@@ -22,7 +22,7 @@ Content-Type: application/json
 GET {{baseUrl}}/ekyc/me
 Authorization: Bearer {{token}}
 
-### Đồng ý trước khi chụp (bắt buộc, hiệu lực 30 phút). purpose: OWNER_ENROLLMENT (eKYC chỉ dành cho Chủ kho)
+### Đồng ý trước khi chụp (bắt buộc, hiệu lực 30 phút). purpose: OWNER_ENROLLMENT (eKYC chỉ dành cho Chủ tài sản)
 POST {{baseUrl}}/ekyc/consent
 Authorization: Bearer {{token}}
 Content-Type: application/json

@@ -16,7 +16,7 @@ public class BeneficiaryResponse
 
     public string? Phone { get; set; }
 
-    /// <summary>Lời nhắn Chủ kho để lại cho người nhận; null khi chưa viết.</summary>
+    /// <summary>Lời nhắn Chủ tài sản để lại cho người nhận; null khi chưa viết.</summary>
     public string? Message { get; set; }
 
     /// <summary>Id các tài sản đang được gán cho người này, theo thứ tự gán. Rỗng khi chưa được gán tài sản nào.</summary>
@@ -32,6 +32,6 @@ public class BeneficiaryResponse
     /// <summary>True khi hồ sơ cùng CCCD đã tồn tại trong kho (tạo mới nhưng trả về hồ sơ cũ theo QUOTA-04).</summary>
     public bool IsExisting { get; set; }
 
-    /// <summary>True khi máy chủ thư đã báo không giao được thư tới email này (bounce); Chủ kho nên sửa email.</summary>
+    /// <summary>True khi máy chủ thư đã báo không giao được thư tới email này (bounce); Chủ tài sản nên sửa email.</summary>
     public bool EmailUndeliverable { get; set; }
 }

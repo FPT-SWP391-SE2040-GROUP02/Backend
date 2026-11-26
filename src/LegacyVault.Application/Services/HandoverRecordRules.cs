@@ -225,7 +225,7 @@ public static class HandoverRecordRules
     }
 
     /// <summary>
-    /// So dòng biên bản với cách chia ban đầu của Chủ kho (mỗi cặp người nhận - tài sản). Trả các khác biệt theo thứ tự:
+    /// So dòng biên bản với cách chia ban đầu của Chủ tài sản (mỗi cặp người nhận - tài sản). Trả các khác biệt theo thứ tự:
     /// người nhận được thêm, người nhận bị bỏ, rồi tài sản đổi người nhận (thêm/bớt người cùng nhận). Rỗng khi giống hệt.
     /// Người gọi bỏ trước các dòng gán trỏ tới tài sản đã bị xóa nội dung (biên bản không ghi được tài sản đó).
     /// </summary>
@@ -238,7 +238,7 @@ public static class HandoverRecordRules
         List<Guid> ownerRecipients = DistinctRecipients(ownerLines);
         List<HandoverSplitDifference> result = new List<HandoverSplitDifference>();
 
-        // 1. Người nhận có trong biên bản mà Chủ kho không chia cho
+        // 1. Người nhận có trong biên bản mà Chủ tài sản không chia cho
         foreach (Guid beneficiaryId in recordRecipients)
         {
             if (!ownerRecipients.Contains(beneficiaryId))
@@ -250,7 +250,7 @@ public static class HandoverRecordRules
             }
         }
 
-        // 2. Người nhận Chủ kho đã chia mà biên bản bỏ ra
+        // 2. Người nhận Chủ tài sản đã chia mà biên bản bỏ ra
         foreach (Guid beneficiaryId in ownerRecipients)
         {
             if (!recordRecipients.Contains(beneficiaryId))
@@ -262,7 +262,7 @@ public static class HandoverRecordRules
             }
         }
 
-        // 3. Tài sản có nhóm người nhận khác nhau (theo thứ tự tài sản của Chủ kho rồi tới tài sản chỉ có trong biên bản)
+        // 3. Tài sản có nhóm người nhận khác nhau (theo thứ tự tài sản của Chủ tài sản rồi tới tài sản chỉ có trong biên bản)
         List<Guid> assetIds = new List<Guid>(ownerByAsset.Keys);
         foreach (Guid assetId in recordByAsset.Keys)
         {
@@ -349,7 +349,7 @@ public static class HandoverRecordRules
     /// <summary>
     /// Kho đã khóa cho bàn giao chưa: khóa từ lúc luật sư chấp nhận giấy tờ đầu tiên (HandoverRequested), qua lúc chốt
     /// biên bản (HandoverInProgress) tới khi đóng (Closed). Có biên bản đang lập chưa chắc đã khóa: người nhận gửi yêu cầu
-    /// chỉ tạo biên bản, Chủ kho vẫn sửa được kho cho tới khi luật sư chấp nhận.
+    /// chỉ tạo biên bản, Chủ tài sản vẫn sửa được kho cho tới khi luật sư chấp nhận.
     /// </summary>
     public static bool IsVaultLocked(PlanStatus planStatus)
     {
@@ -364,7 +364,7 @@ public static class HandoverRecordRules
 
     /// <summary>
     /// Luật sư chấp nhận một yêu cầu hoặc hồ sơ báo tin: kế hoạch đang hoạt động thì khóa kho (HandoverRequested).
-    /// Trả true khi lần này vừa khóa (người gọi báo Chủ kho và Người thực thi); kho đã khóa từ trước thì trả false.
+    /// Trả true khi lần này vừa khóa (người gọi báo Chủ tài sản và Người thực thi); kho đã khóa từ trước thì trả false.
     /// </summary>
     public static bool LockVaultOnAccept(HandoverPlan plan, DateTimeOffset now)
     {

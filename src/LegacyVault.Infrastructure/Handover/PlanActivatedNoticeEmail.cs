@@ -4,14 +4,14 @@ using LegacyVault.Infrastructure.Notifications;
 namespace LegacyVault.Infrastructure.Handover;
 
 /// <summary>
-/// Dựng thư báo người nhận rằng họ đã được chọn, gửi khi Chủ kho kích hoạt kế hoạch. Hàm thuần, không gửi gì.
+/// Dựng thư báo người nhận rằng họ đã được chọn, gửi khi Chủ tài sản kích hoạt kế hoạch. Hàm thuần, không gửi gì.
 /// </summary>
 /// <remarks>
 /// Cùng khung với thư "Thông báo nhận bàn giao di sản số" (HandoverInvitationEmail) nhưng bỏ nhãn nhỏ phía trên tiêu đề.
-/// Hệ thống không tự biết Chủ kho còn hay mất, nên thư phải nói rõ: khi việc đó xảy ra, người nhận tự gửi yêu cầu.
+/// Hệ thống không tự biết Chủ tài sản còn hay mất, nên thư phải nói rõ: khi việc đó xảy ra, người nhận tự gửi yêu cầu.
 /// Có link riêng (RequestToken) thì nút dẫn tới trang gửi yêu cầu; không có thì dẫn về trang chủ và chỉ vào mục
 /// "Nhận tài sản". Thư không bao giờ có mã nhận.
-/// Có thông tin liên hệ của Chủ kho và Người thực thi; không có tên gói hay tài sản.
+/// Có thông tin liên hệ của Chủ tài sản và Người thực thi; không có tên gói hay tài sản.
 /// </remarks>
 public static class PlanActivatedNoticeEmail
 {
@@ -52,14 +52,14 @@ public static class PlanActivatedNoticeEmail
     }
 
     /// <summary>
-    /// Chữ mặc định của thư báo kích hoạt kế hoạch: liên hệ Chủ kho và Người thực thi, rồi việc người nhận phải làm khi
-    /// Chủ kho qua đời.
+    /// Chữ mặc định của thư báo kích hoạt kế hoạch: liên hệ Chủ tài sản và Người thực thi, rồi việc người nhận phải làm khi
+    /// Chủ tài sản qua đời.
     /// </summary>
     private static EmailParts Parts(PlanActivatedNotice notice)
     {
         List<string> lines = new List<string>();
         lines.Add(notice.OwnerName + " đã chọn bạn làm người nhận trên LegacyVault và vừa kích hoạt kế hoạch bàn giao.");
-        lines.Add("Chủ kho: " + Contact(notice.OwnerName, notice.OwnerEmail, PhoneText(notice.OwnerPhone)) + ".");
+        lines.Add("Chủ tài sản: " + Contact(notice.OwnerName, notice.OwnerEmail, PhoneText(notice.OwnerPhone)) + ".");
         if (!string.IsNullOrWhiteSpace(notice.ExecutorName))
         {
             lines.Add("Người thực thi: " + Contact(notice.ExecutorName, notice.ExecutorEmail, PhoneText(notice.ExecutorPhone)) + ".");
@@ -69,13 +69,13 @@ public static class PlanActivatedNoticeEmail
         string buttonText;
         if (notice.RequestToken.Length > 0)
         {
-            lines.Add("Khi Chủ kho qua đời, bạn cần chủ động gửi yêu cầu nhận tài sản, kèm di chúc, bằng nút bên dưới. "
+            lines.Add("Khi Chủ tài sản qua đời, bạn cần chủ động gửi yêu cầu nhận tài sản, kèm di chúc, bằng nút bên dưới. "
                 + "LegacyVault không tự biết khi nào việc đó xảy ra nên sẽ không tự nhắc bạn.");
             buttonText = RequestButtonText;
         }
         else
         {
-            lines.Add("Khi Chủ kho qua đời, bạn cần chủ động đăng nhập bằng đúng email này, mở mục Nhận tài sản và gửi "
+            lines.Add("Khi Chủ tài sản qua đời, bạn cần chủ động đăng nhập bằng đúng email này, mở mục Nhận tài sản và gửi "
                 + "yêu cầu kèm di chúc. LegacyVault không tự biết khi nào việc đó xảy ra nên sẽ không tự nhắc bạn.");
             buttonText = OpenButtonText;
         }

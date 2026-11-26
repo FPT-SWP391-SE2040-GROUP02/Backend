@@ -104,7 +104,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         string? ownerCitizenId = await ownerIdentityReader.FindBoundCitizenIdAsync(vault.OwnerId, ct);
         if (ownerCitizenId != null && string.Equals(data.CitizenId, ownerCitizenId, StringComparison.Ordinal))
         {
-            throw ValidationErrors.For("citizenId", "Số CCCD người thụ hưởng không được trùng với CCCD của Chủ kho.");
+            throw ValidationErrors.For("citizenId", "Số CCCD người thụ hưởng không được trùng với CCCD của Chủ tài sản.");
         }
         if (!string.IsNullOrWhiteSpace(data.Email))
         {
@@ -112,7 +112,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             if (owner != null && !string.IsNullOrWhiteSpace(owner.Email) &&
                 string.Equals(data.Email.Trim(), owner.Email.Trim(), StringComparison.OrdinalIgnoreCase))
             {
-                throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
+                throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ tài sản.");
             }
             await EnsureEmailIsNotStaffAsync(data.Email, ct);
             await EmailDomainGuard.EnsureAsync(domainChecker, data.Email.Trim().ToLowerInvariant(), "email", ct);
@@ -134,7 +134,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
         // Sau bước tìm trùng: gửi lại đúng hồ sơ cũ (chưa đủ tuổi từ trước) vẫn trả 200, chỉ hồ sơ mới mới bị kiểm tuổi.
         EnsureAdult(data.DateOfBirth, today);
 
-        // Hồ sơ mới thật sự được tạo: email không được trùng Chủ kho, nhân sự, Người thực thi hay người nhận khác.
+        // Hồ sơ mới thật sự được tạo: email không được trùng Chủ tài sản, nhân sự, Người thực thi hay người nhận khác.
         // Kiểm sau bước tìm trùng CCCD để gửi lại đúng người đã có (cùng email) vẫn trả hồ sơ cũ.
         if (!string.IsNullOrWhiteSpace(data.Email))
         {
@@ -258,7 +258,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
     }
 
     /// <summary>
-    /// Email không trùng Chủ kho, Người thực thi của kho hay người nhận khác (xem RecipientRules). Hồ sơ đang sửa không tính.
+    /// Email không trùng Chủ tài sản, Người thực thi của kho hay người nhận khác (xem RecipientRules). Hồ sơ đang sửa không tính.
     /// </summary>
     private async Task EnsureEmailAvailableAsync(
         string email, Vault vault, Guid? exceptBeneficiaryId, CancellationToken ct, string? sameCitizenId = null)
@@ -329,7 +329,7 @@ public sealed partial class BeneficiaryService : IBeneficiaryService
             if (owner != null && !string.IsNullOrWhiteSpace(owner.Email) &&
                 string.Equals(updated.Email.Trim(), owner.Email.Trim(), StringComparison.OrdinalIgnoreCase))
             {
-                throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ kho.");
+                throw ValidationErrors.For("email", "Email người thụ hưởng không được trùng với email của Chủ tài sản.");
             }
             await EnsureEmailIsNotStaffAsync(updated.Email, ct);
             // Chỉ kiểm khi đổi email, để sửa tên hay số điện thoại không bị chặn bởi email cũ.

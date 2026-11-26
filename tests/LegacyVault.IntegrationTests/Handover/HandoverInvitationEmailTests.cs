@@ -5,7 +5,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
 
-/// <summary>Nội dung thư mời nhận tài sản (thư thứ hai, sau khi Chủ kho mất). Hàm thuần, không cần SQL.</summary>
+/// <summary>Nội dung thư mời nhận tài sản (thư thứ hai, sau khi Chủ tài sản mất). Hàm thuần, không cần SQL.</summary>
 public sealed class HandoverInvitationEmailTests
 {
     private const string Link = "http://localhost:5173/receive?token=abc";
@@ -83,8 +83,8 @@ public sealed class HandoverInvitationEmailTests
 
         EmailContent content = HandoverInvitationEmail.Build(invitation, Link, null);
 
-        Assert.Contains("Trước đây chủ kho đã báo cho bạn biết", content.TextBody);
-        Assert.Contains("Nếu có thắc mắc, bạn cứ hỏi Người thực thi do chủ kho chỉ định.", content.TextBody);
+        Assert.Contains("Trước đây chủ tài sản đã báo cho bạn biết", content.TextBody);
+        Assert.Contains("Nếu có thắc mắc, bạn cứ hỏi Người thực thi do chủ tài sản chỉ định.", content.TextBody);
     }
 
     [Fact]

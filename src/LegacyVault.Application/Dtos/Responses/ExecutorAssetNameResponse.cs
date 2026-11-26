@@ -6,7 +6,7 @@ namespace LegacyVault.Application.Dtos.Responses;
 /// </summary>
 public class ExecutorAssetNameResponse
 {
-    /// <summary>Tên do Chủ kho đặt.</summary>
+    /// <summary>Tên do Chủ tài sản đặt.</summary>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>FILE hoặc TEXT.</summary>

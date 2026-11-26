@@ -4,7 +4,7 @@ using LegacyVault.Application.Dtos.Responses;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Chủ kho gán trực tiếp từng tài sản cho từng người nhận. Tài sản gán cho nhiều người thì những người đó nhận chung.
+/// Chủ tài sản gán trực tiếp từng tài sản cho từng người nhận. Tài sản gán cho nhiều người thì những người đó nhận chung.
 /// </summary>
 /// <remarks>
 /// Luật chung khi cài đặt:
@@ -12,7 +12,7 @@ namespace LegacyVault.Application.Services;
 /// - Thao tác thêm người nhận chặn khi kho đóng, kế hoạch bị khóa hoặc dịch vụ đang ân hạn, và chặn hạng Free;
 ///   thao tác chỉ gỡ vẫn cho khi dịch vụ đang ân hạn.
 /// - Suất người nhận tính theo số người khác nhau có ít nhất một dòng gán trong kho.
-/// - Kế hoạch đang chạy mà thao tác làm kho không còn dòng gán nào thì Chủ kho phải xác nhận, kế hoạch về bản nháp.
+/// - Kế hoạch đang chạy mà thao tác làm kho không còn dòng gán nào thì Chủ tài sản phải xác nhận, kế hoạch về bản nháp.
 /// Lỗi chung: 401 SESSION_EXPIRED, 404 VAULT_NOT_FOUND (không có kho hoặc kho người khác),
 /// 409 VAULT_NOT_EDITABLE (+reason: VAULT_CLOSED / PLAN_LOCKED / SERVICE_READ_ONLY).
 /// </remarks>

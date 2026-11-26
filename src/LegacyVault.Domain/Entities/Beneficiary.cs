@@ -46,7 +46,7 @@ public class Beneficiary
     public byte[] ContactEncrypted { get; set; } = Array.Empty<byte>();
 
     /// <summary>
-    /// Băm SHA-256 của link riêng để người nhận gửi yêu cầu nhận tài sản; cấp mới mỗi lần Chủ kho kích hoạt kế hoạch
+    /// Băm SHA-256 của link riêng để người nhận gửi yêu cầu nhận tài sản; cấp mới mỗi lần Chủ tài sản kích hoạt kế hoạch
     /// (gửi trong thư báo kích hoạt). Null khi chưa cấp.
     /// </summary>
     public string? RequestTokenHash { get; set; }

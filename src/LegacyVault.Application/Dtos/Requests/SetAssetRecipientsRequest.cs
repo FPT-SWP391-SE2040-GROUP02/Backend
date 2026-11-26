@@ -13,7 +13,7 @@ public class SetAssetRecipientsRequest
     public List<Guid> BeneficiaryIds { get; set; } = new List<Guid>();
 
     /// <summary>
-    /// Chủ kho đồng ý kế hoạch trở về bản nháp khi thao tác làm kho không còn tài sản nào được gán.
+    /// Chủ tài sản đồng ý kế hoạch trở về bản nháp khi thao tác làm kho không còn tài sản nào được gán.
     /// Chưa đồng ý thì backend trả 409 PLAN_DEACTIVATION_CONFIRMATION_REQUIRED.
     /// </summary>
     public bool ConfirmPlanDeactivation { get; set; }

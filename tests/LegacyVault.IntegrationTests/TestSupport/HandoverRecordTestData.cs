@@ -11,12 +11,12 @@ namespace LegacyVault.IntegrationTests.TestSupport;
 
 /// <summary>
 /// Đưa một kho đi qua luồng biên bản bàn giao bằng API thật: người nhận gửi yêu cầu kèm giấy tờ, luật sư chấp nhận
-/// giấy tờ, lấy biên bản phân chia của Chủ kho làm biên bản rồi chốt. Dùng chung cho các test cần kho đã ở giai đoạn bàn giao.
+/// giấy tờ, lấy biên bản phân chia của Chủ tài sản làm biên bản rồi chốt. Dùng chung cho các test cần kho đã ở giai đoạn bàn giao.
 /// </summary>
 public static class HandoverRecordTestData
 {
     /// <summary>
-    /// Body chốt biên bản: luật sư tick xác nhận căn cứ pháp lý và (khi biên bản khác cách chia của Chủ kho) xác nhận khác
+    /// Body chốt biên bản: luật sư tick xác nhận căn cứ pháp lý và (khi biên bản khác cách chia của Chủ tài sản) xác nhận khác
     /// biệt; không khác thì cờ thứ hai bị bỏ qua.
     /// </summary>
     public static readonly object FinalizeBody = new { confirmLegalBasis = true, confirmSplitDeviation = true };
@@ -156,7 +156,7 @@ public static class HandoverRecordTestData
         }
     }
 
-    /// <summary>Luật sư lấy biên bản phân chia của Chủ kho làm biên bản rồi chốt; trả biên bản sau khi chốt.</summary>
+    /// <summary>Luật sư lấy biên bản phân chia của Chủ tài sản làm biên bản rồi chốt; trả biên bản sau khi chốt.</summary>
     public static async Task<JsonElement> UseOwnerSplitAndFinalizeAsync(HttpClient verifier, Guid recordId)
     {
         await AcceptAllClaimsAsync(verifier, recordId);

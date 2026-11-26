@@ -83,7 +83,7 @@ public sealed class ExecutorKeyRulesTests
     }
 }
 
-/// <summary>Mã nhận do server tạo: Chủ kho xem trạng thái và đổi mã, Người thực thi đọc khi bàn giao bắt đầu (SQL Server thật).</summary>
+/// <summary>Mã nhận do server tạo: Chủ tài sản xem trạng thái và đổi mã, Người thực thi đọc khi bàn giao bắt đầu (SQL Server thật).</summary>
 public sealed class ExecutorKeyFlowTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;
@@ -197,7 +197,7 @@ public sealed class ExecutorKeyFlowTests : IAsyncLifetime
         await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.HandoverInProgress);
         string oldShard = (await ApiTestHelpers.ReadJsonAsync(
             await executor.Client.GetAsync(HandoverKeyUrl(vault.VaultId)))).GetProperty("shard").GetString()!;
-        // Kế hoạch đang chạy lại (Active) thì Chủ kho mới đổi mã được.
+        // Kế hoạch đang chạy lại (Active) thì Chủ tài sản mới đổi mã được.
         await ApiTestHelpers.SetPlanStatusAsync(factory, vault.VaultId, PlanStatus.Active);
 
         HttpResponseMessage response = await vault.Client.PostAsync(Url(vault.VaultId) + "/reissue", null);

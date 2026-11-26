@@ -86,14 +86,14 @@ Lỗi `409 PLAN_ACTIVATION_REQUIREMENTS_NOT_MET` giữ nguyên ProblemDetails v�
 
 ## Di chúc điện tử, mã nhận do server tạo, người nhận (bổ sung 16/11/2026, nhánh feat/will-signature)
 
-Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự LegacyVault** (role `EXECUTOR`) do Admin tạo, Chủ kho chọn một người. Người nhận không eKYC, không gọi video. Trang bàn giao của Chủ kho là "Di chúc" điện tử: Chủ kho ký bằng PIN kho lúc kích hoạt, Người thực thi ký khi chấp nhận lời mời. Mọi trường mới trong response đều tùy chọn để client cũ không vỡ.
+Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự LegacyVault** (role `EXECUTOR`) do Admin tạo, Chủ tài sản chọn một người. Người nhận không eKYC, không gọi video. Trang bàn giao của Chủ tài sản là "Di chúc" điện tử: Chủ tài sản ký bằng PIN kho lúc kích hoạt, Người thực thi ký khi chấp nhận lời mời. Mọi trường mới trong response đều tùy chọn để client cũ không vỡ.
 
 **`GET /vaults/{vaultId}/plan-setup` (và response của `POST .../activate`)** thêm:
 
 | Field | Kiểu | Nội dung |
 |---|---|---|
-| `ownerFullName`, `ownerEmail` | string | Họ tên và email tài khoản Chủ kho. |
-| `activatedAt` | ISO hoặc null | Thời điểm kích hoạt. FE chỉ coi Chủ kho "đã ký" khi `planStatus != DRAFT` và `activatedAt != null`. |
+| `ownerFullName`, `ownerEmail` | string | Họ tên và email tài khoản Chủ tài sản. |
+| `activatedAt` | ISO hoặc null | Thời điểm kích hoạt. FE chỉ coi Chủ tài sản "đã ký" khi `planStatus != DRAFT` và `activatedAt != null`. |
 | `recipients[]` | mảng | Người nhận theo từng người, lấy từ các dòng gán tài sản của kho, sắp theo `fullName`; người chưa được gán tài sản nào thì không xuất hiện. Mỗi phần tử: `beneficiaryId`, `fullName` (giải mã từ dữ liệu cá nhân, không log), `hasMessage` (đã có lời nhắn; **không trả nội dung lời nhắn**), `assets[]` (`id`, `name`, `kind`, `sharedWithCount` là số người cùng nhận tài sản đó, tính cả người này; lớn hơn 1 là nhận chung). |
 | `executors[].fullName` | string hoặc null | Họ tên tài khoản Người thực thi nếu đã liên kết (sau khi chấp nhận), ngược lại null. |
 
@@ -107,7 +107,7 @@ Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự 
 | `POST /vaults/{vaultId}/executor-key/reissue` | Owner + `X-Vault-Pin` | Đổi mã (version + 1), trả `ExecutorKeyStatusResponse` như GET, **không có trường `shard`**. Chưa có mã → 409 `EXECUTOR_KEY_NOT_ISSUED`; kế hoạch đã khóa → 409 `VAULT_NOT_EDITABLE`. |
 | `GET /executor/vaults/{vaultId}/handover-key` | Người thực thi đã chấp nhận | Đọc mã (16 ký tự Crockford base32, dạng `XXXX-XXXX-XXXX-XXXX`). Không phải Executor đã chấp nhận → 404 `VAULT_NOT_FOUND`. Kế hoạch chưa `HANDOVER_IN_PROGRESS` → 409 `HANDOVER_NOT_ALLOWED`, `reason = HANDOVER_NOT_STARTED`. |
 
-- **Đã xóa** endpoint Chủ kho cấp mã lần đầu (`POST /vaults/{vaultId}/executor-key`); gọi sẽ nhận 405. Mã chỉ do server tạo.
+- **Đã xóa** endpoint Chủ tài sản cấp mã lần đầu (`POST /vaults/{vaultId}/executor-key`); gọi sẽ nhận 405. Mã chỉ do server tạo.
 - Tự đổi mã (version + 1, nhật ký `ExecutorKeyReissued`, actor System) khi **đổi Người thực thi**: người thay chấp nhận làm người cũ `REVOKED`, hoặc Admin giao người thay khi người cũ bị thu hồi ngay. Chỉ đổi nếu kho đã có mã.
 - Khi **bắt đầu bàn giao** (`HandoverStarter` đặt `HANDOVER_IN_PROGRESS`) server đảm bảo có mã đọc được: chưa có hoặc chỉ có hash thì tạo mới (actor System).
 - Mã lưu dạng hash SHA-256 (gắn kho và phiên bản) và bản mã hóa phong bì AES-256-GCM; chỉ là cổng mở khóa việc tải của người nhận (người nhận nhập mã trước khi tải), không dùng mã hóa nội dung. Nhật ký chỉ ghi version, không ghi mã hay hash (SEC-07). `send-key` (gửi mã cho người nhận) giữ nguyên.
@@ -116,16 +116,16 @@ Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự 
 - Tạo/sửa người nhận với email trùng tài khoản role `EXECUTOR`, `VERIFIER`, `ADMIN` → 400 `VALIDATION_ERROR`, trường `email`: "Email này thuộc tài khoản nhân sự của LegacyVault nên không thể làm người nhận."
 - Nhận gói trong app (`claim`, `turns/{turnId}/claim`): tài khoản nhân sự → 409 `HANDOVER_NOT_ALLOWED`, `reason = STAFF_CANNOT_CLAIM`.
 - Admin đổi role sang nhân sự (`PUT /admin/users/{id}/role`): người dùng đang có lượt bàn giao đã nhận còn mở (chưa `HANDOVER_COMMITTED`/`DECLINED`/`DECISION_EXPIRED`/`CANCELLED`/`LAPSED`) → 409 `ADMIN_ACTION_NOT_ALLOWED`, `reason = RECIPIENT_HAS_ACTIVE_HANDOVER`. Email người nhận được mã hóa nên không dò theo email ở bước này; hai bước chặn ở trên lo phần còn lại.
-- `GET /vaults/{vaultId}/executor-candidates?q=`: chỉ trả tài khoản role `EXECUTOR`, Active, đã xác minh email và đã có `LegalVerifiedAt` (cùng điều kiện được mời), không gồm Chủ kho.
+- `GET /vaults/{vaultId}/executor-candidates?q=`: chỉ trả tài khoản role `EXECUTOR`, Active, đã xác minh email và đã có `LegalVerifiedAt` (cùng điều kiện được mời), không gồm Chủ tài sản.
 
-**Nhật ký mới (`AuditAction`, lưu dạng chuỗi, không migration):** `PlanActivated = 62` (Chủ kho ký bằng PIN), `ExecutorAccepted = 63` (Người thực thi tự chấp nhận lời mời, actor Executor, đích Vault).
+**Nhật ký mới (`AuditAction`, lưu dạng chuỗi, không migration):** `PlanActivated = 62` (Chủ tài sản ký bằng PIN), `ExecutorAccepted = 63` (Người thực thi tự chấp nhận lời mời, actor Executor, đích Vault).
 
 ## Phiên bản di chúc đã ký, ký lại, danh tính lập di chúc (bổ sung 17/11/2026, nhánh feat/will-signature)
 
-**Quy tắc nghiệp vụ.** Bàn giao chỉ theo **bản ký gần nhất**. Mỗi lần Chủ kho ký (kích hoạt hoặc ký lại bằng PIN) server lưu một phiên bản trong bảng `WillVersions`; khi bắt đầu bàn giao, `HandoverStarter` chỉ dùng phần **có trong bản ký gần nhất VÀ vẫn còn tồn tại** (giao của bản chụp và cấu hình hiện tại):
+**Quy tắc nghiệp vụ.** Bàn giao chỉ theo **bản ký gần nhất**. Mỗi lần Chủ tài sản ký (kích hoạt hoặc ký lại bằng PIN) server lưu một phiên bản trong bảng `WillVersions`; khi bắt đầu bàn giao, `HandoverStarter` chỉ dùng phần **có trong bản ký gần nhất VÀ vẫn còn tồn tại** (giao của bản chụp và cấu hình hiện tại):
 
 - Xóa gói/tài sản/người nhận sau khi ký: có hiệu lực ngay (không bàn giao thứ đã xóa); phần còn lại vẫn bàn giao theo bản ký.
-- Gán thêm tài sản cho người nhận, đổi người nhận hoặc gán cho người nhận mới mà **chưa ký lại**: khác bản ký nên được đếm ở `unsignedChanges` và chờ Chủ kho ký lại.
+- Gán thêm tài sản cho người nhận, đổi người nhận hoặc gán cho người nhận mới mà **chưa ký lại**: khác bản ký nên được đếm ở `unsignedChanges` và chờ Chủ tài sản ký lại.
 - Kế hoạch đang chạy từ trước khi có tính năng này và **chưa có dòng `WillVersions` nào**: giữ cách cũ (theo cấu hình hiện tại). Người thực thi vẫn **không** ký lại khi đổi tài sản/người nhận (chỉ ký lại khi phạm vi nhiệm vụ đổi, như trước).
 - Chưa có hạn ân hạn hay tự động đưa kế hoạch về nháp.
 
@@ -134,7 +134,7 @@ Hiện trạng nghiệp vụ: Người thực thi là **tài khoản nhân sự 
 | Method / path | Caller / body | Result |
 |---|---|---|
 | POST `/vaults/{vaultId}/will/sign` | Owner + **`X-Vault-Pin`**: `{ configVersion }` | Ký lại: tạo phiên bản N+1, ghi nhật ký `WillResigned` (đích Vault, `targetVersion` = số phiên bản), trả `PlanSetupResponse` mới. Không có thay đổi chưa ký → 200 trả nguyên trạng, **không** tạo phiên bản (gọi lặp an toàn). Kế hoạch chưa chạy (`IsRunning` = false) → 409 `WILL_SIGN_NOT_ALLOWED`. `configVersion` cũ → 409 `EDIT_CONFLICT`. Thiếu/sai/khóa PIN → 403 `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN`, 423 `VAULT_PIN_LOCKED`. Người khác kể cả Admin/Executor → 404 `VAULT_NOT_FOUND`. Kế hoạch chạy từ trước, chưa có phiên bản nào: ký lần đầu tạo phiên bản 1 |
-| GET `/vaults/{vaultId}/will/identity` | Owner + **`X-Vault-Pin`** | Danh tính đầy đủ đã giải mã để lập di chúc: `{ owner, recipients[] }`; `owner` = `{ fullName, dateOfBirth, citizenId (12 số), residenceAddress }` hoặc **null** khi Chủ kho chưa có danh tính eKYC đã gắn; `recipients[]` = `{ beneficiaryId, fullName, dateOfBirth, citizenId }` cho mọi hồ sơ người nhận của kho. `Cache-Control: no-store`. Giới hạn tần suất như policy `plan-setup`. Thiếu/sai/khóa PIN → 403 `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN`, 423 `VAULT_PIN_LOCKED` (không ghi nhật ký). Mỗi lần gọi thành công ghi nhật ký `WillIdentityViewed` (không ghi giá trị giải mã; không log họ tên/CCCD). Người khác kể cả Admin → 404 `VAULT_NOT_FOUND`; chưa đăng nhập → 401 |
+| GET `/vaults/{vaultId}/will/identity` | Owner + **`X-Vault-Pin`** | Danh tính đầy đủ đã giải mã để lập di chúc: `{ owner, recipients[] }`; `owner` = `{ fullName, dateOfBirth, citizenId (12 số), residenceAddress }` hoặc **null** khi Chủ tài sản chưa có danh tính eKYC đã gắn; `recipients[]` = `{ beneficiaryId, fullName, dateOfBirth, citizenId }` cho mọi hồ sơ người nhận của kho. `Cache-Control: no-store`. Giới hạn tần suất như policy `plan-setup`. Thiếu/sai/khóa PIN → 403 `VAULT_PIN_REQUIRED` / `INVALID_VAULT_PIN`, 423 `VAULT_PIN_LOCKED` (không ghi nhật ký). Mỗi lần gọi thành công ghi nhật ký `WillIdentityViewed` (không ghi giá trị giải mã; không log họ tên/CCCD). Người khác kể cả Admin → 404 `VAULT_NOT_FOUND`; chưa đăng nhập → 401 |
 
 **`PlanSetupResponse`** (GET `plan-setup`, response của `activate` và `will/sign`) thêm bốn field (đều tùy chọn cho client cũ):
 

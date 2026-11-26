@@ -141,7 +141,7 @@ public sealed class AssetAssignmentService(
 
         DateTimeOffset now = timeProvider.GetUtcNow();
 
-        // Kế hoạch đang chạy mà thao tác làm kho không còn dòng gán nào thì Chủ kho phải xác nhận.
+        // Kế hoạch đang chạy mà thao tác làm kho không còn dòng gán nào thì Chủ tài sản phải xác nhận.
         int remaining = vaultAssignments.Count - toRemove.Count + toAdd.Count;
         if (toRemove.Count > 0 && remaining == 0 && PlanRules.IsRunning(vault.Plan.Status))
         {

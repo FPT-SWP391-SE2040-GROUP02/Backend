@@ -1,18 +1,18 @@
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Một chỗ biên bản khác cách chia ban đầu của Chủ kho (AssetAssignments), do HandoverRecordRules.FindSplitDifferences
+/// Một chỗ biên bản khác cách chia ban đầu của Chủ tài sản (AssetAssignments), do HandoverRecordRules.FindSplitDifferences
 /// tìm ra. Chỉ có id; service đổi sang tên khi trả về, không kèm CCCD.
 /// </summary>
 public sealed class HandoverSplitDifference
 {
-    /// <summary>Người nhận có trong biên bản nhưng không có trong cách chia của Chủ kho (thường do luật sư thêm).</summary>
+    /// <summary>Người nhận có trong biên bản nhưng không có trong cách chia của Chủ tài sản (thường do luật sư thêm).</summary>
     public const string RecipientAdded = "RECIPIENT_ADDED";
 
-    /// <summary>Người nhận Chủ kho đã chia tài sản nhưng không có trong biên bản.</summary>
+    /// <summary>Người nhận Chủ tài sản đã chia tài sản nhưng không có trong biên bản.</summary>
     public const string RecipientRemoved = "RECIPIENT_REMOVED";
 
-    /// <summary>Tài sản đổi người nhận hoặc thêm, bớt người cùng nhận so với Chủ kho.</summary>
+    /// <summary>Tài sản đổi người nhận hoặc thêm, bớt người cùng nhận so với Chủ tài sản.</summary>
     public const string AssetRecipientsChanged = "ASSET_RECIPIENTS_CHANGED";
 
     /// <summary>RECIPIENT_ADDED, RECIPIENT_REMOVED hoặc ASSET_RECIPIENTS_CHANGED.</summary>
@@ -24,7 +24,7 @@ public sealed class HandoverSplitDifference
     /// <summary>Tài sản đổi người nhận; null với khác biệt theo người nhận.</summary>
     public Guid? AssetId { get; set; }
 
-    /// <summary>Người nhận tài sản này theo Chủ kho (chỉ với ASSET_RECIPIENTS_CHANGED).</summary>
+    /// <summary>Người nhận tài sản này theo Chủ tài sản (chỉ với ASSET_RECIPIENTS_CHANGED).</summary>
     public List<Guid> OwnerBeneficiaryIds { get; set; } = new List<Guid>();
 
     /// <summary>Người nhận tài sản này theo biên bản (chỉ với ASSET_RECIPIENTS_CHANGED).</summary>

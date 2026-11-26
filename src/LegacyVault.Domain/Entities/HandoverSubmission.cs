@@ -5,9 +5,9 @@ namespace LegacyVault.Domain.Entities;
 /// khai trên văn bản mẫu và ảnh căn cước hai mặt. Thay cho xác minh eKYC bằng camera ở bước danh tính của lượt bàn giao.
 /// </summary>
 /// <remarks>
-/// - Không lưu họ tên, ngày sinh: Backend đối chiếu bản khai với thông tin Chủ kho đã khai cho người nhận lúc nộp
+/// - Không lưu họ tên, ngày sinh: Backend đối chiếu bản khai với thông tin Chủ tài sản đã khai cho người nhận lúc nộp
 ///   và giữ kết quả khớp hay không, cộng số căn cước người nhận khai.
-/// - Ảnh căn cước lưu mã hóa (cùng cơ chế ảnh danh tính Chủ kho); chỉ Người xét duyệt được giao xem, mỗi lần xem có log.
+/// - Ảnh căn cước lưu mã hóa (cùng cơ chế ảnh danh tính Chủ tài sản); chỉ Người xét duyệt được giao xem, mỗi lần xem có log.
 /// - Mỗi lượt có thể có nhiều hồ sơ (nộp lại sau khi được yêu cầu bổ sung); chỉ bản mới nhất còn hiệu lực.
 /// </remarks>
 public class HandoverSubmission
@@ -22,7 +22,7 @@ public class HandoverSubmission
 
     public HandoverSubmissionStatus Status { get; set; }
 
-    /// <summary>Họ tên khai khớp thông tin Chủ kho đã khai cho người nhận (so không phân biệt dấu và hoa thường).</summary>
+    /// <summary>Họ tên khai khớp thông tin Chủ tài sản đã khai cho người nhận (so không phân biệt dấu và hoa thường).</summary>
     public bool NameMatches { get; set; }
 
     /// <summary>Số căn cước khai khớp.</summary>
@@ -34,7 +34,7 @@ public class HandoverSubmission
     /// <summary>Số căn cước đầy đủ người nhận khai, để Người xét duyệt đối chiếu với ảnh.</summary>
     public string CitizenId { get; set; } = string.Empty;
 
-    /// <summary>Họ tên người nhận đã gõ lúc nộp, để luật sư xem cạnh thông tin Chủ kho khai. Rỗng với hồ sơ nộp trước khi có cột này.</summary>
+    /// <summary>Họ tên người nhận đã gõ lúc nộp, để luật sư xem cạnh thông tin Chủ tài sản khai. Rỗng với hồ sơ nộp trước khi có cột này.</summary>
     public string FullName { get; set; } = string.Empty;
 
     /// <summary>Ngày sinh người nhận đã gõ lúc nộp; null với hồ sơ nộp trước khi có cột này.</summary>

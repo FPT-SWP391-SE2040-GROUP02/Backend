@@ -1,6 +1,6 @@
 namespace LegacyVault.Application.Notifications;
 
-/// <summary>Thư báo có yêu cầu nhận tài sản, gửi Chủ kho, Người thực thi hoặc luật sư của biên bản.</summary>
+/// <summary>Thư báo có yêu cầu nhận tài sản, gửi Chủ tài sản, Người thực thi hoặc luật sư của biên bản.</summary>
 public sealed class HandoverRequestNotice
 {
     public const string Owner = "OWNER";
@@ -18,13 +18,13 @@ public sealed class HandoverRequestNotice
     /// <summary>Thư báo biên bản đã tới bước ký: luật sư xác nhận danh tính xong, người nhận và Người thực thi cần ký.</summary>
     public const string StageSigning = "SIGNING";
 
-    /// <summary>Thư báo luật sư có hồ sơ báo tin Chủ kho đã mất cần xét; OwnerName là tên người mất do người nộp khai.</summary>
+    /// <summary>Thư báo luật sư có hồ sơ báo tin Chủ tài sản đã mất cần xét; OwnerName là tên người mất do người nộp khai.</summary>
     public const string StageReport = "REPORT";
 
     /// <summary>Thư báo luật sư đã hủy biên bản đang lập: kho mở khóa.</summary>
     public const string StageCancelled = "CANCELLED";
 
-    /// <summary>Thư báo Chủ kho và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa.</summary>
+    /// <summary>Thư báo Chủ tài sản và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa.</summary>
     public const string StageLocked = "LOCKED";
 
     /// <summary>Người thực thi cũ (chỉ dùng với thư đổi Người thực thi).</summary>

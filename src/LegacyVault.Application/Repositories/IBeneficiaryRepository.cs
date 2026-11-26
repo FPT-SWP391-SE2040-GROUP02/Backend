@@ -15,7 +15,7 @@ public interface IBeneficiaryRepository
 
     /// <summary>
     /// Các hồ sơ người nhận trong kho của Owner này có cùng 4 số cuối CCCD (có theo dõi thay đổi), để đối chiếu CCCD của
-    /// chính Owner khi gắn danh tính (không cho người nhận trùng Chủ kho).
+    /// chính Owner khi gắn danh tính (không cho người nhận trùng Chủ tài sản).
     /// </summary>
     Task<List<Beneficiary>> ListByOwnerAndCitizenIdLast4Async(Guid ownerId, string last4, CancellationToken ct);
 

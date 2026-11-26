@@ -516,6 +516,80 @@ public sealed class WillSignatureTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task InvitedExecutor_ReadsTheFullSignedWill_ThenKeepsAccessAfterAccepting()
+    {
+        PreparedPlan plan = await PrepareReadyPlanAsync(true);
+        JsonElement mine = await plan.Executor.GetFromJsonAsync<JsonElement>("/api/v1/executor-invitations/mine");
+        Guid invitationId = mine.GetProperty("pending")[0].GetProperty("id").GetGuid();
+        string invitationUrl = $"/api/v1/executor/invitations/{invitationId}/will";
+        string vaultUrl = $"/api/v1/executor/vaults/{plan.VaultId}/will";
+
+        JsonElement unsigned = await ApiTestHelpers.AssertProblemAsync(
+            await plan.Executor.GetAsync(invitationUrl), HttpStatusCode.Conflict, "EXECUTOR_NOT_ALLOWED");
+        Assert.Equal("WILL_NOT_SIGNED", unsigned.GetProperty("reason").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await OwnerSignAsync(plan)).StatusCode);
+
+        // Người lạ, chính Chủ tài sản và người chưa nhận vai gọi đường dẫn theo kho đều không xem được.
+        HttpClient stranger = await ApiTestHelpers.CreateClientForNewUserAsync(factory, true);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(invitationUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await plan.Owner.GetAsync(invitationUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await plan.Executor.GetAsync(vaultUrl)).StatusCode);
+
+        HttpResponseMessage response = await plan.Executor.GetAsync(invitationUrl);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl!.NoStore);
+        JsonElement paper = await ApiTestHelpers.ReadJsonAsync(response);
+        Assert.Equal(1, paper.GetProperty("versionNo").GetInt32());
+        Assert.Equal(0, paper.GetProperty("unassignedAssetCount").GetInt32());
+        Assert.False(string.IsNullOrEmpty(paper.GetProperty("ownerEmail").GetString()));
+        Assert.Equal(2, paper.GetProperty("recipients").GetArrayLength());
+        JsonElement first = FindRecipient(paper.GetProperty("recipients"), plan.FirstBeneficiaryId);
+        JsonElement firstIdentity = FindRecipient(paper.GetProperty("identity").GetProperty("recipients"), plan.FirstBeneficiaryId);
+        Assert.Equal("000000001015", firstIdentity.GetProperty("citizenId").GetString());
+        Assert.Equal("Người nhận", first.GetProperty("fullName").GetString());
+        Assert.Equal(3, first.GetProperty("assets").GetArrayLength());
+        Assert.Contains("Ghi chú ba", paper.GetRawText());
+        Assert.DoesNotContain("Nội dung của", paper.GetRawText());
+        JsonElement second = FindRecipient(paper.GetProperty("recipients"), plan.SecondBeneficiaryId);
+        Assert.Equal(2, second.GetProperty("assets")[0].GetProperty("sharedWithCount").GetInt32());
+
+        Assert.Equal(HttpStatusCode.OK, (await AcceptInvitationAsync(plan, 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await plan.Executor.GetAsync(invitationUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await plan.Executor.GetAsync(vaultUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(vaultUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await plan.Owner.GetAsync(vaultUrl)).StatusCode);
+        Assert.Equal(2, await CountAuditAsync(plan.VaultId, AuditAction.ExecutorWillViewed));
+    }
+
+    [SqlFact]
+    public async Task ExecutorWill_ShowsTheSignedVersion_NotUnsignedChanges()
+    {
+        PreparedPlan plan = await PrepareReadyPlanAsync(false);
+        await ActivateAsync(plan);
+        await AddUnsignedChangesAsync(plan);
+
+        JsonElement paper = await plan.Executor.GetFromJsonAsync<JsonElement>($"/api/v1/executor/vaults/{plan.VaultId}/will");
+
+        Assert.Equal(1, paper.GetProperty("versionNo").GetInt32());
+        JsonElement recipient = Assert.Single(paper.GetProperty("recipients").EnumerateArray());
+        JsonElement asset = Assert.Single(recipient.GetProperty("assets").EnumerateArray());
+        Assert.Equal(plan.FirstAssetId, asset.GetProperty("id").GetGuid());
+        Assert.True(paper.GetProperty("unassignedAssetCount").GetInt32() >= 0);
+    }
+
+    private static JsonElement FindRecipient(JsonElement recipients, Guid beneficiaryId)
+    {
+        foreach (JsonElement recipient in recipients.EnumerateArray())
+        {
+            if (recipient.GetProperty("beneficiaryId").GetGuid() == beneficiaryId)
+            {
+                return recipient;
+            }
+        }
+        throw new InvalidOperationException("Không thấy người nhận trên tờ.");
+    }
+
+    [SqlFact]
     public async Task OwnerChangesAfterSigningDraft_MustSignAgainBeforeExecutorAccepts()
     {
         PreparedPlan plan = await PrepareReadyPlanAsync(false);

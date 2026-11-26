@@ -25,7 +25,7 @@ public sealed class SystemExecutorDirectoryService : ISystemExecutorDirectorySer
 
     public async Task<List<SystemExecutorResponse>> ListAvailableExecutorsAsync(CancellationToken ct)
     {
-        // Danh bạ có email: chỉ Chủ kho (người có kho) được xem, vai trò tài khoản không đủ để phân biệt.
+        // Danh bạ có email: chỉ Chủ tài sản (người có kho) được xem, vai trò tài khoản không đủ để phân biệt.
         if (await vaultRepository.FindByOwnerIdAsync(currentUser.RequireUserId(), ct) == null)
         {
             throw new AppException(AppErrorType.NotFound, ErrorCode.VaultNotFound, "Không tìm thấy kho.");

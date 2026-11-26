@@ -118,7 +118,7 @@ Content-Type: application/json
   "configVersion": {{configVersion}}
 }
 
-### Owner xem danh tính đầy đủ (Chủ kho và người nhận) để lập di chúc — 200, Cache-Control: no-store
-# owner = null nếu Chủ kho chưa có danh tính eKYC đã gắn. Mỗi lần gọi ghi nhật ký WILL_IDENTITY_VIEWED. Người khác/Admin: 404.
+### Owner xem danh tính đầy đủ (Chủ tài sản và người nhận) để lập di chúc — 200, Cache-Control: no-store
+# owner = null nếu Chủ tài sản chưa có danh tính eKYC đã gắn. Mỗi lần gọi ghi nhật ký WILL_IDENTITY_VIEWED. Người khác/Admin: 404.
 GET {{baseUrl}}/vaults/{{vaultId}}/will/identity
 Authorization: Bearer {{ownerToken}}
