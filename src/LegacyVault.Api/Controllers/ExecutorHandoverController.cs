@@ -109,7 +109,9 @@ public sealed class ExecutorHandoverController : ControllerBase
     }
 
     /// <summary>
-    /// Người thực thi ký phần của một người nhận đã được xác nhận danh tính. Ký là bấm xác nhận, lưu người ký và thời điểm.
+    /// Người thực thi ký phần của một người nhận đã được xác nhận danh tính, sau khi luật sư đã ký phần đó (chưa thì 409
+    /// HANDOVER_NOT_ALLOWED reason VERIFIER_NOT_SIGNED). Ký là bấm xác nhận, lưu người ký và thời điểm; ký xong thì người
+    /// nhận được báo ký phần của mình.
     /// </summary>
     [HttpPost("vaults/{vaultId:guid}/handover-record/recipients/{beneficiaryId:guid}/sign")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]

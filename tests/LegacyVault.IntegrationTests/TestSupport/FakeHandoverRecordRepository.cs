@@ -193,6 +193,11 @@ public sealed class FakeHandoverRecordRepository : IHandoverRecordRepository
         Beneficiaries.Add(beneficiary);
     }
 
+    public void RemoveBeneficiary(Beneficiary beneficiary)
+    {
+        Beneficiaries.Remove(beneficiary);
+    }
+
     public Task<Beneficiary?> FindBeneficiaryForUpdateAsync(Guid beneficiaryId, CancellationToken ct)
     {
         foreach (Beneficiary beneficiary in Beneficiaries)

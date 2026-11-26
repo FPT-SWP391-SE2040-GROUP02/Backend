@@ -24,8 +24,9 @@ namespace LegacyVault.Application.Services;
 /// | Lượt của tôi đã có quyền tải (Grant), dù người nhận khác chưa ký              | CODE_READY           | true        |
 /// | Lượt chưa xác nhận danh tính, chưa nộp ảnh căn cước hoặc bị yêu cầu bổ sung   | NEED_IDENTITY        | true        |
 /// | Lượt chưa xác nhận danh tính, đã nộp ảnh căn cước, đang chờ luật sư duyệt     | IN_REVIEW            | false       |
-/// | Danh tính của tôi đã xong, tôi chưa ký bản hiện tại                           | NEED_MY_SIGNATURE    | true        |
-/// | Tôi đã ký, luật sư hoặc Người thực thi chưa ký (chưa được mở quyền tải)       | WAITING_OTHERS       | false       |
+/// | Danh tính của tôi đã xong, tôi ký được ngay (Người thực thi đã ký phần của tôi) | NEED_MY_SIGNATURE    | true        |
+/// | Danh tính của tôi đã xong, còn chờ luật sư hoặc Người thực thi ký phần của tôi | WAITING_OTHERS       | false       |
+/// | Tôi đã ký, chưa được mở quyền tải                                             | WAITING_OTHERS       | false       |
 /// Mỗi người nhận đi riêng theo lượt của chính mình: không chờ người nhận khác nộp ảnh hay ký.
 /// </remarks>
 public static class RecipientStepRules
@@ -116,13 +117,14 @@ public static class RecipientStepRules
             }
             return InReview;
         }
-        HandoverRecordSignature? mySignature =
-            HandoverRecordRules.FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId);
-        if (mySignature == null)
+        // Thứ tự ký phần của tôi: luật sư → Người thực thi → tôi. Chỉ báo cần ký khi tôi ký được ngay (cùng luật với lúc ký).
+        string? blockReason = HandoverRecordRules.FindSignBlockReason(
+            record, HandoverSignerRole.Recipient, beneficiaryId, true);
+        if (blockReason == null)
         {
             return NeedMySignature;
         }
-        // Tôi đã ký nhưng luật sư hoặc Người thực thi chưa ký nên chưa được mở quyền tải.
+        // Còn chờ luật sư hoặc Người thực thi ký phần của tôi, hoặc tôi đã ký mà chưa được mở quyền tải.
         return WaitingOthers;
     }
 

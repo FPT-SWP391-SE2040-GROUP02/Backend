@@ -145,9 +145,145 @@ public static class HandoverRecordRules
         return now >= availableAt.Value;
     }
 
+    /// <summary>Lý do chưa ký được: bên này đã ký phần này rồi (ký lặp thì giữ chữ ký cũ, không báo lỗi).</summary>
+    public const string SignAlreadySigned = "ALREADY_SIGNED";
+
+    /// <summary>Lý do chưa ký được: biên bản chưa chốt.</summary>
+    public const string SignNotSigningStep = "NOT_SIGNING_STEP";
+
+    /// <summary>Lý do chưa ký được: biên bản đã đủ chữ ký.</summary>
+    public const string SignRecordCompleted = "RECORD_COMPLETED";
+
+    /// <summary>Lý do luật sư, Người thực thi chưa ký được: danh tính người nhận chưa được xác nhận.</summary>
+    public const string SignRecipientNotConfirmed = "RECIPIENT_NOT_CONFIRMED";
+
+    /// <summary>Lý do người nhận chưa ký được: luật sư chưa xác nhận danh tính của chính người đó.</summary>
+    public const string SignIdentityNotConfirmed = "IDENTITY_NOT_CONFIRMED";
+
+    /// <summary>Lý do Người thực thi chưa ký được: luật sư chưa ký phần của người nhận này.</summary>
+    public const string SignVerifierNotSigned = "VERIFIER_NOT_SIGNED";
+
+    /// <summary>Lý do người nhận chưa ký được: Người thực thi chưa ký phần của người đó.</summary>
+    public const string SignExecutorNotSigned = "EXECUTOR_NOT_SIGNED";
+
+    /// <summary>
+    /// Luật ký duy nhất "bên này ký phần của người nhận X được chưa", dùng chung cho lúc ký và cho cờ canSign trả về FE.
+    /// Thứ tự ký cho phần của mỗi người nhận: luật sư → Người thực thi → người nhận. Trả null khi ký được ngay,
+    /// ngược lại trả mã lý do (các hằng Sign... ở trên), xét lần lượt:
+    /// 1. Biên bản chưa chốt hoặc đã đủ chữ ký.
+    /// 2. Bên này đã ký phần X (kể cả chữ ký cũ không ghi người nhận của luật sư, Người thực thi trước khi ký riêng).
+    /// 3. Danh tính của X chưa được luật sư xác nhận (identityConfirmed do người gọi đọc từ lượt của X).
+    /// 4. Bên ký trước chưa ký phần X: Người thực thi chờ luật sư, người nhận chờ Người thực thi.
+    /// Chữ ký đã có từ trước theo thứ tự khác (biên bản đang dở) được giữ nguyên; luật này chỉ áp cho lần ký sau.
+    /// </summary>
+    public static string? FindSignBlockReason(
+        HandoverRecord record, HandoverSignerRole role, Guid beneficiaryId, bool identityConfirmed)
+    {
+        // 1. Biên bản phải đang ở bước ký
+        if (!IsOpenForSigning(record))
+        {
+            if (record.Status == HandoverRecordStatus.Completed)
+            {
+                return SignRecordCompleted;
+            }
+            return SignNotSigningStep;
+        }
+
+        // 2. Bên này đã ký phần X
+        if (FindSignature(record, role, beneficiaryId) != null)
+        {
+            return SignAlreadySigned;
+        }
+
+        // 3. Danh tính của X phải xong trước
+        if (!identityConfirmed)
+        {
+            if (role == HandoverSignerRole.Recipient)
+            {
+                return SignIdentityNotConfirmed;
+            }
+            return SignRecipientNotConfirmed;
+        }
+
+        // 4. Bên ký trước trong thứ tự phải đã ký phần X
+        if (role == HandoverSignerRole.Executor)
+        {
+            if (FindSignature(record, HandoverSignerRole.Verifier, beneficiaryId) == null)
+            {
+                return SignVerifierNotSigned;
+            }
+        }
+        if (role == HandoverSignerRole.Recipient)
+        {
+            if (FindSignature(record, HandoverSignerRole.Executor, beneficiaryId) == null)
+            {
+                return SignExecutorNotSigned;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Câu báo lỗi (409 HANDOVER_NOT_ALLOWED) cho một mã lý do chưa ký được.</summary>
+    public static string SignBlockMessage(string reason)
+    {
+        if (reason == SignRecordCompleted)
+        {
+            return "Biên bản đã đủ chữ ký.";
+        }
+        if (reason == SignNotSigningStep)
+        {
+            return "Chưa tới bước ký: biên bản phải được chốt.";
+        }
+        if (reason == SignAlreadySigned)
+        {
+            return "Bạn đã ký phần này.";
+        }
+        if (reason == SignRecipientNotConfirmed)
+        {
+            return "Chưa ký được: người nhận này chưa được xác nhận danh tính.";
+        }
+        if (reason == SignIdentityNotConfirmed)
+        {
+            return "Chưa ký được: luật sư chưa xác nhận danh tính của bạn. Hãy nộp ảnh căn cước ở cổng người nhận.";
+        }
+        if (reason == SignVerifierNotSigned)
+        {
+            return "Luật sư chưa ký phần của người nhận này.";
+        }
+        if (reason == SignExecutorNotSigned)
+        {
+            return "Người thực thi chưa ký phần của bạn.";
+        }
+        return "Chưa ký được phần này.";
+    }
+
+    /// <summary>
+    /// Có phần nào luật sư đã ký mà Người thực thi chưa ký không (bản hiện tại, biên bản đang ở bước ký). Luật sư chỉ nhắc
+    /// được Người thực thi khi có phần như vậy: phần luật sư chưa ký thì Người thực thi chưa ký được.
+    /// </summary>
+    public static bool HasPartWaitingForExecutor(HandoverRecord record)
+    {
+        if (!IsOpenForSigning(record))
+        {
+            return false;
+        }
+        foreach (Guid beneficiaryId in GroupAssetsByRecipient(record.Lines).Keys)
+        {
+            bool verifierSigned = FindSignature(record, HandoverSignerRole.Verifier, beneficiaryId) != null;
+            bool executorSigned = FindSignature(record, HandoverSignerRole.Executor, beneficiaryId) != null;
+            if (verifierSigned && !executorSigned)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>
     /// Biên bản đã chốt, chưa hoàn tất và có người nhận chỉ còn thiếu chữ ký luật sư để được mở quyền tải: Người thực thi
     /// và người nhận đó đã ký, luật sư chưa ký cho người đó (đều tính theo bản hiện tại).
+    /// Theo thứ tự ký mới (luật sư ký trước) tình huống này chỉ còn gặp ở biên bản đang dở có chữ ký sai thứ tự từ trước
+    /// khi đổi luật; vẫn giữ để báo luật sư ký nốt những phần đó.
     /// </summary>
     public static bool OnlyVerifierSignatureMissing(HandoverRecord record)
     {

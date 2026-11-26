@@ -436,16 +436,16 @@ public sealed class HandoverFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task RecipientSignsFirst_GrantOpensWhenVerifierSignsLast()
+    public async Task OldOutOfOrderRecord_KeepsSignatures_AndGrantOpensWhenVerifierSignsLast()
     {
-        // Chuẩn bị: người nhận xong danh tính; Người thực thi đã ký, luật sư chưa ký
+        // Chuẩn bị: người nhận xong danh tính; biên bản cũ đang dở có chữ ký Người thực thi từ trước khi có luật thứ tự
+        // (luật sư chưa ký) — chữ ký này được giữ nguyên, luật mới chỉ áp cho lần ký sau
         await BuildScenarioAsync(1);
         HttpClient receiver = await NewReceiverAsync();
         Guid turnId = (await ClaimAsync(receiver, 0)).GetProperty("id").GetGuid();
         Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, current.Record.RecordId, confirmedOnly: true))[0];
-        HttpResponseMessage executorSigned = await current.Record.Executor.Client.PostAsync(
-            HandoverRecordTestData.SignUrl(HandoverRecordTestData.ExecutorRecordUrl(current.VaultId), beneficiaryId), null);
-        Assert.Equal(HttpStatusCode.OK, executorSigned.StatusCode);
+        await HandoverRecordTestData.InsertSignatureAsync(factory, current.Record.RecordId,
+            HandoverSignerRole.Executor, current.Record.Executor.User.Id, beneficiaryId);
 
         // Hành động: người nhận ký trước, luật sư ký sau cùng
         JsonElement afterRecipient = await HandoverRecordTestData.SignAsRecipientAsync(receiver, turnId);
@@ -479,7 +479,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         string executorUrl = HandoverRecordTestData.ExecutorRecordUrl(current.VaultId);
         string verifierUrl = HandoverRecordTestData.VerifierRecordUrl(recordId);
 
-        // Hành động và kiểm tra: luật sư ký trước Người thực thi cũng được
+        // Hành động và kiểm tra: luật sư ký phần của A trước (đúng thứ tự)
         HttpResponseMessage verifierFirst = await current.Record.Verifier.Client.PostAsync(
             HandoverRecordTestData.SignUrl(verifierUrl, a), null);
         Assert.Equal(HttpStatusCode.OK, verifierFirst.StatusCode);
@@ -531,6 +531,143 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         // Kiểm tra
         JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("IDENTITY_NOT_CONFIRMED", problem.GetProperty("reason").GetString());
+    }
+
+    [SqlFact]
+    public async Task ExecutorSignsBeforeVerifier_Returns409_VerifierNotSigned()
+    {
+        // Chuẩn bị: người nhận xong danh tính, luật sư chưa ký phần của người đó
+        await BuildScenarioAsync(1);
+        HttpClient receiver = await NewReceiverAsync();
+        await ClaimAsync(receiver, 0);
+        Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, current.Record.RecordId, confirmedOnly: true))[0];
+        string executorUrl = HandoverRecordTestData.ExecutorRecordUrl(current.VaultId);
+
+        // Hành động
+        HttpResponseMessage response = await current.Record.Executor.Client.PostAsync(
+            HandoverRecordTestData.SignUrl(executorUrl, beneficiaryId), null);
+        JsonElement view = await ApiTestHelpers.ReadJsonAsync(await current.Record.Executor.Client.GetAsync(executorUrl));
+
+        // Kiểm tra: 409 đúng lý do, không có chữ ký nào; màn Người thực thi khóa nút với cùng lý do
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(response, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("VERIFIER_NOT_SIGNED", problem.GetProperty("reason").GetString());
+        Assert.Equal("Luật sư chưa ký phần của người nhận này.", problem.GetProperty("title").GetString());
+        JsonElement row = view.GetProperty("recipients")[0];
+        Assert.False(row.GetProperty("canSign").GetBoolean());
+        Assert.Equal("VERIFIER_NOT_SIGNED", row.GetProperty("signBlockedReason").GetString());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Equal(0, await db.Set<HandoverRecordSignature>().CountAsync(s => s.RecordId == current.Record.RecordId));
+        });
+    }
+
+    [SqlFact]
+    public async Task RecipientSignsBeforeExecutor_Returns409_ExecutorNotSigned_ThenSignsAfterExecutor()
+    {
+        // Chuẩn bị: người nhận xong danh tính, luật sư đã ký phần của người đó, Người thực thi chưa ký
+        await BuildScenarioAsync(1);
+        HttpClient receiver = await NewReceiverAsync();
+        Guid turnId = (await ClaimAsync(receiver, 0)).GetProperty("id").GetGuid();
+        Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, current.Record.RecordId, confirmedOnly: true))[0];
+        HttpResponseMessage verifierSigned = await current.Record.Verifier.Client.PostAsync(
+            HandoverRecordTestData.SignUrl(HandoverRecordTestData.VerifierRecordUrl(current.Record.RecordId), beneficiaryId), null);
+        Assert.Equal(HttpStatusCode.OK, verifierSigned.StatusCode);
+
+        // Hành động 1: người nhận ký trước Người thực thi
+        HttpResponseMessage early = await receiver.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
+        JsonElement viewBefore = await ApiTestHelpers.ReadJsonAsync(await receiver.GetAsync($"/api/v1/handover/turns/{turnId}/record"));
+
+        // Kiểm tra 1: 409 đúng lý do; màn người nhận khóa nút với cùng lý do và thấy luật sư đã ký phần của mình
+        JsonElement problem = await ApiTestHelpers.AssertProblemAsync(early, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("EXECUTOR_NOT_SIGNED", problem.GetProperty("reason").GetString());
+        Assert.Equal("Người thực thi chưa ký phần của bạn.", problem.GetProperty("title").GetString());
+        Assert.False(viewBefore.GetProperty("canSign").GetBoolean());
+        JsonElement rowBefore = viewBefore.GetProperty("recipients")[0];
+        Assert.Equal("EXECUTOR_NOT_SIGNED", rowBefore.GetProperty("signBlockedReason").GetString());
+        Assert.Equal(JsonValueKind.String, rowBefore.GetProperty("verifierSignedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, rowBefore.GetProperty("executorSignedAt").ValueKind);
+
+        // Hành động 2: Người thực thi ký rồi người nhận ký
+        HttpResponseMessage executorSigned = await current.Record.Executor.Client.PostAsync(
+            HandoverRecordTestData.SignUrl(HandoverRecordTestData.ExecutorRecordUrl(current.VaultId), beneficiaryId), null);
+        JsonElement viewAfterExecutor = await ApiTestHelpers.ReadJsonAsync(
+            await receiver.GetAsync($"/api/v1/handover/turns/{turnId}/record"));
+        JsonElement afterRecipient = await HandoverRecordTestData.SignAsRecipientAsync(receiver, turnId);
+
+        // Kiểm tra 2: tới lượt thì ký được; đủ ba chữ ký thì mở quyền tải, biên bản hoàn tất
+        Assert.Equal(HttpStatusCode.OK, executorSigned.StatusCode);
+        Assert.True(viewAfterExecutor.GetProperty("canSign").GetBoolean());
+        Assert.Equal(string.Empty, viewAfterExecutor.GetProperty("recipients")[0].GetProperty("signBlockedReason").GetString());
+        Assert.Equal("COMPLETED", afterRecipient.GetProperty("status").GetString());
+        Assert.True(afterRecipient.GetProperty("recipients")[0].GetProperty("fullySigned").GetBoolean());
+        Assert.Equal("HANDOVER_COMMITTED", (await GetTurnAsync(receiver, turnId)).GetProperty("status").GetString());
+    }
+
+    [SqlFact]
+    public async Task SigningInOrderForOneRecipient_OpensOnlyThatRecipient_OthersUnaffected()
+    {
+        // Chuẩn bị: hai người nhận đều xong danh tính
+        await BuildScenarioAsync(2);
+        HttpClient receiverA = await NewReceiverAsync();
+        HttpClient receiverB = await NewReceiverAsync(1);
+        Guid turnA = (await ClaimAsync(receiverA, 0)).GetProperty("id").GetGuid();
+        Guid turnB = (await ClaimAsync(receiverB, 1)).GetProperty("id").GetGuid();
+        Guid recordId = current.Record.RecordId;
+        Guid a = await BeneficiaryOfTurnAsync(turnA);
+        Guid b = await BeneficiaryOfTurnAsync(turnB);
+        string verifierUrl = HandoverRecordTestData.VerifierRecordUrl(recordId);
+        string executorUrl = HandoverRecordTestData.ExecutorRecordUrl(current.VaultId);
+
+        // Hành động: luật sư → Người thực thi → người nhận ký phần của A
+        Assert.Equal(HttpStatusCode.OK,
+            (await current.Record.Verifier.Client.PostAsync(HandoverRecordTestData.SignUrl(verifierUrl, a), null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await current.Record.Executor.Client.PostAsync(HandoverRecordTestData.SignUrl(executorUrl, a), null)).StatusCode);
+        await HandoverRecordTestData.SignAsRecipientAsync(receiverA, turnA);
+
+        // Kiểm tra: A được mở quyền tải; B vẫn chờ, chưa có chữ ký nào; luật sư thấy B còn ký được, Người thực thi thì chưa
+        Assert.Equal("HANDOVER_COMMITTED", (await GetTurnAsync(receiverA, turnA)).GetProperty("status").GetString());
+        Assert.Equal("READY_TO_ACCEPT", (await GetTurnAsync(receiverB, turnB)).GetProperty("status").GetString());
+        JsonElement forVerifier = await ApiTestHelpers.ReadJsonAsync(await current.Record.Verifier.Client.GetAsync(verifierUrl));
+        Assert.Equal("SIGNING", forVerifier.GetProperty("status").GetString());
+        JsonElement rowA = RowOf(forVerifier, a);
+        JsonElement rowB = RowOf(forVerifier, b);
+        Assert.True(rowA.GetProperty("fullySigned").GetBoolean());
+        Assert.Equal("ALREADY_SIGNED", rowA.GetProperty("signBlockedReason").GetString());
+        Assert.False(rowB.GetProperty("fullySigned").GetBoolean());
+        Assert.True(rowB.GetProperty("canSign").GetBoolean());
+        JsonElement forExecutor = await ApiTestHelpers.ReadJsonAsync(await current.Record.Executor.Client.GetAsync(executorUrl));
+        Assert.Equal("VERIFIER_NOT_SIGNED", RowOf(forExecutor, b).GetProperty("signBlockedReason").GetString());
+        JsonElement forB = await ApiTestHelpers.ReadJsonAsync(await receiverB.GetAsync($"/api/v1/handover/turns/{turnB}/record"));
+        Assert.Equal("EXECUTOR_NOT_SIGNED", forB.GetProperty("recipients")[0].GetProperty("signBlockedReason").GetString());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            Assert.Empty(await db.Set<HandoverGrant>().Where(g => g.TurnId == turnB).ToListAsync());
+            Assert.Equal(0, await db.Set<HandoverRecordSignature>().CountAsync(s => s.BeneficiaryId == b));
+        });
+    }
+
+    private static JsonElement RowOf(JsonElement record, Guid beneficiaryId)
+    {
+        foreach (JsonElement row in record.GetProperty("recipients").EnumerateArray())
+        {
+            if (row.GetProperty("beneficiaryId").GetGuid() == beneficiaryId)
+            {
+                return row;
+            }
+        }
+        throw new InvalidOperationException("Không thấy người nhận trong biên bản.");
+    }
+
+    private async Task<Guid> BeneficiaryOfTurnAsync(Guid turnId)
+    {
+        Guid beneficiaryId = Guid.Empty;
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            HandoverTurn turn = await db.Set<HandoverTurn>().SingleAsync(t => t.Id == turnId);
+            beneficiaryId = turn.BeneficiaryId;
+        });
+        return beneficiaryId;
     }
 
     [SqlFact]

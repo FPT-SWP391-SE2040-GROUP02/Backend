@@ -86,6 +86,16 @@ Content-Type: application/json
 ###
 @verifierToken = {{verifierLogin.response.body.$.accessToken}}
 
+### Đăng nhập Người thực thi của kho (để ký sau luật sư ở bước 7a)
+# @name executorLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "nguoithucthi@example.com", "password": "Password123!" }
+
+###
+@executorToken = {{executorLogin.response.body.$.accessToken}}
+
 ### 5) Biên bản được giao cho tôi
 # @name records
 GET {{baseUrl}}/verifier/handover-records
@@ -110,19 +120,31 @@ Content-Type: application/json
 ### 6) Chốt biên bản: bắt buộc tick xác nhận căn cứ pháp lý (thiếu hoặc false: 400 VALIDATION_ERROR).
 #    Biên bản khác cách chia của Chủ tài sản (splitDifferences không rỗng) thì phải thêm confirmSplitDeviation: true.
 #    Kho chưa khóa (chưa chấp nhận giấy tờ nào) thì 409 HANDOVER_NOT_ALLOWED (VAULT_NOT_LOCKED).
-#    Chốt xong biên bản ở SIGNING: luật sư và Người thực thi ký được ngay; mỗi người nhận ký khi danh tính của mình xong.
+#    Chốt xong biên bản ở SIGNING. Phần của mỗi người nhận ký theo thứ tự: luật sư → Người thực thi → người nhận,
+#    sau khi danh tính của người nhận đó xong. Xem recipients[].canSign và signBlockedReason.
 POST {{baseUrl}}/verifier/handover-records/{{recordId}}/finalize
 Authorization: Bearer {{verifierToken}}
 Content-Type: application/json
 
 { "confirmLegalBasis": true, "confirmSplitDeviation": true }
 
-### 7) Luật sư ký biên bản. Có chữ ký luật sư + Người thực thi + người nhận X thì X được mở quyền tải ngay.
-POST {{baseUrl}}/verifier/handover-records/{{recordId}}/sign
+### 7) Luật sư ký phần của một người nhận (ký đầu tiên). Ký xong thì thư báo Người thực thi ký phần đó.
+#    409 HANDOVER_NOT_ALLOWED: NOT_SIGNING_STEP, RECORD_COMPLETED, RECIPIENT_NOT_CONFIRMED (danh tính chưa xác nhận).
+#    Có chữ ký luật sư + Người thực thi + người nhận X thì X được mở quyền tải ngay.
+@beneficiaryId = 00000000-0000-0000-0000-000000000000
+POST {{baseUrl}}/verifier/handover-records/{{recordId}}/recipients/{{beneficiaryId}}/sign
 Authorization: Bearer {{verifierToken}}
 
-### 7b) Luật sư nhắc Người thực thi ký (gửi thư). Mỗi biên bản nhắc một lần mỗi 24 giờ.
-#    409 HANDOVER_NOT_ALLOWED: WRONG_STATE, EXECUTOR_ALREADY_SIGNED, NO_EXECUTOR, REMINDED_RECENTLY (kèm remindAvailableAt).
+### 7a) Người thực thi ký phần đó (sau luật sư). Ký trước luật sư: 409 HANDOVER_NOT_ALLOWED reason VERIFIER_NOT_SIGNED.
+#    Ký xong thì thư báo người nhận ký.
+#    Người nhận ký trước Người thực thi: 409 reason EXECUTOR_NOT_SIGNED (POST /handover/turns/{turnId}/record/sign).
+POST {{baseUrl}}/executor/vaults/{{vaultId}}/handover-record/recipients/{{beneficiaryId}}/sign
+Authorization: Bearer {{executorToken}}
+
+### 7b) Luật sư nhắc Người thực thi ký (gửi thư). Chỉ nhắc khi có phần luật sư đã ký mà Người thực thi chưa ký
+#    (hasPartWaitingForExecutor). Mỗi biên bản nhắc một lần mỗi 24 giờ.
+#    409 HANDOVER_NOT_ALLOWED: WRONG_STATE, EXECUTOR_ALREADY_SIGNED, VERIFIER_NOT_SIGNED (chưa có phần nào để Người thực
+#    thi ký), NO_EXECUTOR, REMINDED_RECENTLY (kèm remindAvailableAt).
 POST {{baseUrl}}/verifier/handover-records/{{recordId}}/remind-executor
 Authorization: Bearer {{verifierToken}}
 

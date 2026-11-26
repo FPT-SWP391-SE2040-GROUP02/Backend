@@ -57,9 +57,14 @@ public class HandoverRecordResponse
     /// <summary>Lúc luật sư nhắc lại được (lần nhắc trước + 24 giờ); null khi chưa nhắc lần nào.</summary>
     public DateTimeOffset? ExecutorRemindAvailableAt { get; set; }
 
+    /// <summary>
+    /// Có phần luật sư đã ký mà Người thực thi chưa ký: luật sư chỉ nhắc được Người thực thi khi true (cùng thời hạn 24 giờ).
+    /// </summary>
+    public bool HasPartWaitingForExecutor { get; set; }
+
     public List<HandoverRecordRecipientResponse> Recipients { get; set; } = new List<HandoverRecordRecipientResponse>();
 
-    /// <summary>Người đang xem ký được lúc này không (đúng bước, chưa ký bản hiện tại).</summary>
+    /// <summary>Người đang xem ký được ít nhất một phần lúc này không (theo luật thứ tự, chưa ký bản hiện tại).</summary>
     public bool CanSign { get; set; }
 
     /// <summary>Chỉ cho luật sư: tài sản của kho để chọn.</summary>
@@ -145,8 +150,22 @@ public class HandoverRecordRecipientResponse
     public DateTimeOffset? VerifierSignedAt { get; set; }
     public DateTimeOffset? ExecutorSignedAt { get; set; }
 
-    /// <summary>Người đang xem (luật sư hoặc Người thực thi) ký được cho người nhận này ngay lúc này.</summary>
+    /// <summary>
+    /// Người đang xem ký được phần của người nhận này ngay lúc này (luật sư, Người thực thi; người nhận thì là dòng của
+    /// chính mình). Thứ tự ký mỗi phần: luật sư → Người thực thi → người nhận.
+    /// </summary>
     public bool CanSign { get; set; }
+
+    /// <summary>
+    /// Lý do người đang xem chưa ký được phần này; rỗng khi CanSign hoặc dòng không phải của người xem (màn người nhận).
+    /// NOT_SIGNING_STEP, RECORD_COMPLETED, ALREADY_SIGNED, RECIPIENT_NOT_CONFIRMED (luật sư, Người thực thi chờ xác nhận
+    /// danh tính), IDENTITY_NOT_CONFIRMED (người nhận chờ xác nhận danh tính), VERIFIER_NOT_SIGNED (chờ luật sư ký phần
+    /// này), EXECUTOR_NOT_SIGNED (chờ Người thực thi ký phần này).
+    /// </summary>
+    public string SignBlockedReason { get; set; } = string.Empty;
+
+    /// <summary>Phần của người nhận này đã đủ chữ ký ba bên (bản hiện tại).</summary>
+    public bool FullySigned { get; set; }
 
     /// <summary>Phiếu giao nhận: lúc bên nhận xác nhận đã nhận đủ; null khi chưa.</summary>
     public DateTimeOffset? ReceivedAllAt { get; set; }
@@ -177,6 +196,16 @@ public class HandoverRecordPersonResponse
 
     /// <summary>Email đã khai; luật sư dùng để biết người trong hồ sơ báo tin đã có trong kho chưa.</summary>
     public string Email { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Luật sư sửa, xóa được người này lúc này không: do chính luật sư thêm ở biên bản đang lập, chưa gửi yêu cầu,
+    /// chưa được Chủ tài sản gán tài sản và chưa từng được gửi thư mời.
+    /// </summary>
+    public bool CanEdit { get; set; }
+
+    /// <summary>Ngày sinh và số điện thoại chỉ trả khi CanEdit, để điền sẵn ô sửa.</summary>
+    public DateOnly? DateOfBirth { get; set; }
+    public string Phone { get; set; } = string.Empty;
 }
 
 /// <summary>Một người nhận trong biên bản phân chia của Chủ tài sản và các tài sản Chủ tài sản đã gán cho người đó.</summary>

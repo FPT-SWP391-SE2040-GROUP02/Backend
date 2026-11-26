@@ -76,8 +76,8 @@ public static class HandoverRequestNoticeEmail
                 + "Luật sư đang xét giấy tờ và sẽ lập biên bản bàn giao.";
             actionUrl = baseUrl + "/executor";
             buttonText = "Mở không gian Người thực thi";
-            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt biên bản, bạn ký và gửi mã nhận cho từng người nhận "
-                + "khi người đó ký xong.";
+            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt biên bản và ký phần của từng người nhận, bạn ký phần đó "
+                + "rồi gửi mã nhận khi người nhận ký xong.";
         }
         else
         {
@@ -120,8 +120,8 @@ public static class HandoverRequestNoticeEmail
                 + $"{notice.OwnerName}.";
             actionUrl = baseUrl + "/executor";
             buttonText = "Mở không gian Người thực thi";
-            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt biên bản, bạn ký và gửi mã nhận cho từng người nhận "
-                + "khi người đó ký xong.";
+            note = "Bạn chưa cần làm gì lúc này. Khi luật sư chốt biên bản và ký phần của từng người nhận, bạn ký phần đó "
+                + "rồi gửi mã nhận khi người nhận ký xong.";
         }
         string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(
@@ -185,10 +185,10 @@ public static class HandoverRequestNoticeEmail
     {
         string title = "Luật sư nhắc bạn ký biên bản bàn giao";
         string lead = $"Luật sư nhắc bạn ký biên bản bàn giao kho của {notice.OwnerName}. "
-            + "Biên bản đã chốt nhưng chưa có chữ ký của bạn.";
+            + "Luật sư đã ký phần của người nhận nhưng chưa có chữ ký của bạn.";
         string actionUrl = baseUrl + "/executor";
         string buttonText = "Mở không gian Người thực thi";
-        string note = "Người nhận chưa được mở quyền tải cho tới khi bạn và luật sư đều đã ký.";
+        string note = "Người nhận chỉ ký được sau khi bạn ký phần của họ.";
         string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(
             title: title,
@@ -280,21 +280,27 @@ public static class HandoverRequestNoticeEmail
         string note;
         if (notice.Audience == HandoverRequestNotice.Recipient)
         {
-            lead = $"Luật sư đã xác minh danh tính của bạn xong. Bạn có thể đọc và ký biên bản bàn giao tài sản trong kho của "
-                + $"{notice.OwnerName} ngay, không cần chờ người nhận khác.";
+            lead = $"Luật sư và Người thực thi đã ký phần của bạn trong biên bản bàn giao tài sản trong kho của "
+                + $"{notice.OwnerName}. Bạn có thể đọc và ký ngay, không cần chờ người nhận khác.";
             actionUrl = baseUrl + "/claim/beneficiary";
             buttonText = "Đọc và ký biên bản";
-            note = "Bạn ký xong và luật sư, Người thực thi cũng đã ký thì phần của bạn được mở; Người thực thi gửi mã nhận "
-                + "để bạn tải tài sản. Hãy đăng nhập bằng đúng email nhận thư này.";
+            note = "Bạn ký xong thì phần của bạn được mở; Người thực thi gửi mã nhận để bạn tải tài sản. "
+                + "Hãy đăng nhập bằng đúng email nhận thư này.";
         }
         else
         {
-            lead = $"Luật sư đã chốt biên bản bàn giao tài sản trong kho của {notice.OwnerName}. "
-                + "Bạn có thể ký biên bản ngay.";
+            // RequesterName: họ tên người nhận vừa được luật sư ký phần (rỗng thì viết chung).
+            string partOf = "phần của một người nhận";
+            if (!string.IsNullOrWhiteSpace(notice.RequesterName))
+            {
+                partOf = $"phần của {notice.RequesterName}";
+            }
+            lead = $"Luật sư đã ký {partOf} trong biên bản bàn giao tài sản trong kho của {notice.OwnerName}. "
+                + "Bạn có thể ký phần này ngay.";
             actionUrl = baseUrl + "/executor";
             buttonText = "Mở không gian Người thực thi";
-            note = "Mỗi người nhận được giao riêng: người nào đã ký (cùng chữ ký của bạn và luật sư) thì bạn gửi mã nhận "
-                + "cho người đó, không cần chờ người nhận khác.";
+            note = "Thứ tự ký cho phần của mỗi người nhận: luật sư, bạn, rồi người nhận. Người nhận ký xong thì bạn gửi mã "
+                + "nhận cho người đó, không cần chờ người nhận khác.";
         }
         string text = $"Xin chào {notice.FullName},\n\n{title}\n\n{lead}\n\n{buttonText}: {actionUrl}\n\n{note}\n";
         string html = LegacyVaultEmailTheme.BuildHtml(

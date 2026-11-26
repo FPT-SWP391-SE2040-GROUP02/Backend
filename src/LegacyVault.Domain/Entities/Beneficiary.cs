@@ -51,6 +51,12 @@ public class Beneficiary
     /// </summary>
     public string? RequestTokenHash { get; set; }
 
+    /// <summary>
+    /// Biên bản bàn giao mà luật sư đã thêm hồ sơ này. Null là hồ sơ do Chủ tài sản khai (hoặc hồ sơ có trước khi có cột
+    /// này): luật sư chỉ sửa, xóa được hồ sơ do mình thêm ở chính biên bản đang lập. Không đặt khóa ngoại.
+    /// </summary>
+    public Guid? AddedByHandoverRecordId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>Đổi sau mỗi lần sửa; dùng làm ETag chống ghi đè. Null khi mới tạo → etag "0".</summary>
