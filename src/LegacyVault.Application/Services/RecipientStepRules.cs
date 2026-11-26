@@ -12,7 +12,7 @@ namespace LegacyVault.Application.Services;
 /// Bảng ánh xạ (xét từ trên xuống, gặp dòng đúng đầu tiên thì dừng):
 /// | Điều kiện                                                                  | Trạng thái           | needsAction |
 /// |----------------------------------------------------------------------------|----------------------|-------------|
-/// | Kho chưa có biên bản đang mở (chưa ai gửi yêu cầu, hoặc Chủ kho đã hủy)       | NOT_REQUESTED        | false       |
+/// | Kho chưa có biên bản đang mở (chưa ai gửi yêu cầu, hoặc Chủ tài sản đã hủy)       | NOT_REQUESTED        | false       |
 /// | Có yêu cầu của tôi, trạng thái Submitted                                     | REQUEST_PENDING      | false       |
 /// | Có yêu cầu của tôi, trạng thái SupplementRequested                           | SUPPLEMENT_REQUESTED | true        |
 /// | Có yêu cầu của tôi, trạng thái Rejected                                      | REJECTED             | false       |

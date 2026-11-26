@@ -47,7 +47,7 @@ public sealed class AuditVaultAssetFlowTests : IAsyncLifetime
         HttpResponseMessage again = await client.PostAsync("/api/v1/vaults", null);
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);
 
-        // Kiểm tra: đúng một dòng VaultCreated của chủ kho
+        // Kiểm tra: đúng một dòng VaultCreated của chủ tài sản
         Guid ownerId = await AuditTestData.GetOwnerIdAsync(factory, vaultId);
         List<AuditLog> logs = await AuditTestData.ListForVaultAsync(factory, vaultId);
         AuditLog log = Assert.Single(logs);

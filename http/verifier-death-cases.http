@@ -41,7 +41,7 @@ Authorization: Bearer {{token}}
 @caseId = 00000000-0000-0000-0000-000000000000
 
 ### 2) Chi tiết (no-store). reviewVersion có CCCD 12 số, 3 thông tin trên giấy (dateOfDeath, issuedOn, deathRegistrationPlace); versions[] (bản cũ) chỉ có 4 số cuối.
-# warnings (không chặn duyệt): DEATH_BEFORE_LAST_CHECKIN khi Chủ kho điểm danh SAU ngày mất (kèm lastCheckInOn), LATE_REGISTRATION khi đăng ký khai tử hơn 15 ngày sau ngày mất.
+# warnings (không chặn duyệt): DEATH_BEFORE_LAST_CHECKIN khi Chủ tài sản điểm danh SAU ngày mất (kèm lastCheckInOn), LATE_REGISTRATION khi đăng ký khai tử hơn 15 ngày sau ngày mất.
 # approveBlockers cho biết vì sao chưa duyệt được: NOT_UNDER_REVIEW, NEWER_VERSION_PENDING,
 # FLAGS_NOT_REVIEWED, và VERIFIER_CONFLICT (cuối danh sách) nếu bạn là Owner/Executor/người gửi.
 # @name detail

@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Người thân nộp hồ sơ báo tin Chủ kho đã mất (không cần được khai làm người nhận từ trước) và theo dõi kết quả.
+/// Người thân nộp hồ sơ báo tin Chủ tài sản đã mất (không cần được khai làm người nhận từ trước) và theo dõi kết quả.
 /// </summary>
 /// <remarks>Phản hồi không bao giờ cho biết người mất có kho hay không.</remarks>
 [ApiController]

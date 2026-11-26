@@ -227,7 +227,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         HttpResponseMessage open = await executor.Client.PostAsync(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId), null);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, open.StatusCode);
 
-        // Link riêng cho xem tên Chủ kho và email đã che mà không cần đăng nhập.
+        // Link riêng cho xem tên Chủ tài sản và email đã che mà không cần đăng nhập.
         (HttpClient recipient, string token, HttpResponseMessage sent) = await SubmitRequestAsync(vault.VaultId);
         HttpClient anonymous = factory.CreateClient();
         JsonElement preview = await ApiTestHelpers.ReadJsonAsync(
@@ -254,7 +254,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
             Assert.Equal(PlanStatus.Active, (await db.HandoverPlans.SingleAsync(p => p.VaultId == vault.VaultId)).Status);
         });
 
-        // Người thực thi thấy biên bản đang lập; luật sư chưa chấp nhận giấy tờ nên kho chưa khóa, Chủ kho vẫn thêm tài sản.
+        // Người thực thi thấy biên bản đang lập; luật sư chưa chấp nhận giấy tờ nên kho chưa khóa, Chủ tài sản vẫn thêm tài sản.
         JsonElement executorView = await ApiTestHelpers.ReadJsonAsync(
             await executor.Client.GetAsync(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId)));
         Assert.Equal("DRAFTING", executorView.GetProperty("status").GetString());
@@ -395,7 +395,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
         string url = HandoverRecordTestData.VerifierRecordUrl(recordId);
 
-        // Người nhận mới (có tên trong di chúc nhưng Chủ kho chưa khai): thêm vào kho rồi ghi tài sản được.
+        // Người nhận mới (có tên trong di chúc nhưng Chủ tài sản chưa khai): thêm vào kho rồi ghi tài sản được.
         HttpResponseMessage added = await verifier.Client.PostAsJsonAsync(url + "/recipients", new
         {
             fullName = "Lê Văn Mới",
@@ -436,7 +436,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Verifier_AddsRecipientsInOneBatch_AllOrNothing()
     {
-        // Chuẩn bị: biên bản đang lập; kho đã có người nhận do Chủ kho khai
+        // Chuẩn bị: biên bản đang lập; kho đã có người nhận do Chủ tài sản khai
         Vault2 vault = await BuildVaultAsync();
         await HandoverRecordTestData.CreateVerifierClientAsync(factory);
         Guid recordId = await HandoverRecordTestData.RequestAsync(factory, vault.VaultId);
@@ -586,7 +586,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.DoesNotContain("001090000011", text);
         Assert.DoesNotContain(RecipientEmail(0), text);
 
-        // Người lạ và chính Chủ kho đều nhận không tìm thấy
+        // Người lạ và chính Chủ tài sản đều nhận không tìm thấy
         HttpResponseMessage fromStranger = await stranger.GetAsync(namesUrl);
         Assert.Equal(HttpStatusCode.NotFound, fromStranger.StatusCode);
         HttpResponseMessage fromOwner = await vault.Owner.GetAsync(namesUrl);
@@ -631,7 +631,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
             await SetLinesAsync(verifier.Client, recordId, (vault.FirstRecipient, vault.AssetA), (vault.FirstRecipient, vault.AssetA)),
             HttpStatusCode.BadRequest, "VALIDATION_ERROR");
 
-        // Luật sư khác chủ kho chọn: một tài sản có thể giao cho hai người (đồng thừa kế).
+        // Luật sư khác chủ tài sản chọn: một tài sản có thể giao cho hai người (đồng thừa kế).
         HttpResponseMessage set = await SetLinesAsync(verifier.Client, recordId,
             (vault.FirstRecipient, vault.AssetA), (vault.FirstRecipient, vault.AssetB), (vault.SecondRecipient, vault.AssetB));
         Assert.Equal(HttpStatusCode.OK, set.StatusCode);

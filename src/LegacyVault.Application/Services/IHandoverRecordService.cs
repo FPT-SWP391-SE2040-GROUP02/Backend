@@ -26,7 +26,7 @@ public interface IHandoverRecordService
     Task<List<HandoverRecordSummaryResponse>> ListForVerifierAsync(CancellationToken ct);
     Task<HandoverRecordResponse> GetForVerifierAsync(Guid recordId, CancellationToken ct);
 
-    /// <summary>Lấy biên bản phân chia của Chủ kho (các gói sẵn sàng) làm bản đầu, thay toàn bộ dòng đang có.</summary>
+    /// <summary>Lấy biên bản phân chia của Chủ tài sản (các gói sẵn sàng) làm bản đầu, thay toàn bộ dòng đang có.</summary>
     Task<HandoverRecordResponse> UseOwnerSplitAsync(Guid recordId, CancellationToken ct);
 
     /// <summary>Thay toàn bộ dòng "ai nhận tài sản nào". Chỉ khi biên bản đang lập (bước 1).</summary>
@@ -71,11 +71,11 @@ public interface IHandoverRecordService
 
     // Người nhận gửi yêu cầu nhận tài sản
 
-    /// <summary>Thông tin link riêng (không cần đăng nhập): tên Chủ kho, tên người nhận, email đã che.</summary>
+    /// <summary>Thông tin link riêng (không cần đăng nhập): tên Chủ tài sản, tên người nhận, email đã che.</summary>
     Task<HandoverRequestPreviewResponse> PreviewRequestAsync(string token, CancellationToken ct);
 
     /// <summary>
-    /// Gửi yêu cầu nhận tài sản kèm giấy tờ. Yêu cầu đầu tiên tạo biên bản, phân công luật sư, khóa kho và báo Chủ kho,
+    /// Gửi yêu cầu nhận tài sản kèm giấy tờ. Yêu cầu đầu tiên tạo biên bản, phân công luật sư, khóa kho và báo Chủ tài sản,
     /// Người thực thi, luật sư. Lỗi: 404 link sai, 403 sai email, 409 HANDOVER_NOT_ALLOWED.
     /// </summary>
     Task<MyHandoverClaimResponse> SubmitClaimAsync(
@@ -89,7 +89,7 @@ public interface IHandoverRecordService
     Task<MyHandoverClaimResponse> SubmitClaimByAccountAsync(
         Guid vaultId, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct);
 
-    /// <summary>Luật sư hủy biên bản đang lập (mở nhầm, giấy tờ sai), kho mở khóa và báo Chủ kho, Người thực thi.</summary>
+    /// <summary>Luật sư hủy biên bản đang lập (mở nhầm, giấy tờ sai), kho mở khóa và báo Chủ tài sản, Người thực thi.</summary>
     Task<HandoverRecordResponse> CancelByVerifierAsync(Guid recordId, CancelHandoverRecordRequest request, CancellationToken ct);
 
     /// <summary>
@@ -105,7 +105,7 @@ public interface IHandoverRecordService
 
     Task<PreparedDownload> PrepareMyClaimFileAsync(Guid claimId, Guid fileId, CancellationToken ct);
 
-    // Chủ kho
+    // Chủ tài sản
 
     /// <summary>Yêu cầu nhận tài sản đang mở của kho; null khi không có.</summary>
     Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct);

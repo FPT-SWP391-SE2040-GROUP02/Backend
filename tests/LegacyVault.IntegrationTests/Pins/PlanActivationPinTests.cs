@@ -15,7 +15,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Pins;
 
 /// <summary>
-/// Kích hoạt kế hoạch là bước Chủ kho ký di chúc bằng PIN của kho: thiếu, sai hoặc đúng PIN
+/// Kích hoạt kế hoạch là bước Chủ tài sản ký di chúc bằng PIN của kho: thiếu, sai hoặc đúng PIN
 /// (bộ kiểm PIN thật, SQL Server thật).
 /// </summary>
 public sealed class PlanActivationPinTests : IAsyncLifetime

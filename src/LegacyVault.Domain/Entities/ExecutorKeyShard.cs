@@ -8,7 +8,7 @@ namespace LegacyVault.Domain.Entities;
 /// - DB giữ ShardHash (SHA-256 gắn với kho và phiên bản) để đối chiếu, và bản mã hóa phong bì (AES-256-GCM, DEK bọc bằng KEK)
 ///   để Người thực thi đọc lại khi bàn giao đã bắt đầu. Mã gốc không bao giờ lưu dạng rõ và không vào nhật ký (SEC-07).
 /// - Mã chỉ là cổng mở khóa việc tải của người nhận (người nhận nhập mã trước khi tải), không dùng để mã hóa nội dung tài sản.
-/// - Đổi mã (Chủ kho đổi, hoặc hệ thống tự đổi khi đổi Người thực thi) thì Version tăng, hash mới thay hash cũ nên mã cũ hết hiệu lực.
+/// - Đổi mã (Chủ tài sản đổi, hoặc hệ thống tự đổi khi đổi Người thực thi) thì Version tăng, hash mới thay hash cũ nên mã cũ hết hiệu lực.
 /// </remarks>
 public class ExecutorKeyShard
 {

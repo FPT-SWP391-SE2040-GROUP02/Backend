@@ -66,7 +66,7 @@ public class HandoverTurn
     public DateTimeOffset? IdentityConfirmedAt { get; set; }
 
     /// <summary>
-    /// Lúc người nhận nhập đúng mã nhận do Người thực thi đưa (khóa do Chủ kho cấp, xem ExecutorKeyShard).
+    /// Lúc người nhận nhập đúng mã nhận do Người thực thi đưa (khóa do Chủ tài sản cấp, xem ExecutorKeyShard).
     /// Chỉ cần khi kho đã cấp khóa; kho chưa cấp khóa thì bỏ qua bước này.
     /// </summary>
     public DateTimeOffset? KeyVerifiedAt { get; set; }

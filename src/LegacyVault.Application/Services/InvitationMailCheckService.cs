@@ -65,7 +65,7 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
                 "Bạn đã thử quá số lần cho phép. Hãy gọi số điện thoại công ty ghi trong thư để xác minh.");
         }
 
-        // 3. Mã hồ sơ đúng lấy từ hồ sơ chứng tử, số căn cước đúng lấy từ thông tin Chủ kho đã khai
+        // 3. Mã hồ sơ đúng lấy từ hồ sơ chứng tử, số căn cước đúng lấy từ thông tin Chủ tài sản đã khai
         string wantedCode = string.Empty;
         HandoverRecord? record = await records.FindByVaultIdAsync(turn.VaultId, ct);
         if (record != null)
@@ -94,7 +94,7 @@ public sealed class InvitationMailCheckService : IInvitationMailCheckService
             return response;
         }
 
-        // 6. Đúng: xóa bộ đếm sai, trả tên gói và tên Chủ kho
+        // 6. Đúng: xóa bộ đếm sai, trả tên gói và tên Chủ tài sản
         Failures.TryRemove(turn.Id, out _);
         response.Verified = true;
         response.AttemptsLeft = MaxAttempts;

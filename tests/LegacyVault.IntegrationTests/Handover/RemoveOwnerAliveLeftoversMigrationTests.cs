@@ -11,7 +11,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests.Handover;
 
 /// <summary>
-/// Migration RemoveOwnerAliveLeftovers phải dọn hàng cũ của luồng "Chủ kho báo còn sống": kế hoạch Blocked trở về Active,
+/// Migration RemoveOwnerAliveLeftovers phải dọn hàng cũ của luồng "Chủ tài sản báo còn sống": kế hoạch Blocked trở về Active,
 /// dòng nhật ký ObjectionReported/ObjectionConcluded bị xóa, dòng nhật ký khác giữ nguyên; đọc lại được bằng model hiện tại.
 /// </summary>
 public sealed class RemoveOwnerAliveLeftoversMigrationTests : IAsyncLifetime

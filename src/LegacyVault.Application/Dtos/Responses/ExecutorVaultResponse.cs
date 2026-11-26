@@ -5,12 +5,12 @@ public class ExecutorVaultResponse
 {
     public Guid VaultId { get; set; }
 
-    /// <summary>Họ tên Chủ kho theo tài khoản, để Người thực thi nhận ra kho.</summary>
+    /// <summary>Họ tên Chủ tài sản theo tài khoản, để Người thực thi nhận ra kho.</summary>
     public string OwnerFullName { get; set; } = string.Empty;
 
     public string PlanStatus { get; set; } = string.Empty;
 
-    /// <summary>Hướng dẫn Chủ kho để lại cho Người thực thi; null khi Chủ kho chưa viết.</summary>
+    /// <summary>Hướng dẫn Chủ tài sản để lại cho Người thực thi; null khi Chủ tài sản chưa viết.</summary>
     public string? ExecutorNote { get; set; }
 
     public DateTimeOffset? ExecutorNoteUpdatedAt { get; set; }
@@ -18,10 +18,10 @@ public class ExecutorVaultResponse
     /// <summary>Lúc tài khoản chấp nhận lời mời làm Người thực thi của kho; null khi dữ liệu cũ không có.</summary>
     public DateTimeOffset? AcceptedAt { get; set; }
 
-    /// <summary>Phiên bản biên bản phân chia Chủ kho ký gần nhất; null khi chưa ký. Không kèm tài sản hay người nhận.</summary>
+    /// <summary>Phiên bản biên bản phân chia Chủ tài sản ký gần nhất; null khi chưa ký. Không kèm tài sản hay người nhận.</summary>
     public int? WillVersionNo { get; set; }
 
-    /// <summary>Lúc Chủ kho ký phiên bản đó; null cùng lúc với WillVersionNo.</summary>
+    /// <summary>Lúc Chủ tài sản ký phiên bản đó; null cùng lúc với WillVersionNo.</summary>
     public DateTimeOffset? WillSignedAt { get; set; }
 
     /// <summary>Phiên bản tôi đã xem và ký gần nhất; null khi chưa ký phiên bản nào.</summary>
@@ -33,7 +33,7 @@ public class ExecutorVaultResponse
     /// <summary>Phiên bản tôi đã không đồng ý; null khi không có.</summary>
     public int? DeclinedWillVersionNo { get; set; }
 
-    /// <summary>Kế hoạch đang chạy và Chủ kho đã ký phiên bản mới mà tôi chưa trả lời.</summary>
+    /// <summary>Kế hoạch đang chạy và Chủ tài sản đã ký phiên bản mới mà tôi chưa trả lời.</summary>
     public bool WillConsentRequired { get; set; }
 
     /// <summary>Số tài sản trong kho; chỉ là số đếm.</summary>

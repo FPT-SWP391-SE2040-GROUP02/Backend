@@ -6,7 +6,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Email;
 
-/// <summary>Kiểm tra nội dung thư báo người nhận khi Chủ kho kích hoạt kế hoạch. Hàm thuần, không cần SQL hay mạng.</summary>
+/// <summary>Kiểm tra nội dung thư báo người nhận khi Chủ tài sản kích hoạt kế hoạch. Hàm thuần, không cần SQL hay mạng.</summary>
 public sealed class PlanActivatedNoticeEmailTests
 {
     private const string LandingUrl = "http://localhost:5173/";
@@ -69,7 +69,7 @@ public sealed class PlanActivatedNoticeEmailTests
         EmailContent email = PlanActivatedNoticeEmail.Build(notice, requestUrl);
 
         // Kiểm tra
-        Assert.Contains("Khi Chủ kho qua đời, bạn cần chủ động gửi yêu cầu nhận tài sản", email.TextBody);
+        Assert.Contains("Khi Chủ tài sản qua đời, bạn cần chủ động gửi yêu cầu nhận tài sản", email.TextBody);
         Assert.Contains(PlanActivatedNoticeEmail.RequestButtonText + ": " + requestUrl, email.TextBody);
         Assert.Contains(WebUtility.HtmlEncode(PlanActivatedNoticeEmail.RequestButtonText), email.HtmlBody);
         Assert.DoesNotContain("bạn sẽ nhận một email khác", email.TextBody);

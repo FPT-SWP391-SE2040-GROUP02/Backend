@@ -44,7 +44,7 @@ public sealed class PlanSetupController(IPlanSetupService service) : ControllerB
     /// <summary>
     /// Kiểm lại mọi điều kiện rồi kích hoạt kế hoạch trong một giao dịch: đặt trạng thái Đã kích hoạt, tạo mã nhận và
     /// biên bản phân chia phiên bản 1. Gửi lặp lại chỉ trả nguyên trạng, không kích hoạt lại.
-    /// Cần header X-Vault-Pin: nhập PIN là bước Chủ kho ký biên bản phân chia.
+    /// Cần header X-Vault-Pin: nhập PIN là bước Chủ tài sản ký biên bản phân chia.
     /// </summary>
     [RequireVaultPin]
     [HttpPost("activate"), EnableRateLimiting("plan-setup")]
@@ -52,7 +52,7 @@ public sealed class PlanSetupController(IPlanSetupService service) : ControllerB
         service.ActivateAsync(vaultId, request, ct);
 
     /// <summary>
-    /// Chủ kho ký lại di chúc bằng PIN (header X-Vault-Pin) sau khi đổi cấu hình: tạo phiên bản di chúc mới. Chỉ khi kế hoạch
+    /// Chủ tài sản ký lại di chúc bằng PIN (header X-Vault-Pin) sau khi đổi cấu hình: tạo phiên bản di chúc mới. Chỉ khi kế hoạch
     /// đang chạy và có thay đổi chưa ký; không có thay đổi thì trả nguyên trạng. configVersion cũ → 409 EDIT_CONFLICT.
     /// </summary>
     [RequireVaultPin]

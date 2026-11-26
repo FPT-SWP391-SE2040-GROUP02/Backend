@@ -105,7 +105,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
 
     public async Task<List<ExecutorVaultResponse>> ListMyVaultsAsync(CancellationToken ct)
     {
-        // 1. Các kho tôi đã nhận lời làm Người thực thi (Chủ kho không bao giờ là Người thực thi của kho mình)
+        // 1. Các kho tôi đã nhận lời làm Người thực thi (Chủ tài sản không bao giờ là Người thực thi của kho mình)
         Guid userId = currentUser.RequireUserId();
         List<Executor> executors = await records.ListAcceptedExecutorsAsync(userId, ct);
 
@@ -204,7 +204,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     public async Task<MyHandoverClaimResponse> SubmitClaimAsync(
         string token, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct)
     {
-        // 1. Người gửi phải đăng nhập đúng email Chủ kho đã khai cho người nhận của link này
+        // 1. Người gửi phải đăng nhập đúng email Chủ tài sản đã khai cho người nhận của link này
         User user = await RequireVerifiedUserAsync(ct);
         Beneficiary beneficiary = await RequireBeneficiaryByTokenAsync(token, ct);
         Vault vault = await RequireVaultAsync(beneficiary.VaultId, ct);
@@ -335,10 +335,10 @@ public sealed class HandoverRecordService : IHandoverRecordService
         User user, Beneficiary beneficiary, Vault vault, string? note, List<UploadedFile> wills, List<UploadedFile> files,
         CancellationToken ct)
     {
-        // 1. Chủ kho không tự gửi; lời nhắn và tệp phải hợp lệ
+        // 1. Chủ tài sản không tự gửi; lời nhắn và tệp phải hợp lệ
         if (vault.OwnerId == user.Id)
         {
-            throw HandoverAccess.NotAllowed("OWNER_CANNOT_CLAIM", "Chủ kho không tự gửi yêu cầu nhận tài sản của kho mình.");
+            throw HandoverAccess.NotAllowed("OWNER_CANNOT_CLAIM", "Chủ tài sản không tự gửi yêu cầu nhận tài sản của kho mình.");
         }
         string cleanNote = NormalizeNote(note);
         if (wills.Count == 0)
@@ -379,7 +379,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 UpdatedAt = now
             };
             records.Add(record);
-            // Chưa khóa kho: Chủ kho vẫn sửa được cho tới khi luật sư chấp nhận giấy tờ (ReviewClaimAsync).
+            // Chưa khóa kho: Chủ tài sản vẫn sửa được cho tới khi luật sư chấp nhận giấy tờ (ReviewClaimAsync).
             created = true;
         }
         else
@@ -429,7 +429,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         AttachFiles(record, saved);
         await SaveOrDeleteFilesAsync(saved, ct);
 
-        // 4. Báo sau khi lưu: lần đầu báo Chủ kho (hủy được), Người thực thi và luật sư; lần sau chỉ báo luật sư
+        // 4. Báo sau khi lưu: lần đầu báo Chủ tài sản (hủy được), Người thực thi và luật sư; lần sau chỉ báo luật sư
         string requesterName = protector.Unprotect(beneficiary).FullName;
         await NotifyRequestAsync(vault, record, requesterName, created, ct);
 
@@ -584,7 +584,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         RequireStatus(record, HandoverRecordStatus.Drafting, "Chỉ lấy biên bản phân chia khi biên bản đang lập.");
         Vault vault = await RequireVaultAsync(record.VaultId, ct);
 
-        // 2. Đọc biên bản phân chia: mỗi dòng gán của Chủ kho thành một dòng biên bản (tài sản gán cho nhiều người là đồng thừa kế)
+        // 2. Đọc biên bản phân chia: mỗi dòng gán của Chủ tài sản thành một dòng biên bản (tài sản gán cho nhiều người là đồng thừa kế)
         List<AssetAssignment> ownerAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
         List<(Guid BeneficiaryId, Guid AssetId)> lines = new List<(Guid BeneficiaryId, Guid AssetId)>();
         HashSet<Guid> rejected = RejectedBeneficiaries(record);
@@ -604,7 +604,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         if (lines.Count == 0)
         {
             throw HandoverAccess.NotAllowed("NO_OWNER_SPLIT",
-                "Chủ kho chưa lập biên bản phân chia. Vui lòng tự lập biên bản.");
+                "Chủ tài sản chưa lập biên bản phân chia. Vui lòng tự lập biên bản.");
         }
 
         // 3. Thay toàn bộ dòng, lưu
@@ -678,19 +678,19 @@ public sealed class HandoverRecordService : IHandoverRecordService
         {
             throw HandoverAccess.NotAllowed("CLAIMS_PENDING", claimError);
         }
-        // Chỉ chốt khi kho đã khóa (luật sư đã chấp nhận giấy tờ): cách chia của Chủ kho không còn đổi được nữa.
+        // Chỉ chốt khi kho đã khóa (luật sư đã chấp nhận giấy tờ): cách chia của Chủ tài sản không còn đổi được nữa.
         if (!HandoverRecordRules.IsVaultLocked(vault.Plan.Status))
         {
             throw HandoverAccess.NotAllowed("VAULT_NOT_LOCKED",
                 "Chưa chấp nhận giấy tờ nào nên kho chưa khóa. Xét giấy tờ trước khi chốt biên bản.");
         }
-        // Biên bản khác cách chia ban đầu của Chủ kho thì luật sư phải tick xác nhận căn cứ của việc thay đổi.
+        // Biên bản khác cách chia ban đầu của Chủ tài sản thì luật sư phải tick xác nhận căn cứ của việc thay đổi.
         List<HandoverSplitDifference> differences = await FindSplitDifferencesAsync(record, vault.Id, ct);
         bool deviationConfirmed = request.ConfirmSplitDeviation == true;
         if (differences.Count > 0 && !deviationConfirmed)
         {
             throw ValidationErrors.For("confirmSplitDeviation",
-                "Biên bản khác cách chia ban đầu của Chủ kho. Vui lòng xác nhận căn cứ của việc thay đổi trước khi chốt.");
+                "Biên bản khác cách chia ban đầu của Chủ tài sản. Vui lòng xác nhận căn cứ của việc thay đổi trước khi chốt.");
         }
 
         // 2. Tạo hoặc cập nhật lượt cho từng người nhận; biên bản sang bước giao (luật sư và Người thực thi ký được ngay,
@@ -772,7 +772,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         record.FinalizedAt = null;
         record.LegalBasisConfirmedAt = null;
         record.LegalBasisConfirmedByUserId = null;
-        // Sửa lại biên bản thì phải xác nhận lại khác biệt so với cách chia của Chủ kho khi chốt.
+        // Sửa lại biên bản thì phải xác nhận lại khác biệt so với cách chia của Chủ tài sản khi chốt.
         record.SplitDeviationConfirmedAt = null;
         record.SplitDeviationConfirmedByUserId = null;
         record.UpdatedAt = now;
@@ -849,7 +849,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
         await SaveAsync(ct);
 
-        // 4. Kho vừa khóa: báo Chủ kho và Người thực thi (sau khi lưu)
+        // 4. Kho vừa khóa: báo Chủ tài sản và Người thực thi (sau khi lưu)
         if (vaultJustLocked)
         {
             string requesterName = await FindBeneficiaryNameAsync(vault.Id, claim.BeneficiaryId, ct);
@@ -872,7 +872,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         return string.Empty;
     }
 
-    /// <summary>Báo Chủ kho và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa. Thư lỗi thì bỏ qua.</summary>
+    /// <summary>Báo Chủ tài sản và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa. Thư lỗi thì bỏ qua.</summary>
     private async Task NotifyVaultLockedAsync(Vault vault, string requesterName, CancellationToken ct)
     {
         string ownerName = await FindUserNameAsync(vault.OwnerId, ct);
@@ -979,7 +979,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     }
 
     /// <summary>
-    /// Kiểm một người nhận mới (đủ CCCD, họ tên, ngày sinh, email; không trùng Chủ kho, nhân sự hay người nhận khác) và
+    /// Kiểm một người nhận mới (đủ CCCD, họ tên, ngày sinh, email; không trùng Chủ tài sản, nhân sự hay người nhận khác) và
     /// dựng hồ sơ đã mã hóa. Chưa ghi gì vào kho.
     /// </summary>
     private async Task<Beneficiary> BuildNewRecipientAsync(
@@ -1018,7 +1018,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
                 throw ValidationErrors.For("citizenId", "Người này đã có trong kho.");
             }
         }
-        // Email không trùng Chủ kho, nhân sự (Người xét duyệt, Người thực thi), Người thực thi của kho hay người nhận khác.
+        // Email không trùng Chủ tài sản, nhân sự (Người xét duyệt, Người thực thi), Người thực thi của kho hay người nhận khác.
         await RecipientRules.EnsureEmailAvailableAsync(
             data.Email, vault, null, users, invitations, protector, vaultBeneficiaries, ct);
         return beneficiary;
@@ -1113,7 +1113,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         return await HandoverRecordFileStorage.PrepareAsync(contentStore, file, ct);
     }
 
-    // ---------------- Chủ kho ----------------
+    // ---------------- Chủ tài sản ----------------
 
     public async Task<OwnerHandoverRequestResponse?> GetOwnerRequestAsync(Guid vaultId, CancellationToken ct)
     {
@@ -1172,7 +1172,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         await CancelRecordAsync(record, vault, timeProvider.GetUtcNow(), ct);
         await SaveAsync(ct);
 
-        // 3. Kho đã mở khóa: báo Chủ kho và Người thực thi
+        // 3. Kho đã mở khóa: báo Chủ tài sản và Người thực thi
         await NotifyCancelledAsync(vault, ct);
         return await BuildVerifierResponseAsync(record, vault, ct);
     }
@@ -1803,7 +1803,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             response.AvailableRecipients.Add(person);
         }
 
-        // Biên bản phân chia của Chủ kho: gom các dòng gán theo từng người nhận.
+        // Biên bản phân chia của Chủ tài sản: gom các dòng gán theo từng người nhận.
         List<AssetAssignment> ownerAssignments = await assignments.FindDetailedByVaultIdAsync(vault.Id, ct);
         Dictionary<Guid, OwnerSplitRecipientResponse> ownerSplitByBeneficiary = new Dictionary<Guid, OwnerSplitRecipientResponse>();
         foreach (AssetAssignment assignment in ownerAssignments)
@@ -2047,7 +2047,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             response.Recipients.Add(recipient);
         }
 
-        // Khác biệt so với cách chia của Chủ kho: người nhận chỉ xem phần của mình nên không nhận danh sách này.
+        // Khác biệt so với cách chia của Chủ tài sản: người nhận chỉ xem phần của mình nên không nhận danh sách này.
         if (onlyBeneficiaryId == null)
         {
             List<HandoverSplitDifference> differences = await FindSplitDifferencesAsync(record, vault.Id, ct);
@@ -2059,7 +2059,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         return response;
     }
 
-    /// <summary>So dòng biên bản hiện tại với cách chia của Chủ kho (bỏ tài sản đã bị xóa nội dung).</summary>
+    /// <summary>So dòng biên bản hiện tại với cách chia của Chủ tài sản (bỏ tài sản đã bị xóa nội dung).</summary>
     private async Task<List<HandoverSplitDifference>> FindSplitDifferencesAsync(
         HandoverRecord record, Guid vaultId, CancellationToken ct)
     {
@@ -2305,7 +2305,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
     }
 
     /// <summary>
-    /// Email tài khoản phải trùng email Chủ kho đã khai cho người nhận. Sai thì 403 HANDOVER_EMAIL_MISMATCH kèm email đã che.
+    /// Email tài khoản phải trùng email Chủ tài sản đã khai cho người nhận. Sai thì 403 HANDOVER_EMAIL_MISMATCH kèm email đã che.
     /// </summary>
     private void EnsureEmailMatches(User user, Beneficiary beneficiary)
     {
@@ -2321,7 +2321,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
             extensions["invitedEmailMasked"] = MaskEmail(NormalizeEmail(data.Email));
         }
         throw new AppException(AppErrorType.Forbidden, ErrorCode.HandoverEmailMismatch,
-            "Link này dành cho một email khác. Hãy đăng nhập bằng đúng email Chủ kho đã khai.", extensions);
+            "Link này dành cho một email khác. Hãy đăng nhập bằng đúng email Chủ tài sản đã khai.", extensions);
     }
 
     /// <summary>Hồ sơ danh tính (ảnh căn cước) mới nhất chưa bị thay thế của một lượt; null khi chưa nộp.</summary>
@@ -2360,7 +2360,7 @@ public sealed class HandoverRecordService : IHandoverRecordService
         return null;
     }
 
-    /// <summary>Email Chủ kho (hoặc luật sư) khai cho người nhận có trùng email tài khoản (đã chuẩn hóa) không.</summary>
+    /// <summary>Email Chủ tài sản (hoặc luật sư) khai cho người nhận có trùng email tài khoản (đã chuẩn hóa) không.</summary>
     private bool BeneficiaryEmailMatches(Beneficiary beneficiary, string normalizedAccountEmail)
     {
         BeneficiaryPersonalData data;

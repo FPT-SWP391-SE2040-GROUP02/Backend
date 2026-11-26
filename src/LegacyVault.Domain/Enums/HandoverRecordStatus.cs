@@ -24,6 +24,6 @@ public enum HandoverRecordStatus
     /// <summary>Mọi người nhận trong biên bản đã ký (cùng luật sư và Người thực thi): đã giao xong cho mọi người.</summary>
     Completed = 3,
 
-    /// <summary>Chủ kho hủy trước khi đủ chữ ký, hoặc luật sư hủy khi đang lập; kho mở khóa, kế hoạch về Đang hoạt động.</summary>
+    /// <summary>Chủ tài sản hủy trước khi đủ chữ ký, hoặc luật sư hủy khi đang lập; kho mở khóa, kế hoạch về Đang hoạt động.</summary>
     Cancelled = 4,
 }

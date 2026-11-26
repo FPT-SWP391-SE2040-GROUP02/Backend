@@ -37,13 +37,13 @@ public class VerifierHandoverReportResponse : MyHandoverReportResponse
 
     public string SubmitterPhone { get; set; } = string.Empty;
 
-    /// <summary>Có kho mà Chủ kho đã eKYC mang đúng số căn cước này.</summary>
+    /// <summary>Có kho mà Chủ tài sản đã eKYC mang đúng số căn cước này.</summary>
     public bool VaultFound { get; set; }
 
-    /// <summary>Tên Chủ kho của kho tìm thấy; rỗng khi không có.</summary>
+    /// <summary>Tên Chủ tài sản của kho tìm thấy; rỗng khi không có.</summary>
     public string OwnerName { get; set; } = string.Empty;
 
-    /// <summary>Họ tên người nộp khai khớp họ tên eKYC của Chủ kho.</summary>
+    /// <summary>Họ tên người nộp khai khớp họ tên eKYC của Chủ tài sản.</summary>
     public bool NameMatches { get; set; }
 
     /// <summary>Lý do luật sư đã ghi khi chấp nhận hồ sơ có cảnh báo.</summary>

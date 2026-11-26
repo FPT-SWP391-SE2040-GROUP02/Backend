@@ -13,7 +13,7 @@ namespace LegacyVault.Api.Controllers;
 /// (mục "Nhận tài sản"), rồi theo dõi kết quả luật sư xét và nộp bổ sung khi được yêu cầu.
 /// </summary>
 /// <remarks>
-/// Phải đăng nhập đúng email Chủ kho đã khai cho người nhận (sai thì 403 HANDOVER_EMAIL_MISMATCH). Link sai là 404.
+/// Phải đăng nhập đúng email Chủ tài sản đã khai cho người nhận (sai thì 403 HANDOVER_EMAIL_MISMATCH). Link sai là 404.
 /// </remarks>
 [ApiController]
 [Authorize]
@@ -28,7 +28,7 @@ public sealed class HandoverRequestsController : ControllerBase
         this.recordService = recordService;
     }
 
-    /// <summary>Thông tin link riêng: tên Chủ kho, tên người nhận và email đã che. Không cần đăng nhập.</summary>
+    /// <summary>Thông tin link riêng: tên Chủ tài sản, tên người nhận và email đã che. Không cần đăng nhập.</summary>
     [HttpGet("preview")]
     [AllowAnonymous]
     [EnableRateLimiting("plan-setup")]

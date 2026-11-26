@@ -44,7 +44,7 @@ public sealed class ExecutorAssetService : IExecutorAssetService
         Vault vault = await FindMyExecutorVaultAsync(vaultId, ct);
 
         // Trước khi luật sư chốt biên bản bàn giao, Người thực thi chưa được xem người nhận (họ tên, CCCD) và ai nhận
-        // tài sản nào, tránh lạm quyền khi Chủ kho còn sống. Lúc đó chỉ xem được tên và loại qua ListAssetNamesAsync.
+        // tài sản nào, tránh lạm quyền khi Chủ tài sản còn sống. Lúc đó chỉ xem được tên và loại qua ListAssetNamesAsync.
         if (vault.Plan.Status != PlanStatus.HandoverInProgress && vault.Plan.Status != PlanStatus.Closed)
         {
             throw HandoverAccess.NotAllowed("HANDOVER_NOT_STARTED",

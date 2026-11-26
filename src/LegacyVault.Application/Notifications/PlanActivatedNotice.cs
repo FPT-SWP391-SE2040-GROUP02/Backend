@@ -1,8 +1,8 @@
 namespace LegacyVault.Application.Notifications;
 
 /// <summary>
-/// Dữ liệu thư báo một người nhận rằng họ đã được chọn, gửi khi Chủ kho kích hoạt kế hoạch.
-/// Chỉ có tên và thông tin liên hệ của Chủ kho và Người thực thi; không có tên gói hay tài sản.
+/// Dữ liệu thư báo một người nhận rằng họ đã được chọn, gửi khi Chủ tài sản kích hoạt kế hoạch.
+/// Chỉ có tên và thông tin liên hệ của Chủ tài sản và Người thực thi; không có tên gói hay tài sản.
 /// </summary>
 public sealed class PlanActivatedNotice
 {

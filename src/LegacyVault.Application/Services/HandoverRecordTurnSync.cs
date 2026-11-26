@@ -13,7 +13,7 @@ namespace LegacyVault.Application.Services;
 /// </summary>
 public sealed class HandoverRecordTurnSync
 {
-    /// <summary>Tên hiển thị của "gói" trên lượt: lượt giờ đi theo biên bản, không theo gói của Chủ kho.</summary>
+    /// <summary>Tên hiển thị của "gói" trên lượt: lượt giờ đi theo biên bản, không theo gói của Chủ tài sản.</summary>
     public const string TurnTitle = "Biên bản bàn giao";
 
     private readonly IHandoverRepository handover;
@@ -128,7 +128,7 @@ public sealed class HandoverRecordTurnSync
                 };
                 invitation.ApplyContacts(contacts);
                 invitation.OwnerMessage = data.Message;
-                // Người không có trong cách chia ban đầu của Chủ kho là người luật sư thêm: thư mời dùng lời riêng.
+                // Người không có trong cách chia ban đầu của Chủ tài sản là người luật sư thêm: thư mời dùng lời riêng.
                 if (!ownerRecipientIds.Contains(pair.Key))
                 {
                     invitation.AddedByVerifier = true;
@@ -139,7 +139,7 @@ public sealed class HandoverRecordTurnSync
         return invitations;
     }
 
-    /// <summary>Người nhận mà Chủ kho đã chia ít nhất một tài sản (cách chia ban đầu của kho).</summary>
+    /// <summary>Người nhận mà Chủ tài sản đã chia ít nhất một tài sản (cách chia ban đầu của kho).</summary>
     private async Task<HashSet<Guid>> FindOwnerRecipientIdsAsync(Guid vaultId, CancellationToken ct)
     {
         HashSet<Guid> result = new HashSet<Guid>();
@@ -198,7 +198,7 @@ public sealed class HandoverRecordTurnSync
     }
 
     /// <summary>
-    /// Ghim lại danh sách tài sản của lượt (bản ghim không đổi khi Chủ kho sửa tài sản sau này).
+    /// Ghim lại danh sách tài sản của lượt (bản ghim không đổi khi Chủ tài sản sửa tài sản sau này).
     /// existingTurn = true khi lượt đã có trong DB: tài sản ghim mới phải được thêm tường minh, vì Id đã có sẵn
     /// nên EF sẽ tưởng là dòng cũ cần sửa nếu chỉ thêm qua danh sách của lượt.
     /// </summary>

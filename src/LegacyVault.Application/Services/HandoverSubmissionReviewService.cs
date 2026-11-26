@@ -87,7 +87,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
     }
 
     /// <summary>
-    /// Thêm thông tin Chủ kho đã khai cho người nhận này (giải mã từ hồ sơ người nhận), để luật sư đặt cạnh thông tin người nhận
+    /// Thêm thông tin Chủ tài sản đã khai cho người nhận này (giải mã từ hồ sơ người nhận), để luật sư đặt cạnh thông tin người nhận
     /// gõ. Không đọc được (thiếu dịch vụ giải mã, hồ sơ đã bị xóa, thiếu KEK) thì để trống, không làm hỏng màn hình.
     /// </summary>
     private async Task FillDeclaredAsync(
@@ -111,7 +111,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         }
         catch (System.Security.Cryptography.CryptographicException)
         {
-            // Để trống phần Chủ kho khai.
+            // Để trống phần Chủ tài sản khai.
         }
     }
 

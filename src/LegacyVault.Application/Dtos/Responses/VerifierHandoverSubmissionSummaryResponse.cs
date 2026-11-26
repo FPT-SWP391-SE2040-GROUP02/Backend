@@ -12,7 +12,7 @@ public class VerifierHandoverSubmissionSummaryResponse
     /// <summary>ACCEPT | DECLINE.</summary>
     public string Kind { get; set; } = string.Empty;
 
-    /// <summary>true khi cả ba trường (họ tên, số căn cước, ngày sinh) khớp thông tin Chủ kho đã khai.</summary>
+    /// <summary>true khi cả ba trường (họ tên, số căn cước, ngày sinh) khớp thông tin Chủ tài sản đã khai.</summary>
     public bool AllMatch { get; set; }
 
     public DateTimeOffset SubmittedAt { get; set; }

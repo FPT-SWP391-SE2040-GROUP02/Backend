@@ -10,7 +10,7 @@ Căn cứ: `LegacyVault-SRS-v3.15.0.md` (nghiệp vụ), `BE-FEATURE-API-HANDOFF
 
 **LegacyVault là một "két sắt số" có tính năng bàn giao cho người thân khi chủ két qua đời.**
 
-Hình dung một người (gọi là **Owner**, chủ kho) muốn để lại cho gia đình mật khẩu tài khoản, giấy tờ nhà đất, lời nhắn... Họ:
+Hình dung một người (gọi là **Owner**, chủ tài sản) muốn để lại cho gia đình mật khẩu tài khoản, giấy tờ nhà đất, lời nhắn... Họ:
 
 1. **Tạo kho** và **tải tài sản lên**. Hệ thống **mã hóa** nội dung trước khi lưu.
 2. Chia tài sản thành các **gói bàn giao** và chỉ định **người nhận** cho từng gói.

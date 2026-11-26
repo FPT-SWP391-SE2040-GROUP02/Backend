@@ -8,7 +8,7 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Luật chung khi thêm hoặc sửa người nhận, dùng cho cả Chủ kho (hồ sơ người nhận) lẫn luật sư (thêm người nhận
+/// Luật chung khi thêm hoặc sửa người nhận, dùng cho cả Chủ tài sản (hồ sơ người nhận) lẫn luật sư (thêm người nhận
 /// vào biên bản): ngày sinh hợp lệ và đủ 18 tuổi, email không trùng với những người cùng tham gia kho.
 /// </summary>
 public static class RecipientRules
@@ -40,7 +40,7 @@ public static class RecipientRules
     }
 
     /// <summary>
-    /// Email người nhận không được trùng với: Chủ kho, tài khoản nhân sự (Người xét duyệt, Người thực thi hệ thống,
+    /// Email người nhận không được trùng với: Chủ tài sản, tài khoản nhân sự (Người xét duyệt, Người thực thi hệ thống,
     /// Quản trị viên), Người thực thi của kho (đã mời hoặc đã nhận việc) và các người nhận khác trong kho.
     /// <paramref name="exceptBeneficiaryId"/> là hồ sơ đang sửa, không tính là "người nhận khác".
     /// <paramref name="sameCitizenId"/> là số CCCD của người đang thêm: hồ sơ cùng số CCCD là chính người đó (gửi lại, hoặc
@@ -62,7 +62,7 @@ public static class RecipientRules
         User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
         if (owner != null && string.Equals(owner.Email?.Trim(), normalized, StringComparison.OrdinalIgnoreCase))
         {
-            throw ValidationErrors.For("email", "Email người nhận không được trùng với email của Chủ kho.");
+            throw ValidationErrors.For("email", "Email người nhận không được trùng với email của Chủ tài sản.");
         }
 
         User? account = await users.FindByEmailAsync(normalized, ct);

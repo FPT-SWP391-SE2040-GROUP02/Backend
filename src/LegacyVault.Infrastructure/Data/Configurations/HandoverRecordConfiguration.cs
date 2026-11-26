@@ -21,7 +21,7 @@ public sealed class HandoverRecordConfiguration : IEntityTypeConfiguration<Hando
         builder.Property(r => r.UpdatedAt)
             .IsConcurrencyToken();
 
-        // Mỗi kho chỉ có một biên bản đang mở; biên bản Chủ kho đã hủy không tính (người nhận gửi yêu cầu lại được).
+        // Mỗi kho chỉ có một biên bản đang mở; biên bản Chủ tài sản đã hủy không tính (người nhận gửi yêu cầu lại được).
         builder.HasIndex(r => r.VaultId)
             .IsUnique()
             .HasFilter("[Status] <> 'Cancelled'");

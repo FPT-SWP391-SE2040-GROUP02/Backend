@@ -525,7 +525,7 @@ public sealed class HandoverClaimTests
     [Fact]
     public async Task GetMyInvitations_VaultOwner_DoesNotSeeOwnVaultTurn()
     {
-        // Email người nhận trùng email Chủ kho: vẫn không được thấy lượt của kho mình.
+        // Email người nhận trùng email Chủ tài sản: vẫn không được thấy lượt của kho mình.
         data.People[recipient.Id].Email = data.Owner.Email;
         AddTurn(HandoverTurnStatus.Invited, null);
         currentUser.UserId = data.Owner.Id;

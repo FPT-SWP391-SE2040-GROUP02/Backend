@@ -11,7 +11,7 @@ namespace LegacyVault.Application.Services;
 public interface IExecutorWillService
 {
     /// <summary>
-    /// Người thực thi đồng ý (ký bằng mật khẩu) hoặc không đồng ý phiên bản Chủ kho ký lại. Không đồng ý thì vẫn giữ vai trò
+    /// Người thực thi đồng ý (ký bằng mật khẩu) hoặc không đồng ý phiên bản Chủ tài sản ký lại. Không đồng ý thì vẫn giữ vai trò
     /// theo bản đã ký trước cho tới khi có người thay. Không phải Người thực thi của kho → 404; phiên bản cũ → 409
     /// EXECUTOR_NOT_ALLOWED reason WILL_VERSION_CHANGED; kế hoạch không chạy → reason PLAN_NOT_RUNNING.
     /// </summary>
@@ -97,7 +97,7 @@ public sealed class ExecutorWillService : IExecutorWillService
             return true;
         }, ct);
 
-        // 3. Không đồng ý thì báo Chủ kho sau khi đã lưu
+        // 3. Không đồng ý thì báo Chủ tài sản sau khi đã lưu
         if (notifyOwnerId != null)
         {
             User? owner = await users.FindByIdAsync(notifyOwnerId.Value, ct);

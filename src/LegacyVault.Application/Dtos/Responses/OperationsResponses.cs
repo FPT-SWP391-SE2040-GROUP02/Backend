@@ -93,7 +93,7 @@ public class AdminUserHeldVaultResponse
 {
     public Guid VaultId { get; set; }
 
-    /// <summary>Họ tên Chủ kho đã che: chỉ giữ chữ đầu mỗi từ (ví dụ "N. V. A.").</summary>
+    /// <summary>Họ tên Chủ tài sản đã che: chỉ giữ chữ đầu mỗi từ (ví dụ "N. V. A.").</summary>
     public string OwnerNameMasked { get; set; } = string.Empty;
 
     /// <summary>PlanStatus dạng API.</summary>

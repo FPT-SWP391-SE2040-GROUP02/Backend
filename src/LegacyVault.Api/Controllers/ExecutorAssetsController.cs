@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>Người thực thi xem danh sách tài sản của kho theo từng người nhận (chỉ danh sách, không có nội dung).</summary>
-/// <remarks>Người gọi phải là Người thực thi đang hiệu lực của kho và không phải chủ kho; không đủ điều kiện thì 404.</remarks>
+/// <remarks>Người gọi phải là Người thực thi đang hiệu lực của kho và không phải chủ tài sản; không đủ điều kiện thì 404.</remarks>
 [ApiController]
 [Authorize]
 [Route("api/v1/executor")]

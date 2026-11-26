@@ -2,7 +2,7 @@ using LegacyVault.Domain.Entities;
 
 namespace LegacyVault.Application.Repositories;
 
-/// <summary>Đọc và ghi hồ sơ báo tin Chủ kho đã mất. Không chứa luật nghiệp vụ.</summary>
+/// <summary>Đọc và ghi hồ sơ báo tin Chủ tài sản đã mất. Không chứa luật nghiệp vụ.</summary>
 public interface IHandoverReportRepository
 {
     /// <summary>Hồ sơ kèm tệp, có theo dõi thay đổi; null khi không có.</summary>

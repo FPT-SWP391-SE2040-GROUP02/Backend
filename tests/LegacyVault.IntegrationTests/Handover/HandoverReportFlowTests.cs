@@ -53,7 +53,7 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         public Guid AssetId { get; set; }
     }
 
-    /// <summary>Kho đang hoạt động, có một tài sản, có Người thực thi, Chủ kho đã eKYC, không khai người nhận nào.</summary>
+    /// <summary>Kho đang hoạt động, có một tài sản, có Người thực thi, Chủ tài sản đã eKYC, không khai người nhận nào.</summary>
     private async Task<NoRecipientVault> BuildVaultAsync(PlanStatus status = PlanStatus.Active)
     {
         (HttpClient owner, Guid vaultId) = await ApiTestHelpers.CreateClientWithPaidVaultAsync(factory);
@@ -172,7 +172,7 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         HttpClient stranger = await NewUserAsync();
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"{ReportsUrl}/{reportId}/files/{fileId}")).StatusCode);
 
-        // Chấp nhận: mở biên bản, khóa kho, Chủ kho thấy ai báo
+        // Chấp nhận: mở biên bản, khóa kho, Chủ tài sản thấy ai báo
         HttpResponseMessage accepted = await ReviewAsync(verifier.Client, reportId, "ACCEPT");
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
         Guid recordId = (await ApiTestHelpers.ReadJsonAsync(accepted)).GetProperty("recordId").GetGuid();
@@ -364,7 +364,7 @@ public sealed class HandoverReportFlowTests : IAsyncLifetime
         NoRecipientVault vault = await BuildVaultAsync();
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.CreateVerifierClientAsync(factory);
         HttpClient relative = await NewUserAsync();
-        // Họ tên khai không khớp họ tên eKYC của Chủ kho thì hồ sơ có cảnh báo.
+        // Họ tên khai không khớp họ tên eKYC của Chủ tài sản thì hồ sơ có cảnh báo.
         HttpResponseMessage submitted = await relative.PostAsync(ReportsUrl, FormWith("deceasedFullName", "Trần Văn Khác"));
         Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
         Guid reportId = (await ApiTestHelpers.ReadJsonAsync(submitted)).GetProperty("id").GetGuid();

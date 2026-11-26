@@ -9,7 +9,7 @@ using Xunit;
 namespace LegacyVault.IntegrationTests;
 
 /// <summary>
-/// Chủ kho gán tài sản trực tiếp cho người nhận, đếm suất, nhận chung qua HTTP trên SQL Server thật
+/// Chủ tài sản gán tài sản trực tiếp cho người nhận, đếm suất, nhận chung qua HTTP trên SQL Server thật
 /// (docs/api-contract.md mục 6.6).
 /// </summary>
 /// <remarks>

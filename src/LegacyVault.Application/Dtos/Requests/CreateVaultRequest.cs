@@ -7,7 +7,7 @@ namespace LegacyVault.Application.Dtos.Requests;
 /// </summary>
 /// <remarks>
 /// Body rỗng thì kho tên "Kho của tôi". Owner đã có kho thì tên/mô tả gửi lên bị bỏ qua, trả lại kho cũ.
-/// Không có trường ownerId: chủ kho luôn lấy từ ICurrentUser (SETUP-12, SEC-04).
+/// Không có trường ownerId: chủ tài sản luôn lấy từ ICurrentUser (SETUP-12, SEC-04).
 /// </remarks>
 public class CreateVaultRequest
 {

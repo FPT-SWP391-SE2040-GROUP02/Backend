@@ -26,7 +26,7 @@ Cấu hình `Handover:RequireIdentityVerification`:
 
 | Giá trị | Hiệu lực |
 |---|---|
-| `true` (mặc định trong code) | `claim` dừng ở `IDENTITY_IN_PROGRESS`; người nhận nộp ảnh CCCD và giấy tờ, Verifier duyệt hồ sơ thì lượt sang `READY_TO_ACCEPT` (xem `HandoverSubmissionService` và `HandoverSubmissionReviewService`). eKYC khuôn mặt chỉ dành cho Chủ kho, không dùng cho người nhận. |
+| `true` (mặc định trong code) | `claim` dừng ở `IDENTITY_IN_PROGRESS`; người nhận nộp ảnh CCCD và giấy tờ, Verifier duyệt hồ sơ thì lượt sang `READY_TO_ACCEPT` (xem `HandoverSubmissionService` và `HandoverSubmissionReviewService`). eKYC khuôn mặt chỉ dành cho Chủ tài sản, không dùng cho người nhận. |
 | `false` | `claim` đi thẳng tới `READY_TO_ACCEPT` và lượt có `identityBypassed: true`. **Chỉ hợp lệ ở môi trường Development**: ở môi trường khác API không khởi động (`OptionsValidationException`). |
 
 `appsettings.Development.json` đặt `false` để bạn thử được. Lúc khởi động API ghi một dòng log cho biết đang bật hay bỏ qua.
@@ -62,10 +62,10 @@ Tiền tố `/api/v1/handover`. Tất cả cần `Authorization: Bearer` trừ e
 
 | # | Phương thức và đường dẫn | Mô tả |
 |---|---|---|
-| 1 | `GET invitations/{token}` | Công khai. `200 { "valid": true, "responseExpired": false, "invitedEmailMasked": "m•••••h@example.com", "invitedEmail": "minh@example.com", "accountExists": true, "ownerFullName": "Nguyễn Văn A" }`; token lạ `404 HANDOVER_INVITATION_INVALID`. `invitedEmailMasked` là email người nhận đã che bớt; `invitedEmail` là email đầy đủ (đã chuẩn hóa) cho người giữ link để form đăng ký điền sẵn và khóa; cả hai null khi không đọc được; `accountExists` cho biết email được mời đã có tài khoản chưa để FE chọn nút Đăng nhập hay Tạo tài khoản; `ownerFullName` là tên Chủ kho (thư mời đã nêu tên này) để trang cửa vào ghi tiêu đề. |
+| 1 | `GET invitations/{token}` | Công khai. `200 { "valid": true, "responseExpired": false, "invitedEmailMasked": "m•••••h@example.com", "invitedEmail": "minh@example.com", "accountExists": true, "ownerFullName": "Nguyễn Văn A" }`; token lạ `404 HANDOVER_INVITATION_INVALID`. `invitedEmailMasked` là email người nhận đã che bớt; `invitedEmail` là email đầy đủ (đã chuẩn hóa) cho người giữ link để form đăng ký điền sẵn và khóa; cả hai null khi không đọc được; `accountExists` cho biết email được mời đã có tài khoản chưa để FE chọn nút Đăng nhập hay Tạo tài khoản; `ownerFullName` là tên Chủ tài sản (thư mời đã nêu tên này) để trang cửa vào ghi tiêu đề. |
 | 1a | `GET invitations/mine` | Cần đăng nhập. Lời mời nhận gói đang chờ tài khoản này: `200 [{ turnId, containerName, ownerFullName, invitedAt }]`, mới nhất trước. Chỉ gồm lượt chưa ai nhận, còn nhận được (`INVITED` / `INITIAL_RESPONSE_EXPIRED`), kế hoạch `HANDOVER_IN_PROGRESS`, kho không bị giữ, không phải kho của chính mình và email người nhận trùng email đã xác minh của tài khoản. Chưa xác minh email thì `[]`. Email người nhận nằm trong dữ liệu mã hóa nên server giải mã từng người nhận để so (quy mô đồ án, xem comment ở `HandoverService.GetMyInvitationsAsync`). |
 | 2 | `POST invitations/{token}/claim` | Gắn tài khoản đang đăng nhập vào lượt. Cùng người gọi lại: trả trạng thái hiện tại. Trả `HandoverTurn`. Email tài khoản (trim, chữ thường) phải trùng email người nhận, sai thì `403 HANDOVER_EMAIL_MISMATCH`. |
-| 2a | `POST turns/{turnId}/claim` | Nhận lượt ngay trong app (FE gọi khi người nhận bấm "Đồng ý nhận" / "Từ chối nhận" ở thẻ thư mời, không có nút nhận riêng). Dùng chung mọi bước kiểm của endpoint 2 (đã có người nhận `409 HANDOVER_ALREADY_CLAIMED`, chủ kho `OWNER_CANNOT_CLAIM`, kế hoạch, trạng thái, hold) và kiểm email. Cùng người gọi lại: trả trạng thái hiện tại, không ghi gì. Id lạ: `404 HANDOVER_NOT_FOUND`. |
+| 2a | `POST turns/{turnId}/claim` | Nhận lượt ngay trong app (FE gọi khi người nhận bấm "Đồng ý nhận" / "Từ chối nhận" ở thẻ thư mời, không có nút nhận riêng). Dùng chung mọi bước kiểm của endpoint 2 (đã có người nhận `409 HANDOVER_ALREADY_CLAIMED`, chủ tài sản `OWNER_CANNOT_CLAIM`, kế hoạch, trạng thái, hold) và kiểm email. Cùng người gọi lại: trả trạng thái hiện tại, không ghi gì. Id lạ: `404 HANDOVER_NOT_FOUND`. |
 | 3 | `GET turns/me` | Các lượt tôi đã nhận, mới nhất trước. |
 | 4 | `GET turns/{turnId}` | Một lượt của tôi. |
 | 5 | `POST turns/{turnId}/accept` | Đồng ý: tạo grant 30 ngày. Gọi lặp trả lại cùng grant. |
@@ -124,9 +124,9 @@ Lỗi trả `application/problem+json` có trường `code` (UPPER_SNAKE) và đ
 ## 7. Bảo mật và dữ liệu
 
 - Token mời chỉ lưu dạng hash SHA-256 (`InvitationTokenHash`); token gốc chỉ đi tới bộ gửi email. Email mời chỉ có tên và link, không có tên gói hay tài sản.
-- Chủ kho không thể tự nhận lượt của mình (`OWNER_CANNOT_CLAIM`).
+- Chủ tài sản không thể tự nhận lượt của mình (`OWNER_CANNOT_CLAIM`).
 - Tài khoản nhân sự (role EXECUTOR, VERIFIER, ADMIN) không nhận được tài sản bàn giao (`STAFF_CANNOT_CLAIM`).
-- Snapshot ghim phiên bản tài sản lúc mở bàn giao; chủ kho sửa tài sản sau đó không đổi gì ở lượt.
+- Snapshot ghim phiên bản tài sản lúc mở bàn giao; chủ tài sản sửa tài sản sau đó không đổi gì ở lượt.
 - Chỉ mục unique: một grant cho mỗi lượt.
 - Nhật ký truy cập (`HandoverAccessLogs`) chỉ ghi id và kết quả (`Succeeded`, `Denied`, `IntegrityFailed`), không ghi tên tệp hay nội dung.
 
@@ -140,5 +140,5 @@ Các file dùng chung chỉ bị thêm vài dòng ở đúng vị trí (xem `doc
 ## 9. Chạy thử nhanh
 
 1. Chạy `http/handover-dev.sql` cho kho của bạn.
-2. Đăng nhập web bằng tài khoản khác chủ kho (đã xác minh email) rồi mở `http://localhost:5173/receive?token=dev-token-1`.
+2. Đăng nhập web bằng tài khoản khác chủ tài sản (đã xác minh email) rồi mở `http://localhost:5173/receive?token=dev-token-1`.
 3. Hoặc dùng `http/handover-receive.http`.

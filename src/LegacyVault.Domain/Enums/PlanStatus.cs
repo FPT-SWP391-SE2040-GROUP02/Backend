@@ -9,7 +9,7 @@ public enum PlanStatus
     /// <summary>Đang thiết lập.</summary>
     Draft = 0,
 
-    /// <summary>Đã kích hoạt: Chủ kho đã chọn Người thực thi và khai xong.</summary>
+    /// <summary>Đã kích hoạt: Chủ tài sản đã chọn Người thực thi và khai xong.</summary>
     Active = 1,
 
     /// <summary>Người thực thi đã mở bàn giao; luật sư đang lập biên bản, cấu hình kho bị khóa.</summary>

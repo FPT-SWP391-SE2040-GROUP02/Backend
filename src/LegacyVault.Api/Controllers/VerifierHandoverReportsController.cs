@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace LegacyVault.Api.Controllers;
 
-/// <summary>Luật sư xét hồ sơ báo tin Chủ kho đã mất. Chấp nhận thì mở biên bản bàn giao và khóa kho.</summary>
+/// <summary>Luật sư xét hồ sơ báo tin Chủ tài sản đã mất. Chấp nhận thì mở biên bản bàn giao và khóa kho.</summary>
 /// <remarks>Vai trò luật sư được service kiểm từ DB; hồ sơ không được giao cho mình luôn là 404.</remarks>
 [ApiController]
 [Authorize]

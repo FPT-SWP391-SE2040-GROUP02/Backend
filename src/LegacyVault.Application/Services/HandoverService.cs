@@ -89,7 +89,7 @@ public sealed class HandoverService : IHandoverService
             responseExpired = true;
         }
 
-        // 3. Dựng kết quả: link hợp lệ, email được mời, đã có tài khoản chưa, tên Chủ kho
+        // 3. Dựng kết quả: link hợp lệ, email được mời, đã có tài khoản chưa, tên Chủ tài sản
         InvitationStatusResponse response = new InvitationStatusResponse
         {
             Valid = true,
@@ -208,7 +208,7 @@ public sealed class HandoverService : IHandoverService
                 continue;
             }
 
-            // 3. Lượt hợp lệ: thêm vào danh sách kèm tên gói và tên Chủ kho
+            // 3. Lượt hợp lệ: thêm vào danh sách kèm tên gói và tên Chủ tài sản
             User? owner = await users.FindByIdAsync(vault.OwnerId, ct);
             string ownerName = string.Empty;
             if (owner != null)
@@ -257,7 +257,7 @@ public sealed class HandoverService : IHandoverService
 
         if (vault.OwnerId == userId)
         {
-            throw HandoverAccess.NotAllowed("OWNER_CANNOT_CLAIM", "Chủ kho không thể nhận tài sản của chính mình.");
+            throw HandoverAccess.NotAllowed("OWNER_CANNOT_CLAIM", "Chủ tài sản không thể nhận tài sản của chính mình.");
         }
 
         // Tài khoản nhân sự (Executor, Verifier, Admin) xử lý hồ sơ bàn giao nên không được nhận tài sản.
@@ -424,7 +424,7 @@ public sealed class HandoverService : IHandoverService
             "Lời mời này gửi tới một email khác. Hãy đăng nhập bằng đúng email được mời.", extensions);
     }
 
-    /// <summary>Thông tin Chủ kho đã khai cho người nhận của lượt, đã giải mã; không có hoặc không giải mã được thì null.</summary>
+    /// <summary>Thông tin Chủ tài sản đã khai cho người nhận của lượt, đã giải mã; không có hoặc không giải mã được thì null.</summary>
     private async Task<BeneficiaryPersonalData?> ReadRecipientAsync(HandoverTurn turn, CancellationToken ct)
     {
         Beneficiary? beneficiary = await beneficiaries.FindByIdAsync(turn.VaultId, turn.BeneficiaryId, ct);
@@ -492,7 +492,7 @@ public sealed class HandoverService : IHandoverService
         return turn;
     }
 
-    /// <summary>Họ tên người nhận Chủ kho đã nhập, giải mã để chào đúng người; không đọc được thì để trống, không làm hỏng màn hình.</summary>
+    /// <summary>Họ tên người nhận Chủ tài sản đã nhập, giải mã để chào đúng người; không đọc được thì để trống, không làm hỏng màn hình.</summary>
     private async Task<string?> FindRecipientFullNameAsync(HandoverTurn turn, CancellationToken ct)
     {
         BeneficiaryPersonalData? recipient = await ReadRecipientAsync(turn, ct);

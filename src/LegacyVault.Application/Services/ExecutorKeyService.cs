@@ -77,7 +77,7 @@ public sealed class ExecutorKeyService : IExecutorKeyService
     {
         Guid userId = currentUser.RequireUserId();
         Vault? vault = await vaultRepository.FindByIdAsync(vaultId, ct);
-        // Chỉ Người thực thi ĐÃ CHẤP NHẬN của kho mới đọc được mã; lời mời chưa trả lời, Chủ kho hay người lạ
+        // Chỉ Người thực thi ĐÃ CHẤP NHẬN của kho mới đọc được mã; lời mời chưa trả lời, Chủ tài sản hay người lạ
         // đều nhận 404 như kho không tồn tại (không lộ kho nào có mã).
         if (vault == null || vault.OwnerId == userId || !await IsAcceptedExecutorAsync(vault.Id, userId, ct))
         {
@@ -108,14 +108,14 @@ public sealed class ExecutorKeyService : IExecutorKeyService
         catch (Exception exception) when (exception is System.Security.Cryptography.CryptographicException
             || exception is FormatException || exception is KeyNotFoundException || exception is InvalidOperationException)
         {
-            // Không đưa chi tiết lỗi giải mã ra ngoài; Chủ kho cấp lại là có mã mới.
+            // Không đưa chi tiết lỗi giải mã ra ngoài; Chủ tài sản cấp lại là có mã mới.
             shardText = string.Empty;
         }
         if (string.IsNullOrEmpty(shardText))
         {
             // Mã cấp trước khi có tính năng gửi trên hệ thống (chỉ có hash) hoặc không giải mã được.
             throw new AppException(AppErrorType.Conflict, ErrorCode.ExecutorKeyNotIssued,
-                "Mã nhận của kho này chưa đọc được trên hệ thống. Chủ kho cần đổi mã.");
+                "Mã nhận của kho này chưa đọc được trên hệ thống. Chủ tài sản cần đổi mã.");
         }
 
         User? owner = await userRepository.FindByIdAsync(vault.OwnerId, ct);

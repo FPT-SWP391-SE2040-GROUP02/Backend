@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LegacyVault.Api.Controllers;
 
 /// <summary>
-/// Chủ kho xem yêu cầu nhận tài sản đang mở của kho mình (chỉ đọc).
+/// Chủ tài sản xem yêu cầu nhận tài sản đang mở của kho mình (chỉ đọc).
 /// </summary>
 /// <remarks>Kho không phải của mình luôn là 404.</remarks>
 [ApiController]

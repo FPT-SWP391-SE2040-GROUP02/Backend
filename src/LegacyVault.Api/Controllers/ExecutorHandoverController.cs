@@ -12,7 +12,7 @@ namespace LegacyVault.Api.Controllers;
 /// Người thực thi: mở bàn giao, xem và ký biên bản bàn giao, theo dõi tiến độ, gửi mã nhận cho người nhận.
 /// </summary>
 /// <remarks>
-/// Người gọi phải là Người thực thi đang hiệu lực của kho và không phải Chủ kho; không đủ điều kiện thì 404.
+/// Người gọi phải là Người thực thi đang hiệu lực của kho và không phải Chủ tài sản; không đủ điều kiện thì 404.
 /// Người thực thi chỉ giữ và giao tài sản theo biên bản, không sửa được biên bản.
 /// </remarks>
 [ApiController]
@@ -50,7 +50,7 @@ public sealed class ExecutorHandoverController : ControllerBase
     }
 
     /// <summary>
-    /// Đồng ý (ký bằng mật khẩu) hoặc không đồng ý phiên bản biên bản phân chia Chủ kho vừa ký lại.
+    /// Đồng ý (ký bằng mật khẩu) hoặc không đồng ý phiên bản biên bản phân chia Chủ tài sản vừa ký lại.
     /// </summary>
     [HttpPost("vaults/{vaultId:guid}/will/respond")]
     [EnableRateLimiting("executor-invitations")]

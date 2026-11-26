@@ -22,7 +22,7 @@ public static class HandoverAccess
         return turn;
     }
 
-    /// <summary>Người dùng là Người thực thi đang hiệu lực của kho. Chủ kho không bao giờ được tính là Người thực thi của chính kho mình.</summary>
+    /// <summary>Người dùng là Người thực thi đang hiệu lực của kho. Chủ tài sản không bao giờ được tính là Người thực thi của chính kho mình.</summary>
     public static async Task<bool> IsActiveExecutorAsync(
         IExecutorReader executorReader, Vault vault, Guid userId, CancellationToken ct)
     {

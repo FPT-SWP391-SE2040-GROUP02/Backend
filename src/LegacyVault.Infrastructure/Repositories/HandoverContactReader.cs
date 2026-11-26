@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegacyVault.Infrastructure.Repositories;
 
-/// <summary>Đọc họ tên Chủ kho và liên hệ Người thực thi cho thư mời nhận tài sản.</summary>
+/// <summary>Đọc họ tên Chủ tài sản và liên hệ Người thực thi cho thư mời nhận tài sản.</summary>
 public sealed class HandoverContactReader : IHandoverContactReader
 {
     private readonly AppDbContext context;

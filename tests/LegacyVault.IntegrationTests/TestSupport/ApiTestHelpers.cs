@@ -64,7 +64,7 @@ public static class ApiTestHelpers
     }
 
     /// <summary>
-    /// Chủ kho chỉ mời được Người thực thi hệ thống: đổi tài khoản có email này thành EXECUTOR đang hoạt động,
+    /// Chủ tài sản chỉ mời được Người thực thi hệ thống: đổi tài khoản có email này thành EXECUTOR đang hoạt động,
     /// chưa có thì thêm mới (đã xác minh email).
     /// </summary>
     public static async Task EnsureSystemExecutorAsync(ApiFactory factory, string email)
@@ -138,7 +138,7 @@ public static class ApiTestHelpers
     }
 
     /// <summary>
-    /// Chủ kho ký biên bản phân chia (ghi thẳng DB, như bước nhập PIN) cho lời mời đang chờ của kế hoạch nháp.
+    /// Chủ tài sản ký biên bản phân chia (ghi thẳng DB, như bước nhập PIN) cho lời mời đang chờ của kế hoạch nháp.
     /// </summary>
     public static Task SignWillForInviteeAsync(ApiFactory factory, Guid vaultId)
     {

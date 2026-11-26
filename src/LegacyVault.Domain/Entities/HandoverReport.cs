@@ -3,10 +3,10 @@ using LegacyVault.Domain.Enums;
 namespace LegacyVault.Domain.Entities;
 
 /// <summary>
-/// Hồ sơ báo tin Chủ kho đã mất (bảng HandoverReports), do người thân nộp kèm giấy chứng tử và di chúc.
+/// Hồ sơ báo tin Chủ tài sản đã mất (bảng HandoverReports), do người thân nộp kèm giấy chứng tử và di chúc.
 /// </summary>
 /// <remarks>
-/// - Người nộp không cần được Chủ kho khai từ trước; nộp hồ sơ không làm họ thành người nhận.
+/// - Người nộp không cần được Chủ tài sản khai từ trước; nộp hồ sơ không làm họ thành người nhận.
 /// - Kho được tìm bằng số căn cước người mất. Người nộp không biết có tìm thấy hay không (VaultId chỉ luật sư dùng).
 /// - Nộp hồ sơ chưa khóa kho. Luật sư chấp nhận thì mới tạo (hoặc gắn vào) biên bản bàn giao và khóa kho.
 /// - Thông tin người mất và người nhận gợi ý nằm trong DataProtected (mã hóa envelope).

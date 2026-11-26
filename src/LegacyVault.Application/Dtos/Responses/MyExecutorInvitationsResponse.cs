@@ -22,7 +22,7 @@ public sealed class MyExecutorInvitationResponse
 {
     public Guid Id { get; set; }
 
-    /// <summary>Tên Chủ kho đã mời.</summary>
+    /// <summary>Tên Chủ tài sản đã mời.</summary>
     public string OwnerName { get; set; } = string.Empty;
 
     public string InviteeEmail { get; set; } = string.Empty;
@@ -37,10 +37,10 @@ public sealed class MyExecutorInvitationResponse
     /// <summary>Lúc từ chối, hết hạn hoặc bị thu hồi; null khi còn chờ.</summary>
     public DateTimeOffset? EndedAt { get; set; }
 
-    /// <summary>True khi Chủ kho đã ký biên bản phân chia và lời mời ký được; false thì phải chờ Chủ kho ký.</summary>
+    /// <summary>True khi Chủ tài sản đã ký biên bản phân chia và lời mời ký được; false thì phải chờ Chủ tài sản ký.</summary>
     public bool WillReady { get; set; }
 
-    /// <summary>Phiên bản Chủ kho ký gần nhất; gửi lại khi chấp nhận. Null khi WillReady = false.</summary>
+    /// <summary>Phiên bản Chủ tài sản ký gần nhất; gửi lại khi chấp nhận. Null khi WillReady = false.</summary>
     public int? WillVersionNo { get; set; }
 
     public DateTimeOffset? WillSignedAt { get; set; }
@@ -48,6 +48,6 @@ public sealed class MyExecutorInvitationResponse
     /// <summary>Số tài sản trong kho; chỉ là số đếm, không có tên hay nội dung. 0 khi WillReady = false.</summary>
     public int AssetCount { get; set; }
 
-    /// <summary>Số người nhận trên tờ; 0 khi Chủ kho không khai người nhận.</summary>
+    /// <summary>Số người nhận trên tờ; 0 khi Chủ tài sản không khai người nhận.</summary>
     public int RecipientCount { get; set; }
 }

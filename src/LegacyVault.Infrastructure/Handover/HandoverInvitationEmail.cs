@@ -9,9 +9,9 @@ namespace LegacyVault.Infrastructure.Handover;
 /// Dựng email mời nhận tài sản. Hàm thuần, không gửi gì.
 /// </summary>
 /// <remarks>
-/// - Không có tên gói hay tên tài sản; chỉ có tên người nhận, tên Chủ kho, liên hệ Người thực thi, link và hạn phản hồi.
-/// - Đây là thư thứ hai người nhận được: lần đầu họ đã được báo khi Chủ kho bật kế hoạch bàn giao, nên thư nhắc lại chuyện cũ.
-/// - Không đoán giới tính từ tên: dùng "bạn" cho người nhận và chỉ dùng họ tên cho Chủ kho, Người thực thi.
+/// - Không có tên gói hay tên tài sản; chỉ có tên người nhận, tên Chủ tài sản, liên hệ Người thực thi, link và hạn phản hồi.
+/// - Đây là thư thứ hai người nhận được: lần đầu họ đã được báo khi Chủ tài sản bật kế hoạch bàn giao, nên thư nhắc lại chuyện cũ.
+/// - Không đoán giới tính từ tên: dùng "bạn" cho người nhận và chỉ dùng họ tên cho Chủ tài sản, Người thực thi.
 /// - Giờ hiển thị theo giờ Việt Nam (UTC+7). Mọi chữ do người dùng nhập được mã hóa HTML trong bản HTML.
 /// </remarks>
 public static class HandoverInvitationEmail
@@ -43,13 +43,13 @@ public static class HandoverInvitationEmail
             .ToString("dd/MM", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>Cách gọi Chủ kho trong thư: họ tên, hoặc chữ "chủ kho" khi chưa có tên.</summary>
+    /// <summary>Cách gọi Chủ tài sản trong thư: họ tên, hoặc chữ "chủ tài sản" khi chưa có tên.</summary>
     private static string OwnerLabel(HandoverInvitation invitation)
     {
         string owner = invitation.OwnerFullName.Trim();
         if (owner.Length == 0)
         {
-            return "chủ kho";
+            return "chủ tài sản";
         }
         return owner;
     }
@@ -88,7 +88,7 @@ public static class HandoverInvitationEmail
         }
         else
         {
-            lines.Add("Người thực thi do chủ kho chỉ định đã mở bàn giao. "
+            lines.Add("Người thực thi do chủ tài sản chỉ định đã mở bàn giao. "
                 + "Luật sư đã lập biên bản bàn giao, trong đó có tên bạn.");
         }
         lines.Add(ContactLine(invitation, executorLabel, hasExecutor));
@@ -140,7 +140,7 @@ public static class HandoverInvitationEmail
     }
 
     /// <summary>
-    /// Thư mời người nhận do luật sư thêm vào biên bản (Chủ kho không chia tài sản cho họ): nói rõ luật sư thêm theo di chúc
+    /// Thư mời người nhận do luật sư thêm vào biên bản (Chủ tài sản không chia tài sản cho họ): nói rõ luật sư thêm theo di chúc
     /// hoặc quy định pháp luật, và dặn tạo tài khoản bằng đúng email này. Không có tên tài sản hay số căn cước.
     /// </summary>
     private static EmailParts AddedByVerifierParts(HandoverInvitation invitation, string? supportContact)
@@ -232,12 +232,12 @@ public static class HandoverInvitationEmail
             + " " + string.Join(" · ", company) + ".";
     }
 
-    /// <summary>Câu liên hệ trong thư: có Người thực thi thì kèm số điện thoại và/hoặc email của họ, không thì bảo hỏi Người thực thi do chủ kho chỉ định.</summary>
+    /// <summary>Câu liên hệ trong thư: có Người thực thi thì kèm số điện thoại và/hoặc email của họ, không thì bảo hỏi Người thực thi do chủ tài sản chỉ định.</summary>
     private static string ContactLine(HandoverInvitation invitation, string executorLabel, bool hasExecutor)
     {
         if (!hasExecutor)
         {
-            return "Nếu có thắc mắc, bạn cứ hỏi Người thực thi do chủ kho chỉ định.";
+            return "Nếu có thắc mắc, bạn cứ hỏi Người thực thi do chủ tài sản chỉ định.";
         }
         bool hasPhone = !string.IsNullOrWhiteSpace(invitation.ExecutorPhone);
         bool hasEmail = !string.IsNullOrWhiteSpace(invitation.ExecutorEmail);

@@ -52,7 +52,7 @@ public sealed class ExecutorInvitationSender(
     public sealed record InvitationMail(string Subject, string Text, string Html);
 
     /// <summary>
-    /// Dựng nội dung thư mời. ownerName có giá trị thì thư nêu rõ tên Chủ kho đã mời; assignedByAdmin thì thư nói do
+    /// Dựng nội dung thư mời. ownerName có giá trị thì thư nêu rõ tên Chủ tài sản đã mời; assignedByAdmin thì thư nói do
     /// quản trị viên chỉ định. Tách riêng để bản xem thử và bản gửi thật dùng chung một nội dung.
     /// </summary>
     public static InvitationMail BuildMail(
@@ -70,7 +70,7 @@ public sealed class ExecutorInvitationSender(
             subject = "Quản trị viên LegacyVault mời bạn làm Người thực thi";
             title = "Quản trị viên LegacyVault mời bạn làm Người thực thi";
             lead = "Quản trị viên LegacyVault chọn anh/chị là người đứng ra lo việc bàn giao tài sản số của một kho đang cần người phụ trách, "
-                + "cho người thân của Chủ kho khi Chủ kho qua đời. Mỗi kho chỉ có một người được giao nhiệm vụ như vậy.";
+                + "cho người thân của Chủ tài sản khi Chủ tài sản qua đời. Mỗi kho chỉ có một người được giao nhiệm vụ như vậy.";
         }
         else if (hasOwner)
         {
@@ -83,10 +83,10 @@ public sealed class ExecutorInvitationSender(
         }
         else
         {
-            who = "Một Chủ kho";
+            who = "Một Chủ tài sản";
             subject = "Lời mời làm Người thực thi — LegacyVault";
             title = "Bạn được mời làm Người thực thi";
-            lead = "Một Chủ kho trên LegacyVault đã chọn anh/chị là người đứng ra lo việc bàn giao tài sản số của họ cho người thân "
+            lead = "Một Chủ tài sản trên LegacyVault đã chọn anh/chị là người đứng ra lo việc bàn giao tài sản số của họ cho người thân "
                 + "khi họ qua đời. Mỗi kho chỉ có một người được giao nhiệm vụ như vậy.";
         }
 
@@ -96,7 +96,7 @@ public sealed class ExecutorInvitationSender(
         List<LegacyVaultEmailTheme.MailListSection> sections = new List<LegacyVaultEmailTheme.MailListSection>();
         sections.Add(new LegacyVaultEmailTheme.MailListSection("Nếu nhận lời, anh/chị sẽ:", new string[]
         {
-            "Mở bàn giao trên hệ thống khi Chủ kho qua đời (không cần nộp giấy tờ).",
+            "Mở bàn giao trên hệ thống khi Chủ tài sản qua đời (không cần nộp giấy tờ).",
             "Giữ hộ tài sản, không tự chia, bán hay cho; việc chia do luật sư lập trong biên bản bàn giao.",
             "Ký biên bản bàn giao cùng luật sư và người nhận.",
             "Gửi mã nhận cho người nhận khi biên bản đã đủ chữ ký.",
@@ -109,7 +109,7 @@ public sealed class ExecutorInvitationSender(
             + "Hồ sơ báo tin do Người xét duyệt của LegacyVault quyết định, không phải anh/chị."));
         closing.Add(new LegacyVaultEmailTheme.MailParagraph(
             null,
-            "Anh/chị có thể nhận lời hoặc từ chối. Chủ kho sẽ được báo lại lựa chọn của anh/chị."));
+            "Anh/chị có thể nhận lời hoặc từ chối. Chủ tài sản sẽ được báo lại lựa chọn của anh/chị."));
 
         string notice = "Lời mời có hiệu lực đến "
             + expiresAt.ToOffset(TimeSpan.FromHours(7)).ToString("HH:mm 'ngày' dd/MM/yyyy", CultureInfo.InvariantCulture)

@@ -49,7 +49,7 @@ public class HandoverRequestPreviewResponse
 
     public string RecipientName { get; set; } = string.Empty;
 
-    /// <summary>Email Chủ kho đã khai cho người nhận, che bớt; người nhận phải đăng nhập đúng email này.</summary>
+    /// <summary>Email Chủ tài sản đã khai cho người nhận, che bớt; người nhận phải đăng nhập đúng email này.</summary>
     public string InvitedEmailMasked { get; set; } = string.Empty;
 
     /// <summary>Gửi yêu cầu được không: kế hoạch đang hoạt động hoặc đang có biên bản chưa đủ chữ ký.</summary>
@@ -71,7 +71,7 @@ public class MyHandoverClaimResponse
     /// <summary>Bước của biên bản: DRAFTING, IDENTITY_CHECK, SIGNING, COMPLETED hoặc CANCELLED.</summary>
     public string RecordStatus { get; set; } = string.Empty;
 
-    /// <summary>Lý do luật sư hủy biên bản; null khi Chủ kho hủy hoặc chưa hủy.</summary>
+    /// <summary>Lý do luật sư hủy biên bản; null khi Chủ tài sản hủy hoặc chưa hủy.</summary>
     public string? CancelReason { get; set; }
 
     public string Note { get; set; } = string.Empty;
@@ -85,7 +85,7 @@ public class MyHandoverClaimResponse
     public List<HandoverRecordFileResponse> Files { get; set; } = new List<HandoverRecordFileResponse>();
 }
 
-/// <summary>Yêu cầu nhận tài sản đang mở của kho, cho Chủ kho xem (GET /vaults/{id}/handover-request).</summary>
+/// <summary>Yêu cầu nhận tài sản đang mở của kho, cho Chủ tài sản xem (GET /vaults/{id}/handover-request).</summary>
 public class OwnerHandoverRequestResponse
 {
     public Guid RecordId { get; set; }
@@ -93,7 +93,7 @@ public class OwnerHandoverRequestResponse
     public string Status { get; set; } = string.Empty;
 
     /// <summary>
-    /// Kho đã khóa chưa. false: luật sư đang xét giấy tờ, Chủ kho vẫn sửa được kho; true: luật sư đã chấp nhận giấy tờ.
+    /// Kho đã khóa chưa. false: luật sư đang xét giấy tờ, Chủ tài sản vẫn sửa được kho; true: luật sư đã chấp nhận giấy tờ.
     /// </summary>
     public bool VaultLocked { get; set; }
 

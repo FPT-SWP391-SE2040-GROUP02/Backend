@@ -135,7 +135,7 @@ public sealed class HandoverVaultLockFlowTests : IAsyncLifetime
         (Guid firstClaim, Guid recordId) = await SubmitOkAsync(vault.FirstClient, vault.VaultId);
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
 
-        // Kiểm tra: có biên bản nhưng kho chưa khóa, Chủ kho thấy yêu cầu và vẫn sửa được kho
+        // Kiểm tra: có biên bản nhưng kho chưa khóa, Chủ tài sản thấy yêu cầu và vẫn sửa được kho
         Assert.Equal(PlanStatus.Active, await ReadPlanStatusAsync(vault.VaultId));
         JsonElement ownerView = await ApiTestHelpers.ReadJsonAsync(await vault.Owner.GetAsync(ownerUrl));
         Assert.False(ownerView.GetProperty("vaultLocked").GetBoolean());
@@ -159,7 +159,7 @@ public sealed class HandoverVaultLockFlowTests : IAsyncLifetime
             HandoverRecordTestData.VerifierRecordUrl(recordId) + "/finalize", HandoverRecordTestData.FinalizeBody);
 
         // Kiểm tra: bổ sung và từ chối không khóa; còn yêu cầu chờ xét nên biên bản vẫn mở và chưa chốt được;
-        // người đã gửi yêu cầu không bị Chủ kho xóa
+        // người đã gửi yêu cầu không bị Chủ tài sản xóa
         Assert.Equal(PlanStatus.Active, afterSupplement);
         Assert.Equal(PlanStatus.Active, afterReject);
         Assert.Equal(recordId, sameRecord);
@@ -174,7 +174,7 @@ public sealed class HandoverVaultLockFlowTests : IAsyncLifetime
         // Hành động: luật sư chấp nhận người thứ hai
         Assert.Equal(HttpStatusCode.OK, (await ReviewAsync(verifier.Client, recordId, secondClaim, "ACCEPT", null)).StatusCode);
 
-        // Kiểm tra: kho khóa; Chủ kho không sửa được nữa; người bị từ chối không ghi tài sản được
+        // Kiểm tra: kho khóa; Chủ tài sản không sửa được nữa; người bị từ chối không ghi tài sản được
         Assert.Equal(PlanStatus.HandoverRequested, await ReadPlanStatusAsync(vault.VaultId));
         JsonElement lockedView = await ApiTestHelpers.ReadJsonAsync(await vault.Owner.GetAsync(ownerUrl));
         Assert.True(lockedView.GetProperty("vaultLocked").GetBoolean());
@@ -227,7 +227,7 @@ public sealed class HandoverVaultLockFlowTests : IAsyncLifetime
         VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
         string assignmentsUrl = $"/api/v1/vaults/{vault.VaultId}/assets/";
 
-        // Hành động: Chủ kho gỡ hai dòng gán (dòng thứ hai là dòng cuối của kế hoạch)
+        // Hành động: Chủ tài sản gỡ hai dòng gán (dòng thứ hai là dòng cuối của kế hoạch)
         HttpResponseMessage removeFirst = await vault.Owner.DeleteAsync(
             assignmentsUrl + vault.AssetA + "/assignments/" + vault.FirstRecipient);
         HttpResponseMessage removeLast = await vault.Owner.DeleteAsync(

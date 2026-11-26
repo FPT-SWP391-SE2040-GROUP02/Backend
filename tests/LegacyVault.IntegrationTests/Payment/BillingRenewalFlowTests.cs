@@ -142,7 +142,7 @@ public sealed class BillingRenewalFlowTests : IAsyncLifetime
     [SqlFact]
     public async Task Renewal_ExpiredReviewVault_CanRenewAndDoesNotNeedEkyc()
     {
-        // Chuẩn bị: hết ân hạn, chờ rà soát; Chủ kho chưa có eKYC
+        // Chuẩn bị: hết ân hạn, chờ rà soát; Chủ tài sản chưa có eKYC
         (HttpClient client, Guid vaultId, _) = await BillingTestData.CreateFreeVaultAsync(factory, null);
         await BillingTestData.MakePaidActiveAsync(factory, vaultId, TimeSpan.FromDays(-300));
         await ApiTestHelpers.SetEntitlementStatusAsync(factory, vaultId, EntitlementStatus.ExpiredReview);

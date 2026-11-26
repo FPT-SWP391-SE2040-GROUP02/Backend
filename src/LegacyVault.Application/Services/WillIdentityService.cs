@@ -9,8 +9,8 @@ namespace LegacyVault.Application.Services;
 public interface IWillIdentityService
 {
     /// <summary>
-    /// Chủ kho xem danh tính đầy đủ (đã giải mã) của mình và của từng người nhận trong kho để lập di chúc.
-    /// Người khác (kể cả Admin) → 404 như các API Chủ kho. Mỗi lần thành công ghi nhật ký WILL_IDENTITY_VIEWED
+    /// Chủ tài sản xem danh tính đầy đủ (đã giải mã) của mình và của từng người nhận trong kho để lập di chúc.
+    /// Người khác (kể cả Admin) → 404 như các API Chủ tài sản. Mỗi lần thành công ghi nhật ký WILL_IDENTITY_VIEWED
     /// (không ghi giá trị đã giải mã).
     /// </summary>
     Task<WillIdentityResponse> GetAsync(Guid vaultId, CancellationToken ct);
@@ -57,7 +57,7 @@ public sealed class WillIdentityService : IWillIdentityService
         Guid userId = currentUser.RequireUserId();
         Vault vault = VaultRules.EnsureOwnedBy(await vaults.FindByIdAsync(vaultId, ct), userId);
 
-        // Chủ kho chưa có danh tính eKYC đã gắn thì owner = null.
+        // Chủ tài sản chưa có danh tính eKYC đã gắn thì owner = null.
         WillOwnerIdentityResponse? owner = null;
         OwnerIdentity? ownerIdentity = await ownerIdentities.FindByUserIdAsync(vault.OwnerId, ct);
         if (ownerIdentity != null)

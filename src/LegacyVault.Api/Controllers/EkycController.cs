@@ -11,7 +11,7 @@ namespace LegacyVault.Api.Controllers;
 
 /// <summary>Xác minh danh tính điện tử của người dùng đang đăng nhập (docs/api-contract.md mục 6.9).</summary>
 [ApiController]
-// eKYC chỉ dành cho Chủ kho (vai trò USER); nhân sự (EXECUTOR, VERIFIER, ADMIN) không dùng và nhận 403.
+// eKYC chỉ dành cho Chủ tài sản (vai trò USER); nhân sự (EXECUTOR, VERIFIER, ADMIN) không dùng và nhận 403.
 [Authorize(Roles = "USER")]
 [EnableRateLimiting(AuthRateLimitPolicies.Ekyc)]
 [Route("api/v1/ekyc")]

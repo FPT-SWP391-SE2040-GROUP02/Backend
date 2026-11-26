@@ -19,7 +19,7 @@ public class FinalizeHandoverRecordRequest
     public bool? ConfirmLegalBasis { get; set; }
 
     /// <summary>
-    /// Luật sư xác nhận biên bản khác cách chia ban đầu của Chủ kho là theo di chúc hoặc quy định pháp luật. Bắt buộc true
+    /// Luật sư xác nhận biên bản khác cách chia ban đầu của Chủ tài sản là theo di chúc hoặc quy định pháp luật. Bắt buộc true
     /// khi biên bản có khác biệt (splitDifferences không rỗng), thiếu thì 400 VALIDATION_ERROR; không khác thì bỏ qua.
     /// </summary>
     public bool? ConfirmSplitDeviation { get; set; }

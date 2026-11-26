@@ -30,15 +30,15 @@ public interface IPlanSetupService
     Task<PlanSetupResponse> ActivateAsync(Guid vaultId, ActivatePlanRequest request, CancellationToken ct);
 
     /// <summary>
-    /// Chủ kho ký lại di chúc (PIN kiểm ở filter) khi kế hoạch đang chạy và có thay đổi chưa ký: tạo phiên bản di chúc mới.
+    /// Chủ tài sản ký lại di chúc (PIN kiểm ở filter) khi kế hoạch đang chạy và có thay đổi chưa ký: tạo phiên bản di chúc mới.
     /// Không có thay đổi thì trả nguyên trạng, không tạo phiên bản. configVersion cũ → 409 EDIT_CONFLICT.
     /// </summary>
     Task<PlanSetupResponse> SignWillAsync(Guid vaultId, SignWillRequest request, CancellationToken ct);
     Task<bool> CheckEmailExistsAsync(string email, CancellationToken ct);
 
     /// <summary>
-    /// Chủ kho tìm tài khoản có sẵn để chọn làm Người thực thi. Từ khóa dưới 2 ký tự trả danh sách rỗng
-    /// (không cho duyệt toàn bộ người dùng); tối đa 8 kết quả; không gồm chính Chủ kho, Admin, Verifier.
+    /// Chủ tài sản tìm tài khoản có sẵn để chọn làm Người thực thi. Từ khóa dưới 2 ký tự trả danh sách rỗng
+    /// (không cho duyệt toàn bộ người dùng); tối đa 8 kết quả; không gồm chính Chủ tài sản, Admin, Verifier.
     /// </summary>
     Task<IReadOnlyList<ExecutorCandidateResponse>> SearchCandidatesAsync(Guid vaultId, string? query, CancellationToken ct);
 
@@ -204,7 +204,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             {
                 throw NotAllowed("ROLE_CONFLICT");
             }
-            // Cùng luật với Chủ kho mời: chỉ giao cho Người thực thi hệ thống đã được cấp vai trò.
+            // Cùng luật với Chủ tài sản mời: chỉ giao cho Người thực thi hệ thống đã được cấp vai trò.
             if (target.Role != UserRole.Executor)
             {
                 throw new AppException(AppErrorType.Validation, ErrorCode.OnlySystemExecutorsAllowed,
@@ -267,7 +267,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             await NotifyExecutorChangedAsync(executor, formerExecutorUserId, ct);
             return Map(executor);
         }
-        // Thư do quản trị viên giao, lời thư không nói "Chủ kho mời".
+        // Thư do quản trị viên giao, lời thư không nói "Chủ tài sản mời".
         return await DeliverAsync(executor, token.Value, accountExists, ct, assignedByAdmin: true);
     }
 
@@ -410,7 +410,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         List<Executor> items = await invitations.ListByInviteeEmailAsync(email, MyInvitationsMaxCount, ct);
         foreach (Executor item in items)
         {
-            // Chủ kho không nhận lời mời của chính kho mình; lời mời đã nhận nằm ở danh sách kho của Executor.
+            // Chủ tài sản không nhận lời mời của chính kho mình; lời mời đã nhận nằm ở danh sách kho của Executor.
             if (item.Vault.OwnerId == userId)
             {
                 continue;
@@ -529,7 +529,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             DateTimeOffset now = time.GetUtcNow();
             if (accept)
             {
-                // Người thực thi ký sau cùng: phải có tờ Chủ kho đã ký và đúng phiên bản người này vừa xem.
+                // Người thực thi ký sau cùng: phải có tờ Chủ tài sản đã ký và đúng phiên bản người này vừa xem.
                 WillVersion? latest = await willVersions.FindLatestByVaultIdAsync(vault.Id, ct);
                 List<AssetAssignment> current = await assignments.FindByVaultIdAsync(vault.Id, ct);
                 if (latest == null || !WillVersionRules.IsReadyForInvitee(vault.Plan, item, latest, current))
@@ -640,14 +640,14 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
             vault.Plan.ActivationPolicyVersion = PolicyVersion;
             vault.Plan.ActivationPolicyAcknowledgedAt = now;
             vault.Plan.UpdatedAt = now;
-            // Ký bằng PIN cũng là lúc chụp lại cấu hình: bàn giao chỉ theo bản ký này cho tới khi Chủ kho ký lại.
+            // Ký bằng PIN cũng là lúc chụp lại cấu hình: bàn giao chỉ theo bản ký này cho tới khi Chủ tài sản ký lại.
             List<AssetAssignment> signedAssignments = await assignments.FindByVaultIdAsync(vault.Id, ct);
             WillVersion version = await AddWillVersionAsync(vault, signedAssignments, now, ct);
             Executor? invitee = FindPendingInvitee(vault, now);
             bool activated = invitee == null;
             if (invitee != null)
             {
-                // Chủ kho ký trước; kế hoạch chỉ có hiệu lực khi Người thực thi xem và ký.
+                // Chủ tài sản ký trước; kế hoạch chỉ có hiệu lực khi Người thực thi xem và ký.
                 version.ExecutorId = invitee.Id;
                 audit.Add(AuditRules.Create(vault.Id, vault.OwnerId, AuditActorRole.Owner, AuditAction.WillSigned,
                     AuditTargetType.Vault, vault.Id, version.VersionNo, AuditOutcome.Succeeded, null, now));
@@ -692,7 +692,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
     private static AppException SetupNotComplete(PlanSetupResponse setup)
     {
         return new AppException(AppErrorType.Conflict, ErrorCode.ExecutorNotAllowed,
-            "Chủ kho cần hoàn tất các bước khác trước khi mời Người thực thi.",
+            "Chủ tài sản cần hoàn tất các bước khác trước khi mời Người thực thi.",
             new Dictionary<string, object?>
             {
                 ["reason"] = "SETUP_NOT_COMPLETE",
@@ -895,7 +895,7 @@ public sealed class PlanSetupService(ICurrentUser currentUser, IVaultRepository 
         {
             pendingInvitee = FindPendingInvitee(vault, time.GetUtcNow());
         }
-        // Chủ kho ký được khi đã mời một người (chưa trả lời) hoặc có người đã nhận vai (dữ liệu cũ).
+        // Chủ tài sản ký được khi đã mời một người (chưa trả lời) hoặc có người đã nhận vai (dữ liệu cũ).
         if (accepted.Count != 1 && pendingInvitee == null)
         {
             missing.Add("PRIMARY_EXECUTOR_REQUIRED");

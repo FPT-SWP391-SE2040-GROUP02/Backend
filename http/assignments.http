@@ -2,7 +2,7 @@
 #
 # Chuẩn bị giống http/vault-assets.http: chạy migration, chạy API (profile http), tạo tài khoản bằng http/auth.http,
 # đăng nhập bên dưới để lấy token, tạo kho rồi điền vaultId.
-# Chủ kho gán trực tiếp từng tài sản cho từng người nhận. Tài sản gán cho nhiều người thì những người đó nhận chung.
+# Chủ tài sản gán trực tiếp từng tài sản cho từng người nhận. Tài sản gán cho nhiều người thì những người đó nhận chung.
 # Gán và gỡ gán cần mã PIN của kho: kho đã đặt PIN thì thêm header X-Vault-Pin (xem http/vault-pin.http).
 
 @baseUrl = http://localhost:5000/api/v1

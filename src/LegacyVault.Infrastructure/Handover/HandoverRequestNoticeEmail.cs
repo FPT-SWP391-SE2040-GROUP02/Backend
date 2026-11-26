@@ -4,7 +4,7 @@ using LegacyVault.Infrastructure.Notifications;
 namespace LegacyVault.Infrastructure.Handover;
 
 /// <summary>
-/// Dựng thư báo có yêu cầu nhận tài sản cho Chủ kho, Người thực thi hoặc luật sư. Hàm thuần, không gửi gì.
+/// Dựng thư báo có yêu cầu nhận tài sản cho Chủ tài sản, Người thực thi hoặc luật sư. Hàm thuần, không gửi gì.
 /// Thư không có tên tài sản hay giấy tờ; nút dẫn về trang của từng vai.
 /// </summary>
 public static class HandoverRequestNoticeEmail
@@ -98,7 +98,7 @@ public static class HandoverRequestNoticeEmail
         return new EmailContent(Subject, text, html);
     }
 
-    /// <summary>Thư báo Chủ kho và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa. Không nêu giấy tờ.</summary>
+    /// <summary>Thư báo Chủ tài sản và Người thực thi: luật sư đã chấp nhận giấy tờ nên kho đã khóa. Không nêu giấy tờ.</summary>
     private static EmailContent BuildLocked(HandoverRequestNotice notice, string baseUrl)
     {
         string title = "Kho đã được khóa để bàn giao";
@@ -223,7 +223,7 @@ public static class HandoverRequestNoticeEmail
         return new EmailContent(VerifierSignNeededSubject, text, html);
     }
 
-    /// <summary>Thư báo Chủ kho và Người thực thi: luật sư đã hủy biên bản đang lập. Không nêu lý do hay giấy tờ.</summary>
+    /// <summary>Thư báo Chủ tài sản và Người thực thi: luật sư đã hủy biên bản đang lập. Không nêu lý do hay giấy tờ.</summary>
     private static EmailContent BuildCancelled(HandoverRequestNotice notice, string baseUrl)
     {
         string title = "Yêu cầu nhận tài sản đã được hủy";

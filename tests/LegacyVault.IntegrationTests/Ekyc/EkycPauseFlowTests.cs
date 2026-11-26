@@ -13,7 +13,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Ekyc;
 
-/// <summary>Công cụ thử nghiệm "tạm ngừng eKYC": chạy trọn luồng eKYC của chủ kho không cần giấy tờ thật.</summary>
+/// <summary>Công cụ thử nghiệm "tạm ngừng eKYC": chạy trọn luồng eKYC của chủ tài sản không cần giấy tờ thật.</summary>
 public sealed class EkycPauseFlowTests : IAsyncLifetime
 {
     private const string PauseUrl = "/api/v1/admin/dev-tools/ekyc-pause";
@@ -53,7 +53,7 @@ public sealed class EkycPauseFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, toggled.StatusCode);
         Assert.True((await ApiTestHelpers.ReadJsonAsync(toggled)).GetProperty("paused").GetBoolean());
 
-        // Hành động: chủ kho đi hết các bước eKYC bằng ảnh bất kỳ
+        // Hành động: chủ tài sản đi hết các bước eKYC bằng ảnh bất kỳ
         HttpClient client = factory.CreateClient();
         ApiTestHelpers.AuthorizeAs(client, factory.Services, owner);
         HttpResponseMessage consent = await client.PostAsJsonAsync("/api/v1/ekyc/consent",

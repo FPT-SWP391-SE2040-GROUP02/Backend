@@ -114,7 +114,7 @@ public sealed class FakeHandoverSubmissionRepository : IHandoverSubmissionReposi
     }
 }
 
-/// <summary>Hồ sơ người nhận: nộp (ảnh căn cước, bản khai đối chiếu với thông tin Chủ kho) và Người xét duyệt duyệt.</summary>
+/// <summary>Hồ sơ người nhận: nộp (ảnh căn cước, bản khai đối chiếu với thông tin Chủ tài sản) và Người xét duyệt duyệt.</summary>
 public sealed class HandoverSubmissionTests
 {
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 10, 14, 8, 0, 0, TimeSpan.Zero);
@@ -221,7 +221,7 @@ public sealed class HandoverSubmissionTests
         Assert.Equal("SUBMITTED", response.Status);
         Assert.True(saved.NameMatches && saved.CitizenIdMatches && saved.DateOfBirthMatches);
         Assert.Equal("012345671234", saved.CitizenId);
-        // Họ tên và ngày sinh người nhận gõ được giữ để luật sư xem cạnh thông tin Chủ kho khai.
+        // Họ tên và ngày sinh người nhận gõ được giữ để luật sư xem cạnh thông tin Chủ tài sản khai.
         Assert.Equal("Trần Minh Anh", saved.FullName);
         Assert.Equal(new DateOnly(1990, 1, 1), saved.DateOfBirth);
         Assert.Equal(2, store.Contents.Count);

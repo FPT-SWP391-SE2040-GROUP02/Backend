@@ -271,7 +271,7 @@ public static class EkycRules
 
     /// <summary>
     /// Tên dùng để so khớp: như <see cref="NormalizeName"/> nhưng bỏ dấu tiếng Việt và đổi Đ thành D, vì OCR hay đọc sai dấu
-    /// (ví dụ Trịnh thành Trinh) và Chủ kho có thể khai tên không dấu. Chỉ để so sánh, không dùng để lưu.
+    /// (ví dụ Trịnh thành Trinh) và Chủ tài sản có thể khai tên không dấu. Chỉ để so sánh, không dùng để lưu.
     /// </summary>
     public static string NormalizeNameForCompare(string name)
     {

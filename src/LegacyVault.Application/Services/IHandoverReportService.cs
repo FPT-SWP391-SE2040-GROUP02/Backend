@@ -3,7 +3,7 @@ using LegacyVault.Application.Dtos.Responses;
 
 namespace LegacyVault.Application.Services;
 
-/// <summary>Hồ sơ báo tin Chủ kho đã mất: người thân nộp, luật sư xét rồi mở biên bản bàn giao.</summary>
+/// <summary>Hồ sơ báo tin Chủ tài sản đã mất: người thân nộp, luật sư xét rồi mở biên bản bàn giao.</summary>
 public interface IHandoverReportService
 {
     /// <summary>
@@ -24,7 +24,7 @@ public interface IHandoverReportService
     Task<List<VerifierHandoverReportResponse>> ListForVerifierAsync(CancellationToken ct);
 
     /// <summary>
-    /// Luật sư xét: ACCEPT (tạo hoặc gắn vào biên bản, khóa kho, báo Chủ kho; có cảnh báo thì
+    /// Luật sư xét: ACCEPT (tạo hoặc gắn vào biên bản, khóa kho, báo Chủ tài sản; có cảnh báo thì
     /// phải xác nhận đã đối chiếu giấy tờ và ghi lý do), REQUEST_SUPPLEMENT hoặc REJECT (kèm lý do).
     /// </summary>
     Task<VerifierHandoverReportResponse> ReviewAsync(

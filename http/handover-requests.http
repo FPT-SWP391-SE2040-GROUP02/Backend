@@ -2,7 +2,7 @@
 # và luật sư chốt biên bản kèm xác nhận căn cứ pháp lý. Chỉ Development, dữ liệu mẫu.
 #
 # Chuẩn bị:
-#   1. Chạy migration và API (profile http). Chủ kho có gói sẵn sàng, khai người nhận với email nguoinhan@gmail.com,
+#   1. Chạy migration và API (profile http). Chủ tài sản có gói sẵn sàng, khai người nhận với email nguoinhan@gmail.com,
 #      rồi kích hoạt kế hoạch (http/plan-setup.http).
 #   2. Tài khoản người nhận đăng ký bằng đúng email đó và ĐÃ xác minh email (http/auth.http).
 #   3. Tệp giấy tờ mẫu: đặt một tệp PDF bất kỳ tên giay-to.pdf cạnh file này (không dùng giấy tờ thật).
@@ -108,7 +108,7 @@ Content-Type: application/json
 }
 
 ### 6) Chốt biên bản: bắt buộc tick xác nhận căn cứ pháp lý (thiếu hoặc false: 400 VALIDATION_ERROR).
-#    Biên bản khác cách chia của Chủ kho (splitDifferences không rỗng) thì phải thêm confirmSplitDeviation: true.
+#    Biên bản khác cách chia của Chủ tài sản (splitDifferences không rỗng) thì phải thêm confirmSplitDeviation: true.
 #    Kho chưa khóa (chưa chấp nhận giấy tờ nào) thì 409 HANDOVER_NOT_ALLOWED (VAULT_NOT_LOCKED).
 #    Chốt xong biên bản ở SIGNING: luật sư và Người thực thi ký được ngay; mỗi người nhận ký khi danh tính của mình xong.
 POST {{baseUrl}}/verifier/handover-records/{{recordId}}/finalize

@@ -12,6 +12,6 @@ public class InvitationMailCheckResponse
     /// <summary>Tiêu đề lượt bàn giao; chỉ có khi Verified.</summary>
     public string? ContainerName { get; set; }
 
-    /// <summary>Họ tên Chủ kho; chỉ có khi Verified.</summary>
+    /// <summary>Họ tên Chủ tài sản; chỉ có khi Verified.</summary>
     public string? OwnerFullName { get; set; }
 }

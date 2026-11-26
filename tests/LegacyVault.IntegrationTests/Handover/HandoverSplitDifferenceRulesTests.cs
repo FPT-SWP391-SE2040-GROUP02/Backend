@@ -3,7 +3,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Handover;
 
-/// <summary>So biên bản với cách chia ban đầu của Chủ kho (HandoverRecordRules.FindSplitDifferences), không cần database.</summary>
+/// <summary>So biên bản với cách chia ban đầu của Chủ tài sản (HandoverRecordRules.FindSplitDifferences), không cần database.</summary>
 public sealed class HandoverSplitDifferenceRulesTests
 {
     private static readonly Guid An = Guid.NewGuid();
@@ -34,7 +34,7 @@ public sealed class HandoverSplitDifferenceRulesTests
     [Fact]
     public void LawyerAddsARecipient_ListsTheRecipientAndTheAssetChange()
     {
-        // Chuẩn bị: Chủ kho cho An nhà; luật sư thêm Cường cùng nhận nhà
+        // Chuẩn bị: Chủ tài sản cho An nhà; luật sư thêm Cường cùng nhận nhà
         List<(Guid BeneficiaryId, Guid AssetId)> owner = Lines((An, House));
         List<(Guid BeneficiaryId, Guid AssetId)> record = Lines((An, House), (Cuong, House));
 
@@ -54,7 +54,7 @@ public sealed class HandoverSplitDifferenceRulesTests
     [Fact]
     public void RecipientDroppedAndAssetMoved_AreBothListed()
     {
-        // Chuẩn bị: Chủ kho cho An nhà, Bình xe; biên bản giao cả nhà và xe cho An
+        // Chuẩn bị: Chủ tài sản cho An nhà, Bình xe; biên bản giao cả nhà và xe cho An
         List<(Guid BeneficiaryId, Guid AssetId)> owner = Lines((An, House), (Binh, Car));
         List<(Guid BeneficiaryId, Guid AssetId)> record = Lines((An, House), (An, Car));
 
@@ -74,7 +74,7 @@ public sealed class HandoverSplitDifferenceRulesTests
     [Fact]
     public void AssetLeftOutOfTheRecord_IsAnAssetChange()
     {
-        // Chuẩn bị: Chủ kho cho An nhà và xe; biên bản chỉ ghi nhà
+        // Chuẩn bị: Chủ tài sản cho An nhà và xe; biên bản chỉ ghi nhà
         List<(Guid BeneficiaryId, Guid AssetId)> owner = Lines((An, House), (An, Car));
         List<(Guid BeneficiaryId, Guid AssetId)> record = Lines((An, House));
 

@@ -18,9 +18,9 @@ namespace LegacyVault.Application.Services;
 
 // Luồng hồ sơ báo tin:
 //   1. Người thân nộp hồ sơ ......... SubmitAsync (chưa khóa kho, không cho biết có kho hay không)
-//   2. Luật sư xét giấy tờ .......... ReviewAsync (chấp nhận thì tạo biên bản bàn giao, khóa kho, báo Chủ kho)
+//   2. Luật sư xét giấy tờ .......... ReviewAsync (chấp nhận thì tạo biên bản bàn giao, khóa kho, báo Chủ tài sản)
 //   3. Từ đây đi tiếp như biên bản thường: HandoverRecordService (thêm người nhận, lập, chốt, ký)
-/// <summary>Hồ sơ báo tin Chủ kho đã mất. Hệ thống chỉ lưu giấy tờ; luật sư xác minh ở ngoài hệ thống.</summary>
+/// <summary>Hồ sơ báo tin Chủ tài sản đã mất. Hệ thống chỉ lưu giấy tờ; luật sư xác minh ở ngoài hệ thống.</summary>
 public sealed partial class HandoverReportService : IHandoverReportService
 {
     /// <summary>Số hồ sơ đang chờ xét tối đa của một tài khoản, để chống nộp hàng loạt.</summary>
@@ -281,7 +281,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         report.UpdatedAt = now;
         await SaveAsync(ct);
 
-        // 4. Kho vừa khóa: báo Chủ kho và Người thực thi
+        // 4. Kho vừa khóa: báo Chủ tài sản và Người thực thi
         if (lockedVault != null)
         {
             await NotifyVaultLockedAsync(lockedVault, report, ct);
@@ -405,7 +405,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         }
     }
 
-    /// <summary>Kho có Chủ kho đã eKYC mang đúng số căn cước này; null khi không có.</summary>
+    /// <summary>Kho có Chủ tài sản đã eKYC mang đúng số căn cước này; null khi không có.</summary>
     private async Task<Vault?> FindVaultAsync(string citizenId, CancellationToken ct)
     {
         List<OwnerIdentity> candidates = await identities.ListByCitizenIdLast4ExceptUserAsync(
@@ -643,7 +643,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         return result;
     }
 
-    /// <summary>Bỏ khoảng trắng, dấu chấm, dấu gạch (cùng luật với người nhận của Chủ kho).</summary>
+    /// <summary>Bỏ khoảng trắng, dấu chấm, dấu gạch (cùng luật với người nhận của Chủ tài sản).</summary>
     private static string NormalizePhone(string? phone)
     {
         StringBuilder builder = new StringBuilder();

@@ -38,7 +38,7 @@ public static class AuditTestData
         return matched;
     }
 
-    /// <summary>Id chủ kho, dùng để so với ActorUserId.</summary>
+    /// <summary>Id chủ tài sản, dùng để so với ActorUserId.</summary>
     public static async Task<Guid> GetOwnerIdAsync(ApiFactory factory, Guid vaultId)
     {
         Guid ownerId = Guid.Empty;
