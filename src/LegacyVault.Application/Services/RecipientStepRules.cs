@@ -170,11 +170,13 @@ public static class RecipientStepRules
 
     /// <summary>
     /// Người nhận gửi được yêu cầu lúc này không (cùng điều kiện với luồng gửi bằng link): kho chưa có biên bản thì kế hoạch
-    /// phải đang hoạt động; có biên bản thì biên bản chưa hoàn tất. Chỉ áp dụng khi trạng thái là NOT_REQUESTED.
+    /// phải đang hoạt động; có biên bản thì biên bản chưa hoàn tất. Chỉ áp dụng khi trạng thái là NOT_REQUESTED hoặc REJECTED
+    /// (yêu cầu đã bị từ chối, được gửi lại).
     /// </summary>
     public static bool CanRequest(string status, PlanStatus planStatus, HandoverRecord? record)
     {
-        if (status != NotRequested)
+        // Yêu cầu bị từ chối là đã đóng: người nhận được gửi yêu cầu mới (biên bản chưa hoàn tất).
+        if (status != NotRequested && status != Rejected)
         {
             return false;
         }

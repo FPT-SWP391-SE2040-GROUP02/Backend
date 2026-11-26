@@ -355,6 +355,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
         DateTimeOffset now = timeProvider.GetUtcNow();
         HandoverRecord? record = await records.FindByVaultIdAsync(vault.Id, ct);
         bool created = false;
+        // Yêu cầu trước đã bị từ chối thì đã đóng: gửi lại là mở lượt xét mới trên chính yêu cầu đó, không bị khóa.
+        HandoverClaim? reopened = null;
         if (record == null)
         {
             if (vault.Plan.Status != PlanStatus.Active)
@@ -389,30 +391,46 @@ public sealed class HandoverRecordService : IHandoverRecordService
             {
                 throw HandoverAccess.NotAllowed("RECORD_COMPLETED", "Biên bản bàn giao của kho này đã đủ chữ ký.");
             }
-            if (FindClaim(record, beneficiary.Id) != null)
+            HandoverClaim? existing = FindClaim(record, beneficiary.Id);
+            if (existing != null && existing.Status != HandoverClaimStatus.Rejected)
             {
                 throw HandoverAccess.NotAllowed("ALREADY_REQUESTED",
                     "Bạn đã gửi yêu cầu cho kho này. Xem kết quả ở mục Yêu cầu của tôi.");
             }
+            reopened = existing;
             record.UpdatedAt = now;
         }
 
         // 3. Ghi yêu cầu và giấy tờ (mã hóa), lưu một lần; lưu lỗi thì xóa tệp đã ghi
-        HandoverClaim claim = new HandoverClaim
+        HandoverClaim claim;
+        if (reopened != null)
         {
-            RecordId = record.Id,
-            BeneficiaryId = beneficiary.Id,
-            UserId = user.Id,
-            Status = HandoverClaimStatus.Submitted,
-            Note = cleanNote,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-        records.AddClaim(claim);
-        // EF tự gắn yêu cầu vào biên bản đang theo dõi; chỉ gắn tay khi chưa có (biên bản mới tạo).
-        if (!record.Claims.Contains(claim))
+            // Mỗi người nhận chỉ có một dòng yêu cầu trong biên bản (unique), nên gửi lại thì xét lại chính dòng đó.
+            claim = reopened;
+            claim.Status = HandoverClaimStatus.Submitted;
+            claim.Note = cleanNote;
+            claim.ReviewReason = null;
+            claim.ReviewedAt = null;
+            claim.UpdatedAt = now;
+        }
+        else
         {
-            record.Claims.Add(claim);
+            claim = new HandoverClaim
+            {
+                RecordId = record.Id,
+                BeneficiaryId = beneficiary.Id,
+                UserId = user.Id,
+                Status = HandoverClaimStatus.Submitted,
+                Note = cleanNote,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            records.AddClaim(claim);
+            // EF tự gắn yêu cầu vào biên bản đang theo dõi; chỉ gắn tay khi chưa có (biên bản mới tạo).
+            if (!record.Claims.Contains(claim))
+            {
+                record.Claims.Add(claim);
+            }
         }
         List<HandoverRecordFile> saved = await HandoverRecordFileStorage.SaveAllAsync(
             contentStore, wills, record.Id, claim.Id, HandoverRecordFileKind.Will, user.Id, now, ct);

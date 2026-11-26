@@ -129,4 +129,14 @@ public sealed class FakeAppUrlProvider : IAppUrlProvider
     {
         return "http://fe.test/executor-invitation?token=" + Uri.EscapeDataString(token);
     }
+
+    public string GetExecutorInboxUrl()
+    {
+        return "http://fe.test/executor/invitations";
+    }
+
+    public string GetOwnerHandoverUrl()
+    {
+        return "http://fe.test/dashboard/wills";
+    }
 }

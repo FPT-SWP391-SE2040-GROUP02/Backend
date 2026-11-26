@@ -118,7 +118,28 @@ public sealed class RecipientStepRulesTests
         // Kiểm tra
         Assert.Equal(expected, status);
         Assert.Equal(needsAction, RecipientStepRules.NeedsAction(status, record));
-        Assert.False(RecipientStepRules.CanRequest(status, PlanStatus.HandoverRequested, record));
+        // Yêu cầu bị từ chối là đã đóng nên gửi lại được; các trạng thái khác thì không gửi thêm.
+        Assert.Equal(
+            claimStatus == HandoverClaimStatus.Rejected,
+            RecipientStepRules.CanRequest(status, PlanStatus.HandoverRequested, record));
+    }
+
+    [Fact]
+    public void RejectedClaim_CanRequestAgain_UnlessTheRecordIsCompleted()
+    {
+        // Chuẩn bị: yêu cầu của tôi bị từ chối, biên bản còn đang lập hoặc đã hoàn tất
+        HandoverRecord drafting = Record(HandoverRecordStatus.Drafting);
+        AddClaim(drafting, Me, HandoverClaimStatus.Rejected);
+        HandoverRecord completed = Record(HandoverRecordStatus.Completed);
+        AddClaim(completed, Me, HandoverClaimStatus.Rejected);
+
+        // Hành động
+        string status = RecipientStepRules.ResolveStatus(drafting, Me, null, null);
+
+        // Kiểm tra
+        Assert.Equal(RecipientStepRules.Rejected, status);
+        Assert.True(RecipientStepRules.CanRequest(status, PlanStatus.HandoverRequested, drafting));
+        Assert.False(RecipientStepRules.CanRequest(status, PlanStatus.Closed, completed));
     }
 
     [Fact]
