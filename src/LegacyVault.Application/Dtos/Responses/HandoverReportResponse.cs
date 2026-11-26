@@ -56,6 +56,12 @@ public class SuggestedRecipientResponse
 {
     public string FullName { get; set; } = string.Empty;
 
+    /// <summary>Số căn cước do người nộp khai; rỗng khi không khai.</summary>
+    public string CitizenId { get; set; } = string.Empty;
+
+    /// <summary>Ngày sinh yyyy-MM-dd do người nộp khai; rỗng khi không khai.</summary>
+    public string DateOfBirth { get; set; } = string.Empty;
+
     public string Email { get; set; } = string.Empty;
 
     public string Phone { get; set; } = string.Empty;

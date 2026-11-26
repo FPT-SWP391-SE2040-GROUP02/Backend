@@ -17,6 +17,12 @@ public class SuggestedRecipient
 {
     public string FullName { get; set; } = string.Empty;
 
+    /// <summary>Đủ 12 chữ số; rỗng khi người nộp không khai (hồ sơ cũ cũng rỗng).</summary>
+    public string CitizenId { get; set; } = string.Empty;
+
+    /// <summary>Ngày sinh dạng yyyy-MM-dd; rỗng khi người nộp không khai.</summary>
+    public string DateOfBirth { get; set; } = string.Empty;
+
     public string Email { get; set; } = string.Empty;
 
     public string Phone { get; set; } = string.Empty;

@@ -614,8 +614,9 @@ public sealed class AdminService : IAdminService
                 "Địa chỉ email này đã được sử dụng.");
         }
 
-        // Số không bắt buộc ở đây; có thì chuẩn hóa giống đăng ký để so trùng đúng, và mỗi số chỉ thuộc một tài khoản.
-        string? phone = string.IsNullOrWhiteSpace(request.Phone) ? null : PhoneRules.NormalizeContactPhone(request.Phone, "phone");
+        // Số không bắt buộc ở đây; có thì phải đúng định dạng số di động Việt Nam, chuẩn hóa giống đăng ký để so trùng đúng,
+        // và mỗi số chỉ thuộc một tài khoản.
+        string? phone = string.IsNullOrWhiteSpace(request.Phone) ? null : PhoneRules.NormalizeVietnamesePhone(request.Phone, "phone");
         if (phone != null && await users.PhoneExistsAsync(phone, null, ct))
         {
             throw PhoneRules.AlreadyUsed("phone");

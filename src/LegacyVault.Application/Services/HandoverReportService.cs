@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using LegacyVault.Application.Dtos.Requests;
 using LegacyVault.Application.Dtos.Responses;
 using LegacyVault.Application.Exceptions;
@@ -98,7 +97,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
     {
         // 1. Tài khoản người dùng đã xác minh email; thông tin khai và tệp phải hợp lệ
         User user = await RequireSubmitterAsync(ct);
-        HandoverReportData data = ReadRequest(request);
+        HandoverReportData data = ReadRequest(request, RecipientRules.TodayInVietnam(timeProvider));
         string note = NormalizeNote(request.Note);
         ValidateUploads(uploads);
 
@@ -566,7 +565,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
 
     // ---------------- Hàm phụ: kiểm dữ liệu ----------------
 
-    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request)
+    private static HandoverReportData ReadRequest(SubmitHandoverReportRequest request, DateOnly today)
     {
         HandoverReportData data = new HandoverReportData();
         data.DeceasedFullName = CleanText(request.DeceasedFullName);
@@ -579,11 +578,15 @@ public sealed partial class HandoverReportService : IHandoverReportService
         {
             throw ValidationErrors.For("attested", "Vui lòng cam đoan giấy tờ là thật.");
         }
-        data.Recipients = ReadRecipients(request.Recipients);
+        data.Recipients = ReadRecipients(request.Recipients, today);
         return data;
     }
 
-    private static List<SuggestedRecipient> ReadRecipients(string? json)
+    /// <summary>
+    /// Người nhận do người nộp khai: căn cước và ngày sinh không bắt buộc (luật sư nhập nốt khi lập biên bản) nhưng đã
+    /// khai thì phải đúng, để luật sư điền sẵn được mà không phải sửa lại.
+    /// </summary>
+    private static List<SuggestedRecipient> ReadRecipients(string? json, DateOnly today)
     {
         List<SuggestedRecipient> result = new List<SuggestedRecipient>();
         if (string.IsNullOrWhiteSpace(json))
@@ -608,6 +611,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
             throw ValidationErrors.For("recipients", "Khai tối đa 20 người nhận.");
         }
         HashSet<string> emails = new HashSet<string>();
+        HashSet<string> citizenIds = new HashSet<string>();
         foreach (SuggestedRecipient? item in items)
         {
             if (item == null)
@@ -634,10 +638,17 @@ public sealed partial class HandoverReportService : IHandoverReportService
             {
                 throw ValidationErrors.For("recipients", "Email của người nhận bị trùng.");
             }
-            if (clean.Phone.Length > 0 && !PhonePattern().IsMatch(clean.Phone))
+            if (clean.Phone.Length > 0 && !PhoneRules.IsVietnamesePhone(clean.Phone))
             {
-                throw ValidationErrors.For("recipients", "Số điện thoại của người nhận không hợp lệ (9 đến 15 chữ số).");
+                throw ValidationErrors.For("recipients",
+                    "Số điện thoại của người nhận không đúng định dạng (ví dụ 0912345678 hoặc +84912345678).");
             }
+            clean.CitizenId = ReadRecipientCitizenId(item.CitizenId);
+            if (clean.CitizenId.Length > 0 && !citizenIds.Add(clean.CitizenId))
+            {
+                throw ValidationErrors.For("recipients", "Số căn cước của người nhận bị trùng.");
+            }
+            clean.DateOfBirth = ReadRecipientBirthDate(item.DateOfBirth, today);
             result.Add(clean);
         }
         return result;
@@ -657,8 +668,53 @@ public sealed partial class HandoverReportService : IHandoverReportService
         return builder.ToString();
     }
 
-    [GeneratedRegex("^\\+?[0-9]{9,15}$")]
-    private static partial Regex PhonePattern();
+    /// <summary>Số căn cước người nhận: không khai thì rỗng; khai thì đủ 12 chữ số.</summary>
+    private static string ReadRecipientCitizenId(string? citizenId)
+    {
+        if (string.IsNullOrWhiteSpace(citizenId))
+        {
+            return string.Empty;
+        }
+        StringBuilder builder = new StringBuilder();
+        foreach (char c in citizenId)
+        {
+            if (!char.IsWhiteSpace(c))
+            {
+                builder.Append(c);
+            }
+        }
+        string normalized = builder.ToString();
+        if (!CitizenIdRules.IsDigits(normalized, CitizenIdRules.CitizenIdLength, CitizenIdRules.CitizenIdLength))
+        {
+            throw ValidationErrors.For("recipients", "Số căn cước của người nhận gồm đúng 12 chữ số.");
+        }
+        return normalized;
+    }
+
+    /// <summary>Ngày sinh người nhận (yyyy-MM-dd): không khai thì rỗng; khai thì hợp lệ, không ở tương lai và đủ 18 tuổi.</summary>
+    private static string ReadRecipientBirthDate(string? dateOfBirth, DateOnly today)
+    {
+        string text = CleanText(dateOfBirth);
+        if (text.Length == 0)
+        {
+            return string.Empty;
+        }
+        DateOnly parsed;
+        if (!DateOnly.TryParseExact(text, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out parsed))
+        {
+            throw ValidationErrors.For("recipients", "Ngày sinh của người nhận không hợp lệ.");
+        }
+        if (parsed > today)
+        {
+            throw ValidationErrors.For("recipients", "Ngày sinh của người nhận không được ở tương lai.");
+        }
+        if (parsed > today.AddYears(-RecipientRules.MinimumAge))
+        {
+            throw ValidationErrors.For("recipients", "Người nhận phải đủ 18 tuổi.");
+        }
+        return text;
+    }
 
     private static bool IsEmail(string email)
     {
@@ -830,6 +886,8 @@ public sealed partial class HandoverReportService : IHandoverReportService
             SuggestedRecipientResponse recipient = new SuggestedRecipientResponse
             {
                 FullName = item.FullName,
+                CitizenId = item.CitizenId,
+                DateOfBirth = item.DateOfBirth,
                 Email = item.Email,
                 Phone = item.Phone
             };
