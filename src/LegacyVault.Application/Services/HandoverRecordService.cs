@@ -1041,7 +1041,8 @@ public sealed class HandoverRecordService : IHandoverRecordService
         }
         if (request.Phone != null && request.Phone.Trim().Length > 0)
         {
-            data.Phone = request.Phone.Trim();
+            // Số có nhập thì phải là số di động Việt Nam; lưu dạng đã bỏ khoảng trắng, dấu chấm, gạch nối.
+            data.Phone = PhoneRules.NormalizeVietnamesePhone(request.Phone, "phone");
         }
         return data;
     }

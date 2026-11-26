@@ -30,6 +30,15 @@ public class AdminUserResponse
 /// <summary>Chi tiết một tài khoản cho Admin: thông tin tài khoản cộng việc đang giữ, quyết định và hoạt động gần đây.</summary>
 public class AdminUserDetailResponse : AdminUserResponse
 {
+    /// <summary>Số điện thoại của tài khoản nhân sự (Admin nhập khi tạo hoặc sửa); null khi chưa có hoặc tài khoản người dùng thường.</summary>
+    public string? Phone { get; set; }
+
+    /// <summary>Số chứng chỉ hành nghề luật sư; null khi không có.</summary>
+    public string? PracticeCertificateNumber { get; set; }
+
+    /// <summary>Số thẻ luật sư; null khi không có.</summary>
+    public string? LawyerCardNumber { get; set; }
+
     /// <summary>
     /// Việc đang giữ của luật sư: biên bản bàn giao chưa hoàn tất, chưa hủy và hồ sơ báo tin còn chờ xét được giao cho
     /// người này; rỗng với vai trò khác.
