@@ -188,13 +188,57 @@ public static class HandoverRecordTestData
         return result;
     }
 
-    /// <summary>Luật sư và Người thực thi ký biên bản (bước 3). Biên bản phải đang ở bước ký.</summary>
-    public static async Task SignAsVerifierAndExecutorAsync(FinalizedRecord record, Guid vaultId)
+    /// <summary>Đường ký phần của một người nhận, tính từ đường biên bản của luật sư hoặc Người thực thi.</summary>
+    public static string SignUrl(string recordUrl, Guid beneficiaryId)
     {
-        HttpResponseMessage verifier = await record.Verifier.Client.PostAsync(VerifierRecordUrl(record.RecordId) + "/sign", null);
-        Assert.Equal(HttpStatusCode.OK, verifier.StatusCode);
-        HttpResponseMessage executor = await record.Executor.Client.PostAsync(ExecutorRecordUrl(vaultId) + "/sign", null);
-        Assert.Equal(HttpStatusCode.OK, executor.StatusCode);
+        return recordUrl + "/recipients/" + beneficiaryId + "/sign";
+    }
+
+    /// <summary>Người nhận trong biên bản; confirmedOnly thì chỉ người đã được xác nhận danh tính.</summary>
+    public static async Task<List<Guid>> RecipientIdsAsync(ApiFactory factory, Guid recordId, bool confirmedOnly = false)
+    {
+        List<Guid> result = new List<Guid>();
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            List<Guid> ids = await db.Set<HandoverRecordLine>().Where(l => l.RecordId == recordId)
+                .Select(l => l.BeneficiaryId).Distinct().ToListAsync();
+            foreach (Guid id in ids)
+            {
+                bool ready = await db.Set<HandoverTurn>().AnyAsync(t => t.RecordId == recordId && t.BeneficiaryId == id
+                    && (t.Status == HandoverTurnStatus.ReadyToAccept || t.Status == HandoverTurnStatus.HandoverCommitted));
+                if (!confirmedOnly || ready)
+                {
+                    result.Add(id);
+                }
+            }
+        });
+        return result;
+    }
+
+    /// <summary>Đặt mọi lượt đang mời là đã xác nhận danh tính, cho những test không đi qua bước xác minh.</summary>
+    public static async Task ConfirmIdentitiesAsync(ApiFactory factory, Guid recordId)
+    {
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            await db.Set<HandoverTurn>().Where(t => t.RecordId == recordId && t.Status == HandoverTurnStatus.Invited)
+                .ExecuteUpdateAsync(x => x.SetProperty(t => t.Status, HandoverTurnStatus.ReadyToAccept));
+        });
+    }
+
+    /// <summary>
+    /// Người thực thi rồi luật sư ký phần của từng người nhận đã được xác nhận danh tính (bấm lại không ghi trùng).
+    /// </summary>
+    public static async Task SignAsVerifierAndExecutorAsync(ApiFactory factory, FinalizedRecord record, Guid vaultId)
+    {
+        foreach (Guid beneficiaryId in await RecipientIdsAsync(factory, record.RecordId, confirmedOnly: true))
+        {
+            HttpResponseMessage executor = await record.Executor.Client.PostAsync(
+                SignUrl(ExecutorRecordUrl(vaultId), beneficiaryId), null);
+            Assert.Equal(HttpStatusCode.OK, executor.StatusCode);
+            HttpResponseMessage verifier = await record.Verifier.Client.PostAsync(
+                SignUrl(VerifierRecordUrl(record.RecordId), beneficiaryId), null);
+            Assert.Equal(HttpStatusCode.OK, verifier.StatusCode);
+        }
     }
 
     /// <summary>Người nhận ký biên bản từ lượt của mình; trả biên bản sau khi ký.</summary>

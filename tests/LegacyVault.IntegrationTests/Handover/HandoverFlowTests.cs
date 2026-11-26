@@ -177,7 +177,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Assert.Equal("READY_TO_ACCEPT", claimed.GetProperty("status").GetString());
         Guid turnId = claimed.GetProperty("id").GetGuid();
 
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(factory, current.Record, current.VaultId);
         JsonElement signed = await HandoverRecordTestData.SignAsRecipientAsync(client, turnId);
         Assert.Equal("COMPLETED", signed.GetProperty("status").GetString());
 
@@ -415,7 +415,7 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         HttpClient receiver = await NewReceiverAsync();
         JsonElement claimed = await ClaimAsync(receiver, 0);
         Guid turnId = claimed.GetProperty("id").GetGuid();
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(factory, current.Record, current.VaultId);
 
         Task<HttpResponseMessage> first = receiver.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
         Task<HttpResponseMessage> second = receiver.PostAsync($"/api/v1/handover/turns/{turnId}/record/sign", null);
@@ -442,15 +442,16 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         await BuildScenarioAsync(1);
         HttpClient receiver = await NewReceiverAsync();
         Guid turnId = (await ClaimAsync(receiver, 0)).GetProperty("id").GetGuid();
+        Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, current.Record.RecordId, confirmedOnly: true))[0];
         HttpResponseMessage executorSigned = await current.Record.Executor.Client.PostAsync(
-            HandoverRecordTestData.ExecutorRecordUrl(current.VaultId) + "/sign", null);
+            HandoverRecordTestData.SignUrl(HandoverRecordTestData.ExecutorRecordUrl(current.VaultId), beneficiaryId), null);
         Assert.Equal(HttpStatusCode.OK, executorSigned.StatusCode);
 
         // Hành động: người nhận ký trước, luật sư ký sau cùng
         JsonElement afterRecipient = await HandoverRecordTestData.SignAsRecipientAsync(receiver, turnId);
         string statusBeforeVerifier = (await GetTurnAsync(receiver, turnId)).GetProperty("status").GetString()!;
         HttpResponseMessage verifierSigned = await current.Record.Verifier.Client.PostAsync(
-            HandoverRecordTestData.VerifierRecordUrl(current.Record.RecordId) + "/sign", null);
+            HandoverRecordTestData.SignUrl(HandoverRecordTestData.VerifierRecordUrl(current.Record.RecordId), beneficiaryId), null);
 
         // Kiểm tra: chưa đủ chữ ký luật sư thì chưa mở; luật sư ký xong thì mở cho người đã ký và biên bản hoàn tất
         Assert.Equal("SIGNING", afterRecipient.GetProperty("status").GetString());
@@ -463,6 +464,51 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         {
             Assert.Single(await db.Set<HandoverGrant>().Where(g => g.TurnId == turnId).ToListAsync());
         });
+    }
+
+    [SqlFact]
+    public async Task EachRecipientIsSignedSeparately_InAnyOrder_AndTheFirstReadyOneIsDelivered()
+    {
+        // Chuẩn bị: hai người nhận, mới người A xong danh tính
+        await BuildScenarioAsync(2);
+        HttpClient receiverA = await NewReceiverAsync();
+        Guid turnA = (await ClaimAsync(receiverA, 0)).GetProperty("id").GetGuid();
+        Guid recordId = current.Record.RecordId;
+        Guid a = (await HandoverRecordTestData.RecipientIdsAsync(factory, recordId, confirmedOnly: true))[0];
+        Guid b = (await HandoverRecordTestData.RecipientIdsAsync(factory, recordId)).Single(id => id != a);
+        string executorUrl = HandoverRecordTestData.ExecutorRecordUrl(current.VaultId);
+        string verifierUrl = HandoverRecordTestData.VerifierRecordUrl(recordId);
+
+        // Hành động và kiểm tra: luật sư ký trước Người thực thi cũng được
+        HttpResponseMessage verifierFirst = await current.Record.Verifier.Client.PostAsync(
+            HandoverRecordTestData.SignUrl(verifierUrl, a), null);
+        Assert.Equal(HttpStatusCode.OK, verifierFirst.StatusCode);
+
+        // Luật sư cũng không ký được cho người B chưa xác nhận danh tính
+        HttpResponseMessage verifierUnconfirmed = await current.Record.Verifier.Client.PostAsync(
+            HandoverRecordTestData.SignUrl(verifierUrl, b), null);
+        Assert.Equal("RECIPIENT_NOT_CONFIRMED",
+            (await ApiTestHelpers.ReadJsonAsync(verifierUnconfirmed)).GetProperty("reason").GetString());
+
+        // Người B chưa xác nhận danh tính thì không bên nào ký cho B được
+        HttpResponseMessage unconfirmed = await current.Record.Executor.Client.PostAsync(
+            HandoverRecordTestData.SignUrl(executorUrl, b), null);
+        Assert.Equal("RECIPIENT_NOT_CONFIRMED",
+            (await ApiTestHelpers.ReadJsonAsync(unconfirmed)).GetProperty("reason").GetString());
+
+        // Đủ ba chữ ký cho A thì A được giao ngay, biên bản vẫn chờ B
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(factory, current.Record, current.VaultId);
+        JsonElement afterA = await HandoverRecordTestData.SignAsRecipientAsync(receiverA, turnA);
+        Assert.Equal("SIGNING", afterA.GetProperty("status").GetString());
+        Assert.Equal("HANDOVER_COMMITTED",
+            (await GetTurnAsync(receiverA, turnA)).GetProperty("status").GetString());
+        JsonElement forVerifier = await ApiTestHelpers.ReadJsonAsync(
+            await current.Record.Verifier.Client.GetAsync(verifierUrl));
+        JsonElement rowB = forVerifier.GetProperty("recipients").EnumerateArray()
+            .Single(r => r.GetProperty("beneficiaryId").GetGuid() == b);
+        Assert.Equal(JsonValueKind.Null, rowB.GetProperty("executorSignedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, rowB.GetProperty("verifierSignedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, forVerifier.GetProperty("verifierSignedAt").ValueKind);
     }
 
     [SqlFact]
@@ -497,8 +543,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
         Guid turnA = (await ClaimAsync(receiverA, 0)).GetProperty("id").GetGuid();
         string verifierUrl = HandoverRecordTestData.VerifierRecordUrl(current.Record.RecordId);
 
-        // Hành động: luật sư và Người thực thi ký ngay sau khi chốt; A ký
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(current.Record, current.VaultId);
+        // Hành động: Người thực thi và luật sư ký phần của A (đã xong danh tính); A ký
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(factory, current.Record, current.VaultId);
         JsonElement afterA = await HandoverRecordTestData.SignAsRecipientAsync(receiverA, turnA);
 
         // Kiểm tra: A được mở quyền tải dù B chưa nộp ảnh; biên bản vẫn đang giao; đã có người nhận thì không mở lại được
@@ -513,6 +559,8 @@ public sealed class HandoverFlowTests : IAsyncLifetime
 
         // Hành động: B nhận lượt (xong danh tính) rồi ký sau
         Guid turnB = (await ClaimAsync(receiverB, 1)).GetProperty("id").GetGuid();
+        // B mới xong danh tính nên Người thực thi và luật sư ký phần của B lúc này
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(factory, current.Record, current.VaultId);
         JsonElement afterB = await HandoverRecordTestData.SignAsRecipientAsync(receiverB, turnB);
 
         // Kiểm tra: mọi người nhận đã ký thì biên bản hoàn tất; mỗi người chỉ đọc được phần của mình

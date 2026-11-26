@@ -54,22 +54,50 @@ public static class HandoverRecordRules
         return result;
     }
 
-    /// <summary>Chữ ký hiện tại của một bên; với người nhận thì truyền beneficiaryId. Null khi chưa ký.</summary>
+    /// <summary>
+    /// Chữ ký hiện tại của một bên cho phần của một người nhận. Mỗi bên ký riêng cho từng người nhận. Chữ ký của luật sư
+    /// và Người thực thi không ghi người nhận (biên bản ký trước khi đổi cách ký) được tính cho mọi người nhận.
+    /// </summary>
     public static HandoverRecordSignature? FindSignature(HandoverRecord record, HandoverSignerRole role, Guid? beneficiaryId)
     {
+        HandoverRecordSignature? forAll = null;
         foreach (HandoverRecordSignature signature in CurrentSignatures(record))
         {
             if (signature.Role != role)
             {
                 continue;
             }
-            if (role == HandoverSignerRole.Recipient && signature.BeneficiaryId != beneficiaryId)
+            if (signature.BeneficiaryId == beneficiaryId)
             {
-                continue;
+                return signature;
             }
-            return signature;
+            if (role != HandoverSignerRole.Recipient && signature.BeneficiaryId == null)
+            {
+                forAll = signature;
+            }
         }
-        return null;
+        return forAll;
+    }
+
+    /// <summary>
+    /// Bên này đã ký xong cho mọi người nhận chưa: trả chữ ký muộn nhất; còn thiếu người nào thì null.
+    /// </summary>
+    public static HandoverRecordSignature? FindSignatureForAll(HandoverRecord record, HandoverSignerRole role)
+    {
+        HandoverRecordSignature? latest = null;
+        foreach (Guid beneficiaryId in GroupAssetsByRecipient(record.Lines).Keys)
+        {
+            HandoverRecordSignature? signature = FindSignature(record, role, beneficiaryId);
+            if (signature == null)
+            {
+                return null;
+            }
+            if (latest == null || signature.SignedAt > latest.SignedAt)
+            {
+                latest = signature;
+            }
+        }
+        return latest;
     }
 
     /// <summary>Danh tính đã được luật sư xác nhận: lượt đã qua bước xác minh (hoặc đã bàn giao).</summary>
@@ -118,8 +146,8 @@ public static class HandoverRecordRules
     }
 
     /// <summary>
-    /// Biên bản đã chốt, chưa hoàn tất và chỉ còn thiếu chữ ký luật sư để mở quyền tải: Người thực thi đã ký, ít nhất một
-    /// người nhận trong biên bản đã ký, luật sư chưa ký (đều tính theo bản hiện tại).
+    /// Biên bản đã chốt, chưa hoàn tất và có người nhận chỉ còn thiếu chữ ký luật sư để được mở quyền tải: Người thực thi
+    /// và người nhận đó đã ký, luật sư chưa ký cho người đó (đều tính theo bản hiện tại).
     /// </summary>
     public static bool OnlyVerifierSignatureMissing(HandoverRecord record)
     {
@@ -127,18 +155,11 @@ public static class HandoverRecordRules
         {
             return false;
         }
-        if (FindSignature(record, HandoverSignerRole.Verifier, null) != null)
+        foreach (Guid beneficiaryId in GroupAssetsByRecipient(record.Lines).Keys)
         {
-            return false;
-        }
-        if (FindSignature(record, HandoverSignerRole.Executor, null) == null)
-        {
-            return false;
-        }
-        Dictionary<Guid, List<Guid>> recipients = GroupAssetsByRecipient(record.Lines);
-        foreach (Guid beneficiaryId in recipients.Keys)
-        {
-            if (FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId) != null)
+            if (FindSignature(record, HandoverSignerRole.Verifier, beneficiaryId) == null
+                && FindSignature(record, HandoverSignerRole.Executor, beneficiaryId) != null
+                && FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId) != null)
             {
                 return true;
             }
@@ -146,21 +167,20 @@ public static class HandoverRecordRules
         return false;
     }
 
-    /// <summary>Đủ chữ ký ba bên của bản hiện tại: luật sư, Người thực thi và từng người nhận trong biên bản.</summary>
+    /// <summary>Đủ chữ ký ba bên của bản hiện tại cho phần của một người nhận.</summary>
+    public static bool IsSignedFor(HandoverRecord record, Guid beneficiaryId)
+    {
+        return FindSignature(record, HandoverSignerRole.Verifier, beneficiaryId) != null
+            && FindSignature(record, HandoverSignerRole.Executor, beneficiaryId) != null
+            && FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId) != null;
+    }
+
+    /// <summary>Phần của mọi người nhận trong biên bản đều đủ chữ ký ba bên.</summary>
     public static bool AllSigned(HandoverRecord record)
     {
-        if (FindSignature(record, HandoverSignerRole.Verifier, null) == null)
+        foreach (Guid beneficiaryId in GroupAssetsByRecipient(record.Lines).Keys)
         {
-            return false;
-        }
-        if (FindSignature(record, HandoverSignerRole.Executor, null) == null)
-        {
-            return false;
-        }
-        Dictionary<Guid, List<Guid>> recipients = GroupAssetsByRecipient(record.Lines);
-        foreach (Guid beneficiaryId in recipients.Keys)
-        {
-            if (FindSignature(record, HandoverSignerRole.Recipient, beneficiaryId) == null)
+            if (!IsSignedFor(record, beneficiaryId))
             {
                 return false;
             }

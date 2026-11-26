@@ -131,8 +131,10 @@ public sealed class AdminAssignExecutorDuringHandoverTests : IAsyncLifetime
         Handover handover = await BuildFinalizedHandoverAsync();
         string executorRecordUrl = HandoverRecordTestData.ExecutorRecordUrl(handover.VaultId);
         string keyUrl = "/api/v1/executor/vaults/" + handover.VaultId + "/handover-key";
-        Assert.Equal(HttpStatusCode.OK,
-            (await handover.Record.Executor.Client.PostAsync(executorRecordUrl + "/sign", null)).StatusCode);
+        await HandoverRecordTestData.ConfirmIdentitiesAsync(factory, handover.Record.RecordId);
+        Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, handover.Record.RecordId))[0];
+        string signUrl = HandoverRecordTestData.SignUrl(executorRecordUrl, beneficiaryId);
+        Assert.Equal(HttpStatusCode.OK, (await handover.Record.Executor.Client.PostAsync(signUrl, null)).StatusCode);
 
         // Hành động
         HttpResponseMessage assigned = await AssignAsync(handover);
@@ -175,8 +177,11 @@ public sealed class AdminAssignExecutorDuringHandoverTests : IAsyncLifetime
 
         // Hành động
         HttpResponseMessage assigned = await AssignAsync(handover);
-        HttpResponseMessage oldSign = await handover.Record.Executor.Client.PostAsync(executorRecordUrl + "/sign", null);
-        HttpResponseMessage newSign = await handover.NewExecutorClient.PostAsync(executorRecordUrl + "/sign", null);
+        await HandoverRecordTestData.ConfirmIdentitiesAsync(factory, handover.Record.RecordId);
+        Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, handover.Record.RecordId))[0];
+        string signUrl = HandoverRecordTestData.SignUrl(executorRecordUrl, beneficiaryId);
+        HttpResponseMessage oldSign = await handover.Record.Executor.Client.PostAsync(signUrl, null);
+        HttpResponseMessage newSign = await handover.NewExecutorClient.PostAsync(signUrl, null);
 
         // Kiểm tra: người cũ không ký được nữa, người mới ký được
         Assert.Equal(HttpStatusCode.OK, assigned.StatusCode);

@@ -140,8 +140,12 @@ public sealed class HandoverRecordReminderFlowTests : IAsyncLifetime
     {
         // Chuẩn bị
         (Guid vaultId, HandoverRecordTestData.FinalizedRecord record) = await BuildFinalizedAsync();
-        Assert.Equal(HttpStatusCode.OK,
-            (await record.Executor.Client.PostAsync(HandoverRecordTestData.ExecutorRecordUrl(vaultId) + "/sign", null)).StatusCode);
+        await HandoverRecordTestData.ConfirmIdentitiesAsync(factory, record.RecordId);
+        foreach (Guid id in await HandoverRecordTestData.RecipientIdsAsync(factory, record.RecordId))
+        {
+            Assert.Equal(HttpStatusCode.OK, (await record.Executor.Client.PostAsync(
+                HandoverRecordTestData.SignUrl(HandoverRecordTestData.ExecutorRecordUrl(vaultId), id), null)).StatusCode);
+        }
 
         // Hành động
         HttpResponseMessage response = await record.Verifier.Client.PostAsync(RemindUrl(record.RecordId), null);
@@ -203,11 +207,12 @@ public sealed class HandoverRecordReminderFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await recipient.PostAsync($"/api/v1/handover/turns/{turnId}/claim", null)).StatusCode);
 
         // Hành động: Người thực thi ký (chưa có người nhận nào ký) rồi người nhận ký, cuối cùng luật sư ký
-        await record.Executor.Client.PostAsync(HandoverRecordTestData.ExecutorRecordUrl(vaultId) + "/sign", null);
+        Guid beneficiaryId = (await HandoverRecordTestData.RecipientIdsAsync(factory, record.RecordId))[0];
+        await record.Executor.Client.PostAsync(HandoverRecordTestData.SignUrl(HandoverRecordTestData.ExecutorRecordUrl(vaultId), beneficiaryId), null);
         int afterExecutor = notices.OfStage(HandoverRequestNotice.StageVerifierSignNeeded).Count;
         await HandoverRecordTestData.SignAsRecipientAsync(recipient, turnId);
         List<HandoverRequestNotice> afterRecipient = notices.OfStage(HandoverRequestNotice.StageVerifierSignNeeded);
-        await record.Verifier.Client.PostAsync(HandoverRecordTestData.VerifierRecordUrl(record.RecordId) + "/sign", null);
+        await record.Verifier.Client.PostAsync(HandoverRecordTestData.SignUrl(HandoverRecordTestData.VerifierRecordUrl(record.RecordId), beneficiaryId), null);
 
         // Kiểm tra: chỉ một thư, tới luật sư, gửi lúc người nhận ký xong; luật sư ký không gửi thêm
         Assert.Equal(0, afterExecutor);

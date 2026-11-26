@@ -621,7 +621,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         // Bước 1 chưa có dòng: chưa chốt được; chưa tới bước ký thì không ai ký được.
         await ApiTestHelpers.AssertProblemAsync(await verifier.Client.PostAsJsonAsync(url + "/finalize", HandoverRecordTestData.FinalizeBody), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         JsonElement early = await ApiTestHelpers.AssertProblemAsync(
-            await verifier.Client.PostAsync(url + "/sign", null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+            await verifier.Client.PostAsync(HandoverRecordTestData.SignUrl(url, vault.FirstRecipient), null), HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
         Assert.Equal("NOT_SIGNING_STEP", early.GetProperty("reason").GetString());
 
         // Dòng sai: tài sản lạ, trùng cặp người - tài sản.
@@ -648,9 +648,9 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, stillDrafting.GetProperty("legalBasisConfirmedAt").ValueKind);
         JsonElement finalized = await FinalizeOkAsync(verifier.Client, url);
 
-        // Chốt xong là biên bản đang giao: luật sư ký được ngay, không chờ danh tính người nhận.
+        // Chốt xong là biên bản đang giao: chưa người nhận nào xác nhận danh tính nên luật sư chưa ký được cho ai.
         Assert.Equal("SIGNING", finalized.GetProperty("status").GetString());
-        Assert.True(finalized.GetProperty("canSign").GetBoolean());
+        Assert.False(finalized.GetProperty("canSign").GetBoolean());
         Assert.Equal(2, finalized.GetProperty("recipients").GetArrayLength());
         // Đã chốt thì không sửa dòng được nữa.
         await ApiTestHelpers.AssertProblemAsync(
@@ -714,7 +714,10 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal(turnId, signingRow.GetProperty("turnId").GetGuid());
 
         // Luật sư ký rồi mở lại: chữ ký cũ mất hiệu lực, bản mới.
-        await PostOkAsync(record.Verifier.Client, verifierUrl + "/sign");
+        Guid signedFor = (await HandoverRecordTestData.RecipientIdsAsync(factory, record.RecordId, confirmedOnly: true))[0];
+        await PostOkAsync(record.Executor.Client,
+            HandoverRecordTestData.SignUrl(HandoverRecordTestData.ExecutorRecordUrl(vault.VaultId), signedFor));
+        await PostOkAsync(record.Verifier.Client, HandoverRecordTestData.SignUrl(verifierUrl, signedFor));
         JsonElement reopened = await PostOkAsync(record.Verifier.Client, verifierUrl + "/reopen");
         Assert.Equal("DRAFTING", reopened.GetProperty("status").GetString());
         Assert.Equal(2, reopened.GetProperty("revisionNo").GetInt32());
@@ -729,7 +732,7 @@ public sealed class HandoverRecordFlowTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.String, refinalized.GetProperty("legalBasisConfirmedAt").ValueKind);
         Assert.Equal("SIGNING", refinalized.GetProperty("status").GetString());
 
-        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(record, vault.VaultId);
+        await HandoverRecordTestData.SignAsVerifierAndExecutorAsync(factory, record, vault.VaultId);
         // Người thực thi chưa gửi được mã khi biên bản chưa đủ chữ ký.
         HttpResponseMessage tooEarly = await record.Executor.Client.PostAsJsonAsync(
             $"/api/v1/executor/handover-records/{record.RecordId}/handover-turns/{turnId}/send-key", new { key = "x" });
