@@ -166,4 +166,6 @@ public enum AuditAction
     ExecutorWillConfirmed = 79,
     /// <summary>Người thực thi không đồng ý phiên bản biên bản phân chia Chủ tài sản ký lại.</summary>
     ExecutorWillDeclined = 80,
+    /// <summary>Người thực thi hoặc người được mời mở biên bản phân chia đầy đủ. Nhật ký không ghi danh tính hay tên tài sản.</summary>
+    ExecutorWillViewed = 81,
 }

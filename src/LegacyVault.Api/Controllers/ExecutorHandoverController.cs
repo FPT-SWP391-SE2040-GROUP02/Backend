@@ -63,6 +63,36 @@ public sealed class ExecutorHandoverController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Biên bản phân chia đầy đủ (bản Chủ tài sản ký gần nhất) cho Người thực thi: danh tính, tên tài sản và người nhận.
+    /// Không có nội dung tài sản. Mỗi lần xem ghi nhật ký; response không được cache.
+    /// </summary>
+    [HttpGet("vaults/{vaultId:guid}/will")]
+    [EnableRateLimiting("executor-invitations")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType<ExecutorWillResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ExecutorWillResponse> GetWill(Guid vaultId, CancellationToken ct)
+    {
+        return willService.GetForVaultAsync(vaultId, ct);
+    }
+
+    /// <summary>
+    /// Biên bản phân chia đầy đủ cho người đang được mời đọc trước khi ký nhận vai. Chỉ tài khoản có email đã xác minh
+    /// trùng email được mời; response không được cache.
+    /// </summary>
+    [HttpGet("invitations/{invitationId:guid}/will")]
+    [EnableRateLimiting("executor-invitations")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType<ExecutorWillResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public Task<ExecutorWillResponse> GetInvitationWill(Guid invitationId, CancellationToken ct)
+    {
+        return willService.GetForInvitationAsync(invitationId, ct);
+    }
+
     /// <summary>Biên bản bàn giao của kho. Chưa mở bàn giao thì 204 (không có nội dung).</summary>
     [HttpGet("vaults/{vaultId:guid}/handover-record")]
     [ProducesResponseType<HandoverRecordResponse>(StatusCodes.Status200OK)]

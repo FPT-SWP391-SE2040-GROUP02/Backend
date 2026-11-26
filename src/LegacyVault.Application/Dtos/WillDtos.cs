@@ -23,3 +23,11 @@ public sealed record WillRecipientIdentityResponse(Guid BeneficiaryId, string Fu
 
 /// <summary>Owner null khi Chủ tài sản chưa có danh tính eKYC đã gắn.</summary>
 public sealed record WillIdentityResponse(WillOwnerIdentityResponse? Owner, List<WillRecipientIdentityResponse> Recipients);
+
+/// <summary>
+/// Biên bản phân chia đầy đủ cho Người thực thi (và người đang được mời) đọc trước khi ký: bản Chủ tài sản ký gần nhất, dùng
+/// đúng kiểu người nhận của plan-setup và danh tính của will/identity. Không có nội dung tài sản, lời nhắn (HasMessage luôn
+/// false) hay liên hệ của người nhận.
+/// </summary>
+public sealed record ExecutorWillResponse(int VersionNo, DateTimeOffset SignedAt, string OwnerName, string OwnerEmail,
+    List<PlanSetupRecipientResponse> Recipients, int UnassignedAssetCount, WillIdentityResponse Identity);
