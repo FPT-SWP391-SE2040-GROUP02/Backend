@@ -88,8 +88,8 @@ public class CreateAdminUserRequest
 }
 
 /// <summary>
-/// Admin sửa thông tin của một tài khoản nhân sự (Người xét duyệt, Người thực thi hệ thống, Quản trị viên). Thay trọn bốn
-/// trường: trường tùy chọn để trống thì xóa giá trị cũ.
+/// Admin sửa thông tin của tài khoản Người xét duyệt hoặc Người thực thi hệ thống: chỉ họ tên và số điện thoại. Thay trọn hai
+/// trường: số điện thoại để trống thì xóa số cũ. Số chứng chỉ, số thẻ luật sư chỉ nhập lúc tạo tài khoản.
 /// </summary>
 public class UpdateAdminUserProfileRequest
 {
@@ -99,12 +99,4 @@ public class UpdateAdminUserProfileRequest
 
     [MaxLength(32)]
     public string? Phone { get; set; }
-
-    /// <summary>Số chứng chỉ hành nghề luật sư (VERIFIER hoặc EXECUTOR); vai trò khác bỏ qua.</summary>
-    [MaxLength(64)]
-    public string? PracticeCertificateNumber { get; set; }
-
-    /// <summary>Số thẻ luật sư (VERIFIER hoặc EXECUTOR); vai trò khác bỏ qua.</summary>
-    [MaxLength(64)]
-    public string? LawyerCardNumber { get; set; }
 }

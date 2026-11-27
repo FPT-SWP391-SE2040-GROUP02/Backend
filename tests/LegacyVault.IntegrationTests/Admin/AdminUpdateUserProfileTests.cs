@@ -9,7 +9,7 @@ using Xunit;
 
 namespace LegacyVault.IntegrationTests.Admin;
 
-/// <summary>Admin sửa họ tên, số điện thoại, số chứng chỉ và số thẻ luật sư của tài khoản nhân sự. Chạy trên SQL Server thật ([SqlFact]).</summary>
+/// <summary>Admin chỉ sửa họ tên và số điện thoại của tài khoản Người xét duyệt và Người thực thi. Chạy trên SQL Server thật ([SqlFact]).</summary>
 public sealed class AdminUpdateUserProfileTests : IAsyncLifetime
 {
     private ApiFactory factory = null!;
@@ -58,16 +58,17 @@ public sealed class AdminUpdateUserProfileTests : IAsyncLifetime
         {
             fullName = "  Lê Thu Hà  ",
             phone = "091 234-56.78",
-            practiceCertificateNumber = " CC-12345 ",
-            lawyerCardNumber = "LS-678"
+            practiceCertificateNumber = "CC-IGNORED",
+            lawyerCardNumber = "LS-IGNORED"
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Lê Thu Hà", (await ApiTestHelpers.ReadJsonAsync(response)).GetProperty("fullName").GetString());
         JsonElement detail = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync($"/api/v1/admin/users/{verifier.Id}"));
         Assert.Equal("0912345678", detail.GetProperty("phone").GetString());
-        Assert.Equal("CC-12345", detail.GetProperty("practiceCertificateNumber").GetString());
-        Assert.Equal("LS-678", detail.GetProperty("lawyerCardNumber").GetString());
+        // Số chứng chỉ và số thẻ luật sư không sửa được qua đường này: giá trị gửi kèm bị bỏ qua.
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("practiceCertificateNumber").ValueKind);
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("lawyerCardNumber").ValueKind);
         int audited = 0;
         await ApiTestHelpers.WithDbAsync(factory, async db =>
         {
@@ -77,23 +78,18 @@ public sealed class AdminUpdateUserProfileTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Admin_ClearsOptionalFields_WhenLeftEmpty()
+    public async Task Admin_ClearsPhone_WhenLeftEmpty()
     {
         User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         User verifier = await VaultTestData.AddVerifierAsync(factory);
         HttpClient client = ClientFor(admin);
-        await client.PutAsJsonAsync(ProfileUrl(verifier.Id), new
-        {
-            fullName = "Lê Thu Hà", phone = "0912345678", practiceCertificateNumber = "CC-1", lawyerCardNumber = "LS-1"
-        });
+        await client.PutAsJsonAsync(ProfileUrl(verifier.Id), new { fullName = "Lê Thu Hà", phone = "0912345678" });
 
         HttpResponseMessage cleared = await client.PutAsJsonAsync(ProfileUrl(verifier.Id), new { fullName = "Lê Thu Hà", phone = "" });
 
         Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
         JsonElement detail = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync($"/api/v1/admin/users/{verifier.Id}"));
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("phone").ValueKind);
-        Assert.Equal(JsonValueKind.Null, detail.GetProperty("practiceCertificateNumber").ValueKind);
-        Assert.Equal(JsonValueKind.Null, detail.GetProperty("lawyerCardNumber").ValueKind);
     }
 
     [SqlFact]
@@ -120,16 +116,18 @@ public sealed class AdminUpdateUserProfileTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Admin_Update_OnlyForStaffAccounts_AndOnlyByAdmin()
+    public async Task Admin_Update_OnlyForVerifierAndExecutor_AndOnlyByAdmin()
     {
         User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
         User owner = await VaultTestData.AddUserAsync(factory, UserRole.User, UserStatus.Active);
         User verifier = await VaultTestData.AddVerifierAsync(factory);
         HttpClient adminClient = ClientFor(admin);
 
-        // Chủ tài sản (người dùng thường) không thuộc phạm vi sửa của Admin.
+        // Chủ tài sản (người dùng thường) và tài khoản Admin không thuộc phạm vi sửa này.
         HttpResponseMessage forOwner = await adminClient.PutAsJsonAsync(ProfileUrl(owner.Id), new { fullName = "Tên Mới" });
         await ApiTestHelpers.AssertProblemAsync(forOwner, HttpStatusCode.Conflict, "ADMIN_ACTION_NOT_ALLOWED");
+        HttpResponseMessage forAdmin = await adminClient.PutAsJsonAsync(ProfileUrl(admin.Id), new { fullName = "Tên Mới" });
+        await ApiTestHelpers.AssertProblemAsync(forAdmin, HttpStatusCode.Conflict, "ADMIN_ACTION_NOT_ALLOWED");
         // Tài khoản không tồn tại và người không phải Admin: 404.
         await ApiTestHelpers.AssertProblemAsync(
             await adminClient.PutAsJsonAsync(ProfileUrl(Guid.NewGuid()), new { fullName = "X" }), HttpStatusCode.NotFound, "USER_NOT_FOUND");
@@ -137,19 +135,18 @@ public sealed class AdminUpdateUserProfileTests : IAsyncLifetime
     }
 
     [SqlFact]
-    public async Task Admin_Update_AdminAccountIgnoresCertificateNumbers()
+    public async Task Admin_Update_ExecutorAccount_ChangesNameAndPhone()
     {
         User admin = await VaultTestData.AddUserAsync(factory, UserRole.Admin, UserStatus.Active);
+        User executor = await VaultTestData.AddUserAsync(factory, UserRole.Executor, UserStatus.Active);
         HttpClient client = ClientFor(admin);
 
-        HttpResponseMessage response = await client.PutAsJsonAsync(ProfileUrl(admin.Id), new
-        {
-            fullName = "Quản Trị Mới", practiceCertificateNumber = "CC-9", lawyerCardNumber = "LS-9"
-        });
+        HttpResponseMessage response = await client.PutAsJsonAsync(
+            ProfileUrl(executor.Id), new { fullName = "Người Thực Thi Mới", phone = "0933 444 555" });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        JsonElement detail = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync($"/api/v1/admin/users/{admin.Id}"));
-        Assert.Equal("Quản Trị Mới", detail.GetProperty("fullName").GetString());
-        Assert.Equal(JsonValueKind.Null, detail.GetProperty("practiceCertificateNumber").ValueKind);
+        JsonElement detail = await ApiTestHelpers.ReadJsonAsync(await client.GetAsync($"/api/v1/admin/users/{executor.Id}"));
+        Assert.Equal("Người Thực Thi Mới", detail.GetProperty("fullName").GetString());
+        Assert.Equal("0933444555", detail.GetProperty("phone").GetString());
     }
 }

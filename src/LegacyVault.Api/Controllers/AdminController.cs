@@ -135,7 +135,7 @@ public sealed class AdminController : ControllerBase
         return adminService.ChangeRoleAsync(userId, request, ct);
     }
 
-    /// <summary>Admin sửa họ tên, số điện thoại, số chứng chỉ hành nghề và số thẻ luật sư của tài khoản nhân sự.</summary>
+    /// <summary>Admin sửa họ tên và số điện thoại của tài khoản Người xét duyệt hoặc Người thực thi.</summary>
     [HttpPut("users/{userId:guid}/profile")]
     [ProducesResponseType<AdminUserResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
