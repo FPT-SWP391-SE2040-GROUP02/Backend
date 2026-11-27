@@ -23,7 +23,8 @@ public sealed class AccountPhoneService(
 {
     public async Task<UserResponse> SetMyPhoneAsync(SetPhoneRequest request, CancellationToken ct)
     {
-        string phone = PhoneRules.NormalizeContactPhone(request.Phone, "phone");
+        // Số này được gửi cho người nhận nên phải là số di động Việt Nam (khác lúc đăng ký, không kiểm định dạng).
+        string phone = PhoneRules.NormalizeVietnamesePhone(request.Phone, "phone");
 
         Guid? userId = currentUser.UserId;
         if (userId == null)

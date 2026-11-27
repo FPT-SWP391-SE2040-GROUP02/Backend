@@ -14,7 +14,8 @@ namespace LegacyVault.Api.Controllers;
 public sealed class MePhoneController(IAccountPhoneService accountPhoneService) : ControllerBase
 {
     /// <summary>
-    /// Đặt hoặc đổi số điện thoại. Không kiểm định dạng, chỉ bỏ ký tự phân cách (tối đa 20 ký tự). Trả người dùng mới.
+    /// Đặt hoặc đổi số điện thoại. Chỉ nhận số di động Việt Nam (0 hoặc +84, đầu số 3, 5, 7, 8, 9); bỏ khoảng trắng, dấu
+    /// chấm, gạch nối, ngoặc trước khi kiểm. Sai định dạng thì 400 VALIDATION_ERROR (errors.phone). Trả người dùng mới.
     /// </summary>
     [HttpPut]
     [ProducesResponseType<UserResponse>(StatusCodes.Status200OK)]
