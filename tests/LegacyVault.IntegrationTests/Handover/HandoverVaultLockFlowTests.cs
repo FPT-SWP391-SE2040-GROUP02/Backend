@@ -219,6 +219,43 @@ public sealed class HandoverVaultLockFlowTests : IAsyncLifetime
     }
 
     [SqlFact]
+    public async Task RejectedRecipient_CanSendANewRequest_EvenAfterTheVaultIsLocked()
+    {
+        // Chuẩn bị: luật sư từ chối người đầu, chấp nhận người thứ hai nên kho khóa và biên bản vẫn mở
+        LockVault vault = await BuildVaultAsync();
+        (Guid firstClaim, Guid recordId) = await SubmitOkAsync(vault.FirstClient, vault.VaultId);
+        (Guid secondClaim, Guid _) = await SubmitOkAsync(vault.SecondClient, vault.VaultId);
+        VaultTestData.ExecutorClient verifier = await HandoverRecordTestData.AssignedVerifierClientAsync(factory, recordId);
+        Assert.Equal(HttpStatusCode.OK, (await ReviewAsync(verifier.Client, recordId, firstClaim, "REJECT", "Thiếu di chúc")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ReviewAsync(verifier.Client, recordId, secondClaim, "ACCEPT", null)).StatusCode);
+        Assert.Equal(PlanStatus.HandoverRequested, await ReadPlanStatusAsync(vault.VaultId));
+
+        // Hành động: xem danh sách kho của người bị từ chối rồi gửi yêu cầu mới
+        JsonElement rejectedRow = (await ApiTestHelpers.ReadJsonAsync(await vault.FirstClient.GetAsync(RequestsUrl + "/available")))[0];
+        (Guid againClaim, Guid againRecord) = await SubmitOkAsync(vault.FirstClient, vault.VaultId);
+        JsonElement pendingRow = (await ApiTestHelpers.ReadJsonAsync(await vault.FirstClient.GetAsync(RequestsUrl + "/available")))[0];
+        HttpResponseMessage twice = await vault.FirstClient.PostAsync(
+            RequestsUrl + "/by-account", HandoverRecordTestData.ByAccountForm(vault.VaultId, "Gửi lần nữa"));
+
+        // Kiểm tra: dòng bị từ chối gửi lại được; sau khi gửi thì chờ xét, không gửi trùng; vẫn một biên bản, một dòng yêu cầu
+        Assert.Equal("REJECTED", rejectedRow.GetProperty("status").GetString());
+        Assert.True(rejectedRow.GetProperty("canRequest").GetBoolean());
+        Assert.Equal(recordId, againRecord);
+        Assert.Equal(firstClaim, againClaim);
+        Assert.Equal("REQUEST_PENDING", pendingRow.GetProperty("status").GetString());
+        Assert.False(pendingRow.GetProperty("canRequest").GetBoolean());
+        JsonElement duplicate = await ApiTestHelpers.AssertProblemAsync(twice, HttpStatusCode.Conflict, "HANDOVER_NOT_ALLOWED");
+        Assert.Equal("ALREADY_REQUESTED", duplicate.GetProperty("reason").GetString());
+        await ApiTestHelpers.WithDbAsync(factory, async db =>
+        {
+            HandoverClaim claim = await db.Set<HandoverClaim>().SingleAsync(c => c.Id == firstClaim);
+            Assert.Equal(HandoverClaimStatus.Submitted, claim.Status);
+            // Lý do từ chối lần trước được giữ lại để luật sư xem khi xét lần gửi mới.
+            Assert.Equal("Thiếu di chúc", claim.ReviewReason);
+        });
+    }
+
+    [SqlFact]
     public async Task OpenRequest_BlocksRemovingTheLastAssignment_AndFinalizeNeedsALockedVault()
     {
         // Chuẩn bị

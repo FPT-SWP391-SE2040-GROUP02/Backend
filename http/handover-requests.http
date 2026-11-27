@@ -6,6 +6,8 @@
 #      rồi kích hoạt kế hoạch (http/plan-setup.http).
 #   2. Tài khoản người nhận đăng ký bằng đúng email đó và ĐÃ xác minh email (http/auth.http).
 #   3. Tệp giấy tờ mẫu: đặt một tệp PDF bất kỳ tên giay-to.pdf cạnh file này (không dùng giấy tờ thật).
+#   Gửi yêu cầu bắt buộc có giấy chứng tử (deathCertificates) và di chúc (wills); giấy tờ khác (files) nếu có.
+#   Yêu cầu bị từ chối thì chạy lại bước 2 để gửi lại.
 
 @baseUrl = http://localhost:5000/api/v1
 
@@ -44,6 +46,16 @@ Content-Disposition: form-data; name="vaultId"
 Content-Disposition: form-data; name="note"
 
 Xin nhận tài sản (dữ liệu thử)
+------LegacyVaultBoundary
+Content-Disposition: form-data; name="deathCertificates"; filename="chung-tu.pdf"
+Content-Type: application/pdf
+
+< ./giay-to.pdf
+------LegacyVaultBoundary
+Content-Disposition: form-data; name="wills"; filename="di-chuc.pdf"
+Content-Type: application/pdf
+
+< ./giay-to.pdf
 ------LegacyVaultBoundary
 Content-Disposition: form-data; name="files"; filename="giay-to.pdf"
 Content-Type: application/pdf

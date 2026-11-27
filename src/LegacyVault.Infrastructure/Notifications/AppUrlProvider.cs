@@ -44,4 +44,14 @@ public sealed class AppUrlProvider : IAppUrlProvider
     {
         return $"{_clientBaseUrl}/executor-invitation?token={Uri.EscapeDataString(token)}";
     }
+
+    public string GetExecutorInboxUrl()
+    {
+        return $"{_clientBaseUrl}/executor/invitations";
+    }
+
+    public string GetOwnerHandoverUrl()
+    {
+        return $"{_clientBaseUrl}/dashboard/wills";
+    }
 }

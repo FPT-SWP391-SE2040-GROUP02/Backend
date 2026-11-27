@@ -91,7 +91,7 @@ public sealed class ExecutorKeyService : IExecutorKeyService
             Dictionary<string, object?> extensions = new Dictionary<string, object?>();
             extensions["reason"] = "HANDOVER_NOT_STARTED";
             throw new AppException(AppErrorType.Conflict, ErrorCode.HandoverNotAllowed,
-                "Mã nhận chỉ xem được sau khi luật sư chốt biên bản bàn giao.", extensions);
+                "Mã nhận chỉ xem được sau khi luật sư chốt phương án chia.", extensions);
         }
 
         ExecutorKeyShard? shard = await shardRepository.FindByVaultIdAsync(vault.Id, ct);

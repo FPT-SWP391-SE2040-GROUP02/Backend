@@ -83,11 +83,12 @@ public interface IHandoverRecordService
     Task<HandoverRequestPreviewResponse> PreviewRequestAsync(string token, CancellationToken ct);
 
     /// <summary>
-    /// Gửi yêu cầu nhận tài sản kèm giấy tờ. Yêu cầu đầu tiên tạo biên bản, phân công luật sư, khóa kho và báo Chủ tài sản,
-    /// Người thực thi, luật sư. Lỗi: 404 link sai, 403 sai email, 409 HANDOVER_NOT_ALLOWED.
+    /// Gửi yêu cầu nhận tài sản kèm giấy chứng tử, di chúc (bắt buộc) và giấy tờ khác. Yêu cầu đầu tiên tạo biên bản,
+    /// phân công luật sư và báo Chủ tài sản, Người thực thi, luật sư; kho chỉ khóa khi luật sư chấp nhận. Yêu cầu đã bị từ
+    /// chối thì gửi lại được. Lỗi: 400 thiếu hoặc sai giấy tờ, 404 link sai, 403 sai email, 409 HANDOVER_NOT_ALLOWED.
     /// </summary>
     Task<MyHandoverClaimResponse> SubmitClaimAsync(
-        string token, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct);
+        string token, string? note, HandoverDocumentUploads uploads, CancellationToken ct);
 
     /// <summary>
     /// Gửi yêu cầu nhận tài sản trong app, không cần link: server tự tìm người nhận của kho mang đúng email đã xác minh của
@@ -95,7 +96,7 @@ public interface IHandoverRecordService
     /// 409 HANDOVER_NOT_ALLOWED.
     /// </summary>
     Task<MyHandoverClaimResponse> SubmitClaimByAccountAsync(
-        Guid vaultId, string? note, List<UploadedFile> wills, List<UploadedFile> files, CancellationToken ct);
+        Guid vaultId, string? note, HandoverDocumentUploads uploads, CancellationToken ct);
 
     /// <summary>Luật sư hủy biên bản đang lập (mở nhầm, giấy tờ sai), kho mở khóa và báo Chủ tài sản, Người thực thi.</summary>
     Task<HandoverRecordResponse> CancelByVerifierAsync(Guid recordId, CancelHandoverRecordRequest request, CancellationToken ct);

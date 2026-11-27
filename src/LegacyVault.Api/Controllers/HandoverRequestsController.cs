@@ -40,7 +40,8 @@ public sealed class HandoverRequestsController : ControllerBase
     }
 
     /// <summary>
-    /// Gửi yêu cầu nhận tài sản kèm di chúc (bắt buộc) và giấy tờ khác (PDF hoặc ảnh, tổng tối đa 10 tệp, mỗi tệp tối đa 10 MiB) và lời nhắn cho luật sư.
+    /// Gửi yêu cầu nhận tài sản kèm giấy chứng tử (deathCertificates), di chúc (wills), cả hai bắt buộc, giấy tờ khác (files) và
+    /// lời nhắn cho luật sư. PDF hoặc ảnh, tổng tối đa 10 tệp, mỗi tệp tối đa 10 MiB.
     /// </summary>
     [HttpPost]
     [Consumes("multipart/form-data")]
@@ -53,12 +54,11 @@ public sealed class HandoverRequestsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     public async Task<MyHandoverClaimResponse> Submit(
-        [FromForm] string token, [FromForm] string? note, [FromForm] List<IFormFile>? wills, [FromForm] List<IFormFile>? files,
-        CancellationToken ct)
+        [FromForm] string token, [FromForm] string? note, [FromForm] List<IFormFile>? deathCertificates,
+        [FromForm] List<IFormFile>? wills, [FromForm] List<IFormFile>? files, CancellationToken ct)
     {
-        List<UploadedFile> willFiles = await UploadedFileReader.ReadAllAsync(wills, ct);
-        List<UploadedFile> uploaded = await UploadedFileReader.ReadAllAsync(files, ct);
-        return await recordService.SubmitClaimAsync(token, note, willFiles, uploaded, ct);
+        HandoverDocumentUploads uploads = await ReadDocumentsAsync(deathCertificates, wills, files, ct);
+        return await recordService.SubmitClaimAsync(token, note, uploads, ct);
     }
 
     /// <summary>
@@ -76,12 +76,11 @@ public sealed class HandoverRequestsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     public async Task<MyHandoverClaimResponse> SubmitByAccount(
-        [FromForm] Guid vaultId, [FromForm] string? note, [FromForm] List<IFormFile>? wills, [FromForm] List<IFormFile>? files,
-        CancellationToken ct)
+        [FromForm] Guid vaultId, [FromForm] string? note, [FromForm] List<IFormFile>? deathCertificates,
+        [FromForm] List<IFormFile>? wills, [FromForm] List<IFormFile>? files, CancellationToken ct)
     {
-        List<UploadedFile> willFiles = await UploadedFileReader.ReadAllAsync(wills, ct);
-        List<UploadedFile> uploaded = await UploadedFileReader.ReadAllAsync(files, ct);
-        return await recordService.SubmitClaimByAccountAsync(vaultId, note, willFiles, uploaded, ct);
+        HandoverDocumentUploads uploads = await ReadDocumentsAsync(deathCertificates, wills, files, ct);
+        return await recordService.SubmitClaimByAccountAsync(vaultId, note, uploads, ct);
     }
 
     /// <summary>
@@ -136,5 +135,15 @@ public sealed class HandoverRequestsController : ControllerBase
             return VerifierHandoverRecordsController.IntegrityFailed(HttpContext);
         }
         return new HandoverFileResult(download);
+    }
+
+    private static async Task<HandoverDocumentUploads> ReadDocumentsAsync(
+        List<IFormFile>? deathCertificates, List<IFormFile>? wills, List<IFormFile>? files, CancellationToken ct)
+    {
+        HandoverDocumentUploads uploads = new HandoverDocumentUploads();
+        uploads.DeathCertificates = await UploadedFileReader.ReadAllAsync(deathCertificates, ct);
+        uploads.Wills = await UploadedFileReader.ReadAllAsync(wills, ct);
+        uploads.Others = await UploadedFileReader.ReadAllAsync(files, ct);
+        return uploads;
     }
 }

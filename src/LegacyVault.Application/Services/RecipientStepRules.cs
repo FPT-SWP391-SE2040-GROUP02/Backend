@@ -13,6 +13,7 @@ namespace LegacyVault.Application.Services;
 /// | Điều kiện                                                                  | Trạng thái           | needsAction |
 /// |----------------------------------------------------------------------------|----------------------|-------------|
 /// | Kho chưa có biên bản đang mở (chưa ai gửi yêu cầu, hoặc Chủ tài sản đã hủy)       | NOT_REQUESTED        | false       |
+/// | Kho chưa có biên bản đang mở, yêu cầu gần nhất của tôi bị từ chối             | REJECTED             | false       |
 /// | Có yêu cầu của tôi, trạng thái Submitted                                     | REQUEST_PENDING      | false       |
 /// | Có yêu cầu của tôi, trạng thái SupplementRequested                           | SUPPLEMENT_REQUESTED | true        |
 /// | Có yêu cầu của tôi, trạng thái Rejected                                      | REJECTED             | false       |
@@ -28,6 +29,7 @@ namespace LegacyVault.Application.Services;
 /// | Danh tính của tôi đã xong, còn chờ luật sư hoặc Người thực thi ký phần của tôi | WAITING_OTHERS       | false       |
 /// | Tôi đã ký, chưa được mở quyền tải                                             | WAITING_OTHERS       | false       |
 /// Mỗi người nhận đi riêng theo lượt của chính mình: không chờ người nhận khác nộp ảnh hay ký.
+/// REJECTED vẫn gửi lại được (canRequest) khi biên bản chưa hoàn tất, hoặc biên bản đã đóng mà kế hoạch đang hoạt động.
 /// </remarks>
 public static class RecipientStepRules
 {
@@ -170,11 +172,12 @@ public static class RecipientStepRules
 
     /// <summary>
     /// Người nhận gửi được yêu cầu lúc này không (cùng điều kiện với luồng gửi bằng link): kho chưa có biên bản thì kế hoạch
-    /// phải đang hoạt động; có biên bản thì biên bản chưa hoàn tất. Chỉ áp dụng khi trạng thái là NOT_REQUESTED.
+    /// phải đang hoạt động; có biên bản thì biên bản chưa hoàn tất. Chỉ áp dụng khi chưa gửi (NOT_REQUESTED) hoặc yêu cầu bị
+    /// từ chối (REJECTED, gửi lại).
     /// </summary>
     public static bool CanRequest(string status, PlanStatus planStatus, HandoverRecord? record)
     {
-        if (status != NotRequested)
+        if (status != NotRequested && status != Rejected)
         {
             return false;
         }

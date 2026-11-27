@@ -11,7 +11,7 @@ public interface IHandoverReportService
     /// hoặc không phải tài khoản người dùng, 409 ALREADY_REPORTED, TOO_MANY_REPORTS, REPORT_LIMIT_REACHED, OWNER_CANNOT_CLAIM, NO_VERIFIER.
     /// </summary>
     Task<MyHandoverReportResponse> SubmitAsync(
-        SubmitHandoverReportRequest request, HandoverReportUploads uploads, CancellationToken ct);
+        SubmitHandoverReportRequest request, HandoverDocumentUploads uploads, CancellationToken ct);
 
     Task<List<MyHandoverReportResponse>> ListMineAsync(CancellationToken ct);
 

@@ -232,7 +232,7 @@ public static class HandoverRecordRules
         }
         if (reason == SignNotSigningStep)
         {
-            return "Chưa tới bước ký: biên bản phải được chốt.";
+            return "Chưa tới bước ký: phương án chia phải được chốt.";
         }
         if (reason == SignAlreadySigned)
         {
@@ -333,7 +333,7 @@ public static class HandoverRecordRules
     {
         if (lines.Count == 0)
         {
-            return "Biên bản phải có ít nhất một người nhận một tài sản.";
+            return "Phương án chia phải có ít nhất một người nhận một tài sản.";
         }
         HashSet<(Guid, Guid)> seenPairs = new HashSet<(Guid, Guid)>();
         foreach ((Guid beneficiaryId, Guid assetId) in lines)
@@ -568,6 +568,19 @@ public static class HandoverRecordRules
         record.CancelledAt = now;
         record.CancelReason = AllRejectedReason;
         record.UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Tệp thuộc lần gửi hiện tại của yêu cầu. Gửi lại sau khi bị từ chối đặt lại mốc gửi (CreatedAt) của yêu cầu: tệp của
+    /// lần trước vẫn được lưu nhưng không còn liệt kê trong yêu cầu.
+    /// </summary>
+    public static bool IsCurrentClaimFile(HandoverClaim claim, HandoverRecordFile file)
+    {
+        if (file.ClaimId != claim.Id)
+        {
+            return false;
+        }
+        return file.CreatedAt >= claim.CreatedAt;
     }
 
     /// <summary>Người nhận có trong biên bản (đã gửi yêu cầu hoặc được ghi tài sản) không.</summary>

@@ -93,13 +93,13 @@ public sealed partial class HandoverReportService : IHandoverReportService
     // ---------------- Người thân ----------------
 
     public async Task<MyHandoverReportResponse> SubmitAsync(
-        SubmitHandoverReportRequest request, HandoverReportUploads uploads, CancellationToken ct)
+        SubmitHandoverReportRequest request, HandoverDocumentUploads uploads, CancellationToken ct)
     {
         // 1. Tài khoản người dùng đã xác minh email; thông tin khai và tệp phải hợp lệ
         User user = await RequireSubmitterAsync(ct);
         HandoverReportData data = ReadRequest(request, RecipientRules.TodayInVietnam(timeProvider));
         string note = NormalizeNote(request.Note);
-        ValidateUploads(uploads);
+        HandoverDocumentRules.ValidateFirstSubmission(uploads);
 
         // 2. Chống nộp trùng và nộp hàng loạt (chỉ xét hồ sơ của chính người này)
         await EnsureNotDuplicateAsync(user.Id, data.DeceasedCitizenId, ct);
@@ -298,8 +298,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
     // ---------------- Hàm phụ: nghiệp vụ ----------------
 
     /// <summary>
-    /// Từ chối hồ sơ báo tin: kho có biên bản đang lập chưa khóa (chỉ có yêu cầu của người nhận) mà mọi yêu cầu đều bị từ
-    /// chối và không còn hồ sơ nào khác chờ xét thì đóng biên bản. Chưa lưu.
+    /// Từ chối hồ sơ báo tin: kho có biên bản đang mở thì xét điều kiện đóng chung với xét yêu cầu. Chưa lưu.
     /// </summary>
     private async Task CloseRecordIfAllRejectedAsync(HandoverReport report, DateTimeOffset now, CancellationToken ct)
     {
@@ -317,11 +316,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         {
             return;
         }
-        int pendingReports = await reports.CountPendingByVaultAsync(vault.Id, report.Id, ct);
-        if (HandoverRecordRules.ShouldCloseAfterAllRejected(record, vault.Plan.Status, pendingReports))
-        {
-            HandoverRecordRules.CloseAfterAllRejected(record, now);
-        }
+        await HandoverRecordClosing.CloseIfNothingLeftAsync(reports, record, vault.Plan.Status, report.Id, now, ct);
     }
 
     /// <summary>Trả về kho vừa được khóa, hoặc null khi kho đã khóa từ trước.</summary>
@@ -351,7 +346,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
                 report.UpdatedAt = now;
                 await SaveAsync(ct);
                 throw HandoverAccess.NotAllowed("REPORT_TRANSFERRED",
-                    "Kho này đang do luật sư khác lập biên bản. Hồ sơ đã được chuyển cho luật sư đó.");
+                    "Kho này đang do luật sư khác phụ trách. Hồ sơ đã được chuyển cho luật sư đó.");
             }
             report.RecordId = record.Id;
             // Biên bản do người nhận gửi yêu cầu tạo ra chưa khóa kho: chấp nhận hồ sơ này là lúc khóa.
@@ -364,7 +359,7 @@ public sealed partial class HandoverReportService : IHandoverReportService
         if (vault.Plan.Status != PlanStatus.Active)
         {
             throw HandoverAccess.NotAllowed("PLAN_NOT_ACTIVE",
-                "Kho này chưa kích hoạt kế hoạch bàn giao nên chưa mở biên bản được.");
+                "Kho này chưa kích hoạt kế hoạch bàn giao nên chưa mở phương án chia được.");
         }
         record = new HandoverRecord
         {
@@ -739,23 +734,6 @@ public sealed partial class HandoverReportService : IHandoverReportService
             throw ValidationErrors.For("note", "Lời nhắn tối đa 1000 ký tự.");
         }
         return text;
-    }
-
-    private static void ValidateUploads(HandoverReportUploads uploads)
-    {
-        if (uploads.DeathCertificates.Count == 0)
-        {
-            throw ValidationErrors.For("deathCertificates", "Vui lòng đính kèm giấy chứng tử.");
-        }
-        if (uploads.Wills.Count == 0)
-        {
-            throw ValidationErrors.For("wills", "Vui lòng đính kèm di chúc.");
-        }
-        List<UploadedFile> all = new List<UploadedFile>();
-        all.AddRange(uploads.DeathCertificates);
-        all.AddRange(uploads.Wills);
-        all.AddRange(uploads.Others);
-        HandoverRecordFileStorage.Validate(all, true);
     }
 
     // ---------------- Hàm phụ: tệp ----------------

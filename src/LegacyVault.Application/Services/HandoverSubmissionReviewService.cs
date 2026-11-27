@@ -301,7 +301,7 @@ public sealed class HandoverSubmissionReviewService : IHandoverSubmissionReviewS
         if (record == null || !HandoverRecordRules.IsOpenForSigning(record))
         {
             throw HandoverAccess.NotAllowed("NOT_IDENTITY_STEP",
-                "Biên bản chưa ở bước kiểm danh tính. Hãy chốt biên bản trước.");
+                "Biên bản chưa ở bước kiểm danh tính. Hãy chốt phương án chia trước.");
         }
     }
 

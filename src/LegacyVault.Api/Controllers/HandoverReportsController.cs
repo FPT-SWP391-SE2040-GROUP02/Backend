@@ -41,7 +41,7 @@ public sealed class HandoverReportsController : ControllerBase
     public async Task<MyHandoverReportResponse> Submit(
         [FromForm] SubmitHandoverReportForm form, CancellationToken ct)
     {
-        HandoverReportUploads uploads = new HandoverReportUploads();
+        HandoverDocumentUploads uploads = new HandoverDocumentUploads();
         uploads.DeathCertificates = await UploadedFileReader.ReadAllAsync(form.DeathCertificates, ct);
         uploads.Wills = await UploadedFileReader.ReadAllAsync(form.Wills, ct);
         uploads.Others = await UploadedFileReader.ReadAllAsync(form.Others, ct);
