@@ -9,7 +9,7 @@ public sealed class SystemExecutorResponse
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
-    public string? PhoneMasked { get; set; }
+    public string? Phone { get; set; }
     public string ExecutorRoleTitle { get; set; } = string.Empty;
     public int AssignedVaultsCount { get; set; }
     public bool IsAvailable { get; set; } = true;

@@ -36,13 +36,14 @@ public sealed class SystemExecutorDirectoryService : ISystemExecutorDirectorySer
 
         foreach (User user in users)
         {
-            string? phoneMasked = MaskPhone(user.Phone);
+            // Khách cần gọi được cho Người thực thi nên danh bạ trả đủ số điện thoại.
+            string? phone = ReadPhone(user.Phone);
             result.Add(new SystemExecutorResponse
             {
                 Id = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
-                PhoneMasked = phoneMasked,
+                Phone = phone,
                 AvatarUrl = null,
                 ExecutorRoleTitle = user.ExecutorRoleTitle ?? string.Empty,
                 AssignedVaultsCount = 0,
@@ -53,17 +54,12 @@ public sealed class SystemExecutorDirectoryService : ISystemExecutorDirectorySer
         return result;
     }
 
-    private static string? MaskPhone(string? phone)
+    private static string? ReadPhone(string? phone)
     {
         if (string.IsNullOrWhiteSpace(phone))
         {
             return null;
         }
-        string trimmed = phone.Trim();
-        if (trimmed.Length <= 6)
-        {
-            return trimmed;
-        }
-        return string.Concat(trimmed.AsSpan(0, 4), "***", trimmed.AsSpan(trimmed.Length - 3));
+        return phone.Trim();
     }
 }
