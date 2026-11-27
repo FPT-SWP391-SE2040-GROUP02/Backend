@@ -685,10 +685,10 @@ public sealed class AdminService : IAdminService
     public async Task<AdminUserResponse> UpdateUserProfileAsync(
         Guid userId, UpdateAdminUserProfileRequest request, CancellationToken ct)
     {
-        // 1. Chỉ Admin; chỉ tài khoản nhân sự (Chủ tài sản và người dùng thường không thuộc phạm vi này)
+        // 1. Chỉ Admin; chỉ tài khoản Người xét duyệt hoặc Người thực thi (Chủ tài sản, người dùng thường và Admin không thuộc phạm vi này)
         Guid adminId = await RequireAdminAsync(ct);
         User user = await LoadUserAsync(userId, ct);
-        if (user.Role == UserRole.User)
+        if (user.Role != UserRole.Verifier && user.Role != UserRole.Executor)
         {
             throw NotAllowed("NOT_STAFF_ACCOUNT");
         }
@@ -717,11 +717,9 @@ public sealed class AdminService : IAdminService
         DateTimeOffset now = timeProvider.GetUtcNow();
         user.FullName = fullName;
         user.Phone = phone;
-        user.PracticeCertificateNumber = TrimOrNull(request.PracticeCertificateNumber, user.Role);
-        user.LawyerCardNumber = TrimOrNull(request.LawyerCardNumber, user.Role);
         user.UpdatedAt = now;
         audit.Add(AuditRules.Create(null, adminId, AuditActorRole.Admin, AuditAction.AdminUpdatedUserProfile,
-            AuditTargetType.User, user.Id, null, AuditOutcome.Succeeded, "Sửa thông tin tài khoản nhân sự", now));
+            AuditTargetType.User, user.Id, null, AuditOutcome.Succeeded, "Sửa họ tên và số điện thoại tài khoản nhân sự", now));
         try
         {
             await unitOfWork.SaveChangesAsync(ct);
