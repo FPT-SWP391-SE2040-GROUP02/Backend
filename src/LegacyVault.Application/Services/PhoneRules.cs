@@ -5,9 +5,9 @@ using LegacyVault.Application.Exceptions;
 namespace LegacyVault.Application.Services;
 
 /// <summary>
-/// Chuẩn hóa số điện thoại liên hệ của tài khoản (đăng ký, Google): không kiểm định dạng, gõ số nào cũng nhận (đồ án,
-/// demo dễ nhập). Chỗ nhập số của người khác (tài khoản nhân sự do Admin tạo, người nhận trong hồ sơ báo tin) dùng
-/// <see cref="NormalizeVietnamesePhone"/> để bắt số sai định dạng.
+/// Chuẩn hóa số điện thoại liên hệ của tài khoản lúc đăng ký: không kiểm định dạng, gõ số nào cũng nhận (đồ án, demo dễ
+/// nhập). Các chỗ khác dùng <see cref="NormalizeVietnamesePhone"/> để bắt số sai định dạng: người dùng tự thêm hoặc đổi số
+/// (PUT /me/phone), tài khoản nhân sự do Admin tạo hoặc sửa, người nhận trong hồ sơ báo tin.
 /// </summary>
 public static partial class PhoneRules
 {

@@ -99,6 +99,38 @@ public sealed class UniquePhoneTests
         Assert.Equal(0, unitOfWork.SaveCount);
     }
 
+    [Theory]
+    [InlineData("12345")]
+    [InlineData("091234567")]
+    [InlineData("0212345678")]
+    [InlineData("+8401234567")]
+    [InlineData("abc0912345678")]
+    [InlineData("")]
+    public async Task SetMyPhone_NotAVietnameseMobileNumber_Returns400AndKeepsOldNumber(string input)
+    {
+        User me = AddUser("me@example.com", UserRole.User, "0900000001");
+
+        AppException error = await Assert.ThrowsAsync<AppException>(() => PhoneServiceFor(me).SetMyPhoneAsync(
+            new SetPhoneRequest { Phone = input }, CancellationToken.None));
+
+        Assert.Equal(AppErrorType.Validation, error.Type);
+        Assert.Equal("0900000001", me.Phone);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Theory]
+    [InlineData("0912345678", "0912345678")]
+    [InlineData("+84 912 345 678", "+84912345678")]
+    [InlineData("091.234.5678", "0912345678")]
+    public async Task SetMyPhone_VietnameseMobileNumber_IsSavedWithoutSeparators(string input, string expected)
+    {
+        User me = AddUser("me@example.com", UserRole.User, null);
+
+        await PhoneServiceFor(me).SetMyPhoneAsync(new SetPhoneRequest { Phone = input }, CancellationToken.None);
+
+        Assert.Equal(expected, me.Phone);
+    }
+
     [Fact]
     public async Task SetMyPhone_SameNumberAsMine_IsAccepted()
     {
